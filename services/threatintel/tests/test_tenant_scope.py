@@ -269,6 +269,8 @@ async def test_dev_mode_only_applies_with_nothing_configured(monkeypatch: pytest
     every tenant-scoped route.
     """
     monkeypatch.setenv("AISOC_DEV_MODE", "1")
+    monkeypatch.setenv("AISOC_DEV_AUTH_BYPASS", "1")
+    monkeypatch.delenv("AISOC_PUBLISHED_BIND_ADDRS", raising=False)
     monkeypatch.setenv("SECRET_KEY", SECRET)
     monkeypatch.setenv("AISOC_SERVICE_TOKEN", SERVICE_TOKEN)
     with pytest.raises(HTTPException) as exc:
@@ -277,8 +279,77 @@ async def test_dev_mode_only_applies_with_nothing_configured(monkeypatch: pytest
 
     monkeypatch.setenv("SECRET_KEY", "")
     monkeypatch.setenv("AISOC_SERVICE_TOKEN", "")
+    ts._BYPASS_LOGGED.clear()
     principal = await ts.require_console_or_service_auth(authorization=None, x_aisoc_tenant_id=None)
     assert principal.tenant_ids == frozenset({ts.DEV_TENANT_ID})
+
+
+@pytest.mark.asyncio
+async def test_dev_mode_alone_no_longer_admits_an_uncredentialed_caller(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The defect, stated as a test.
+
+    `AISOC_DEV_MODE` selects table autocreate, docs URLs, the metrics gate,
+    log formatting, the GraphiQL UI and an ephemeral vault key. It also
+    defaults to `1` on ten services in `docker-compose.yml`, while nothing
+    generates a service token. So a hand-copied `.env` and a plain
+    `docker compose up` admitted a caller with no credential at all, and the
+    only thing that had to be true for it was a flag nobody set for this
+    purpose.
+    """
+    monkeypatch.setenv("AISOC_DEV_MODE", "1")
+    monkeypatch.delenv("AISOC_DEV_AUTH_BYPASS", raising=False)
+    monkeypatch.delenv("AISOC_PUBLISHED_BIND_ADDRS", raising=False)
+    monkeypatch.setenv("SECRET_KEY", "")
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "")
+    ts._BYPASS_LOGGED.clear()
+    with pytest.raises(HTTPException) as exc:
+        await ts.require_console_or_service_auth(authorization=None, x_aisoc_tenant_id=None)
+    assert exc.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_the_bypass_is_refused_on_a_reachable_published_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An anonymous principal is a convenience only on loopback.
+
+    The service binds `0.0.0.0` inside its container and cannot work out for
+    itself whether anyone else can reach it, so compose passes the published
+    addresses in. Both directions, because a check that only ever refuses is
+    indistinguishable from one that removed the shim.
+    """
+    monkeypatch.setenv("AISOC_DEV_MODE", "1")
+    monkeypatch.setenv("AISOC_DEV_AUTH_BYPASS", "1")
+    monkeypatch.setenv("SECRET_KEY", "")
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "")
+
+    for published in ("0.0.0.0", "192.168.1.10", "127.0.0.1,0.0.0.0:8080", "aisoc.example.com"):
+        monkeypatch.setenv("AISOC_PUBLISHED_BIND_ADDRS", published)
+        ts._BYPASS_LOGGED.clear()
+        with pytest.raises(HTTPException) as exc:
+            await ts.require_console_or_service_auth(authorization=None, x_aisoc_tenant_id=None)
+        assert exc.value.status_code == 503, published
+
+    for published in ("127.0.0.1", "localhost:8080", "::1", "[::1]:9000"):
+        monkeypatch.setenv("AISOC_PUBLISHED_BIND_ADDRS", published)
+        ts._BYPASS_LOGGED.clear()
+        principal = await ts.require_console_or_service_auth(authorization=None, x_aisoc_tenant_id=None)
+        assert principal.tenant_ids == frozenset({ts.DEV_TENANT_ID}), published
+
+
+def test_the_dev_tenant_is_not_the_canonical_tenant() -> None:
+    """The crux, and it was byte-identical.
+
+    `DEV_TENANT_ID` was `…0001`, the tenant migration 001 seeds and that
+    `bootstrap_admin` puts the real administrator into. So an unauthenticated
+    caller admitted by the shim was scoped to the operator's own data rather
+    than to a demo tenant.
+    """
+    import uuid as _uuid
+
+    assert ts.DEV_TENANT_ID != _uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 @pytest.mark.asyncio

@@ -379,6 +379,12 @@ def test_dev_auth_is_dev_mode_reads_live_env(monkeypatch):
 
     monkeypatch.setenv("ENV", "development")
     monkeypatch.delenv("ENVIRONMENT", raising=False)
+    # The environment name is necessary and no longer sufficient: the shim
+    # also needs an explicit opt-in that no compose file sets. What this test
+    # is about is that the answer tracks a mid-test change rather than being
+    # cached, so the flag is held on for both halves.
+    monkeypatch.setenv("AISOC_DEV_AUTH_BYPASS", "1")
+    monkeypatch.delenv("AISOC_PUBLISHED_BIND_ADDRS", raising=False)
     assert dev_auth.is_dev_mode() is True
 
     monkeypatch.setenv("ENV", "production")
@@ -400,6 +406,8 @@ def test_dev_auth_is_dev_mode_honors_environment_fallback(monkeypatch):
 
     monkeypatch.delenv("ENV", raising=False)
     monkeypatch.setenv("ENVIRONMENT", "development")
+    monkeypatch.setenv("AISOC_DEV_AUTH_BYPASS", "1")
+    monkeypatch.delenv("AISOC_PUBLISHED_BIND_ADDRS", raising=False)
     assert dev_auth.is_dev_mode() is True
 
     monkeypatch.setenv("ENVIRONMENT", "production")

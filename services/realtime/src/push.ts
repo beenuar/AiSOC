@@ -89,23 +89,42 @@ function key(...parts: string[]): string {
   return ['aisoc', 'push', ...parts].join(':');
 }
 
+class MissingTenant extends Error {
+  constructor() {
+    super('X-Tenant-Id is required');
+    this.name = 'MissingTenant';
+  }
+}
+
+/**
+ * The tenant this request acts for, from the header the API proxy stamps.
+ *
+ * Two fallbacks were removed rather than kept as defence in depth, because
+ * both were ways to get the wrong answer quietly. A `tenant_id` query
+ * parameter is caller-supplied, and the routes now require the internal token
+ * so the only caller is the proxy, which sends a header. And the literal
+ * `'default'` is not a tenant at all: migration 001 seeds the canonical tenant
+ * with that *slug* and the demo seed renames it, so every subscription that
+ * reached the fallback was filed under a key belonging to nobody, silently.
+ */
 function tenantOf(req: Request): string {
   const hdr = req.headers['x-tenant-id'];
   if (typeof hdr === 'string' && hdr.length > 0) return hdr;
   if (Array.isArray(hdr) && hdr[0]) return hdr[0];
-  const q = req.query.tenant_id;
-  if (typeof q === 'string' && q.length > 0) return q;
-  return 'default';
+  throw new MissingTenant();
 }
 
 function userOf(req: Request, body: SubscribeRequestBody): string | null {
-  // Prefer the body field for now; the API gateway is expected to validate
-  // it against the bearer token before traffic reaches the realtime
-  // service in production.
-  if (body.user_id) return body.user_id;
+  // The header first, and the body only as a fallback. This was the other way
+  // round, under a comment saying the API gateway "is expected to" validate
+  // the body field against the bearer token. It does not: it stamps
+  // `X-User-Id` from the authenticated principal and forwards the body
+  // untouched, so preferring the body let a caller enrol a push endpoint
+  // against another user in their own tenant.
   const hdr = req.headers['x-user-id'];
   if (typeof hdr === 'string' && hdr.length > 0) return hdr;
   if (Array.isArray(hdr) && hdr[0]) return hdr[0];
+  if (body.user_id) return body.user_id;
   return null;
 }
 
@@ -445,7 +464,13 @@ export class PushManager {
   };
 
   unsubscribeHandler = async (req: Request, res: Response): Promise<void> => {
-    const tenantId = tenantOf(req);
+    let tenantId: string;
+    try {
+      tenantId = tenantOf(req);
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+      return;
+    }
     const { endpoint } = (req.body ?? {}) as { endpoint?: string };
     if (!endpoint) {
       res.status(400).json({ error: 'endpoint is required' });
@@ -460,7 +485,13 @@ export class PushManager {
       res.status(503).json({ error: 'push not configured' });
       return;
     }
-    const tenantId = tenantOf(req);
+    let tenantId: string;
+    try {
+      tenantId = tenantOf(req);
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+      return;
+    }
     const userIdHdr = req.headers['x-user-id'];
     const userId =
       typeof userIdHdr === 'string'
@@ -505,9 +536,21 @@ export class PushManager {
       res.status(400).json({ error: 'notification.title and body are required' });
       return;
     }
+    // This route is already behind the internal token, so a service naming the
+    // tenant in the body is the normal case. The header is the fallback, and
+    // `tenantOf` now throws rather than inventing 'default', so a call that
+    // names no tenant at all has to answer 400 instead of filing the
+    // notification under a key belonging to nobody.
+    let tenantId: string;
+    try {
+      tenantId = body.tenant_id ?? tenantOf(req);
+    } catch (err) {
+      res.status(400).json({ error: (err as Error).message });
+      return;
+    }
     const stats = await this.sendToTarget(
       {
-        tenant_id: body.tenant_id ?? tenantOf(req),
+        tenant_id: tenantId,
         user_ids: body.user_ids,
         topic: body.topic,
       },
@@ -516,3 +559,10 @@ export class PushManager {
     res.json(stats);
   };
 }
+
+/**
+ * The two request resolvers, for the unit test that pins where the tenant and
+ * the user come from. Grouped under one name so the module's public surface
+ * still reads as "the PushManager class" at a glance.
+ */
+export const __testing = { tenantOf, userOf };

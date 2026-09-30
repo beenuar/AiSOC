@@ -666,10 +666,29 @@ function asyncRoute(
   };
 }
 
+// `public-key` is the VAPID public key and is public by definition.
 app.get('/v1/push/public-key', pushManager.publicKeyHandler);
-app.post('/v1/push/subscribe', pushRateLimit, asyncRoute(pushManager.subscribeHandler));
-app.post('/v1/push/unsubscribe', pushRateLimit, asyncRoute(pushManager.unsubscribeHandler));
-app.post('/v1/push/test', pushRateLimit, asyncRoute(pushManager.testNotifyHandler));
+
+// The other three carried only a rate limiter, and took the tenant from a
+// request header, then a query parameter, then the literal string 'default'.
+// So any caller who could reach the port could enrol a push endpoint against
+// any tenant, unsubscribe another tenant's devices, or make this service send
+// a notification. They are reached through the API's `/api/v1/push/*` proxy,
+// which authenticates the analyst and stamps the tenant, so the same internal
+// token `/internal/*` requires is the right contract: it makes the proxy the
+// only way in, which is what the module already assumed.
+app.post('/v1/push/subscribe', pushRateLimit, asyncRoute(async (req, res) => {
+  if (!requireInternal(req, res)) return;
+  await pushManager.subscribeHandler(req, res);
+}));
+app.post('/v1/push/unsubscribe', pushRateLimit, asyncRoute(async (req, res) => {
+  if (!requireInternal(req, res)) return;
+  await pushManager.unsubscribeHandler(req, res);
+}));
+app.post('/v1/push/test', pushRateLimit, asyncRoute(async (req, res) => {
+  if (!requireInternal(req, res)) return;
+  await pushManager.testNotifyHandler(req, res);
+}));
 
 // --- Internal broadcast endpoint (called by other services) ---
 // POST /internal/agent-event
@@ -694,7 +713,12 @@ function requireInternal(req: express.Request, res: express.Response): boolean {
     });
     return false;
   }
-  const auth = req.headers['x-internal-token'];
+  // Both spellings. `x-internal-token` is what the agents service and the
+  // API's approval route send; `x-aisoc-internal-token` is what the API's
+  // push proxy and the chatops notifier send, and what slack-bot reads. One
+  // receiver accepting both is the only fix that does not require every
+  // sender to change in the same release.
+  const auth = req.headers['x-internal-token'] ?? req.headers['x-aisoc-internal-token'];
   if (typeof auth !== 'string' || auth.length !== INTERNAL_TOKEN.length) {
     res.status(401).json({ error: 'unauthorized' });
     return false;

@@ -49,10 +49,22 @@ async def test_unconfigured_in_production_fails_closed():
 
 
 @pytest.mark.asyncio
-async def test_unconfigured_in_dev_mode_is_allowed(monkeypatch: pytest.MonkeyPatch):
-    """`docker compose up` with no token still works locally."""
+async def test_unconfigured_in_dev_mode_is_refused(monkeypatch: pytest.MonkeyPatch):
+    """The exemption is gone, and this assertion used to read the other way.
+
+    `docker-compose.yml` defaults `AISOC_DEV_MODE` to 1 on ten services while
+    nothing generates a service token, so "unconfigured and in dev mode" was
+    not a local convenience, it was the state every stock install ran in. This
+    is a service-to-service dependency with no browser to keep usable, so 503
+    with an actionable message is the whole of what is needed — the same
+    posture `services/actions/app/security/authz.py` already took.
+    """
     monkeypatch.setenv("AISOC_DEV_MODE", "1")
-    assert await _call(None) is None
+    monkeypatch.delenv("AISOC_SERVICE_TOKEN", raising=False)
+    with pytest.raises(HTTPException) as exc:
+        await _call(None)
+    assert exc.value.status_code == 503
+    assert "AISOC_SERVICE_TOKEN" in exc.value.detail
 
 
 @pytest.mark.asyncio

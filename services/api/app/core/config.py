@@ -4,6 +4,7 @@ AiSOC — open-source AI Security Operations Center
 MIT License
 """
 
+import ipaddress
 import logging
 import os
 import warnings
@@ -93,8 +94,91 @@ def is_auth_bypass_env(value: str | None) -> bool:
 
     Same canonical set as :func:`is_dev_env` minus ``"test"`` — see the
     module-level rationale.
+
+    Naming a dev-class environment is now necessary and **not sufficient**:
+    :func:`auth_bypass_refusal` has to return ``None`` as well.
     """
     return _normalize_env(value) in AUTH_BYPASS_ENVIRONMENTS
+
+
+# ------------------------------------------------------------------
+# The anonymous shim needs an explicit opt-in, not just an environment name
+# ------------------------------------------------------------------
+# ``ENVIRONMENT`` defaulted to ``development`` in ``docker-compose.yml``, in
+# ``.env.example``, and therefore in the ``.env`` that ``ensure_env.py``
+# copies from it. So every stock ``docker compose up`` served an
+# uncredentialed request as an administrator, and the single-host guide told
+# operators to publish that console on ``0.0.0.0``.
+#
+# An environment name cannot carry that weight on its own. It is a label
+# chosen for logging verbosity and docs URLs, it defaults to a dev-class
+# value, and nothing about setting it says "and make this host anonymous".
+# So the shim now needs a flag whose only meaning is the bypass, which no
+# compose file and no template sets, plus a bind address that keeps the
+# consequence on the operator's own machine.
+
+#: The environment variable whose only job is to enable the anonymous shim.
+#: Deliberately not ``AISOC_DEV_MODE``: that flag already means eight other
+#: things across nine services, and a flag that means many things cannot be
+#: refused for one of them.
+DEV_AUTH_BYPASS_VAR: Final[str] = "AISOC_DEV_AUTH_BYPASS"
+
+#: Where the deployment publishes the console and the API, comma-separated.
+#: Supplied by compose so the API can answer "is anyone but this machine able
+#: to reach me", which it otherwise cannot know: it binds inside a container
+#: and sees only ``0.0.0.0``.
+PUBLISHED_BIND_VAR: Final[str] = "AISOC_PUBLISHED_BIND_ADDRS"
+
+_TRUTHY: Final[frozenset[str]] = frozenset({"1", "true", "yes", "on"})
+
+
+def _is_loopback(address: str) -> bool:
+    """Whether ``address`` reaches only the machine the stack runs on."""
+    host = address.strip().lower()
+    if not host:
+        return True
+    # Strip a port, and the brackets an IPv6 host:port form carries.
+    if host.startswith("["):
+        host = host.partition("]")[0].lstrip("[")
+    elif host.count(":") == 1:
+        host = host.partition(":")[0]
+    if host in {"localhost", "::1", "ip6-localhost"}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # A hostname that is not obviously loopback. Treat as reachable: the
+        # safe answer when the question cannot be decided is the one that
+        # refuses the bypass.
+        return False
+
+
+def auth_bypass_refusal(env: str | None = None) -> str | None:
+    """Why the anonymous shim must not serve this request, or ``None``.
+
+    Returns a sentence for the log, so an operator who expected the bypass
+    learns which condition withheld it rather than seeing an unexplained 401.
+    """
+    resolved = _normalize_env(env if env is not None else current_env_from_os())
+    if resolved not in AUTH_BYPASS_ENVIRONMENTS:
+        return f"ENVIRONMENT is {resolved or 'unset'!r}, which is not one of {sorted(AUTH_BYPASS_ENVIRONMENTS)}"
+    if os.getenv(DEV_AUTH_BYPASS_VAR, "").strip().lower() not in _TRUTHY:
+        return (
+            f"{DEV_AUTH_BYPASS_VAR} is not set. Naming a development "
+            "environment no longer enables the anonymous shim on its own; set "
+            f"{DEV_AUTH_BYPASS_VAR}=1 deliberately, or use "
+            "infra/compose/docker-compose.dev.yml, which sets it"
+        )
+    published = [a for a in os.getenv(PUBLISHED_BIND_VAR, "").split(",") if a.strip()]
+    reachable = [a.strip() for a in published if not _is_loopback(a)]
+    if reachable:
+        return (
+            f"{DEV_AUTH_BYPASS_VAR} is set, but this deployment publishes "
+            f"{', '.join(reachable)}, which is not loopback. An anonymous "
+            "administrator on a reachable address is not a developer "
+            "convenience. Bind to 127.0.0.1, or authenticate"
+        )
+    return None
 
 
 def current_env_from_os() -> str:

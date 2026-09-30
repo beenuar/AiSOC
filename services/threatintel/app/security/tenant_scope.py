@@ -62,6 +62,7 @@ import base64
 import binascii
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import os
@@ -92,8 +93,29 @@ INSECURE_SECRET_DEFAULTS = frozenset(
 )
 
 #: Deterministic demo tenant, matching ``DEMO_TENANT_ID`` in
-#: services/api/app/api/v1/dev_auth.py. Only ever used under AISOC_DEV_MODE.
-DEV_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
+#: services/api/app/api/v1/dev_auth.py. Only ever reached when
+#: :func:`auth_bypass_refusal` returns ``None``.
+#:
+#: This used to be ``…0001``, the canonical tenant that migration 001 seeds
+#: and that ``bootstrap_admin`` puts the real administrator into, so an
+#: unauthenticated caller was scoped to the operator's own data. The canonical
+#: id stays where it is because ten modules pin it; the demo identity moved.
+DEV_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-0000000000de")
+
+#: The environment variable whose only job is to enable the anonymous shim.
+#:
+#: Deliberately not ``AISOC_DEV_MODE``. That flag already selects table
+#: autocreate, docs URLs, the metrics gate, log formatting, the GraphiQL UI
+#: and an ephemeral vault key, and ``docker-compose.yml`` defaults it to ``1``
+#: on ten services. A flag that means nine things cannot be refused for one
+#: of them, so the bypass gets a variable that means exactly one thing and
+#: that no compose file or template sets.
+DEV_AUTH_BYPASS_VAR = "AISOC_DEV_AUTH_BYPASS"
+
+#: Where the deployment publishes this service, comma-separated. Supplied by
+#: compose, because a container binds ``0.0.0.0`` and cannot otherwise know
+#: whether anyone but the operator's own machine can reach it.
+PUBLISHED_BIND_VAR = "AISOC_PUBLISHED_BIND_ADDRS"
 
 #: Header a trusted service uses to declare which tenant it is acting for.
 TENANT_HEADER = "X-AiSOC-Tenant-ID"
@@ -200,6 +222,86 @@ def _dev_mode() -> bool:
     return os.getenv("AISOC_DEV_MODE", "").strip().lower() in _TRUTHY
 
 
+def _is_loopback(address: str) -> bool:
+    """Whether ``address`` reaches only the machine this service runs on."""
+    host = address.strip().lower()
+    if not host:
+        return True
+    if host.startswith("["):
+        host = host.partition("]")[0].lstrip("[")
+    elif host.count(":") == 1:
+        host = host.partition(":")[0]
+    if host in {"localhost", "::1", "ip6-localhost"}:
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        # A hostname that is not obviously loopback. When the question cannot
+        # be decided, the safe answer is the one that refuses the bypass.
+        return False
+
+
+def auth_bypass_refusal() -> str | None:
+    """Why an uncredentialed caller must not be admitted, or ``None``.
+
+    Three conditions, where there used to be one. ``AISOC_DEV_MODE`` alone
+    admitted a caller with no credential at all whenever neither a console
+    secret nor a service token was configured — and ``docker-compose.yml``
+    defaults that flag to ``1`` on ten services while generating no service
+    token, so a hand-copied ``.env`` and a plain ``docker compose up`` left
+    this open.
+
+    Returns a sentence for the log, so an operator who expected the bypass
+    learns which condition withheld it instead of seeing an unexplained 503.
+    """
+    if not _dev_mode():
+        return "AISOC_DEV_MODE is not set"
+    if os.getenv(DEV_AUTH_BYPASS_VAR, "").strip().lower() not in _TRUTHY:
+        return (
+            f"{DEV_AUTH_BYPASS_VAR} is not set. AISOC_DEV_MODE selects several "
+            "unrelated development behaviours and defaults to 1 in compose, so "
+            "it no longer enables the anonymous path on its own. Set "
+            f"{DEV_AUTH_BYPASS_VAR}=1 deliberately, or use "
+            "infra/compose/docker-compose.dev.yml, which sets it"
+        )
+    published = [a for a in os.getenv(PUBLISHED_BIND_VAR, "").split(",") if a.strip()]
+    reachable = [a.strip() for a in published if not _is_loopback(a)]
+    if reachable:
+        return (
+            f"{DEV_AUTH_BYPASS_VAR} is set, but this deployment publishes "
+            f"{', '.join(reachable)}, which is not loopback. Bind to 127.0.0.1, "
+            "or configure SECRET_KEY and a service token"
+        )
+    return None
+
+
+#: Refusals and activations already logged, so a hot path does not emit one
+#: line per request. Keyed on the reason rather than counted, so a deployment
+#: whose refusal *changes* still says so once.
+_BYPASS_LOGGED: set[str] = set()
+
+
+def _bypass_permitted() -> bool:
+    """Whether to admit an uncredentialed caller, logging the decision once."""
+    refusal = auth_bypass_refusal()
+    if refusal is None:
+        if "__active__" not in _BYPASS_LOGGED:
+            _BYPASS_LOGGED.add("__active__")
+            logger.warning(
+                "ANONYMOUS ACCESS IS ENABLED on %s. Requests with no credential "
+                "resolve to the demo tenant %s. This is a development "
+                "convenience and must not be used where anyone else can reach "
+                "this host.",
+                SERVICE_NAME,
+                DEV_TENANT_ID,
+            )
+        return True
+    if refusal not in _BYPASS_LOGGED:
+        _BYPASS_LOGGED.add(refusal)
+        logger.info("anonymous access refused on %s: %s", SERVICE_NAME, refusal)
+    return False
+
+
 def resolve_console_secret() -> str:
     """The HS256 secret console tokens are signed with, or "" when unusable."""
     secret = (os.getenv("SECRET_KEY") or "").strip()
@@ -302,7 +404,7 @@ async def require_console_or_service_auth(
     service_token = resolve_service_token()
 
     if not console_secret and not service_token:
-        if _dev_mode():
+        if _bypass_permitted():
             return TenantPrincipal(
                 tenant_ids=frozenset({DEV_TENANT_ID}),
                 subject="dev",

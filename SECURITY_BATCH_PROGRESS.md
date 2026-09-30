@@ -147,8 +147,14 @@ anonymous principal is an `admin` in the same tenant the real operator is
 bootstrapped into.
 
 - [x] **S1c** Console credential on every call ([#1069](https://github.com/beenuar/AiSOC/pull/1069))
-- [ ] **S1** Production-class defaults on every documented path
-- [ ] **S1b** The nine vendored shims, slack-bot and realtime push
+- [x] **S1a** The bypass needs an explicit opt-in, refuses a reachable bind address, and the demo
+      identity has its own tenant ([#1070](https://github.com/beenuar/AiSOC/pull/1070))
+- [x] **S1b** The nine vendored shims, the three `require_service_auth` copies, slack-bot and
+      realtime push ([#1070](https://github.com/beenuar/AiSOC/pull/1070))
+- [ ] **S1d** Production-class defaults on every documented path: `install.sh`, `install.ps1`,
+      `make up`, the dev overlay, the single-host guide, the walkthrough, `make smoke` asserting an
+      anonymous write returns 401, and the gate that resolves the environment each documented path
+      produces
 
 ## S2 to S13
 
@@ -188,3 +194,19 @@ caught it on the first attempt here, which is what it is for.
 The batch order is dependency-driven, not severity-driven. S1c had to land
 before S1 because closing the anonymous path turns 61 console calls into 401s,
 and the console had to be able to authenticate first.
+
+S1 split into S1a/S1b (the code that decides whether to admit an
+uncredentialed caller, across all eleven services at once so the vendored
+copies and their cross-references move together) and S1d (the deployment
+paths). They are separable because S1a/S1b close the hole and S1d makes the
+documented experience match; shipping the first without the second leaves a
+correct default and a stale guide, which is the safe order.
+
+Two things found while fixing S1b that neither brief raised:
+
+* the API's push proxy stamped `X-AiSOC-Internal-Token` while realtime's
+  `requireInternal` reads `x-internal-token`, so the token it sent was never
+  checked by anything;
+* `userOf` in `services/realtime/src/push.ts` preferred a caller-supplied body
+  field over the stamped `X-User-Id`, under a comment asserting that the API
+  gateway validates it. It does not.

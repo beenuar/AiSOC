@@ -49,6 +49,7 @@ import uuid
 from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import func, select
 
+from app.api.v1.dev_auth import DEMO_TENANT_ID
 from app.core.security import get_password_hash
 from app.db.database import AsyncSessionLocal
 from app.models.tenant import Tenant, User
@@ -56,6 +57,14 @@ from app.models.tenant import Tenant, User
 # Matches the tenant seeded by migration 001. Reused so a bootstrap on an
 # already-migrated database adopts that tenant rather than creating a second
 # one that none of the seeded rows belong to.
+#
+# This must never equal `dev_auth.DEMO_TENANT_ID`. The two used to be the same
+# UUID, and that is what turned the development auth bypass into a
+# vulnerability rather than a convenience: the anonymous principal the API
+# hands back was an administrator in whichever tenant this script had just
+# created the operator's real account in, acting on their alerts and their
+# connector credentials. `_ensure_tenant` refuses to proceed if they are ever
+# made equal again, rather than trusting a comment to hold.
 DEFAULT_TENANT_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 # `.internal` is reserved by ICANN for private use and — unlike `.local`,
@@ -144,7 +153,20 @@ def resolve_password(args: argparse.Namespace) -> tuple[str, bool]:
 
 
 async def _ensure_tenant(session) -> Tenant:
-    """Adopt the migration-seeded tenant, else any existing one, else create it."""
+    """Adopt the migration-seeded tenant, else any existing one, else create it.
+
+    Never the demo tenant. The bypass hands an uncredentialed caller an
+    administrator in `DEMO_TENANT_ID`, so a real account sharing that tenant
+    is a real account anyone can act as.
+    """
+    if DEFAULT_TENANT_ID == DEMO_TENANT_ID:
+        raise RuntimeError(
+            "the bootstrap tenant and the demo tenant are the same "
+            f"({DEFAULT_TENANT_ID}). The development auth bypass makes an "
+            "uncredentialed caller an administrator of the demo tenant, so a "
+            "real account must not live there. Refusing to bootstrap."
+        )
+
     result = await session.execute(select(Tenant).where(Tenant.id == DEFAULT_TENANT_ID))
     tenant = result.scalar_one_or_none()
     if tenant is not None:
@@ -152,8 +174,10 @@ async def _ensure_tenant(session) -> Tenant:
 
     # A deployment that was provisioned some other way already has a tenant;
     # attaching the administrator to a brand-new one would make them an admin
-    # of nothing, with every existing alert invisible.
-    result = await session.execute(select(Tenant).order_by(Tenant.created_at).limit(1))
+    # of nothing, with every existing alert invisible. The demo tenant is
+    # excluded from that adoption: `seed_demo` creates it, so on a stack where
+    # the demo ran first it can easily be the oldest row.
+    result = await session.execute(select(Tenant).where(Tenant.id != DEMO_TENANT_ID).order_by(Tenant.created_at).limit(1))
     tenant = result.scalar_one_or_none()
     if tenant is not None:
         return tenant
