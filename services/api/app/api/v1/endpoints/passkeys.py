@@ -40,7 +40,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import and_, select, update
 
@@ -50,6 +50,7 @@ from app.core.security import create_access_token, create_refresh_token
 from app.db.rls import TenantDBSession
 from app.models.responder import PasskeyChallenge, PasskeyCredential
 from app.models.tenant import User
+from app.services.login_throttle import client_ip, get_login_throttle
 
 logger = logging.getLogger(__name__)
 
@@ -374,10 +375,28 @@ async def passkey_authenticate_begin(
 @router.post("/authenticate/finish", response_model=AuthenticateFinishResponse)
 async def passkey_authenticate_finish(
     body: FinishRequest,
+    http_request: Request,
     db: DBSession,
 ) -> AuthenticateFinishResponse:
-    """Verify a passkey assertion and mint JWTs."""
+    """Verify a passkey assertion and mint JWTs.
+
+    Throttled per source, and not per account: this route is given a
+    credential id rather than an address, so there is no account to count
+    against until the lookup succeeds. A passkey assertion is far harder to
+    brute-force than a password, so the limit is there to bound the work an
+    unauthenticated caller can make this service do, not to stop guessing.
+    """
     webauthn, _ = _import_webauthn()
+
+    throttle = get_login_throttle()
+    source = client_ip(http_request)
+    decision = await throttle.check(email="", source_ip=source)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=decision.detail,
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
 
     await _consume_challenge(db, encoded=body.challenge, purpose="authenticate")
 
@@ -397,6 +416,10 @@ async def passkey_authenticate_finish(
         )
     ).scalar_one_or_none()
     if cred_row is None:
+        # Fed, not merely checked. A limiter whose counter nothing increments
+        # never refuses anything, which is the shape the console-credential
+        # work found repeatedly: a mechanism with no caller on the path.
+        await throttle.record_failure(email="", source_ip=source)
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Unknown or revoked passkey",

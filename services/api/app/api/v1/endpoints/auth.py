@@ -1,10 +1,11 @@
 """Authentication endpoints: login, refresh, logout, user preferences."""
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update
 
@@ -20,6 +21,9 @@ from app.core.security import (
     verify_password,
 )
 from app.models.tenant import User
+from app.services.login_throttle import client_ip, get_login_throttle
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -59,17 +63,44 @@ class PreferencesPatch(BaseModel):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, db: DBSession) -> TokenResponse:
-    """Authenticate with email/password, return JWT tokens."""
+async def login(request: LoginRequest, http_request: Request, db: DBSession) -> TokenResponse:
+    """Authenticate with email/password, return JWT tokens.
+
+    Fifty wrong passwords for one account inside a minute used to return
+    fifty 401s with no delay and no lockout. The throttle runs *before* the
+    password is verified, and its reply is the same whether the account
+    exists or not: a throttle that only engages for real accounts is a
+    user-enumeration oracle.
+    """
+    throttle = get_login_throttle()
+    source = client_ip(http_request)
+    decision = await throttle.check(email=request.email, source_ip=source)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=decision.detail,
+            headers={"Retry-After": str(decision.retry_after_seconds)},
+        )
+
     result = await db.execute(select(User).where(User.email == request.email, User.is_active.is_(True)))
     user = result.scalar_one_or_none()
 
     if user is None or not verify_password(request.password, user.hashed_password):
+        locked = await throttle.record_failure(email=request.email, source_ip=source)
+        if locked.locked_out:
+            logger.warning(
+                "login lockout: %s principal locked after %d failures (ip=%s)",
+                locked.scope,
+                locked.failures,
+                str(source).replace("\r", "").replace("\n", " ")[:64],
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    await throttle.record_success(email=request.email, source_ip=source)
 
     # Update last login
     await db.execute(update(User).where(User.id == user.id).values(last_login=datetime.now(UTC)))

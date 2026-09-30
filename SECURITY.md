@@ -63,7 +63,8 @@ If you operate AiSOC, please review:
 - [`docs/runbooks/HARDENING.md`](docs/runbooks/HARDENING.md) for production hardening steps
 - [`infra/helm/aisoc/values.yaml`](infra/helm/aisoc/values.yaml) for the security-related defaults
 - [`services/api/app/core/security.py`](services/api/app/core/security.py) and [`services/api/app/auth/`](services/api/app/auth/) for our auth, RBAC, and SSO primitives
-- [`services/api/app/middleware/`](services/api/app/middleware/) for rate limiting, audit logging, and request hardening
+- [`services/api/app/middleware/`](services/api/app/middleware/) for audit logging and request hardening
+- [`services/api/app/services/login_throttle.py`](services/api/app/services/login_throttle.py) for sign-in throttling and lockout, and the `*_rate_limit.py` modules beside it for the explain, lake and waitlist limits. This line used to say rate limiting lived in the middleware directory, which holds two files and neither is a limiter
 
 ## Federated Threat Intel Mesh disclosure
 

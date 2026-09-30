@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Fifty wrong passwords for one account returned fifty 401s, with no delay and no lockout.** `POST /api/v1/auth/login` did a `SELECT`, a `verify_password`, and a 401. `SECURITY.md` pointed readers at `services/api/app/middleware/` "for rate limiting, audit logging, and request hardening", and that directory holds exactly two files, neither of which is a limiter. Rate limiting did exist in this service — on the explain endpoint, on lake queries and on the public waitlist form — and the login route consulted none of it. That is the shape this repository keeps finding: a mechanism that exists, is tested, and has no caller on the path that needs it.
+
+  `services/api/app/services/login_throttle.py` counts failures against **two** principals, because one counter cannot catch both attacks. An account counter catches one source guessing many passwords. A source counter catches one source spraying one common password across many accounts, which never trips an account counter at all, since each account sees a single failure.
+
+  **A success clears the account counter and deliberately not the source counter.** An attacker who guesses one password out of a thousand attempts would otherwise reset their own budget with it and carry on from zero, which turns a successful compromise into a free pass for the next nine hundred guesses.
+
+  The refusal is identical for an account that exists and one that does not, and the throttle runs *before* the database is consulted so it cannot know which it is. A throttle that engaged only for real accounts would answer 429 for those and 401 for the rest, and that difference is a user list — a worse defect than the one being fixed.
+
+  Below the threshold nothing happens, so someone who mistypes twice gets the ordinary 401. Past it, a 429 carrying `Retry-After` whose delay doubles per failure up to a ceiling; past the lockout threshold, a fixed cool-off. Doubling rather than a flat window, because a flat window is a rate an attacker can schedule around. Redis keys hold a SHA-256 of the address rather than the address, since an email in a key is an email in `KEYS *` and in every backup of that Redis.
+
+  When Redis is unavailable the limiter falls back to per-replica counting and says so at `warning`. Failing closed would lock every operator out of their own console over a Redis blip; failing silently open would remove the control exactly when an attacker is most likely to have caused the outage. Per-replica counting is weaker than shared counting and is documented as weaker rather than described as equivalent.
+
+  The passkey assertion route is throttled per source as well, and its failures are counted rather than only checked — a limiter whose counter nothing increments never refuses anything.
+
+  Measured in both directions: 22 cases, of which the four route-level ones fail on the pre-fix tree as `assert 429 in [401, 401, 401, ...]`. The control — that the first two attempts still answer 401 — passes on both trees, which is what stops the suite being satisfied by a route that refuses everyone.
+
+
 ### BREAKING
 
 - **An unauthenticated request is no longer an administrator, and `AISOC_DEV_MODE` no longer admits an uncredentialed caller.** If you rely on either, here is what changes and how to get it back.
