@@ -62,16 +62,18 @@ class PreferencesPatch(BaseModel):
     preferences: dict[str, Any]
 
 
+# The throttle runs *before* the password is verified, and answers the same
+# whether the account exists or not. A throttle that engaged only for real
+# accounts would reply 429 for those and 401 for the rest, and that difference
+# is a user list.
+#
+# The explanation lives here rather than in the docstring because the
+# docstring is published as the operation's `description` in
+# `docs/openapi.yaml`, and an API description should say what the endpoint
+# does, not what it used to do wrong.
 @router.post("/login", response_model=TokenResponse)
 async def login(request: LoginRequest, http_request: Request, db: DBSession) -> TokenResponse:
-    """Authenticate with email/password, return JWT tokens.
-
-    Fifty wrong passwords for one account inside a minute used to return
-    fifty 401s with no delay and no lockout. The throttle runs *before* the
-    password is verified, and its reply is the same whether the account
-    exists or not: a throttle that only engages for real accounts is a
-    user-enumeration oracle.
-    """
+    """Authenticate with email/password, return JWT tokens."""
     throttle = get_login_throttle()
     source = client_ip(http_request)
     decision = await throttle.check(email=request.email, source_ip=source)
