@@ -151,7 +151,7 @@ bootstrapped into.
       identity has its own tenant ([#1070](https://github.com/beenuar/AiSOC/pull/1072))
 - [x] **S1b** The nine vendored shims, the three `require_service_auth` copies, slack-bot and
       realtime push ([#1070](https://github.com/beenuar/AiSOC/pull/1072))
-- [x] **S1d** Production-class defaults on every documented path ([#1073](https://github.com/beenuar/AiSOC/pull/1073))
+- [x] **S1d** Production-class defaults on every documented path ([#1073](https://github.com/beenuar/AiSOC/pull/1074))
 
 ## S2 to S13
 
