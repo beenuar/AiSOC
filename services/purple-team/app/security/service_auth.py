@@ -44,12 +44,6 @@ from fastapi import Header, HTTPException, status
 #: Set by each vendored copy so the per-service override resolves.
 SERVICE_NAME = "PURPLE_TEAM"
 
-_TRUTHY = {"1", "true", "yes", "on"}
-
-
-def _dev_mode() -> bool:
-    return os.getenv("AISOC_DEV_MODE", "").strip().lower() in _TRUTHY
-
 
 def resolve_token() -> str:
     """Per-service override wins, then the shared platform token."""
@@ -63,8 +57,13 @@ async def require_service_auth(authorization: str | None = Header(default=None))
     """FastAPI dependency. Fails closed unless explicitly in dev mode."""
     token = resolve_token()
     if not token:
-        if _dev_mode():
-            return
+        # No dev-mode exemption, matching services/actions/app/security/authz.py.
+        # This branch used to return early when AISOC_DEV_MODE was set, and
+        # docker-compose.yml defaults that flag to 1 on ten services while
+        # nothing generates a service token — so the exemption was not a
+        # developer convenience, it was the state every stock install ran in.
+        # A service-to-service dependency has no browser to keep usable, so
+        # 503 with an actionable message is the whole of what is needed.
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(

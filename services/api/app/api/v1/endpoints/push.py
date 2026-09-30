@@ -53,7 +53,12 @@ async def _proxy(
     url = f"{settings.REALTIME_BASE_URL.rstrip('/')}{path}"
     headers: dict[str, str] = {"Accept": "application/json"}
     if settings.REALTIME_INTERNAL_TOKEN:
+        # Both spellings: realtime's requireInternal reads
+        # `x-internal-token`, which is what the agents service sends, and
+        # this proxy historically sent only the AiSOC-prefixed form — so
+        # the token it stamped was never actually checked.
         headers["X-AiSOC-Internal-Token"] = settings.REALTIME_INTERNAL_TOKEN
+        headers["X-Internal-Token"] = settings.REALTIME_INTERNAL_TOKEN
     if user is not None:
         # Mirror what the realtime push module expects (x-tenant-id /
         # x-user-id headers). We also send the AiSOC-prefixed variants so

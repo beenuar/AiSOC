@@ -22,7 +22,6 @@ signature and is authenticated with a shared token instead.
 from __future__ import annotations
 
 import hmac
-import os
 from typing import Any
 
 import structlog
@@ -64,15 +63,18 @@ class ApprovalCardRequest(BaseModel):
 def _authorized(supplied: str | None) -> bool:
     """Compare the internal token in constant time, failing closed.
 
-    An unset token refuses every internal call unless dev mode is on. The
-    alternative — treating "no token configured" as "no auth needed" — makes
-    a route that can post into a workspace channel open to anything that can
-    reach the pod.
+    An unset token refuses every internal call, with no dev-mode exemption.
+    That exemption used to exist and it was the only state a stock install ran
+    in: `docker-compose.yml` defaults `AISOC_DEV_MODE` to 1 on this service,
+    and `AISOC_INTERNAL_TOKEN` appeared only commented out in `.env.example`
+    with nothing generating it. So a route that posts into a workspace channel
+    was open to anything that could reach the pod. `scripts/ensure_env.py` now
+    generates the token, which is what makes requiring it viable.
     """
     settings = get_settings()
     expected = settings.AISOC_INTERNAL_TOKEN.strip()
     if not expected:
-        return os.environ.get("AISOC_DEV_MODE", "").strip().lower() in {"1", "true", "yes", "on"}
+        return False
     return bool(supplied) and hmac.compare_digest(supplied.strip(), expected)
 
 

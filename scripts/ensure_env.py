@@ -136,6 +136,17 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Bearer for realtime's /internal/* fan-out (API/agents -> realtime). Sent as x-internal-token.",
     ),
+    # Service-to-service bearer for slack-bot's POST /internal/approval-card,
+    # a route that posts into a workspace channel. Its guard treated an unset
+    # value as "no auth needed" whenever AISOC_DEV_MODE was set, and compose
+    # defaults that flag to 1 while this variable appeared only commented out
+    # in `.env.example` — so nothing generated it and the exemption was the
+    # only state a stock install ran in. Generating it lets the guard require
+    # it unconditionally.
+    "AISOC_INTERNAL_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Bearer for slack-bot's /internal/approval-card (agents -> slack-bot). Sent as X-AiSOC-Internal-Token.",
+    ),
     # The datastore passwords. `.env.example` shipped these as
     # `aisoc_dev_secret` / `aisoc_app_dev_secret` / `redis_dev_secret` /
     # `clickhouse_dev_secret`, and `docker-compose.prod.yml` guarded each one

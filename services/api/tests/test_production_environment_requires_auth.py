@@ -20,8 +20,6 @@ product and a silently broken developer experience.
 
 from __future__ import annotations
 
-import importlib
-
 import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
@@ -47,19 +45,29 @@ def _probe_app(get_current_user) -> FastAPI:  # noqa: ANN001 - dependency callab
 
 @pytest.fixture
 def client_in(monkeypatch: pytest.MonkeyPatch):
-    def _build(environment: str) -> TestClient:
+    def _build(environment: str, *, bypass: str | None = None) -> TestClient:
         # `current_env_from_os` reads ENV first, so both are set; a stale ENV
         # is precisely what shadowed an operator's ENVIRONMENT on ingest.
         monkeypatch.setenv("ENVIRONMENT", environment)
         monkeypatch.delenv("ENV", raising=False)
+        monkeypatch.delenv("AISOC_PUBLISHED_BIND_ADDRS", raising=False)
+        if bypass is None:
+            monkeypatch.delenv("AISOC_DEV_AUTH_BYPASS", raising=False)
+        else:
+            monkeypatch.setenv("AISOC_DEV_AUTH_BYPASS", bypass)
+
         from app.api.v1 import deps, dev_auth
 
-        # Both, and in this order. Reloading `dev_auth` alone leaves
-        # `deps.get_current_user` closed over the previous module, and the
-        # route then rejects on validation (422) instead of exercising the
-        # authentication path this test is about.
-        importlib.reload(dev_auth)
-        importlib.reload(deps)
+        # This fixture used to `importlib.reload` both modules. It does not
+        # any more, and neither should anything else here: a reload rebinds
+        # every function object in `deps`, so the `dependency_overrides` that
+        # other modules keyed on the old objects stop matching and their
+        # routes fall through to real authentication. It went unnoticed
+        # because this filename sorts near the end of the suite; a new file
+        # doing the same thing took 146 unrelated tests down with it. The
+        # shim reads `os.environ` at call time, so setting the variables is
+        # sufficient and always was.
+        dev_auth._REFUSALS_LOGGED.clear()
         return TestClient(_probe_app(deps.get_current_user), raise_server_exceptions=False)
 
     return _build
@@ -80,8 +88,20 @@ class TestTheBypassIsEnvironmentGated:
         reader could reasonably assume any named environment is safe."""
         assert client_in(environment).get("/probe").status_code == 401
 
-    def test_development_still_resolves_a_user(self, client_in) -> None:
+    def test_development_alone_is_no_longer_enough(self, client_in) -> None:
+        """Naming the environment stopped being sufficient.
+
+        This assertion used to read the other way, and that is the defect:
+        `ENVIRONMENT` defaulted to `development` in `docker-compose.yml` and
+        in the `.env` the setup script writes, so the only thing between an
+        uncredentialed request and an administrator was a string nobody had
+        chosen deliberately. The shim now needs `AISOC_DEV_AUTH_BYPASS`,
+        which no compose file or template sets.
+        """
+        assert client_in("development").get("/probe").status_code == 401
+
+    def test_development_with_the_explicit_optin_still_resolves_a_user(self, client_in) -> None:
         """The other direction, so this cannot pass on a build with no shim."""
-        response = client_in("development").get("/probe")
+        response = client_in("development", bypass="1").get("/probe")
         assert response.status_code == 200
         assert response.json()["role"] == "admin"
