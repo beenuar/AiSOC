@@ -11,6 +11,7 @@
 import React, { useState } from 'react';
 import { mutate } from 'swr';
 import type { Playbook } from './types';
+import { apiFetch } from '@/lib/api';
 
 /** Small toggle that flips Playbook.enabled via PUT /api/v1/playbooks/<id>. */
 export function EnabledToggle({ playbook }: { playbook: Playbook }) {
@@ -18,7 +19,7 @@ export function EnabledToggle({ playbook }: { playbook: Playbook }) {
   async function toggle() {
     setLoading(true);
     try {
-      await fetch(`/api/v1/playbooks/${playbook.id}`, {
+      await apiFetch(`/api/v1/playbooks/${playbook.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !playbook.enabled }),
@@ -54,7 +55,7 @@ export function RunButton({ playbook }: { playbook: Playbook }) {
   async function run() {
     setStatus('running');
     try {
-      const res = await fetch(`/api/v1/playbooks/${playbook.id}/run`, {
+      const res = await apiFetch(`/api/v1/playbooks/${playbook.id}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ context: {}, dry_run: true }),
@@ -89,6 +90,6 @@ export function RunButton({ playbook }: { playbook: Playbook }) {
 /** Delete a playbook (used only for user-created playbooks, not shipped packs). */
 export async function deletePlaybook(id: string) {
   if (!confirm('Delete this playbook?')) return;
-  await fetch(`/api/v1/playbooks/${id}`, { method: 'DELETE' });
+  await apiFetch(`/api/v1/playbooks/${id}`, { method: 'DELETE' });
   await mutate('/api/v1/playbooks');
 }

@@ -6,7 +6,7 @@ import clsx from 'clsx';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { formatTagLabel } from './tagLabel';
-import { AUTH_TOKEN_KEY } from '@/lib/api';
+import { apiFetch, AUTH_TOKEN_KEY } from '@/lib/api';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -596,7 +596,7 @@ export function MarketplaceView() {
         return next;
       });
       try {
-        const res = await fetch('/api/v1/marketplace/install', {
+        const res = await apiFetch('/api/v1/marketplace/install', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...authHeaders() },
           credentials: 'include',

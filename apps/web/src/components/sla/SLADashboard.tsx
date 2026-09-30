@@ -3,17 +3,7 @@
 import { useState } from 'react';
 import useSWR, { mutate } from 'swr';
 import { demoFallback } from '@/lib/demoFallback';
-
-const fetcher = async (url: string) => {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  const text = await r.text();
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error('Invalid JSON');
-  }
-};
+import { apiFetch, authedFetcher } from '@/lib/api';
 
 interface SeverityMetrics {
   total: number;
@@ -130,7 +120,7 @@ function EditConfigModal({
 
   const save = async () => {
     setSaving(true);
-    await fetch(`/api/v1/sla/config/${config.severity}`, {
+    await apiFetch(`/api/v1/sla/config/${config.severity}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mttd_target: mttd, mttr_target: mttr, mttc_target: mttc }),
@@ -202,7 +192,7 @@ function EditKpiBarModal({
     setErr(null);
     setSaving(true);
     try {
-      const res = await fetch('/api/v1/sla/kpi-targets', {
+      const res = await apiFetch('/api/v1/sla/kpi-targets', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -440,7 +430,7 @@ export function SLADashboard() {
 
   const { data: rawMetrics, error: metricsError, mutate: refetchMetrics } = useSWR<SLAMetrics>(
     `/api/v1/sla/metrics?days=${days}`,
-    fetcher,
+    authedFetcher,
     {
       refreshInterval: 60_000,
       fallbackData: demoFallback(MOCK_SLA_METRICS),
@@ -461,7 +451,7 @@ export function SLADashboard() {
   // and a 42.5m MTTR rendered in both, on every deployment, identically.
   const metrics = isValidMetrics ? rawMetrics : undefined;
 
-  const { data: configs } = useSWR<SLAConfig[]>('/api/v1/sla/config', fetcher, {
+  const { data: configs } = useSWR<SLAConfig[]>('/api/v1/sla/config', authedFetcher, {
     fallbackData: demoFallback(MOCK_SLA_CONFIGS),
     shouldRetryOnError: false,
     errorRetryCount: 0,

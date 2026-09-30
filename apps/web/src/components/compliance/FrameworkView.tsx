@@ -4,6 +4,7 @@ import useSWR, { mutate } from 'swr';
 import { useState } from 'react';
 import { ComplianceHeatmap } from './ComplianceHeatmap';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
+import { apiFetch } from '@/lib/api';
 
 interface Evidence {
   id: string;
@@ -82,7 +83,7 @@ export function FrameworkView({ framework }: Props) {
   async function handleCollect() {
     setCollecting(true);
     try {
-      const res = await fetch(`/api/v1/compliance/${framework}/collect`, {
+      const res = await apiFetch(`/api/v1/compliance/${framework}/collect`, {
         method: 'POST',
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -96,7 +97,7 @@ export function FrameworkView({ framework }: Props) {
   async function handleExport() {
     setExporting(true);
     try {
-      const res = await fetch(`/api/v1/compliance/${framework}/export`);
+      const res = await apiFetch(`/api/v1/compliance/${framework}/export`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const exportData = await res.json();
 

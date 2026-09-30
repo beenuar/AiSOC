@@ -46,6 +46,10 @@ vi.mock('@/lib/api', () => ({
     exportCsv: exportCsvMock,
     exportHtml: exportHtmlMock,
   },
+  // The view's SWR fetcher. It used to be a module-local arrow that called
+  // `fetch(url, { credentials: 'include' })`, i.e. no credential the API
+  // reads; SWR itself is mocked below, so this only has to exist.
+  authedFetcher: vi.fn(),
 }));
 
 const toastSuccess = vi.hoisted(() => vi.fn());

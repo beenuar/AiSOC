@@ -109,27 +109,3 @@ export function describeApiFailure(error: unknown, subject: FailureSubject): str
   const detail = error instanceof Error ? error.message : String(error ?? 'unknown error');
   return `Could not load the ${what}: ${detail}. ${unknownNotEmpty(what)}`;
 }
-
-/**
- * `fetch` wrapper that throws {@link ApiError} rather than a bare `Error`.
- *
- * The per-view fetchers this replaces threw `new Error('HTTP 404')`, which
- * carried the status in prose only. Callers therefore could not distinguish a
- * console bug from an outage without parsing a message, and none of them did —
- * they all printed "unreachable".
- */
-export async function jsonFetcher<T>(url: string): Promise<T> {
-  let response: Response;
-  try {
-    response = await fetch(url);
-  } catch (err) {
-    // Status 0 is the transport failing: DNS, TLS, CORS, offline. This is the
-    // only case where "unreachable" is the honest word.
-    throw new ApiError(err instanceof Error ? err.message : 'Network request failed', 0, '');
-  }
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new ApiError(`HTTP ${response.status}`, response.status, body);
-  }
-  return (await response.json()) as T;
-}

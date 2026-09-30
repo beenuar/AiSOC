@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import useSWR from 'swr';
+import { apiFetch, authedFetcher } from '@/lib/api';
 
 interface ControlOut {
   id: string;
@@ -42,11 +43,6 @@ interface SOC2Response {
   controls: ControlWithEvidence[];
 }
 
-const fetcher = (url: string) =>
-  fetch(url, { credentials: 'include' }).then((r) => {
-    if (!r.ok) throw new Error('Failed to fetch');
-    return r.json();
-  });
 
 const STATUS_STYLES: Record<string, string> = {
   collected: 'bg-green-100 text-green-800 border-green-200',
@@ -92,14 +88,14 @@ export function SOC2View() {
 
   const { data, error, isLoading, mutate } = useSWR<SOC2Response>(
     '/api/v1/compliance/soc2',
-    fetcher,
+    authedFetcher,
     { revalidateOnFocus: false }
   );
 
   const handleCollect = async () => {
     setCollecting(true);
     try {
-      await fetch('/api/v1/compliance/soc2/collect', {
+      await apiFetch('/api/v1/compliance/soc2/collect', {
         method: 'POST',
         credentials: 'include',
       });
@@ -112,7 +108,7 @@ export function SOC2View() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch('/api/v1/compliance/soc2/export', { credentials: 'include' });
+      const res = await apiFetch('/api/v1/compliance/soc2/export', { credentials: 'include' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       // Generate a printable HTML page for PDF export

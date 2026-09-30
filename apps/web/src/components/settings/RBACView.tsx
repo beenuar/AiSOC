@@ -5,7 +5,8 @@ import useSWR, { mutate } from 'swr';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { demoFallback } from '@/lib/demoFallback';
 import { FailureBanner } from '@/components/ui/FailureBanner';
-import { describeApiFailure, jsonFetcher } from '@/lib/failure';
+import { describeApiFailure } from '@/lib/failure';
+import { apiFetch, authedFetcher } from '@/lib/api';
 
 interface Permission {
   id: string;
@@ -25,7 +26,6 @@ interface Role {
 
 // Throws `ApiError`, so the banner below can tell a 403 (this operator cannot
 // read roles) from a 500 (the API is broken) from a 422 (the console is).
-const fetcher = jsonFetcher;
 
 const CATEGORY_COLORS: Record<string, string> = {
   cases: 'bg-blue-500/20 text-blue-300',
@@ -257,10 +257,10 @@ export function RBACView() {
     data: roles,
     error: rolesError,
     mutate: reloadRoles,
-  } = useSWR<Role[]>('/api/v1/rbac/roles', fetcher, {
+  } = useSWR<Role[]>('/api/v1/rbac/roles', authedFetcher, {
     fallbackData: demoFallback(MOCK_ROLES),
   });
-  const { data: permissions } = useSWR<Permission[]>('/api/v1/rbac/permissions', fetcher, {
+  const { data: permissions } = useSWR<Permission[]>('/api/v1/rbac/permissions', authedFetcher, {
     fallbackData: demoFallback(MOCK_PERMISSIONS),
   });
 
@@ -269,7 +269,7 @@ export function RBACView() {
 
   const handleDelete = async (role: Role) => {
     if (!confirm(`Delete role "${role.name}"?`)) return;
-    await fetch(`/api/v1/rbac/roles/${role.id}`, { method: 'DELETE' });
+    await apiFetch(`/api/v1/rbac/roles/${role.id}`, { method: 'DELETE' });
     mutate('/api/v1/rbac/roles');
   };
 

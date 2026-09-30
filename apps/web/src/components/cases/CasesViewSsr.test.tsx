@@ -1,15 +1,19 @@
 /**
- * The server fetch in `cases/page.tsx` must survive into the first paint.
+ * The fabricated case list stays withheld outside the hosted demo.
  *
- * `initialCases` is documented as server-rendered data that avoids a flash of
- * mock content. It was folded into the same `fallback` object as `MOCK_CASES`
- * and the whole thing passed through `demoFallback(fallback)` — which returns
- * `undefined` outside the hosted demo *regardless of whether real SSR data
- * was supplied*. So on every non-demo deployment the server round-trip was
- * made, awaited, and then discarded.
+ * This file used to assert that an `initialCases` prop, fed by a server-side
+ * fetch in `cases/page.tsx`, survived into the first paint. That fetch sent
+ * no credential and a build-time tenant id, so it served one fixed tenant's
+ * cases to whoever loaded the page and only returned anything because an
+ * uncredentialed request resolved to a demo administrator. It was removed,
+ * and with it the prop: a server render has no session to borrow, so there
+ * was no authenticated version of that call to keep.
  *
- * Real SSR data is not sample data, and the gate that withholds one must not
- * withhold the other.
+ * What still matters, and is what this file now covers, is the direction that
+ * has a production path: `demoFallback` must hand SWR the sample list inside
+ * the hosted demo and nothing at all outside it. Folding real data and sample
+ * data into one object and passing the pair through `demoFallback` is how
+ * that gate got confused once already.
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
@@ -53,28 +57,8 @@ vi.mock('@/components/saved-views/SavedViewsBar', () => ({
 
 import { CasesView } from './CasesView';
 
-const SSR_CASES: CasesResponse = {
-  cases: [
-    {
-      id: 'case-ssr-1',
-      title: 'Server-rendered case from the API',
-      status: 'open',
-      severity: 'high',
-      alertCount: 2,
-      createdAt: '2026-05-06T09:00:00Z',
-      updatedAt: '2026-05-06T09:30:00Z',
-      tags: [],
-    },
-  ],
-  total: 1,
-  page: 1,
-  pageSize: 1,
-} as CasesResponse;
-
-/** Titles only `MOCK_CASES` carries. */
 const FABRICATED_TITLES = [
   'Ransomware incident on finance workstations',
-  'Suspected APT lateral movement campaign',
   'Cryptominer on dev server cluster',
 ];
 
@@ -89,14 +73,8 @@ afterEach(() => {
   __setDemoModeForTests(null);
 });
 
-describe('server-rendered cases are not discarded outside demo mode', () => {
-  it('renders the SSR payload on first paint', () => {
-    render(<CasesView initialCases={SSR_CASES} />);
-
-    expect(screen.getByText('Server-rendered case from the API')).toBeTruthy();
-  });
-
-  it('still withholds the fabricated list when no SSR data was supplied', () => {
+describe('the fabricated case list is withheld outside demo mode', () => {
+  it('renders none of the sample titles', () => {
     render(<CasesView />);
 
     for (const title of FABRICATED_TITLES) {
@@ -107,16 +85,16 @@ describe('server-rendered cases are not discarded outside demo mode', () => {
     }
   });
 
-  it('never hands the fabricated list to SWR as real SSR data', () => {
-    render(<CasesView initialCases={SSR_CASES} />);
+  it('hands SWR no fallback at all, rather than a fabricated one', () => {
+    render(<CasesView />);
 
-    const supplied = [...swrFallbacks.values()].find(Boolean) as CasesResponse | undefined;
-    expect(supplied?.cases?.[0]?.title).toBe('Server-rendered case from the API');
+    const supplied = [...swrFallbacks.values()] as (CasesResponse | undefined)[];
+    expect(supplied.every((value) => value === undefined)).toBe(true);
   });
 });
 
 describe('the hosted demo is still populated', () => {
-  it('shows the sample list when the build is the demo and there is no SSR data', () => {
+  it('shows the sample list when the build is the demo', () => {
     __setDemoModeForTests(true);
 
     render(<CasesView />);

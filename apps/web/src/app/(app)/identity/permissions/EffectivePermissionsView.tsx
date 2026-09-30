@@ -38,7 +38,7 @@ import useSWR from 'swr';
 import cytoscape, { type Core, type ElementDefinition } from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import { clsx } from 'clsx';
-import { safeFetcher } from '@/lib/fetcher';
+import { authedFetcher } from '@/lib/api';
 import { demoFallback } from '@/lib/demoFallback';
 import { describeApiFailure } from '@/lib/failure';
 
@@ -284,7 +284,7 @@ function countDenyActions(decisions: Decision[]): number {
 }
 
 function isScaffold501(error: unknown): boolean {
-  // safeFetcher throws `HTTP 501 …` strings on coverage=scaffold providers.
+  // authedFetcher throws ApiError with the status on coverage=scaffold providers.
   return error instanceof Error && error.message.startsWith('HTTP 501');
 }
 
@@ -352,7 +352,7 @@ export function EffectivePermissionsView() {
 
   const { data: providerInfo } = useSWR<{ providers: ProviderInfo[] }>(
     '/api/v1/identity/effective-permissions/providers',
-    safeFetcher,
+    authedFetcher,
     { fallbackData: demoFallback({ providers: DEMO_PROVIDERS }) },
   );
   const providers = providerInfo?.providers ?? DEMO_PROVIDERS;
@@ -365,7 +365,7 @@ export function EffectivePermissionsView() {
       : null;
   const { data, error, isLoading, mutate } = useSWR<ResolverResult>(
     apiUrl,
-    safeFetcher,
+    authedFetcher,
     {
       fallbackData:
         provider === 'aws' && !isScaffoldProvider ? demoFallback(DEMO_RESULT) : undefined,

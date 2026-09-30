@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { apiFetch } from '@/lib/api';
 
 // ---------------------------------------------------------------------------
 // Wire types — mirror services/api/app/api/v1/endpoints/waitlist.py
@@ -90,7 +91,7 @@ export default function AdminWaitlistPage() {
     setError(null);
     try {
       const qs = statusFilter === 'all' ? '' : `?status_filter=${statusFilter}`;
-      const response = await fetch(`/api/v1/waitlist/entries${qs}`, {
+      const response = await apiFetch(`/api/v1/waitlist/entries${qs}`, {
         method: 'GET',
         cache: 'no-store',
       });
@@ -118,7 +119,7 @@ export default function AdminWaitlistPage() {
   ) => {
     setBusyRow(entryId);
     try {
-      const response = await fetch(`/api/v1/waitlist/entries/${entryId}`, {
+      const response = await apiFetch(`/api/v1/waitlist/entries/${entryId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status: nextStatus }),
@@ -139,7 +140,7 @@ export default function AdminWaitlistPage() {
     setBusyRow(entryId);
     setError(null);
     try {
-      const response = await fetch('/api/v1/admin/tenants/provision', {
+      const response = await apiFetch('/api/v1/admin/tenants/provision', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ waitlist_entry_id: entryId, seed_demo: true }),

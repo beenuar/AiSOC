@@ -27,6 +27,7 @@ import { STEP_TYPE_META } from './stepColors';
 import { AUTHORABLE_STEP_TYPES, defaultParamsFor } from './stepSchemas';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { useHistoryState } from '@/hooks/useHistoryState';
+import { apiFetch, authedFetcher } from '@/lib/api';
 
 /**
  * What the palette offers. Derived from the registry, and filtered on
@@ -53,11 +54,6 @@ function makeNewStep(type: StepType): PlaybookStep {
   };
 }
 
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error('Failed to fetch');
-    return r.json();
-  });
 
 /* ───────────────────────────── Trigger editor ───────────────────────────── */
 
@@ -112,7 +108,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
 
   const { data: remote, isLoading } = useSWR<Playbook>(
     !isNew ? `/api/v1/playbooks/${playbookId}` : null,
-    fetcher,
+    authedFetcher,
   );
 
   const [playbook, history] = useHistoryState<Playbook>(EMPTY_PLAYBOOK);
@@ -274,7 +270,7 @@ export function PlaybookEditor({ playbookId }: PlaybookEditorProps) {
     setRunning(true);
     setRunResult(null);
     try {
-      const res = await fetch(`/api/v1/playbooks/${playbook.id}/run`, {
+      const res = await apiFetch(`/api/v1/playbooks/${playbook.id}/run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ context: {}, dry_run: true }),

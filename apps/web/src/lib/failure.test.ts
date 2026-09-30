@@ -24,7 +24,7 @@ describe('statusOf', () => {
 
   it('parses the status out of the legacy fetchers that only threw a string', () => {
     // `RBACView` and `PlaybooksView` threw `new Error('HTTP 404')`, and
-    // `safeFetcher` throws `HTTP 501 Not Implemented — …`. Downgrading those
+    // `authedFetcher` throws `ApiError` carrying status 501. Downgrading those
     // to "unrecognised" would lose the only signal that distinguishes a
     // console bug from an outage.
     expect(statusOf(new Error('HTTP 404'))).toBe(404);

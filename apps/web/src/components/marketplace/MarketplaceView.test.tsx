@@ -59,6 +59,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
+  window.localStorage.clear();
 });
 
 describe('MarketplaceView install flow', () => {
@@ -72,12 +73,16 @@ describe('MarketplaceView install flow', () => {
     expect(screen.getByRole('button', { name: /^install$/i })).toBeInTheDocument();
   });
 
-  it('POSTs to /api/v1/marketplace/install when the user clicks Install', async () => {
+  it('POSTs to /api/v1/marketplace/install with the caller credential', async () => {
     const fetchMock = vi.fn(
       async (): Promise<Response> =>
         new Response(JSON.stringify({ ok: true }), { status: 200 }),
     );
     vi.stubGlobal('fetch', fetchMock);
+    // The install used to go out as a bare `fetch` with `credentials:
+    // 'include'`, which sends cookies the API does not read. It succeeded
+    // only where an uncredentialed request resolved to a demo administrator.
+    window.localStorage.setItem('aisoc.responder.accessToken', 'test-token');
 
     render(<MarketplaceView />);
 
@@ -88,8 +93,10 @@ describe('MarketplaceView install flow', () => {
         '/api/v1/marketplace/install',
         expect.objectContaining({
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer test-token',
+          }),
         }),
       );
     });

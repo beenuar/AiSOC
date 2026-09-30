@@ -361,6 +361,22 @@ jobs:
         run: python scripts/check_mock_data_gated.py --self-test
       - name: Verify sample data is gated behind demo mode
         run: python scripts/check_mock_data_gated.py
+      # Sixty-one console calls reached an API with no Authorization header,
+      # and every one of them worked: an uncredentialed request resolved to a
+      # demo administrator in a development-class environment, which is how
+      # the quick start ran. Closing that turns each into a 401, so the
+      # console side needs a gate of its own — nothing here looked at a
+      # request header before, only at server-side route decorators.
+      #
+      # Self-test first. Three blind spots in its own first draft are pinned
+      # as cases: a generic type argument hid both real SWR sites, a
+      # multi-line arrow fetcher was truncated at the first newline, and an
+      # inline fetcher whose URL is the SWR key has no API path at the call
+      # site to match on at all.
+      - name: Console credential gate — self-test
+        run: python3 scripts/check_console_auth_headers.py --self-test
+      - name: Verify every console API call carries a credential
+        run: python3 scripts/check_console_auth_headers.py
       # Sending a customer file to a third party is a disclosure, and for the
       # first commercial provider wired here it is a disclosure to the public
       # internet: a stored report carries `visibility: "public"` and

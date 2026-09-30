@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Worth recording separately: `main` was green at `079fdb69` while every open pull request was red on this, because the advisories were published after `main` last ran. A stale-green default branch hiding a breaker that reds the whole queue is a shape this repository has hit before.
 
+- **Every console call to an AiSOC API now carries a credential. Sixty-one did not.** The gap: `apps/web` reached API routes through bare `fetch(url)` and through two single-argument SWR fetchers that take no options, so the request went out with no `Authorization` header. Those calls worked, which is what hid them — an uncredentialed request resolves to a demo administrator whenever the API runs in a development-class environment, and that is how the quick start and the documented single-host deployment run.
+
+  How it was measured: `scripts/check_console_auth_headers.py`, which parses each `fetch(` and `useSWR(` call in `apps/web/src` and asks whether the credential is visible on the same expression. Against the commit before the fix it reports 61 findings across 21 files; after, 33 API calls across 311 files all carry one, with a single allowlisted exception (the public `/r/<slug>` replay permalink, which is unauthenticated by design). A hand-written grep for `fetch('/api/v1` finds only 27 of the 61: it cannot see a template-literal URL behind a base variable, the six call sites inside `api.ts` itself, or any of the 16 `useSWR` keys whose fetcher is anonymous by construction.
+
+  Two near-misses are now findings rather than passes, because neither authenticates: `X-Tenant-Id` on its own is a caller-supplied claim, not an identity, and five `api.ts` call sites sent exactly that and no token; and `credentials: 'include'` sends cookies, while the API verifies a bearer token and the SSO cookie it sets is read by nothing.
+
+  The fix routes everything through one credentialed path — `apiHeaders()`, `apiRequest()`, `authedFetcher()` and `apiFetch()` in `apps/web/src/lib/api.ts` — and deletes `apps/web/src/lib/fetcher.ts` and `jsonFetcher` outright. Three hand-rolled copies of the localStorage token block collapse into the helper, which also fixes a tenant-switcher bug they shared: all three pinned `X-Tenant-Id` to the build-time `TENANT_ID` rather than resolving `getActiveTenantId()` at call time, so switching tenant did not reach them.
+
+  The server-side prefetch in `apps/web/src/app/(app)/cases/page.tsx` was removed rather than credentialed. It sent a build-time tenant id and no token, so it served one fixed tenant's cases to whoever loaded the page; a server render has no session to borrow, so there was no authenticated version of that call to keep. The `initialCases` prop it fed went with it, along with the two assertions in `CasesViewSsr.test.tsx` that only described it — the two covering the demo gate remain, since that is the direction with a production path.
+
+  The gate that keeps it closed is wired into `ci.yml` beside the sample-data gate, and runs `--self-test` first. Three blind spots in its own first draft are pinned as cases, each of which had made it silently miss real findings: a generic type argument (`useSWR<Role[]>(...)`) hid both settings SWR sites, a multi-line arrow fetcher was truncated at the first newline so nine calls on the honeytokens and purple-team pages read as "imported, judged elsewhere", and an inline fetcher whose URL is the SWR key has no API path at the call site to match on at all.
+
 ## [14.0.0] - 2026-09-29
 
 ### BREAKING

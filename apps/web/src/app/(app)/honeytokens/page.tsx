@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR, { mutate } from "swr";
 import { useTenantId } from "@/components/layout/TenantProvider";
+import { apiHeaders } from '@/lib/api';
 
 // Same-origin by default — Next.js rewrites proxy `/api/v1/honeytokens/*`
 // to the honeytokens service. Override with `NEXT_PUBLIC_HONEYTOKENS_URL`
@@ -18,7 +19,7 @@ const API = process.env.NEXT_PUBLIC_HONEYTOKENS_URL ?? "";
 // the console's `X-Tenant-Id` header uses.
 
 const fetcher = (url: string) =>
-  fetch(url).then((r) => {
+  fetch(url, { headers: apiHeaders() }).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   });
@@ -139,7 +140,7 @@ function CreateTokenModal({
     try {
       const res = await fetch(`${API}/api/v1/honeytokens`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders(),
         body: JSON.stringify({
           tenant_id: tenantId,
           name,
@@ -325,13 +326,13 @@ export default function HoneytokensPage() {
   };
 
   const revoke = async (id: string) => {
-    await fetch(`${API}/api/v1/honeytokens/${id}/revoke`, { method: "PATCH" });
+    await fetch(`${API}/api/v1/honeytokens/${id}/revoke`, { method: "PATCH", headers: apiHeaders() });
     refresh();
   };
 
   const remove = async (id: string) => {
     if (!confirm("Delete this honeytoken?")) return;
-    await fetch(`${API}/api/v1/honeytokens/${id}`, { method: "DELETE" });
+    await fetch(`${API}/api/v1/honeytokens/${id}`, { method: "DELETE", headers: apiHeaders() });
     refresh();
   };
 

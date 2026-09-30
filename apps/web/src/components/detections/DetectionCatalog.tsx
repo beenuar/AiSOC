@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import clsx from 'clsx';
 import { canUseDemoData } from '@/lib/demoFallback';
+import { apiFetch } from '@/lib/api';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -95,7 +96,7 @@ function DetectionCard({ rule }: { rule: DetectionRule }) {
     e.stopPropagation();
     setInstalling(true);
     try {
-      await fetch(`/api/v1/community/detections/${rule.id}/install`, { method: 'POST' });
+      await apiFetch(`/api/v1/community/detections/${rule.id}/install`, { method: 'POST' });
       setInstalled(true);
     } catch {
       // ignore
@@ -111,7 +112,7 @@ function DetectionCard({ rule }: { rule: DetectionRule }) {
     }
     setLoadingDetail(true);
     try {
-      const res = await fetch(`/api/v1/community/detections/${rule.id}`);
+      const res = await apiFetch(`/api/v1/community/detections/${rule.id}`);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = await res.json();
       setDetail(data.sigma_yaml ?? 'No content available');
@@ -241,7 +242,7 @@ export function DetectionCatalog() {
       if (product !== 'all') params.set('logsource_product', product);
       if (level !== 'all') params.set('level', level);
 
-      const res = await fetch(`/api/v1/community/detections?${params}`);
+      const res = await apiFetch(`/api/v1/community/detections?${params}`);
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data: DetectionListResponse = await res.json();
       setRules(data.items ?? []);

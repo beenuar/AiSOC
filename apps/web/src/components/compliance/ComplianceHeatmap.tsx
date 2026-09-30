@@ -1,6 +1,7 @@
 'use client';
 
 import useSWR from 'swr';
+import { authedFetcher } from '@/lib/api';
 
 interface HeatmapCell {
   category: string;
@@ -41,11 +42,6 @@ function intensityClass(count: number, max: number): string {
   return 'opacity-100';
 }
 
-const fetcher = (url: string) =>
-  fetch(url).then((r) => {
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    return r.json();
-  });
 
 interface Props {
   framework: string;
@@ -54,7 +50,7 @@ interface Props {
 export function ComplianceHeatmap({ framework }: Props) {
   const { data, error, isLoading } = useSWR<HeatmapData>(
     `/api/v1/compliance/${framework}/heatmap`,
-    fetcher,
+    authedFetcher,
     { refreshInterval: 60_000 }
   );
 

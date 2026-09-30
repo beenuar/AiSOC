@@ -139,28 +139,19 @@ function CaseCard({ c }: { c: Case }) {
 
 type FilterStatus = Case['status'] | 'all';
 
-interface CasesViewProps {
-  /**
-   * Optional pre-fetched cases from a Server Component. When provided, these
-   * are rendered on first paint (no flash of mock data) and SWR revalidates
-   * in the background. When omitted (e.g. dev/local without API access),
-   * deterministic mock data is used so the layout stays stable for SSR.
-   */
-  initialCases?: CasesResponse;
-}
-
-export function CasesView({ initialCases }: CasesViewProps = {}) {
+export function CasesView() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
   const [severityFilter, setSeverityFilter] = useState<Case['severity'] | 'all'>('all');
   const [search, setSearch] = useState('');
 
-  // Real server-rendered cases are not sample data, and the gate that
-  // withholds one must not withhold the other. Folding both into a single
-  // `fallback` and passing that through `demoFallback` returned `undefined`
-  // outside the hosted demo *regardless of whether SSR data was supplied* —
-  // so the server fetch in `cases/page.tsx` was made, awaited and discarded
-  // on every non-demo deployment, which is the flash of empty content the
-  // prop exists to prevent.
+  // This view took an `initialCases` prop fed by a server-side fetch in
+  // `cases/page.tsx`. That fetch sent no credential and a build-time tenant
+  // id, so it returned one fixed tenant's cases to whoever loaded the page,
+  // and it only returned anything at all because an uncredentialed request
+  // resolved to a demo administrator. A server render has no session to
+  // borrow, so it was removed rather than repaired; the list now loads
+  // through the credentialed client on mount, under the caller's own
+  // identity.
   const sampleCases = demoFallback<CasesResponse>({
     cases: MOCK_CASES,
     total: MOCK_CASES.length,
@@ -172,10 +163,7 @@ export function CasesView({ initialCases }: CasesViewProps = {}) {
     ['cases', statusFilter, severityFilter],
     () => casesApi.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
     {
-      fallbackData: initialCases ?? sampleCases,
-      // Supplying `fallbackData` is enough to stop SWR revalidating on mount,
-      // which would turn the SSR snapshot into what the view permanently
-      // shows rather than its first paint.
+      fallbackData: sampleCases,
       revalidateOnMount: true,
     }
   );

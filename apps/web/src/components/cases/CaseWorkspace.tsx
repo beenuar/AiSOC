@@ -24,19 +24,7 @@ import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
-import {
-  casesApi,
-  graphApi,
-  realtimeApi,
-  type AttackChainTimeline,
-  type AttackChainWindow,
-  type Case,
-  type CaseAttackPath,
-  type CaseSeverity,
-  type CaseStatus,
-  type CaseTask,
-  type CaseTimelineEvent,
-} from '@/lib/api';
+import { apiFetch, type AttackChainTimeline, type AttackChainWindow, type Case, type CaseAttackPath, casesApi, type CaseSeverity, type CaseStatus, type CaseTask, type CaseTimelineEvent, graphApi, realtimeApi } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -406,7 +394,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               setInvestigating(false);
               toast.success('Investigation complete — report ready');
               // Fetch the Markdown report
-              fetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.md`)
+              apiFetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.md`)
                 .then((r) => r.ok ? r.text() : '')
                 .then((md) => { if (md) setReportMd(md); })
                 .catch(() => { /* best-effort */ });
@@ -462,7 +450,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
             if (inv.status === 'completed') {
               toast.success('Investigation complete — report ready');
               try {
-                const resp = await fetch(`/api/v1/cases/${caseId}/investigations/${result.run_id}/report.md`);
+                const resp = await apiFetch(`/api/v1/cases/${caseId}/investigations/${result.run_id}/report.md`);
                 if (resp.ok) setReportMd(await resp.text());
               } catch { /* best-effort */ }
             } else {

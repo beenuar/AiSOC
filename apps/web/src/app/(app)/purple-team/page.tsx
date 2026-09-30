@@ -4,6 +4,7 @@ import { useState } from 'react'
 import useSWR from 'swr'
 import { demoFallback } from '@/lib/demoFallback';
 import { useTenantId } from '@/components/layout/TenantProvider';
+import { apiHeaders } from '@/lib/api';
 
 // Same-origin by default — Next.js rewrites proxy `/api/v1/purple-team/*` to
 // the purple-team service. Override with `NEXT_PUBLIC_PURPLE_TEAM_API` for
@@ -122,7 +123,7 @@ interface TabletopSession {
 // below is `null`-gated on it so no request is issued against a guess.
 
 const fetcher = (url: string) =>
-  fetch(url).then((r) => {
+  fetch(url, { headers: apiHeaders() }).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`)
     return r.json()
   })
@@ -243,7 +244,7 @@ function CoverageHeatmap() {
     try {
       const res = await fetch(
         `${API}/api/v1/purple-team/drift/snapshot?tenant_id=${tenantId}&trigger=manual`,
-        { method: 'POST' }
+        { method: 'POST', headers: apiHeaders() }
       )
       if (!res.ok) throw new Error(`HTTP ${res.status}`)
       await mutateDrift()
@@ -588,7 +589,7 @@ function TabletopPanel() {
     if (!tenantId) return
     await fetch(`${API}/api/v1/purple-team/tabletop`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders(),
       body: JSON.stringify({
         tenant_id: tenantId,
         name: form.name,
@@ -604,19 +605,19 @@ function TabletopPanel() {
   async function addFinding(sessionId: string) {
     await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}/findings`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders(),
       body: JSON.stringify({ finding: newFinding, severity: newFindingSeverity }),
     })
     setNewFinding('')
     mutate()
-    const res = await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}`)
+    const res = await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}`, { headers: apiHeaders() })
     if (!res.ok) return
     const updated = await res.json()
     setSelectedSession(updated)
   }
 
   async function completeSession(sessionId: string) {
-    await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}/complete`, { method: 'PATCH' })
+    await fetch(`${API}/api/v1/purple-team/tabletop/${sessionId}/complete`, { method: 'PATCH', headers: apiHeaders() })
     mutate()
   }
 
@@ -803,7 +804,7 @@ function ReportDetectionModal({
   async function save() {
     await fetch(`${API}/api/v1/purple-team/executions/${execution.id}/detection`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: apiHeaders(),
       body: JSON.stringify({
         execution_id: execution.id,
         detected,

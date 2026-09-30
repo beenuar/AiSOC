@@ -154,6 +154,40 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The headers every console call to an AiSOC API must carry.
+ *
+ * Exported because not every call can go through {@link apiRequest}: the
+ * NDJSON and SSE endpoints need the raw `Response` so the caller can read
+ * `response.body`. Those five call sites used to build their own header
+ * object, and every one of them sent `X-Tenant-Id` and no token — which
+ * reads like an identity and is not one. The API authenticates a bearer
+ * token; a tenant header is a caller-supplied claim.
+ *
+ * `X-Tenant-Id` resolves at call time so the tenant switcher applies to the
+ * very next request without a page reload.
+ */
+export function apiHeaders(extra?: HeadersInit): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'X-Tenant-Id': getActiveTenantId(),
+    ...(extra as Record<string, string> | undefined),
+  };
+
+  if (typeof window !== 'undefined') {
+    try {
+      if (!headers.Authorization && !headers.authorization) {
+        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
+        if (token) headers.Authorization = `Bearer ${token}`;
+      }
+    } catch {
+      /* localStorage unavailable; ignore */
+    }
+  }
+
+  return headers;
+}
+
 async function request<T>(path: string, options: FetchOptions = {}): Promise<T> {
   const { params, baseUrl, ...fetchOptions } = options;
 
@@ -169,32 +203,7 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
     if (qs) url += `?${qs}`;
   }
 
-  const headers: HeadersInit = {
-    'Content-Type': 'application/json',
-    // Resolve at call-time so the tenant switcher takes effect on the very
-    // next fetch (no full page reload needed).
-    'X-Tenant-Id': getActiveTenantId(),
-    ...fetchOptions.headers,
-  };
-
-  // Mobile responder PWA auth: if a passkey-issued JWT is present in
-  // localStorage, attach it as a Bearer token. The desktop console relies on
-  // cookies set by the API gateway, so this is purely additive.
-  if (typeof window !== 'undefined') {
-    try {
-      const existing =
-        (headers as Record<string, string>).Authorization ??
-        (headers as Record<string, string>).authorization;
-      if (!existing) {
-        const token = window.localStorage.getItem('aisoc.responder.accessToken');
-        if (token) {
-          (headers as Record<string, string>).Authorization = `Bearer ${token}`;
-        }
-      }
-    } catch {
-      /* localStorage unavailable; ignore */
-    }
-  }
+  const headers = apiHeaders(fetchOptions.headers);
 
   let response: Response;
   try {
@@ -222,8 +231,59 @@ async function request<T>(path: string, options: FetchOptions = {}): Promise<T> 
 
   if (response.status === 204) return {} as T;
   // Some endpoints (the agent stream, NDJSON) might not be JSON. Callers that
-  // need streams should use fetch() directly. Here we assume JSON.
+  // need streams should use fetch() with apiHeaders(). Here we assume JSON.
   return (await response.json()) as T;
+}
+
+/**
+ * The credentialed JSON client, for calls with no typed wrapper yet.
+ *
+ * Sixty-one console call sites reached the API with no `Authorization`
+ * header, forty-five of them through a bare `fetch(url)`. They worked only
+ * because the API resolved a credential-free request to a demo administrator
+ * in a development-class environment. Prefer a typed namespace below when one
+ * covers the route; reach for this when none does, rather than for `fetch`.
+ *
+ * `scripts/check_console_auth_headers.py` keeps the class closed.
+ */
+export async function apiRequest<T>(path: string, options: FetchOptions = {}): Promise<T> {
+  return request<T>(path, options);
+}
+
+/**
+ * SWR fetcher that carries a credential.
+ *
+ * SWR calls a fetcher as `f(key)`, so a fetcher has nowhere to put options
+ * and every single-argument fetcher in this console was anonymous by
+ * construction. This one routes through {@link request}, so it also throws
+ * {@link ApiError} with the status intact, which `describeApiFailure` needs
+ * to tell a console bug from an outage.
+ */
+export async function authedFetcher<T>(url: string): Promise<T> {
+  return request<T>(url);
+}
+
+/**
+ * A credentialed `fetch` that returns the raw `Response`.
+ *
+ * For the endpoints whose body is not JSON: NDJSON streams, SSE, PDF and
+ * Markdown downloads. Identical to `fetch` except that the credential and
+ * tenant headers are not optional.
+ */
+export async function apiFetch(path: string, options: FetchOptions = {}): Promise<Response> {
+  const { params, baseUrl, ...fetchOptions } = options;
+  let url = `${baseUrl ?? API_BASE}${path}`;
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.set(key, String(value));
+      }
+    });
+    const qs = searchParams.toString();
+    if (qs) url += `?${qs}`;
+  }
+  return fetch(url, { ...fetchOptions, headers: apiHeaders(fetchOptions.headers), cache: 'no-store' });
 }
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
@@ -328,14 +388,9 @@ export const authApi = {
 
   /** Merge user preferences on the server (theme, layout, etc.). */
   async updateUserPreferences(preferences: Record<string, unknown>): Promise<AuthUser> {
-    const token = typeof window !== 'undefined'
-      ? window.localStorage.getItem(AUTH_TOKEN_KEY)
-      : null;
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
     const response = await fetch(`${API_BASE}/api/v1/auth/me/preferences`, {
       method: 'PATCH',
-      headers,
+      headers: apiHeaders(),
       body: JSON.stringify({ preferences }),
     });
     if (!response.ok) throw new Error('Failed to update preferences');
@@ -1815,7 +1870,7 @@ export const casesApi = {
   /** Trigger a browser download of the PDF report. */
   downloadReportPdf: async (caseId: string, runId: string): Promise<void> => {
     const resp = await fetch(`${API_BASE}/api/v1/cases/${caseId}/investigations/${runId}/report.pdf`, {
-      headers: { 'X-Tenant-Id': TENANT_ID },
+      headers: apiHeaders(),
     });
     if (!resp.ok) {
       const err = await resp.text().catch(() => resp.statusText);
@@ -1853,18 +1908,7 @@ export const casesApi = {
    * report surfaces behave consistently in the PWA.
    */
   openAutoSummaryHtml: async (caseId: string): Promise<void> => {
-    const headers: Record<string, string> = {
-      Accept: 'text/html',
-      'X-Tenant-Id': TENANT_ID,
-    };
-    if (typeof window !== 'undefined') {
-      try {
-        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-        if (token) headers.Authorization = `Bearer ${token}`;
-      } catch {
-        /* localStorage unavailable; ignore */
-      }
-    }
+    const headers = apiHeaders({ Accept: 'text/html' });
 
     const url = `${API_BASE}/api/v1/cases/${caseId}/summary?format=html`;
     const response = await fetch(url, { headers, cache: 'no-store' });
@@ -3186,10 +3230,7 @@ export const agentsApi = {
   streamInvestigation: (alertId: string, signal?: AbortSignal) =>
     fetch(`${AGENTS_BASE}/api/v1/agents/investigate/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: apiHeaders(),
       body: JSON.stringify({ alertId }),
       signal,
     }),
@@ -3207,14 +3248,11 @@ export const agentsApi = {
   ) =>
     fetch(`${AGENTS_BASE}/api/v1/explain`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: apiHeaders(),
       body: JSON.stringify({
         alert: payload.alert,
         alert_id: payload.alertId,
-        tenant_id: TENANT_ID,
+        tenant_id: getActiveTenantId(),
       }),
       signal,
     }),
@@ -4666,10 +4704,7 @@ export const copilotApi = {
   streamChat: (req: CopilotChatRequest, signal?: AbortSignal) =>
     fetch(`${API_BASE}/api/v1/copilot/chat/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: apiHeaders(),
       body: JSON.stringify(req),
       signal,
     }),
@@ -4778,10 +4813,7 @@ export const contextualApi = {
   stream: (req: ContextualActionRequest, signal?: AbortSignal) =>
     fetch(`${AGENTS_BASE}/api/v1/contextual/action/stream`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Tenant-Id': TENANT_ID,
-      },
+      headers: apiHeaders(),
       body: JSON.stringify(req),
       signal,
     }),
@@ -5665,18 +5697,7 @@ export const reportsApi = {
     if (params.period_start) search.set('period_start', params.period_start);
     if (params.period_end) search.set('period_end', params.period_end);
 
-    const headers: Record<string, string> = {
-      Accept: 'text/html',
-      'X-Tenant-Id': TENANT_ID,
-    };
-    if (typeof window !== 'undefined') {
-      try {
-        const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-        if (token) headers.Authorization = `Bearer ${token}`;
-      } catch {
-        /* localStorage unavailable; ignore */
-      }
-    }
+    const headers = apiHeaders({ Accept: 'text/html' });
 
     const url = `${API_BASE}/api/v1/reports/digest/weekly?${search.toString()}`;
     const response = await fetch(url, { headers, cache: 'no-store' });
@@ -5915,18 +5936,7 @@ function buildAuditExportSearch(
 }
 
 function buildAuditExportHeaders(accept: string): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: accept,
-    'X-Tenant-Id': TENANT_ID,
-  };
-  if (typeof window !== 'undefined') {
-    try {
-      const token = window.localStorage.getItem(AUTH_TOKEN_KEY);
-      if (token) headers.Authorization = `Bearer ${token}`;
-    } catch {
-      /* localStorage unavailable; ignore */
-    }
-  }
+  const headers = apiHeaders({ Accept: accept });
   return headers;
 }
 

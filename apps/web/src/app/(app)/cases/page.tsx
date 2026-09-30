@@ -1,8 +1,4 @@
 import { CasesView } from '@/components/cases/CasesView';
-import {
-  normalizeCasesResponse,
-  type CasesResponse,
-} from '@/lib/api';
 
 export const metadata = {
   title: 'Cases',
@@ -15,41 +11,19 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export const fetchCache = 'force-no-store';
 
-const DEFAULT_TENANT_ID = '00000000-0000-0000-0000-000000000001';
-
-function resolveServerApiBase(): string {
-  // Prefer the in-cluster mesh URL when running on Fly so SSR doesn't depend
-  // on public DNS or TLS. Fall back to the public API base for local dev.
-  const internal = process.env.API_URL?.trim();
-  if (internal) return internal.replace(/\/+$/, '');
-  const publicBase = process.env.NEXT_PUBLIC_API_URL?.trim();
-  if (publicBase) return publicBase.replace(/\/+$/, '');
-  return '';
-}
-
-async function loadInitialCases(): Promise<CasesResponse | null> {
-  const base = resolveServerApiBase();
-  if (!base) return null;
-  const tenantId =
-    process.env.NEXT_PUBLIC_TENANT_ID?.trim() || DEFAULT_TENANT_ID;
-  try {
-    const res = await fetch(`${base}/api/v1/cases`, {
-      headers: {
-        Accept: 'application/json',
-        'X-Tenant-Id': tenantId,
-      },
-      cache: 'no-store',
-      next: { revalidate: 0 },
-    });
-    if (!res.ok) return null;
-    const raw = await res.json();
-    return normalizeCasesResponse(raw);
-  } catch {
-    return null;
-  }
-}
-
-export default async function CasesPage() {
-  const initialCases = await loadInitialCases();
-  return <CasesView initialCases={initialCases ?? undefined} />;
+// There is no server-side prefetch here on purpose.
+//
+// This page used to fetch `/api/v1/cases` during the server render, sending
+// `X-Tenant-Id` from a build-time environment variable and no credential at
+// all. It returned data because the API resolved an uncredentialed request to
+// a demo administrator in a development-class environment, and the tenant it
+// read was whichever one the image was built for rather than the one the
+// signed-in analyst belongs to.
+//
+// A server render has no session to borrow: the bearer token lives in the
+// browser. So the prefetch cannot be made correct, only removed. `CasesView`
+// loads through the credentialed client on mount, which is the only place the
+// caller's own identity and tenant are known.
+export default function CasesPage() {
+  return <CasesView />;
 }

@@ -24,6 +24,7 @@
  */
 
 import type { Playbook, StepType } from './types';
+import { apiFetch } from '@/lib/api';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -383,7 +384,7 @@ export async function forkPlaybook(
   opts?: { author?: string },
 ): Promise<Playbook> {
   const body = buildForkBody(original, opts);
-  const res = await fetch('/api/v1/playbooks', {
+  const res = await apiFetch('/api/v1/playbooks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),

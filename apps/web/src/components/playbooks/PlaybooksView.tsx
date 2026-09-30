@@ -24,7 +24,8 @@ import { SavedViewsBar } from '@/components/saved-views/SavedViewsBar';
 import { DraftFromPromptDialog } from './DraftFromPromptDialog';
 import { demoFallback } from '@/lib/demoFallback';
 import { FailureBanner } from '@/components/ui/FailureBanner';
-import { describeApiFailure, jsonFetcher } from '@/lib/failure';
+import { describeApiFailure } from '@/lib/failure';
+import { apiFetch, authedFetcher } from '@/lib/api';
 
 /** Filter snapshot stored by the backend as a saved-view preset. */
 type PlaybookFilterSnapshot = PlaybookGalleryFilters;
@@ -41,7 +42,6 @@ const DEFAULT_PLAYBOOK_FILTERS: PlaybookFilterSnapshot = {
 // Was `throw new Error('Failed to fetch')` — the status was discarded
 // entirely, so neither banner below it could say anything more specific than
 // "unavailable", and both guessed at a cause.
-const fetcher = jsonFetcher;
 
 /* ─────────────────────────── Run History Tab ─────────────────────────── */
 
@@ -56,7 +56,7 @@ const STATUS_BADGE: Record<string, string> = {
 function RunHistoryTab() {
   const { data, isLoading, error, mutate } = useSWR<PlaybookRun[]>(
     '/api/v1/playbooks/runs?limit=100',
-    fetcher,
+    authedFetcher,
     { refreshInterval: 10000 }
   );
   if (isLoading) return <div className="py-10 text-center text-gray-600 text-sm">Loading run history…</div>;
@@ -151,7 +151,7 @@ function CommunityPlaybooksTab() {
     try {
       const params = new URLSearchParams({ page: String(p), page_size: String(PAGE_SIZE), sort_by: sort });
       if (q) params.set('search', q);
-      const res = await fetch(`/api/v1/community/playbooks?${params}`);
+      const res = await apiFetch(`/api/v1/community/playbooks?${params}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setItems(data.items ?? []);
@@ -176,7 +176,7 @@ function CommunityPlaybooksTab() {
         setSubmitResult('Invalid JSON. Please fix and retry.');
         return;
       }
-      const res = await fetch('/api/v1/community/playbooks/submit', {
+      const res = await apiFetch('/api/v1/community/playbooks/submit', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
@@ -349,7 +349,7 @@ function CommunityPlaybookCard({ playbook }: { playbook: CommunityPlaybook }) {
   const handleInstall = async () => {
     setInstalling(true);
     try {
-      await fetch(`/api/v1/community/playbooks/${playbook.id}/install`, { method: 'POST' });
+      await apiFetch(`/api/v1/community/playbooks/${playbook.id}/install`, { method: 'POST' });
       setInstalled(true);
     } catch { /* ignore */ } finally {
       setInstalling(false);
@@ -422,7 +422,7 @@ const MOCK_PLAYBOOKS: Playbook[] = [
 
 export function PlaybooksView() {
   const [tab, setTab] = useState<'playbooks' | 'runs' | 'community'>('playbooks');
-  const { data, isLoading, error, mutate } = useSWR<Playbook[]>('/api/v1/playbooks', fetcher, {
+  const { data, isLoading, error, mutate } = useSWR<Playbook[]>('/api/v1/playbooks', authedFetcher, {
     refreshInterval: 30000,
     fallbackData: demoFallback(MOCK_PLAYBOOKS),
   });
