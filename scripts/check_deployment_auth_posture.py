@@ -80,6 +80,10 @@ DEV_OVERLAY = "infra/compose/docker-compose.dev.yml"
 #: The env file `scripts/ensure_env.py` copies into `.env` on first run.
 ENV_TEMPLATE = ".env.example"
 
+#: Workflows exempt from the "generate the secrets before booting" rule,
+#: with the reason. Only for a job that boots nothing real.
+WORKFLOW_BOOT_EXEMPT: dict[str, str] = {}
+
 #: Files that start the stack for a reader following the documentation.
 #: Each is scanned for an assignment that would put a documented path back
 #: into a development-class environment.
@@ -273,6 +277,38 @@ def inspect(root: pathlib.Path) -> Report:
                     )
                 )
 
+    # A workflow that boots the stack without generating secrets provisions an
+    # environment no real deployment has. With ENVIRONMENT defaulting to
+    # production, ingest refuses to start without JWT_SECRET and the API
+    # refuses without METRICS_TOKEN — which is the services being right, and
+    # exactly why a copied `.env.example` is no longer enough.
+    workflows = root / ".github" / "workflows"
+    if workflows.is_dir():
+        for path in sorted(workflows.glob("*.yml")):
+            text = path.read_text(encoding="utf-8", errors="replace")
+            # Only a real invocation counts; the phrase appears in prose too.
+            boots = any(
+                line.strip().startswith(("docker compose", "- run: docker compose", "$(COMPOSE)"))
+                and " up" in line
+                and not line.lstrip().startswith("#")
+                for line in text.splitlines()
+            )
+            if not boots:
+                continue
+            report.variables_resolved += 1
+            if "ensure_env.py" in text or "make env" in text or "make up" in text:
+                continue
+            if path.name in WORKFLOW_BOOT_EXEMPT:
+                continue
+            report.findings.append(
+                Finding(
+                    f".github/workflows/{path.name}",
+                    "boots the stack but never runs scripts/ensure_env.py, so it provisions "
+                    "an environment with every generated secret empty. ingest refuses to "
+                    "start without JWT_SECRET and the API without METRICS_TOKEN.",
+                )
+            )
+
     overlay = root / DEV_OVERLAY
     if not overlay.is_file():
         report.findings.append(
@@ -349,6 +385,7 @@ class Case:
     env_example: str = "ENVIRONMENT=production\n"
     overlay: str | None = None
     makefile: str = "up:\n\tdocker compose up -d\n"
+    workflow: str | None = None
     expect: str | None = None
 
 
@@ -436,6 +473,27 @@ def self_test_cases() -> tuple[Case, ...]:
             expect=None,
         ),
         Case(
+            "a workflow that boots the stack without generating the secrets",
+            _GOOD_COMPOSE,
+            overlay=_GOOD_OVERLAY,
+            workflow="jobs:\n  smoke:\n    steps:\n      - run: cp .env.example .env\n      - run: docker compose up -d\n",
+            expect="never runs scripts/ensure_env.py",
+        ),
+        Case(
+            "the same workflow, generating them",
+            _GOOD_COMPOSE,
+            overlay=_GOOD_OVERLAY,
+            workflow="jobs:\n  smoke:\n    steps:\n      - run: python3 scripts/ensure_env.py\n      - run: docker compose up -d\n",
+            expect=None,
+        ),
+        Case(
+            "a workflow that only mentions the command in prose",
+            _GOOD_COMPOSE,
+            overlay=_GOOD_OVERLAY,
+            workflow="# what `docker compose up -d` pulls for the console\njobs:\n  build:\n    steps:\n      - run: echo hi\n",
+            expect=None,
+        ),
+        Case(
             "a comment mentioning ENVIRONMENT=development in an entry point",
             _GOOD_COMPOSE,
             overlay=_GOOD_OVERLAY,
@@ -455,6 +513,9 @@ def _case_results(tmp: pathlib.Path) -> list[tuple[str, bool]]:
         (tree / "Makefile").write_text(case.makefile, encoding="utf-8")
         if case.overlay is not None:
             (tree / DEV_OVERLAY).write_text(case.overlay, encoding="utf-8")
+        if case.workflow is not None:
+            (tree / ".github" / "workflows").mkdir(parents=True, exist_ok=True)
+            (tree / ".github" / "workflows" / "probe.yml").write_text(case.workflow, encoding="utf-8")
         report = inspect(tree)
         blob = " | ".join(f.render() for f in report.findings)
         if case.expect is None:

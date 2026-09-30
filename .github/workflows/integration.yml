@@ -321,16 +321,32 @@ jobs:
 
       # The spine test reads the API and mints a realtime ticket. Both used
       # to succeed with no credential, because an uncredentialed request
-      # resolved to a demo administrator and every documented path produced
-      # one. Minted through the shipped command, for the same reason the
-      # ingest token is.
-      - name: Mint the API credential the spine test needs
+      # resolved to a demo administrator and the compose file defaulted to a
+      # development-class environment. It no longer does, so they need one.
+      #
+      # Obtained by signing in rather than by `mint_api_token`, because this
+      # job deliberately pulls the API image from GHCR `:main` (it builds only
+      # fusion and ingest-worker from PR source) and a command added in this
+      # pull request is not in that image. Logging in works against any API
+      # image, which is the property that matters for a job whose images are
+      # deliberately mixed.
+      - name: Sign in for the credential the spine test needs
         run: |
           set -euo pipefail
-          docker compose run --rm -T api python -m app.scripts.bootstrap_admin >/dev/null 2>&1 || true
-          token="$(docker compose run --rm -T api python -m app.scripts.mint_api_token --quiet)"
+          password="ci-$(openssl rand -hex 16)"
+          echo "::add-mask::$password"
+          AISOC_ADMIN_PASSWORD="$password" docker compose run --rm -T \
+            -e AISOC_ADMIN_PASSWORD="$password" api \
+            python -m app.scripts.bootstrap_admin --reset-password >/dev/null 2>&1 || \
+            AISOC_ADMIN_PASSWORD="$password" docker compose run --rm -T \
+              -e AISOC_ADMIN_PASSWORD="$password" api \
+              python -m app.scripts.bootstrap_admin >/dev/null 2>&1
+          token="$(curl -sf -X POST http://localhost:8000/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"email\":\"admin@aisoc.internal\",\"password\":\"$password\"}" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')"
           if [ -z "$token" ]; then
-            echo "::error::mint_api_token printed nothing"
+            echo "::error::could not sign in for an API token"
             exit 1
           fi
           echo "::add-mask::$token"

@@ -57,6 +57,20 @@ jobs:
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc || true
           echo "after:  $(df -h / | awk 'NR==2{print $4}') free"
 
+      - name: Generate the secrets the stack needs
+        run: |
+          set -euo pipefail
+          cp .env.example .env
+          # `make up` runs this, and the stack now needs it to boot: with
+          # ENVIRONMENT defaulting to production, ingest refuses to start
+          # without a JWT_SECRET and the API refuses without METRICS_TOKEN.
+          # That is the services being right — ingest previously started on a
+          # literal published in this repository — but a workflow that copies
+          # `.env.example` and stops has provisioned an environment no real
+          # deployment ever has.
+          python3 scripts/ensure_env.py
+          python3 scripts/ensure_env.py --check
+
       - name: Build the CORE images from this commit
         run: |
           set -euo pipefail

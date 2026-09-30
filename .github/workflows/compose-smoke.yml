@@ -209,6 +209,16 @@ jobs:
           fi
           echo "Resolved AISOC_VERSION=${AISOC_VERSION}"
 
+          # `make up` runs this, and the stack now needs it to boot: with
+          # ENVIRONMENT defaulting to production, ingest refuses to start
+          # without a JWT_SECRET and the API refuses without METRICS_TOKEN.
+          # That is the services being right — ingest previously started on a
+          # literal published in this repository — but a workflow that copies
+          # `.env.example` and stops has provisioned an environment no real
+          # deployment ever has.
+          python3 scripts/ensure_env.py
+          python3 scripts/ensure_env.py --check
+
       - name: Validate compose file
         if: steps.relevant.outputs.run == 'true' || github.event_name == 'push'
         run: docker compose config --quiet
