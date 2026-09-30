@@ -174,6 +174,13 @@ bootstrapped into.
       belongs to an unrelated project).
 - [ ] File the advisories against the release once the batch has landed.
 
+### D8. Two documents publish the claim-matrix row count in prose
+
+`ROADMAP.md` and `apps/docs/docs/compliance/evidence-pack.md` both state the
+figure, and `scripts/check_readme_figures.py` compares them against the live
+table. So every PR that adds a claim row moves three files, not one. The gate
+caught it on the first attempt here, which is what it is for.
+
 ## Notes for the next session
 
 The batch order is dependency-driven, not severity-driven. S1c had to land
