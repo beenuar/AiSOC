@@ -101,7 +101,21 @@ ceilings:
     # semgrep 1.86.0 on the same rule set the workflow uses: 205 rules over
     # the two new files, exactly 1 finding. Counted rather than suppressed,
     # for the reason stated at the bottom of this file.
-    total: 103
+    #
+    # 103 -> 104 (error unchanged at 40). A fourth
+    # `dynamic-urllib-use-detected`, on scripts/check_chart_version.py:495,
+    # which asks GHCR whether the Helm chart version about to be pushed
+    # already exists holding different content. Same shape as the three
+    # above and as check_published_images.py: every URL is an f-string whose
+    # literal prefix is `https://ghcr.io/`, with the repository a module
+    # constant and only a tag or a digest from the registry's own response
+    # interpolated, so the `file://` read the rule warns about cannot be
+    # reached — but the rule fires on any non-literal argument to `urlopen`.
+    # Measured in isolation with semgrep 1.86.0 on the same rule set and the
+    # same five configs the workflow passes: 205 rules over the one new
+    # file, exactly 1 finding. CI measured the whole tree at 104/40 against
+    # the ceiling of 103, which is the +1 and nothing else.
+    total: 104
     error: 40
     measured_with: "1.86.0"
   checkov:
