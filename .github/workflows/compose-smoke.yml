@@ -248,12 +248,21 @@ jobs:
           } > /tmp/prod-real.env
           test "$(wc -l < /tmp/prod-real.env)" -gt 10 \
             || { echo "::error::no guarded variables were derived"; exit 1; }
-          sed 's|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=aisoc_dev_secret|' /tmp/prod-real.env > /tmp/prod-published.env
+          # Derived from the compose file, not typed here. This step now sits
+          # in a workflow that also runs ensure_env.py, and a workflow that
+          # generates secrets must not also carry the literals the generator
+          # replaces: a hardcoded one could be the value that wins. Reading it
+          # from the compose default also means this negative control follows
+          # the literal if it is ever changed.
+          published="$(grep -oE 'POSTGRES_PASSWORD:-[^}]+' docker-compose.yml | head -1 | cut -d- -f2-)"
+          test -n "$published" \
+            || { echo "::error::no POSTGRES_PASSWORD default found to test against"; exit 1; }
+          sed "s|^POSTGRES_PASSWORD=.*|POSTGRES_PASSWORD=$published|" /tmp/prod-real.env > /tmp/prod-published.env
 
           echo "::group::published credential — must refuse"
           if docker compose --env-file /tmp/prod-published.env -f docker-compose.yml -f docker-compose.prod.yml \
                up --no-build --exit-code-from preflight-secrets preflight-secrets; then
-            echo "::error::the production stack started on aisoc_dev_secret"
+            echo "::error::the production stack started on the published development default"
             exit 1
           fi
           docker compose --env-file /tmp/prod-published.env -f docker-compose.yml -f docker-compose.prod.yml down -v
