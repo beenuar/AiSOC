@@ -2498,7 +2498,12 @@ paths:
       tags:
       - tenants
       summary: Create User
-      description: Create a new user in the current tenant.
+      description: 'Create a new user in the current tenant.
+
+
+        The role must be one the caller could hold itself. `platform_admin` and
+
+        `admin` cannot be assigned through the API at all.'
       operationId: create_user_api_v1_tenants_me_users_post
       requestBody:
         content:
@@ -2526,7 +2531,12 @@ paths:
       tags:
       - tenants
       summary: Update User
-      description: Update a user.
+      description: 'Update a user.
+
+
+        A role change is bounded the same way creation is, and a principal
+
+        already holding `platform_admin` or `admin` cannot be re-roled here.'
       operationId: update_user_api_v1_tenants_me_users__user_id__patch
       security:
       - HTTPBearer: []

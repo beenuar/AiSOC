@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [14.0.0] - 2026-09-29
+
+### BREAKING
+
+- **No route will confer a role, scope or organisation membership beyond the caller's own authority, and `platform_admin` and `admin` are now unreachable from every API route.** If you script any of the following, it stops working and the remedy is below.
+
+  | Route | What used to be accepted | What happens now |
+  |---|---|---|
+  | `POST /api/v1/tenants/me/users` | any `role` string, including `platform_admin` and `admin` | `403` for a role above the caller; `422` for a role outside `ROLE_PERMISSIONS` |
+  | `PATCH /api/v1/tenants/me/users/{id}` | promotion to any role; re-roling a wildcard principal | `403` on both |
+  | `POST /api/v1/api-keys` | `scopes: ["*"]` from `tenant_admin`; any scope from any `users:write` holder | `403` unless every scope is one the minter holds |
+  | `PATCH /api/v1/api-keys/{id}` | the same widening on an existing key | `403`, and the name and expiry in the same request are not written either |
+  | `POST /api/v1/rbac/roles` and `PATCH /api/v1/rbac/roles/{id}` | any permission set | `403` if it exceeds the author's own |
+  | `POST /api/v1/rbac/users/{id}/roles` | attaching any tenant role | `403` if the role carries a permission the caller lacks |
+  | `POST /api/v1/mssp/delegations` | any `granted_role` string | `403` / `422` on the same rule |
+  | `PUT /api/v1/mssp/organizations/current/members` | an `admin` appointing or demoting an `owner` | `403` on both |
+
+  **The remedy.** A `tenant_admin` can still create, promote to and mint keys for every role and scope it holds itself, `tenant_admin` included — nothing narrowed there. What it can no longer do is create something above itself. To create a wildcard principal, run `python -m app.scripts.bootstrap_admin` against the database, which is now the only path and is deliberately not reachable over HTTP. Deployments that used the tenant API to provision their own `platform_admin` should move that step into their bootstrap.
+
+### Security
+
+- **GHSA-pm3f-h6gc-rvgp (HIGH, CVSS 8.1): a `tenant_admin` could mint a `platform_admin` and become it.** `create_user` in `services/api/app/api/v1/endpoints/tenants.py` took `role` from the request body and wrote it to `users.role` — the column `CurrentUser.require_permission` reads on every guarded request — with no allow-list and no grant scope. `ROLE_PERMISSIONS` declares `platform_admin` and `admin` as `["*"]` and `has_permission` returns `True` for everything when the list holds `"*"`, so the string a client chose became a blanket authorization bypass. Reproduced end to end against the shipped code on real Postgres: `tenant_admin` logs in, `POST /tenants/me/users` with `role: "platform_admin"` returns **201** and persists the row, the new account logs in with `role=platform_admin` in its JWT, and `GET /api/v1/rbac/permissions` answers **200** for it while answering **403** for the `tenant_admin` that created it.
+
+  **Fixed by scoping the grant to the granter rather than by allow-listing the route**, because the report's own root cause — the server trusting a client-supplied role string as the authorization decision — is not specific to one handler. `services/api/app/core/role_grants.py` is the single place a grant is decided, and the property is *no principal may confer authority it does not itself hold*: the granted role's permission set must be a subset of the caller's, computed from `scopes` for an API-key principal because that is the branch `require_permission` actually takes. Escalation is then impossible by construction instead of by enumeration, which matters because **five more routes had the same defect and the report named one**. Enumerating them first was the point; the list, with verdicts, is in the pull request.
+
+  **The wildcard is refused to everybody, including a caller that already holds it.** Every route that could mint one resolves its tenant from the caller's session, so a `platform_admin` created through one is a deployment-wide administrator made through a single tenant's door. That set is *derived* from `ROLE_PERMISSIONS` rather than listed, so a third role declared `["*"]` is un-grantable the moment it is declared — a listed set is the version of this rule that goes stale. `app/services/scim/roles.py` had reached the same conclusion for directory groups first and kept its own copy of the vocabulary; it now binds to the shared one, and `check_scim_contract.py` follows that indirection rather than reporting the vocabulary unreadable.
+
+  **Two of the six siblings were worse than the reported route, in different directions.** `POST /api/v1/api-keys` guarded only `"*"` and guarded it with `current_user.role not in ("platform_admin", "tenant_admin")` — so `tenant_admin`, a role that is scoped on purpose, could mint a wildcard key and reach total authority creating no user at all; and every non-wildcard scope was unguarded, so any `users:write` holder could mint a `plugins:admin` key (plugin import runs code) while being refused `POST /api/v1/plugins/discover` themselves. Both reproduced: the wildcard key answered **200** on `/rbac/permissions`, and the `plugins:admin` key answered **200** on `/plugins/discover` against its minter's **403**. `POST /api/v1/rbac/users/{id}/roles` is gated on `users:write` while role *authorship* is gated on `roles:write`, so a caller holding only the first could attach whatever the second had built — and those rows are a live authorization path, since `has_permission_db` prefers `user_roles` over the static map for any principal holding one.
+
+  Reported by [@a25370](https://github.com/a25370).
+
+### Added
+
+- **`scripts/check_role_grant_scope.py`**, wired into `isolation.yml`, asks of every handler binding a request model that declares `role`, `org_role`, `granted_role`, `scopes`, `role_id` or `permission_ids` whether it reaches `app.core.role_grants`. Three directions, because a one-directional gate passes while drift goes the way things actually change: forward (a handler that confers authority without deciding), reverse (a waiver that no longer covers a live handler), and vocabulary (a grantable role that acquires the wildcard, a role nobody classified, or SCIM going back to its own copy). Six injected drifts prove it fails, and **run against the tree before this fix it names all nine handlers** rather than only the reported one.
+
+  The first version of it read assignments instead of request models and produced eight false reports — `scopes=list(row.scopes)` in a response projection and `org_role=str(member.org_role)` in a member listing are indistinguishable from a grant at the syntax level and are not one. What distinguishes a grant is that a client chose the value, which is exactly what a request model says. The two remaining entries in its waiver list are name collisions rather than exemptions and are recorded with the reason: a connector's third-party OAuth scopes, and the free-text job title on the public waitlist row.
+
+  Regression coverage is `services/api/tests/test_role_grant_scope.py`, which asserts both directions on every call site — the escalating request is refused **and** nothing is written, and a legitimate grant still lands. It imports nothing the fix added, deliberately: a test that imports a new symbol fails on the old tree with `ImportError`, which proves the symbol is absent and says nothing about whether the escalation was possible. **16 of its 28 tests fail against the vulnerable tree and every one of them fails with `DID NOT RAISE HTTPException`** — the grant succeeding. The other 12 are the legitimate-grant direction and pass on both trees, which is the assertion that this is a closed hole and not a lost capability.
+
 ### Fixed
 
 - **Two scanner jobs in `security.yml` could report success over a scan that failed, and that was the only thing keeping one of them off branch protection.** `Semgrep (ratcheted)` and `IaC scan (checkov, ratcheted)` each ran their scan under `continue-on-error: true` with no later step reading the outcome. `continue-on-error` is *defined* as rewriting a failed step's conclusion to `success`, so the Actions API shows a clean job and no amount of run history would have found it — which is why `scripts/check_required_check_substance.py` refuses the shape statically instead, and why it named both by name when they were considered for promotion alongside the three scanner checks that were required yesterday.

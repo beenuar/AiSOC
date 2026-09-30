@@ -36,6 +36,7 @@ from __future__ import annotations
 import re
 from typing import Final
 
+from app.core.role_grants import GRANTABLE_ROLES, never_grantable
 from app.core.security import ROLE_PERMISSIONS
 
 #: The role a provisioned principal holds before any group confers one.
@@ -46,16 +47,12 @@ DEFAULT_PROVISIONED_ROLE: Final[str] = "viewer"
 #: Total order, least authority first. A principal's role is the last entry
 #: in this list that any of their mapped groups confers.
 #:
-#: ``admin`` and ``platform_admin`` are both in ``ROLE_PERMISSIONS`` with
-#: ``["*"]`` and are deliberately **not** reachable from a directory group:
-#: see :data:`UNREACHABLE_BY_GROUP`.
-ROLE_PRECEDENCE: Final[tuple[str, ...]] = (
-    "viewer",
-    "soc_analyst",
-    "threat_hunter",
-    "soc_lead",
-    "tenant_admin",
-)
+#: This *is* ``app.core.role_grants.GRANTABLE_ROLES``, not a copy of it. SCIM
+#: reached the conclusion that wildcard roles must not be conferrable by a
+#: client-supplied name first, and kept its own list; the tenant user API then
+#: shipped without the same rule (GHSA-pm3f-h6gc-rvgp). Two lists that agree
+#: today are two lists that disagree later, so there is now one.
+ROLE_PRECEDENCE: Final[tuple[str, ...]] = GRANTABLE_ROLES
 
 #: Roles no directory group may confer, with the reason.
 #:
@@ -65,11 +62,11 @@ ROLE_PRECEDENCE: Final[tuple[str, ...]] = (
 #: than the platform's administrators, could mint a platform administrator by
 #: choosing a group name. ``api_service`` is the identity an API key resolves
 #: to and is not a human role at all.
-UNREACHABLE_BY_GROUP: Final[dict[str, str]] = {
-    "platform_admin": "holds '*' across every tenant; a directory group name must not be able to mint one",
-    "admin": "holds '*' across every tenant; a directory group name must not be able to mint one",
-    "api_service": "the identity an API key resolves to, not a role a person can hold",
-}
+#:
+#: Shared with every other grant path, and the wildcard members are derived
+#: from ``ROLE_PERMISSIONS`` rather than named, so a third role declared with
+#: ``["*"]`` is unreachable from a group the moment it is declared.
+UNREACHABLE_BY_GROUP: Final[dict[str, str]] = never_grantable()
 
 #: Group-name fragments that resolve to a role, most specific first.
 #:

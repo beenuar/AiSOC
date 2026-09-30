@@ -67,6 +67,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
+from app.core.role_grants import RoleGrantDenied, authorize_role_grant
 from app.db.database import get_db
 from app.models.mssp import MSSPDelegation, MSSPTenantMetrics, MSSPTenantNote
 from app.models.organization import (
@@ -284,11 +285,27 @@ async def create_delegation(
     db: Annotated[AsyncSession, Depends(get_db)],
     current_user: Annotated[CurrentUser, Depends(require_permission("users:write"))],
 ) -> MSSPDelegation:
+    # Ownership first, so a caller probing for tenants they do not manage
+    # still gets the same 404 whatever role string they send.
     await _require_own_child(db, current_user, body.child_tenant_id)
+    # `granted_role` was an unvalidated string. Nothing resolves it into a
+    # session yet, so this was not exploitable — but it is a role name stored
+    # against a customer tenant, and the whole point of the column is that a
+    # future reader turns it into authority. Refusing an ungrantable value now
+    # means that reader cannot be the thing that makes it exploitable.
+    try:
+        granted_role = authorize_role_grant(
+            granter_role=current_user.role,
+            granter_scopes=current_user.scopes,
+            requested_role=body.granted_role,
+        )
+    except RoleGrantDenied as exc:
+        code = status.HTTP_422_UNPROCESSABLE_ENTITY if exc.unknown else status.HTTP_403_FORBIDDEN
+        raise HTTPException(status_code=code, detail=exc.reason) from exc
     delegation = MSSPDelegation(
         parent_tenant_id=current_user.tenant_id,
         child_tenant_id=body.child_tenant_id,
-        granted_role=body.granted_role,
+        granted_role=granted_role,
         granted_by_user=current_user.user_id,
         expires_at=body.expires_at,
     )
@@ -817,6 +834,29 @@ async def _admin_scope(scope: PortfolioScope = Depends(_scope)) -> PortfolioScop
     return scope
 
 
+def _require_org_grant_scope(granter: str, requested: str, *, current: str | None) -> None:
+    """Refuse an organisation role above the granter's own.
+
+    ``ORG_ROLES`` is ordered by authority, unlike the tenant roles, so this is
+    an index comparison rather than a permission-set comparison — but it is
+    the same property `app.core.role_grants` enforces there: nobody confers
+    what they do not hold. ``current`` covers the other half, since demoting
+    the sitting ``owner`` is how an ``admin`` would clear the way.
+    """
+    rank = {role: index for index, role in enumerate(reversed(ORG_ROLES))}
+    ceiling = rank.get(granter, -1)
+    if rank.get(requested, len(ORG_ROLES)) > ceiling:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Cannot grant organisation role '{requested}': it is above your own '{granter}'",
+        )
+    if current is not None and rank.get(current, len(ORG_ROLES)) > ceiling:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Cannot change a member holding '{current}': it is above your own '{granter}'",
+        )
+
+
 class LimitHeadroomOut(BaseModel):
     key: str
     label: str
@@ -1273,6 +1313,14 @@ async def upsert_member(
             )
         )
     ).scalar_one_or_none()
+
+    # `ORG_ROLES` is a vocabulary, not a grant scope. `_admin_scope` admits
+    # `owner` and `admin` alike, so without this an `admin` could appoint an
+    # `owner` — or demote the sitting one — which is the same shape as the
+    # tenant-role escalation in a second vocabulary. Checked after the member
+    # row is loaded because demotion needs the *current* role, and before any
+    # write.
+    _require_org_grant_scope(scope.org_role, body.org_role, current=None if member is None else str(member.org_role))
 
     if member is None:
         member = OrganizationMember(org_id=scope.org_id, user_id=body.user_id, org_role=body.org_role)

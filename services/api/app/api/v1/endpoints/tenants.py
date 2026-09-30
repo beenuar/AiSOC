@@ -9,11 +9,22 @@ from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.core.role_grants import RoleGrantDenied, authorize_role_change, authorize_role_grant
 from app.core.security import get_password_hash
 from app.models.tenant import Tenant, User
 from app.services.tenant_deletion import delete_tenant
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
+
+
+def _refuse(exc: RoleGrantDenied) -> HTTPException:
+    """Map a refused grant onto a status code.
+
+    422 when the role is not in the vocabulary at all (the request is
+    malformed), 403 when it exists and this caller may not confer it.
+    """
+    code = status.HTTP_422_UNPROCESSABLE_ENTITY if exc.unknown else status.HTTP_403_FORBIDDEN
+    return HTTPException(status_code=code, detail=exc.reason)
 
 
 class TenantHeaderResponse(BaseModel):
@@ -64,6 +75,10 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     username: str
     password: str
+    #: Refused unless the caller already holds everything it confers, and
+    #: refused outright for the wildcard roles. See ``app.core.role_grants``.
+    #: Not a Literal: the enforced vocabulary lives in ``ROLE_PERMISSIONS``,
+    #: and a second copy in the schema would be a second thing to keep true.
     role: str = "soc_analyst"
 
 
@@ -195,7 +210,22 @@ async def create_user(
     current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
     db: DBSession,
 ) -> UserResponse:
-    """Create a new user in the current tenant."""
+    """Create a new user in the current tenant.
+
+    The role must be one the caller could hold itself. `platform_admin` and
+    `admin` cannot be assigned through the API at all.
+    """
+    # Authorized before anything is read or written, so a refused request
+    # touches no row and reveals nothing about which addresses exist.
+    try:
+        granted_role = authorize_role_grant(
+            granter_role=current_user.role,
+            granter_scopes=current_user.scopes,
+            requested_role=request.role,
+        )
+    except RoleGrantDenied as exc:
+        raise _refuse(exc) from exc
+
     # Check email uniqueness
     existing = await db.execute(select(User).where(User.email == request.email))
     if existing.scalar_one_or_none() is not None:
@@ -209,7 +239,7 @@ async def create_user(
         email=request.email,
         username=request.username,
         hashed_password=get_password_hash(request.password),
-        role=request.role,
+        role=granted_role,
     )
     db.add(user)
     await db.commit()
@@ -224,7 +254,15 @@ async def update_user(
     current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
     db: DBSession,
 ) -> UserResponse:
-    """Update a user."""
+    """Update a user.
+
+    A role change is bounded the same way creation is, and a principal
+    already holding `platform_admin` or `admin` cannot be re-roled here.
+    """
+    # Promotion is the same grant as creation and goes through the same check.
+    # An allow-list on `create_user` alone would have left `role: "admin"`
+    # here as a one-request escalation. Rationale kept out of the docstring
+    # because FastAPI publishes that verbatim in docs/openapi.yaml.
     result = await db.execute(select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id))
     user = result.scalar_one_or_none()
     if user is None:
@@ -235,6 +273,19 @@ async def update_user(
         val = getattr(request, field, None)
         if val is not None:
             updates[field] = val
+
+    if "role" in updates:
+        try:
+            updates["role"] = authorize_role_change(
+                granter_role=current_user.role,
+                granter_scopes=current_user.scopes,
+                current_role=str(user.role),
+                requested_role=updates["role"],
+            )
+        except RoleGrantDenied as exc:
+            # Raised before the UPDATE, so a refused promotion leaves the
+            # username and is_active fields in the same request unwritten too.
+            raise _refuse(exc) from exc
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)

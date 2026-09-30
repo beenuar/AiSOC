@@ -18,11 +18,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import AuthUser, require_permission
+from app.core.role_grants import RoleGrantDenied, authorize_permission_grant
 from app.db.rls import TenantDBSession
 from app.models.rbac import Permission, Role, RolePermission, UserRole
 from app.models.tenant import User
 
 router = APIRouter(prefix="/rbac", tags=["rbac"])
+
+
+def _authorize_permission_grant(permissions: list[Permission], current_user: AuthUser, *, subject: str) -> None:
+    """Refuse a database-backed role that confers more than its author holds.
+
+    These rows are a second authorization path, not documentation:
+    ``CurrentUser.has_permission_db`` resolves ``user_roles`` →
+    ``role_permissions`` → ``permissions`` and prefers it over the static
+    ``ROLE_PERMISSIONS`` map whenever the principal has any row at all. So a
+    role assembled here and attached below is exactly as load-bearing as
+    ``users.role``, and the same property has to hold for it.
+    """
+    try:
+        authorize_permission_grant(
+            granter_role=current_user.role,
+            granter_scopes=current_user.scopes,
+            requested=[p.name for p in permissions],
+            subject=subject,
+        )
+    except RoleGrantDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.reason) from exc
 
 
 # ──────────────────────────────────────────────
@@ -140,6 +162,11 @@ async def create_role(
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"Role '{body.name}' already exists")
 
+    # Resolved and authorized before the role row exists, so a refused
+    # permission set does not leave an empty role behind.
+    perms_to_attach = await _resolve_permissions(db, body.permission_ids)
+    _authorize_permission_grant(perms_to_attach, current_user, subject="permission(s)")
+
     role = Role(
         tenant_id=current_user.tenant_id,
         name=body.name,
@@ -150,7 +177,6 @@ async def create_role(
     await db.flush()  # get role.id
 
     # Attach permissions
-    perms_to_attach = await _resolve_permissions(db, body.permission_ids)
     for perm in perms_to_attach:
         db.add(RolePermission(role_id=role.id, permission_id=perm.id))
 
@@ -197,6 +223,13 @@ async def update_role(
     if role.is_system:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="System roles cannot be modified")
 
+    # Resolved and authorized before the DELETE below, which would otherwise
+    # strip the role's existing permissions on the way to a refusal.
+    perms: list[Permission] = []
+    if body.permission_ids is not None:
+        perms = await _resolve_permissions(db, body.permission_ids)
+        _authorize_permission_grant(perms, current_user, subject="permission(s)")
+
     if body.name is not None:
         role.name = body.name
     if body.description is not None:
@@ -205,7 +238,6 @@ async def update_role(
     if body.permission_ids is not None:
         # Replace permissions
         await db.execute(delete(RolePermission).where(RolePermission.role_id == role.id))
-        perms = await _resolve_permissions(db, body.permission_ids)
         for perm in perms:
             db.add(RolePermission(role_id=role.id, permission_id=perm.id))
 
@@ -272,6 +304,16 @@ async def assign_role(
 
     role = await _get_role_or_404(db, body.role_id, current_user.tenant_id)
 
+    # `users:write` is the gate on this route and `roles:write` is the gate on
+    # role *authorship*, so without this a caller holding only the former
+    # could attach whatever the latter had already built — including
+    # `roles:write` itself, from which the rest follows.
+    _authorize_permission_grant(
+        await _load_role_models(db, role.id),
+        current_user,
+        subject=f"permission(s) carried by role {role.name!r}",
+    )
+
     # Ensure the target user belongs to this tenant
     user_res = await db.execute(select(User).where(User.id == user_id, User.tenant_id == current_user.tenant_id))
     if user_res.scalar_one_or_none() is None:
@@ -323,11 +365,15 @@ async def _resolve_permissions(db: AsyncSession, permission_ids: list[uuid.UUID]
     return list(found)
 
 
-async def _load_role_permissions(db: AsyncSession, role_id: uuid.UUID) -> list[PermissionOut]:
+async def _load_role_models(db: AsyncSession, role_id: uuid.UUID) -> list[Permission]:
     result = await db.execute(
         select(Permission)
         .join(RolePermission, RolePermission.permission_id == Permission.id)
         .where(RolePermission.role_id == role_id)
         .order_by(Permission.category, Permission.name)
     )
-    return [PermissionOut.model_validate(p) for p in result.scalars().all()]
+    return list(result.scalars().all())
+
+
+async def _load_role_permissions(db: AsyncSession, role_id: uuid.UUID) -> list[PermissionOut]:
+    return [PermissionOut.model_validate(p) for p in await _load_role_models(db, role_id)]

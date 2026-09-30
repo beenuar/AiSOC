@@ -33,6 +33,7 @@ on:
       - "scripts/check_runtime_db_role.py"
       - "scripts/check_rls_policy_shape.py"
       - "scripts/check_scim_contract.py"
+      - "scripts/check_role_grant_scope.py"
       - "scripts/check_whitelabel_metering.py"
       - "docker-compose.yml"
       - "infra/**"
@@ -56,6 +57,7 @@ on:
       - "scripts/check_runtime_db_role.py"
       - "scripts/check_rls_policy_shape.py"
       - "scripts/check_scim_contract.py"
+      - "scripts/check_role_grant_scope.py"
       - "scripts/check_whitelabel_metering.py"
       - "docker-compose.yml"
       - "infra/**"
@@ -234,6 +236,19 @@ jobs:
 
       - name: The SCIM surface matches what it advertises, audits and grants
         run: python scripts/check_scim_contract.py
+
+      # A role string from a request body is an authorization decision the
+      # client made. `POST /tenants/me/users` persisted one with no allow-list
+      # and no grant scope, and because `platform_admin` is declared `["*"]` a
+      # `tenant_admin` could mint total authority (GHSA-pm3f-h6gc-rvgp). Five
+      # sibling routes had the same defect, which is why this gate asks the
+      # question of every handler that binds an authority field rather than of
+      # the one the report named.
+      - name: Role-grant gate self-test (six injected drifts)
+        run: python scripts/check_role_grant_scope.py --self-test
+
+      - name: No route confers authority its caller does not hold
+        run: python scripts/check_role_grant_scope.py
 
       # An uploaded logo renders in the console and inside PDF reports other
       # people open, so the SVG allowlist is a security control under steady

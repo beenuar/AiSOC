@@ -57,6 +57,13 @@ ROUTER = REPO_ROOT / "services/api/app/api/v1/endpoints/scim.py"
 RESOURCES = REPO_ROOT / "services/api/app/services/scim/resources.py"
 ROLES = REPO_ROOT / "services/api/app/services/scim/roles.py"
 SECURITY = REPO_ROOT / "services/api/app/core/security.py"
+#: The grant vocabulary moved here when the tenant user API was found
+#: conferring wildcard roles from a request body (GHSA-pm3f-h6gc-rvgp), and
+#: ``roles.py`` now binds its two constants to this module rather than
+#: restating them. This gate follows that indirection instead of reporting
+#: the vocabulary unreadable, which is what it did the moment the two lists
+#: became one.
+ROLE_GRANTS = REPO_ROOT / "services/api/app/core/role_grants.py"
 MAIN = REPO_ROOT / "services/api/app/main.py"
 
 #: Operations RFC 7644 defines that this deployment intends to serve, mapped
@@ -244,6 +251,54 @@ def _assigned_names(tree: ast.Module, variable: str) -> set[str] | None:
     return None
 
 
+def _shared_vocabulary(roles_tree: ast.Module, grants_tree: ast.Module, security_tree: ast.Module, variable: str) -> set[str] | None:
+    """Resolve a name ``roles.py`` binds to the shared grant vocabulary.
+
+    Handles exactly the two forms that module uses — a bare reference to
+    ``GRANTABLE_ROLES`` and a call to ``never_grantable()`` — rather than
+    anything general. A third form should fail this gate loudly, because it
+    would mean the vocabulary moved again without anyone saying where to.
+    """
+    for node in ast.walk(roles_tree):
+        value: ast.expr | None = None
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == variable:
+            value = node.value
+        elif isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == variable for t in node.targets):
+            value = node.value
+        if value is None:
+            continue
+        if isinstance(value, ast.Name):
+            resolved = _assigned_names(grants_tree, value.id)
+            return resolved
+        if isinstance(value, ast.Call) and getattr(value.func, "id", "") == "never_grantable":
+            explicit = _assigned_names(grants_tree, "_NEVER_GRANTABLE_EXPLICIT")
+            enforced_map = _dict_value(security_tree, "ROLE_PERMISSIONS")
+            if explicit is None or enforced_map is None:
+                return None
+            wildcard = {role for role, perms in enforced_map.items() if "*" in (perms or [])}
+            return wildcard | explicit
+        return _assigned_names(roles_tree, variable)
+    return None
+
+
+def _dict_value(tree: ast.Module, variable: str) -> dict | None:
+    """A module-level dict literal, values included."""
+    for node in ast.walk(tree):
+        value: ast.expr | None = None
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == variable:
+            value = node.value
+        elif isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == variable for t in node.targets):
+            value = node.value
+        if value is None:
+            continue
+        try:
+            resolved = ast.literal_eval(value)
+        except (ValueError, TypeError, SyntaxError):
+            return None
+        return resolved if isinstance(resolved, dict) else None
+    return None
+
+
 def _group_rule_roles(tree: ast.Module) -> set[str]:
     """Roles the group-name rules can produce."""
     for node in ast.walk(tree):
@@ -330,8 +385,10 @@ def audit(root: Path) -> tuple[list[str], dict[str, int]]:
 
     # --- the role vocabulary agrees, in both directions -------------------
     enforced = _assigned_names(security_tree, "ROLE_PERMISSIONS")
-    precedence = _assigned_names(roles_tree, "ROLE_PRECEDENCE")
-    unreachable = _assigned_names(roles_tree, "UNREACHABLE_BY_GROUP")
+    grants_path = root / ROLE_GRANTS.relative_to(REPO_ROOT)
+    grants_tree = _parse(grants_path) if grants_path.is_file() else ast.parse("")
+    precedence = _shared_vocabulary(roles_tree, grants_tree, security_tree, "ROLE_PRECEDENCE")
+    unreachable = _shared_vocabulary(roles_tree, grants_tree, security_tree, "UNREACHABLE_BY_GROUP")
     rule_roles = _group_rule_roles(roles_tree)
 
     if enforced is None or precedence is None or unreachable is None:
@@ -385,10 +442,15 @@ def _self_test_cases() -> list[tuple[str, bool]]:
             'await _unrecorded(\n        db,\n        principal,\n        request,\n        action="scim:user:create",',
         ),
         (
+            # Deliberately *not* a wildcard role. Since the vocabulary moved to
+            # `app/core/role_grants.py` a role declared `["*"]` is classified
+            # as unreachable the moment it is declared, so probing with one
+            # would assert the old behaviour and pass for the wrong reason.
+            # The role that still needs a human decision is an ordinary one.
             "a role the mapping does not classify is reported",
             SECURITY,
             'ROLE_PERMISSIONS: dict[str, list[str]] = {\n    "platform_admin": ["*"],',
-            'ROLE_PERMISSIONS: dict[str, list[str]] = {\n    "brand_new_role": ["*"],\n    "platform_admin": ["*"],',
+            'ROLE_PERMISSIONS: dict[str, list[str]] = {\n    "brand_new_role": ["alerts:read"],\n    "platform_admin": ["*"],',
         ),
         (
             "a capability advertised with no route is reported",
@@ -402,7 +464,7 @@ def _self_test_cases() -> list[tuple[str, bool]]:
         with tempfile.TemporaryDirectory() as tmp:
             tree = Path(tmp) / "tree"
             # Copy only what the gate reads, so the self-test stays fast.
-            for source in {ROUTER, RESOURCES, ROLES, SECURITY, MAIN}:
+            for source in {ROUTER, RESOURCES, ROLES, SECURITY, ROLE_GRANTS, MAIN}:
                 destination = tree / source.relative_to(REPO_ROOT)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)

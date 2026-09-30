@@ -33,6 +33,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.core.role_grants import RoleGrantDenied, authorize_permission_grant
 from app.core.security import generate_api_key
 from app.models.tenant import ApiKey
 
@@ -76,6 +77,30 @@ def _validate_scopes(scopes: list[str]) -> None:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"Invalid scope(s): {', '.join(invalid)}. Valid scopes: {sorted(VALID_SCOPES)}",
         )
+
+
+def _authorize_scopes(scopes: list[str], current_user: AuthUser) -> None:
+    """Refuse scopes the minter does not hold.
+
+    A key is a bearer credential, so its scopes are authority conferred on
+    whoever holds it. The check this replaced named two roles in a tuple —
+    ``("platform_admin", "tenant_admin")`` — and covered only ``"*"``, which
+    got both halves wrong. ``tenant_admin`` is a scoped role by design and
+    could mint a wildcard key, which is the same total escalation as
+    GHSA-pm3f-h6gc-rvgp by a door that creates no user at all; and every
+    non-wildcard scope was unguarded, so the same caller could mint a
+    ``plugins:admin`` key — plugin import runs code — while being refused
+    ``POST /api/v1/plugins/discover`` itself.
+    """
+    try:
+        authorize_permission_grant(
+            granter_role=current_user.role,
+            granter_scopes=current_user.scopes,
+            requested=scopes,
+            subject="API key scope(s)",
+        )
+    except RoleGrantDenied as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.reason) from exc
 
 
 # ── Request / response schemas ────────────────────────────────────────────────
@@ -147,13 +172,7 @@ async def create_api_key(
     The raw key value is returned **only once** in this response.
     """
     _validate_scopes(body.scopes)
-
-    # Only admins can issue wildcard keys
-    if "*" in body.scopes and current_user.role not in ("platform_admin", "tenant_admin"):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only admins can create wildcard (*) API keys",
-        )
+    _authorize_scopes(body.scopes, current_user)
 
     raw_key, prefix, hashed_key = generate_api_key()
 
@@ -220,6 +239,13 @@ async def update_api_key(
     current_user: Annotated[AuthUser, Depends(require_permission("users:write"))],
 ) -> ApiKeyOut:
     """Update an API key's name, scopes, or expiry."""
+    # Authorized before the row is loaded, so a refused scope change leaves
+    # the name and expiry in the same request unwritten as well. `get_db`
+    # would roll back anyway; not depending on that is the point.
+    if body.scopes is not None:
+        _validate_scopes(body.scopes)
+        _authorize_scopes(body.scopes, current_user)
+
     result = await db.execute(select(ApiKey).where(ApiKey.id == key_id, ApiKey.tenant_id == current_user.tenant_id))
     ak = result.scalar_one_or_none()
     if ak is None:
@@ -229,12 +255,6 @@ async def update_api_key(
         ak.name = body.name
 
     if body.scopes is not None:
-        _validate_scopes(body.scopes)
-        if "*" in body.scopes and current_user.role not in ("platform_admin", "tenant_admin"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only admins can grant wildcard (*) scope",
-            )
         ak.scopes = body.scopes
 
     if body.expires_in_days is not None:

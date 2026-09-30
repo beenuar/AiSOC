@@ -93,9 +93,29 @@ Defined in [`ROLE_PERMISSIONS`](https://github.com/beenuar/AiSOC/blob/main/servi
 
 Wildcards are supported (`*` grants everything). For everything else, the check is exact string match — no implicit hierarchies, no inherited verbs. This is deliberate: it keeps the permission list auditable.
 
+### Role grants are scoped to the granter
+
+The table above is the whole reason this section exists. Two of those roles hold `*`, so a single role string decides whether an account has every permission in the product — and `POST /api/v1/tenants/me/users` used to take that string from the request body and store it with no allow-list and no comparison against the caller. A `tenant_admin`, which is scoped on purpose, could create a `platform_admin`, sign in as it, and reach `roles:write` and `plugins:admin` (GHSA-pm3f-h6gc-rvgp).
+
+[`app/core/role_grants.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/core/role_grants.py) is the one place that decides a grant, and the rule is about the granter rather than the route:
+
+**No principal may confer authority it does not itself hold.**
+
+Concretely, a grant is refused when the role is not in `ROLE_PERMISSIONS` at all (`422`), when it confers a permission the caller lacks (`403`), or when it is one of the roles nobody may confer from a request (`403`). Three consequences are worth stating outright:
+
+- **`platform_admin` and `admin` are unreachable from every API route**, including for a caller that already holds `*`. Every route that could mint one resolves its tenant from the caller's own session, so a wildcard principal created through one is a deployment-wide administrator made through a single tenant's door. The only way to create one is [`app/scripts/bootstrap_admin.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/scripts/bootstrap_admin.py), which runs out of band with database credentials.
+- That set is **derived** from `ROLE_PERMISSIONS`, not listed. A role declared `["*"]` tomorrow is un-grantable the moment it is declared.
+- A `tenant_admin` can still create and promote to every other role, including `tenant_admin`. What it can no longer do is create something above itself.
+
+The same rule covers authority that is not spelled "role": API-key scopes (a key is a bearer credential, so its scopes must be a subset of its minter's — the check this replaced named `("platform_admin", "tenant_admin")` in a tuple and covered only `*`, which let a `tenant_admin` mint a wildcard key and let anyone with `users:write` mint a `plugins:admin` key they were themselves refused), the database-backed RBAC roles below, MSSP delegations, and organisation membership, where an `admin` may neither appoint an `owner` nor demote the sitting one.
+
+[`scripts/check_role_grant_scope.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/check_role_grant_scope.py) fails CI if a handler binds a request model declaring `role`, `org_role`, `granted_role`, `scopes`, `role_id` or `permission_ids` without reaching that module. Run against the tree before the fix it names all nine handlers, which is why it exists instead of an allow-list on the route the report happened to name.
+
 ### Custom roles
 
 Custom roles can be defined by inserting rows into the `roles` table with the desired permission list. They are scoped per-tenant; one tenant's `compliance_auditor` does not bleed into another's.
+
+These rows are a live authorization path rather than documentation: `CurrentUser.has_permission_db` resolves `user_roles` → `role_permissions` → `permissions` and prefers it over `ROLE_PERMISSIONS` for any principal holding a row. So authoring a role, and attaching one to a user, are both grants and both go through the check above — a caller may not build or hand out a permission set larger than its own.
 
 ### Permission denied vs. not found
 
