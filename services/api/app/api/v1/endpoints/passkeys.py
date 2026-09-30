@@ -378,14 +378,17 @@ async def passkey_authenticate_finish(
     http_request: Request,
     db: DBSession,
 ) -> AuthenticateFinishResponse:
-    """Verify a passkey assertion and mint JWTs.
-
-    Throttled per source, and not per account: this route is given a
-    credential id rather than an address, so there is no account to count
-    against until the lookup succeeds. A passkey assertion is far harder to
-    brute-force than a password, so the limit is there to bound the work an
-    unauthenticated caller can make this service do, not to stop guessing.
-    """
+    """Verify a passkey assertion and mint JWTs."""
+    # Throttled per source, and not per account: this route is given a
+    # credential id rather than an address, so there is no account to count
+    # against until the lookup succeeds. A passkey assertion is far harder to
+    # brute-force than a password, so the limit bounds the work an
+    # unauthenticated caller can make this service do rather than stopping
+    # guessing.
+    #
+    # In a comment because the docstring is published as this operation's
+    # `description` in `docs/openapi.yaml`, and an API description should say
+    # what the endpoint does.
     webauthn, _ = _import_webauthn()
 
     throttle = get_login_throttle()
