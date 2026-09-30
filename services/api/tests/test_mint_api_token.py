@@ -43,20 +43,23 @@ class _User:
 
 
 class _Result:
-    def __init__(self, rows: list[_User]):
+    """Rows are `object` because this double serves both resolvers: one asks
+    for tenants and the other for users."""
+
+    def __init__(self, rows: list[object]):
         self._rows = rows
 
-    def scalar_one_or_none(self) -> _User | None:
+    def scalar_one_or_none(self) -> object | None:
         return self._rows[0] if self._rows else None
 
-    def scalars(self) -> list[_User]:
+    def scalars(self) -> list[object]:
         return self._rows
 
 
 class _Session:
     """Returns a fixed row set, and records that nothing was written."""
 
-    def __init__(self, rows: list[_User]):
+    def __init__(self, rows: list[object]):
         self._rows = rows
         self.added: list[object] = []
         self.commits = 0
