@@ -28,6 +28,26 @@ name: Security
 #     They now live in the allow-list, where a run that disagrees with them
 #     fails and prints the number to write.
 #
+# A ratcheted scanner runs its scan under `continue-on-error`, because the
+# scan's own exit status is not the verdict — the count is. That is only safe
+# while something *reads* the outcome, and for Semgrep and checkov nothing
+# did, so either job could report success over a scan that never finished.
+# `continue-on-error` is defined as rewriting a failed step's conclusion to
+# `success`, so the Actions API cannot show this and no amount of run history
+# would have found it; `scripts/check_required_check_substance.py --static`
+# refuses the shape instead. Both now give the scan step an `id` and put a
+# blocking step that reads `steps.<id>.outcome == 'failure'` *ahead of* the
+# ratchet — ahead, because a scan that dies part-way still leaves a short
+# report and the ratchet's shrink-only arm would answer it with "lower the
+# ceiling to N", which would bake the broken scan in.
+#
+# Four of the six jobs here are required checks on `main`: the claim-matrix
+# ratchet, gitleaks, Trivy and checkov. `Semgrep (ratcheted)` is deliberately
+# not, and the reason is measured rather than cautious — it disagrees with
+# itself on an unchanged tree about one run in twenty. See
+# `.security/allowlist.yml` and `.github/required-checks.json`, both of which
+# record the decision so it is not quietly reversed.
+#
 # GitHub native push-protection remains the always-on hard secret gate.
 
 on:
@@ -139,7 +159,13 @@ jobs:
       # `--error` is gone: it exits non-zero on any finding, which would make
       # the exit status carry the same information as the count and force
       # `continue-on-error` back onto the ratchet step below with it.
+      #
+      # `continue-on-error` here is deliberate and now *read*, by the step
+      # below. Without `--error`, semgrep exits 0 whether or not it finds
+      # anything, so a non-zero status means the scan itself failed — an
+      # unfetchable rule config, a crash — and not a finding.
       - name: Scan
+        id: scan
         continue-on-error: true
         run: |
           semgrep --json --output semgrep.json --disable-version-check \
@@ -150,6 +176,22 @@ jobs:
             --config p/react \
             --exclude plans/ \
             services/ apps/ packages/ scripts/
+      # Blocking, and this is the step that makes the one above safe.
+      # `continue-on-error` rewrites a failed step's *conclusion* to success,
+      # so without something reading its `outcome` the job reports green over
+      # a scan that died — the shape
+      # `scripts/check_required_check_substance.py` refuses by name, and the
+      # reason this check could not be required.
+      #
+      # Ahead of the ratchet on purpose. A scan that failed part-way can still
+      # leave a short `semgrep.json`, and the ratchet's shrink-only arm would
+      # read that short count and print "lower it to N" — advice that would
+      # bake a broken scan into the ceiling.
+      - name: The scan itself did not fail
+        if: steps.scan.outcome == 'failure'
+        run: |
+          echo "::error title=semgrep::semgrep exited non-zero. Without \`--error\` that is the scan failing, not a finding, so the count below would describe a partial run."
+          exit 1
       # Blocking. No `continue-on-error`: a missing or truncated report means
       # the scan did not finish, and the gate says so rather than passing.
       - name: Ratchet the finding count
@@ -225,14 +267,58 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
+      # Its own step, and blocking. The install used to sit inside the scan
+      # step under `continue-on-error`, so a failed `pip install` was
+      # absorbed and the only symptom was the ratchet below complaining
+      # about a report that was never written.
+      - name: Install checkov
+        run: pip install --quiet checkov==3.2.334
+      # `continue-on-error` here is deliberate and now *read*, by the step
+      # below. It replaces a trailing `|| true`, which discarded every exit
+      # code checkov has — the one that means "I found things" and the one
+      # that means "I could not run" alike.
       - name: checkov (terraform + helm)
+        id: checkov
         continue-on-error: true
         run: |
-          pip install --quiet checkov==3.2.334
           # `--output-file-path .` writes ./results_json.json; checkov treats
           # a directory argument that way rather than honouring a filename.
+          status=0
           checkov -d infra/terraform -d infra/helm --quiet --compact \
-            -o json --output-file-path . || true
+            -o json --output-file-path . || status=$?
+          # Measured against the pinned 3.2.334: 0 = no failed checks, 1 =
+          # failed checks, 2 = a usage error. 1 is the normal state here —
+          # there are 219 of them — and deciding on it is the ratchet's job,
+          # not this step's. Anything above 1 is checkov failing to run.
+          #
+          # `--soft-fail` would be the obvious way to write this and is the
+          # wrong one: measured, it collapses 1 to 0 but leaves 2 alone,
+          # which buys nothing, and it is silent about the case that matters
+          # most — a `-d` naming a directory that does not exist exits 0
+          # under every combination, logging an ERROR and scanning what is
+          # left. That one is caught downstream instead, by the ratchet's
+          # shrink-only arm, because a vanished directory shows up as a
+          # count below the ceiling.
+          if [ "$status" -gt 1 ]; then
+            echo "::error title=iac-checkov::checkov exited $status — that is the scan failing to run, not a finding"
+            exit "$status"
+          fi
+      # Blocking, and this is the step that makes the one above safe.
+      # `continue-on-error` rewrites a failed step's *conclusion* to success,
+      # so without something reading its `outcome` the job reports green over
+      # a scan that died — the shape
+      # `scripts/check_required_check_substance.py` refuses by name, and the
+      # reason this check could not be required.
+      #
+      # Ahead of the ratchet on purpose. A scan that failed part-way can
+      # still leave a short `results_json.json`, and the ratchet's
+      # shrink-only arm would read that short count and print "lower it to
+      # N" — advice that would bake a broken scan into the ceiling.
+      - name: The scan itself did not fail
+        if: steps.checkov.outcome == 'failure'
+        run: |
+          echo "::error title=iac-checkov::checkov did not complete, so the count below would describe a partial scan"
+          exit 1
       - name: Ratchet the checkov finding count
         run: python3 scripts/check_scanner_ratchet.py --tool checkov --report results_json.json
 

@@ -90,6 +90,24 @@ ceilings:
     # one is to retain `semgrep.json` as a run artefact and diff two runs of
     # the same tree. Nothing here does that yet.
     #
+    # Third consequence, and the one most likely to be undone by someone
+    # tidying up: this is why `Semgrep (ratcheted)` is **not** a required
+    # check on `main` while the other ratcheted scanners are. The job used to
+    # carry a second, unrelated defect — a `continue-on-error` scan step whose
+    # outcome nothing read, so the job reported success over a scan that had
+    # died — and that one is now fixed, in the same change that promoted
+    # `IaC scan (checkov, ratcheted)` to a required check after fixing the
+    # identical hole there. Semgrep was deliberately left unrequired anyway.
+    # The split above is the reason: at one run in twenty disagreeing with
+    # itself, requiring this job would red a pull request whose author cannot
+    # have caused it and cannot do anything about it except press re-run, and
+    # a required check whose documented remedy is "run it again" teaches
+    # people to re-run until green instead of reading what it said. Fixing
+    # the absorbed failure and requiring the job are separate questions;
+    # only the first was answered yes. Requiring it becomes reasonable once
+    # the +/-1 is attributed and eliminated, not before.
+    # The same reasoning is recorded in `.github/required-checks.json`.
+    #
     # 102 -> 103 (error unchanged at 40). The added WARNING is a third
     # `dynamic-urllib-use-detected`, on scripts/check_required_check_substance.py,
     # which asks the Actions API which steps each required check actually

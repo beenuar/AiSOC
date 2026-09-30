@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Two scanner jobs in `security.yml` could report success over a scan that failed, and that was the only thing keeping one of them off branch protection.** `Semgrep (ratcheted)` and `IaC scan (checkov, ratcheted)` each ran their scan under `continue-on-error: true` with no later step reading the outcome. `continue-on-error` is *defined* as rewriting a failed step's conclusion to `success`, so the Actions API shows a clean job and no amount of run history would have found it — which is why `scripts/check_required_check_substance.py` refuses the shape statically instead, and why it named both by name when they were considered for promotion alongside the three scanner checks that were required yesterday.
+
+  Both now carry the shape the gate's own failure message prescribes: the scan step has an `id`, and a blocking step reads `steps.<id>.outcome == 'failure'`. That step sits **ahead of** the ratchet rather than after it, for a reason that was measured rather than assumed — a scan that dies part-way still writes a report, so the ratchet would read the short count and print "lower it to N", which is precisely the advice that would bake a broken scan into the ceiling. Reproduced with the pinned semgrep 1.86.0: an unfetchable rule config exits 7 **and still writes `semgrep.json`**.
+
+  checkov needed two further corrections. Its `pip install` lived *inside* the absorbed step, so a failed install was swallowed and the only symptom was the ratchet complaining about a report that was never written; it is now a blocking step of its own. And its trailing or-true suffix discarded every exit code checkov has, so even with an `id` the outcome could never have been `failure`. That is now an explicit rule over the exit code, measured against the pinned 3.2.334: 0 = no failed checks, 1 = failed checks (the normal state, and the ratchet's decision to make), 2 = a usage error and the only one that is the scan failing to run. `--soft-fail` was measured and rejected as the way to write it — it collapses 1 into 0 but leaves 2 alone, buying nothing, and it is silent on the case that matters most, a `-d` naming a directory that does not exist, which exits 0 under every combination and is caught downstream by the ratchet's shrink-only arm instead.
+
+  The whole workflow tree was swept for the same shape, not just these two: 60 workflow files, 5 `continue-on-error` steps, and the only unguarded ones were these two. The other three are the dependency audits in `security-audit.yml`, which already read all three outcomes in one blocking step. No job-level `continue-on-error` exists anywhere.
+
+### Changed
+
+- **`IaC scan (checkov, ratcheted)` is now a required status check on `main`**, bringing the protected set to 28. It reported a real conclusion on all 40 sampled `pull_request` runs with zero skips — GitHub counts a skipped check as passing, so that is checked rather than assumed — and the absorbed-failure hole above was the only thing disqualifying it. `.github/required-checks.json` was updated in the same change, because `check_required_check_substance.py` cross-checks the committed manifest against the live protection API whenever it holds a token that can read it.
+
+- **`Semgrep (ratcheted)` stays deliberately unrequired even though its hole is now closed**, and the reason is measured rather than cautious: it disagrees with itself on an unchanged tree. Four pull requests on one base, changing nothing but a lockfile, run within thirteen minutes, split 102/40 and 101/39 over the identical 387 rules and 2,267 files. Requiring it would red roughly one pull request in twenty for a reason no author can act on, and the only remedy is a re-run — which teaches people to re-run until green rather than to read what the check said. Fixing the absorbed failure and requiring the job are separate questions and only the first was answered yes; the distinction is recorded in `.github/required-checks.json`, `.security/allowlist.yml` and the `security.yml` header so it is not quietly reversed.
+
 ## [13.0.1] - 2026-09-29
 
 ### Fixed
