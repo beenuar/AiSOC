@@ -9,7 +9,7 @@ Flow:
 
 Dependencies (optional):
   - python3-saml (onelogin/python3-saml) if available
-  - Falls back to stub mode when not installed
+  - Refuses with 501 when not installed, rather than inventing an identity
 
 Configuration (env vars):
   SAML_IDP_ENTITY_ID       IdP Entity ID (issuer)
@@ -34,8 +34,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import jwt as _jwt
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import RedirectResponse, Response
 
 logger = logging.getLogger(__name__)
 
@@ -140,12 +140,16 @@ async def saml_login(request: Request, redirect: str = "/") -> Response:
         auth = OneLogin_Saml2_Auth(req, _saml_settings())
         login_url: str = auth.login(return_to=redirect)
         return RedirectResponse(url=login_url)
-    except ImportError:
-        logger.warning("python3-saml not installed — SAML login stub active")
-        return HTMLResponse(
-            _stub_page("SAML Login (Stub)", "python3-saml is not installed. Configure SAML_IDP_SSO_URL and install python3-saml."),
-            status_code=200,
-        )
+    except ImportError as exc:
+        # 501, not a page that looks like a login. This branch used to render
+        # a stub and the one below it used to mint a token, and since
+        # python3-saml was declared in no manifest, the stub was the only
+        # reachable path on a stock install.
+        logger.error("SAML is enabled but python3-saml is not installed")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=("SAML is not available on this deployment: python3-saml is not installed. Install it, or use OIDC."),
+        ) from exc
     except Exception as exc:
         logger.exception("SAML login error")
         raise HTTPException(status_code=500, detail=f"SAML error: {exc}") from exc
@@ -187,12 +191,17 @@ async def saml_acs(request: Request) -> Response:
         response.set_cookie("aisoc_token", token, httponly=True, samesite="lax", secure=request.url.scheme == "https")
         return response
 
-    except ImportError:
-        logger.warning("python3-saml not installed — ACS stub active")
-        token = _issue_jwt({"sub": "stub-saml-user", "email": "saml@stub.local", "provider": "saml-stub"})
-        resp = RedirectResponse(url="/", status_code=302)
-        resp.set_cookie("aisoc_token", token, httponly=True, samesite="lax")
-        return resp
+    except ImportError as exc:
+        # This issued a signed session for a principal called
+        # `stub-saml-user` that no identity provider had ever seen, from an
+        # exception handler that had verified nothing. It is a 501 now: an
+        # assertion consumer with no library to consume assertions has
+        # nothing to say about who the caller is.
+        logger.error("SAML ACS reached but python3-saml is not installed")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=("SAML is not available on this deployment: python3-saml is not installed."),
+        ) from exc
 
 
 @router.get("/metadata")
@@ -243,13 +252,6 @@ async def saml_logout(request: Request) -> Response:
 
 def _first(lst: list[str]) -> str:
     return lst[0] if lst else ""
-
-
-def _stub_page(title: str, message: str) -> str:
-    return f"""<!DOCTYPE html><html><head><title>{title}</title></head>
-<body style="font-family:sans-serif;padding:2rem">
-<h2>{title}</h2><p style="color:#666">{message}</p>
-</body></html>"""
 
 
 async def _build_saml_request(request: Request) -> dict[str, Any]:

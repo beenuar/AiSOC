@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Both SSO handlers minted a signed session for an identity nobody authenticated.** `app/auth/saml.py` issued a token for `stub-saml-user` whenever `python3-saml` failed to import, and `python3-saml` was declared in **no install path at all** — so the `ImportError` branch was not a fallback, it was the only reachable path through the assertion consumer on every deployment. `app/auth/oidc.py` did the same for `oidc-stub-user` whenever `OIDC_ISSUER` or `OIDC_CLIENT_ID` was unset, which is the default. Both set `aisoc_token` as a cookie from inside an exception handler that had verified nothing.
+
+  The only reason this was not already a full authentication bypass is that the API verifies a bearer token and does not read that cookie. A cookie the API ignores today is a cookie the API might read tomorrow, and making SSO complete a sign-in is exactly what Phase 4 of the parity plan does — so the stubs had to go before SSO was made to work, not after.
+
+  Both paths now answer `501 Not Implemented` and name what is missing. `python3-saml` is declared in `services/api/pyproject.toml` and locked, which is what makes that 501 clearable rather than permanent, and `services/api/Dockerfile` gains `pkg-config`, `libxml2-dev`, `libxmlsec1-dev` and `libxmlsec1-openssl` so the native `xmlsec` extension builds. **Verified by building the image and importing `onelogin.saml2` inside it**, rather than by reading the manifest: the image grows from 1.36 GB to 1.53 GB, which is the cost of the XML security stack in a single-stage build, and a multi-stage split that keeps only the runtime libraries is the obvious follow-up.
+
+  Asserted three ways, because deleting a branch is not the same as proving no path reaches it: neither identity appears in any auth module, both handlers answer 501 when unconfigured, and no `set_cookie` sits inside an exception handler. Six of the eight cases fail on the pre-fix tree.
+
+
+### Security
+
 - **Fifty wrong passwords for one account returned fifty 401s, with no delay and no lockout.** `POST /api/v1/auth/login` did a `SELECT`, a `verify_password`, and a 401. `SECURITY.md` pointed readers at `services/api/app/middleware/` "for rate limiting, audit logging, and request hardening", and that directory holds exactly two files, neither of which is a limiter. Rate limiting did exist in this service — on the explain endpoint, on lake queries and on the public waitlist form — and the login route consulted none of it. That is the shape this repository keeps finding: a mechanism that exists, is tested, and has no caller on the path that needs it.
 
   `services/api/app/services/login_throttle.py` counts failures against **two** principals, because one counter cannot catch both attacks. An account counter catches one source guessing many passwords. A source counter catches one source spraying one common password across many accounts, which never trips an account counter at all, since each account sees a single failure.

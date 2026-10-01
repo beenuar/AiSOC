@@ -127,6 +127,14 @@ croniter = ">=2.0,<7.0"
 # would surface as a rebalance nobody could explain. Only used by
 # `app.workers.retro_hunt_consumer`, which is off by default.
 aiokafka = ">=0.10,<0.15"
+# The SAML routes import `onelogin.saml2`, and this was declared in no
+# install path at all. `app/auth/saml.py` caught the resulting ImportError
+# and issued a signed session for a principal called `stub-saml-user` that
+# no identity provider had ever seen, so the stub was not a fallback: on a
+# stock install it was the only reachable path through the assertion
+# consumer. The handler answers 501 now, and declaring this is what makes
+# that 501 clearable rather than permanent.
+python3-saml = ">=1.16,<2"
 
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.

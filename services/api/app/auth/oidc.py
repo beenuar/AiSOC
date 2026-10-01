@@ -32,7 +32,7 @@ from urllib.parse import urlencode, urlparse
 
 import httpx
 import jwt as _jwt
-from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
 logger = logging.getLogger(__name__)
@@ -129,12 +129,16 @@ async def oidc_login(request: Request, redirect: str = "/") -> Response:
 
     safe_redirect = _safe_redirect(redirect)
     if not issuer or not client_id:
-        # Stub mode
-        logger.warning("OIDC not configured (OIDC_ISSUER / OIDC_CLIENT_ID missing) — issuing stub token")
-        token = _issue_jwt({"sub": "oidc-stub-user", "email": "oidc@stub.local", "provider": "oidc-stub"})
-        resp = RedirectResponse(url=safe_redirect, status_code=302)
-        resp.set_cookie("aisoc_token", token, httponly=True, samesite="lax")
-        return resp
+        # This issued a signed session for a principal called
+        # `oidc-stub-user` that no identity provider had ever seen, and it
+        # fired whenever OIDC_ISSUER or OIDC_CLIENT_ID was unset, which is
+        # the default. An unconfigured identity provider has nothing to say
+        # about who the caller is.
+        logger.error("OIDC login requested but OIDC_ISSUER / OIDC_CLIENT_ID are not set")
+        raise HTTPException(
+            status_code=status.HTTP_501_NOT_IMPLEMENTED,
+            detail=("OIDC is not configured on this deployment: set OIDC_ISSUER and OIDC_CLIENT_ID."),
+        )
 
     try:
         provider = await _discover(issuer)
