@@ -792,7 +792,6 @@ OPTIONAL_BY_OMISSION: dict[tuple[str, str], str] = {
         "manifest deliberately does not carry the SDK"
     ),
     ("api", "httpx_ws"): "the graph WebSocket client is an opt-in transport nothing in the default deployment dials",
-    ("api", "onelogin"): "python3-saml is only needed by deployments using SAML SSO; the OIDC path is the default",
     ("api", "reportlab"): "a second PDF backend behind WeasyPrint, reached only when a caller asks for it",
 }
 

@@ -15,16 +15,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libcairo2 \
     libgdk-pixbuf-2.0-0 \
     shared-mime-info \
-    # python3-saml -> xmlsec -> libxmlsec1. The SAML routes import
-    # `onelogin.saml2`, and that import used to fail on every image: the
-    # handler caught the ImportError and issued a signed session for a
-    # principal no identity provider had seen, so the stub was the only
-    # reachable path through the assertion consumer. It answers 501 now, and
-    # these are what make the 501 clearable rather than permanent.
-    pkg-config \
-    libxml2-dev \
-    libxmlsec1-dev \
-    libxmlsec1-openssl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install poetry==2.4.1 && \
