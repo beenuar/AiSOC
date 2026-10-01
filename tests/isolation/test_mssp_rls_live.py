@@ -106,6 +106,11 @@ def seeded():
     import asyncio
 
     state: dict = {}
+    # Torn down *before* seeding as well as after. A run whose seed raised
+    # part-way leaves rows behind, and the next run then dies on a unique
+    # constraint rather than on the thing it was testing — which is how a
+    # one-off failure becomes a permanently red job.
+    asyncio.run(_teardown())
     asyncio.run(_seed(state))
     try:
         yield state
@@ -151,12 +156,19 @@ async def _seed(state: dict) -> None:
         )
         for parent, child, pack in ((MSSP_A, CHILD_A, pack_a), (MSSP_B, CHILD_B, pack_b)):
             await admin.execute(
-                "INSERT INTO mssp_delegations (parent_tenant_id, child_tenant_id) VALUES ($1,$2)",
+                "INSERT INTO mssp_delegations (parent_tenant_id, child_tenant_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
                 parent,
                 child,
             )
             await admin.execute(
-                "INSERT INTO mssp_rule_overrides (parent_tenant_id, child_tenant_id, rule_id) VALUES ($1,$2,$3)",
+                # `action` is NOT NULL with a CHECK of ('exclude','customize')
+                # and no default. A hand-written probe schema that omitted it
+                # passed locally and failed in CI against the real migration
+                # chain — which is the argument for running this against the
+                # chain rather than an approximation of it.
+                "INSERT INTO mssp_rule_overrides "
+                "(parent_tenant_id, child_tenant_id, rule_id, action) "
+                "VALUES ($1,$2,$3,'exclude') ON CONFLICT DO NOTHING",
                 parent,
                 child,
                 rule_id,
@@ -167,7 +179,7 @@ async def _seed(state: dict) -> None:
                 child,
             )
             await admin.execute(
-                "INSERT INTO mssp_rule_packs (id, parent_tenant_id, name) VALUES ($1,$2,$3)",
+                "INSERT INTO mssp_rule_packs (id, parent_tenant_id, name) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING",
                 pack,
                 parent,
                 f"rls-pack-{parent}",
