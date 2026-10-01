@@ -20,6 +20,47 @@ _API_URL = os.getenv("API_SERVICE_URL", "http://api:8000")
 _TIMEOUT = float(os.getenv("AGENTS_API_TIMEOUT", "10.0"))
 
 
+#: Whether the entity graph is part of this deployment. Neo4j is a `full`
+#: profile service, so on CORE there is no graph to read and every call
+#: below would fail regardless of credentials.
+_GRAPH_ENABLED = os.getenv("AISOC_GRAPH_ENABLED", "").strip().lower() in ("1", "true", "yes")
+
+_UNAVAILABLE_LOGGED = False
+
+
+def graph_unavailable_reason(api_token: str | None) -> str | None:
+    """Why a graph read cannot be made, or None if it can.
+
+    Two reasons, and telling them apart matters to whoever reads the log.
+
+    The graph routes on the API authenticate with `get_current_user`, which
+    validates a **user** JWT. A background worker has no user, so a service
+    token does not open them: before this, `ContextBundleBuilder()` was
+    constructed with no token on the production path and every graph read
+    during auto-triage answered 401, four warnings per alert, on every
+    entity. That reads like a broken integration rather than a capability
+    that is not present.
+
+    And on CORE there is no graph at all. Neo4j runs in the `full` profile,
+    so the honest answer there is "not in this deployment", not an
+    authentication error.
+    """
+    if not _GRAPH_ENABLED:
+        return "the entity graph runs in the `full` profile and is not part of this deployment"
+    if not api_token:
+        return "no user credential is available on this path; the graph routes authenticate a user and a background worker has none"
+    return None
+
+
+def _note_unavailable(reason: str) -> None:
+    """Say it once per process, not once per entity per alert."""
+    global _UNAVAILABLE_LOGGED  # noqa: PLW0603
+    if _UNAVAILABLE_LOGGED:
+        return
+    _UNAVAILABLE_LOGGED = True
+    logger.info("graph.unavailable", reason=reason)
+
+
 def _headers(api_token: str | None) -> dict[str, str]:
     return {"Authorization": f"Bearer {api_token}"} if api_token else {}
 
@@ -30,6 +71,14 @@ async def get_attack_path(
     max_depth: int = 6,
 ) -> dict[str, Any]:
     """Return the Case → Alert → Host/User → IOC → Technique attack path."""
+    unavailable = graph_unavailable_reason(api_token)
+    if unavailable:
+        _note_unavailable(unavailable)
+        # "could not check" with a reason, which is what the agent
+        # prompt renders. An empty result would read to the model as
+        # "this entity has no neighbours", which is a different and
+        # much worse claim.
+        return {"error": unavailable, "available": False}
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(
@@ -56,6 +105,14 @@ async def get_blast_radius(
     hops: int = 3,
 ) -> dict[str, Any]:
     """Compute the blast radius starting from a Host/User/IOC/Alert node."""
+    unavailable = graph_unavailable_reason(api_token)
+    if unavailable:
+        _note_unavailable(unavailable)
+        # "could not check" with a reason, which is what the agent
+        # prompt renders. An empty result would read to the model as
+        # "this entity has no neighbours", which is a different and
+        # much worse claim.
+        return {"error": unavailable, "available": False}
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(
@@ -89,6 +146,14 @@ async def get_entity_neighbors(
     api_token: str | None = None,
 ) -> dict[str, Any]:
     """Return all nodes directly connected (depth 1) to the specified entity."""
+    unavailable = graph_unavailable_reason(api_token)
+    if unavailable:
+        _note_unavailable(unavailable)
+        # "could not check" with a reason, which is what the agent
+        # prompt renders. An empty result would read to the model as
+        # "this entity has no neighbours", which is a different and
+        # much worse claim.
+        return {"error": unavailable, "available": False}
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
             resp = await client.get(

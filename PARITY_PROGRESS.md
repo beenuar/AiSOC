@@ -343,3 +343,33 @@ or a file, not a resolvable import, so the rule would have to parse free text
 to decide what to import. Both halves exist and are enforced separately: every
 row names a runnable gate, and every module has an importer or a reason.
 Recorded rather than faked with a heuristic that would pass on anything.
+
+## Live QA on a real stack (2026-10-01)
+
+CORE brought up from this tree with `make env && docker compose up -d`, a real
+administrator created by `make bootstrap`, and the golden pipeline run three
+times. **16 services running**, which is the figure parity 1.2 corrected
+`install.sh`, `walkthrough.mdx` and the `Makefile` to and registered in the
+gate.
+
+| Component | Verdict | Evidence |
+|---|---|---|
+| Fleet | PASS | 16/16 running; postgres, redis, kafka, zookeeper, ollama, qdrant, litellm, api all report healthy |
+| `make env` | PASS | Generated 14 real secrets. No `replace-me` placeholder, so the vault works and connector saves do not 500 |
+| `make bootstrap` | PASS | Created `admin@aisoc.internal` and printed a generated password once |
+| Golden pipeline | PASS | **10/10 stages**, three separate runs. Event accepted, traversed the spine, became an alert, retrievable by id, severity survived normalization, attribution not duplicated, description is prose |
+| Unauthenticated ingest | PASS | HTTP 401 with a usable message |
+| AI auto-triage | PASS | All three alerts carry `disposition='true_positive'` and `confidence=44`. **45 LLM calls** recorded at the gateway. `status='new'` is correct: a true positive escalates rather than auto-closing |
+| Login | PASS | `POST /api/v1/auth/login` returns a token for the bootstrap credentials; the browser then reads all three alerts |
+| Console honesty | PASS | Unauthenticated panels read "not measured" and "Treat this as unknown rather than as an empty queue". With a session they read real zeros with context. No fabricated data anywhere |
+| Login page leaks | PASS | No demo-credential banner and no commercial hostname |
+| API docs URL | **FAIL, fixed** | `make up`, `install.sh` and the README all advertised `http://localhost:8000/api/docs`, which **404s**: `make up` starts a production-class stack and the API disables its docs there by design. Five surfaces corrected to point at `docs/openapi.yaml` |
+| Graph evidence | **FAIL, partly fixed** | Every auto-triage emitted **four 401s per alert** on `graph/neighbors` and `graph/blast-radius`. `ContextBundleBuilder()` is constructed with no token on the production path, and those routes authenticate a *user*, which a background worker does not have. On CORE there is also no Neo4j at all. Now reported once as "the entity graph runs in the `full` profile and is not part of this deployment" rather than four authentication errors |
+| `incident-context` 401 | **FAIL, open** | One per alert remains, same root cause. A guard there broke six tests that exercise the enabled path, so it was reverted: the proper fix is a service principal the API accepts, which belongs with parity 4.1 |
+
+### What the QA found that no test could
+
+Both failures above are invisible to unit tests. The docs URL is a string in
+a `Makefile` echo, and the graph 401 only appears when a worker with no user
+identity calls a user-authenticated route in a deployment where the backing
+store is not running. Each needed a real stack to see.
