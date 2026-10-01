@@ -76,22 +76,31 @@ jobs:
         uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
       - name: Setup Node 22
-        # Deliberately **no** `cache: "pnpm"`. This job has now been broken
-        # twice by the same mechanism: a restored pnpm store that is missing
-        # or has not linked a platform-specific optional binary. The first
-        # time it was `@tailwindcss/oxide-linux-x64-gnu` and the dev server
-        # died with "Cannot find native binding"; this time Turbopack's own
-        # binary was absent and every page failed to compile with
-        # `Can't resolve '@vercel/turbopack-next/internal/font/google/font'`.
+        # Deliberately **no** `cache: "pnpm"`, and the reasoning is worth
+        # keeping because the first version of it was wrong.
         #
-        # Both are the same shape — a cache keyed on `pnpm-lock.yaml`, which
-        # does not change when the *platform* set of optional packages needs
-        # to. A cold install costs about a minute here and removes the class.
+        # This job has been broken twice by an unresolvable
+        # `[next]/internal/font/google/...` module. The cache looked like
+        # the cause — an earlier failure here really was a restored store
+        # that had not linked `@tailwindcss/oxide-linux-x64-gnu` — and
+        # removing it produced one green run. The next commit, which
+        # changed one JSON file, failed again on a *different* font. So the
+        # cache was a plausible hypothesis that one green run appeared to
+        # confirm and the following run disproved.
         #
-        # The symptom is also badly misleading: a missing native binding
-        # surfaces as a module-resolution error naming a virtual path that
-        # exists in no package, so the obvious reading is a bad import in
-        # application code. Nothing in `apps/web` was wrong either time.
+        # `next/font/google` fetches from Google at compile time, so the
+        # real dependency is the network, and the failure is intermittent
+        # rather than deterministic. The cache stays off because it buys
+        # nothing here and has caused one confirmed failure of its own, but
+        # it is **not** the fix: `NEXT_FONT_GOOGLE_MOCKED_RESPONSES`, or
+        # self-hosting the five faces through `next/font/local`, is.
+        # Tracked rather than claimed closed.
+        #
+        # The symptom misleads either way: a compile-time font fetch that
+        # fails surfaces as a module-resolution error naming a virtual path
+        # present in no package, so it reads as a bad import. Nothing in
+        # `apps/web` was wrong on either occasion — `next dev --turbo`
+        # serves 200 locally on the same commit.
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "22"
