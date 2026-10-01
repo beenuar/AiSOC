@@ -20,6 +20,7 @@ calling through and hoping something notices.
 from __future__ import annotations
 
 import inspect
+from typing import Any
 
 import pytest
 from app.memory import outcomes as outcomes_module
@@ -58,7 +59,7 @@ def test_the_canonical_writer_declares_the_injection_flag() -> None:
 
 
 @pytest.mark.parametrize(("label", "cls"), WRITERS)
-def test_every_writer_accepts_the_canonical_keywords(label: str, cls: type) -> None:
+def test_every_writer_accepts_the_canonical_keywords(label: str, cls: Any) -> None:
     missing = _keyword_params(CANONICAL) - _keyword_params(cls.record_outcome)
     assert not missing, (
         f"{label}.record_outcome does not accept {sorted(missing)}. The call site is inside "
@@ -68,7 +69,7 @@ def test_every_writer_accepts_the_canonical_keywords(label: str, cls: type) -> N
 
 
 @pytest.mark.parametrize(("label", "cls"), WRITERS)
-def test_no_writer_requires_something_the_caller_does_not_pass(label: str, cls: type) -> None:
+def test_no_writer_requires_something_the_caller_does_not_pass(label: str, cls: Any) -> None:
     """The other direction.
 
     A writer that adds a required keyword of its own is just as broken, and
