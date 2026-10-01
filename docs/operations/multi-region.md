@@ -1,5 +1,15 @@
 # AiSOC Multi-Region Operations
 
+:::warning A design, not an implementation
+
+Nothing in this document is implemented. There is no per-tenant region routing, no
+`events_dist` distributed table, no active-active deployment and no measured RPO or
+RTO. It records a target architecture so that the choices are reviewable before any
+of it is built, and it is not on any roadmap milestone.
+
+:::
+
+
 > **Audience**: Platform / SRE teams running AiSOC in production across multiple cloud regions.
 > **Last updated**: maintained by hand. `scripts/generate_runbook.py` exists but
 > needs a live OTel endpoint, so nothing in CI regenerates this page.

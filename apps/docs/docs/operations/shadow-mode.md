@@ -274,7 +274,11 @@ decides.
 
 Two capabilities can be earned:
 
-* `auto_close` on an alert class: the agent closes alerts of that class without
+* `auto_close` on an alert class. **Recorded but not yet enforced**: the grant is written
+  and earned as described below, and no code reads it, so earning it changes nothing
+  today. Closure is still governed by the single process-wide
+  `AISOC_AUTO_CLOSE_THRESHOLD`. Restored by parity 2.1. As designed, it would let
+  the agent close alerts of that class without
   a human.
 * `auto_execute` on a response verb: that verb's autonomy tier ceiling rises.
 

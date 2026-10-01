@@ -191,7 +191,7 @@ rejects, triage falls back to a deterministic path and the rail shows which one 
 | AI triage + Investigation Ledger | Beta | Unit + substrate eval + local-model run | Yes, copilot mode |
 | Event lake + hunting (ClickHouse) | Beta | Unit | Yes, `full` profile |
 | Retro-hunts when new intel arrives | Beta | Unit + live ClickHouse replay | Yes, `full` profile |
-| Hunting agent + 68-hunt library | Beta | Unit + boundary gate | Yes, `full` profile |
+| 68-hunt YAML library, replayed against synthetic events | Alpha | Unit + boundary gate | Yes, `full` profile. The NL hunting agent is **not wired**: nothing outside its own test imports it, and the scheduler reads a synthetic JSONL corpus rather than tenant data. Restored by parity 6.1 |
 | SCIM 2.0, white-label, usage metering | Beta | Unit + Okta/Entra sequences | Yes |
 | Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |

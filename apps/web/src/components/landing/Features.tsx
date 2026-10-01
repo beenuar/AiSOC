@@ -22,7 +22,7 @@ const FEATURES = [
   {
     title: 'Three-tier agent memory',
     description:
-      'Session (in-process LRU), working (Redis, 24 h TTL), and institutional (PostgreSQL + pgvector, permanent). Agents carry context across tool calls, cases, and sessions; institutional knowledge survives restarts.',
+      'Session (in-process LRU), working (Redis, 24 h TTL), and institutional (PostgreSQL, reason-coded key/value, permanent). Agents carry context across tool calls, cases, and sessions; institutional knowledge survives restarts. Recall is by key and reason code, not semantic: there is no embedding index on this path yet.',
     icon: (
       <path d="M12 2a5 5 0 015 5v1h1a3 3 0 010 6h-1v1a5 5 0 01-10 0v-1H6a3 3 0 010-6h1V7a5 5 0 015-5z" />
     ),

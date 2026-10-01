@@ -121,10 +121,10 @@ The claim-to-gate matrix stands at **255 rows — 255 GATED / 0 PARTIAL / 0 NO G
 - [x] Full analyst audit log (append-only `audit_log` table + middleware + UI)
 
 ### Compliance
-- [x] SOC 2 Type II evidence collection dashboard + PDF export
+- [x] Compliance evidence mapping for **24 controls across 5 frameworks** (SOC2, PCI-DSS, HIPAA, ISO27001, NIST-CSF), with PDF export. Not a SOC 2 Type II evidence dashboard: the console pages for it call routes that do not exist. Restored by parity 1.3
 - [x] ISO 27001 control mapping
 - [x] NIST CSF / NIST 800-53 control coverage heatmap
-- [x] PCI-DSS, HIPAA, DORA module
+- [x] PCI-DSS and HIPAA control mappings. **DORA is not mapped** by any code path
 - [x] MTTD / MTTR / MTTC SLA tracking per tenant
 
 ### High Availability & Operations
@@ -209,7 +209,7 @@ SOAR platforms drove this release.
 
 - [x] `shifts.py` — shift-handoff CRUD
 - [x] `stix_taxii.py` — STIX 2.1 / TAXII 2.1 publishing
-- [x] `compliance.py` — automated compliance evidence (SOC 2, ISO 27001, NIST CSF, PCI-DSS, HIPAA, DORA)
+- [x] `compliance.py`, automated compliance evidence for 24 controls across SOC 2, ISO 27001, NIST CSF, PCI-DSS and HIPAA. **DORA is not among them**
 - [x] `deployment.py` — deployment / air-gap toggles
 
 ### New connectors (16 → 26)
@@ -237,7 +237,7 @@ SOAR platforms drove this release.
 All items below were shipped as part of the v1.0 buyer-value plan.
 Implemented and reviewed by Beenu Arora <beenu@cyble.com>.
 
-- [x] WCAG AA full accessibility pass (axe-core CI gate — `apps/web/src/test/a11y.test.tsx`)
+- [x] axe-core CI gate over the components listed in `apps/web/src/test/a11y.test.tsx`. **Not a full WCAG AA pass**: the queue, alert list, case workspace, investigation rail and settings are not covered. Restored by parity 4.7
 - [x] Light theme persisted in user profile (`ThemeProvider.tsx` + `PATCH /api/v1/users/me/preferences`)
 - [x] Saved views and custom drag-drop dashboard widgets per analyst (`saved_views.py` + `DashboardView.tsx`)
 - [x] AI-generated weekly executive digest — auto-emailed PDF (`digest_pdf.py` + `weekly_digest_task.py`)

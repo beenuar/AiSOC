@@ -147,10 +147,15 @@ function Summary({
 
   return (
     <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-5">
-      <Card label="Techniques covered" value={coverage.unique_techniques}>
+      {/* Tag coverage, and labelled as such. The number says a rule that
+          can fire claims the technique; it does not say the rule would
+          catch an attacker using it. The generator counted every rule on
+          disk until 2026-10-01, including reference-only ones, which read
+          as 493 techniques covered when the executable figure was 391. */}
+      <Card label="Techniques tagged" value={coverage.unique_techniques}>
         {tierFilter === 'all'
-          ? 'across all tiers'
-          : `in ${TIER_LABEL[tierFilter]} tier (${techShown} shown)`}
+          ? 'on executable rules, across all tiers'
+          : `on executable rules in ${TIER_LABEL[tierFilter]} tier (${techShown} shown)`}
       </Card>
 
       {/* The executable figure leads, because this page is called Coverage

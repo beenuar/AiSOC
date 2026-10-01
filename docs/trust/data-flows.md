@@ -20,7 +20,10 @@ The investigation agent calls an LLM you configure. There are three modes:
    llama.cpp. No evidence leaves your network at all. This is the only mode in
    which the "no data leaves" claim is unconditionally true.
 2. **Hosted LLM with redaction (default).** When you configure a cloud provider
-   (Anthropic/OpenAI), evidence is pseudonymized before egress by
+   (hosted providers), evidence is **not** pseudonymized before egress today. The reversible
+   pseudonymizer exists and is unit-tested, but no LLM call site invokes it, so this
+   paragraph describes a planned control rather than a shipped one. Restored by parity 2.4.
+   The mechanism, for reference, is
    `services/agents/app/privacy/redactor.py`: internal IPs, emails, file paths,
    secrets, internal hostnames, and usernames are replaced with opaque,
    per-run, in-memory tokens (`USER_1`, `HOST_2`, `IP_3`). The LLM reasons over

@@ -611,18 +611,33 @@ def coverage_block(items: list[dict[str, Any]]) -> dict[str, Any]:
     rather than a single flat number.
     """
     techniques: dict[str, int] = {}
+    executable_techniques: dict[str, int] = {}
     by_tier: dict[str, dict[str, int]] = {}
     for item in items:
         tier = item.get("tier") or "stable"
+        runs = bool(item.get("executable", True))
         for tid in item.get("mitre_techniques") or []:
             techniques[tid] = techniques.get(tid, 0) + 1
+            if runs:
+                executable_techniques[tid] = executable_techniques.get(tid, 0) + 1
             tier_map = by_tier.setdefault(tier, {})
             tier_map[tid] = tier_map.get(tid, 0) + 1
 
     return {
-        "techniques": dict(sorted(techniques.items())),
-        "unique_techniques": len(techniques),
-        "total_with_mitre": sum(1 for i in items if i.get("mitre_techniques")),
+        # The headline. A technique counts only when a rule that can actually
+        # fire carries the tag, because the previous figure counted every
+        # rule on disk including the reference-only ones, and a reader takes
+        # a coverage number as a statement about what the product detects.
+        "unique_techniques": len(executable_techniques),
+        "techniques": dict(sorted(executable_techniques.items())),
+        "total_with_mitre": sum(1 for i in items if i.get("mitre_techniques") and i.get("executable", True)),
+        # Kept, clearly named, because the on-disk corpus is a real thing a
+        # reader may want to size. It is not coverage.
+        "unique_techniques_all_rules": len(techniques),
+        "techniques_all_rules": dict(sorted(techniques.items())),
+        # This is tag coverage, not detection efficacy: it says a rule claims
+        # the technique, not that the rule would catch an attacker using it.
+        "measure": "attack_technique_tags_on_executable_rules",
         "by_tier": {tier: dict(sorted(tids.items())) for tier, tids in by_tier.items()},
     }
 
@@ -721,6 +736,16 @@ def build_index() -> dict[str, Any]:
             # falsehood.
             "executable": sum(1 for i in items if i.get("executable", True)),
             "quarantined": sum(1 for i in items if not i.get("executable", True)),
+            # The three states, reported separately because the single
+            # `executable` figure above conflates two different things and a
+            # reader of a marketplace index takes it as a detection count.
+            # It reads 2,767 while the item flags say 2,603, and the 164 in
+            # between are the playbooks and plugins described above, which
+            # carry no flag at all. Both numbers are defensible; publishing
+            # only one of them and calling it `executable` is not.
+            "executable_detections": sum(1 for i in items if i.get("executable") is True),
+            "reference_only_detections": sum(1 for i in items if i.get("executable") is False),
+            "not_a_detection": sum(1 for i in items if "executable" not in i),
         },
         "mitre_coverage": coverage_block(items),
         "items": items,

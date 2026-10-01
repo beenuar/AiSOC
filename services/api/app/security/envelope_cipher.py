@@ -23,7 +23,8 @@ The `KeyManager` protocol keeps the KMS backend pluggable:
 - `LocalKeyManager` — KEK is a Fernet key from the environment (default; matches
   today's trust model but with per-secret DEKs).
 - `AwsKmsKeyManager` — wraps DEKs via AWS KMS ``encrypt``/``decrypt`` (boto3,
-  lazy-imported). GCP KMS / HashiCorp Vault Transit implement the same protocol.
+  lazy-imported). GCP KMS and HashiCorp Vault Transit are **not implemented**:
+  `get_vault` accepts the local and AWS KMS backends only.
 - `FakeKmsKeyManager` — in-memory, rotatable; lets the envelope round-trip and
   the rotation/re-wrap flow be unit-tested offline with no cloud credentials.
 

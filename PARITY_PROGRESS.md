@@ -216,3 +216,34 @@ a reachability finding for 1.4 rather than a claim edit.
 The security batch comes first and is tracked separately. Phase 1 starts once
 it has landed and been released, because several of its items assume those
 fixes exist.
+
+## Phase 1.1 — overclaims retracted (2026-10-01)
+
+All twelve rows narrowed or removed, each naming the sub-item that restores it.
+Every figure re-derived from the tree rather than copied from the plan.
+
+| Claim | What it says now | Restored by |
+|---|---|---|
+| Hunting agent + 68-hunt library | The 68 YAML hunts are real; the **agent is not wired** (nothing outside its test imports it) and the scheduler replays synthetic JSONL | 6.1 |
+| Hosted egress is pseudonymized by default | Retracted. The redactor exists and is unit-tested; **no LLM call site invokes it**. Matrix row 19 narrowed from "no data exfiltration" with the reason in the row | 2.4 |
+| Institutional memory on PostgreSQL + pgvector | Narrowed to reason-coded key/value on plain Postgres. **No pgvector, no embedding** on that path | 6.5 |
+| `auto_close` grant closes alerts of that class | Recorded but **not enforced**: no code reads the grant, closure still uses one process-wide threshold | 2.1 |
+| SAML, OIDC, group mapping, `SAML_IDP_METADATA_URL`, TOTP, per-role MFA | Moved to planned. Both handlers answer 501 since v15.0.0 and neither provisions a user, binds a tenant nor maps a group | 4.1, 4.2 |
+| SOC 2 Type II dashboard; six frameworks including DORA | Narrowed to **24 controls across 5 frameworks**, DORA absent | 1.3 |
+| Shift handoff, EASM, MSSP ARR dashboard, gamification | Removed from `intro.md` | None |
+| WCAG AA full pass | Narrowed to the components axe covers | 4.7 |
+| EU residency, `events_dist`, active-active, RPO/RTO | Labelled a design, banner at the top of the document | None |
+| GCP KMS and Vault Transit implement the same protocol | Corrected: `get_vault` accepts local and AWS KMS only | None |
+| Tenant skills authored in a console editor | Corrected: API-only | 6.3 |
+| ATT&CK coverage of 493 techniques | **Generator fixed, not output.** Coverage now counts executable rules only: **391**, labelled tag coverage. The 493 survives as `unique_techniques_all_rules` | 5.5 |
+
+Two figures from D4 and D5 moved while this was written, which is why the plan
+says to re-derive rather than copy:
+
+- ATT&CK over executable rules reads **391**, not the 387 captured. The corpus
+  grew; the method is what matters.
+- `stats.executable` read **2,767** against item flags of **2,603**. The 164 in
+  between are playbooks and plugins carrying no flag. Both are defensible
+  numbers; publishing one of them under the name `executable` was not, so the
+  index now reports `executable_detections`, `reference_only_detections` and
+  `not_a_detection` separately.

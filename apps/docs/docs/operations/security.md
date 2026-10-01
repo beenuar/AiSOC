@@ -42,21 +42,41 @@ Rotate `SECRET_KEY` periodically. Doing so invalidates every active session, whi
 
 ### Single Sign-On (SSO)
 
-AiSOC supports two enterprise SSO protocols out of the box:
+:::warning Planned, not shipped
 
-- **OIDC** — configured via `services/api/app/auth/oidc.py`. Point AiSOC at your IdP's discovery URL, set the client ID/secret, and map IdP groups to AiSOC roles in the role mapping config. Common IdPs tested: Okta, Entra ID (Azure AD), Google Workspace, Auth0.
-- **SAML 2.0** — configured via `services/api/app/auth/saml.py`. Upload your IdP metadata XML or set the `SAML_IDP_METADATA_URL`. Group-to-role mapping uses the same shape as OIDC.
+**Neither SSO protocol completes a sign-in today.** Both handlers existed as
+stubs that issued a token for a principal no identity provider had seen; in
+`v15.0.0` those were deleted and both now answer `501 Not Implemented` when
+unconfigured. What is missing is the rest: neither provisions a local user,
+binds a tenant, maps IdP groups to roles, nor issues the bearer token the API
+verifies. `SAML_IDP_METADATA_URL` is read by nothing.
 
-Both providers issue the same internal JWT after authentication, so authorization (RBAC, RLS) works identically regardless of how the user signed in.
+Restored by parity 4.1, which adds an end to end CI test against a
+containerised test identity provider for both protocols.
+
+:::
+
+The two protocols AiSOC is building toward:
+
+- **OIDC**, in `services/api/app/auth/oidc.py`. Discovery URL, client id and
+  secret, and IdP group to role mapping.
+- **SAML 2.0**, in `services/api/app/auth/saml.py`. IdP metadata by file or by
+  URL, with the same group mapping shape as OIDC.
+
+Both are intended to issue the same internal bearer token, so that RBAC and
+RLS apply identically however a user signed in.
 
 ### Multi-Factor Authentication
 
 Two MFA paths are available:
 
 - **WebAuthn / passkeys** — implemented in [`services/api/app/api/v1/endpoints/passkeys.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/passkeys.py). Required for the [Responder PWA](../intro) (`/responder/*` route). Passkey-only login means there is no password fallback for on-call responders — you authenticate with the device, biometric, or hardware key the user registered.
-- **TOTP** — standard 6-digit time-based codes for analyst console accounts when SSO is not in use. Backup codes are generated at enrolment and shown once.
+- **TOTP**, with backup codes and per-role enforcement, is **planned and not
+  implemented**. No TOTP enrolment, verification or backup-code path exists in
+  the tree. Restored by parity 4.2.
 
-Both MFA methods are enforced per-user, configurable per-role: tenant admins can require MFA for any role they choose.
+Passkeys are enforced for the Responder PWA. **Per-role MFA enforcement for the
+console is not implemented**; it arrives with parity 4.2.
 
 ### API keys
 
