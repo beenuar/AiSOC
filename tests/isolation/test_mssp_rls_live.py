@@ -80,9 +80,14 @@ async def _connect(dsn: str):
     try:
         return await asyncpg.connect(_asyncpg_dsn(dsn))
     except Exception as exc:  # noqa: BLE001
+        # Both branches raise, but `pytest.fail` / `pytest.skip` are not
+        # annotated NoReturn, so without the explicit raise this reads as a
+        # function that sometimes returns None — `py/mixed-returns`. Same
+        # shape and same fix as `_connect_admin` in test_postgres_rls.py.
         if REQUIRED:
             pytest.fail(f"POSTGRES_RLS_ISOLATION_REQUIRED is set but no Postgres answered: {exc}")
         pytest.skip(f"no Postgres: {exc}")
+        raise
 
 
 async def _count_as(conn, tenant: uuid.UUID, table: str) -> int:
