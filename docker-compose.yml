@@ -526,6 +526,13 @@ services:
       # from your SIEM" path was unreachable on every local and CI stack.
       # This is a pgx DSN and is deliberately distinct from the SQLAlchemy
       # DATABASE_URL the Python services use.
+      # sslmode=disable is correct *here* and nowhere else: the bundled
+      # Postgres serves no certificate, so requiring TLS would break the
+      # documented first run on a machine where there is nothing to fix.
+      # A production deployment that leaves this is reported at boot by
+      # warn_if_insecure_defaults, which also reports an *unset* sslmode —
+      # libpq reads that as `prefer`, which downgrades to cleartext without
+      # a log line, and is therefore worse than the honest `disable` below.
       DATABASE_DSN: postgres://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc?sslmode=disable
       LOG_LEVEL: info
       # A bare literal, and a published one: `dev_secret_key_change_in_production`

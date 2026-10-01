@@ -67,6 +67,7 @@ from typing import Any
 import structlog
 
 from app.core.config import settings
+from app.core.kafka_security import kafka_client_kwargs
 from app.services.event_schema import validate_event
 
 logger = structlog.get_logger()
@@ -251,6 +252,7 @@ async def _build_consumer(topic: str, partition: int, start_offset: int, factory
         # would move the live consumer's position.
         enable_auto_commit=False,
         value_deserializer=_decode,
+        **kafka_client_kwargs(),
     )
     await consumer.start()
     target = TopicPartition(topic, partition)
@@ -268,6 +270,7 @@ async def _build_producer(factory: Any) -> Any:
     producer = AIOKafkaProducer(
         bootstrap_servers=settings.kafka_bootstrap_servers,
         value_serializer=_encode,
+        **kafka_client_kwargs(),
     )
     await producer.start()
     return producer

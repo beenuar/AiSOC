@@ -11,6 +11,7 @@ import (
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
 	"github.com/beenuar/aisoc/services/ingest/internal/enrichment"
 	"github.com/beenuar/aisoc/services/ingest/internal/graph"
+	"github.com/beenuar/aisoc/services/ingest/internal/kafkatls"
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 	"github.com/rs/zerolog/log"
 	kafka "github.com/segmentio/kafka-go"
@@ -26,7 +27,20 @@ type Publisher struct {
 
 // New creates a new Kafka publisher
 func New(cfg *config.Config) (*Publisher, error) {
+	// Resolved once and shared by all three writers. kafka-go's zero
+	// Transport means plaintext, and none of them set one, so the ingest
+	// service — the front door for every normalized event — spoke cleartext
+	// to the broker. Resolve returns an error rather than a default in a
+	// protected environment, so this fails at construction instead of
+	// succeeding quietly.
+	transport, err := kafkatls.Resolve()
+	if err != nil {
+		return nil, fmt.Errorf("kafka transport: %w", err)
+	}
+	kafkaTransport := transport.WriterTransport()
+
 	w := &kafka.Writer{
+		Transport:              kafkaTransport,
 		Addr:                   kafka.TCP(cfg.KafkaBrokers),
 		Topic:                  cfg.KafkaTopic,
 		Balancer:               &kafka.Hash{},
@@ -39,6 +53,7 @@ func New(cfg *config.Config) (*Publisher, error) {
 	var vulnWriter *kafka.Writer
 	if cfg.VulnCorrelEnabled && cfg.VulnKafkaTopic != "" {
 		vulnWriter = &kafka.Writer{
+			Transport:              kafkaTransport,
 			Addr:                   kafka.TCP(cfg.KafkaBrokers),
 			Topic:                  cfg.VulnKafkaTopic,
 			Balancer:               &kafka.Hash{},
@@ -54,6 +69,7 @@ func New(cfg *config.Config) (*Publisher, error) {
 	var graphWriter *kafka.Writer
 	if cfg.GraphUpdatesTopic != "" {
 		graphWriter = &kafka.Writer{
+			Transport:              kafkaTransport,
 			Addr:                   kafka.TCP(cfg.KafkaBrokers),
 			Topic:                  cfg.GraphUpdatesTopic,
 			Balancer:               &kafka.Hash{},

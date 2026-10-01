@@ -34,6 +34,7 @@ from app.clients.misp import MispClient
 from app.clients.otx import OtxClient
 from app.clients.taxii import TaxiiClient
 from app.config import settings
+from app.core.kafka_security import kafka_client_kwargs
 from app.feeds.handlers import (
     handle_cisa_kev_feed,
     handle_misp_feed,
@@ -136,7 +137,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     kafka_producer = None
     if settings.KAFKA_BOOTSTRAP_SERVERS:
         try:
-            kafka_producer = AIOKafkaProducer(bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS)
+            kafka_producer = AIOKafkaProducer(
+                bootstrap_servers=settings.KAFKA_BOOTSTRAP_SERVERS,
+                **kafka_client_kwargs(),
+            )
             await kafka_producer.start()
         except Exception as exc:
             logger.warning("Kafka producer unavailable", error=str(exc))

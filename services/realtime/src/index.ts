@@ -11,6 +11,7 @@ import rateLimit from 'express-rate-limit';
 import { PushManager } from './push';
 import { resolveTicketSecret, verifyRealtimeTicket } from './auth';
 import { setupTelemetry, type Shutdown } from './telemetry';
+import { resolveKafkaTransport } from './kafkaTransport.js';
 
 const log = pino({ level: process.env.LOG_LEVEL || 'info' });
 
@@ -409,6 +410,12 @@ const kafka = new Kafka({
   clientId: 'aisoc-realtime',
   brokers: KAFKA_BROKERS,
   retry: { retries: 5 },
+  // kafkajs leaves `ssl` and `sasl` undefined, which is plaintext, and this
+  // client had neither — so the service fanning normalized alerts out to
+  // every connected browser read them off the broker in the clear. The
+  // resolver throws in a protected environment rather than returning a
+  // default, so a misconfigured deployment fails at startup.
+  ...resolveKafkaTransport(),
 });
 
 // --- Subscription state, reported on /health ---

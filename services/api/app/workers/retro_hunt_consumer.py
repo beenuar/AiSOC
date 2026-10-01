@@ -46,6 +46,7 @@ from typing import Any
 from sqlalchemy import text
 
 from app.core.config import settings
+from app.core.kafka_security import kafka_client_kwargs
 from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
 from app.services.retro_hunt.intel_types import route_feed_type
@@ -296,6 +297,7 @@ async def _build_consumer() -> Any:
         group_id=settings.RETRO_HUNT_CONSUMER_GROUP,
         enable_auto_commit=True,
         auto_offset_reset="latest",
+        **kafka_client_kwargs(),
     )
     await consumer.start()
     logger.info(

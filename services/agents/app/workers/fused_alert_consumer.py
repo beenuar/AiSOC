@@ -51,6 +51,7 @@ from app.context import knowledge_base
 from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
+from app.core.kafka_security import kafka_client_kwargs
 from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.investigator.bundle_prompt import prefetch_context_bundle_dict
@@ -348,6 +349,7 @@ class FusedAlertTriageWorker:
             # mid-triage re-delivers the alert instead of dropping it.
             enable_auto_commit=False,
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+            **kafka_client_kwargs(),
         )
         await self._consumer.start()
         self._running = True
@@ -429,6 +431,7 @@ class FusedAlertTriageWorker:
             self._producer = AIOKafkaProducer(
                 bootstrap_servers=self._bootstrap,
                 value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                **kafka_client_kwargs(),
             )
             await self._producer.start()
             return self._producer

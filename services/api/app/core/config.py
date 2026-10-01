@@ -964,6 +964,37 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
     s = s or settings
     msgs: list[str] = []
 
+    # Postgres transport. `sslmode` unset means `prefer` in libpq, which
+    # negotiates TLS when the server offers it and silently falls back to
+    # cleartext when it does not — so an operator reading "prefer" has no
+    # way to know which of the two actually happened, and a server that
+    # stops offering TLS downgrades every connection without a single log
+    # line. `disable` is worse and is what `docker-compose.yml` ships.
+    #
+    # Named here rather than enforced in the driver because every service
+    # builds its own engine, and the one place they all pass through at
+    # boot is this collector.
+    dsn = str(getattr(s, "DATABASE_URL", "") or "")
+    if dsn:
+        from urllib.parse import parse_qs as _parse_qs
+        from urllib.parse import urlsplit as _urlsplit
+
+        query = _parse_qs(_urlsplit(dsn).query)
+        sslmode = (query.get("sslmode") or query.get("ssl") or [""])[0].strip().lower()
+        if sslmode in {"disable", "allow", "false", "0"}:
+            msgs.append(
+                f"DATABASE_URL carries sslmode={sslmode!r}, so every query — alerts, "
+                "entities, credentials in the vault's ciphertext column — crosses the "
+                "network in the clear. Use sslmode=require at minimum, or verify-full "
+                "with a CA bundle."
+            )
+        elif not sslmode:
+            msgs.append(
+                "DATABASE_URL sets no sslmode, which libpq reads as 'prefer': TLS when "
+                "the server offers it and cleartext when it does not, with no way to "
+                "tell which happened. Set sslmode explicitly."
+            )
+
     if s.SECRET_KEY in INSECURE_SECRET_KEY_DEFAULTS:
         msgs.append("SECRET_KEY is set to a known insecure placeholder; rotate before exposing this instance to the network.")
 

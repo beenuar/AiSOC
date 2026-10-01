@@ -344,6 +344,22 @@ jobs:
       # themselves the same published number.
       - name: Verify vendored aisoc_benchmark is in sync
         run: python scripts/sync_vendored_benchmark.py --check
+      # Thirteen Kafka clients across Python, Go and TypeScript, and not one
+      # passed a security protocol — so every one took the library default,
+      # which is PLAINTEXT in all three. The spine carries raw event bodies,
+      # usernames, hostnames and command lines, and the commercial MSK
+      # deployment ran TLS_PLAINTEXT with the TLS listener unused.
+      #
+      # Checked in two directions: every construction site passes the
+      # resolver, and the resolver actually refuses. The first alone would
+      # pass a tree where every site dutifully calls a resolver that always
+      # answers PLAINTEXT.
+      - name: Kafka transport gate — self-test
+        run: python scripts/check_kafka_transport.py --self-test
+      - name: Verify every Kafka client resolves a transport
+        run: python scripts/check_kafka_transport.py
+      - name: Verify the vendored Kafka transport copies match
+        run: python scripts/sync_vendored_kafka_security.py --check
       # Fabricated security data must never render as a tenant's real state.
       # Around three dozen console components served a `MOCK_*` / `DEMO_*`
       # array of plausible alerts, connectors and coverage numbers whenever the

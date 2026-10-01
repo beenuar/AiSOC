@@ -14,6 +14,7 @@ import (
 	"os"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/graph"
+	"github.com/beenuar/aisoc/services/ingest/internal/kafkatls"
 	kafka "github.com/segmentio/kafka-go"
 )
 
@@ -72,7 +73,16 @@ func NewKafkaSource(cfg KafkaSourceConfig) (*KafkaSource, error) {
 	if len(brokers) == 0 {
 		return nil, fmt.Errorf("graph_ws: kafka brokers required")
 	}
+	// A nil Dialer is plaintext. Resolve refuses cleartext in a protected
+	// environment, and a reader that cannot be built securely must not be
+	// built at all — returning one that connects in the clear is the defect.
+	transport, err := kafkatls.Resolve()
+	if err != nil {
+		return nil, fmt.Errorf("kafka transport: %w", err)
+	}
+
 	rd := kafka.NewReader(kafka.ReaderConfig{
+		Dialer:      transport.Dialer(),
 		Brokers:     brokers,
 		Topic:       cfg.Topic,
 		GroupID:     group,

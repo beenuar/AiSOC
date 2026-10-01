@@ -46,6 +46,11 @@ def _make_settings(**overrides) -> Settings:
         # values fail closed (503) in prod, so the "clean prod" baseline must
         # set a real value.
         "AISOC_REALTIME_JWT_SECRET": "d" * 64,
+        # An explicit sslmode, because an unset one means libpq's `prefer`:
+        # TLS when the server offers it, cleartext when it does not, and no
+        # way to tell which happened. A clean production baseline has to make
+        # the choice rather than inherit a mode that tolerates a downgrade.
+        "DATABASE_URL": "postgresql+asyncpg://aisoc:pw@db:5432/aisoc?sslmode=require",
     }
     base.update(overrides)
     # ``_env_file=None`` skips .env discovery so test runs are deterministic

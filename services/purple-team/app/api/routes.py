@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
@@ -73,6 +73,18 @@ async def _get_db() -> AsyncSession:
 
 
 def _caldera() -> CalderaClient:
+    """Build a Caldera client, or refuse and name what is missing.
+
+    Refusing here rather than returning a client that cannot authenticate
+    keeps the failure legible: a 503 that names `CALDERA_API_KEY` is a
+    configuration gap, while a 401 from Caldera on the first request reads
+    as an outage of somebody else's service.
+    """
+    if not settings.caldera_api_key.strip():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=("Caldera is not configured on this deployment: set CALDERA_API_KEY (and CALDERA_URL if it is not the default)."),
+        )
     return CalderaClient(settings.caldera_url, settings.caldera_api_key)
 
 

@@ -71,6 +71,7 @@ from typing import Any
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.core.config import settings
+from app.core.kafka_security import kafka_client_kwargs
 from app.services.dead_letters import DeadLetterSink
 from app.services.feature_extraction import extract
 from app.services.peer_group import PeerGroupService
@@ -190,9 +191,11 @@ class UEBAKafkaConsumer:
             group_id=settings.kafka_consumer_group,
             auto_offset_reset="latest",
             enable_auto_commit=True,
+            **kafka_client_kwargs(),
         )
         producer = AIOKafkaProducer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
+            **kafka_client_kwargs(),
         )
 
         await consumer.start()

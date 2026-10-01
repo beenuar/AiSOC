@@ -12,6 +12,7 @@ import structlog
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from app.core.config import settings
+from app.core.kafka_security import kafka_client_kwargs
 from app.models.alert import FusionDecision, RawAlert
 from app.services.alert_sink import AlertSink, PersistOutcome, PersistResult
 from app.services.detection_engine import DetectionEngine
@@ -105,10 +106,12 @@ class FusionWorker:
             # commit an in-flight message before processing finishes.
             enable_auto_commit=False,
             value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+            **kafka_client_kwargs(),
         )
         self._producer = AIOKafkaProducer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            **kafka_client_kwargs(),
         )
         await self._consumer.start()
         await self._producer.start()
