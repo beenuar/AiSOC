@@ -163,6 +163,7 @@ class TriageWriter(Protocol):
         confidence: float,
         author: str,
         alert_id: Any = None,
+        injection_suspected: bool = False,
     ) -> None:
         """Write the per-signature outcome prior that lets a repeat alert suppress."""
 
@@ -293,6 +294,7 @@ class LiveTriageWriter:
         confidence: float,
         author: str,
         alert_id: Any = None,
+        injection_suspected: bool = False,
     ) -> None:
         await outcomes_module.record_outcome(
             tenant_id,
@@ -301,6 +303,7 @@ class LiveTriageWriter:
             confidence=confidence,
             author=author,
             alert_id=alert_id,
+            injection_suspected=injection_suspected,
         )
 
     async def record_suppression(

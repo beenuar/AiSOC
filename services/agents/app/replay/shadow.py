@@ -169,6 +169,7 @@ class ShadowTriageWriter:
         confidence: float,
         author: str,
         alert_id: Any = None,
+        injection_suspected: bool = False,
     ) -> None:
         self.calls["record_outcome"] += 1
 

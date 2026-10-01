@@ -230,8 +230,18 @@ async def test_the_same_run_leaks_through_memory_once_the_shadow_sinks_are_remov
             # and this whole file would disarm itself quietly.
             "disposition": normalize_disposition(kwargs["disposition"], default=NEEDS_REVIEW),
             "confidence": kwargs["confidence"],
-            "author": kwargs["author"],
+            # Recorded as human-confirmed, which the worker never does. An
+            # AI prior can no longer suppress at all — that rule was added
+            # because a corroboration threshold cannot help when the
+            # attacker picks the count — so a human prior is now the only
+            # kind that *can* leak, and modelling the leak with the author
+            # the worker actually passes would make this file prove nothing
+            # while still passing.
+            "author": outcomes_module.HUMAN,
             "count": store.get(signature, {}).get("count", 0) + 1,
+            # The TTL reads this. Omitting it makes every prior count as
+            # expired, which disarms the leak the same way.
+            "last_seen": datetime.now(UTC).isoformat(),
         }
         store[signature] = prior
         return prior

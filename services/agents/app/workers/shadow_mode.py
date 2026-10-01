@@ -357,6 +357,7 @@ class ShadowModeTriageWriter:
         confidence: float,
         author: str,
         alert_id: Any = None,
+        injection_suspected: bool = False,
     ) -> None:
         # An outcome prior lets a later identical alert close without triage.
         # A shadow verdict must never reach that far: it would act on a future

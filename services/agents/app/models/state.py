@@ -88,6 +88,16 @@ class InvestigationState(BaseModel):
     # `bundle.py`. A type annotation is not worth an import cycle.
     knowledge_base: dict[str, Any] | None = None
 
+    #: True when the prompt-injection guard refused any evidence retrieved
+    #: for this alert. Carried onto the per-signature outcome prior, so a
+    #: benign disposition reached through attacker-reachable text can never
+    #: auto-close a later alert with the same signature.
+    #:
+    #: A field rather than a lookup at suppression time: by then the
+    #: retrieval is gone, and recomputing it would mean re-running the guard
+    #: over text the triage no longer holds.
+    injection_suspected: bool = False
+
     # The last few analyst decisions on alerts of this shape, as
     # `app.context.dispositions.RecentDispositions.as_state()` renders them,
     # and the directory record for the principals this alert names, as

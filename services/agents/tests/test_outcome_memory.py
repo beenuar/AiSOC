@@ -8,6 +8,8 @@ corroborated-AI priors and never auto-closes a prior true-positive.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 from app.core.cost_governor import get_governor
 from app.memory import institutional
@@ -17,6 +19,7 @@ from app.memory.outcomes import (
     lookup_prior,
     record_outcome,
     should_auto_suppress,
+    suppression_refusal,
 )
 from app.workers import fused_alert_consumer as worker_mod
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker, build_state
@@ -87,14 +90,78 @@ def _signature(message: dict) -> str:
 # ── unit: trust gate ─────────────────────────────────────────────────────────
 
 
-async def test_should_auto_suppress_trust_gate():
-    # Human benign prior → always trusted.
-    assert should_auto_suppress({"disposition": "false_positive", "author": HUMAN, "count": 1, "confidence": 0.5})
-    # AI prior needs corroboration (count) + high confidence.
-    assert not should_auto_suppress({"disposition": "benign", "author": AI, "count": 1, "confidence": 0.99})
-    assert should_auto_suppress({"disposition": "benign", "author": AI, "count": 3, "confidence": 0.95})
-    # A prior true-positive NEVER auto-closes a future alert.
-    assert not should_auto_suppress({"disposition": "true_positive", "author": HUMAN, "count": 9, "confidence": 1.0})
+def _fresh(**over):
+    """A prior last confirmed today, so TTL is not what is under test."""
+    base = {
+        "disposition": "false_positive",
+        "author": HUMAN,
+        "count": 1,
+        "confidence": 0.5,
+        "last_seen": datetime.now(UTC).isoformat(),
+    }
+    base.update(over)
+    return base
+
+
+async def test_only_a_human_confirmed_prior_suppresses():
+    """A corroboration threshold does not help when the attacker picks the count.
+
+    The previous rule let three AI triages at >=0.90 confidence auto-close
+    every future alert sharing that evidence signature. That is a teachable
+    control: anyone who can produce three benign-looking alerts with one
+    signature trains the system to stop showing them that signature, with
+    no human having looked. Raising the threshold would not have fixed it —
+    the attacker chooses how many alerts to send.
+    """
+    assert should_auto_suppress(_fresh())
+    assert not should_auto_suppress(_fresh(author=AI, count=1, confidence=0.99))
+    assert not should_auto_suppress(_fresh(author=AI, count=3, confidence=0.95))
+    assert not should_auto_suppress(_fresh(author=AI, count=999, confidence=1.0))
+    assert "AI-authored" in (suppression_refusal(_fresh(author=AI, count=3, confidence=0.95)) or "")
+
+
+async def test_a_prior_true_positive_never_auto_closes():
+    assert not should_auto_suppress(_fresh(disposition="true_positive", count=9, confidence=1.0))
+
+
+async def test_a_prior_expires():
+    """Environments change, and a prior that never ages out is permanent.
+
+    Measured from `last_seen`, so a signature an analyst keeps confirming
+    stays suppressed and one nobody has looked at since lapses into "show
+    it to somebody".
+    """
+    stale = _fresh(last_seen=(datetime.now(UTC) - timedelta(days=120)).isoformat())
+    assert not should_auto_suppress(stale)
+    assert "older than" in (suppression_refusal(stale) or "")
+    # And the boundary in the other direction.
+    assert should_auto_suppress(_fresh(last_seen=(datetime.now(UTC) - timedelta(days=30)).isoformat()))
+
+
+async def test_an_unparseable_timestamp_counts_as_expired():
+    """Failing closed, because the alternative is suppressing on an unknown age."""
+    assert not should_auto_suppress(_fresh(last_seen="not-a-date"))
+    assert not should_auto_suppress({"disposition": "benign", "author": HUMAN})
+
+
+async def test_injection_tripped_evidence_never_suppresses():
+    """Whoever authored it.
+
+    An alert body is attacker-reachable text. If the prompt-injection guard
+    flagged the evidence a benign disposition was derived from, that
+    disposition is exactly what the attacker was aiming for — and the check
+    is at suppression time, not write time, so a prior written before the
+    guard learned a pattern stops suppressing once it does.
+    """
+    flagged = _fresh(injection_suspected=True)
+    assert not should_auto_suppress(flagged)
+    assert "injection" in (suppression_refusal(flagged) or "")
+
+
+async def test_the_refusal_says_which_rule_declined():
+    """ "Declined" with no reason makes a broken control look like a working one."""
+    assert suppression_refusal(None) is not None
+    assert suppression_refusal(_fresh()) is None
 
 
 async def test_record_and_lookup_roundtrip_and_count_bump():

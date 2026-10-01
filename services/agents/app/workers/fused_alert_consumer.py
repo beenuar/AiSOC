@@ -56,7 +56,7 @@ from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.investigator.bundle_prompt import prefetch_context_bundle_dict
 from app.llm.factory import llm_override
-from app.memory.outcomes import AI, should_auto_suppress
+from app.memory.outcomes import AI, suppression_refusal
 from app.models.state import AgentStatus, InvestigationState
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
@@ -671,6 +671,11 @@ class FusedAlertTriageWorker:
                     confidence=float(confidence or 0.0),
                     author=AI,
                     alert_id=(state.raw_alert or {}).get("id"),
+                    # The guard already ran over this alert's runbook
+                    # retrieval; carrying its verdict onto the prior is what
+                    # stops a disposition derived from attacker-reachable
+                    # text from auto-closing the next one.
+                    injection_suspected=bool(getattr(state, "injection_suspected", False)),
                 )
                 _METRICS["outcome_written"] += 1
 
@@ -892,6 +897,11 @@ class FusedAlertTriageWorker:
             _METRICS["runbooks_retrieved"] += len(retrieval.runbooks)
         if retrieval.dropped_for_injection:
             _METRICS["runbooks_refused_for_injection"] += retrieval.dropped_for_injection
+            # Recorded on the state so it reaches the outcome prior. Without
+            # this the flag threaded into `record_outcome` would read a field
+            # nobody sets and the whole injection rule would be dead code
+            # that looks like a control.
+            state.injection_suspected = True
 
     async def _attach_recent_dispositions(self, state: InvestigationState) -> None:
         """Record what this tenant's analysts decided the last few times.
@@ -959,10 +969,20 @@ class FusedAlertTriageWorker:
         except Exception as exc:  # noqa: BLE001 — memory read is advisory
             logger.debug("auto_triage_worker.memory_lookup_failed", error=str(exc))
             return None
-        if not should_auto_suppress(prior):
+        refusal = suppression_refusal(prior)
+        if refusal is not None:
+            # Logged with the reason. "Suppression declined" alone makes a
+            # control that has silently stopped working look identical to one
+            # that is working, and these rules decline far more often now
+            # than the old corroboration threshold did.
+            logger.debug(
+                "auto_triage_worker.suppression_declined",
+                signature=signature,
+                reason=refusal,
+            )
             return None
 
-        assert prior is not None  # narrowed by should_auto_suppress
+        assert prior is not None  # narrowed by suppression_refusal
         disposition = normalize_disposition(prior.get("disposition"), default=NEEDS_REVIEW)
         confidence = float(prior.get("confidence", 0.9))
         count = int(prior.get("count", 1))

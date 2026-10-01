@@ -260,26 +260,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | No integration ships a working credential nobody chose | `apps/docs/docs/operations/security.md` (secrets) | `ci.yml :: Python — Tests` (`services/purple-team/tests/test_caldera_key_has_no_default.py`, 4 cases: the published literal is absent from code, the setting defaults to empty, building a client without a key raises and names the variable, and a configured key still builds one) | GATED | **Proven against the pre-fix tree**: 3 of 4 fail at `48234dc5`. `ADMIN123` is Caldera's own published first-run credential, so an unconfigured deployment authenticated with it against any Caldera nobody had rotated. The fourth case runs the other way so this cannot pass on a build with no client at all |
 | Every state-changing route makes an authorization decision, or declares why identity is one | `apps/docs/docs/operations/security.md` (RBAC); `README.md` | `ci.yml :: Python — Lint & Type-check` (`check_route_authz.py` — 224 of 245 state-changing routes authorize; the remaining 21 must each sit in a module carrying a written reason, checked in both directions so an undeclared module fails *and* a declaration describing no route fails) | GATED | **Proven by perturbation**: removing a real declaration and adding one for a nonexistent module were each run and each failed the gate. 218 → 224 authorizing. Two corrections worth recording: four MSSP routes guarding cross-tenant grants were counted as unauthorized while being correctly guarded by an organisation-role dependency, fixed in the gate rather than by bolting a redundant tenant permission onto a surface that is not tenant-scoped; and one route was gated and then **reverted**, because its existing pin argued every authenticated principal is a legitimate rater and the permission added here contradicted that — a prior decision with its reasoning written down outranks a later sweep that did not read it. One limit: the gate reads the signature, so it proves a decision is *made*, not that the permission chosen is the right one |
 | The audit log names the credential that acted, and a tenant can read its own trail | `apps/docs/docs/compliance/evidence-pack.md`; `apps/docs/docs/operations/security.md` | `ci.yml :: Python — Lint & Type-check` (`check_audit_coverage.py` — every actor-bearing `emit_audit` records the credential, `tenant_admin` holds `audit_log:read`, the modules whose *reads* are the sensitive act emit audit, and the coverage floor ratchets; 6 self-test cases including two controls) + `ci.yml :: Python — Tests` (`services/api/tests/test_audit_attribution_and_readership.py`) | GATED | **Proven against the pre-fix tree**: 7 of 11 fail at `3c04a21b`, and the gate found two live defects on its first run that the hand-written fix had missed. The honest limit is published rather than hidden: **7 of 86 endpoint modules emit audit at all**, the floor is set at that measured value rather than an aspiration, and the gate prints the largest unaudited surfaces by route count on success so the next step is named. Raising it is ordinary work, not a gap in the control. One correction recorded: the attribution rule first reported the SCIM writer, whose actor is already `scim:<token>` — a scheme-prefixed actor is self-attributing |
+| Only a human-confirmed, unexpired, uninjected prior can auto-close an alert | `apps/docs/docs/concepts/automation-maturity.md`; `apps/docs/docs/console/funnel-kpis.md` | `ci.yml :: Python — Tests` (`services/agents/tests/test_outcome_memory.py` — an AI prior never suppresses at any count or confidence, a prior expires 90 days after its last confirmation, an unparseable timestamp counts as expired, injection-flagged evidence never suppresses, and the refusal names which rule declined; plus `test_outcome_writer_signature_parity.py`, which compares all four `record_outcome` signatures in both directions and asserts the concrete writer forwards the flag) | GATED | **Proven against the pre-fix tree**: `suppression_refusal` does not exist there, so the whole module fails to import, and 2 of the 10 parity cases fail. The durable finding is why the parity test exists: adding the keyword broke four writers and **no test failed on the exception**, because the call sits inside `contextlib.suppress(Exception)` — what surfaced was a zero write-count in an unrelated replay test three files away. One limit: these prove the *rules*, and the injection flag is only as good as the guard that sets it, which scores 98.1% on its tuned corpus and 7.1% on held-out payloads |
 
 ## Summary
 
-- GATED: 252
+- GATED: 253
 
 ## Summary
 
-- GATED: 252
+- GATED: 253
 
 ## Summary
 
-- GATED: 252
+- GATED: 253
 
 ## Summary
 
-- GATED: 252
+- GATED: 253
 
 ## Summary
 
-- GATED: 252
+- GATED: 253
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 
