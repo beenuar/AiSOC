@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Four MSSP routes that manage portfolio membership and cross-tenant grants were counted as unauthorized, and were not.** They are guarded by `_admin_scope`, which resolves the caller's role inside an MSSP organisation and raises 403 unless they administer it — an authorization decision by any definition. The gate missed it twice over: organisation roles are a separate ordered ladder rather than tenant permissions, and `Depends(_admin_scope)` passes the dependency *by name* while the matcher only recognised `Depends(factory(...))`. Both fixed in the gate rather than worked around in the routes; the alternative was bolting a redundant tenant permission onto a surface that is not tenant-scoped, which is a worse design adopted to satisfy a gate, and that is how gates start being gamed.
+
+- **`POST /knowledge-base/query` now requires `knowledge_base:read`.** Its previous pin had deliberately left it ungated and said exactly why: every existing candidate permission was either held by every role including machine keys, or restricted to tenant administrators, which would take the runbooks away from the analysts who need them mid-incident. It asked for a new entitlement to be *written down* rather than reverse-engineered from a role list. This is that entitlement — held by every role that can read an alert including `viewer`, because reading a runbook during an incident is not a privileged act, and deliberately **not** held by `api_service`, so a machine key scoped to ingestion cannot exfiltrate the library. The open half of the original question stands and is recorded: retrieval and LLM synthesis share one entitlement, and splitting them needs a view on what a model call over tenant content costs.
+
+- **`POST /plugins/{id}/rate` was gated and then deliberately un-gated again.** Its existing pin argued that every authenticated principal is a legitimate rater, that the vocabulary has no permission for expressing an opinion, and that the real integrity question is one-vote-per-user — storage and product, not authorization. That reasoning holds, the permission added here excluded `viewer` and so contradicted it, and the change was reverted. Recorded because a prior decision with its reasoning written down should outrank a later sweep that did not read it.
+
+- **The identity-only ceiling is no longer a bare number.** `MAX_UNAUTHORIZED` said "21 routes are excused" and nothing about which or why. Every identity-only route must now sit in a module with a **declared reason** — SCIM authenticates with its own bearer token and resolves no tenant role, passkeys and push and saved views and on-call act on the caller's own resource, `auth.py` is sign-in itself and has no principal to check before authenticating. Checked in both directions: an undeclared module fails, and a declaration that no longer describes any route fails too, so the list cannot become a place excuses outlive the thing they excused. Both directions were proven by perturbing the declaration and watching the gate fail.
+
+  State-changing routes that authorize: **218 → 224**.
+
+
 ### BREAKING
 
 - **`/api/v1/shifts` is gone, and `/api/v1/threatintel/stix/*` reads answer 404 outside demo mode.** Neither had a caller: nothing in `apps/web`, no SDK, and no other service referenced either, and the console's shift page is demo-gated and renders its own sample data client-side. If you were calling them, you were reading records nobody entered.

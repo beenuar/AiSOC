@@ -287,23 +287,37 @@ class TestWiring:
         ]
         assert not unguarded, f"{module.__name__} has state-changing routes with no permission: {unguarded}"
 
-    def test_kb_query_is_deliberately_not_gated(self) -> None:
-        """The one route in this change left alone, pinned so it stays a decision.
+    def test_kb_query_governs_reading_the_library(self) -> None:
+        """The entitlement this route's previous pin asked somebody to name.
 
-        The vocabulary has no knowledge-base permission: every candidate is
-        either held by every role including machine keys (`cases:read`,
+        That pin refused to pick one and said why: every existing candidate
+        was either held by every role including machine keys (`cases:read`,
         `reports:read`) or restricted to tenant administrators
         (`settings:read`), which would take the runbooks away from the
-        analysts who need them mid-incident. Picking one on the strength of
-        its role list rather than what the route does would be
-        reverse-engineering a permission from the answer.
+        analysts who need them mid-incident. Choosing on the strength of a
+        role list rather than on what the route does would have been
+        reverse-engineering a permission from the answer — so it asked for a
+        new one to be written down instead.
 
-        If somebody gates it, this fails and they write down which entitlement
-        governs reading the library — and whether LLM synthesis needs a
-        stronger one than retrieval. The rest of `knowledge_base.py` is gated,
-        so a *new* ungated route there still fails the check below.
+        `knowledge_base:read` is that permission. It is held by every role
+        that can read an alert, including `viewer`, because reading a runbook
+        during an incident is not a privileged act — and it is *not* held by
+        `api_service`, so a machine key scoped to alert ingestion cannot
+        exfiltrate the library.
+
+        The open half of the original question stands: retrieval and LLM
+        synthesis share one entitlement here. Splitting them needs a view on
+        what spending a model call on tenant content costs, which is parity
+        plan work, not an authorization decision.
         """
-        assert _permissions_on(_route_for(knowledge_base, "query_kb")) == []
+        assert _permissions_on(_route_for(knowledge_base, "query_kb")) == ["knowledge_base:read"]
+
+    def test_the_library_is_not_readable_by_a_machine_key_role(self) -> None:
+        """The other direction, so the grant is not simply universal."""
+        from app.core.security import ROLE_PERMISSIONS
+
+        assert "knowledge_base:read" not in ROLE_PERMISSIONS["api_service"]
+        assert "knowledge_base:read" in ROLE_PERMISSIONS["viewer"]
 
     def test_the_rest_of_the_knowledge_base_is_gated(self) -> None:
         unguarded = {
@@ -311,4 +325,4 @@ class TestWiring:
             for r in knowledge_base.router.routes
             if r.methods & {"POST", "PUT", "PATCH", "DELETE"} and not _permissions_on(r)
         }
-        assert unguarded == {"query_kb"}, f"unexpected ungated knowledge-base routes: {unguarded - {'query_kb'}}"
+        assert unguarded == set(), f"unexpected ungated knowledge-base routes: {unguarded}"

@@ -90,6 +90,21 @@ AUTHZ_CALLS = frozenset(
         "require_permission_db",
         "has_permission",
         "has_permission_db",
+        # Organisation-role decisions. `_admin_scope` resolves the caller's
+        # role inside an MSSP organisation and raises 403 unless they
+        # administer it, which is an authorization decision by any
+        # definition — it just is not a tenant permission, because an MSSP
+        # portfolio is not a tenant and `ORG_ROLES` is a separate, ordered
+        # ladder.
+        #
+        # Added rather than worked around. Four routes that manage portfolio
+        # membership and cross-tenant grants were counted as unauthorized
+        # while being correctly guarded, and the only way to clear them
+        # without this would have been to bolt a redundant tenant permission
+        # onto a surface that is not tenant-scoped — a worse design adopted
+        # to satisfy a gate, which is how gates start being gamed.
+        "_admin_scope",
+        "_owner_scope",
     }
 )
 
@@ -141,7 +156,60 @@ AUTHZ_CALLS = frozenset(
 #: interchangeable with a tenant role. This gate reads `require_permission`
 #: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
 #: still resolve that scope.
-MAX_UNAUTHORIZED = 26
+MAX_UNAUTHORIZED = 21
+
+#: Modules whose state-changing routes are authorized *by identity*, with the
+#: reason. A route where the caller acts on their own resource is not an
+#: unauthorized route — asking for a permission there would be theatre, since
+#: the only principal who could hold it is the one already identified.
+#:
+#: Declared per module rather than counted, because "20 remaining" tells a
+#: reviewer nothing and this tells them exactly what is excused and why. The
+#: numeric ceiling stays as a backstop: a new identity-only route in an
+#: already-listed module would not be caught by the list alone.
+#:
+#: Checked in both directions — a module that stops having identity-only
+#: routes must lose its entry, or the list becomes a place excuses go to
+#: outlive the thing they excused.
+IDENTITY_IS_AUTHORIZATION: dict[str, str] = {
+    "scim.py": (
+        "SCIM authenticates with its own bearer token and resolves a "
+        "`SCIMPrincipal`, not a tenant role. There is no permission to check: "
+        "the token *is* the grant, and it is scoped to one organisation at "
+        "mint time."
+    ),
+    "passkeys.py": (
+        "A registration or authentication ceremony for the caller's own "
+        "credential. A permission would have to be held by the person "
+        "enrolling their own key, which is everyone."
+    ),
+    "push.py": (
+        "Web-push subscriptions for the caller's own browser. The row is "
+        "keyed on the authenticated user; there is no other principal's "
+        "subscription to reach."
+    ),
+    "saved_views.py": (
+        "A user's own saved filters on list pages. Scoped to the "
+        "authenticated user id in the query, so identity is both the "
+        "authentication and the scope."
+    ),
+    "community.py": (
+        "`POST /plugins/{id}/rate`. Every authenticated principal is a "
+        "legitimate rater, the vocabulary has no permission for expressing "
+        "an opinion, and requiring an administrative one would mean only "
+        "administrators may rate. The real integrity question is "
+        "one-vote-per-user, which the in-memory counter cannot express — "
+        "storage and product, not authorization. Pinned by "
+        "`test_rating_is_deliberately_not_gated`."
+    ),
+    "auth.py": ("Sign-in itself. A permission check before authentication has no principal to check against."),
+    "oncall.py": (
+        "`PUT /oncall/me` sets the caller's own availability. Setting somebody else's is a different route and does take a permission."
+    ),
+    "realtime.py": (
+        "Mints a short-lived WebSocket ticket for the caller's own socket, carrying the claims they already hold. It confers nothing new."
+    ),
+}
 
 
 def _authorizing_names(tree: ast.Module) -> set[str]:
@@ -201,6 +269,15 @@ def _calls_authz(node: ast.AST) -> list[str]:
         name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
         if name in AUTHZ_CALLS:
             found.append(name)
+        # `Depends(_admin_scope)` passes the dependency by name, not by
+        # calling it. A matcher that only looked for a Call missed every
+        # organisation-role decision in `mssp.py`, because those are
+        # dependencies rather than factories — `require_permission("x")`
+        # returns a dependency, `_admin_scope` *is* one.
+        if name == "Depends":
+            for argument in sub.args:
+                if isinstance(argument, ast.Name) and argument.id in AUTHZ_CALLS:
+                    found.append(argument.id)
     return found
 
 
@@ -416,6 +493,29 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\ncurrent identity-only routes ({len(added)}):")
         for line in added:
             print(f"  {line}")
+        return 1
+
+    # Every identity-only route must sit in a module with a declared
+    # reason. A bare count says how much is excused; this says what, which
+    # is the question a reviewer actually has.
+    undeclared = sorted({r["module"] for r in ungated if Path(r["module"]).name not in IDENTITY_IS_AUTHORIZATION})
+    if undeclared:
+        print(f"\nFAIL: {len(undeclared)} module(s) have identity-only state-changing routes")
+        print("and no declared reason. Either authorize them, or add the module to")
+        print(f"IDENTITY_IS_AUTHORIZATION in {Path(__file__).name} with why identity suffices.")
+        for module in undeclared:
+            print(f"  {module}")
+        return 1
+
+    # And the other direction: a module that no longer has any is an excuse
+    # outliving the thing it excused.
+    present = {Path(r["module"]).name for r in ungated}
+    stale = sorted(set(IDENTITY_IS_AUTHORIZATION) - present)
+    if stale:
+        print(f"\nFAIL: {len(stale)} declared exemption(s) no longer describe any route.")
+        print("Remove them; the list may only shrink.")
+        for name in stale:
+            print(f"  {name}")
         return 1
 
     # Reverse: a ceiling that no longer describes the tree is stale, and a

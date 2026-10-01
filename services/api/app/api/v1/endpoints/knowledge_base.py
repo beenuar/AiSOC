@@ -272,7 +272,15 @@ async def delete_document(
 
 
 @router.post("/query", response_model=QueryResponse, summary="Search knowledge base + optional LLM synthesis")
-async def query_kb(body: QueryRequest, db: DBSession, user: AuthUser) -> QueryResponse:
+async def query_kb(
+    body: QueryRequest,
+    db: DBSession,
+    # A POST that reads: the question is a body rather than a query string,
+    # which is why this was counted as a state-changing route with no
+    # authorization decision. It searches the tenant's knowledge base and
+    # can spend an LLM call, so bare identity was the wrong bar.
+    user: Annotated[AuthUser, Depends(require_permission("knowledge_base:read"))],
+) -> QueryResponse:
     wheres = ["to_tsvector('english', content) @@ plainto_tsquery('english', :q)", "tenant_id = :tenant_id"]
     params: dict[str, Any] = {"q": body.question, "tenant_id": user.tenant_id, "limit": body.top_k}
     if body.doc_kinds:
