@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [15.0.0] - 2026-10-01
+
+A security release. Thirteen defects, each found by reading the code at
+`v14.0.0` and each shipped with a reproduction that fails on the untouched
+tree for the stated reason.
+
+Two of them are breaking. `/api/v1/shifts` is removed and the STIX reads
+answer 404 outside demo mode, because both served records nobody entered;
+and `ENVIRONMENT` now defaults to `production` on every documented path,
+which turns several previously silent warnings into boot refusals.
+
+The through-line is not a category of bug. It is that a control can exist,
+pass its tests, and never run: an API key resolving to its owner's email so
+the audit log could not name the credential, 275 route dependencies reading
+a hardcoded map while the console wrote to a database nothing consulted,
+a prompt-injection flag read from a field no code ever set, and eleven
+`emit_audit` call sites that could not distinguish a session from a script.
+Each fix therefore ships the gate that would have caught it.
+
+
 ### Security
 
 - **Two permission models shipped side by side, and the one almost every route used ignored the database.** 275 route dependencies called the synchronous `require_permission`, which reads the hardcoded `ROLE_PERMISSIONS` map; 27 called `require_permission_db`, which reads the `user_roles` / `role_permissions` tables. The console ships a full RBAC administration screen writing to those tables — so an operator could grant a permission, watch it appear in the UI, and have **275 of 302 routes ignore it**. Revoking worked no better.
