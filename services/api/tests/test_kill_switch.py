@@ -9,32 +9,34 @@ reason is mandatory.
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 
 import pytest
 from app.api.v1.endpoints import kill_switch
 from app.main import app
+from fastapi.testclient import TestClient
+
+#: One client for the module. Resolution is by **sending a request**, not
+#: by walking `app.routes`: that is not the route table and what it holds
+#: changes with the FastAPI minor, which made the sibling compliance file
+#: pass locally and report every path unreachable in CI.
+#:
+#: A 401 answers the question as well as a 200 does, because authentication
+#: runs after the route has matched.
+_CLIENT = TestClient(app, raise_server_exceptions=False)
 
 
-def _resolve(path: str, method: str) -> str | None:
-    async def go() -> str | None:
-        scope = {
-            "type": "http",
-            "method": method,
-            "path": path,
-            "headers": [],
-            "query_string": b"",
-            "root_path": "",
-            "app": app,
-        }
-        for route in app.router.routes:
-            match, _child = route.matches(scope)
-            if match.name == "FULL":
-                return getattr(route, "name", None)
+def _reaches_a_route(path: str, method: str = "GET") -> bool:
+    return _CLIENT.request(method, path).status_code != 404
+
+
+def _handler_for(path: str, method: str = "GET") -> str | None:
+    """The handler that owns `path`, from the OpenAPI document."""
+    spec = app.openapi()
+    operation = spec.get("paths", {}).get(path, {}).get(method.lower())
+    if not operation:
         return None
-
-    return asyncio.run(go())
+    return operation.get("operationId", "").split("_api_v1_")[0] or None
 
 
 class TestTheRoutesExist:
@@ -47,7 +49,8 @@ class TestTheRoutesExist:
         ],
     )
     def test_each_route_reaches_its_handler(self, path: str, method: str, handler: str) -> None:
-        assert _resolve(path, method) == handler
+        assert _reaches_a_route(path, method), f"{method} {path} answers 404"
+        assert _handler_for(path, method) == handler
 
 
 class TestAuthorization:
