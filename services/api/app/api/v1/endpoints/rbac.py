@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.api.v1.deps import AuthUser, require_permission
+from app.core.permission_cache import bump_version
 from app.core.role_grants import RoleGrantDenied, authorize_permission_grant
 from app.db.rls import TenantDBSession
 from app.models.rbac import Permission, Role, RolePermission, UserRole
@@ -181,6 +182,7 @@ async def create_role(
         db.add(RolePermission(role_id=role.id, permission_id=perm.id))
 
     await db.commit()
+    await bump_version(str(current_user.tenant_id))
     await db.refresh(role)
 
     return RoleOut(
@@ -242,6 +244,7 @@ async def update_role(
             db.add(RolePermission(role_id=role.id, permission_id=perm.id))
 
     await db.commit()
+    await bump_version(str(current_user.tenant_id))
     await db.refresh(role)
     perms_out = await _load_role_permissions(db, role.id)
     return RoleOut(
@@ -265,6 +268,7 @@ async def delete_role(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="System roles cannot be deleted")
     await db.delete(role)
     await db.commit()
+    await bump_version(str(current_user.tenant_id))
 
 
 # ──────────────────────────────────────────────
@@ -327,6 +331,7 @@ async def assign_role(
     assignment = UserRole(user_id=user_id, role_id=role.id, assigned_by=current_user.user_id)
     db.add(assignment)
     await db.commit()
+    await bump_version(str(current_user.tenant_id))
     return UserRoleOut(user_id=user_id, role_id=role.id, role_name=role.name)
 
 
@@ -340,6 +345,7 @@ async def revoke_role(
     """Revoke a role from a user."""
     await db.execute(delete(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id))
     await db.commit()
+    await bump_version(str(current_user.tenant_id))
 
 
 # ──────────────────────────────────────────────

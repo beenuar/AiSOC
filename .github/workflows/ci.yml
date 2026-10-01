@@ -344,6 +344,16 @@ jobs:
       # themselves the same published number.
       - name: Verify vendored aisoc_benchmark is in sync
         run: python scripts/sync_vendored_benchmark.py --check
+      # Two permission models shipped side by side: 275 route dependencies
+      # read the hardcoded ROLE_PERMISSIONS map while 27 read the
+      # user_roles / role_permissions tables the console's RBAC screen
+      # writes to. An operator could grant a permission, watch it appear in
+      # the UI, and have 275 of 302 routes ignore it. There is one model
+      # now; this keeps it one.
+      - name: One permission model — self-test
+        run: python scripts/check_one_permission_model.py --self-test
+      - name: Verify the database is authoritative for permissions
+        run: python scripts/check_one_permission_model.py
       # Thirteen Kafka clients across Python, Go and TypeScript, and not one
       # passed a security protocol — so every one took the library default,
       # which is PLAINTEXT in all three. The spine carries raw event bodies,

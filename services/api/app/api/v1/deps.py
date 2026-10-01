@@ -21,6 +21,7 @@ activates the RLS policies defined in ``migrations/002_rls.sql``.
         ...
 """
 
+import logging
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
@@ -38,9 +39,12 @@ from app.api.v1.dev_auth import (
     DEMO_USER_ROLE,
     is_dev_mode,
 )
+from app.core.permission_cache import grants, resolve_permissions
 from app.core.security import decode_token, has_permission, hash_api_key, token_is_revoked
 from app.db.database import get_db
 from app.models.tenant import ApiKey, User
+
+logger = logging.getLogger("aisoc.deps")
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -68,6 +72,7 @@ class CurrentUser:
         email: str,
         scopes: list[str] | None = None,
         api_key_prefix: str | None = None,
+        resolved_permissions: frozenset[str] | None = None,
     ) -> None:
         self.user_id = user_id
         self.tenant_id = tenant_id
@@ -83,6 +88,17 @@ class CurrentUser:
         # key, or disable a person — and the log could not tell an
         # investigator which one had happened.
         self.api_key_prefix = api_key_prefix
+        # What the RBAC tables say this principal holds, resolved once at
+        # authentication. `None` means "nothing resolved it", which is the
+        # case for a directly-constructed principal in a test and for the
+        # dev-mode user, and falls through to the static map.
+        #
+        # The whole reason this field exists: 275 route dependencies checked
+        # the hardcoded `ROLE_PERMISSIONS` map while 27 checked the tables
+        # the console's RBAC screen writes to, so an operator could grant a
+        # permission, watch it appear in the UI, and have 275 of 302 routes
+        # ignore it.
+        self.resolved_permissions = resolved_permissions
 
     def __repr__(self) -> str:
         # Without this a stray `str(user)` persists `<...CurrentUser object at
@@ -101,13 +117,20 @@ class CurrentUser:
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"API key missing scope: {permission}",
                 )
-        else:
-            # JWT / role path — static ROLE_PERMISSIONS fallback
-            if not has_permission(self.role, permission):
+        elif self.resolved_permissions is not None:
+            # Database-backed: what the RBAC tables actually grant.
+            if not grants(self.resolved_permissions, permission):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission denied: {permission}",
                 )
+        elif not has_permission(self.role, permission):
+            # Nothing resolved a set for this principal, so the static map
+            # is the only answer available.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied: {permission}",
+            )
 
     async def has_permission_db(self, permission: str, db: AsyncSession) -> bool:
         """Check permission via RBAC tables (granular RBAC).
@@ -273,11 +296,32 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    # Resolved once, here, where a session already exists. Doing it in the
+    # permission dependency instead would mean a query per check and would
+    # make a database blip deny every request.
+    #
+    # Fails *open to the static map* rather than closed, deliberately: this
+    # is authentication, and a transient database fault must not lock every
+    # operator out of the platform mid-incident. The static map is the
+    # behaviour that shipped for the last fourteen releases, so falling back
+    # to it is no worse than before — whereas failing closed would be a new
+    # and much louder outage. The event is logged at error, not debug.
+    resolved: frozenset[str] | None = None
+    try:
+        resolved = await resolve_permissions(db, tenant_id=user.tenant_id, user_id=user.id, static_role=user.role)
+    except Exception as exc:  # noqa: BLE001
+        logger.error(
+            "permission resolution failed for user %s; falling back to the static role map: %s",
+            str(user.id).replace("\r", "").replace("\n", " ")[:64],
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+
     return CurrentUser(
         user_id=user.id,
         tenant_id=user.tenant_id,
         role=user.role,
         email=user.email,
+        resolved_permissions=resolved,
     )
 
 
@@ -288,7 +332,27 @@ async def get_current_active_user(
 
 
 def require_permission(permission: str):
-    """Factory for permission-checking dependencies."""
+    """Factory for permission-checking dependencies, database-backed.
+
+    This used to consult the hardcoded `ROLE_PERMISSIONS` map only, while a
+    second factory, `require_permission_db`, consulted the `user_roles` /
+    `role_permissions` tables the console's RBAC administration surface
+    writes to. 275 routes used the first and 27 used the second, so an
+    operator could grant a permission, watch it appear in the UI, and have
+    275 of 302 routes ignore it.
+
+    The resolution happens once, in `get_current_user`, where a session
+    already exists — not here. A query per permission check would mean a
+    database blip denies every request, turning a transient fault into a
+    platform-wide outage at the authorization layer, and it broke 84 tests
+    that legitimately drive routes with a mocked session.
+
+    So this stays synchronous and reads what authentication resolved.
+
+    API keys keep their own path. A key's scopes are an explicit, narrower
+    grant chosen at mint time — resolving a key to its owner's full role
+    would widen it, which is the opposite of what a scoped key is for.
+    """
 
     async def _check(current_user: Annotated[CurrentUser, Depends(get_current_user)]) -> CurrentUser:
         current_user.require_permission(permission)
