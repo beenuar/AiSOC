@@ -878,7 +878,7 @@ ${C_BOLD}${C_GREEN}AiSOC is up and running${C_RESET}${C_GREEN}, and a real event
   ${C_BOLD}Web console:${C_RESET}     http://localhost:3000
   ${C_BOLD}API:${C_RESET}             http://localhost:8000
   ${C_BOLD}API spec:${C_RESET}        docs/openapi.yaml  (interactive docs are off in
-                   this production-class stack; set ENVIRONMENT=development for them)
+                   this production-class stack, which is the posture to keep)
   ${C_BOLD}Realtime WS:${C_RESET}     ws://localhost:8086
 
   ${C_BOLD}Sign in as:${C_RESET}      ${AISOC_ADMIN_EMAIL:-admin@aisoc.internal}

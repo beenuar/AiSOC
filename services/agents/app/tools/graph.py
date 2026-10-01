@@ -25,7 +25,10 @@ _TIMEOUT = float(os.getenv("AGENTS_API_TIMEOUT", "10.0"))
 #: below would fail regardless of credentials.
 _GRAPH_ENABLED = os.getenv("AISOC_GRAPH_ENABLED", "").strip().lower() in ("1", "true", "yes")
 
-_UNAVAILABLE_LOGGED = False
+#: A set rather than a module-level bool with `global`. CodeQL reads the
+#: bool as an unused global because every read and write happens inside the
+#: function, and a mutable container needs no `global` statement at all.
+_UNAVAILABLE_LOGGED: set[str] = set()
 
 
 def graph_unavailable_reason(api_token: str | None) -> str | None:
@@ -53,11 +56,10 @@ def graph_unavailable_reason(api_token: str | None) -> str | None:
 
 
 def _note_unavailable(reason: str) -> None:
-    """Say it once per process, not once per entity per alert."""
-    global _UNAVAILABLE_LOGGED  # noqa: PLW0603
-    if _UNAVAILABLE_LOGGED:
+    """Say it once per reason per process, not once per entity per alert."""
+    if reason in _UNAVAILABLE_LOGGED:
         return
-    _UNAVAILABLE_LOGGED = True
+    _UNAVAILABLE_LOGGED.add(reason)
     logger.info("graph.unavailable", reason=reason)
 
 
