@@ -276,7 +276,12 @@ def self_test() -> int:
             encoding="utf-8",
         )
         found = _python_sites(pathlib.Path(tmp))
-        extra.append(("detects a client that passes no transport", found and not found[0][2]))
+        # `bool(...)` rather than the bare expression: `found and ...` is the
+        # list itself when it is empty, which types as `list | bool` and is
+        # also the wrong answer — an empty list is falsy, so the case would
+        # have reported "did not detect" where the truth is "found nothing
+        # to look at".
+        extra.append(("detects a client that passes no transport", bool(found) and not found[0][2]))
         (base / "unwired.py").write_text(
             "from aiokafka import AIOKafkaConsumer\n"
             "from app.core.kafka_security import kafka_client_kwargs\n"

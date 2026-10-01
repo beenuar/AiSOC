@@ -447,6 +447,16 @@ services:
       # `production` changed nothing — including the dev auth bypass in
       # app/api/v1/dev_auth.py, which could not be switched off from .env at all.
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      # The bundled Postgres and Kafka serve no certificates, and
+      # ENVIRONMENT now defaults to production — where a cleartext transport
+      # is a boot refusal, not a warning. Without these two the documented
+      # `make up` fails on a machine where there is nothing to fix, which is
+      # exactly how a security default gets patched out downstream. Stated
+      # here, in the file that chooses it, rather than weakened in the code
+      # that enforces it: a real deployment that leaves either unset is
+      # refused at boot.
+      AISOC_ALLOW_CLEARTEXT_DB: "1"
+      AISOC_ALLOW_CLEARTEXT_KAFKA: "1"
       # What this deployment published, so the service can refuse the
       # anonymous auth shim on an address someone else can reach. It
       # binds 0.0.0.0 inside the container and cannot tell otherwise.
@@ -513,6 +523,16 @@ services:
       # environments` never fired on the one service taking events off the
       # network.
       ENV: ${ENVIRONMENT:-production}
+      # The bundled Postgres and Kafka serve no certificates, and
+      # ENVIRONMENT now defaults to production — where a cleartext transport
+      # is a boot refusal, not a warning. Without these two the documented
+      # `make up` fails on a machine where there is nothing to fix, which is
+      # exactly how a security default gets patched out downstream. Stated
+      # here, in the file that chooses it, rather than weakened in the code
+      # that enforces it: a real deployment that leaves either unset is
+      # refused at boot.
+      AISOC_ALLOW_CLEARTEXT_DB: "1"
+      AISOC_ALLOW_CLEARTEXT_KAFKA: "1"
       # What this deployment published, so the service can refuse the
       # anonymous auth shim on an address someone else can reach. It
       # binds 0.0.0.0 inside the container and cannot tell otherwise.
@@ -1021,6 +1041,16 @@ services:
       # binds 0.0.0.0 inside the container and cannot tell otherwise.
       AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      # The bundled Postgres and Kafka serve no certificates, and
+      # ENVIRONMENT now defaults to production — where a cleartext transport
+      # is a boot refusal, not a warning. Without these two the documented
+      # `make up` fails on a machine where there is nothing to fix, which is
+      # exactly how a security default gets patched out downstream. Stated
+      # here, in the file that chooses it, rather than weakened in the code
+      # that enforces it: a real deployment that leaves either unset is
+      # refused at boot.
+      AISOC_ALLOW_CLEARTEXT_DB: "1"
+      AISOC_ALLOW_CLEARTEXT_KAFKA: "1"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_URL: redis://:${REDIS_PASSWORD:-redis_dev_secret}@redis:6379/6
       DATABASE_URL: postgresql+asyncpg://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc

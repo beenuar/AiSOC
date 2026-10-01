@@ -981,7 +981,16 @@ def warn_if_insecure_defaults(s: Settings | None = None) -> list[str]:
 
         query = _parse_qs(_urlsplit(dsn).query)
         sslmode = (query.get("sslmode") or query.get("ssl") or [""])[0].strip().lower()
-        if sslmode in {"disable", "allow", "false", "0"}:
+        # An explicit, named opt-out, mirroring AISOC_ALLOW_CLEARTEXT_KAFKA.
+        # It exists because in production these messages are boot-blockers
+        # and the bundled compose Postgres serves no certificate — without
+        # it the documented `make up` path fails on a machine where there is
+        # nothing to fix, which is precisely how a security default gets
+        # patched out downstream. The compose file sets it with the reason
+        # written beside it, so the choice is visible rather than absent.
+        if os.getenv("AISOC_ALLOW_CLEARTEXT_DB", "").strip().lower() in {"1", "true", "yes", "on"}:
+            pass
+        elif sslmode in {"disable", "allow", "false", "0"}:
             msgs.append(
                 f"DATABASE_URL carries sslmode={sslmode!r}, so every query — alerts, "
                 "entities, credentials in the vault's ciphertext column — crosses the "
