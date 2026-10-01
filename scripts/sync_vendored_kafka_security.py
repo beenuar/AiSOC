@@ -28,7 +28,19 @@ import argparse
 import pathlib
 import sys
 
-REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+# `scripts/` is on sys.path when this runs as a program, but not when a test
+# loads it by path. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_if_requested  # noqa: E402
+
+self_test_if_requested(__file__)
+
+# `repo_root()` asks git. Two levels above this file is whatever happens to
+# be there, which on the gate-contract probe is a temporary directory
+# containing only `scripts/` — and a sync script that resolves its root that
+# way reports success over a tree with no services in it.
+REPO_ROOT = repo_root()
 
 #: The copy every other service is compared against.
 SOURCE = REPO_ROOT / "services" / "fusion" / "app" / "core" / "kafka_security.py"
