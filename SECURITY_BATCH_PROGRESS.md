@@ -238,3 +238,56 @@ Two things found while fixing S1b that neither brief raised:
 * `userOf` in `services/realtime/src/push.ts` preferred a caller-supplied body
   field over the stamped `X-User-Id`, under a comment asserting that the API
   gateway validates it. It does not.
+
+## Status at the end of this session
+
+Eleven pull requests merged to `main`, which is green: **95 checks passing, 0
+failures** at `805ae445`. Claim-to-gate matrix at **253 rows, all GATED**.
+
+| Defect | PR | State |
+|---|---|---|
+| S1a/S1b anonymous bypass + demo tenant split | [#1072](https://github.com/beenuar/AiSOC/pull/1072) | merged |
+| S1c console credentials on all 61 calls | [#1069](https://github.com/beenuar/AiSOC/pull/1069) | merged |
+| S1d production posture on documented paths | [#1074](https://github.com/beenuar/AiSOC/pull/1074) | merged |
+| S2 copilot + saved hunts tenant-scoped | [#1079](https://github.com/beenuar/AiSOC/pull/1079) | merged |
+| S3/S4 fabricated shift + STIX data | [#1077](https://github.com/beenuar/AiSOC/pull/1077) | merged |
+| S5 login throttling and lockout | [#1075](https://github.com/beenuar/AiSOC/pull/1075) | merged |
+| S6 SSO stub identities deleted | [#1076](https://github.com/beenuar/AiSOC/pull/1076) | merged |
+| S7 audit attribution + tenant-admin reads | [#1080](https://github.com/beenuar/AiSOC/pull/1080) | merged |
+| S9 route authorization decisions | [#1081](https://github.com/beenuar/AiSOC/pull/1081) | merged |
+| S10 human-confirmed priors only | [#1082](https://github.com/beenuar/AiSOC/pull/1082) | merged |
+| S11/S12 TLS everywhere + Caldera default | [#1078](https://github.com/beenuar/AiSOC/pull/1078) | merged |
+| S8 RLS on `mssp_*`, plain-session ratchet | — | **not started** |
+| S13 database-backed RBAC at 272 static sites | — | **not started** |
+
+Ten of the thirteen are closed. **S8 and S13 remain**, and `v15.0.0` has not
+been cut — cutting it now would publish a security release that does not
+contain two of the defects it would claim to fix.
+
+### Where to resume
+
+1. **S8.** Four `mssp_*` tables carry no RLS policy; 51 modules open a plain
+   session rather than a tenant-scoped one; 35 predicate exceptions are
+   recorded. The pattern to copy is migration `076` from S2, which pairs a
+   `tenant_id NOT NULL` column, forced RLS, and an explicit `aisoc_app` grant
+   — the grant matters because `ALTER DEFAULT PRIVILEGES` only covers tables
+   created by the role that ran it.
+2. **S13.** 272 static permission checks resolve against `ROLE_PERMISSIONS`
+   rather than the RBAC tables. Note that S9 added `knowledge_base:read` to
+   five roles there, so the migration has one more permission to carry than
+   the plan describes.
+3. **`v15.0.0`**, once both land, with the advisory drafts this file records.
+
+### Two things a resumed session should not relearn
+
+**The matrix parser stops at a blank line inside the table.** Several rebases
+put a new row *after* `## Summary`, where it parsed as nothing and silently
+lowered the published GATED count. `/tmp/aisoc-tools/rebase-onto-main.sh`
+handles the three files that conflict on every one of these PRs and
+recomputes the summary from the parser rather than merging it textually.
+
+**A new gate must satisfy `check_gate_contract.py`.** It copies `scripts/`
+into a repository containing nothing else and requires every check to refuse.
+`sync_vendored_kafka_security.py` resolved its root from `__file__` and
+reported four matching copies over a tree with no services at all; use
+`gate_toolkit.repo_root()`, which asks git, and declare a `--self-test`.
