@@ -239,55 +239,65 @@ Two things found while fixing S1b that neither brief raised:
   field over the stamped `X-User-Id`, under a comment asserting that the API
   gateway validates it. It does not.
 
-## Status at the end of this session
+## Complete — released as v15.0.0 (2026-10-01)
 
-Eleven pull requests merged to `main`, which is green: **95 checks passing, 0
-failures** at `805ae445`. Claim-to-gate matrix at **253 rows, all GATED**.
+All thirteen defects are fixed and on `main`. Seventeen pull requests;
+`main` green; claim-to-gate matrix at **255 rows, all GATED**.
 
-| Defect | PR | State |
-|---|---|---|
-| S1a/S1b anonymous bypass + demo tenant split | [#1072](https://github.com/beenuar/AiSOC/pull/1072) | merged |
-| S1c console credentials on all 61 calls | [#1069](https://github.com/beenuar/AiSOC/pull/1069) | merged |
-| S1d production posture on documented paths | [#1074](https://github.com/beenuar/AiSOC/pull/1074) | merged |
-| S2 copilot + saved hunts tenant-scoped | [#1079](https://github.com/beenuar/AiSOC/pull/1079) | merged |
-| S3/S4 fabricated shift + STIX data | [#1077](https://github.com/beenuar/AiSOC/pull/1077) | merged |
-| S5 login throttling and lockout | [#1075](https://github.com/beenuar/AiSOC/pull/1075) | merged |
-| S6 SSO stub identities deleted | [#1076](https://github.com/beenuar/AiSOC/pull/1076) | merged |
-| S7 audit attribution + tenant-admin reads | [#1080](https://github.com/beenuar/AiSOC/pull/1080) | merged |
-| S9 route authorization decisions | [#1081](https://github.com/beenuar/AiSOC/pull/1081) | merged |
-| S10 human-confirmed priors only | [#1082](https://github.com/beenuar/AiSOC/pull/1082) | merged |
-| S11/S12 TLS everywhere + Caldera default | [#1078](https://github.com/beenuar/AiSOC/pull/1078) | merged |
-| S8 RLS on `mssp_*`, plain-session ratchet | — | **not started** |
-| S13 database-backed RBAC at 272 static sites | — | **not started** |
+| Defect | PR |
+|---|---|
+| S1a/S1b anonymous bypass + demo tenant split | [#1072](https://github.com/beenuar/AiSOC/pull/1072) |
+| S1c console credentials on all 61 calls | [#1069](https://github.com/beenuar/AiSOC/pull/1069) |
+| S1d production posture on documented paths | [#1074](https://github.com/beenuar/AiSOC/pull/1074) |
+| S2 copilot + saved hunts tenant-scoped | [#1079](https://github.com/beenuar/AiSOC/pull/1079) |
+| S3/S4 fabricated shift + STIX data | [#1077](https://github.com/beenuar/AiSOC/pull/1077) |
+| S5 login throttling and lockout | [#1075](https://github.com/beenuar/AiSOC/pull/1075) |
+| S6 SSO stub identities deleted | [#1076](https://github.com/beenuar/AiSOC/pull/1076) |
+| S7 audit attribution + tenant-admin reads | [#1080](https://github.com/beenuar/AiSOC/pull/1080) |
+| S8 RLS on the six unpoliced `mssp_*` tables | [#1084](https://github.com/beenuar/AiSOC/pull/1084) |
+| S9 route authorization decisions | [#1081](https://github.com/beenuar/AiSOC/pull/1081) |
+| S10 human-confirmed priors only | [#1082](https://github.com/beenuar/AiSOC/pull/1082) |
+| S11/S12 TLS everywhere + Caldera default | [#1078](https://github.com/beenuar/AiSOC/pull/1078) |
+| S13 database-backed RBAC at every route | [#1085](https://github.com/beenuar/AiSOC/pull/1085) |
 
-Ten of the thirteen are closed. **S8 and S13 remain**, and `v15.0.0` has not
-been cut — cutting it now would publish a security release that does not
-contain two of the defects it would claim to fix.
+Release [#1086](https://github.com/beenuar/AiSOC/pull/1086) · advisories
+[#1087](https://github.com/beenuar/AiSOC/pull/1087) → `docs/security/v15-advisory-drafts.md`.
 
-### Where to resume
+**Published and verified at the registry, not from a green workflow**: the
+release body survived at 52,623 characters (the cap is 125,000), and all
+39 first-party image references resolve in GHCR with `v15.0.0` manifests
+returning HTTP 200.
 
-1. **S8.** Four `mssp_*` tables carry no RLS policy; 51 modules open a plain
-   session rather than a tenant-scoped one; 35 predicate exceptions are
-   recorded. The pattern to copy is migration `076` from S2, which pairs a
-   `tenant_id NOT NULL` column, forced RLS, and an explicit `aisoc_app` grant
-   — the grant matters because `ALTER DEFAULT PRIVILEGES` only covers tables
-   created by the role that ran it.
-2. **S13.** 272 static permission checks resolve against `ROLE_PERMISSIONS`
-   rather than the RBAC tables. Note that S9 added `knowledge_base:read` to
-   five roles there, so the migration has one more permission to carry than
-   the plan describes.
-3. **`v15.0.0`**, once both land, with the advisory drafts this file records.
+### What this batch actually taught
 
-### Two things a resumed session should not relearn
+Not a category of bug. A shape: **a control that exists, passes its tests,
+and never runs.** 275 route dependencies read a hardcoded map while the
+console wrote to a database nothing consulted. A prompt-injection flag was
+read from a field no code ever set. Thirteen Kafka clients each took the
+library default. An `ImportError` branch nobody could avoid was the only
+reachable path through the SAML assertion consumer.
 
-**The matrix parser stops at a blank line inside the table.** Several rebases
-put a new row *after* `## Summary`, where it parsed as nothing and silently
-lowered the published GATED count. `/tmp/aisoc-tools/rebase-onto-main.sh`
-handles the three files that conflict on every one of these PRs and
-recomputes the summary from the parser rather than merging it textually.
+Three mistakes of my own are worth more than the fixes:
 
-**A new gate must satisfy `check_gate_contract.py`.** It copies `scripts/`
-into a repository containing nothing else and requires every check to refuse.
-`sync_vendored_kafka_security.py` resolved its root from `__file__` and
-reported four matching copies over a tree with no services at all; use
-`gate_toolkit.repo_root()`, which asks git, and declare a `--self-test`.
+* **A real database caught what a static gate could not.** The obvious
+  MSSP policies are mutually recursive; Postgres answers `infinite
+  recursion detected` on the first `SELECT` while
+  `check_rls_policy_shape.py` passed throughout. Shape is not liveness.
+* **Adding one keyword broke four writer signatures and no test failed on
+  the exception**, because the call sits inside `contextlib.suppress`.
+  What surfaced was a zero write-count in an unrelated replay test three
+  files away.
+* **The first design for database-backed permissions was wrong.**
+  Resolving inside the permission check would have made a transient
+  database fault deny every request on the platform. It resolves at
+  authentication and fails *open* to the static map, deliberately.
+
+### Still open
+
+`e2e.yml :: Buyer journey` is **intermittently red and not a required
+check**. `next/font/google` fetches from Google at compile time, so the
+real dependency is the network. Removing the pnpm store cache produced one
+green run and the next commit failed again on a different font, so that
+hypothesis is disproved and recorded as such in the workflow. The fix is
+`NEXT_FONT_GOOGLE_MOCKED_RESPONSES` or self-hosting the five faces through
+`next/font/local`.
