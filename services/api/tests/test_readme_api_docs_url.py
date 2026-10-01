@@ -23,7 +23,6 @@ from __future__ import annotations
 import pathlib
 import re
 
-from app.core.config import settings
 from app.main import create_application
 
 REPO = pathlib.Path(__file__).resolve().parents[3]
