@@ -56,9 +56,9 @@ import json
 import os
 import sys
 import time
-from typing import Any, cast
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any, cast
 
 # `scripts/` is on sys.path when this file is run as a program, but not when a
 # test loads it by path with importlib. gate_toolkit sits beside it either way.
