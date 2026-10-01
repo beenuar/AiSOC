@@ -109,17 +109,6 @@ ALLOWED_GLOBALS: dict[tuple[str, str], str] = {
     ),
     # ── Real instances of the class, each named with where it closes ───────
     (
-        "services/agents/app/api/copilot.py",
-        "_CONVERSATIONS",
-    ): (
-        "Cross-tenant conversation store. Closed by the security batch item that moves copilot "
-        "conversations into a tenant-scoped table; this entry goes with it."
-    ),
-    (
-        "services/agents/app/api/hunt_search.py",
-        "_SAVED_SEARCHES",
-    ): "Cross-tenant saved-search store, same item, same removal.",
-    (
         "services/agents/app/api/router.py",
         "_runs",
     ): (

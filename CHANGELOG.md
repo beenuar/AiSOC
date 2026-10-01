@@ -27,7 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Two of its own rules were wrong first and are worth recording. A shape heuristic that fired on "a dict of dicts with several populated string fields" caught `compliance.FRAMEWORKS` (the real 24-control mapping), `inbox._TEMPLATE_CATALOG`, `translation._FIELD_MAP` and `explain._OCSF_BY_SOURCE` — four configuration tables, four false positives out of four detections, so the name is the signal now and the shape is only the detail. And the allowlist credited an entry whenever the name still existed rather than when it actually suppressed a finding, so the two STIX lists kept their excuse after their handlers stopped appending; it credits a suppression now, and immediately reported both as stale.
 
-  Fifteen entries remain, each naming where it closes. Five are not defects — a log de-duplicator, two caches of static artefacts, and global-by-design community content — and the rest point at the item that gives them a table.
+  Thirteen entries remain, each naming where it closes — it was fifteen when this was written, and the copilot and saved-hunt entries came out the moment those two moved to tables, which is the ratchet doing its job rather than a figure being edited. Five are not defects — a log de-duplicator, two caches of static artefacts, and global-by-design community content — and the rest point at the item that gives them a table.
 
 
 ### Security
