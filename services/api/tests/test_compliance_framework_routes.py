@@ -21,12 +21,11 @@ inferred from the source.
 from __future__ import annotations
 
 import pytest
-from fastapi.testclient import TestClient
 from app.api.v1.endpoints.compliance import FRAMEWORKS
 from app.api.v1.endpoints.compliance_framework import SLUG_TO_KEY, resolve_framework
 from app.main import app
 from fastapi import HTTPException
-
+from fastapi.testclient import TestClient
 
 #: One client for the whole module. Building it per test triples the run
 #: time of a file that is mostly routing assertions.
