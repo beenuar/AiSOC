@@ -51,8 +51,8 @@ from __future__ import annotations
 
 import logging
 import time
-from functools import lru_cache
 from dataclasses import dataclass, field
+from functools import lru_cache
 from typing import Any, Final
 
 from sqlalchemy import func, select
