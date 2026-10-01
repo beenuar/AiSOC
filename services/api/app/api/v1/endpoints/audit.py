@@ -8,7 +8,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select
@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from app.api.v1.deps import AuthUser, require_permission
 from app.db.rls import TenantDBSession
 from app.models.audit import AuditLog
+from app.services.audit import emit_audit
 from app.services.audit_export import (
     AuditRow,
     ExportContext,
@@ -83,6 +84,7 @@ def _filtered_audit_query(
 
 @router.get("", response_model=AuditListResponse)
 async def list_audit_events(
+    request: Request,
     current_user: Annotated[AuthUser, Depends(require_permission("audit_log:read"))],
     db: TenantDBSession,
     page: int = Query(default=1, ge=1),
@@ -108,6 +110,39 @@ async def list_audit_events(
     q = q.order_by(AuditLog.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(q)
     items = result.scalars().all()
+
+    # Reading a trail is itself an act worth recording. The point is not the
+    # page view — it is that `tenant_admin` can now read this, so the set of
+    # people who can see who did what just grew, and an investigator asking
+    # "who looked at this?" must get an answer rather than a shrug.
+    #
+    # The filters are recorded, not the rows: a search term is what the
+    # reader was looking for, which is the interesting fact, while copying
+    # the results would duplicate the log into itself on every page view.
+    await emit_audit(
+        db=db,
+        tenant_id=current_user.tenant_id,
+        actor_id=current_user.user_id,
+        actor_email=current_user.email,
+        action="audit_log:read",
+        resource="audit_log",
+        changes={
+            "filters": {
+                k: v
+                for k, v in (
+                    ("action", action),
+                    ("resource", resource),
+                    ("actor_id", str(actor_id) if actor_id else None),
+                    ("search", search),
+                )
+                if v
+            },
+            "matched": total,
+        },
+        request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
+    )
+    await db.commit()
 
     return AuditListResponse(
         items=[

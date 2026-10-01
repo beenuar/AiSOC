@@ -348,6 +348,7 @@ async def upsert_llm_credential(
                 "created": existing is None,
             },
             request=request,
+            api_key_prefix=getattr(current_user, "api_key_prefix", None),
         )
     except Exception as exc:  # noqa: BLE001 — audit must not fail the call
         logger.error(
@@ -416,6 +417,7 @@ async def delete_llm_credential(
                 "provider": existing.provider,
             },
             request=request,
+            api_key_prefix=getattr(current_user, "api_key_prefix", None),
         )
     except Exception as exc:  # noqa: BLE001
         logger.error(

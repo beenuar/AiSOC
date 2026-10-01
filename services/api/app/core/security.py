@@ -55,6 +55,18 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "threat_intel:write",
         "settings:read",
         "settings:write",
+        # A tenant admin could not read their own tenant's audit log. Only
+        # `platform_admin` and `admin` could, and both hold `*` across every
+        # tenant — so on a multi-tenant deployment the only principals who
+        # could answer "who changed this?" for a customer were the operator's
+        # own staff, and the customer had to ask them. That is a compliance
+        # failure (SOC 2 CC7.2 and ISO 27001 A.12.4 both require the control
+        # owner to be able to review their own trail) and an MSSP blocker.
+        #
+        # Safe because the read is tenant-scoped at the query layer: the
+        # handler filters on the authenticated `tenant_id`, so this grants
+        # visibility of their own history and nothing else.
+        "audit_log:read",
         # Workstream 7: tenant lake API. Tenant admins get full access
         # to the warm-tier query surface (POST /api/v1/lake/sql) and
         # the schema discovery endpoint (GET /api/v1/lake/schema). The

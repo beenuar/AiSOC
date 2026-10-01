@@ -121,6 +121,7 @@ async def create_scim_token(
         resource_id=str(token.id),
         changes={"name": body.name, "prefix": token.token_prefix, "expires_at": expires_at.isoformat() if expires_at else None},
         request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
     )
     await db.commit()
     await db.refresh(token)
@@ -160,6 +161,7 @@ async def rotate_scim_token(
             "superseded_expires_at": token.expires_at.isoformat() if token.expires_at else None,
         },
         request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
     )
     await db.commit()
     await db.refresh(replacement)
@@ -197,5 +199,6 @@ async def revoke_scim_token(
         resource_id=str(token.id),
         changes={"prefix": token.token_prefix},
         request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
     )
     await db.commit()

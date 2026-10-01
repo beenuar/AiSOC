@@ -45,6 +45,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **The audit log could not tell a console session from an API key.** A key owned by a user resolves to that user's email, so an entry read `alice@corp.com deleted the rule` whether Alice did it at the console or a key she minted a year ago did it from a script she no longer runs. Those call for different responses — revoke a key, or disable a person — and the line an investigator reads could not say which had happened. `CurrentUser` now carries `api_key_prefix` on the key path only, and `emit_audit` records `auth_method` beside it. The **prefix**, never the key: it identifies the credential without being usable as one, and it is what the console displays and what an operator revokes by.
+
+- **A tenant admin could not read their own tenant's audit log.** The only roles holding `audit_log:read` were `platform_admin` and `admin`, and both hold `*` across every tenant — so on a multi-tenant deployment the only principals who could answer "who changed this?" about a customer's data were the operator's own staff, and the customer had to ask them. SOC 2 CC7.2 and ISO 27001 A.12.4 both require the control owner to review their own trail, so this was a compliance failure as much as an MSSP blocker. `tenant_admin` holds it now; the grant is safe because both read handlers already filter on the authenticated `tenant_id`, which a test asserts structurally rather than assuming — granting it without that predicate would have turned a compliance gap into a cross-tenant read.
+
+- **Reading the trail is now itself recorded**, because the set of people who can read it just grew. The filters are logged, not the rows: a search term is what the reader was looking for, which is the interesting fact, while copying results would duplicate the log into itself on every page view.
+
+- **`scripts/check_audit_coverage.py` measures the rest honestly rather than claiming it is fixed.** Seven of 86 endpoint modules emit audit at all. The gate ratchets that floor, requires every actor-bearing `emit_audit` to record the credential, requires the roles that must read their own trail to hold the permission, and prints the **largest unaudited surfaces by state-changing route count** on success — `mssp.py` at 17, `community.py` at 11, `cases.py` at 9 — because a bare ratchet tells nobody where to go next and this figure is low enough that "where next" is the useful output. The floor is set at the measured value, not an aspiration: a threshold the tree cannot meet gets disabled, and a disabled gate is worth less than an honest one.
+
+  Its first rule was too blunt and the correction is worth keeping. "Names an actor, so it must record a credential" reported the SCIM writer, whose `actor_email` is already `scim:<token-name>` — that *is* the credential, and there is no API key on that path to name. A scheme-prefixed actor counts as self-attributing now.
+
+
+### Security
+
 - **Copilot conversations and saved hunt searches were readable by every tenant.** Both lived in a module-level dict — `_CONVERSATIONS` in `services/agents/app/api/copilot.py` and `_SAVED_SEARCHES` in `hunt_search.py` — with no tenant column anywhere, and the list handlers took no principal at all. `GET /api/v1/copilot/conversations` returned every tenant's conversations to whoever asked, `GET /api/v1/copilot/conversations/{id}` returned any conversation to anyone holding its id, and `GET /api/v1/hunt/saved` did the same for saved searches.
 
   This is not chat history. A copilot conversation carries the analyst's question, which names hosts and users, and the model's answer, which quotes the alert evidence it was grounded on. A saved hunt search is the query an analyst wrote against their own telemetry.

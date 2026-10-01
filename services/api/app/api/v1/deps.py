@@ -67,12 +67,22 @@ class CurrentUser:
         role: str,
         email: str,
         scopes: list[str] | None = None,
+        api_key_prefix: str | None = None,
     ) -> None:
         self.user_id = user_id
         self.tenant_id = tenant_id
         self.role = role
         self.email = email
         self.scopes = scopes  # None → role-based; list → API-key scoped
+        # Set only on the API-key path, and only so the audit log can say so.
+        #
+        # A key owned by a user resolves to that user's email, so an audit
+        # entry read "alice@corp.com deleted the rule" whether Alice did it
+        # at the console or a key she minted a year ago did it from a script
+        # she no longer runs. Those call for different responses — revoke a
+        # key, or disable a person — and the log could not tell an
+        # investigator which one had happened.
+        self.api_key_prefix = api_key_prefix
 
     def __repr__(self) -> str:
         # Without this a stray `str(user)` persists `<...CurrentUser object at
@@ -196,6 +206,7 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
         role=role,
         email=email,
         scopes=api_key.scopes or [],
+        api_key_prefix=api_key.key_prefix,
     )
 
 

@@ -129,6 +129,7 @@ async def put_branding(
         resource_id=str(org_id),
         changes=body.model_dump(),
         request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
     )
     await db.commit()
     return (await resolver.branding_for_org(db, org_id)).as_dict()
@@ -217,6 +218,7 @@ async def upload_asset(
         resource_id=str(existing.id),
         changes={"kind": kind, "content_type": content_type, "bytes": len(content), "sanitized": was_sanitized, "removed": removed},
         request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
     )
     await db.commit()
 
@@ -293,5 +295,6 @@ async def delete_asset(
         resource_id=str(asset.id),
         changes={"kind": kind},
         request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
     )
     await db.commit()

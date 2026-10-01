@@ -360,6 +360,18 @@ jobs:
         run: python scripts/check_kafka_transport.py
       - name: Verify the vendored Kafka transport copies match
         run: python scripts/sync_vendored_kafka_security.py --check
+      # An API key owned by a user resolved to that user's email, so an
+      # audit entry read the same whether the person acted at the console or
+      # a key they minted acted from a script — and revoking a key and
+      # disabling a person are different responses to the same line. The
+      # gate also holds the ratchet on how many endpoint modules audit at
+      # all, which is 7 of 86 and set at the measured value rather than an
+      # aspiration: a threshold the tree cannot meet gets disabled, and a
+      # disabled gate is worth less than an honest one.
+      - name: Audit coverage gate — self-test
+        run: python scripts/check_audit_coverage.py --self-test
+      - name: Verify the audit log attributes the credential that acted
+        run: python scripts/check_audit_coverage.py
       # Fabricated security data must never render as a tenant's real state.
       # Around three dozen console components served a `MOCK_*` / `DEMO_*`
       # array of plausible alerts, connectors and coverage numbers whenever the

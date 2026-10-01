@@ -301,6 +301,7 @@ async def emit_audit(
     resource_id: str | None = None,
     changes: dict[str, Any] | None = None,
     request: Request | None = None,
+    api_key_prefix: str | None = None,
 ) -> AuditLog:
     """Append an immutable, hash-chained audit event to the log.
 
@@ -324,6 +325,13 @@ async def emit_audit(
     changes:      Before/after dict or delta payload. Will be redacted
                   and size-capped before persistence.
     request:      FastAPI ``Request`` to extract IP & user-agent.
+    api_key_prefix:
+                  Set when the caller authenticated with an API key. A key
+                  owned by a user resolves to that user's email, so without
+                  this an entry read identically whether the person acted at
+                  the console or a key they minted acted from a script —
+                  and revoking a key and disabling a person are different
+                  responses to the same log line.
     """
     actor_ip: str | None = None
     meta: dict[str, Any] = {}
@@ -344,6 +352,15 @@ async def emit_audit(
         rid = _safe_truncate(request.headers.get("x-request-id"), _MAX_REQUEST_ID_LEN)
         if rid:
             meta["request_id"] = rid
+
+    if api_key_prefix:
+        # The prefix, never the key. It is the identifier the console shows
+        # and the one an operator revokes by, which is exactly what an
+        # investigator reading this row needs to act on.
+        meta["auth_method"] = "api_key"
+        meta["api_key_prefix"] = _safe_truncate(api_key_prefix, 32)
+    elif request is not None:
+        meta["auth_method"] = "session"
 
     # Sanitize before persistence. Anything secret-shaped is masked,
     # and oversized payloads collapse to a marker row.

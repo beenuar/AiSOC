@@ -215,6 +215,7 @@ async def explain_alert(
                 "mitre_technique_count": len(explanation.mitre_techniques),
             },
             request=request,
+            api_key_prefix=getattr(current_user, "api_key_prefix", None),
         )
     except Exception as exc:  # noqa: BLE001
         # Audit-log failures must never break the explain response.

@@ -538,6 +538,7 @@ async def _audit_query_attempt(
                 "row_cap": row_cap,
             },
             request=request,
+            api_key_prefix=getattr(user_id, "api_key_prefix", None),
         )
     except Exception as exc:  # noqa: BLE001 — audit must never fail the call
         # Audit write failures must not break the user-facing response;

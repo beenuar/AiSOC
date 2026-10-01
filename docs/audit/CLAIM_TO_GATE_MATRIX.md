@@ -259,26 +259,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Platform data is not carried in the clear between services | `apps/docs/docs/operations/security.md`; `README.md` (architecture) | `ci.yml :: Python — Lint & Type-check` (`check_kafka_transport.py` — all 13 client construction sites across Python, Go and TypeScript pass a resolved transport, checked through the AST so a comment cannot satisfy it, **and** the resolver is called and required to refuse production cleartext, allow development plaintext, and reject a typo rather than defaulting; plus `sync_vendored_kafka_security.py --check`) + `ci.yml :: Python — Tests` (`services/api/tests/test_transport_security_defaults.py`) | GATED | **Proven against the pre-fix tree**: 13 clients unwired, 10 of 13 cases fail at `48234dc5`. The two-direction check is the point — checking call sites alone would pass a tree where every site calls a resolver that always answers PLAINTEXT. The sync gate also re-derives Kafka users from the tree, so an eighth service that never takes a copy fails rather than running plaintext. Two limits: `sslmode` is **reported at boot, not enforced** (every service builds its own engine and the collector is the one place they all pass through), and the compose DSN keeps `sslmode=disable` deliberately because the bundled Postgres serves no certificate |
 | No integration ships a working credential nobody chose | `apps/docs/docs/operations/security.md` (secrets) | `ci.yml :: Python — Tests` (`services/purple-team/tests/test_caldera_key_has_no_default.py`, 4 cases: the published literal is absent from code, the setting defaults to empty, building a client without a key raises and names the variable, and a configured key still builds one) | GATED | **Proven against the pre-fix tree**: 3 of 4 fail at `48234dc5`. `ADMIN123` is Caldera's own published first-run credential, so an unconfigured deployment authenticated with it against any Caldera nobody had rotated. The fourth case runs the other way so this cannot pass on a build with no client at all |
 | Every state-changing route makes an authorization decision, or declares why identity is one | `apps/docs/docs/operations/security.md` (RBAC); `README.md` | `ci.yml :: Python — Lint & Type-check` (`check_route_authz.py` — 224 of 245 state-changing routes authorize; the remaining 21 must each sit in a module carrying a written reason, checked in both directions so an undeclared module fails *and* a declaration describing no route fails) | GATED | **Proven by perturbation**: removing a real declaration and adding one for a nonexistent module were each run and each failed the gate. 218 → 224 authorizing. Two corrections worth recording: four MSSP routes guarding cross-tenant grants were counted as unauthorized while being correctly guarded by an organisation-role dependency, fixed in the gate rather than by bolting a redundant tenant permission onto a surface that is not tenant-scoped; and one route was gated and then **reverted**, because its existing pin argued every authenticated principal is a legitimate rater and the permission added here contradicted that — a prior decision with its reasoning written down outranks a later sweep that did not read it. One limit: the gate reads the signature, so it proves a decision is *made*, not that the permission chosen is the right one |
+| The audit log names the credential that acted, and a tenant can read its own trail | `apps/docs/docs/compliance/evidence-pack.md`; `apps/docs/docs/operations/security.md` | `ci.yml :: Python — Lint & Type-check` (`check_audit_coverage.py` — every actor-bearing `emit_audit` records the credential, `tenant_admin` holds `audit_log:read`, the modules whose *reads* are the sensitive act emit audit, and the coverage floor ratchets; 6 self-test cases including two controls) + `ci.yml :: Python — Tests` (`services/api/tests/test_audit_attribution_and_readership.py`) | GATED | **Proven against the pre-fix tree**: 7 of 11 fail at `3c04a21b`, and the gate found two live defects on its first run that the hand-written fix had missed. The honest limit is published rather than hidden: **7 of 86 endpoint modules emit audit at all**, the floor is set at that measured value rather than an aspiration, and the gate prints the largest unaudited surfaces by route count on success so the next step is named. Raising it is ordinary work, not a gap in the control. One correction recorded: the attribution rule first reported the SCIM writer, whose actor is already `scim:<token>` — a scheme-prefixed actor is self-attributing |
 
 ## Summary
 
-- GATED: 251
+- GATED: 252
 
 ## Summary
 
-- GATED: 251
+- GATED: 252
 
 ## Summary
 
-- GATED: 251
+- GATED: 252
 
 ## Summary
 
-- GATED: 251
+- GATED: 252
 
 ## Summary
 
-- GATED: 251
+- GATED: 252
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 
