@@ -361,6 +361,21 @@ jobs:
         run: python scripts/check_mock_data_gated.py --self-test
       - name: Verify sample data is gated behind demo mode
         run: python scripts/check_mock_data_gated.py
+      # The console half of that gate scans `apps/web/src` and nothing else,
+      # so the same two defects on the Python side had no gate at all: a
+      # module-level container a handler writes to (one object per process,
+      # no tenant, lost on restart) and fabricated records served with no
+      # demo gate. Both shipped — cross-tenant copilot conversations and
+      # saved searches, three invented shifts with named analysts, and
+      # invented STIX indicators.
+      #
+      # A sibling rather than an extension: that file is 1,181 lines of
+      # rules written against TypeScript shapes Python does not have, and
+      # Python has one the console does not. Recorded as a deviation.
+      - name: Python route-state gate — self-test
+        run: python3 scripts/check_python_route_state.py --self-test
+      - name: Verify no route module keeps state in a module global
+        run: python3 scripts/check_python_route_state.py
       # Sixty-one console calls reached an API with no Authorization header,
       # and every one of them worked: an uncredentialed request resolved to a
       # demo administrator in a development-class environment, which is how

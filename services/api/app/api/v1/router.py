@@ -78,7 +78,6 @@ from app.api.v1.endpoints import (
     saved_hunts,
     saved_views,
     scim_tokens,
-    shifts,
     sla,
     stix_taxii,
     tenant_provision,
@@ -310,7 +309,6 @@ api_router.include_router(llm_credentials.router)
 api_router.include_router(stix_taxii.router)
 
 # Shift handoff and SOC analyst scheduling
-api_router.include_router(shifts.router)
 
 # Deployment configuration and air-gap bundle management
 api_router.include_router(deployment.router)

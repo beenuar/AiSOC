@@ -271,6 +271,31 @@ DEMO_TAXII_COLLECTIONS: list[TAXIICollection] = [
 # ── Endpoints ────────────────────────────────────────────────────────────────
 
 
+def _demo_only() -> None:
+    """Refuse outside demo mode.
+
+    Everything these routes serve is invented: `DEMO_INDICATORS`,
+    `DEMO_BUNDLES` and `DEMO_TAXII_COLLECTIONS` are hand-written literals,
+    the POST routes append to those same module-level lists, and none of it
+    is tenant-scoped — so one tenant's POST was readable by every other, and
+    a restart lost the lot. It was served with no demo gate at all.
+
+    A 404 rather than a 501, because the honest answer to "show me this
+    tenant's STIX indicators" on a deployment that stores none is that there
+    is no such collection. The real TAXII 2.1 server backed by the tenant
+    IOC store is parity plan 6.10; when it lands, this helper and the
+    literals go with it.
+    """
+    if not settings.AISOC_DEMO_MODE:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "STIX and TAXII are not available on this deployment. The data these "
+                "routes served was sample content, not this tenant's threat intel."
+            ),
+        )
+
+
 @router.get("/indicators", response_model=IndicatorListResponse)
 async def list_indicators(
     user: AuthUser,
@@ -279,6 +304,7 @@ async def list_indicators(
     label: str | None = Query(default=None),
 ) -> IndicatorListResponse:
     """List STIX 2.1 indicators from the threat intelligence store."""
+    _demo_only()
     items = list(DEMO_INDICATORS)
     if label:
         items = [i for i in items if label in i.labels]
@@ -384,7 +410,13 @@ async def create_indicator(
         confidence=body.confidence,
         labels=body.labels,
     )
-    DEMO_INDICATORS.append(indicator)
+    # Not stored. The MISP push below is real: it translates the object and
+    # sends it to the configured instance. The storage was not — this used
+    # to append to a module-level list shared by every tenant and lost on
+    # restart, so a POST looked persisted and was neither durable nor
+    # private. Pushing without pretending to store is the honest half, and
+    # the tenant-scoped store arrives with the real TAXII server (parity
+    # plan 6.10).
 
     push_result: MispPushResult | None = None
     if _should_push(push_to_misp):
@@ -396,6 +428,7 @@ async def create_indicator(
 @router.get("/bundles", response_model=BundleListResponse)
 async def list_bundles(user: AuthUser) -> BundleListResponse:
     """List STIX 2.1 bundles."""
+    _demo_only()
     return BundleListResponse(items=DEMO_BUNDLES, total=len(DEMO_BUNDLES))
 
 
@@ -427,7 +460,13 @@ async def create_bundle(
         created=datetime.now(UTC).isoformat(),
         objects=body.objects,
     )
-    DEMO_BUNDLES.append(bundle)
+    # Not stored. The MISP push below is real: it translates the object and
+    # sends it to the configured instance. The storage was not — this used
+    # to append to a module-level list shared by every tenant and lost on
+    # restart, so a POST looked persisted and was neither durable nor
+    # private. Pushing without pretending to store is the honest half, and
+    # the tenant-scoped store arrives with the real TAXII server (parity
+    # plan 6.10).
 
     push_result: MispPushResult | None = None
     if _should_push(push_to_misp):
@@ -439,6 +478,7 @@ async def create_bundle(
 @router.get("/taxii/collections", response_model=TAXIICollectionListResponse)
 async def list_taxii_collections(user: AuthUser) -> TAXIICollectionListResponse:
     """List TAXII 2.1 collections for server compatibility."""
+    _demo_only()
     return TAXIICollectionListResponse(
         items=DEMO_TAXII_COLLECTIONS,
         total=len(DEMO_TAXII_COLLECTIONS),

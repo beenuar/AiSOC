@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **`/api/v1/shifts` is gone, and `/api/v1/threatintel/stix/*` reads answer 404 outside demo mode.** Neither had a caller: nothing in `apps/web`, no SDK, and no other service referenced either, and the console's shift page is demo-gated and renders its own sample data client-side. If you were calling them, you were reading records nobody entered.
+
+### Security
+
+- **Two route modules served hand-written records from shared lists, with no tenant filter and no demo gate.** `shifts.py` returned three invented shifts with named analysts, an `alerts_handled` count and a fabricated ticket id; `POST` inserted into that same module-level list and `PUT /{id}/handoff` wrote notes into it, so one tenant posted a handoff and another read it. `stix_taxii.py` did the same with invented indicators, bundles and TAXII collections.
+
+  The shift board is **deleted** rather than rebuilt. A route with no caller, serving data nobody entered, is not a feature with a bug.
+
+  The STIX reads answer **404** outside demo mode — not an empty list, because an empty list is a claim about this tenant's data and 404 is the true statement that the collection does not exist here. The real TAXII 2.1 server backed by the tenant IOC store is parity plan 6.10.
+
+  The two STIX `POST` routes stayed reachable, and that distinction is the point: what they *do* is real, translating the object and pushing it to the configured MISP instance. What was fake was the storage. They no longer append to the shared lists, so the cross-tenant write is gone without a working feature going with it — and six MISP push tests that would otherwise have had to be disabled still pass.
+
+- **`scripts/check_python_route_state.py` closes the class.** `check_mock_data_gated.py` scans `apps/web/src` and nothing else, so the Python side had no gate for either defect: a module-level container a handler writes to, which is one object per process with no tenant and no persistence, and fabricated records served with no demo gate. It parses with `ast` rather than matching text, because "does a function body assign to a name bound at module scope" is a scope question a regex cannot answer. **It found 21 occurrences on the first run.**
+
+  A sibling rather than an extension of the console gate, which the brief asked for: that file is 1,181 lines of rules written against TypeScript shapes Python does not have, and Python has one the console does not. Recorded as a deviation.
+
+  Two of its own rules were wrong first and are worth recording. A shape heuristic that fired on "a dict of dicts with several populated string fields" caught `compliance.FRAMEWORKS` (the real 24-control mapping), `inbox._TEMPLATE_CATALOG`, `translation._FIELD_MAP` and `explain._OCSF_BY_SOURCE` — four configuration tables, four false positives out of four detections, so the name is the signal now and the shape is only the detail. And the allowlist credited an entry whenever the name still existed rather than when it actually suppressed a finding, so the two STIX lists kept their excuse after their handlers stopped appending; it credits a suppression now, and immediately reported both as stale.
+
+  Fifteen entries remain, each naming where it closes. Five are not defects — a log de-duplicator, two caches of static artefacts, and global-by-design community content — and the rest point at the item that gives them a table.
+
+
 ### Security
 
 - **Copilot conversations and saved hunt searches were readable by every tenant.** Both lived in a module-level dict — `_CONVERSATIONS` in `services/agents/app/api/copilot.py` and `_SAVED_SEARCHES` in `hunt_search.py` — with no tenant column anywhere, and the list handlers took no principal at all. `GET /api/v1/copilot/conversations` returned every tenant's conversations to whoever asked, `GET /api/v1/copilot/conversations/{id}` returned any conversation to anyone holding its id, and `GET /api/v1/hunt/saved` did the same for saved searches.
@@ -7370,7 +7393,7 @@ nobody following the README could sign in.
   approved. The detector still runs, and the job summary lists every breaking
   change being permitted next to the CHANGELOG note that justified it. The
   approval is refused if there is no `### BREAKING` section under
-  `## [Unreleased]`, or if that section is byte-identical to the base branch's —
+  `, or if that section is byte-identical to the base branch's —
   checked in both directions, because "a BREAKING section exists" alone would
   let the first note in a release cycle excuse every later break in that cycle.
 
