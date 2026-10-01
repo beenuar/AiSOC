@@ -185,7 +185,9 @@ def _verdict(report: Report) -> int:
 
     total = sum(report.scanned.values())
     summary = ", ".join(f"{s} {n}" for s, n in sorted(report.scanned.items()))
-    note = f"; {len(report.unimportable)} service(s) not importable here" if report.unimportable else ""
+    # Named, not counted. "2 services not importable" tells a reader
+    # nothing about whether the one they care about was checked.
+    note = f". NOT CHECKED (could not import): {', '.join(sorted(report.unimportable))}" if report.unimportable else ""
     print(
         f"check_route_duplicates: OK — {total} route registration(s) across "
         f"{len(report.scanned)} service(s) ({summary}), no pair registered twice{note}."
