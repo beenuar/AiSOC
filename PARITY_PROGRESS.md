@@ -303,3 +303,43 @@ have no caller outside `lib/api.ts`, but 16 of those target routes that exist,
 and an unused-but-working client function is a product-surface judgement
 rather than a correctness defect. The six removed are the ones that were both
 uncalled and pointed at nothing.
+
+## Phase 1.4 — the gates are path-aware (2026-10-01)
+
+| Gate | What it closes |
+|---|---|
+| `check_module_reachability.py` (new) | A claim row could pass on a unit test of a module nothing imports. **889 of 926 modules reachable from 68 entry points; 37 allowlisted** with a reason each. Tests are deliberately not entry points: a module imported only by its own test is the shape being looked for |
+| `check_route_duplicates.py` (new) | Two modules under one prefix shadowing each other, which the static pass records in its own docstring as invisible to it. Names `agents: GET /api/v1/investigations/{run_id}` with both owners on the pre-phase tree |
+| `check_console_route_contract.py` (new, 1.3) | A console path that no service serves. 14 pre-fix, 0 after |
+| `check_claim_gate_matrix.py` (extended) | Every row now declares `core` or `full` (**232 core, 24 full**) and must name a runnable gate rather than prose |
+| `check_python_route_state.py` | The Python demo-state and module-global half. **Already shipped in v15.0.0**, so this sub-item is a deviation rather than work |
+| `check_console_auth_headers.py` (extended, 1.3) | A `useSWR` key held in a variable, which is how an uncredentialed compliance call survived the sweep meant to find it |
+
+### The reachability gate found its own bugs first
+
+Its first run reported **159** unreachable modules. Two were defects in the
+gate, not the tree: a package's `__init__` resolved `from .x import Y`
+against its *parent*, so every module a package re-exported read as dead;
+and importing `a.b.c` did not mark `a` and `a.b`, so 78 package markers
+read as dead because nothing names them directly. After both, **37**, and
+every one of those is real.
+
+It also independently named three modules the capability review had found by
+hand: the hunting agent, the pseudonymizer and the closure guardrails. That
+is the useful signal, because it means the gate would have caught them
+without anyone reading the code.
+
+### Deviations
+
+**D9. Two of 1.4's four gates already existed in part.** The Python demo-state
+and module-global check shipped as `check_python_route_state.py` in v15.0.0,
+so 1.4 adds nothing there. `check_route_shadowing.py` exists and is kept: it
+is the breadth pass that needs no service importable, and the new duplicate
+gate is the depth half rather than a replacement.
+
+**D10. Rows are not failed on a gate test importing an unreachable module.**
+The plan asks for it. The matrix's `Gate` cell is prose naming a workflow job
+or a file, not a resolvable import, so the rule would have to parse free text
+to decide what to import. Both halves exist and are enforced separately: every
+row names a runnable gate, and every module has an importer or a reason.
+Recorded rather than faked with a heuristic that would pass on anything.
