@@ -14,6 +14,7 @@ unset so the demo path never breaks.
 
 from __future__ import annotations
 
+import asyncio
 import itertools
 import json
 import uuid
@@ -22,11 +23,17 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 
 import structlog
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.security.tenant_scope import require_console_or_service_auth
+from app.api import conversation_store
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    TenantScopeError,
+    require_console_or_service_auth,
+    resolve_scoped_tenant,
+)
 
 logger = structlog.get_logger()
 
@@ -77,7 +84,23 @@ class CopilotConversation(BaseModel):
 # In-memory store (demo: resets on restart; production would use Postgres)
 # ---------------------------------------------------------------------------
 
-_CONVERSATIONS: dict[str, dict[str, Any]] = {}
+
+def _tenant_of(principal: TenantPrincipal) -> uuid.UUID:
+    """The one tenant this request may read and write.
+
+    Conversations lived in a module-level dict keyed by conversation id with
+    no tenant anywhere, and the list and fetch handlers bound no principal at
+    all — so `GET /conversations` returned every tenant's conversations to
+    whoever asked, and `GET /conversations/{id}` returned any conversation to
+    anyone holding its id. A copilot conversation carries the analyst's
+    question, which names hosts and users, and the model's answer, which
+    quotes the evidence it was grounded on.
+    """
+    try:
+        return resolve_scoped_tenant(principal)
+    except TenantScopeError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
 
 _SYNTHETIC_REPLIES = [
     (
@@ -182,51 +205,47 @@ async def _get_openai_reply(
 
 
 @router.get("/conversations")
-async def list_conversations(limit: int = 20) -> dict[str, Any]:
-    convs = sorted(
-        _CONVERSATIONS.values(),
-        key=lambda c: c["updatedAt"],
-        reverse=True,
-    )[:limit]
-    return {
-        "conversations": [
-            {
-                "id": c["id"],
-                "title": c["title"],
-                "updatedAt": c["updatedAt"],
-                "messageCount": len(c["messages"]),
-            }
-            for c in convs
-        ]
-    }
+async def list_conversations(
+    limit: int = 20,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+) -> dict[str, Any]:
+    """This tenant's conversations, newest first."""
+    conversations = await conversation_store.list_conversations(tenant_id=_tenant_of(principal), limit=limit)
+    return {"conversations": [c.summary() for c in conversations]}
 
 
 @router.get("/conversations/{conversation_id}")
-async def get_conversation(conversation_id: str) -> dict[str, Any]:
-    conv = _CONVERSATIONS.get(conversation_id)
-    if conv is None:
-        return {"id": conversation_id, "title": "Not found", "messages": []}
-    return {
-        "id": conv["id"],
-        "title": conv["title"],
-        "messages": conv["messages"],
-    }
+async def get_conversation(
+    conversation_id: str,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+) -> dict[str, Any]:
+    """One conversation, if it belongs to this tenant.
+
+    404 rather than the previous `{"title": "Not found", "messages": []}`
+    body with a 200. A 200 saying "not found" is a shape no client can
+    branch on, and it made "this id does not exist" and "this id is
+    somebody else's" look the same as a real empty conversation.
+    """
+    conversation = await conversation_store.get_conversation(tenant_id=_tenant_of(principal), conversation_id=conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such conversation.")
+    return conversation.full()
 
 
 @router.post("/chat", response_model=CopilotChatResponse)
-async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
-    conv_id = req.conversationId or str(uuid.uuid4())
+async def chat(
+    req: CopilotChatRequest,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+) -> CopilotChatResponse:
+    tenant_id = _tenant_of(principal)
     now = datetime.now(UTC).isoformat()
 
-    if conv_id not in _CONVERSATIONS:
-        _CONVERSATIONS[conv_id] = {
-            "id": conv_id,
-            "title": _title_from_message(req.message),
-            "messages": [],
-            "updatedAt": now,
-        }
-
-    conv = _CONVERSATIONS[conv_id]
+    # Read the existing turns under the tenant predicate, so a caller naming
+    # another tenant's conversation id gets a new conversation of their own
+    # rather than that one's history as model context.
+    existing = (
+        await conversation_store.get_conversation(tenant_id=tenant_id, conversation_id=req.conversationId) if req.conversationId else None
+    )
 
     user_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -234,9 +253,9 @@ async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
         "content": req.message,
         "timestamp": now,
     }
-    conv["messages"].append(user_msg)
 
-    reply_text, reply_source = await _get_openai_reply(conv, req.message)
+    history = {"messages": [*(existing.messages if existing else []), user_msg]}
+    reply_text, reply_source = await _get_openai_reply(history, req.message)
 
     assistant_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -244,11 +263,19 @@ async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
         "content": reply_text,
         "timestamp": datetime.now(UTC).isoformat(),
     }
-    conv["messages"].append(assistant_msg)
-    conv["updatedAt"] = assistant_msg["timestamp"]
+
+    # Both turns in one append, so two tabs on the same conversation cannot
+    # drop each other's messages the way a read-modify-write would.
+    stored = await conversation_store.append_messages(
+        tenant_id=tenant_id,
+        conversation_id=existing.id if existing else None,
+        user_id=None,
+        title=existing.title if existing else _title_from_message(req.message),
+        new_messages=[user_msg, assistant_msg],
+    )
 
     return CopilotChatResponse(
-        conversationId=conv_id,
+        conversationId=stored.id,
         reply=CopilotMessage(**assistant_msg),
         source=reply_source,
         notice=(
@@ -262,31 +289,49 @@ async def chat(req: CopilotChatRequest) -> CopilotChatResponse:
 
 
 @router.post("/chat/stream")
-async def chat_stream(req: CopilotChatRequest) -> StreamingResponse:
+async def chat_stream(
+    req: CopilotChatRequest,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+) -> StreamingResponse:
     """Stream a chat reply as NDJSON deltas."""
 
-    conv_id = req.conversationId or str(uuid.uuid4())
+    tenant_id = _tenant_of(principal)
     now = datetime.now(UTC).isoformat()
 
-    if conv_id not in _CONVERSATIONS:
-        _CONVERSATIONS[conv_id] = {
-            "id": conv_id,
-            "title": _title_from_message(req.message),
-            "messages": [],
-            "updatedAt": now,
-        }
+    existing = (
+        await conversation_store.get_conversation(tenant_id=tenant_id, conversation_id=req.conversationId) if req.conversationId else None
+    )
 
-    conv = _CONVERSATIONS[conv_id]
     user_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "role": "user",
         "content": req.message,
         "timestamp": now,
     }
-    conv["messages"].append(user_msg)
+    history = {"messages": [*(existing.messages if existing else []), user_msg]}
 
-    reply_text, reply_source = await _get_openai_reply(conv, req.message)
+    reply_text, reply_source = await _get_openai_reply(history, req.message)
     msg_id = str(uuid.uuid4())
+    assistant_msg: dict[str, Any] = {
+        "id": msg_id,
+        "role": "assistant",
+        "content": reply_text,
+        "timestamp": datetime.now(UTC).isoformat(),
+    }
+
+    # Persisted before the stream opens, not inside the generator. A client
+    # that disconnects mid-stream used to leave the assistant turn unwritten
+    # while the user's question had already been appended, so the next
+    # request fed the model a conversation ending in an unanswered question.
+    # The reply is fully computed by this point, so there is nothing to wait
+    # for.
+    stored = await conversation_store.append_messages(
+        tenant_id=tenant_id,
+        conversation_id=existing.id if existing else None,
+        user_id=None,
+        title=existing.title if existing else _title_from_message(req.message),
+        new_messages=[user_msg, assistant_msg],
+    )
 
     async def _stream() -> AsyncIterator[bytes]:
         # Provenance first: a consumer must be able to label the answer before
@@ -296,25 +341,13 @@ async def chat_stream(req: CopilotChatRequest) -> StreamingResponse:
         for i, word in enumerate(words):
             chunk = word + (" " if i < len(words) - 1 else "")
             yield (json.dumps({"delta": chunk, "done": False}) + "\n").encode()
-            # tiny delay to simulate streaming
-            import asyncio
-
             await asyncio.sleep(0.01)
-
-        assistant_msg: dict[str, Any] = {
-            "id": msg_id,
-            "role": "assistant",
-            "content": reply_text,
-            "timestamp": datetime.now(UTC).isoformat(),
-        }
-        conv["messages"].append(assistant_msg)
-        conv["updatedAt"] = assistant_msg["timestamp"]
 
         yield (
             json.dumps(
                 {
                     "done": True,
-                    "conversationId": conv_id,
+                    "conversationId": stored.id,
                     "messageId": msg_id,
                 }
             )

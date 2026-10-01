@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Copilot conversations and saved hunt searches were readable by every tenant.** Both lived in a module-level dict — `_CONVERSATIONS` in `services/agents/app/api/copilot.py` and `_SAVED_SEARCHES` in `hunt_search.py` — with no tenant column anywhere, and the list handlers took no principal at all. `GET /api/v1/copilot/conversations` returned every tenant's conversations to whoever asked, `GET /api/v1/copilot/conversations/{id}` returned any conversation to anyone holding its id, and `GET /api/v1/hunt/saved` did the same for saved searches.
+
+  This is not chat history. A copilot conversation carries the analyst's question, which names hosts and users, and the model's answer, which quotes the alert evidence it was grounded on. A saved hunt search is the query an analyst wrote against their own telemetry.
+
+  **Both routers already authenticated every request** — each declared `dependencies=[Depends(require_console_or_service_auth)]` — and that is the detail worth keeping. Authenticated and scoped are different properties, and the gap between them is where this lived: the principal was verified and then discarded, because no handler took it as a parameter. A module global has no tenant, so the moment a handler writes to one the read can no longer be scoped; the information needed to scope it was never stored. That is why these moved to tables rather than gaining a filter.
+
+  Migration `076` adds `aisoc_copilot_conversations` and `aisoc_saved_hunt_searches`, both with `tenant_id NOT NULL` so a row cannot exist outside a tenant, RLS enabled and forced, and an explicit grant to `aisoc_app` (`ALTER DEFAULT PRIVILEGES` only covers tables created by the role that ran it). Every statement in `conversation_store.py` carries the predicate as well as the policy, because a policy is only as good as the `set_config` that precedes it.
+
+  Three smaller corrections came with it. `GET /conversations/{id}` answered **200** with `{"title": "Not found", "messages": []}`, a shape no client can branch on and one that made a missing id, somebody else's id and a real empty conversation identical; it is a 404 now. The chat handlers did a read-modify-write on the message list, so two tabs on one conversation each dropped the other's turn; both turns now append in a single statement. And the streaming handler persisted the assistant's reply **inside the generator**, so a client disconnecting mid-stream left the user's question stored with no answer and the next request fed the model a conversation ending in an unanswered question — the reply is fully computed before the stream opens, so it is written there instead.
+
+
+### Security
+
 - **Both SSO handlers minted a signed session for an identity nobody authenticated.** `app/auth/saml.py` issued a token for `stub-saml-user` whenever `python3-saml` failed to import, and `python3-saml` was declared in **no install path at all** — so the `ImportError` branch was not a fallback, it was the only reachable path through the assertion consumer on every deployment. `app/auth/oidc.py` did the same for `oidc-stub-user` whenever `OIDC_ISSUER` or `OIDC_CLIENT_ID` was unset, which is the default. Both set `aisoc_token` as a cookie from inside an exception handler that had verified nothing.
 
   The only reason this was not already a full authentication bypass is that the API verifies a bearer token and does not read that cookie. A cookie the API ignores today is a cookie the API might read tomorrow, and making SSO complete a sign-in is exactly what Phase 4 of the parity plan does — so the stubs had to go before SSO was made to work, not after.

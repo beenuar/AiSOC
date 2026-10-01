@@ -23,7 +23,13 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.security.tenant_scope import require_console_or_service_auth
+from app.api import conversation_store
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    TenantScopeError,
+    require_console_or_service_auth,
+    resolve_scoped_tenant,
+)
 
 logger = structlog.get_logger()
 
@@ -91,10 +97,21 @@ class SavedSearch(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# In-memory store (demo; production would persist to Postgres)
+# Tenant-scoped persistence
 # ---------------------------------------------------------------------------
+#
+# This was a module-level dict with no tenant, listed by a handler that bound
+# no principal, so one analyst's saved searches were returned to every other
+# tenant and a restart lost all of them. A saved hunt search is the query an
+# analyst wrote against their own telemetry, which names their hosts, their
+# users and what they were looking for.
 
-_SAVED_SEARCHES: dict[str, SavedSearch] = {}
+
+def _tenant_of(principal: TenantPrincipal) -> uuid.UUID:
+    try:
+        return resolve_scoped_tenant(principal)
+    except TenantScopeError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
 
 
 def _synthetic_hits(query: str, limit: int) -> list[dict[str, Any]]:
@@ -180,28 +197,60 @@ async def hunt_search(query: HuntQuery) -> HuntResponse:
 
 
 @router.get("/saved")
-async def list_saved_searches() -> dict[str, list[dict[str, Any]]]:
-    """Return all saved searches."""
-    return {"searches": [s.model_dump() for s in _SAVED_SEARCHES.values()]}
+async def list_saved_searches(
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+) -> dict[str, list[dict[str, Any]]]:
+    """This tenant's saved searches, newest first."""
+    rows = await conversation_store.list_saved_searches(tenant_id=_tenant_of(principal))
+    return {
+        "searches": [
+            {
+                "id": row.id,
+                "name": row.name,
+                "query": row.query,
+                "language": row.backend,
+                "createdAt": row.updated_at,
+                "pinned": False,
+            }
+            for row in rows
+        ]
+    }
 
 
 @router.post("/saved", response_model=SavedSearch, status_code=201)
-async def save_search(data: SavedSearchCreate) -> SavedSearch:
-    """Persist a new saved search."""
-    ss = SavedSearch(
-        id=str(uuid.uuid4()),
+async def save_search(
+    data: SavedSearchCreate,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+) -> SavedSearch:
+    """Persist a new saved search against the caller's tenant."""
+    row = await conversation_store.save_search(
+        tenant_id=_tenant_of(principal),
+        user_id=None,
         name=data.name,
         query=data.query,
-        language=data.language,
-        createdAt=datetime.now(UTC).isoformat(),
+        backend=data.language,
     )
-    _SAVED_SEARCHES[ss.id] = ss
-    return ss
+    return SavedSearch(
+        id=row.id,
+        name=row.name,
+        query=row.query,
+        language=row.backend,
+        createdAt=row.updated_at,
+    )
 
 
 @router.delete("/saved/{search_id}", status_code=204, response_model=None)
-async def delete_saved_search(search_id: str) -> None:
-    """Delete a saved search by ID."""
-    if search_id not in _SAVED_SEARCHES:
+async def delete_saved_search(
+    search_id: str,
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
+) -> None:
+    """Delete one of this tenant's saved searches.
+
+    The delete carries the tenant predicate, so an id belonging to another
+    tenant removes nothing and answers 404 — the same answer as an id that
+    does not exist, which is what stops the route being a probe for whether
+    one does.
+    """
+    deleted = await conversation_store.delete_saved_search(tenant_id=_tenant_of(principal), search_id=search_id)
+    if not deleted:
         raise HTTPException(status_code=404, detail="saved search not found")
-    del _SAVED_SEARCHES[search_id]
