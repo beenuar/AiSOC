@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import logging
 import time
+from functools import lru_cache
 from dataclasses import dataclass, field
 from typing import Any, Final
 
@@ -139,33 +140,32 @@ class PermissionCache:
 CACHE = PermissionCache()
 
 
-#: Built once and reused. `from_url` is lazy, so this costs nothing until
-#: the first command, and rebuilding it per call would open a connection
-#: per permission check.
-_CLIENT: Any | None = None
-_CLIENT_TRIED: bool = False
-
-
+@lru_cache(maxsize=1)
 def _redis_client() -> Any | None:
-    global _CLIENT, _CLIENT_TRIED  # noqa: PLW0603
-    if _CLIENT_TRIED:
-        return _CLIENT
-    _CLIENT_TRIED = True
+    """Built once and reused.
+
+    `from_url` is lazy, so this costs nothing until the first command, and
+    rebuilding it per call would open a connection per permission check.
+
+    Memoised rather than held in a pair of module globals. The first draft
+    used `_CLIENT` plus a `_CLIENT_TRIED` flag to distinguish "no client"
+    from "not asked yet", which CodeQL correctly flagged as a global whose
+    only job was bookkeeping the cache already does — `lru_cache` caches a
+    `None` return just as happily as a client.
+    """
     try:
         from redis.asyncio import from_url  # noqa: PLC0415
 
         from app.core.config import settings  # noqa: PLC0415
 
-        _CLIENT = from_url(str(settings.REDIS_URL), decode_responses=True)
+        return from_url(str(settings.REDIS_URL), decode_responses=True)
     except Exception:  # noqa: BLE001 - absence is a supported configuration
-        _CLIENT = None
-    return _CLIENT
+        return None
 
 
 def reset_for_tests() -> None:
     """Drop the cache and the client handle. Tests only."""
-    global _CLIENT, _CLIENT_TRIED  # noqa: PLW0603
-    _CLIENT, _CLIENT_TRIED = None, False
+    _redis_client.cache_clear()
     CACHE.clear()
     CACHE._warned_no_redis = False
 
