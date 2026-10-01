@@ -47,9 +47,13 @@ class TestTheCredentialIsRecorded:
             role="soc_analyst",
             email="a@example.com",
             scopes=["alerts:read"],
-            api_key_prefix="aisoc_live_ab12",
+            # Deliberately not key-shaped. A realistic `aisoc_live_...`
+            # literal is indistinguishable from a real credential to a
+            # secret scanner, and a test fixture is not worth an
+            # allowlist entry that would also cover a genuine leak.
+            api_key_prefix="prefix-under-test",
         )
-        assert user.api_key_prefix == "aisoc_live_ab12"
+        assert user.api_key_prefix == "prefix-under-test"
 
     def test_emit_audit_accepts_and_records_it(self) -> None:
         from app.services import audit
