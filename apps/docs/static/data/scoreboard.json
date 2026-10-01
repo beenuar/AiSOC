@@ -3,9 +3,9 @@
   "_readme": "Append-only public benchmark scoreboard. Each row is one eval run. Substrate rows (no LLM, deterministic) are marked substrate:true and MUST NOT be quoted as live agent performance. Wet-eval rows (substrate:false) are appended by the T5.5 weekly CI workflow once it lands. Newest row first.",
   "rows": [
     {
-      "date": "2026-09-29",
-      "agent_version": "v14.0.0",
-      "commit_sha": "ebaa19a1",
+      "date": "2026-10-01",
+      "agent_version": "v15.0.0",
+      "commit_sha": "a227f4c3",
       "substrate": true,
       "eval_mode": "substrate-only",
       "mitre_accuracy": 0.97,
