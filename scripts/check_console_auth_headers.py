@@ -433,9 +433,9 @@ def inspect(root: pathlib.Path) -> Report:
                 # sees a bare identifier with no path in it. That is how
                 # `FrameworkView.tsx` kept an uncredentialed compliance call
                 # through the sweep that was meant to find exactly this.
-                key = parts[0].strip()
-                if key.isidentifier():
-                    binding = _definition_of(source, key)
+                swr_key = parts[0].strip()
+                if swr_key.isidentifier():
+                    binding = _definition_of(source, swr_key)
                     if binding is not None:
                         url = _api_path_in(binding)
             if url is None:

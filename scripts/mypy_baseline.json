@@ -34,8 +34,7 @@
       "assignment": 1
     },
     "scripts/run_evals.py": {
-      "attr-defined": 9,
-      "index": 13,
+      "attr-defined": 3,
       "no-redef": 1
     },
     "scripts/upgrade_playbooks.py": {
