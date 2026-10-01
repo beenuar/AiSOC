@@ -141,7 +141,7 @@ AUTHZ_CALLS = frozenset(
 #: interchangeable with a tenant role. This gate reads `require_permission`
 #: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
 #: still resolve that scope.
-MAX_UNAUTHORIZED = 28
+MAX_UNAUTHORIZED = 26
 
 
 def _authorizing_names(tree: ast.Module) -> set[str]:
