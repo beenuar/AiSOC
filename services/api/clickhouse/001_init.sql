@@ -4,7 +4,8 @@
 CREATE DATABASE IF NOT EXISTS aisoc;
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- Raw OCSF events (hot tier - 30 days MergeTree)
+-- Raw OCSF events (hot tier, 90 days: see the TTL below, which is what
+-- actually governs. This comment said 30 days over a 90 DAY TTL.)
 -- ──────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS aisoc.raw_events (
     event_id        UUID DEFAULT generateUUIDv4(),

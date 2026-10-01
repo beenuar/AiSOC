@@ -19,10 +19,18 @@ as a JSON string. The native ``match_when`` specs were authored against exactly
 those flat connector fields, so ``matches(rule.match_when, json.loads(raw_data))``
 is the correct evaluation contract.
 
-Performance: rules are indexed by ``product`` so an event only evaluates its
-own product's rules plus product-agnostic rules, keeping per-event work far
-below the full 817-rule corpus. The engine is pure/synchronous; the consumer
-calls it inline (the corpus is small and the matcher is regex/dict work).
+Performance: every event is evaluated against the **whole corpus**. A
+product-based pre-filter was tried and removed, because connector product
+names do not line up with spec products (``aws_cloudtrail`` against ``aws``,
+``crowdstrike_falcon`` against ``edr``) and any such filter silently drops
+real matches. See ``_candidates``, which returns ``self._rules`` unchanged
+and records that reasoning. The full pass is cheap because the matcher
+short-circuits on the first absent field, so a benign event touches almost
+no rule past its first clause. The engine is pure and synchronous; the
+consumer calls it inline.
+
+Indexing by log source is parity plan 6.9, and it has to solve the
+product-name mapping first.
 """
 
 from __future__ import annotations

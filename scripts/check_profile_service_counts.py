@@ -68,6 +68,13 @@ ONE_SHOT: frozenset[str] = frozenset({"ollama-pull"})
 #: integer near the word "services": a gate that guesses which numbers are
 #: claims would either miss the one that matters or flag prose forever.
 CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
+    # Three figures that had drifted to 10, fifteen and fifteen against a
+    # compose file supporting neither. Registered rather than merely
+    # corrected: an unregistered figure is one nobody notices going stale,
+    # which is how all three got there.
+    ("install.sh", "core", r"Starting the (\d+)-service CORE stack"),
+    ("apps/docs/docs/deployment/walkthrough.mdx", "core", r"starts the (\d+) CORE services"),
+    ("Makefile", "core", r"`missing` on all (\d+) first-party services"),
     # The production deployment page. `prod:full` is a separate figure from
     # `full` because the production stack deliberately does not start kafka-ui,
     # and a reader comparing the two pages would otherwise find a discrepancy

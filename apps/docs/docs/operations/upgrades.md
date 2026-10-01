@@ -125,6 +125,26 @@ docker compose -f docker-compose.yml -f infra/compose/docker-compose.dev.yml up 
 
 Major releases occasionally ship one-way migrations (e.g. column drops). When that's the case, the CHANGELOG flags the migration as "irreversible" and the only rollback is restoring from the database snapshot you took in step 2 of the pre-upgrade checklist.
 
+## Upgrading across a major
+
+Every major below changes behaviour rather than only schema, so read the row
+for each one you are crossing. The authoritative list of what breaks is the
+`### BREAKING` section of [`CHANGELOG.md`](https://github.com/beenuar/AiSOC/blob/main/CHANGELOG.md);
+this table says what an operator has to **do**.
+
+| From, to | What changes | What you do |
+|---|---|---|
+| any, **v10.0.0** | Services stop connecting to Postgres as a superuser, so the 92 row-level security policies begin to apply. The four services running their own alembic chain migrate as the owner, not as the app role. | Run the migrations with `DATABASE_MIGRATION_URL` set to the owning role. A service that still connects as a superuser bypasses every policy, so check the role before and after. |
+| v10, **v11.0.0** | `POST /v1/ingest` and `/v1/ingest/batch` require a credential. CORE needs **8 GB of memory and 20 GB of disk**, up from about 6.5 GB. | Mint an ingest token and set it on every producer before upgrading, or ingestion stops. Check the host has the headroom first. |
+| v11, **v12.0.0** | The actions service returns 503 on every mutating route, and the realtime edge rejects every connection, until their required secrets are set. | Set them before you start the stack. Both failures are deliberate and loud. |
+| v12, **v13.0.0** | 75 state-changing routes require a permission they did not require before, and several move to `settings:write`, which `soc_analyst`, `soc_lead` and `threat_hunter` do not hold. | Expect HTTP 403 where operators previously got 200. Review who needs `settings:write` before upgrading, not after. |
+| v13, **v14.0.0** | No route will confer a role, scope or organisation membership beyond the caller's own authority, and `platform_admin` and `admin` are unreachable from every API route. | The only way to mint a wildcard role is `python -m app.scripts.bootstrap_admin` against the database. Any automation that created one through the API stops working. |
+| v14, **v15.0.0** | `/api/v1/shifts` is removed and `/api/v1/threatintel/stix/*` reads answer 404 outside demo mode. `make up` starts a production-class stack and `AISOC_DEV_MODE` no longer defaults to on. | Delete any caller of those routes; neither served data anyone entered. Set `ENVIRONMENT=development` explicitly if you were relying on the dev auth bypass, and expect previously silent warnings to become boot refusals. |
+
+Upgrading more than one major at a time is supported but untested as a single
+step. Do them one at a time, running migrations between each, so that a
+failure names the version that caused it.
+
 ## Version skew
 
 Within a given major version, the following components are guaranteed to be wire-compatible across one minor version of skew:

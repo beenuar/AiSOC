@@ -10,8 +10,11 @@ Runs the YAML hunt corpus on the cadence declared per hunt. Each tick:
 
 Telemetry source resolution — in priority order:
 
-* ``HUNT_TELEMETRY_PROVIDER`` env var set to ``synthetic`` (the default in
-  dev/CI) reads from
+* ``HUNT_TELEMETRY_PROVIDER`` env var set to ``synthetic``. This is the
+  default **everywhere, not only in dev and CI**, and it is the only provider
+  with an implementation: scheduled hunts therefore run against a fixture
+  corpus rather than tenant data on every deployment. Parity plan 6.1 points
+  them at federated search. It reads from
   ``services/agents/tests/eval_data/synthetic_telemetry.jsonl`` and treats
   each line as a discrete event. This is what the substrate eval uses and
   is what the public benchmark scoreboard scores against.

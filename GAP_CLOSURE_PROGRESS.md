@@ -466,13 +466,16 @@ suites' job, and anything at all against a live vendor MCP server.
 
 ## Phase 11: File and URL analysis provider contract
 
-- [!] **Phase 11 is not this program's to build.** Another agent is building it
-  in parallel against the MalwareAnalyzer API, whose access the maintainer has
-  supplied. Recorded here so the phase is not double-built, and so a later
-  session does not read the unticked boxes as open work.
-  - [!] 11.1 Interface, CAPEv2 reference provider, mock, documented commercial slot.
-  - [!] 11.2 Upload policy: hash lookup first, disclosure off by default, air-gap refuses non-local.
-  - [!] 11.3 Wiring to enrichment, phishing attachments and the agent tool surface.
+- [x] **Phase 11 shipped in v12.0.0.** It was marked blocked here because
+  another agent was building it in parallel, and the marker outlived the work:
+  the tree carries `services/api/app/services/sandbox/base.py` with the CAPEv2,
+  mock and MalwareAnalyzer providers, the upload policy with migration
+  `064_sandbox_upload_policy.sql` and `scripts/check_sandbox_upload_policy.py`,
+  the enrichment and agent-tool wiring, and six routes at
+  `services/api/app/api/v1/endpoints/sandbox.py`. Corrected by parity 1.2.
+  - [x] 11.1 Interface, CAPEv2 reference provider, mock, documented commercial slot.
+  - [x] 11.2 Upload policy: hash lookup first, disclosure off by default, air-gap refuses non-local.
+  - [x] 11.3 Wiring to enrichment, phishing attachments and the agent tool surface.
 
 ## Phase 12: Production proof and a stable release channel
 

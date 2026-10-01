@@ -11,7 +11,9 @@ FP / benign / benign_true_positive verdicts are auto-closed; true_positive and
 needs_review escalate into the full triage → enrichment → investigation
 pipeline.
 
-Metrics (module-level counters) are exposed via the /triage/stats API.
+Metrics are module-level counters. **No route exposes them**: the
+``/triage/stats`` endpoint this used to name has never existed in the tree.
+They are read in-process and by tests.
 """
 
 from __future__ import annotations

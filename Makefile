@@ -177,7 +177,7 @@ up-full: env _ports _refresh
 # `pull_policy: missing` is correct for a pinned tag — `v12.0.0` is immutable,
 # so once it is local there is nothing to fetch — and wrong for `latest`, which
 # is republished on every merge to main. With `AISOC_VERSION=latest` (the
-# default) and `missing` on all fifteen first-party services, `git pull &&
+# default) and `missing` on all 16 first-party services, `git pull &&
 # make up` ran brand-new compose configuration against whatever images the
 # machine happened to have. Nothing anywhere told an operator to pull.
 #

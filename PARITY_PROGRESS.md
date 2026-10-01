@@ -247,3 +247,24 @@ says to re-derive rather than copy:
   numbers; publishing one of them under the name `executable` was not, so the
   index now reports `executable_detections`, `reference_only_detections` and
   `not_a_detection` separately.
+
+## Phase 1.2 — documentation drift cleared (2026-10-01)
+
+Generators fixed where a generator owned the number, per the plan's rule.
+
+| Drift | Was | Now |
+|---|---|---|
+| `playbooks/README.md` | 50 playbooks across 9 directories | 62 across 21, the figure the marketplace index already published |
+| Hunt scheduler docstring | synthetic is "the default in dev/CI" | synthetic is the default **everywhere** and the only provider implemented, so scheduled hunts run on a fixture corpus on every deployment. Parity 6.1 |
+| Detection engine docstring | "rules are indexed by `product`" over an 817-rule corpus | the whole corpus is evaluated per event; `_candidates` returns `self._rules` unchanged and the docstring now records why a product pre-filter was removed. Indexing is parity 6.9 |
+| Auto-triage docstring | metrics "exposed via the /triage/stats API" | no route exposes them; that endpoint has never existed |
+| `install.sh`, `walkthrough.mdx`, `Makefile` | 10, fifteen, fifteen | **16**, derived by `check_profile_service_counts.py`, and all three now **registered** in its `CLAIM_SITES` so none can drift again. 18 published figures became 21 |
+| ClickHouse schema comment | "hot tier, 30 days" over a `90 DAY` TTL | says 90 and points at the TTL that governs |
+| Upgrade guide | no per-major section at all | a table covering **v10 through v15**, each row saying what an operator must do, derived from each major's own `### BREAKING` section |
+| `GAP_CLOSURE_PROGRESS.md` Phase 11 | `[!]` blocked | `[x]`, with every file it claims verified to exist |
+| CONTRIBUTING | Python 3.12, four severity tiers, hand-written connector docs | 3.11 (what CI runs), five tiers with the no-collapse rule, generated pages |
+
+The registration matters more than the correction. Three figures had drifted
+to numbers the compose file never supported, and an unregistered figure is one
+nobody notices going stale, which is how all three got there. Proven by
+drifting `install.sh` to 11 and watching the gate name it.

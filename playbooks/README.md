@@ -10,7 +10,9 @@ rollback paths.
 ```
 playbooks/
 └── packs/
-    └── v1/                       # Canonical, versioned production pack (50 playbooks)
+    └── v1/                       # Canonical, versioned production pack (62 playbooks
+    │                                 #   across 21 directories; the figure
+    │                                 #   marketplace/index.json publishes)
         ├── account-takeover/     # 5  — ATO, MFA fatigue, session theft, OAuth abuse
         ├── ransomware/           # 5  — host isolate, shadow-copy, fileserver, C2, exposure
         ├── bec/                  # 5  — inbox rules, payment redirect, impersonation, token theft

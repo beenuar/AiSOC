@@ -781,8 +781,9 @@ run_demo() {
     return 0
   fi
   section "Starting AiSOC (CORE profile)"
-  info "Starting the 10-service CORE stack: postgres, redis, kafka, ingest,"
-  info "fusion, api, agents, realtime and the web console."
+  info "Starting the 16-service CORE stack. Validated against docker-compose.yml"
+  info "by scripts/check_profile_service_counts.py, which refuses a figure here"
+  info "that the compose file does not support."
   info ""
   info "This is the same stack 'make up' starts and the same one CI tests."
   info "It runs the real pipeline: an event you send is normalized, placed on"

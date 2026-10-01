@@ -97,7 +97,7 @@ discover it.
 
 | Tool   | Version  | Why this one                                            |
 |--------|----------|---------------------------------------------------------|
-| Python | 3.12     | The API and agent services; 3.11 also works locally      |
+| Python | 3.11     | What CI runs and what every image ships. 3.12 is not tested |
 | Node   | 22       | `apps/web`, `services/realtime`, `services/mcp`          |
 | pnpm   | 8.15.1   | Pinned in `package.json`; a different major resolves differently |
 | Go     | 1.26     | Every `go.mod`, gated by `scripts/check_toolchain_versions.py` |
@@ -374,7 +374,10 @@ class MyConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict]: ...  # raw vendor JSON, no normalization
 
-    def normalize(self, raw_event: dict) -> dict: ...  # OCSF-aligned shape; severity ∈ {"info","low","medium","high"}
+    # Five tiers, not four. A vendor ladder that publishes a distinct
+    # `critical` must map to `critical` and must never be collapsed into
+    # `high`: see the severity section of the connector platform doc.
+    def normalize(self, raw_event: dict) -> dict: ...  # severity in {"info","low","medium","high","critical"}
 ```
 
 Field types are `text`, `secret`, `select` (with `options`), `textarea`,
@@ -430,7 +433,11 @@ The bundled test suite already runs against 100+ tests across 9 connectors
 
 ### 5. Docs
 
-Add `apps/docs/docs/connectors/<connector-id>.md` with prereqs, exact
+Connector pages are **generated** by `scripts/generate_connector_docs.py` from
+your `schema()`, so run it rather than writing the page by hand. An existing
+hand-written page wins over the convention and is left alone, but it must
+still mention every required and secret field or the gate fails. If you are
+writing one by hand anyway, it needs prereqs, exact
 permissions/scopes, secret rotation walkthrough, severity heuristics
 table (mirrors what's in your `normalize()`), and a troubleshooting
 section. Add the new page to `apps/docs/sidebars.ts` under the
