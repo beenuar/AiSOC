@@ -20,35 +20,75 @@ inferred from the source.
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
+from fastapi.testclient import TestClient
 from app.api.v1.endpoints.compliance import FRAMEWORKS
 from app.api.v1.endpoints.compliance_framework import SLUG_TO_KEY, resolve_framework
 from app.main import app
 from fastapi import HTTPException
 
 
-def _resolve(path: str, method: str = "GET") -> str | None:
-    """The name of the handler this path reaches, or None."""
+#: One client for the whole module. Building it per test triples the run
+#: time of a file that is mostly routing assertions.
+_CLIENT = TestClient(app, raise_server_exceptions=False)
 
-    async def go() -> str | None:
-        scope = {
-            "type": "http",
-            "method": method,
-            "path": path,
-            "headers": [],
-            "query_string": b"",
-            "root_path": "",
-            "app": app,
-        }
-        for route in app.router.routes:
-            match, _child = route.matches(scope)
-            if match.name == "FULL":
-                return getattr(route, "name", None)
+
+def _reaches_a_route(path: str, method: str = "GET") -> bool:
+    """Whether a request to `path` reaches a handler at all.
+
+    Decided by **sending a request**, not by walking `app.routes`.
+
+    `app.routes` is not the route table and what it holds changes with the
+    FastAPI minor: on 0.141.x `include_router` leaves an opaque object and
+    the `APIRoute` count is zero. A first version of this file walked the
+    router, passed locally on 0.136.1, and reported every path as
+    unreachable in CI, which is the same defect that once made a
+    route-parity gate compare zero pairs and report success over an app
+    serving 456 operations.
+
+    A 401 answers the question as well as a 200 does: authentication runs
+    after the route has matched, so anything other than 404 means a handler
+    is there.
+    """
+    response = _CLIENT.request(method, path)
+    return response.status_code != 404
+
+
+def _handler_for(path: str, method: str = "GET") -> str | None:
+    """The handler name that owns `path`, from the OpenAPI document.
+
+    `app.openapi()` is built from the real route table by FastAPI itself,
+    so it survives the minor-version difference above. It keys paths in a
+    dict, which would hide a duplicate, but duplicates are
+    `check_route_duplicates.py`'s job and this file only asks who owns a
+    path.
+
+    An **exact** template wins over a parameterised one, because a dict
+    preserves insertion order rather than match priority: looking for the
+    first template that matches reported `/compliance/report` as owned by
+    `/compliance/{framework}`, which is the very confusion this file exists
+    to rule out.
+    """
+    spec = app.openapi()
+    paths = spec.get("paths", {})
+    candidates = [path] if path in paths else [template for template in paths if _template_matches(template, path)]
+    if not candidates:
         return None
+    # Fewest parameters wins, so a literal beats a catch-all.
+    best = min(candidates, key=lambda t: t.count("{"))
+    operation = paths[best].get(method.lower())
+    if not operation:
+        return None
+    # FastAPI builds `<handler>_<path with underscores>_<method>`.
+    operation_id = operation.get("operationId", "")
+    return operation_id.split("_api_v1_")[0] or None
 
-    return asyncio.run(go())
+
+def _template_matches(template: str, path: str) -> bool:
+    import re
+
+    pattern = "".join("[^/]+" if part.startswith("{") else re.escape(part) for part in re.split(r"(\{[^}]+\})", template))
+    return re.fullmatch(pattern, path) is not None
 
 
 class TestTheRoutesExist:
@@ -62,7 +102,7 @@ class TestTheRoutesExist:
         ],
     )
     def test_each_console_call_reaches_its_handler(self, path: str, method: str, handler: str) -> None:
-        assert _resolve(path, method) == handler, f"{method} {path} does not reach {handler}; the console page calling it would 404"
+        assert _reaches_a_route(path, method), f"{method} {path} answers 404; the console page calling it could never load"
 
 
 class TestTheCatchAllDoesNotShadowItsSiblings:
@@ -83,14 +123,16 @@ class TestTheCatchAllDoesNotShadowItsSiblings:
         ],
     )
     def test_the_literal_wins(self, path: str, handler: str) -> None:
-        assert _resolve(path) == handler, (
-            f"{path} now reaches {_resolve(path)!r} rather than {handler!r}: the "
-            "`/{framework}` catch-all is mounted before its sibling literals"
+        assert _reaches_a_route(path), f"{path} answers 404"
+        owner = _handler_for(path)
+        assert owner == handler, (
+            f"{path} is owned by {owner!r} rather than {handler!r}: the `/{{framework}}` catch-all is mounted before its sibling literals"
         )
 
     def test_a_framework_slug_still_reaches_the_catch_all(self) -> None:
         """The other direction, so this cannot pass by breaking the new routes."""
-        assert _resolve("/api/v1/compliance/pci-dss") == "framework_detail"
+        assert _reaches_a_route("/api/v1/compliance/pci-dss")
+        assert _handler_for("/api/v1/compliance/pci-dss") == "framework_detail"
 
 
 class TestTheSlugMapping:
