@@ -137,6 +137,7 @@ class TestHostedEgress:
         # session that has seen the evidence.
         session = egress_privacy.open_session(model="gpt-4o-mini", base_url="https://api.openai.com/v1")
         session.redact_messages([_Message(PROMPT)])
+        assert session.pseudonymizer is not None, "a hosted provider must open a session"
         redacted_host = session.pseudonymizer.redact(EVIDENCE["hostname"])
         restored = session.restore(_Message(f"Isolate {redacted_host} immediately."))
         assert EVIDENCE["hostname"] in restored.content, (

@@ -8629,6 +8629,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/kill-switch:
+    get:
+      tags:
+      - autonomy
+      summary: Is autonomous action frozen
+      description: 'Readable by any authenticated user in the tenant.
+
+
+        Deliberately not behind a write permission: an analyst watching the
+
+        queue stop moving needs to be able to find out why without asking an
+
+        administrator.'
+      operationId: read_kill_switch_api_v1_kill_switch_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitchState'
+      security:
+      - HTTPBearer: []
+  /api/v1/kill-switch/engage:
+    post:
+      tags:
+      - autonomy
+      summary: Freeze autonomous closure and action dispatch for this tenant
+      operationId: engage_api_v1_kill_switch_engage_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngageRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitchState'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/kill-switch/release:
+    post:
+      tags:
+      - autonomy
+      summary: Resume autonomous closure and action dispatch
+      operationId: release_api_v1_kill_switch_release_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitchState'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/ledger/{run_id}/publish/preview:
     post:
       tags:
@@ -22524,6 +22601,19 @@ components:
       - override_note
       - parameter_overrides
       title: EffectiveRuleOut
+    EngageRequest:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 8
+          title: Reason
+          description: 'Why. Required: the next operator has to be able to tell a
+            deliberate freeze from a forgotten test.'
+      type: object
+      required:
+      - reason
+      title: EngageRequest
     EntityNeighborsResponse:
       properties:
         entity_id:
@@ -25434,6 +25524,37 @@ components:
       - created_at
       - created_by
       title: KBDocResponse
+    KillSwitchState:
+      properties:
+        engaged:
+          type: boolean
+          title: Engaged
+        scope:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Scope
+          description: global | tenant, when engaged
+        reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reason
+        engaged_by:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Engaged By
+        engaged_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Engaged At
+      type: object
+      required:
+      - engaged
+      title: KillSwitchState
     KpiBarTargetsOut:
       properties:
         false_positive_rate_max_pct:
@@ -29349,6 +29470,17 @@ components:
         under (``principal``, ``network``, ``workflow``, ``tenant``). One
 
         entity belongs to exactly one group; we don''t duplicate rows.'
+    ReleaseRequest:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 8
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: ReleaseRequest
     ReplaceRulesRequest:
       properties:
         yaml:
