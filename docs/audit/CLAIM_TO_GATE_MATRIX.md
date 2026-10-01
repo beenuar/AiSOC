@@ -262,26 +262,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | The audit log names the credential that acted, and a tenant can read its own trail | `apps/docs/docs/compliance/evidence-pack.md`; `apps/docs/docs/operations/security.md` | `ci.yml :: Python — Lint & Type-check` (`check_audit_coverage.py` — every actor-bearing `emit_audit` records the credential, `tenant_admin` holds `audit_log:read`, the modules whose *reads* are the sensitive act emit audit, and the coverage floor ratchets; 6 self-test cases including two controls) + `ci.yml :: Python — Tests` (`services/api/tests/test_audit_attribution_and_readership.py`) | GATED | **Proven against the pre-fix tree**: 7 of 11 fail at `3c04a21b`, and the gate found two live defects on its first run that the hand-written fix had missed. The honest limit is published rather than hidden: **7 of 86 endpoint modules emit audit at all**, the floor is set at that measured value rather than an aspiration, and the gate prints the largest unaudited surfaces by route count on success so the next step is named. Raising it is ordinary work, not a gap in the control. One correction recorded: the attribution rule first reported the SCIM writer, whose actor is already `scim:<token>` — a scheme-prefixed actor is self-attributing |
 | Only a human-confirmed, unexpired, uninjected prior can auto-close an alert | `apps/docs/docs/concepts/automation-maturity.md`; `apps/docs/docs/console/funnel-kpis.md` | `ci.yml :: Python — Tests` (`services/agents/tests/test_outcome_memory.py` — an AI prior never suppresses at any count or confidence, a prior expires 90 days after its last confirmation, an unparseable timestamp counts as expired, injection-flagged evidence never suppresses, and the refusal names which rule declined; plus `test_outcome_writer_signature_parity.py`, which compares all four `record_outcome` signatures in both directions and asserts the concrete writer forwards the flag) | GATED | **Proven against the pre-fix tree**: `suppression_refusal` does not exist there, so the whole module fails to import, and 2 of the 10 parity cases fail. The durable finding is why the parity test exists: adding the keyword broke four writers and **no test failed on the exception**, because the call sits inside `contextlib.suppress(Exception)` — what surfaced was a zero write-count in an unrelated replay test three files away. One limit: these prove the *rules*, and the injection flag is only as good as the guard that sets it, which scores 98.1% on its tuned corpus and 7.1% on held-out payloads |
 | A permission granted or revoked in the console governs every route | `apps/docs/docs/operations/security.md` (RBAC); `apps/docs/docs/console/settings.md` | `ci.yml :: Python — Lint & Type-check` (`check_one_permission_model.py` — the check reads the resolved set, authentication resolves one, all 5 RBAC mutations invalidate, and no route module imports the static map; 5 self-test cases, one a control) + `ci.yml :: Python — Tests` (`services/api/tests/test_database_backed_permissions.py`, 18 cases **in both directions**: a database grant the static map lacks is allowed, and a static grant the database lacks is denied) | GATED | **The second direction is the one that was broken**: the old fallback restored a deprovisioned user's static permissions whenever their last role was removed, because an empty row set was read as 'not configured'. 275 static sites became database-backed with zero call-site edits by moving resolution into `get_current_user`. Two limits stated rather than hidden: resolution **fails open to the static map** on a database fault, deliberately, because failing closed would turn a blip into a platform-wide lockout mid-incident; and without Redis the invalidation degrades from a version counter to a 15-second TTL, logged, so a multi-replica deployment converges rather than invalidating immediately |
+| Every `mssp_*` table isolates one portfolio from another at the database layer | `apps/docs/docs/concepts/multi-tenancy.md`; `apps/docs/docs/mssp/overview.md` | `integration.yml :: MSSP row-level security isolation (live, two portfolios)` (`tests/isolation/test_mssp_rls_live.py`, 38 cases against a real Postgres) + `ci.yml :: Python — Tests` (`services/api/tests/test_mssp_row_level_security.py`, 20 structural cases including a policy-graph cycle detector) | GATED | **Measured, not asserted**: with the policies disabled 30 of the 38 live cases fail; with them, each of four parties sees exactly its own row and a fifth sees zero. Forced RLS 117 → 123 tables. The cycle detector was **proven by re-injecting the real cycle** the first draft had. Two findings worth keeping: the existing live suite discovers tables by a column named `tenant_id`, so all seven `mssp_*` tables sat outside its coverage figure — which is why six went unpoliced; and `check_rls_policy_shape.py` passed on mutually recursive policies that raise `infinite recursion detected` on the first SELECT, so shape is not liveness. One limit: the live job needs a container, so on a developer machine without one these skip |
 
 ## Summary
 
-- GATED: 254
+- GATED: 255
 
 ## Summary
 
-- GATED: 254
+- GATED: 255
 
 ## Summary
 
-- GATED: 254
+- GATED: 255
 
 ## Summary
 
-- GATED: 254
+- GATED: 255
 
 ## Summary
 
-- GATED: 254
+- GATED: 255
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 

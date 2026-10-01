@@ -105,6 +105,17 @@ class MSSPRulePackAssignment(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     pack_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("mssp_rule_packs.id", ondelete="CASCADE"), nullable=False, index=True)
     child_tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    #: The owning pack's parent, carried here so the row-level policy needs
+    #: no subquery. Writing it as a subquery over `mssp_rule_packs` was the
+    #: first attempt and produced mutually recursive policies — Postgres
+    #: answers `infinite recursion detected` on the first SELECT, which no
+    #: static check caught.
+    #:
+    #: Kept honest by a composite foreign key on
+    #: `(pack_id, parent_tenant_id)`, not by this assignment: a row naming
+    #: the wrong parent cannot be inserted at all, so the denormalisation
+    #: cannot drift.
+    parent_tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     parameter_overrides: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     assigned_by_user: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)

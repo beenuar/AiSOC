@@ -105,7 +105,7 @@ jobs:
           set -euo pipefail
 
           spine_paths='services/ingest/ services/fusion/ services/realtime/ docker-compose.yml scripts/integration/ .github/workflows/integration.yml'
-          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py scripts/check_runtime_db_role.py .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py .github/workflows/integration.yml'
           # backup_crypt.py was missing from the old filter, and it is where
           # every byte of the AES-256-GCM implementation lives — so a change
           # to the encryption itself did not run the gate that proves the
@@ -811,6 +811,18 @@ jobs:
         env:
           POSTGRES_RLS_ISOLATION_REQUIRED: '1'
         run: python -m pytest tests/isolation/test_postgres_rls.py -v --tb=short
+
+      # The suite above discovers tables by looking for a column literally
+      # named `tenant_id`, so every `mssp_*` table was invisible to it — they
+      # name their tenants `parent_tenant_id`/`child_tenant_id` — and six of
+      # the seven carried no policy at all for as long as that blind spot
+      # lasted. They also cannot be asserted the same way: an MSSP row joins
+      # two tenants and *both* must read it, so the shape is "exactly one of
+      # two seeded rows from four directions, and zero from a fifth tenant".
+      - name: MSSP row-level security isolation (live, two portfolios)
+        env:
+          POSTGRES_RLS_ISOLATION_REQUIRED: '1'
+        run: python -m pytest tests/isolation/test_mssp_rls_live.py -v --tb=short
 
       # `POST /alerts/{id}/explain` logged `audit: failed to compute hash chain`
       # on every call against a default install, and the audit row was not

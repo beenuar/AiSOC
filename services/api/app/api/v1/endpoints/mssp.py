@@ -650,6 +650,11 @@ async def assign_pack_to_child(
 
     assignment = MSSPRulePackAssignment(
         pack_id=pack_id,
+        # Taken from the pack that was just loaded and ownership-checked,
+        # never from the request. The composite foreign key would reject a
+        # mismatch anyway; reading it from the pack means the rejection
+        # never has to happen.
+        parent_tenant_id=pack.parent_tenant_id,
         child_tenant_id=body.child_tenant_id,
         enabled=body.enabled,
         parameter_overrides=body.parameter_overrides,
