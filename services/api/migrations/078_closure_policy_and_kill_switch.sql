@@ -59,20 +59,24 @@ ALTER TABLE aisoc_closure_policies FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenant_isolation ON aisoc_closure_policies;
 CREATE POLICY tenant_isolation ON aisoc_closure_policies
+    -- `current_tenant_id()` rather than a raw `current_setting(...)::uuid`.
+    -- It is the helper migration 002 defines and migration 069 uses, and it
+    -- returns NULL for an unset *or empty* setting. Writing the guard as
+    -- `setting = '' OR tenant_id = setting::uuid` failed the live
+    -- two-tenant isolation test with `invalid input syntax for type uuid:
+    -- ""`, because Postgres does not promise to short-circuit the OR and
+    -- evaluated the cast anyway.
+    --
     -- The NULL arm is required, not a loosening. The fused-alert worker in
     -- `services/agents` is the main reader and it consumes from Kafka on a
     -- connection that binds no tenant: without this it would see zero rows,
     -- fall through to the process-wide threshold, and report success. A
     -- policy nobody can read is worse than no policy, because the console
     -- would show it as set.
-    USING (
-        current_setting('app.current_tenant_id', TRUE) IS NULL
-        OR current_setting('app.current_tenant_id', TRUE) = ''
-        OR tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid
-    )
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
     -- Writes stay strict. Only a session that has bound a tenant may write,
     -- and only its own row.
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid);
+    WITH CHECK (tenant_id = current_tenant_id());
 
 -- ── Kill switch ─────────────────────────────────────────────────────────
 --
@@ -114,15 +118,11 @@ ALTER TABLE aisoc_kill_switch FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenant_isolation ON aisoc_kill_switch;
 CREATE POLICY tenant_isolation ON aisoc_kill_switch
-    USING (
-        tenant_id IS NULL
-        OR tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid
-    )
+    USING (tenant_id IS NULL OR tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
     WITH CHECK (
         -- A tenant writes only its own row. The global row is written by the
-        -- platform operator through a session with no tenant set, which the
-        -- predicate below refuses for anyone who has one.
-        tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid
+        -- platform operator through a session with no tenant set.
+        tenant_id = current_tenant_id()
     );
 
 -- ── Audit of every switch change ────────────────────────────────────────
@@ -145,11 +145,8 @@ ALTER TABLE aisoc_kill_switch_audit FORCE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tenant_isolation ON aisoc_kill_switch_audit;
 CREATE POLICY tenant_isolation ON aisoc_kill_switch_audit
-    USING (
-        tenant_id IS NULL
-        OR tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid
-    )
-    WITH CHECK (tenant_id = current_setting('app.current_tenant_id', TRUE)::uuid);
+    USING (tenant_id IS NULL OR tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id());
 
 -- ── Grants ──────────────────────────────────────────────────────────────
 --
