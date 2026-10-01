@@ -8,7 +8,9 @@ import { apiHeaders } from '@/lib/api';
 // Same-origin by default — Next.js rewrites proxy `/api/v1/honeytokens/*`
 // to the honeytokens service. Override with `NEXT_PUBLIC_HONEYTOKENS_URL`
 // to debug against a different origin.
-const API = process.env.NEXT_PUBLIC_HONEYTOKENS_URL ?? "";
+const API = ''  // Same origin, through the rewrite in next.config.js. This read a
+        // NEXT_PUBLIC_* base, which Next inlines at build time, so a
+        // published image could not be pointed anywhere by configuration;
 
 // The tenant used to come from `NEXT_PUBLIC_TENANT_ID`, defaulting to the
 // literal `00000000-0000-0000-0000-000000000001`. A `NEXT_PUBLIC_*` value is

@@ -42,6 +42,12 @@ const AGENTS_HOST = process.env.AGENTS_URL || 'http://localhost:8001';
 const FUSION_HOST = process.env.FUSION_URL || '';
 const ENRICHMENT_HOST = process.env.ENRICHMENT_URL || 'http://enrichment:8082';
 const OSQUERY_TLS_HOST = process.env.OSQUERY_TLS_URL || 'http://localhost:8090';
+// Both services are `extras`-profile, so the default points at the published
+// host port rather than a compose service name: a developer who started them
+// gets a working page, and a deployment that did not start them gets a
+// connection error rather than a 404 from the console itself.
+const HONEYTOKENS_HOST = process.env.HONEYTOKENS_URL || 'http://localhost:8008';
+const PURPLE_TEAM_HOST = process.env.PURPLE_TEAM_URL || 'http://localhost:8006';
 
 const nextConfig = {
   reactStrictMode: true,
@@ -172,6 +178,28 @@ const nextConfig = {
       {
         source: '/api/v1/playbooks',
         destination: `${AGENTS_HOST}/api/v1/playbooks`,
+      },
+      // Honeytokens and purple-team had no rewrite at all. Their pages read a
+      // `NEXT_PUBLIC_*` base that defaults to an empty string, so every call
+      // went to the console's own origin and Next answered 404. Worse, a
+      // `NEXT_PUBLIC_*` value is inlined at build time, so setting it on a
+      // published image does nothing: the pages could not be fixed by
+      // configuration at all.
+      {
+        source: '/api/v1/honeytokens/:path*',
+        destination: `${HONEYTOKENS_HOST}/api/v1/honeytokens/:path*`,
+      },
+      {
+        source: '/api/v1/honeytokens',
+        destination: `${HONEYTOKENS_HOST}/api/v1/honeytokens`,
+      },
+      {
+        source: '/api/v1/purple-team/:path*',
+        destination: `${PURPLE_TEAM_HOST}/api/v1/purple-team/:path*`,
+      },
+      {
+        source: '/api/v1/purple-team',
+        destination: `${PURPLE_TEAM_HOST}/api/v1/purple-team`,
       },
       // Hunt search + saved searches (singular /hunt, distinct from /hunts corpus)
       {

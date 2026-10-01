@@ -268,3 +268,38 @@ The registration matters more than the correction. Three figures had drifted
 to numbers the compose file never supported, and an unregistered figure is one
 nobody notices going stale, which is how all three got there. Proven by
 drifting `install.sh` to 11 and watching the gate name it.
+
+## Phase 1.3 — broken console paths repaired (2026-10-01)
+
+| Was broken | Fix |
+|---|---|
+| 7 compliance calls to 4 route shapes that 404'd | Built the routes with real rows: `GET /{framework}`, `/heatmap`, `/export` (CSV and JSON, hash chain included) and `POST /{framework}/collect`. Slug mapping derived from the `FRAMEWORKS` keys, so a new framework needs no second edit |
+| `POST /{framework}/collect` could have been another no-op | It writes **real evidence rows** from real platform state: audit-log depth, RLS table count, credential-key configuration, passkey enrolment. **10 of 24 controls**, every id read out of `FRAMEWORKS`. The other 14 report `manual` |
+| The case report pane fetched a route nobody had written | `GET /cases/{id}/investigations/{run_id}/report.md`, proxied to the agents service with the same two-step tenant scoping the sibling route uses, which that route shipped without (GHSA-x2gf-3p79-wvgm) |
+| Two agents handlers on `/api/v1/investigations/{run_id}`, each reading its own store | `router.py`'s pair moved to `/api/v1/agent-runs`. It had no caller; `investigate.py` owns the lifecycle and its report routes, so it keeps the canonical path and the status poll now reads the store that is written |
+| honeytokens and purple-team had no rewrite | Added, and the `NEXT_PUBLIC_*` bases removed: Next inlines those at build time, so a published image could not be pointed anywhere by configuration |
+| 5 dead client functions | Deleted (`agentsApi.investigate`, `.getInvestigation`, `.streamInvestigation`, `graphApi.getPaths`, `.getBlastRadius`, `alertsApi.getTimeline`). The plan said seven; six is what no route served **and** nothing called |
+
+### Two gate defects found on the way
+
+**The S1c console-credential gate had a blind spot.** `FrameworkView.tsx` called
+the compliance API with a bare `fetch` and no `Authorization` header, and the
+gate reported the tree clean. The fetcher classifier was right; the **key** was
+a variable (`const dashKey = ...`), so no API path appeared at the call site
+and the call was skipped. The gate now resolves a local binding: 33 calls seen
+became 34, and re-injecting the defect makes it name the file and line.
+
+**The new route-contract gate was vacuous in its first version.** It treated
+any matching Next rewrite as resolution. `/api/v1/:path*` routes everything
+left over to the API service, so all 209 console paths passed against a tree
+with 14 broken calls. A rewrite is proof of routing, not of service, so a
+rewrite now only counts when the service it points at actually serves the
+path. **14 findings pre-fix, 0 after.**
+
+### Deviation D8: six dead client functions, not seven
+
+The plan says seven. Six is what the measurement supports: 22 client members
+have no caller outside `lib/api.ts`, but 16 of those target routes that exist,
+and an unused-but-working client function is a product-surface judgement
+rather than a correctness defect. The six removed are the ones that were both
+uncalled and pointed at nothing.

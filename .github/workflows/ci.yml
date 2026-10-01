@@ -344,6 +344,22 @@ jobs:
       # themselves the same published number.
       - name: Verify vendored aisoc_benchmark is in sync
         run: python scripts/sync_vendored_benchmark.py --check
+      # Nothing checked the console against the backends, so an /api/v1 path
+      # that no service serves shipped silently and showed up as a page that
+      # never loads. It had, repeatedly: seven compliance calls to four route
+      # shapes that did not exist, a case report pane fetching a route nobody
+      # had written, and two pages whose calls went to the console's own
+      # origin because no rewrite existed. 14 findings against the tree
+      # before this phase.
+      #
+      # A rewrite is only proof of routing, not of service. The first version
+      # treated any matching rewrite as resolution, and since
+      # `/api/v1/:path*` routes everything left over to the API service,
+      # every console path passed and the gate was worth nothing.
+      - name: Console route contract — self-test
+        run: python scripts/check_console_route_contract.py --self-test
+      - name: Verify every console API path resolves
+        run: python scripts/check_console_route_contract.py
       # Two permission models shipped side by side: 275 route dependencies
       # read the hardcoded ROLE_PERMISSIONS map while 27 read the
       # user_roles / role_permissions tables the console's RBAC screen

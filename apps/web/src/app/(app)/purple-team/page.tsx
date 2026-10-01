@@ -9,7 +9,9 @@ import { apiHeaders } from '@/lib/api';
 // Same-origin by default — Next.js rewrites proxy `/api/v1/purple-team/*` to
 // the purple-team service. Override with `NEXT_PUBLIC_PURPLE_TEAM_API` for
 // debugging against a different origin.
-const API = process.env.NEXT_PUBLIC_PURPLE_TEAM_API ?? ''
+const API = ''  // Same origin, through the rewrite in next.config.js. This read a
+        // NEXT_PUBLIC_* base, which Next inlines at build time, so a
+        // published image could not be pointed anywhere by configuration
 
 // --------------------------------------------------------------------------
 // Types

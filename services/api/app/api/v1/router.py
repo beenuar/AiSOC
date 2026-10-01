@@ -21,6 +21,7 @@ from app.api.v1.endpoints import (
     cases,
     community,
     compliance,
+    compliance_framework,
     connectors,
     costs,
     data_lifecycle,
@@ -153,6 +154,10 @@ api_router.include_router(rbac.router)
 api_router.include_router(audit.router)
 api_router.include_router(branding.router)
 api_router.include_router(compliance.router)
+# After `compliance.router`, deliberately. The per-framework routes are
+# `/{framework}`, which compiles to `[^/]+` and would swallow the sibling
+# literals `/frameworks`, `/evidence` and `/report` if it matched first.
+api_router.include_router(compliance_framework.router)
 api_router.include_router(metrics.router)
 # Pipeline health snapshot — v1.5 SOC Console parity.
 # /health/pipeline returns the 5-stage ingest→normalize→fuse→correlate→alert

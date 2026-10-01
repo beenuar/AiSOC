@@ -43,7 +43,7 @@ from urllib.parse import quote
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -1208,6 +1208,48 @@ async def case_investigation_run(
     if run_case_id is not None and str(run_case_id) != str(cid):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation run not found for this case")
     return run
+
+
+@router.get(
+    "/{case_id}/investigations/{run_id}/report.md",
+    response_class=PlainTextResponse,
+    summary="Markdown incident report for one investigation run",
+)
+async def case_investigation_report_md(
+    case_id: str,
+    run_id: str,
+    db: DBSession,
+    user: AuthUser,
+) -> PlainTextResponse:
+    """The Markdown report the case workspace renders."""
+    # `CaseWorkspace.tsx` fetched this from two places and the route did not
+    # exist, so the report pane was permanently empty. The agents service has
+    # served `/api/v1/investigations/{run_id}/report.md` all along; nothing
+    # proxied it.
+    #
+    # Scoped in the same two steps as the sibling route above, and for the
+    # same reason: that one shipped without them and any authenticated user
+    # could read any run by id across tenants (GHSA-x2gf-3p79-wvgm).
+    # Resolving the case proves the caller may see this case; checking the
+    # run belongs to it proves the id in the path is not somebody else's run
+    # smuggled under a case the caller does own.
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    safe_run_id = quote(run_id, safe="")
+
+    meta = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}")
+    if meta.status_code >= 400:
+        raise HTTPException(status_code=meta.status_code, detail=meta.text)
+    run_case_id = meta.json().get("case_id")
+    if run_case_id is not None and str(run_case_id) != str(cid):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Investigation run not found for this case",
+        )
+
+    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.md")
+    if resp.status_code >= 400:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return PlainTextResponse(content=resp.text, media_type="text/markdown; charset=utf-8")
 
 
 # Filename sanitiser for Content-Disposition: keep only safe ASCII so the

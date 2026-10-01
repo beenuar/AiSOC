@@ -4,7 +4,7 @@ import useSWR, { mutate } from 'swr';
 import { useState } from 'react';
 import { ComplianceHeatmap } from './ComplianceHeatmap';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
-import { apiFetch } from '@/lib/api';
+import { apiHeaders, apiFetch } from '@/lib/api';
 
 interface Evidence {
   id: string;
@@ -48,16 +48,19 @@ interface FrameworkData {
   controls: ControlWithEvidence[];
 }
 
+// The evidence table's own vocabulary, not a second one. A control is
+// `accepted` once an auditor has signed off an item, `pending` while
+// evidence exists but is unreviewed, `rejected` when every item was
+// rejected, and `missing` when there is none.
 const STATUS_BADGE: Record<string, string> = {
-  approved: 'bg-green-900 text-green-300',
-  collected: 'bg-blue-900 text-blue-300',
-  review: 'bg-yellow-900 text-yellow-300',
+  accepted: 'bg-green-900 text-green-300',
+  pending: 'bg-yellow-900 text-yellow-300',
   rejected: 'bg-red-900 text-red-300',
   missing: 'bg-gray-800 text-gray-400',
 };
 
 const fetcher = (url: string) =>
-  fetch(url).then((r) => {
+  fetch(url, { headers: apiHeaders() }).then((r) => {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     return r.json();
   });
@@ -97,7 +100,7 @@ export function FrameworkView({ framework }: Props) {
   async function handleExport() {
     setExporting(true);
     try {
-      const res = await apiFetch(`/api/v1/compliance/${framework}/export`);
+      const res = await apiFetch(`/api/v1/compliance/${framework}/export?fmt=json`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const exportData = await res.json();
 

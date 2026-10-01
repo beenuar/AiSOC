@@ -426,6 +426,19 @@ def inspect(root: pathlib.Path) -> Report:
                 continue
             url = _api_path_in(parts[0])
             if url is None:
+                # The key may be a local binding rather than a literal.
+                # `const dashKey = `/api/v1/compliance/${f}`;` followed by
+                # `useSWR(dashKey, fetcher)` is an API call with a fetcher
+                # that sends no credential, and reading only the call site
+                # sees a bare identifier with no path in it. That is how
+                # `FrameworkView.tsx` kept an uncredentialed compliance call
+                # through the sweep that was meant to find exactly this.
+                key = parts[0].strip()
+                if key.isidentifier():
+                    binding = _definition_of(source, key)
+                    if binding is not None:
+                        url = _api_path_in(binding)
+            if url is None:
                 continue
             calls += 1
             fetcher = parts[1].strip()

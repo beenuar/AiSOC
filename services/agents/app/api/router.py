@@ -30,7 +30,7 @@ ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_
 
 # In-memory run store for status polling. The durable record of every step is
 # the Postgres Investigation Ledger (written by the shared graph runner) — this
-# dict is only the fast local status cache for GET /investigations/{run_id}.
+# dict is only the fast local status cache for GET /agent-runs/{run_id}.
 _runs: dict[str, dict] = {}
 
 
@@ -66,7 +66,20 @@ async def _run_investigation(run_id: str, state: InvestigationState) -> None:
         _runs[run_id] = {"status": "failed", "error": str(exc)}
 
 
-@router.post("/investigations", response_model=InvestigationResponse)
+# `/agent-runs`, not `/investigations`. Both this module and
+# `app.api.investigate` registered `GET /api/v1/investigations/{run_id}`,
+# each reading its own `_runs` dict, and this one is mounted first
+# (`main.py` includes `router` before `investigate_router`) so it answered
+# every poll from the store that the other module writes to. The result was
+# a 404 for a run that existed, while the sibling report routes under the
+# same prefix worked, which is why it read as a flaky console rather than a
+# routing bug.
+#
+# `app.api.investigate` owns the lifecycle and the report routes, so it
+# keeps the canonical path. This pair is the in-process orchestrator state
+# and has no caller: the console's ledger reads go to the API service, which
+# `apps/web/next.config.js` documents and deliberately does not rewrite here.
+@router.post("/agent-runs", response_model=InvestigationResponse)
 async def start_investigation(
     request: InvestigationRequest,
     background_tasks: BackgroundTasks,
@@ -92,7 +105,7 @@ async def start_investigation(
     )
 
 
-@router.get("/investigations/{run_id}")
+@router.get("/agent-runs/{run_id}")
 async def get_investigation(run_id: str, principal: ScopedPrincipal):
     """Get the status and results of an investigation run."""
     run = _runs.get(run_id)

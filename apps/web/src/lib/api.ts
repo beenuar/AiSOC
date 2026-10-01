@@ -1092,17 +1092,6 @@ export const alertsApi = {
       body: JSON.stringify({ ids, action, ...data }),
     }),
 
-  getTimeline: (id: string) =>
-    request<{
-      events: Array<{
-        id: string;
-        timestamp: string;
-        type: string;
-        title: string;
-        description: string;
-      }>;
-    }>(`/api/v1/alerts/${id}/timeline`),
-
   /**
    * Structured AI explanation for one alert (Stage 2 #6).
    *
@@ -3214,27 +3203,6 @@ export interface AgentInvestigation {
 }
 
 export const agentsApi = {
-  investigate: (alertId: string) =>
-    request<AgentInvestigation>('/api/v1/agents/investigate', {
-      method: 'POST',
-      body: JSON.stringify({ alertId }),
-    }),
-
-  getInvestigation: (id: string) =>
-    request<AgentInvestigation>(`/api/v1/agents/investigations/${id}`),
-
-  /**
-   * Stream an investigation as Server-Sent Events / NDJSON. Returns the
-   * raw `Response` so callers can pipe to a reader.
-   */
-  streamInvestigation: (alertId: string, signal?: AbortSignal) =>
-    fetch(`${AGENTS_BASE}/api/v1/agents/investigate/stream`, {
-      method: 'POST',
-      headers: apiHeaders(),
-      body: JSON.stringify({ alertId }),
-      signal,
-    }),
-
   /**
    * Stream a structured "Explain this alert" walkthrough as NDJSON.
    *
@@ -4016,19 +3984,8 @@ export const graphApi = {
       params: filters as Record<string, string | number>,
     }),
 
-  getPaths: (entity: string, options: { maxHops?: number } = {}) =>
-    request<{ paths: AttackPath[] }>(`/api/v1/graph/paths`, {
-      params: { entity, ...options },
-    }),
-
   getMitreCoverage: () =>
     request<MitreCoverage>('/api/v1/graph/mitre/coverage'),
-
-  getBlastRadius: (entity: string) =>
-    request<{ radius: AttackGraph; affectedAssets: string[] }>(
-      `/api/v1/graph/blast-radius`,
-      { params: { entity } },
-    ),
 
   /**
    * Fetch the reconstructed attack-path graph for a single case.

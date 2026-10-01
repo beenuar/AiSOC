@@ -1456,6 +1456,41 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/investigations/{run_id}/report.md:
+    get:
+      tags:
+      - cases
+      summary: Markdown incident report for one investigation run
+      description: The Markdown report the case workspace renders.
+      operationId: case_investigation_report_md_api_v1_cases__case_id__investigations__run_id__report_md_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            text/plain:
+              schema:
+                type: string
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/cases/{case_id}/summary:
     get:
       tags:
@@ -7343,6 +7378,135 @@ paths:
                 items:
                   $ref: '#/components/schemas/CompliancePosture'
                 title: Response Compliance Report Api V1 Compliance Report Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/compliance/{framework}:
+    get:
+      tags:
+      - compliance
+      summary: One framework's control status
+      operationId: framework_detail_api_v1_compliance__framework__get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: framework
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Framework
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FrameworkDetail'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/compliance/{framework}/heatmap:
+    get:
+      tags:
+      - compliance
+      summary: Control status grid
+      operationId: framework_heatmap_api_v1_compliance__framework__heatmap_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: framework
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Framework
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeatmapResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/compliance/{framework}/collect:
+    post:
+      tags:
+      - compliance
+      summary: Collect what the platform can attest for this framework
+      description: 'Write a real evidence row per automatable control.
+
+
+        Rows join the same tamper-evident hash chain as manually collected
+
+        evidence, and land as `pending`: the platform attesting its own state is
+
+        a claim an auditor still has to accept, and auto-accepting would make the
+
+        review step decorative.'
+      operationId: framework_collect_api_v1_compliance__framework__collect_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: framework
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Framework
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/compliance/{framework}/export:
+    get:
+      tags:
+      - compliance
+      summary: Export this framework's evidence
+      operationId: framework_export_api_v1_compliance__framework__export_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: framework
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Framework
+      - name: fmt
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(csv|json)$
+          default: csv
+          title: Fmt
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
         '422':
           description: Validation Error
           content:
@@ -19955,6 +20119,52 @@ components:
       - status
       - queued_at
       title: CollectJobResponse
+    CollectResponse:
+      properties:
+        framework:
+          type: string
+          title: Framework
+        collected:
+          type: integer
+          title: Collected
+        manual:
+          type: integer
+          title: Manual
+        results:
+          items:
+            $ref: '#/components/schemas/CollectedControl'
+          type: array
+          title: Results
+        collected_at:
+          type: string
+          format: date-time
+          title: Collected At
+      type: object
+      required:
+      - framework
+      - collected
+      - manual
+      - results
+      - collected_at
+      title: CollectResponse
+    CollectedControl:
+      properties:
+        control_id:
+          type: string
+          title: Control Id
+        outcome:
+          type: string
+          title: Outcome
+          description: collected | manual
+        detail:
+          type: string
+          title: Detail
+      type: object
+      required:
+      - control_id
+      - outcome
+      - detail
+      title: CollectedControl
     CommentResponse:
       properties:
         id:
@@ -20591,6 +20801,40 @@ components:
       - tenant_id
       - statements
       title: ContextStatementsResponse
+    Control:
+      properties:
+        id:
+          type: string
+          title: Id
+        framework:
+          type: string
+          title: Framework
+        control_id:
+          type: string
+          title: Control Id
+        category:
+          type: string
+          title: Category
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        automatable:
+          type: boolean
+          title: Automatable
+          default: false
+      type: object
+      required:
+      - id
+      - framework
+      - control_id
+      - category
+      - title
+      title: Control
     ControlItem:
       properties:
         control_id:
@@ -20604,6 +20848,25 @@ components:
       - control_id
       - title
       title: ControlItem
+    ControlWithEvidence:
+      properties:
+        control:
+          $ref: '#/components/schemas/Control'
+        evidence:
+          items:
+            $ref: '#/components/schemas/EvidenceItem'
+          type: array
+          title: Evidence
+        latest_status:
+          type: string
+          title: Latest Status
+          description: accepted | pending | rejected | missing
+      type: object
+      required:
+      - control
+      - evidence
+      - latest_status
+      title: ControlWithEvidence
     ControlsResponse:
       properties:
         framework_id:
@@ -22664,6 +22927,42 @@ components:
       - output_hash
       - duration_ms
       title: EventOut
+    EvidenceItem:
+      properties:
+        id:
+          type: string
+          title: Id
+        control_id:
+          type: string
+          title: Control Id
+        evidence_type:
+          type: string
+          title: Evidence Type
+        title:
+          type: string
+          title: Title
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        status:
+          type: string
+          title: Status
+        collected_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Collected At
+      type: object
+      required:
+      - id
+      - control_id
+      - evidence_type
+      - title
+      - status
+      title: EvidenceItem
     EvidenceReport:
       properties:
         case_id:
@@ -23418,6 +23717,66 @@ components:
       required:
       - formats
       title: FormatsResponse
+    FrameworkDetail:
+      properties:
+        framework:
+          type: string
+          title: Framework
+        framework_name:
+          type: string
+          title: Framework Name
+        summary:
+          $ref: '#/components/schemas/FrameworkSummary'
+        controls:
+          items:
+            $ref: '#/components/schemas/ControlWithEvidence'
+          type: array
+          title: Controls
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - framework
+      - framework_name
+      - summary
+      - controls
+      - generated_at
+      title: FrameworkDetail
+    FrameworkSummary:
+      properties:
+        total:
+          type: integer
+          title: Total
+        collected:
+          type: integer
+          title: Collected
+        review:
+          type: integer
+          title: Review
+        approved:
+          type: integer
+          title: Approved
+        rejected:
+          type: integer
+          title: Rejected
+        missing:
+          type: integer
+          title: Missing
+        pct:
+          type: number
+          title: Pct
+      type: object
+      required:
+      - total
+      - collected
+      - review
+      - approved
+      - rejected
+      - missing
+      - pct
+      title: FrameworkSummary
     FrameworksResponse:
       properties:
         frameworks:
@@ -23923,6 +24282,47 @@ components:
           title: Detail
       type: object
       title: HTTPValidationError
+    HeatmapCell:
+      properties:
+        control_id:
+          type: string
+          title: Control Id
+        title:
+          type: string
+          title: Title
+        status:
+          type: string
+          title: Status
+        evidence_count:
+          type: integer
+          title: Evidence Count
+      type: object
+      required:
+      - control_id
+      - title
+      - status
+      - evidence_count
+      title: HeatmapCell
+    HeatmapResponse:
+      properties:
+        framework:
+          type: string
+          title: Framework
+        cells:
+          items:
+            $ref: '#/components/schemas/HeatmapCell'
+          type: array
+          title: Cells
+        generated_at:
+          type: string
+          format: date-time
+          title: Generated At
+      type: object
+      required:
+      - framework
+      - cells
+      - generated_at
+      title: HeatmapResponse
     HuntPlanClause:
       properties:
         field:
