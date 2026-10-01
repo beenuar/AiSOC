@@ -37,6 +37,29 @@ _UNC_PATH_RE = re.compile(r"\\\\[^\s\"']+")
 _UNIX_PATH_RE = re.compile(r"(?:/[A-Za-z0-9._\-]+){2,}/?")
 # DOMAIN\user (down-level logon name).
 _DOMAIN_USER_RE = re.compile(r"\b[A-Za-z0-9.\-]+\\[A-Za-z0-9._\-]+")
+
+# A bare username in prose, found by the phrase that introduces it. The
+# module docstring says usernames are pseudonymized, and until this they
+# only were in the `DOMAIN\user` form or under a user-ish key: an alert
+# narrative saying "running as priya.raghavan" sent the name to a hosted
+# model in the clear, which a call-path test caught and a unit test of the
+# redactor never could.
+#
+# Cue-anchored on purpose. A pattern broad enough to catch any bare
+# identifier would swallow process names, rule names and ATT&CK ids, and a
+# redactor that mangles the evidence gets switched off.
+_USER_CUE_RE = re.compile(
+    r"\b(?P<cue>user|username|account|actor|principal|logged in as|running as|owned by|"
+    # The negative lookahead refuses a token this pass has already emitted.
+    # Without it, `User ACME\\alice` becomes `User USER_1` on the DOMAIN\\user
+    # pass and then `User USER_2` here, with USER_2 mapping to the string
+    # "USER_1", so rehydrate returns a token instead of the name. The
+    # round-trip test caught it.
+    r"authenticated as|sign-?in by)\b(?P<sep>[:\s=]+)"
+    r"(?!(?:USER|HOST|IP|EMAIL|PATH|SECRET)_\d+\b)"
+    r"(?P<name>[A-Za-z][A-Za-z0-9._\-]{2,63})\b",
+    re.IGNORECASE,
+)
 # Common secret shapes: AWS keys, OpenAI-style, bearer/JWT, private key headers.
 _SECRET_RES: tuple[re.Pattern[str], ...] = (
     re.compile(r"\bAKIA[0-9A-Z]{16}\b"),
@@ -111,6 +134,13 @@ class Pseudonymizer:
             out = _UNIX_PATH_RE.sub(lambda m: self._token("PATH", m.group(0)), out)
         if self.config.redact_usernames:
             out = _DOMAIN_USER_RE.sub(lambda m: self._token("USER", m.group(0)), out)
+            # Cue-anchored bare usernames. After the email and path passes,
+            # so `running as alice@corp.com` is already EMAIL_1 and is not
+            # re-matched here.
+            out = _USER_CUE_RE.sub(
+                lambda m: f"{m.group('cue')}{m.group('sep')}{self._token('USER', m.group('name'))}",
+                out,
+            )
         if self.config.redact_internal_hostnames:
             out = _FQDN_RE.sub(self._maybe_internal_host, out)
         if self.config.redact_internal_ips:

@@ -48,6 +48,7 @@ from app.api.v1.endpoints import (
     insider_threat,
     insights,
     investigations,
+    kill_switch,
     knowledge_base,
     lake,
     live_actions,
@@ -172,6 +173,7 @@ api_router.include_router(health.router)
 api_router.include_router(insights.router)
 api_router.include_router(sla.router)
 api_router.include_router(investigations.router)
+api_router.include_router(kill_switch.router)
 
 # Public investigation-replay publishing — v8 W3.
 # /ledger/{run_id}/publish[/preview] (auth) turns a tenant-private ledger into

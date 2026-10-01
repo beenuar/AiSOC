@@ -343,3 +343,51 @@ or a file, not a resolvable import, so the rule would have to parse free text
 to decide what to import. Both halves exist and are enforced separately: every
 row names a runnable gate, and every module has an importer or a reason.
 Recorded rather than faked with a heuristic that would pass on anything.
+
+## Phase 2.1 to 2.4 — closure is governed (2026-10-01)
+
+| Item | What changed |
+|---|---|
+| **2.1** closure policy | Migration `078`. Per-tenant, per-class: enabled flag, threshold, and `require_grant`. Read by the real `run_auto_triage` path. Additive: a tenant with no row behaves exactly as before |
+| **2.1** the grant finally has a reader | An earned `auto_close` grant had **no consumer at all** (its only reader selected `auto_execute` on action verbs), which is why parity 1.1 had to retract the shadow-mode claim |
+| **2.2** kill switch | Global and per tenant, checked **first** and separately from the policy, with a mandatory reason and an audit row per transition |
+| **2.3** human priors | An analyst disposition now writes a human-authored prior. Until now `record_outcome` was called from three agents-side workers and nowhere an analyst could reach, so **every prior was AI-authored** and v15's refusal rule meant repeat suppression could never fire |
+| **2.4** pseudonymized egress | Every hosted LLM call goes through the pseudonymizer at the contract layer, the one place all sixteen agent call sites already pass through. Matrix row 19 restored and re-gated on a call-path test |
+
+### What testing the path found that testing the function could not
+
+Row 19 used to rest on `test_privacy_redactor.py`, which calls the redactor
+and asserts it redacts. True about a function, silent about the product.
+The replacement drives `safe_ainvoke` and inspects what a fake provider
+received, and it immediately found a real gap: **a bare username in prose**
+(`running as priya.raghavan`) went to a hosted model in the clear, because
+usernames were only redacted in the `DOMAIN\user` form or under a user-ish
+key. Closed with a cue-anchored pattern, deliberately narrow so it does not
+mangle process names or rule ids.
+
+The same file pins the trade-off in the other direction: public IOCs are
+**deliberately not** redacted, so a change to that is a visible decision.
+And it carries a test that disables the control and requires the leak
+assertion to fail, so it cannot pass vacuously.
+
+### Three defects in my own work, caught by the gates
+
+- The closure-policy migration had no `OR <tenant context> IS NULL` arm.
+  `check_rls_policy_shape.py` named the exact consequence: the fused-alert
+  worker consumes from Kafka on a connection that binds no tenant, so it
+  would have seen zero rows, fallen through to the process-wide threshold
+  and reported success.
+- Putting `closure.py` under `app/policy/` made `guardrails.py` look
+  reachable, because that package's `__init__` re-exports it. A package
+  marker can launder every dead module in its package, so closure moved to
+  its own package and the reachability verdict stayed honest.
+- `_alert_evidence` passed the ORM's `affected_host` through unchanged,
+  while the canonicaliser looks for `host`. Two alerts on the same rule and
+  different hosts would have shared a key, so a benign prior for one would
+  have suppressed the other. Found by asserting the negative case.
+
+A database that cannot answer **refuses**: an unreadable policy or switch
+means no auto-close, never a fallback to the permissive default. And an
+unreadable switch reports as an error rather than as "kill switch engaged",
+because a diagnostic that names the wrong subsystem sends an operator to
+debug something that is not broken.

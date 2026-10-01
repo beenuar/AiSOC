@@ -32,6 +32,13 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
+# One definition of "the same alert", shared with `services/api` through a
+# vendored copy, so a human prior written there lands under the key this
+# service looks up.
+from app.memory.fingerprint import (
+    canonical_evidence,
+)
+
 __all__ = [
     "BudgetConfig",
     "Decision",
@@ -118,94 +125,6 @@ class _CacheEntry:
 #: detections on the same host at the same severity would collapse to one
 #: fingerprint, and a benign prior from one would suppress the other — a false
 #: negative, which is far worse than a missed suppression.
-_EVIDENCE_FIELDS = (
-    # rule / detection identity
-    "rule_id",
-    "rule_name",
-    "detection_id",
-    "signature",
-    "title",
-    "category",
-    "severity",
-    # entity identity
-    "hostname",
-    "host",
-    "username",
-    "user",
-    "src_ip",
-    "source_ip",
-    "dst_ip",
-    "dest_ip",
-    "domain",
-    "url",
-    "file_hash",
-    "process_name",
-    # provenance
-    "connector_type",
-    "mitre_techniques",
-)
-
-#: Fields that must never contribute to a fingerprint because they differ
-#: between two occurrences of the same alert. Used only on the fallback path
-#: below, for alert shapes this module does not recognise.
-_VOLATILE_FIELDS = frozenset(
-    {
-        "id",
-        "alert_id",
-        "uuid",
-        "run_id",
-        "incident_id",
-        "source_event_ids",
-        "raw_event",
-        "confidence",
-        "confidence_score",
-        "risk_score",
-        "score",
-        "created_at",
-        "updated_at",
-        "timestamp",
-        "ts",
-        "time",
-        "first_seen",
-        "last_seen",
-        "detected_at",
-        "occurred_at",
-        "ingested_at",
-        "fusion_decision",
-    }
-)
-
-
-def _normalise(value: Any) -> Any:
-    if isinstance(value, list):
-        # Order of techniques or entities is not evidence.
-        return sorted(str(v).strip().lower() for v in value)
-    if isinstance(value, str):
-        return value.strip().lower()
-    return value
-
-
-def canonical_evidence(alert: dict[str, Any]) -> dict[str, Any]:
-    """Reduce an alert to the evidence that makes two alerts "the same".
-
-    Excludes everything volatile — the alert row id, source event ids, the raw
-    event payload, timestamps, and per-run scores like `confidence` and
-    `risk_score` that drift between otherwise identical alerts.
-
-    Two failure directions, and they are not equally bad. Keeping a volatile
-    field means a repeat never matches, so suppression silently does nothing.
-    Dropping an evidence-bearing field means two different alerts share a
-    fingerprint, so a benign prior for one suppresses the other — a false
-    negative. The second is much worse, so an alert shape this module does not
-    recognise falls back to hashing everything except known volatile keys,
-    rather than collapsing into a single bucket.
-    """
-    evidence = {name: _normalise(alert[name]) for name in _EVIDENCE_FIELDS if alert.get(name) not in (None, "", [], {})}
-    if evidence:
-        return evidence
-    return {key: _normalise(value) for key, value in alert.items() if key not in _VOLATILE_FIELDS}
-
-
 @dataclass
 class CostGovernor:
     """Enforces per-tenant budgets, dedup, and the deterministic circuit breaker."""

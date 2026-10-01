@@ -67,6 +67,7 @@ def _cache_parts(messages: list[Any]) -> tuple[str, str]:
 # them here meant the API had no contract at all, because this module imports
 # LangChain and the response cache. Re-exported so existing callers and tests
 # are unaffected by the split.
+from app.llm import egress_privacy  # noqa: E402
 from app.llm.contract_rules import (  # noqa: E402,F401 — re-exported
     AGENTS_LLM_CONTRACT_ENFORCED_ENV,
     CONTRACT_DICT_KEY_BLOCKLIST,
@@ -115,9 +116,22 @@ async def safe_ainvoke(llm: Any, messages: Iterable[Any], **kwargs: Any) -> Any:
         if cached is not None:
             return AIMessage(content=cached)
 
+    # Pseudonymize before egress, restore after. Here rather than at each
+    # of the sixteen call sites, because this is the one place they all
+    # already pass through, and sixteen call sites is sixteen chances to
+    # forget. On by default for hosted providers, off for local ones.
+    egress = egress_privacy.open_session(
+        model=model,
+        base_url=getattr(llm, "base_url", None) or getattr(llm, "openai_api_base", None),
+        tenant_id=str(getattr(llm, "aisoc_tenant_id", "") or ""),
+        tenant_setting=getattr(llm, "aisoc_pseudonymize", None),
+    )
+    outbound = egress.redact_messages(materialised)
+
     t0 = time.monotonic()
-    result = await llm.ainvoke(materialised, **kwargs)
+    result = await llm.ainvoke(outbound, **kwargs)
     latency_ms = (time.monotonic() - t0) * 1000.0
+    result = egress.restore(result)
     # Record token/cost against the active CostTracker (no-op if none bound), so
     # the high-volume auto-triage path is finally visible in the cost dashboard.
     try:
@@ -136,8 +150,17 @@ async def safe_astream(llm: Any, messages: Iterable[Any], **kwargs: Any):
     """Streaming variant of :func:`safe_ainvoke` that yields chunks."""
     materialised = list(messages)
     LLMInputContract.validate(materialised)
-    async for chunk in llm.astream(materialised, **kwargs):
-        yield chunk
+    egress = egress_privacy.open_session(
+        model=_model_name(llm),
+        base_url=getattr(llm, "base_url", None) or getattr(llm, "openai_api_base", None),
+        tenant_id=str(getattr(llm, "aisoc_tenant_id", "") or ""),
+        tenant_setting=getattr(llm, "aisoc_pseudonymize", None),
+    )
+    async for chunk in llm.astream(egress.redact_messages(materialised), **kwargs):
+        # Restored per chunk. A token-by-token stream can split a token
+        # across chunks, so this restores what it can see and the rest
+        # arrives pseudonymized rather than corrupted.
+        yield egress.restore(chunk)
 
 
 def make_safe_chat_model(llm: Any) -> Any:
