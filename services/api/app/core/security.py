@@ -29,12 +29,6 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
     # source of the P0.3 audit finding.
     "admin": ["*"],
     "tenant_admin": [
-        # POST /knowledge-base/query is a read expressed as a POST (the
-        # question is a body), so it was counted as a state-changing
-        # route with no authorization decision. It searches this
-        # tenant's own knowledge base, so every role that can read an
-        # alert can read it.
-        "knowledge_base:read",
         "alerts:read",
         "alerts:write",
         "alerts:delete",
@@ -76,14 +70,14 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # bound to the decision.
         "actions:read",
         "actions:execute",
-    ],
-    "soc_lead": [
         # POST /knowledge-base/query is a read expressed as a POST (the
         # question is a body), so it was counted as a state-changing
         # route with no authorization decision. It searches this
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+    ],
+    "soc_lead": [
         "alerts:read",
         "alerts:write",
         "cases:read",
@@ -106,14 +100,14 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "lake:read_schema",
         "actions:read",
         "actions:execute",
-    ],
-    "soc_analyst": [
         # POST /knowledge-base/query is a read expressed as a POST (the
         # question is a body), so it was counted as a state-changing
         # route with no authorization decision. It searches this
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+    ],
+    "soc_analyst": [
         "alerts:read",
         "alerts:write",
         "cases:read",
@@ -132,14 +126,14 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # vendor, so previewing a response is within the same envelope.
         "actions:read",
         "actions:execute",
-    ],
-    "threat_hunter": [
         # POST /knowledge-base/query is a read expressed as a POST (the
         # question is a body), so it was counted as a state-changing
         # route with no authorization decision. It searches this
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+    ],
+    "threat_hunter": [
         "alerts:read",
         "cases:read",
         "cases:write",
@@ -156,19 +150,25 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # Read the registry to know what response is available for a finding;
         # hunters hand off rather than respond, so no execute.
         "actions:read",
-    ],
-    "viewer": [
         # POST /knowledge-base/query is a read expressed as a POST (the
         # question is a body), so it was counted as a state-changing
         # route with no authorization decision. It searches this
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+    ],
+    "viewer": [
         "alerts:read",
         "cases:read",
         "reports:read",
         "threat_intel:read",
         "actions:read",
+        # POST /knowledge-base/query is a read expressed as a POST (the
+        # question is a body), so it was counted as a state-changing
+        # route with no authorization decision. It searches this
+        # tenant's own knowledge base, so every role that can read an
+        # alert can read it.
+        "knowledge_base:read",
     ],
     "api_service": [
         "alerts:read",
