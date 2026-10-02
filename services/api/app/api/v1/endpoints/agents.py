@@ -36,11 +36,12 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.api.v1.endpoints.cases import _agents_proxy
 from app.api.v1.endpoints.connectors import _fetch_catalog, _safe_log_val
 from app.models.connector import Connector
 
@@ -344,3 +345,60 @@ async def list_agent_tools(
         tool_count=len(tools),
         connector_count=contributing_instances,
     )
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# Natural-language hunting (parity 6.1)
+# ────────────────────────────────────────────────────────────────────────────
+#
+# A thin proxy onto the agents service's own `/hunt`, for the same reason
+# `/cases/{id}/investigate` is one: the console and the MCP server both
+# reach AiSOC through this API, and the agents service is not published.
+#
+# The hunting agent was complete, tested, and had no production caller at
+# all — its only importer repo-wide was its own test. This route and the
+# console's Hunt page are what make it reachable.
+
+
+class HuntRequest(BaseModel):
+    """One natural-language hypothesis to hunt against tenant data."""
+
+    hypothesis: str = Field(min_length=1, max_length=2000)
+
+
+class HuntResponse(BaseModel):
+    """What the hunt found, or why it could not look.
+
+    `checked` and `unavailable_reason` are separate fields deliberately.
+    A hunt that could not run is not a hunt that found nothing, and
+    collapsing the two is how a console shows a reassuring empty result
+    for a search that never happened.
+    """
+
+    hypothesis: str
+    checked: bool
+    matches: list[dict[str, Any]] = []
+    refusals: list[str] = []
+    unavailable_reason: str | None = None
+
+
+@router.post("/hunt", response_model=HuntResponse)
+async def run_hunt(
+    body: HuntRequest,
+    current_user: Annotated[AuthUser, Depends(require_permission("hunts:read"))],
+) -> HuntResponse:
+    """Plan and run one natural-language hunt for the caller's tenant.
+
+    The tenant comes from the authenticated principal and is never read
+    from the body. A caller-supplied tenant on a route like this is the
+    shape that has gone wrong here before.
+    """
+    response = await _agents_proxy(
+        "POST",
+        "/hunt",
+        json={"hypothesis": body.hypothesis, "tenant_id": str(current_user.tenant_id)},
+        timeout=120.0,
+    )
+    if response.status_code >= 400:
+        raise HTTPException(status_code=response.status_code, detail=response.text[:400])
+    return HuntResponse(**response.json())

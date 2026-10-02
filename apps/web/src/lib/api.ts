@@ -3553,7 +3553,37 @@ export interface SavedSearch {
   pinned?: boolean;
 }
 
+/** What `POST /api/v1/agents/hunt` answers. */
+export interface AgentHuntResponse {
+  hypothesis: string;
+  /**
+   * Whether the hunt *ran*. Not the same as `matches.length > 0`: a hunt
+   * that could not run is not a hunt that found nothing, and collapsing
+   * the two is how a console shows a reassuring empty result for a search
+   * that never happened. False always carries an `unavailable_reason`.
+   */
+  checked: boolean;
+  matches: Record<string, unknown>[];
+  /** Plans the validator would not run. Shown, not swallowed. */
+  refusals: string[];
+  unavailable_reason: string | null;
+}
+
 export const huntApi = {
+  /**
+   * Natural-language hunting through the agent (parity 6.1).
+   *
+   * The agent plans; the planner validates every attempt against the
+   * allowed shape. The model never writes a query directly. The tenant
+   * comes from the caller's token server-side and is deliberately not a
+   * parameter here.
+   */
+  runAgentHunt: (hypothesis: string) =>
+    request<AgentHuntResponse>('/api/v1/agents/hunt', {
+      method: 'POST',
+      body: JSON.stringify({ hypothesis }),
+    }),
+
   search: (query: HuntQuery) =>
     request<HuntResponse>('/api/v1/hunt/search', {
       method: 'POST',

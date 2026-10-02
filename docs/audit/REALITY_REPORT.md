@@ -54,7 +54,7 @@ Phase 0 of the world-class program (`AISOC_CURSOR_PROMPT_V2.md`). This document 
 
 | Claim | Code path | Status | Gated in CI? |
 |---|---|---|---|
-| MCP server exposes 18 tools | `services/mcp/` | functional-untested | Yes (`ci.yml` MCP job: type-check/test/build) |
+| MCP server exposes 19 tools | `services/mcp/` | functional-untested | Yes (`ci.yml` MCP job: type-check/test/build) |
 | Plugin SDK Python/TypeScript/Go | `packages/sdk-{py,ts,go}` | functional-untested | Build/test gated; contract-drift vs `docs/openapi.yaml` NOT gated |
 
 ## Overclaims (ranked)

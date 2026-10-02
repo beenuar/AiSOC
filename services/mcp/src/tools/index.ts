@@ -27,6 +27,7 @@ import {
 } from "./investigations.js";
 import { lakeQueryTool, lakeSchemaTool } from "./lake.js";
 import { getReplayReportTool, listReplayReportsTool } from "./replay.js";
+import { runHuntTool } from "./hunt.js";
 import { getTriageVerdictTool } from "./triage.js";
 import type { ToolDefinition } from "./types.js";
 
@@ -52,6 +53,11 @@ export const ALL_TOOLS: ToolDefinition[] = [
   // read the listing top-to-bottom should reach for SELECT only after
   // they've seen the structured tools.
   lakeQueryTool,
+  // Hunting. Sits beside the lake tools because it answers the same kind
+  // of question from the other end: `lakeQueryTool` wants SQL, this one
+  // wants a sentence and has the planner turn it into a validated plan.
+  // Read-only, like both of them.
+  runHuntTool,
   // Action / replay. `previewActionTool` is the only tool here that touches
   // the response surface, and it is dry-run only: it names the dry-run path
   // and nothing in `src/` names `/dispatch`. `tests/actions.test.ts` asserts

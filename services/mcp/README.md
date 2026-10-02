@@ -89,7 +89,7 @@ Print the resolved paths for your own machine with `node dist/index.js install -
 
 ## Tools exposed
 
-The server advertises **18 tools**. Discovery tools list things, deep-dive tools fetch one thing, the lake pair runs governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning.
+The server advertises **19 tools**. Discovery tools list things, deep-dive tools fetch one thing, the lake pair runs governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning.
 
 Every tool carries MCP behaviour annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`), so a client that takes them seriously can decide what it may call without an operator vouching for each tool by name. **Seventeen of the eighteen are read-only.** The exception is `aisoc_run_investigation`, which starts an agent run, and it is annotated as such rather than being quietly marked read-only. No tool is annotated destructive, because none is.
 

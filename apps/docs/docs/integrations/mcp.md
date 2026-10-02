@@ -88,7 +88,7 @@ If the assistant asks for permission to call `aisoc_*` tools, that's expected â€
 
 ## Tools exposed
 
-The server advertises **18 tools** to your assistant. Discovery tools list things, deep-dive tools fetch one thing, the lake-query pair lets agents run governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning:
+The server advertises **19 tools** to your assistant. Discovery tools list things, deep-dive tools fetch one thing, the lake-query pair lets agents run governed SELECTs over the warm tier, and the replay tools expose the agent's own reasoning:
 
 ```mermaid
 graph LR

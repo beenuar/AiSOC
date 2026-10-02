@@ -38,6 +38,7 @@ const EXPECTED_TOOLS = [
   // only ones that touch the response surface, and the preview is dry-run
   // only (see tests/actions.test.ts).
   "aisoc_get_triage_verdict",
+  "aisoc_run_hunt",
   "aisoc_list_replay_reports",
   "aisoc_get_replay_report",
   "aisoc_list_actions",

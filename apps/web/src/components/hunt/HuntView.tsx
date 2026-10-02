@@ -733,10 +733,42 @@ export function HuntView() {
       setNlSubmittedQuery(cleaned);
       setNlExplanation(explanation || null);
     } catch (err) {
+      // The translator could not turn this into a query. Ask the hunting
+      // agent to plan one instead, rather than leaving the analyst with a
+      // toast and an empty editor.
+      //
+      // This is also what takes `services/agents/app/hunt/agent.py` off
+      // the unreachable list on the console side: its only importer
+      // repo-wide used to be its own test.
       console.error('NL translate failed', err);
-      toast.error('Could not translate the question');
       setNlSubmittedQuery(cleaned);
       setNlExplanation(null);
+      try {
+        const hunted = await huntApi.runAgentHunt(cleaned);
+        if (!hunted.checked) {
+          // `checked: false` is not "found nothing". Say which it was.
+          toast.error(
+            hunted.unavailable_reason ??
+              'The hunt could not run, so this is not a result about your estate.',
+          );
+        } else {
+          setNlExplanation(
+            hunted.matches.length > 0
+              ? `The agent planned and ran this hunt: ${hunted.matches.length} match(es).`
+              : 'The agent ran this hunt and nothing matched. That is a result.',
+          );
+          if (hunted.refusals.length > 0) {
+            // Shown rather than swallowed: a plan the validator would not
+            // run is information, and the model never writes a query
+            // directly — it picks from a vocabulary.
+            toast(`The planner declined ${hunted.refusals.length} plan(s). See the console log.`);
+            console.info('hunt.refusals', hunted.refusals);
+          }
+        }
+      } catch (agentErr) {
+        console.error('agent hunt failed', agentErr);
+        toast.error('Could not translate the question, and the hunting agent is unavailable.');
+      }
     } finally {
       setNlPending(false);
     }
