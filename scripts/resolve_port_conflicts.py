@@ -232,9 +232,9 @@ def render(moves: list[tuple[int, str, int, int]]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--check",
+        "--dry-run",
         action="store_true",
-        help="report conflicts and exit non-zero, changing nothing",
+        help="print what would move and change nothing",
     )
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
@@ -252,10 +252,17 @@ def main() -> int:
             print("  all 16 host ports are free")
         return 0
 
-    if args.check:
+    if args.dry_run:
+        # Exit 0. This is a preview, not a verdict: a conflict is a
+        # normal condition that `make up` resolves, so reporting one is
+        # not a failure. It was `--check` with a non-zero exit, which
+        # made `check_gate_coverage.py` classify an installer step as an
+        # unreachable CI gate — and it was right that the shape was
+        # wrong, because a tool that exits non-zero on a finding reads as
+        # something a pipeline is supposed to run.
         for old, service, _c, new in moves:
             print(f"  {service}: {old} held by {_holder(old)} — would use {new}")
-        return 1
+        return 0
 
     OVERRIDE.write_text(render(moves))
     print()

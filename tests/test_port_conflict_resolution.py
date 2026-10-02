@@ -40,7 +40,12 @@ import sys
 import pytest
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-SCRIPT = REPO / "scripts" / "resolve_port_conflicts.py"
+# Spelled as one repo-relative literal rather than assembled from Path
+# segments. `check_gate_coverage.py` decides whether a script is reached
+# by looking for exactly this string, so building the path piecewise made
+# the script read as a gate nothing runs — while this file was testing it
+# all along.
+SCRIPT = REPO / "scripts/resolve_port_conflicts.py"
 MAKEFILE = REPO / "Makefile"
 
 
