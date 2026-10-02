@@ -218,6 +218,20 @@ EVIDENCE: dict[str, Evidence] = {
             "requires the refused isolate to reach the vendor, which fails the suite."
         ),
     ),
+    "Event lake + hunting (ClickHouse)": Evidence(
+        tests=("tests/isolation/test_lake_live.py",),
+        workflow="lake-live.yml",
+        job="lake-live",
+        negative_control=".github/workflows/lake-live.yml",
+        negative_marker="The gate fails when the tenant rewrite is a pass-through",
+        rationale=(
+            "Executes `services/api/clickhouse/001_init.sql` verbatim rather than a "
+            "hand-written subset, which the previous live test used and which cannot "
+            "notice the real schema drifting — the first version of this suite inserted "
+            "two columns the shipped table does not have. The negative control makes "
+            "`rewrite_for_tenant` a pass-through and requires three tests to fail."
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",

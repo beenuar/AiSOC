@@ -1,0 +1,118 @@
+# The event lake, against the schema the product actually ships.
+#
+# Why loading the real DDL is the point
+# ---------------------------------------
+# `test_live_stores.py` has a live ClickHouse case and it writes its own
+# `CREATE TABLE aisoc.raw_events` — a hand-maintained subset of what
+# `services/api/clickhouse/001_init.sql` creates. A test that builds its own
+# schema cannot notice the real one has drifted, which is the same shape as
+# asserting on a producer against a copy of itself.
+#
+# Writing this suite proved the point immediately: the first version
+# inserted `message` and `raw_event`, and the shipped table has neither.
+#
+# No `paths:` filter. The previous arrangement also filtered on paths that
+# omitted `lake_hunt.py`, `lake_rate_limit.py` and `endpoints/lake.py`, so
+# editing the lake's own query surface never re-graded it.
+name: Event lake (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: lake-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  lake-live:
+    name: The shipped DDL loads and tenant scoping holds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Start ClickHouse
+        run: |
+          docker run -d --name lake-clickhouse -p 9000:9000 -p 8123:8123 \
+            -e CLICKHOUSE_SKIP_USER_SETUP=1 \
+            clickhouse/clickhouse-server:24.3-alpine
+
+      - name: Install the API service
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet \
+            clickhouse-driver "sqlglot>=30,<31" structlog \
+            "pydantic>=2,<3" pydantic-settings "fastapi>=0.117,<0.142" \
+            "sqlalchemy[asyncio]" asyncpg "PyJWT>=2.8,<3" \
+            pytest pytest-asyncio
+
+      - name: Wait for ClickHouse
+        run: |
+          for i in $(seq 1 60); do
+            if docker exec lake-clickhouse clickhouse-client -q "SELECT 1" >/dev/null 2>&1; then
+              echo "ClickHouse ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "ClickHouse did not become ready"; docker logs lake-clickhouse | tail -40; exit 1
+
+      - name: The shipped DDL loads and tenant scoping holds
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_lake_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # Makes `rewrite_for_tenant` a pass-through — the shape where an
+      # operator's SQL reaches the lake unfiltered and every tenant reads
+      # every other tenant's events. Measured: three of the six tests
+      # fail, including the fail-closed one.
+      #
+      # Worth stating why the fail-closed test is in that set. Returning
+      # the original SQL when the rewrite cannot be applied is exactly
+      # what a pass-through does, so a control that only checked the
+      # happy path would miss the more dangerous half.
+      - name: The gate fails when the tenant rewrite is a pass-through
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          cp app/services/lake_sql.py /tmp/lake_sql.bak
+          python - <<'PY'
+          import pathlib, re, sys
+          p = pathlib.Path("app/services/lake_sql.py")
+          s = p.read_text()
+          m = re.search(r"\ndef rewrite_for_tenant\(\n(.*?)\n\) -> [^\n]*:\n", s, re.S)
+          if not m:
+              print("negative control could not find rewrite_for_tenant's signature; it "
+                    "has been reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(s[: m.end()] + "    return sql  # injected pass-through\n" + s[m.end() :])
+          PY
+          if python -m pytest ../../tests/isolation/test_lake_live.py -q >/dev/null 2>&1; then
+            cp /tmp/lake_sql.bak app/services/lake_sql.py
+            echo "FAIL: the suite passed with the tenant rewrite doing nothing."
+            exit 1
+          fi
+          cp /tmp/lake_sql.bak app/services/lake_sql.py
+          echo "OK: a pass-through rewrite makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_lake_live.py -q
+
+      - name: ClickHouse logs on failure
+        if: failure()
+        run: docker logs lake-clickhouse | tail -60
