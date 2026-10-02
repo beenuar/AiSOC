@@ -134,15 +134,29 @@ ceilings:
     # file, exactly 1 finding. CI measured the whole tree at 104/40 against
     # the ceiling of 103, which is the +1 and nothing else.
     #
-    # 104/40 -> 103/39. Both went down by one, and the ratchet asked for
-    # it rather than letting the improvement evaporate: the alert-trigger
-    # test in parity 5.1 imported its monkeypatch targets inline in three
-    # places, which CodeQL flagged as `py/import-and-import-from`, and
-    # moving them to a single from-import at the top removed a semgrep
-    # finding of each kind alongside it. Lowering here is what stops the
-    # number drifting back up for free.
-    total: 103
-    error: 39
+    # Held at 104/40, and the reason is worth more than the number.
+    #
+    # One run measured 103/39 and the ratchet asked to lock that in. The
+    # next run on the same branch measured 104/40 again, and **no file
+    # semgrep scans had changed between them** — the two commits in
+    # between touched `.github/workflows/link-check.yml` and this file,
+    # and the job scans `services/ apps/ packages/ scripts/` only.
+    #
+    # The workflow pins the semgrep *binary* to 1.86.0 precisely so the
+    # count cannot re-baseline itself. It does not pin the **rule packs**:
+    # `p/security-audit`, `p/owasp-top-ten`, `p/python`, `p/typescript`
+    # and `p/react` are fetched from the registry at scan time, so the
+    # ratchet compares today's tree against whatever those packs contain
+    # today. A pinned binary against unpinned rules is half a pin.
+    #
+    # So a ±1 drift here is not evidence about the code, and lowering the
+    # ceiling on a low reading would red the next pull request for a rule
+    # update nobody in this repository made. Pinning the packs by digest
+    # is the real fix and is tracked in issue #1099 rather than done here,
+    # because it
+    # re-baselines every count in this file and belongs in its own change.
+    total: 104
+    error: 40
     measured_with: "1.86.0"
   checkov:
     failed: 219
