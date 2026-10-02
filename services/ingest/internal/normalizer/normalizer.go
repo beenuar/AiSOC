@@ -207,6 +207,46 @@ var connectorProfiles = map[string]connectorProfile{
 			"CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFORMATIONAL": 1,
 		},
 	},
+	// aws_cloudtrail — the audit log of the AWS account itself.
+	//
+	// It had no entry here, and the symptom found in live QA is worse than
+	// "unmapped": every CloudTrail event collapsed into **one alert**. The
+	// generic fallback produces a title of "Security Finding from
+	// aws_cloudtrail" for every event and carries no vendor id, and the
+	// alert id is a v5 UUID derived from that content — so a console login
+	// and a DeleteTrail dedup onto the same row. A customer connecting
+	// CloudTrail would see exactly one alert no matter what happened in
+	// their account, which reads as a quiet estate rather than as a bug.
+	//
+	// Mapped from the connector's own lowercase keys (see
+	// `services/connectors/app/connectors/aws_cloudtrail.py::normalize`),
+	// not from raw CloudTrail field names: by the time ingest sees this the
+	// connector has already flattened it.
+	//
+	// 2001 Security Finding rather than 3005/6003, because the connector
+	// ships a curated ~80-event allow-list — it has already decided these
+	// are security-relevant, which is the same reasoning that puts a Splunk
+	// notable at 2001. Category 2 is always promoted, so an IAM policy
+	// change does not need to clear a severity bar to reach a human.
+	"aws_cloudtrail": {
+		product:   OcsfProduct{Name: "CloudTrail", VendorName: "AWS"},
+		classUID:  2001,
+		className: "Security Finding",
+		fieldMap: map[string]string{
+			"created_at":  "time",
+			// `title` is the event name (ConsoleLogin, DeleteTrail), which
+			// is what makes two events two alerts rather than one.
+			"title":       "message",
+			"description": "finding.desc",
+			"external_id": "finding.uid",
+			"severity":    "severity",
+			"src_ip":      "src_endpoint.ip",
+			"user_name":   "actor.user.name",
+			"user_arn":    "actor.user.uid",
+			"aws_region":  "cloud.region",
+		},
+		severityMap: _canonicalSeverityMap,
+	},
 	// ai_runtime / ai_guardrail — the customer's AI estate.
 	//
 	// Two profiles rather than one, and the split is load-bearing. Routine AI
