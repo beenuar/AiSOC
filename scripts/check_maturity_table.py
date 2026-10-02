@@ -232,6 +232,23 @@ EVIDENCE: dict[str, Evidence] = {
             "`rewrite_for_tenant` a pass-through and requires three tests to fail."
         ),
     ),
+    "Retro-hunts when new intel arrives": Evidence(
+        tests=(
+            "tests/isolation/test_retro_hunt_live.py",
+            "tests/isolation/test_retro_hunt_consumer_live.py",
+        ),
+        workflow="retro-hunt-live.yml",
+        job="retro-hunt-live",
+        negative_control=".github/workflows/retro-hunt-live.yml",
+        negative_marker="The gate fails when the consumer stops rejecting poison",
+        rationale=(
+            "Graded with `RETRO_HUNT_ENABLED` on, which is the condition the definition "
+            "attaches to a default-off flag: a feature whose tests also run with it off "
+            "is untested, not opt-in. The sweep already re-implemented nothing; the "
+            "consumer had no coverage at all and its path filter omitted its own module, "
+            "so the loop deciding whether a fault is worth retrying was never graded."
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",

@@ -404,6 +404,18 @@ class Settings(BaseSettings):
     # and report healthy while doing so, so ``scripts/check_ioc_lake_mapping.py``
     # compares this value against that service's setting.
     # ------------------------------------------------------------------
+    # Default **off**, deliberately and permanently.
+    #
+    # A retro-hunt replays every newly-published indicator against a
+    # tenant's entire recorded history, so arming it on upgrade would
+    # change what a deployment does to its own lake without anyone asking
+    # — the same reasoning as the retention purge worker below.
+    #
+    # Off by default is not the same as untested: `retro-hunt-live.yml`
+    # grades the sweep and the consumer on every pull request, with the
+    # flag **on**, against a real ClickHouse and a real broker. See
+    # `docs/audit/MATURITY_DEFINITION.md` on why a flag's default does not
+    # bear on maturity but an ungraded flag does.
     RETRO_HUNT_ENABLED: bool = Field(
         default=False,
         validation_alias=AliasChoices("RETRO_HUNT_ENABLED", "AISOC_RETRO_HUNT_ENABLED"),

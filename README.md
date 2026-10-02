@@ -190,7 +190,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | REST API + web console | Stable | Unit + integration | Yes |
 | AI triage + Investigation Ledger | Beta | Unit + substrate eval + local-model run | Yes, copilot mode |
 | Event lake + hunting (ClickHouse) | Stable | Live ClickHouse on the shipped DDL, with a negative control | Yes, `full` profile |
-| Retro-hunts when new intel arrives | Beta | Unit + live ClickHouse replay | Yes, `full` profile |
+| Retro-hunts when new intel arrives | Stable | Live ClickHouse + Kafka with the flag on, with a negative control | Opt-in, `full` profile |
 | 68-hunt YAML library, replayed against synthetic events | Alpha | Unit + boundary gate | `full` profile. The NL hunting agent is **not wired** — nothing outside its own test imports it, and the scheduler reads a synthetic corpus rather than tenant data (parity 6.1) |
 | SCIM 2.0, white-label, usage metering | Stable | Live Postgres through the real app, with a negative control | Yes |
 | Entity graph (Neo4j) | Stable | Live Neo4j against the production reader, with a negative control | Yes, `full` profile |

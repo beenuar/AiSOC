@@ -80,6 +80,18 @@ approver by design, and AI triage ships in copilot mode. Neither is
 immaturity. What Stable asserts for a governed capability is that the
 governance machinery is proven — *including that it correctly refuses*.
 
+**Stable is independent of a feature flag's default.** Retro-hunting
+defaults off (`RETRO_HUNT_ENABLED = False`), as does the retention purge
+worker, and both for the same reason: they do expensive or destructive
+work across a tenant's whole history, so arming them on upgrade would
+change a deployment's behaviour without anyone asking. A deliberate
+opt-in is an operational choice of the same kind as a compose profile.
+
+The condition attached to that, and it is not a formality: the gate must
+grade the capability **with the flag on**. A default-off feature whose
+tests also run with it off is not Stable, it is untested — which is the
+distinction between an opt-in and a feature nobody has exercised.
+
 ## What the gate checks
 
 `check_maturity_table.py` parses the table out of `README.md` and, for every

@@ -1,0 +1,148 @@
+# Retro-hunts, with the feature flag ON, against a real ClickHouse and a
+# real broker, on every pull request.
+#
+# Why the flag's default does not hold this at Beta
+# ---------------------------------------------------
+# `RETRO_HUNT_ENABLED` defaults to False and stays that way: a retro-hunt
+# replays every newly-published indicator against a tenant's entire recorded
+# history, so arming it on upgrade would change what a deployment does to
+# its own lake without anyone asking.
+#
+# `docs/audit/MATURITY_DEFINITION.md` says a flag's default is an
+# operational choice of the same kind as a compose profile, with one
+# condition that is not a formality: the gate must grade the capability
+# **with the flag on**. A default-off feature whose tests also run with it
+# off is not Stable, it is untested.
+#
+# So `RETRO_HUNT_ENABLED: "true"` below is load-bearing.
+#
+# What was missing
+# ------------------
+# The sweep already had a live suite that re-implements nothing. The
+# **consumer** had none, and its path filter omitted
+# `retro_hunt_consumer.py` entirely — so the loop that decides whether a
+# fault is worth retrying was never graded by anything.
+#
+# That gap has shipped as a defect here before, in its worst form: UEBA's
+# Kafka consumer had no `except` at all, so a handler exception exited the
+# `async for`, `finally` stopped the consumer, and the container sat at
+# `running` with restarts 0 and `/health` returning 200 — permanently, with
+# the exception never logged.
+name: Retro-hunt (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: retro-hunt-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  retro-hunt-live:
+    name: A published indicator sweeps its tenant's recorded data
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Load-bearing. See the header.
+      RETRO_HUNT_ENABLED: "true"
+      ISOLATION_CLICKHOUSE_HOST: localhost
+      ISOLATION_CLICKHOUSE_PORT: "9000"
+      ISOLATION_KAFKA_BROKERS: 127.0.0.1:9092
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Start ClickHouse
+        run: |
+          docker run -d --name rh-clickhouse -p 9000:9000 -p 8123:8123 \
+            -e CLICKHOUSE_SKIP_USER_SETUP=1 \
+            clickhouse/clickhouse-server:24.3-alpine
+
+      # Redpanda rather than Kafka, matching `isolation-live.yml`: same
+      # Kafka API, one container, no ZooKeeper.
+      - name: Start Redpanda (Kafka API)
+        run: |
+          docker run -d --name rh-redpanda -p 9092:9092 \
+            redpandadata/redpanda:v24.2.7 \
+            redpanda start --mode dev-container --smp 1 \
+            --kafka-addr PLAINTEXT://0.0.0.0:9092 \
+            --advertise-kafka-addr PLAINTEXT://127.0.0.1:9092
+
+      - name: Install the API service
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet \
+            clickhouse-driver "kafka-python>=2,<3" "sqlglot>=30,<31" \
+            structlog "pydantic>=2,<3" pydantic-settings \
+            "fastapi>=0.117,<0.142" "sqlalchemy[asyncio]" asyncpg \
+            "PyJWT>=2.8,<3" pytest pytest-asyncio
+
+      - name: Wait for the stores
+        run: |
+          for i in $(seq 1 60); do
+            docker exec rh-clickhouse clickhouse-client -q "SELECT 1" >/dev/null 2>&1 && break
+            sleep 1
+          done
+          for i in $(seq 1 60); do
+            docker exec rh-redpanda rpk cluster info >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec rh-clickhouse clickhouse-client -q "SELECT 1"
+          docker exec rh-redpanda rpk cluster info >/dev/null
+
+      - name: A published indicator is found only for the tenant whose data holds it
+        working-directory: services/api
+        env:
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_retro_hunt_live.py -v --tb=short
+
+      - name: The consumer tells a working message from poison
+        working-directory: services/api
+        run: python -m pytest ../../tests/isolation/test_retro_hunt_consumer_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # Makes `parse_intel_event` accept everything. A parser that returns
+      # a payload for undecodable bytes hands the sweep an envelope it
+      # cannot use, which is how one malformed message stops a working
+      # subscription — the class of defect this job exists for.
+      #
+      # Measured locally: the two poison tests fail.
+      - name: The gate fails when the consumer stops rejecting poison
+        working-directory: services/api
+        run: |
+          cp app/workers/retro_hunt_consumer.py /tmp/retro_hunt_consumer.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/workers/retro_hunt_consumer.py")
+          s = p.read_text()
+          needle = "    except (TypeError, ValueError):\n        return None\n"
+          if needle not in s:
+              print("negative control could not find the parser's guard; it has been "
+                    "reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(s.replace(needle, '    except (TypeError, ValueError):\n        return {"event_type": "NEW_IOC", "data": {"value": "x", "type": "ipv4"}}\n', 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_retro_hunt_consumer_live.py -q >/dev/null 2>&1; then
+            cp /tmp/retro_hunt_consumer.bak app/workers/retro_hunt_consumer.py
+            echo "FAIL: the suite passed with the parser accepting undecodable bytes."
+            exit 1
+          fi
+          cp /tmp/retro_hunt_consumer.bak app/workers/retro_hunt_consumer.py
+          echo "OK: a parser that accepts poison makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_retro_hunt_consumer_live.py -q
+
+      - name: Store logs on failure
+        if: failure()
+        run: |
+          docker logs rh-clickhouse 2>&1 | tail -40
+          docker logs rh-redpanda 2>&1 | tail -40
