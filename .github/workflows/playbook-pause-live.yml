@@ -16,7 +16,7 @@
 #
 # No `paths:` filter: `docs/audit/MATURITY_DEFINITION.md` requires a Stable
 # capability to be graded on every pull request.
-name: Playbook pause (live)
+name: Playbook pause + ledger (live)
 
 on:
   push:
@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   playbook-pause-live:
-    name: Suspend, resume, expire and isolate against real Postgres
+    name: Playbook pause and Investigation Ledger against real Postgres
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -102,6 +102,16 @@ jobs:
         env:
           ISOLATION_PLAYBOOK_DSN: ${{ env.PLAYBOOK_DSN }}
         run: python -m pytest ../../tests/isolation/test_playbook_pause_live.py -v --tb=short
+
+      # The Investigation Ledger, the surface an auditor reads. Its
+      # offline test drives a `_FakeConn` and opens no connection, so it
+      # cannot prove the rows exist, that RLS applies, or that the
+      # foreign keys refuse an event for a run nobody started.
+      - name: The Investigation Ledger persists, scopes and refuses
+        working-directory: services/agents
+        env:
+          ISOLATION_LEDGER_DSN: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_ledger_live.py -v --tb=short
 
       # The negative control.
       #

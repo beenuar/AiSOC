@@ -264,6 +264,23 @@ EVIDENCE: dict[str, Evidence] = {
             "findings from real ones."
         ),
     ),
+    "AI triage + Investigation Ledger": Evidence(
+        tests=("tests/isolation/test_ledger_live.py",),
+        workflow="playbook-pause-live.yml",
+        job="playbook-pause-live",
+        negative_control=".github/workflows/live-agent-eval.yml",
+        negative_marker="The agent places a real LLM call on this commit",
+        rationale=(
+            "Two halves. The ledger is proven against real Postgres — its offline test "
+            "drives a `_FakeConn` and cannot show the rows exist, that RLS applies, or "
+            "that a foreign key refuses an event for a run nobody started. And the agent "
+            "is now graded at commit level: `live-agent-smoke` dispatches the real "
+            "LangGraph against a bundled local model on every pull request and fails when "
+            "`llm_calls_placed` is zero, which is the field that distinguishes a live run "
+            "from one where every agent used its deterministic fallback. **No hosted "
+            "provider has ever been exercised; that remains a separate, unmade claim.**"
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",
@@ -654,17 +671,21 @@ def _self_test() -> int:
 
     # 1. A row marked Stable with no evidence entry at all.
     #
-    # The victim is chosen from the table rather than named, because this
-    # case originally hardcoded a capability that was later promoted. The
-    # replacement then matched nothing, the case found nothing unbacked,
-    # and a self-test that silently stops testing is worse than one that
-    # was never written. If every row is Stable there is nothing to
-    # perturb, so the case reports honestly rather than passing.
+    # The victim is derived, never named. This case first hardcoded a
+    # capability that later earned promotion: the replacement matched
+    # nothing, the case found nothing unbacked, and a self-test that
+    # silently stops testing is worse than one never written.
+    #
+    # Then every row became Stable and the second version — which looked
+    # for a Beta or Alpha row to promote — had nothing to perturb either.
+    # So it now works from whichever end has material: promote an
+    # unearned row if one exists, otherwise take an earned row's evidence
+    # away. Both exercise the same rule, that a Stable row without an
+    # evidence entry is refused.
     text = README.read_text(encoding="utf-8", errors="replace")
     victim = next((r for r in baseline.rows if r.status in ("Beta", "Alpha")), None)
-    if victim is None:
-        cases.append(("no Beta or Alpha row left to perturb for this case", False))
-    else:
+
+    if victim is not None:
         faked = text.replace(
             f"| {victim.capability} | {victim.status} |",
             f"| {victim.capability} | Stable |",
@@ -672,7 +693,20 @@ def _self_test() -> int:
         )
         rows, _ = parse_table(faked)
         unbacked = [r for r in rows if r.status == "Stable" and _match_key(r.capability) is None]
-        cases.append((f"detects {victim.capability[:38]!r} marked Stable with no evidence", bool(unbacked)))
+        cases.append((f"detects {victim.capability[:34]!r} promoted with no evidence", bool(unbacked)))
+    else:
+        stable = next((r for r in baseline.rows if r.status == "Stable"), None)
+        if stable is None:
+            cases.append(("the table has no row to perturb for this case", False))
+        else:
+            key = _match_key(stable.capability)
+            removed = EVIDENCE.pop(key, None) if key else None
+            try:
+                unbacked = _match_key(stable.capability) is None
+            finally:
+                if key and removed is not None:
+                    EVIDENCE[key] = removed
+            cases.append((f"detects {stable.capability[:34]!r} Stable once its evidence is gone", unbacked))
 
     # 2. An entry whose workflow is path-filtered.
     ok, _ = workflow_is_unconditional("isolation-live.yml", "live-stores")

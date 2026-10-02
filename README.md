@@ -188,7 +188,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | Detection engine (2603 executable rules) of 6991 | Stable | Replay proof | Yes |
 | Alert correlation into incidents | Stable | Unit | Yes |
 | REST API + web console | Stable | Unit + integration | Yes |
-| AI triage + Investigation Ledger | Beta | Unit + substrate eval + local-model run | Yes, copilot mode |
+| AI triage + Investigation Ledger | Stable | Live Postgres ledger + a PR-gated local-model agent run. No hosted provider has been exercised | Yes, copilot mode |
 | Event lake + hunting (ClickHouse) | Stable | Live ClickHouse on the shipped DDL, with a negative control | Yes, `full` profile |
 | Retro-hunts when new intel arrives | Stable | Live ClickHouse + Kafka with the flag on, with a negative control | Opt-in, `full` profile |
 | 68-hunt YAML library, replayed against tenant events | Stable | Live ClickHouse: scheduled hunts read tenant data and refuse to fall back to the fixture | Yes, `full` profile |

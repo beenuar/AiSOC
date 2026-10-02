@@ -33,6 +33,7 @@ name: Live agent eval (local model)
 # on-demand, failing hard when the floor is breached, is what that supports.
 
 on:
+  pull_request:
   workflow_dispatch:
     inputs:
       model:
@@ -64,12 +65,20 @@ permissions:
   pull-requests: write
 
 concurrency:
-  group: live-agent-eval-${{ github.ref }}
-  cancel-in-progress: true
+  # Per commit on a push and per pull request otherwise. Keying on
+  # `github.ref` alone lets a push to main cancel the run before it:
+  # across 1,000 push runs this repository lost 259 that way, and a
+  # cancelled run reports neither pass nor fail.
+  group: live-agent-eval-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   live-agent:
     name: Dispatch the real agent against a local model
+    # The deep run stays on the schedule and on demand: ten incidents
+    # through a CPU-hosted model is a 90-minute budget, which is not a
+    # pull-request shape. The PR gate is `live-agent-smoke` below.
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -234,3 +243,139 @@ jobs:
       - name: Ollama log on failure
         if: failure()
         run: tail -100 "$RUNNER_TEMP/ollama.log" || true
+
+  # Commit-level grading of the agent, which did not exist.
+  #
+  # `REALITY_REPORT.md` calls that "the hard ceiling on the project's
+  # credibility": `mitre_accuracy` is an offline keyword extractor, and both
+  # jobs that dispatch the real LangGraph ran only on a schedule or on
+  # demand. So no pull request had ever been graded on agent behaviour.
+  #
+  # This job is deliberately small. One incident, the smallest bundled
+  # model, and one question: **did the agent place a real LLM call and come
+  # back with something schema-valid?** It is not an accuracy measurement —
+  # the deep run above is — it is the check that the live path still works
+  # on the commit being merged.
+  #
+  # The distinction matters because the harness has been fooled before. With
+  # the model pins unset every agent caught its provider error and used its
+  # deterministic fallback, and the run reported `mode: live` with a
+  # groundedness of 0.8050 at 0.11s per investigation — flattering, and
+  # faster than a network round trip. `--wet-require-live` could not see it
+  # because records existed and the stack had imported. `llm_calls_placed`
+  # is what closes that hole, and this job asserts on it directly.
+  live-agent-smoke:
+    name: The agent places a real LLM call on this commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      OLLAMA_MODEL: qwen2.5:0.5b
+      INCIDENT_LIMIT: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+
+      - name: Install agent dependencies
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+
+      - name: Install Ollama
+        run: |
+          set -euo pipefail
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama --version
+
+      - name: Serve the model
+        run: |
+          set -euo pipefail
+          nohup ollama serve > "$RUNNER_TEMP/ollama.log" 2>&1 &
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:11434/api/tags >/dev/null; then
+              echo "ollama up after ${i}s"; break
+            fi
+            sleep 1
+          done
+          curl -sf http://127.0.0.1:11434/api/tags >/dev/null || {
+            echo "::error title=live-agent-smoke::Ollama never became ready."
+            tail -50 "$RUNNER_TEMP/ollama.log"
+            exit 1
+          }
+          ollama pull "$OLLAMA_MODEL"
+
+      - name: Dispatch the agent on one incident
+        env:
+          WET_EVAL_OPENAI_KEY: ollama
+          OPENAI_API_KEY: ollama
+          OPENAI_BASE_URL: http://127.0.0.1:11434/v1
+          # One pin per role: the roles resolve through
+          # `app.llm.model_pins.get_pin`, whose only env override is
+          # `AISOC_MODEL_PIN_<ROLE>`. Leave them unset and every agent asks
+          # Ollama for a gateway alias it has never heard of, then falls back
+          # deterministically — which is the failure this job exists to catch.
+          AISOC_MODEL_PIN_TRIAGE: qwen2.5:0.5b
+          AISOC_MODEL_PIN_RECON: qwen2.5:0.5b
+          AISOC_MODEL_PIN_NL: qwen2.5:0.5b
+          AISOC_MODEL_PIN_HUNT: qwen2.5:0.5b
+        run: |
+          set -euo pipefail
+          python3 scripts/run_evals.py \
+            --wet \
+            --wet-require-live \
+            --wet-model "$OLLAMA_MODEL" \
+            --wet-limit "$INCIDENT_LIMIT" \
+            --out live-agent-smoke.json \
+            --wet-out live-agent-smoke.wet.json
+
+      # The assertion, and the only one this job makes.
+      #
+      # A report with `llm_calls_placed: 0` means every agent fell back
+      # without a provider ever being reached — a run that looks measured
+      # and measured nothing.
+      - name: A real LLM call was placed
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, pathlib, sys
+
+          report = pathlib.Path("live-agent-smoke.wet.json")
+          if not report.is_file():
+              print("::error title=live-agent-smoke::No report produced; the dispatch step "
+                    "did not get far enough to write one.")
+              sys.exit(1)
+
+          data = json.loads(report.read_text())
+          # Nested under `groundedness`, which is where the harness writes
+          # it and where `check_live_agent_floor.py` reads it. The
+          # top-level lookup is a fallback rather than the primary, so a
+          # schema change surfaces as a failure here rather than as a
+          # silently absent field.
+          groundedness = data.get("groundedness") or {}
+          placed = groundedness.get("llm_calls_placed", data.get("llm_calls_placed"))
+          if placed is None:
+              print("::error title=live-agent-smoke::The report carries no "
+                    "`llm_calls_placed`. That field is what distinguishes a live run from "
+                    "one where every agent used its deterministic fallback, and without it "
+                    "this job cannot tell them apart.")
+              sys.exit(1)
+          if not placed:
+              print(f"::error title=live-agent-smoke::llm_calls_placed={placed}. The agent "
+                    "placed no LLM call at all, so whatever it reported came from a "
+                    "fallback rather than a model.")
+              sys.exit(1)
+
+          print(f"OK: {placed} LLM call(s) placed against the local model.")
+          PY
+
+      - name: Report on failure
+        if: failure()
+        run: |
+          set -uo pipefail
+          tail -40 "$RUNNER_TEMP/ollama.log" || true
+          [ -f live-agent-smoke.wet.json ] && head -c 2000 live-agent-smoke.wet.json || true
