@@ -137,6 +137,19 @@ ANY_SHAPE = "*"
 #: both shapes out for the other four would have duplicated four paragraphs
 #: to express "no change".
 EMPTY_TREE_EXCEPTIONS: dict[str, dict[str, tuple[str, str]]] = {
+    "resolve_port_conflicts.py": {
+        ANY_SHAPE: (
+            "passed",
+            "Not a check of the repository. It asks the operating system which TCP ports are "
+            "held and moves AiSOC off the ones that are, so `make up` resolves a conflict "
+            "instead of refusing to start. Exit 0 means 'no port is in use', which is a real "
+            "finding about the host rather than a tree it never opened — and the one piece of "
+            "repository content it does read, the port inventory in scripts/doctor.sh, it "
+            "refuses to run without: a bare tree missing that file exits 1 with the reason, "
+            "Its --self-test proves the two properties that have already been wrong once, the "
+            "probe reporting a held port as held and the overlay using `ports: !override`.",
+        )
+    },
     "wet_eval_check.py": {
         ANY_SHAPE: (
             "passed",

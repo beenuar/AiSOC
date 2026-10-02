@@ -49,7 +49,14 @@ import socket
 import subprocess
 import sys
 
-REPO = pathlib.Path(__file__).resolve().parent.parent
+# Asked of git, not derived from `__file__`. Two levels above this script
+# is whatever happens to be there — a vendored copy, a worktree, a
+# scripts/ directory someone moved — and the overlay this writes has to
+# land beside the `docker-compose.yml` that compose will read.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from gate_toolkit import repo_root  # noqa: E402
+
+REPO = repo_root()
 COMPOSE = REPO / "docker-compose.yml"
 OVERRIDE = REPO / "docker-compose.ports.yml"
 DOCTOR = REPO / "scripts" / "doctor.sh"
@@ -72,6 +79,13 @@ def inventory() -> list[tuple[int, str, int]]:
     missing from the original for exactly that reason, and the conflict
     this audience is most likely to hit was the one nothing checked.
     """
+    if not DOCTOR.exists():
+        raise SystemExit(
+            f"resolve_port_conflicts: {DOCTOR} does not exist. It holds the only list of "
+            "host ports CORE publishes, and guessing which ports to move would be worse "
+            "than stopping. This usually means the script was copied out of the "
+            "repository it belongs to."
+        )
     text = DOCTOR.read_text()
     match = re.search(r'for spec in (".*?"); do', text, re.S)
     if not match:
@@ -229,6 +243,46 @@ def render(moves: list[tuple[int, str, int, int]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _self_test() -> int:
+    """Prove the probe and the overlay still do what they claim.
+
+    Not a gate's self-test in the usual sense — this script resolves a
+    conflict rather than rendering a verdict — but the two properties it
+    rests on are worth proving on demand, because both have already been
+    wrong once:
+
+    * the probe must report a held port as held, which it did not while
+      it set `SO_REUSEADDR`;
+    * the overlay must use `ports: !override`, because a plain override
+      appends and leaves the conflicting binding published.
+    """
+    results: list[tuple[str, bool]] = []
+
+    held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    held.bind(("127.0.0.1", 0))
+    held.listen(1)
+    port = held.getsockname()[1]
+    try:
+        results.append(("a held port is reported held", _listening(port) is True))
+    finally:
+        held.close()
+    results.append(("a free port is reported free", _listening(port) is False))
+
+    rendered = render([(5432, "postgres", 5432, 15432)])
+    results.append(("the overlay uses ports: !override", "ports: !override" in rendered))
+    results.append(("the overlay publishes the new port", '"15432:5432"' in rendered))
+    results.append(("the inventory parses out of doctor.sh", len(inventory()) >= 16))
+
+    for label, ok in results:
+        print(f"  {'PASS' if ok else 'FAIL'}  {label}")
+    failed = [label for label, ok in results if not ok]
+    if failed:
+        print(f"\nresolve_port_conflicts: self-test FAILED ({len(failed)})")
+        return 1
+    print("\nresolve_port_conflicts: self-test OK")
+    return 0
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -237,7 +291,15 @@ def main() -> int:
         help="print what would move and change nothing",
     )
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="prove the probe and the overlay still work, and change nothing",
+    )
     args = parser.parse_args()
+
+    if args.self_test:
+        return _self_test()
 
     moves = plan()
 
