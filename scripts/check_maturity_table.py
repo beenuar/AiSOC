@@ -1,0 +1,504 @@
+#!/usr/bin/env python3
+"""Every Stable row in the README's maturity table must have earned it.
+
+Why this gate exists
+--------------------
+The Project maturity table published a status for fifteen capabilities and
+**nothing checked any of them**. There was no definition of Stable, Beta or
+Alpha anywhere in the repository, no gate parsed the table, and the labels
+appeared in no other file. Promoting a capability was a one-line edit.
+
+That is the claim shape this project exists to refuse. Phase 1.1 of the
+parity plan retracted twelve published claims nothing checked; the maturity
+table was the last large claim surface with no gate behind it. Worse, an
+audit found three of its rows were already wrong — two describing live
+database coverage that exists nowhere in CI, and one naming the wrong compose
+profile.
+
+The definition is in `docs/audit/MATURITY_DEFINITION.md` and was read off the
+four rows that already held Stable rather than invented, so no existing row
+had to be demoted to fit a standard written after the fact.
+
+What Stable requires
+--------------------
+1. **Unconditionally graded** — a PR check with no `paths:` filter and no
+   `if:` guard that could skip it.
+2. **Real production path** — the code a deployment runs, not a double.
+3. **Proven able to fail** — a negative control.
+4. **Real infrastructure** — containers, not in-memory SQLite with shims.
+
+Why a registry rather than parsing the prose
+---------------------------------------------
+The `Tested` column is written for humans. A gate that tried to infer
+evidence from it would either miss the row that matters or flag prose
+forever — the reasoning `check_profile_service_counts.py` records about its
+own list of exact sites. So each Stable row must name its evidence here, and
+this gate verifies the named artefacts exist and hold the four properties.
+
+It runs in **both directions**: an entry naming a row that is no longer
+Stable, or pointing at a file that has been renamed or deleted, fails too. A
+registry that only grows would accumulate stale entries implying coverage
+nobody has.
+"""
+
+from __future__ import annotations
+
+import argparse
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_main  # noqa: E402
+
+REPO = repo_root()
+README = REPO / "README.md"
+WORKFLOWS = REPO / ".github" / "workflows"
+
+#: The heading the table lives under, and the statuses it may publish.
+TABLE_HEADING = "## Project maturity"
+KNOWN_STATUSES = {"Stable", "Beta", "Alpha", "Ready, unpublished"}
+
+#: A name that, when *defined* in a test, means the system under test was
+#: replaced rather than exercised.
+FAKE_DEFINITION = re.compile(r"^\s*class\s+(_?(Fake|Mock|Stub|Dummy)\w*)", re.M)
+
+#: Libraries that intercept the boundary a test claims to cross. Listed
+#: because requiring a *driver import* was the wrong discriminator and
+#: produced a false negative on the strongest evidence in the repository:
+#: `run_golden_pipeline.py` drives a running stack over `urllib`, which is
+#: more real than any direct database connection, and imports no driver at
+#: all.
+#:
+#: So real-path is now two sharper questions — does the test replace the
+#: system under test, and does its job run real infrastructure — rather
+#: than one blunt one about imports.
+#:
+#: `sqlite` is here deliberately: the SCIM suite runs on `sqlite+aiosqlite`
+#: with `@compiles` shims for JSONB, UUID, INET and ARRAY, which is the
+#: exact "double more capable than the real schema" shape that let a query
+#: select two columns `detection_rules` does not have.
+INTERCEPTORS = (
+    "respx",
+    "responses.activate",
+    "unittest.mock.patch",
+    "aioresponses",
+    "sqlite+aiosqlite",
+    "sqlite:///",
+)
+
+
+@dataclass(frozen=True)
+class Evidence:
+    """What a Stable row claims, and where to verify it."""
+
+    #: Test files that exercise the real path. Repo-relative.
+    tests: tuple[str, ...]
+    #: Workflow filename that runs them, and the job id within it.
+    workflow: str
+    job: str
+    #: Where the negative control lives, and the marker proving it is one.
+    negative_control: str
+    negative_marker: str
+    #: Why this is the right evidence. Printed on failure, so an operator
+    #: reading a red build gets the argument rather than just the rule.
+    rationale: str
+    #: Set when the proof is a static gate rather than a live container —
+    #: the detection engine's replay proof, say. Those still need a
+    #: negative control but have no driver to import.
+    static_proof: bool = False
+
+
+#: Evidence for every row the table marks Stable.
+#:
+#: Four entries existed in substance before this gate did — they are the
+#: rows the definition was derived from. The rest are added as each
+#: capability earns promotion, never before.
+EVIDENCE: dict[str, Evidence] = {
+    "Ingest → detect → correlate → alert": Evidence(
+        tests=("tests/e2e/golden_pipeline/run_golden_pipeline.py",),
+        workflow="golden-pipeline.yml",
+        job="golden",
+        negative_control=".github/workflows/golden-pipeline.yml",
+        negative_marker="The gate fails when the pipeline is broken",
+        rationale=(
+            "Eleven independently reported stages driving one real event through ingest, "
+            "Kafka, fusion, Postgres and the public API on the real `make up` stack. The "
+            "negative control stops fusion and requires the check to go red; without it a "
+            "green run would only prove the script ran."
+        ),
+    ),
+    "Detection engine": Evidence(
+        tests=("scripts/compile_sigma_ruleset.py",),
+        workflow="validate-detections.yml",
+        job="validate",
+        negative_control="scripts/compile_sigma_ruleset.py",
+        negative_marker="--prove-gate",
+        rationale=(
+            "`--prove-gate` reverts the Windows connector and requires all 1,687 Windows "
+            "rules to fall silent, so the claim that a rule was watched to fire can itself "
+            "fail. Executable means replayed and observed, never inferred from a directory "
+            "or an `enabled:` flag."
+        ),
+        static_proof=True,
+    ),
+    "Alert correlation into incidents": Evidence(
+        tests=("tests/e2e/golden_pipeline/run_golden_pipeline.py",),
+        workflow="golden-pipeline.yml",
+        job="golden",
+        negative_control=".github/workflows/golden-pipeline.yml",
+        negative_marker="The gate fails when the pipeline is broken",
+        rationale=(
+            "Correlation is exercised inside the golden pipeline rather than only by its "
+            "own unit tests: the alert that reaches Postgres has been through the real "
+            "correlator with a real correlation key."
+        ),
+    ),
+    "REST API + web console": Evidence(
+        tests=("tests/e2e/golden_pipeline/run_golden_pipeline.py",),
+        workflow="golden-pipeline.yml",
+        job="golden",
+        negative_control=".github/workflows/golden-pipeline.yml",
+        negative_marker="The gate fails when the pipeline is broken",
+        rationale=(
+            "The final stage reads the alert back out of the public API against a running "
+            "stack, so the route, its auth and its serialisation are all on the path the "
+            "check grades."
+        ),
+    ),
+}
+
+
+@dataclass
+class Row:
+    capability: str
+    status: str
+    tested: str
+    production: str
+    line: int
+
+
+@dataclass
+class Finding:
+    code: str
+    detail: str
+
+
+@dataclass
+class Scan:
+    rows: list[Row] = field(default_factory=list)
+    findings: list[Finding] = field(default_factory=list)
+
+
+def _match_key(capability: str) -> str | None:
+    """The evidence key for a capability cell, matched on a stable prefix.
+
+    Prefix rather than exact text because a row's wording carries live
+    counts — "Detection engine (2603 executable rules) of 6991" changes
+    whenever the corpus does, and a gate that breaks on a recount would be
+    teaching people to edit the gate instead of the claim.
+    """
+    for key in EVIDENCE:
+        if capability.startswith(key):
+            return key
+    return None
+
+
+def parse_table(text: str) -> tuple[list[Row], list[Finding]]:
+    """Rows of the maturity table, and anything malformed about it."""
+    findings: list[Finding] = []
+    lines = text.splitlines()
+    try:
+        start = next(i for i, ln in enumerate(lines) if ln.strip() == TABLE_HEADING)
+    except StopIteration:
+        return [], [
+            Finding(
+                "table-missing",
+                f"README.md has no {TABLE_HEADING!r} section. This gate grades that table; "
+                "finding nothing and scanning nothing print the same word, so it refuses "
+                "rather than reporting the repository clean.",
+            )
+        ]
+
+    rows: list[Row] = []
+    for offset, raw in enumerate(lines[start:], start=start):
+        if raw.startswith("## ") and offset != start:
+            break
+        if not raw.startswith("| ") or raw.startswith("|---") or raw.startswith("| Capability"):
+            continue
+        cells = [c.strip() for c in raw.strip().strip("|").split("|")]
+        if len(cells) < 4:
+            continue
+        rows.append(Row(cells[0], cells[1], cells[2], cells[3], offset + 1))
+
+    if not rows:
+        findings.append(
+            Finding(
+                "table-empty",
+                "The Project maturity section parsed to zero rows. A parser that matches nothing reports every capability clean.",
+            )
+        )
+    for row in rows:
+        if row.status not in KNOWN_STATUSES:
+            findings.append(
+                Finding(
+                    "unknown-status",
+                    f"line {row.line}: {row.capability!r} publishes status {row.status!r}, "
+                    f"which is not one of {sorted(KNOWN_STATUSES)}. See "
+                    "docs/audit/MATURITY_DEFINITION.md.",
+                )
+            )
+    return rows, findings
+
+
+def workflow_is_unconditional(workflow: str, job: str) -> tuple[bool, str]:
+    """Whether this workflow grades every pull request.
+
+    A `paths:` filter means a change outside the list never re-grades the
+    capability, and a required check that never reports is weaker than no
+    check: it looks green on every commit it did not read.
+    """
+    path = WORKFLOWS / workflow
+    if not path.is_file():
+        return False, f"{workflow} does not exist"
+    text = path.read_text(encoding="utf-8", errors="replace")
+
+    head = text.split("jobs:", 1)[0]
+    if re.search(r"^\s{4,}paths(-ignore)?:", head, re.M):
+        return False, f"{workflow} filters its triggers on `paths:`, so a change elsewhere never re-grades this"
+
+    block = _job_block(text, job)
+    if block is None:
+        return False, f"{workflow} declares no job {job!r}"
+    guard = re.search(r"^\s{4}if:\s*(.+)$", block, re.M)
+    if guard and "changes.outputs" in guard.group(1):
+        return False, f"{workflow} job {job!r} is guarded by `if: {guard.group(1).strip()}`, so it can be skipped"
+    return True, ""
+
+
+def _job_block(text: str, job: str) -> str | None:
+    """The YAML block for one job, by indentation rather than by parsing.
+
+    Deliberately not `yaml.safe_load`: a workflow carries `on:` keys and
+    GitHub expressions that a strict loader mangles, and this only needs
+    the text of one block.
+    """
+    match = re.search(rf"^  {re.escape(job)}:\s*$", text, re.M)
+    if match is None:
+        return None
+    rest = text[match.end() :]
+    following = re.search(r"^  \S", rest, re.M)
+    return rest[: following.start()] if following else rest
+
+
+def declares_containers(workflow: str, job: str) -> bool:
+    """Whether the job runs real infrastructure.
+
+    Either a `services:` block, or it brings the stack up itself — the
+    golden pipeline runs `make up`, which is more real than any `services:`
+    declaration.
+    """
+    path = WORKFLOWS / workflow
+    if not path.is_file():
+        return False
+    block = _job_block(path.read_text(encoding="utf-8", errors="replace"), job)
+    if block is None:
+        return False
+    return bool(re.search(r"^\s+services:", block, re.M)) or "make up" in block or "docker compose" in block
+
+
+def exercises_real_path(test: str) -> tuple[bool, str]:
+    """Whether a test drives the real system rather than a stand-in.
+
+    Asks whether the system under test was *replaced*, not whether a
+    particular driver was imported. The job's own infrastructure is
+    checked separately by `declares_containers`, which is the stronger
+    evidence for "real" anyway.
+    """
+    path = REPO / test
+    if not path.is_file():
+        return False, f"{test} does not exist"
+    source = path.read_text(encoding="utf-8", errors="replace")
+
+    fakes = FAKE_DEFINITION.findall(source)
+    if fakes:
+        names = ", ".join(sorted({f[0] for f in fakes}))
+        return False, (
+            f"{test} defines {names}, so the system under test is replaced rather than "
+            "exercised. A double that answers whatever it is asked cannot fail."
+        )
+    intercepted = [name for name in INTERCEPTORS if name in source]
+    if intercepted:
+        return False, (f"{test} uses {', '.join(intercepted)}, which intercepts the boundary it claims to cross.")
+    return True, ""
+
+
+def has_negative_control(entry: Evidence) -> tuple[bool, str]:
+    """Whether something proves the check can go red."""
+    path = REPO / entry.negative_control
+    if not path.is_file():
+        return False, f"{entry.negative_control} does not exist"
+    if entry.negative_marker not in path.read_text(encoding="utf-8", errors="replace"):
+        return False, (
+            f"{entry.negative_control} no longer contains {entry.negative_marker!r}. The "
+            "negative control is what separates 'we tested it' from 'we know the test "
+            "would notice'."
+        )
+    return True, ""
+
+
+def scan() -> Scan:
+    if not README.is_file():
+        return Scan(findings=[Finding("no-readme", f"{README} does not exist")])
+
+    rows, findings = parse_table(README.read_text(encoding="utf-8", errors="replace"))
+    result = Scan(rows=rows, findings=list(findings))
+    stable_keys: set[str] = set()
+
+    for row in rows:
+        if row.status != "Stable":
+            continue
+        key = _match_key(row.capability)
+        if key is None:
+            result.findings.append(
+                Finding(
+                    "stable-without-evidence",
+                    f"line {row.line}: {row.capability!r} is marked Stable and names no "
+                    "evidence in scripts/check_maturity_table.py. Stable is earned, not "
+                    "edited: add the entry with its negative control, or leave the row "
+                    "Beta. See docs/audit/MATURITY_DEFINITION.md.",
+                )
+            )
+            continue
+        stable_keys.add(key)
+        entry = EVIDENCE[key]
+
+        ok, why = workflow_is_unconditional(entry.workflow, entry.job)
+        if not ok:
+            result.findings.append(Finding("not-unconditional", f"{key}: {why}. Why this evidence: {entry.rationale}"))
+
+        if not entry.static_proof:
+            for test in entry.tests:
+                ok, why = exercises_real_path(test)
+                if not ok:
+                    result.findings.append(Finding("not-real-path", f"{key}: {why}"))
+            if not declares_containers(entry.workflow, entry.job):
+                result.findings.append(
+                    Finding(
+                        "no-containers",
+                        f"{key}: {entry.workflow} job {entry.job!r} declares no `services:` "
+                        "containers and does not bring a stack up, so nothing it runs "
+                        "touched real infrastructure.",
+                    )
+                )
+        else:
+            for test in entry.tests:
+                if not (REPO / test).is_file():
+                    result.findings.append(Finding("not-real-path", f"{key}: {test} does not exist"))
+
+        ok, why = has_negative_control(entry)
+        if not ok:
+            result.findings.append(Finding("no-negative-control", f"{key}: {why}"))
+
+    # The reverse direction. An entry for a row that is no longer Stable
+    # implies coverage nobody is checking, which is how a registry that only
+    # grows becomes a liability rather than a control.
+    for key in EVIDENCE:
+        if key not in stable_keys:
+            result.findings.append(
+                Finding(
+                    "stale-evidence",
+                    f"{key!r} has an evidence entry but no row marks it Stable. Remove the "
+                    "entry so the registry shrinks when a capability is demoted.",
+                )
+            )
+    return result
+
+
+def _self_test() -> int:
+    """Prove this gate still catches each kind of false Stable claim.
+
+    Every case perturbs the real tree in memory rather than a fixture, so
+    the gate is exercised against the table it actually grades.
+    """
+    import dataclasses
+
+    cases: list[tuple[str, bool]] = []
+    baseline = scan()
+    cases.append(("the real tree passes, which every case below perturbs", not baseline.findings))
+
+    original = dict(EVIDENCE)
+
+    # 1. A row marked Stable with no evidence entry at all.
+    text = README.read_text(encoding="utf-8", errors="replace")
+    faked = text.replace("| UEBA | Beta |", "| UEBA | Stable |", 1)
+    rows, _ = parse_table(faked)
+    unbacked = [r for r in rows if r.status == "Stable" and _match_key(r.capability) is None]
+    cases.append(("detects a row marked Stable with no evidence entry", bool(unbacked)))
+
+    # 2. An entry whose workflow is path-filtered.
+    ok, _ = workflow_is_unconditional("isolation-live.yml", "live-stores")
+    cases.append(("detects a path-filtered workflow as skippable", not ok))
+
+    # 3. An entry whose test is a fake rather than the real path.
+    ok, _ = exercises_real_path("services/agents/tests/test_playbook_pause_resume.py")
+    cases.append(("detects a test that defines a fake standing in for the system", not ok))
+
+    # 4. A negative control whose marker has gone.
+    # `dataclasses.replace`, not `copy.replace`: the latter is 3.13+ and
+    # CI pins 3.11.
+    broken = dataclasses.replace(original["Detection engine"], negative_marker="--a-flag-that-does-not-exist")
+    ok, _ = has_negative_control(broken)
+    cases.append(("detects a negative control whose marker is gone", not ok))
+
+    # 5. A missing test file.
+    ok, _ = exercises_real_path("tests/e2e/golden_pipeline/this_file_does_not_exist.py")
+    cases.append(("detects an evidence file that does not exist", not ok))
+
+    # 6. The table itself going missing.
+    _rows, findings = parse_table("# A readme with no maturity table\n")
+    cases.append(("refuses a README with no maturity table", bool(findings)))
+
+    return self_test_main(Path(__file__).name, [], cases)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--self-test", action="store_true", help="prove the gate still detects each case")
+    parser.add_argument("--list", action="store_true", help="print every row and its status")
+    args = parser.parse_args()
+
+    if args.self_test:
+        return _self_test()
+
+    result = scan()
+
+    if args.list:
+        for row in result.rows:
+            backed = "evidence" if _match_key(row.capability) else "—"
+            print(f"  {row.status:<18} {backed:<9} {row.capability[:70]}")
+        print()
+
+    counts: dict[str, int] = {}
+    for row in result.rows:
+        counts[row.status] = counts.get(row.status, 0) + 1
+    summary = ", ".join(f"{n} {s}" for s, n in sorted(counts.items()))
+
+    if result.findings:
+        print(f"MATURITY TABLE GATE FAILED — {len(result.findings)} finding(s):", file=sys.stderr)
+        for finding in result.findings:
+            print(f"  [{finding.code}] {finding.detail}", file=sys.stderr)
+        print(
+            "\nStable is earned, not edited. docs/audit/MATURITY_DEFINITION.md says what each label requires and how to promote a row.",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(f"maturity-table: OK — {len(result.rows)} rows ({summary}); every Stable row's evidence holds.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

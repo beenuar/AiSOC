@@ -804,6 +804,20 @@ jobs:
         run: |
           python3 scripts/check_profile_service_counts.py --self-test
           python3 scripts/check_profile_service_counts.py
+      # The Project maturity table published a status for fifteen
+      # capabilities and nothing checked any of them: no definition of
+      # Stable existed anywhere, no gate parsed the table, and the labels
+      # appeared in no other file. Promoting a capability was a one-line
+      # edit, which is the claim shape Phase 1.1 retracted twelve of.
+      #
+      # Every Stable row must now name its evidence and that evidence must
+      # hold the four properties in docs/audit/MATURITY_DEFINITION.md. The
+      # gate runs in both directions, so an entry for a row that is no
+      # longer Stable fails too.
+      - name: Every Stable capability has earned the label
+        run: |
+          python3 scripts/check_maturity_table.py --self-test
+          python3 scripts/check_maturity_table.py
       # `docker-compose.prod.yml` states that nothing starts on a default
       # credential and implements it with `${VAR:?…}`. Compose's `:?` rejects
       # an unset or empty variable and cannot look at a value, so the guard
