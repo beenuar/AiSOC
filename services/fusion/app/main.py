@@ -1,6 +1,7 @@
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from typing import Any
 
 import redis.asyncio as aioredis
 from fastapi import FastAPI
@@ -23,6 +24,7 @@ from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
 from app.services.ioc_match import TenantIocMatcher
 from app.services.lake_writer import LakeWriter
+from app.services.tenant_overlay import OverlayCache
 from app.services.ueba_signal import UebaSignalCache
 from app.services.windowed_detection import WindowedDetectionEngine
 from app.workers.consumer import FusionWorker
@@ -137,6 +139,11 @@ async def lifespan(app: FastAPI):
         lake=lake,
         detector=detector,
         windowed_detector=windowed_detector,
+        # Parity 5.4. Per-tenant detection tuning as a versioned overlay
+        # with hot reload. Without it the engine evaluated the shared
+        # corpus and nothing else, so a tenant who disabled a noisy rule
+        # in the console kept receiving its alerts.
+        overlays=OverlayCache(_overlay_pool()),
         ueba_cache=ueba_cache,
     )
     set_worker(worker)
@@ -205,3 +212,59 @@ app.state.mark_ready = _mark_ready
 app.state.mark_not_ready = _mark_not_ready
 
 app.include_router(router)
+
+
+_OVERLAY_POOL: Any = None
+
+
+def _overlay_pool() -> Any:
+    """A lazy pool for the tenant-tuning overlay.
+
+    Built on first use rather than at import, because `main` runs before
+    an event loop exists and `asyncpg.create_pool` needs one. The cache
+    tolerates `None` and returns the empty overlay, so a deployment with
+    no database reachable detects exactly as it did before 5.4.
+    """
+    global _OVERLAY_POOL  # noqa: PLW0603
+    if _OVERLAY_POOL is None:
+        _OVERLAY_POOL = _LazyPool(settings.database_url)
+    return _OVERLAY_POOL
+
+
+class _LazyPool:
+    """Opens an asyncpg pool on first acquire."""
+
+    def __init__(self, dsn: str) -> None:
+        self._dsn = dsn
+        self._pool: Any = None
+
+    def acquire(self):  # noqa: ANN201
+        return _LazyAcquire(self)
+
+    async def _ensure(self) -> Any:
+        if self._pool is not None:
+            return self._pool
+        import asyncpg
+
+        dsn = self._dsn
+        for prefix in ("postgresql+asyncpg://", "postgres+asyncpg://"):
+            if dsn.startswith(prefix):
+                dsn = "postgresql://" + dsn[len(prefix) :]
+                break
+        self._pool = await asyncpg.create_pool(dsn, min_size=1, max_size=2)
+        return self._pool
+
+
+class _LazyAcquire:
+    def __init__(self, parent: _LazyPool) -> None:
+        self._parent = parent
+        self._ctx: Any = None
+
+    async def __aenter__(self) -> Any:
+        pool = await self._parent._ensure()
+        self._ctx = pool.acquire()
+        return await self._ctx.__aenter__()
+
+    async def __aexit__(self, *exc: Any) -> None:
+        if self._ctx is not None:
+            await self._ctx.__aexit__(*exc)

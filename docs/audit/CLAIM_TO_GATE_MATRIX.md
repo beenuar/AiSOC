@@ -278,26 +278,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Accessibility is checked on the views an analyst uses, not only on the landing page | `ROADMAP.md` | `ci.yml :: Web — Tests` (`apps/web/src/test/a11y.test.tsx`) | core | GATED | 1.1 narrowed the "WCAG AA full accessibility pass" claim because axe covered the landing and chrome components only. 4.7 adds **three of the five** operator views the plan names: the alerts queue and list, the investigation rail, and settings. Each asserts it rendered real markup **before** axe runs, because axe passes on an empty div and a view that rendered a spinner would report coverage the suite does not have. That guard immediately caught one: the rail keys SWR on a tuple, the fixture read only the string form, and it was rendering its error state. **Limits stated**: the case workspace is not covered, and axe checks a subset of WCAG rather than all of it |
 | A playbook can start from an alert, and previews before it acts | `apps/docs/docs/console/playbooks.md` | `ci.yml :: Python — Tests` (agents, `test_alert_triggered_playbooks.py`) | core | GATED | `find_matching()` had **no production caller**, so no playbook ever ran from an alert. Three switches must agree before one acts (deployment, tenant, playbook) and the default of every one is off; anything short of all three runs in **preview**, with its plan and simulated steps attached to the alert. Preview is the default state rather than a mode somebody has to remember, so a deployment that enables the feature and forgets the per-playbook list gets previews rather than containment. The live list is read per call, so turning one off takes effect on the next alert rather than the next restart. It runs **after** triage, because a playbook's conditions read the verdict |
 | An approval step is a durable pause that survives a restart | `apps/docs/docs/console/playbooks.md` | `ci.yml :: Python — Tests` (agents, `test_playbook_pause_resume.py`) | core | GATED | The engine is a single-threaded index walk with no pause and no resume, so `approval` failed closed and **12 shipped playbooks aborted on it**. Failing closed was right (it previously returned `{"skipped": true}` while reporting SUCCESS, letting a run continue into the action a human was meant to authorise) but it is not an approval mechanism. Migration `081` stores the position **and the context**, because the resumed half would otherwise see an empty context and every templated parameter would resolve to nothing. The stored index is the approval step itself and resume advances past it, so a replayed decision continues rather than pausing again. The pause is resolved **before** the run continues, so a double-tap in the responder app resumes once. Expiry is mandatory with a recorded outcome: `expired` is a decision, not the absence of one |
+| A tenant's detection tuning reaches the streaming engine, and only that tenant's | `apps/docs/docs/console/detection-tuning.md` | `ci.yml :: Python — Service unit tests` (`services/fusion/tests/test_tenant_tuning_overlay.py`) | core | GATED | `DetectionEngine` evaluated the shared corpus and nothing else. The console writes a tenant's disables, thresholds and suppressions to `detection_rules`, where the streaming engine never looked, so a tenant who turned a noisy rule off **kept receiving its alerts while the console showed it disabled**, which is the worst shape because it tells the operator the problem is solved. An overlay rather than a per-tenant ruleset: the difference applied over one shared corpus, not N copies of 833 rules. Suppression is applied **after** the match so the hit can be logged with the tuning, its author and its reason, because "no alert" with no explanation is indistinguishable from a rule that did not match. A failed reload **keeps the previous overlay**: falling back to no-tuning would turn the tenant's queue back on and read as a flood rather than a fault |
 
 ## Summary
 
-- GATED: 270
+- GATED: 271
 
 ## Summary
 
-- GATED: 270
+- GATED: 271
 
 ## Summary
 
-- GATED: 270
+- GATED: 271
 
 ## Summary
 
-- GATED: 270
+- GATED: 271
 
 ## Summary
 
-- GATED: 270
+- GATED: 271
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 
