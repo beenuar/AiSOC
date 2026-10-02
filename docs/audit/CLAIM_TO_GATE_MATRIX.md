@@ -274,26 +274,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | CORE gives the investigation agent real indicator evidence | `apps/docs/docs/deployment/docker.md` | `ci.yml :: Python — Service unit tests` (`services/fusion/tests/test_tenant_ioc_match.py`) | core | GATED | `AlertEnricher` asks the enrichment service, which runs in the `full` profile, so on CORE the call failed, was caught, logged at `debug`, and `{}` returned: the agent received "could not check" for every indicator on every alert. The tenant's own `threat_intel_iocs` is in the Postgres fusion already uses and CORE ships a real CISA KEV feed. Expiry is a hard gate in SQL; decay is a per-type half-life on `last_seen`, because an address reassigns in weeks and a file hash identifies the same bytes forever. The half-lives are judgement rather than measurement and say so. A faded hit is reported weakly rather than dropped, because "seen weakly" is different information from "never seen" |
 | Injection flip rate and unsafe-action rate are measured per family | `apps/docs/docs/benchmark.md` | `ci.yml :: Python — Tests` (`tests/adversarial/test_behavioural_injection.py`) | core | GATED | **27 pairs across the 9 families the plan names**, each payload written to fit the field it arrives in: overall flip 25.9%, unsafe action 3.7%, with a per-family ceiling so a regression in one cannot hide behind an improvement in another. It immediately found a real blind spot: **`fake_tool_output` flips every verdict and the guard catches none of it**, because a payload shaped like a tool's own answer reads as evidence rather than as an instruction. Recorded at 1.0 rather than patched, and the guard is deliberately not tuned against this corpus in the same change, because hardening against a tuned corpus has already been measured here moving 66.7% to 98.1% while held-out payloads moved 3.6% to 7.1%. **Measures the pipeline, not a model**: the stub is deliberately obedient, so the rates are an upper bound on harm and the artefact carries `llm_resistance_measured: false` |
 | Closure accuracy is measured on the tenant's own data, not only on a synthetic corpus | `apps/docs/docs/operations/shadow-mode.md` | `ci.yml :: Python — Tests` (agents, `test_closure_qa_sampling.py`) | core | GATED | Nothing measured this. The eval harness grades a synthetic corpus and the funnel counts how many alerts were closed, neither of which answers "of the ones the agent closed on your data, how many should it have". A tenant-configurable sample (5% default) of auto-closures goes to an analyst, scored on the five-part rubric. The sample is a **deterministic hash of the alert id, not `random()`**: a rolled sample fires at the configured rate *per replica*, so three replicas at 5% sample 15%, and a redelivered Kafka message gets a second roll and weights one closure twice. Bucketing also makes a higher rate a superset of a lower one, so a tenant's figure stays comparable across a rate change. Zero reviews reports **not measured** rather than 0.0, and every mean travels with the count it was taken over |
+| SSO completes a sign-in, into the right tenant with the mapped role | `apps/docs/docs/operations/security.md` | `ci.yml :: Python — Tests` (`services/api/tests/test_sso_provisioning.py`) | core | GATED | Both handlers used to end a successful sign-in by putting a JWT in an `aisoc_token` cookie carrying `sub`, `email`, `name` and `picture`. That token authenticated nothing three times over: signed with `JWT_SECRET` rather than the key the API verifies with, carrying no `tenant_id` or `role`, and in a cookie when the API reads `Authorization: Bearer`. A user could complete the whole dance and find every request unauthenticated. **The security property the tests exist for is that the tenant does not come from the assertion**: an IdP that can name its own tenant can name somebody else's, so it comes from the connection row an administrator configured, and `complete_sso_login` is asserted to take no tenant argument at all. A group cannot map to `admin` or `platform_admin`. The token travels in the URL fragment, which is not sent to the server and does not reach an access log or a `Referer`. **Limit**: no containerised-IdP test yet, so this is gated against the provisioning path rather than against a real Okta, Entra or Keycloak |
 
 ## Summary
 
-- GATED: 266
+- GATED: 267
 
 ## Summary
 
-- GATED: 266
+- GATED: 267
 
 ## Summary
 
-- GATED: 266
+- GATED: 267
 
 ## Summary
 
-- GATED: 266
+- GATED: 267
 
 ## Summary
 
-- GATED: 266
+- GATED: 267
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 
