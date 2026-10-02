@@ -19,6 +19,7 @@ loop prevents it, and that is the difference between a cap and a receipt.
 
 from __future__ import annotations
 
+import contextvars
 import uuid
 
 import pytest
@@ -179,7 +180,9 @@ class _bound:
 
     def __init__(self, tracker: CostTracker) -> None:
         self._tracker = tracker
-        self._token = None
+        # Annotated, because inferring `None` from the initial value makes
+        # the `set()` below an incompatible assignment.
+        self._token: contextvars.Token[CostTracker | None] | None = None
 
     def __enter__(self) -> CostTracker:
         from app.core import cost_telemetry
