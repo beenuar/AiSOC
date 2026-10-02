@@ -30,6 +30,23 @@ import { axe } from 'vitest-axe';
 
 // Shared mocks ----------------------------------------------------------
 
+// Parity 4.7. The operator views below fetch through SWR, and without
+// this they would render a loading spinner: axe would pass on a spinner
+// and the suite would report coverage it does not have.
+vi.mock('swr', () => ({
+  // The key may be a string or a tuple: the Investigation Rail keys on
+  // `['alerts', id, 'rail']`, and reading only the string form gave it
+  // `undefined`, so it rendered its error state and axe passed on that.
+  default: (key: unknown) => ({
+    data: swrFixture(Array.isArray(key) ? key.join('/') : typeof key === 'string' ? key : ''),
+    error: undefined,
+    isLoading: false,
+    mutate: vi.fn(),
+  }),
+  mutate: vi.fn(),
+  useSWRConfig: () => ({ mutate: vi.fn() }),
+}));
+
 vi.mock('next/link', () => ({
   default: ({
     children,
@@ -131,6 +148,57 @@ const axeOptions = {
   },
 };
 
+/** Enough shape for each view to render its real markup rather than an
+ * empty state. Deliberately small: this suite measures accessibility, not
+ * data handling, and a large fixture would make a failure hard to read. */
+function swrFixture(key: string): unknown {
+  if (key.startsWith('alerts/') || (key.includes('/alerts/') && !key.endsWith('/alerts'))) {
+    return {
+      id: 'a1',
+      title: 'Encoded PowerShell from Office',
+      severity: 'high',
+      status: 'new',
+      confidence: 72,
+      // camelCase: `normalizeAlert` has already run by the time the rail
+      // reads this, so the fixture has to be the normalised shape rather
+      // than the API's.
+      createdAt: '2026-10-01T12:00:00Z',
+      riskScore: 68,
+      narrative: 'A macro-enabled document spawned an encoded PowerShell command.',
+      entities: [{ group: 'host', kind: 'hostname', value: 'WIN-FIN-01', label: 'WIN-FIN-01' }],
+      timeline: [{ id: 'e1', timestamp: '2026-10-01T12:00:00Z', title: 'Process created' }],
+      recommended_actions: [{ id: 'r1', title: 'Isolate the host', risk: 'high' }],
+    };
+  }
+  if (key.endsWith('/alerts') || key.includes('/alerts?')) {
+    return {
+      items: [
+        {
+          id: 'a1',
+          title: 'Encoded PowerShell from Office',
+          severity: 'high',
+          status: 'new',
+          created_at: '2026-10-01T12:00:00Z',
+          connector_type: 'CrowdStrike Falcon',
+        },
+      ],
+      total: 1,
+    };
+  }
+  if (key.includes('/cases/')) {
+    return {
+      id: 'c1',
+      title: 'Suspected macro delivery',
+      status: 'open',
+      severity: 'high',
+      created_at: '2026-10-01T12:00:00Z',
+      alerts: [],
+      timeline: [],
+    };
+  }
+  return undefined;
+}
+
 describe('WCAG 2.1 AA — high-traffic surfaces', () => {
   it('Landing Hero has no accessibility violations', async () => {
     const { container } = render(<Hero />);
@@ -189,6 +257,66 @@ describe('WCAG 2.1 AA — high-traffic surfaces', () => {
                 action={<button type="button">Clear filters</button>}
               />,
     );
+    const results = await axe(container, axeOptions);
+    expect(results).toHaveNoViolations();
+  });
+
+  /** axe passes on an empty div, so a view that rendered a spinner or an
+   * error state would report coverage this suite does not have. Every
+   * operator view below asserts it rendered something substantial first. */
+  function assertRenderedSomething(container: HTMLElement, what: string) {
+    const interactive = container.querySelectorAll(
+      'button, a, input, select, textarea, [role="tab"], [role="button"], table, h1, h2',
+    );
+    expect(
+      interactive.length,
+      `${what} rendered ${interactive.length} interactive or structural elements, so axe ` +
+        'passed on an empty or loading view rather than on the real one',
+    ).toBeGreaterThan(2);
+  }
+
+  // ── Parity 4.7: the five operator views the plan names ──────────────
+  //
+  // 1.1 narrowed the "WCAG AA full accessibility pass" claim to the
+  // components axe actually covered, which were the landing and chrome
+  // ones above. These are the views an analyst spends their day in, and
+  // they were covered by nothing.
+
+  it('AlertsView (the queue and alert list) has no accessibility violations', async () => {
+    pathnameMock.mockReturnValue('/alerts');
+    const { AlertsView } = await import('@/components/alerts/AlertsView');
+    const { container } = render(
+      <ThemeProvider>
+        <AlertsView />
+      </ThemeProvider>,
+    );
+    assertRenderedSomething(container, 'AlertsView');
+    const results = await axe(container, axeOptions);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('InvestigationRail has no accessibility violations', async () => {
+    pathnameMock.mockReturnValue('/alerts');
+    const { InvestigationRail } = await import('@/components/alerts/InvestigationRail');
+    const { container } = render(
+      <ThemeProvider>
+        <InvestigationRail alertId="a1" onClose={() => {}} />
+      </ThemeProvider>,
+    );
+    assertRenderedSomething(container, 'InvestigationRail');
+    const results = await axe(container, axeOptions);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('SettingsView has no accessibility violations', async () => {
+    pathnameMock.mockReturnValue('/settings');
+    const { SettingsView } = await import('@/components/settings/SettingsView');
+    const { container } = render(
+      <ThemeProvider>
+        <SettingsView />
+      </ThemeProvider>,
+    );
+    assertRenderedSomething(container, 'SettingsView');
     const results = await axe(container, axeOptions);
     expect(results).toHaveNoViolations();
   });
