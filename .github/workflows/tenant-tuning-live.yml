@@ -1,0 +1,128 @@
+# A tenant's tuning, read out of Postgres and applied by the real engine.
+#
+# Why a live read matters more here than almost anywhere
+# -------------------------------------------------------
+# `OverlayCache._fetch` returns None when it cannot read, and the caller
+# turns that into the empty overlay. The fail-soft is deliberate — losing a
+# tenant's suppressions because the database blinked would turn their queue
+# back on — but it means a **permanently broken overlay is
+# indistinguishable from a tenant who has configured no tuning**. Both show
+# an engine that suppresses nothing.
+#
+# That is exactly what happened. The query selected `rule_id` and
+# `updated_by` from `detection_rules`, which has neither; every execution
+# raised, the handler logged a warning, and the overlay loaded nothing on
+# every deployment. Thirty unit tests passed throughout, against a fake that
+# answered for whatever columns it was asked about.
+#
+# No `paths:` filter: `docs/audit/MATURITY_DEFINITION.md` requires a Stable
+# capability to be graded on every pull request.
+name: Tenant tuning (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tenant-tuning-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  tenant-tuning-live:
+    name: Tuning written to Postgres changes what the engine fires
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      TUNING_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install the fusion service
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet asyncpg structlog pytest pytest-asyncio \
+            "pydantic>=2,<3" pydantic-settings
+
+      # The whole chain, in order, rather than the three migrations that
+      # create the table. `detection_rules` gains columns across later
+      # migrations — `rule_language` among them — so a cherry-picked subset
+      # builds a schema no deployment has, which is the opposite of the
+      # point.
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Tuning in the database changes what the engine fires
+        working-directory: services/fusion
+        env:
+          ISOLATION_TUNING_DSN: ${{ env.TUNING_DSN }}
+        run: python -m pytest ../../tests/isolation/test_tenant_tuning_live.py -v --tb=short
+
+      # The negative control, and it re-injects the real defect rather than
+      # an invented one.
+      #
+      # `rule_id` and `updated_by` are the two columns the query used to
+      # select and `detection_rules` does not have. With them back, every
+      # execution raises, the fail-soft swallows it, and the overlay loads
+      # nothing — which is what shipped.
+      #
+      # Measured: six of the ten tests fail. If they do not, this suite is
+      # not reading the schema it claims to read, and that is worth failing
+      # the build over, because the alternative is a green check over a
+      # feature that silently does nothing.
+      - name: The gate fails when the query names columns that do not exist
+        working-directory: services/fusion
+        env:
+          ISOLATION_TUNING_DSN: ${{ env.TUNING_DSN }}
+        run: |
+          cp app/services/tenant_overlay.py /tmp/tenant_overlay.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/tenant_overlay.py")
+          s = p.read_text()
+          needle = "SELECT COALESCE(provenance->>'source_id', name) AS rule_id,"
+          if needle not in s:
+              print("negative control could not find the projection to break; the query "
+                    "has been reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          s = s.replace(needle, "SELECT rule_id,")
+          s = s.replace("                           author\n", "                           updated_by\n")
+          p.write_text(s)
+          PY
+          if python -m pytest ../../tests/isolation/test_tenant_tuning_live.py -q >/dev/null 2>&1; then
+            cp /tmp/tenant_overlay.bak app/services/tenant_overlay.py
+            echo "FAIL: the suite passed with the query naming columns that do not exist."
+            echo "      It is not reading the real schema."
+            exit 1
+          fi
+          cp /tmp/tenant_overlay.bak app/services/tenant_overlay.py
+          echo "OK: re-injecting the original defect makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_tenant_tuning_live.py -q

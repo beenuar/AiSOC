@@ -144,6 +144,19 @@ EVIDENCE: dict[str, Evidence] = {
             "control drops that index and requires the constraint test to fail."
         ),
     ),
+    "Per-tenant detection tuning in the live engine": Evidence(
+        tests=("tests/isolation/test_tenant_tuning_live.py",),
+        workflow="tenant-tuning-live.yml",
+        job="tenant-tuning-live",
+        negative_control=".github/workflows/tenant-tuning-live.yml",
+        negative_marker="The gate fails when the query names columns that do not exist",
+        rationale=(
+            "`_fetch` fails soft, so a permanently broken overlay is indistinguishable "
+            "from a tenant with no tuning — both suppress nothing. The negative control "
+            "re-injects the real defect, the two columns `detection_rules` does not have, "
+            "and requires six of the ten tests to fail."
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",

@@ -196,7 +196,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | Entity graph (Neo4j) | Stable | Live Neo4j against the production reader, with a negative control | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
 | Alert-triggered playbooks, with a durable approval pause | Stable | Live Postgres: suspend, restart, resume, expiry, with a negative control | Yes — three opt-ins deep, preview by default |
-| Per-tenant detection tuning in the live engine | Beta | Unit + a schema check that parses the migration | Yes |
+| Per-tenant detection tuning in the live engine | Stable | Live Postgres: tuning written changes what the engine fires, with a negative control | Yes |
 | Scheduled connectors | Beta | Contract tests, which gate the shape every connector must satisfy rather than any live vendor | Yes |
 | UEBA | Stable | Live Postgres: migrations, scoring, persistence, isolation, with a negative control | Yes, `full` profile |
 | Package distribution (npm/PyPI) | Ready, unpublished | `release.yml` builds and packs all eight on every tag | Install from source — the upload is blocked on registry credentials, which is an account action |
