@@ -135,7 +135,7 @@ async def run_for_alert(state: Any) -> TriggerOutcome:
         from app.playbook.store import PlaybookStore
 
         store = PlaybookStore.default()
-        matches = store.find_matching("alert.created", context)
+        matches: list[Any] = list(store.find_matching("alert.created", context))
     except Exception as exc:  # noqa: BLE001
         logger.warning("alert_playbooks.match_failed", error=str(exc))
         outcome.skipped_reason = f"could not match playbooks: {exc}"

@@ -8,7 +8,7 @@
   "additionalProperties": false,
 
   "x-aisoc-execution": {
-    "description": "What `services/agents/app/playbook/engine.py` does with each step type. `executed` = a handler runs and has a real effect (an outbound call to a service, or engine-internal control flow). `governed` = the step is dispatched through the action registry in `services/actions`, where the capability contract and the tenant autonomy policy decide whether a vendor is touched; the step reports which happened and `executed` is the single field that means one was, so a preview, an approval queue and a missing integration are each named rather than reported as a success. `unimplemented` = no handler is registered; the engine fails the step closed rather than reporting a success it did not achieve. This map is machine-checked against the engine's handler table, so it cannot drift into an aspirational claim.",
+    "description": "What `services/agents/app/playbook/engine.py` does with each step type. `executed` = a handler runs and has a real effect (an outbound call to a service, or engine-internal control flow). `governed` = the step is dispatched through the action registry in `services/actions`, where the capability contract and the tenant autonomy policy decide whether a vendor is touched; the step reports which happened and `executed` is the single field that means one was, so a preview, an approval queue and a missing integration are each named rather than reported as a success. `unimplemented` = no handler is registered; the engine fails the step closed rather than reporting a success it did not achieve. `approval` became `executed` in parity 5.2: it suspends the run to Postgres and resumes on the decision, where before it had nowhere to pause to and failed closed while 12 shipped playbooks aborted on it. This map is machine-checked against the engine's handler table, so it cannot drift into an aspirational claim.",
     "enrich": "executed",
     "investigate": "executed",
     "notify": "executed",
@@ -19,7 +19,7 @@
     "block_ip": "governed",
     "isolate_host": "governed",
     "create_ticket": "governed",
-    "approval": "unimplemented",
+    "approval": "executed",
     "block_ioc": "governed",
     "disable_user": "governed",
     "reset_password": "governed",

@@ -67,7 +67,7 @@ class _FakeRows:
             return "INSERT 0 1"
         if "UPDATE aisoc_playbook_pauses" in sql and "WHERE id =" in sql:
             for row in self.rows:
-                if row["id"] == args[0] and row["status"] == "waiting":
+                if row["id"] == args[0] and str(row.get("tenant_id")) == str(args[3]) and row["status"] == "waiting":
                     row["status"] = args[1]
                     row["resolution"] = args[2]
                     return "UPDATE 1"
@@ -75,8 +75,11 @@ class _FakeRows:
         return "OK"
 
     async def fetchrow(self, sql: str, *args):  # noqa: ANN001, ANN202
+        # The tenant filter is honoured here on purpose. A fake that
+        # ignored it would pass against a query that ignored it too,
+        # which is the shape that lets a cross-tenant read ship.
         for row in self.rows:
-            if row.get("approval_id") == args[0] and row["status"] == "waiting":
+            if row.get("approval_id") == args[0] and str(row.get("tenant_id")) == str(args[1]) and row["status"] == "waiting":
                 return row
         return None
 
@@ -167,7 +170,7 @@ class TestSuspending:
         monkeypatch.setattr(playbook_pause, "_pool", _none)
         assert (
             await playbook_pause.suspend(
-                tenant_id="t",
+                tenant_id=str(uuid.uuid4()),
                 run_id="r",
                 playbook_id="p",
                 playbook_name="n",
@@ -186,8 +189,9 @@ class TestSurvivingARestart:
         """Nothing is kept alive between the suspend and the lookup, which
         is what a restart leaves you with."""
         approval_id = str(uuid.uuid4())
+        tenant = str(uuid.uuid4())
         await playbook_pause.suspend(
-            tenant_id=str(uuid.uuid4()),
+            tenant_id=tenant,
             run_id="run-3",
             playbook_id="pb-1",
             playbook_name="x",
@@ -198,7 +202,7 @@ class TestSurvivingARestart:
             approval_id=approval_id,
         )
 
-        found = await playbook_pause.find_waiting(approval_id=approval_id)
+        found = await playbook_pause.find_waiting(approval_id=approval_id, tenant_id=tenant)
         assert found is not None
         assert found.run_id == "run-3"
         assert found.run_context["host"] == "WIN-01"
@@ -210,8 +214,9 @@ class TestADecisionThatArrivesTwice:
     async def test_the_second_resolution_does_not_claim_it(self, store) -> None:  # noqa: ANN001
         """A double-tap in the responder app, or a retried webhook."""
         approval_id = str(uuid.uuid4())
+        tenant = str(uuid.uuid4())
         pause = await playbook_pause.suspend(
-            tenant_id=str(uuid.uuid4()),
+            tenant_id=tenant,
             run_id="run-4",
             playbook_id="pb-1",
             playbook_name="x",
@@ -223,15 +228,16 @@ class TestADecisionThatArrivesTwice:
         )
         assert pause is not None
 
-        first = await playbook_pause.resolve(pause_id=pause.id, status="resumed", resolution="approved")
-        second = await playbook_pause.resolve(pause_id=pause.id, status="resumed", resolution="approved again")
+        first = await playbook_pause.resolve(pause_id=pause.id, tenant_id=pause.tenant_id, status="resumed", resolution="approved")
+        second = await playbook_pause.resolve(pause_id=pause.id, tenant_id=pause.tenant_id, status="resumed", resolution="approved again")
         assert first is True
         assert second is False, "the same pause was claimed twice, so the run would resume twice"
 
     async def test_a_resolved_pause_is_no_longer_found(self, store) -> None:  # noqa: ANN001
         approval_id = str(uuid.uuid4())
+        tenant = str(uuid.uuid4())
         pause = await playbook_pause.suspend(
-            tenant_id=str(uuid.uuid4()),
+            tenant_id=tenant,
             run_id="run-5",
             playbook_id="pb-1",
             playbook_name="x",
@@ -241,8 +247,9 @@ class TestADecisionThatArrivesTwice:
             step_results=[],
             approval_id=approval_id,
         )
-        await playbook_pause.resolve(pause_id=pause.id, status="denied", resolution="no")
-        assert await playbook_pause.find_waiting(approval_id=approval_id) is None
+        assert pause is not None
+        await playbook_pause.resolve(pause_id=pause.id, tenant_id=pause.tenant_id, status="denied", resolution="no")
+        assert await playbook_pause.find_waiting(approval_id=approval_id, tenant_id=tenant) is None
 
 
 @pytest.mark.asyncio
@@ -339,3 +346,54 @@ class TestTheRunStatus:
 
     def test_a_paused_step_is_pending_not_success(self) -> None:
         assert StepStatus.PENDING.value != StepStatus.SUCCESS.value
+
+
+@pytest.mark.asyncio
+class TestCrossTenant:
+    """Resuming another tenant's run should take two mistakes, not one.
+
+    The approval id is an unguessable UUID, which is an argument for it
+    being hard to reach the wrong row and not an argument for being
+    allowed to.
+    """
+
+    async def test_another_tenant_cannot_find_the_pause(self, store) -> None:  # noqa: ANN001
+        approval_id = str(uuid.uuid4())
+        owner = str(uuid.uuid4())
+        await playbook_pause.suspend(
+            tenant_id=owner,
+            run_id="run-x",
+            playbook_id="pb-1",
+            playbook_name="x",
+            step_index=0,
+            step_id="gate",
+            run_context={},
+            step_results=[],
+            approval_id=approval_id,
+        )
+
+        assert await playbook_pause.find_waiting(approval_id=approval_id, tenant_id=str(uuid.uuid4())) is None
+        assert await playbook_pause.find_waiting(approval_id=approval_id, tenant_id=owner) is not None
+
+    async def test_another_tenant_cannot_resolve_the_pause(self, store) -> None:  # noqa: ANN001
+        owner = str(uuid.uuid4())
+        pause = await playbook_pause.suspend(
+            tenant_id=owner,
+            run_id="run-y",
+            playbook_id="pb-1",
+            playbook_name="x",
+            step_index=0,
+            step_id="gate",
+            run_context={},
+            step_results=[],
+        )
+        assert pause is not None
+
+        stolen = await playbook_pause.resolve(
+            pause_id=pause.id,
+            tenant_id=str(uuid.uuid4()),
+            status="resumed",
+            resolution="not mine",
+        )
+        assert stolen is False, "another tenant resumed this run"
+        assert await playbook_pause.resolve(pause_id=pause.id, tenant_id=owner, status="resumed", resolution="mine") is True

@@ -544,10 +544,12 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
   },
   approval: {
     type: 'approval',
-    execution: 'unimplemented',
+    execution: 'executed',
     label: 'Approval',
     description:
-      'Not runnable. The engine fails an approval step closed and the run stops there.',
+      'Pauses the run and waits for a human. The run is stored, so it survives a restart, ' +
+      'and resumes from the step after this one when the approval is decided. Undecided ' +
+      'approvals expire with a recorded outcome rather than hanging forever.',
     accent: '#64748b',
     bgColor: '#1e232b',
     icon: '⛔',

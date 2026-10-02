@@ -33,15 +33,19 @@ app, a retried webhook) continues rather than pausing again.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import structlog
-
-logger = structlog.get_logger()
+# The stdlib logger, not structlog. `app.playbook.engine` imports this
+# module and two gates import the engine with only httpx and pydantic
+# installed: `validate_playbooks.py` and the schema-parity check. Pulling
+# structlog into that chain made both fail with ModuleNotFoundError, which
+# is a dependency this file does not need.
+logger = logging.getLogger("aisoc.playbook.pause")
 
 #: How long an approval waits before it expires with a recorded outcome.
 #: Long enough to cross a weekend, short enough that a forgotten request
@@ -54,6 +58,7 @@ class Pause:
     """A suspended run, as stored."""
 
     id: str
+    tenant_id: str
     run_id: str
     playbook_id: str
     step_index: int
@@ -81,7 +86,7 @@ async def _pool() -> Any | None:
     try:
         return await _get_pool()
     except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_pause.pool_unavailable", error=str(exc))
+        logger.warning("playbook_pause: pool unavailable: %s", exc)
         return None
 
 
@@ -107,7 +112,7 @@ async def suspend(
     """
     pool = await _pool()
     if pool is None:
-        logger.warning("playbook_pause.no_database", run_id=run_id)
+        logger.warning("playbook_pause: no database; run %s cannot be suspended", run_id)
         return None
 
     pause_id = str(uuid.uuid4())
@@ -135,18 +140,19 @@ async def suspend(
                 expires_at,
             )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_pause.write_failed", run_id=run_id, error=str(exc))
+        logger.warning("playbook_pause: write failed for run %s: %s", run_id, exc)
         return None
 
     logger.info(
-        "playbook_pause.suspended",
-        run_id=run_id,
-        step_id=step_id,
-        approval_id=approval_id,
-        expires_at=expires_at.isoformat(),
+        "playbook_pause: run %s suspended at step %s on approval %s, expires %s",
+        run_id,
+        step_id,
+        approval_id,
+        expires_at.isoformat(),
     )
     return Pause(
         id=pause_id,
+        tenant_id=tenant_id,
         run_id=run_id,
         playbook_id=playbook_id,
         step_index=step_index,
@@ -158,8 +164,15 @@ async def suspend(
     )
 
 
-async def find_waiting(*, approval_id: str) -> Pause | None:
-    """The run waiting on this approval, if any."""
+async def find_waiting(*, approval_id: str, tenant_id: str) -> Pause | None:
+    """The run waiting on this approval, if any.
+
+    Scoped on the tenant as well as the approval. The approval id is an
+    unguessable UUID, which is an argument for it being hard to reach the
+    wrong row and not an argument for being allowed to: resuming another
+    tenant's playbook run is the kind of thing that should take two
+    mistakes, not one.
+    """
     pool = await _pool()
     if pool is None:
         return None
@@ -167,16 +180,19 @@ async def find_waiting(*, approval_id: str) -> Pause | None:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
-                SELECT id, run_id, playbook_id, step_index, step_id,
+                SELECT id, tenant_id, run_id, playbook_id, step_index, step_id,
                        run_context, step_results, approval_id, expires_at
                   FROM aisoc_playbook_pauses
-                 WHERE approval_id = $1::uuid AND status = 'waiting'
+                 WHERE approval_id = $1::uuid
+                   AND tenant_id = $2::uuid
+                   AND status = 'waiting'
                  LIMIT 1
                 """,
                 approval_id,
+                tenant_id,
             )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_pause.lookup_failed", approval_id=approval_id, error=str(exc))
+        logger.warning("playbook_pause: lookup failed for approval %s: %s", approval_id, exc)
         return None
     if row is None:
         return None
@@ -196,6 +212,7 @@ def _row_to_pause(row: Any) -> Pause:
 
     return Pause(
         id=str(row["id"]),
+        tenant_id=str(row["tenant_id"]),
         run_id=row["run_id"],
         playbook_id=row["playbook_id"],
         step_index=int(row["step_index"]),
@@ -207,7 +224,7 @@ def _row_to_pause(row: Any) -> Pause:
     )
 
 
-async def resolve(*, pause_id: str, status: str, resolution: str) -> bool:
+async def resolve(*, pause_id: str, status: str, resolution: str, tenant_id: str) -> bool:
     """Mark a pause resumed, denied, expired or cancelled.
 
     The status is set **before** the run continues, so a decision that
@@ -225,25 +242,34 @@ async def resolve(*, pause_id: str, status: str, resolution: str) -> bool:
                 """
                 UPDATE aisoc_playbook_pauses
                    SET status = $2, resolved_at = NOW(), resolution = $3
-                 WHERE id = $1::uuid AND status = 'waiting'
+                 WHERE id = $1::uuid
+                   AND tenant_id = $4::uuid
+                   AND status = 'waiting'
                 """,
                 pause_id,
                 status,
                 resolution[:500],
+                tenant_id,
             )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_pause.resolve_failed", pause_id=pause_id, error=str(exc))
+        logger.warning("playbook_pause: resolve failed for %s: %s", pause_id, exc)
         return False
     # asyncpg returns "UPDATE <n>"; zero means somebody else resolved it
     # first, which is the double-decision case and is not an error.
     changed = str(result).rsplit(" ", 1)[-1] != "0"
     if not changed:
-        logger.info("playbook_pause.already_resolved", pause_id=pause_id)
+        logger.info("playbook_pause: %s was already resolved", pause_id)
     return changed
 
 
 async def expire_due(*, now: datetime | None = None) -> list[str]:
     """Expire every pause past its deadline. Returns the run ids.
+
+    Deliberately cross-tenant, and recorded as such in
+    `scripts/check_tenant_query_predicates.py`. A per-tenant sweep would
+    need a list of tenants to iterate, and a tenant missing from that list
+    would have approvals that never expire — the exact silent-hang this
+    sweep exists to prevent.
 
     Run from the scheduler. An expiry that nothing sweeps is a status
     column that never changes, which looks identical to a pause still
@@ -266,11 +292,11 @@ async def expire_due(*, now: datetime | None = None) -> list[str]:
                 now or datetime.now(UTC),
             )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_pause.expiry_sweep_failed", error=str(exc))
+        logger.warning("playbook_pause: expiry sweep failed: %s", exc)
         return []
     run_ids = [r["run_id"] for r in rows]
     if run_ids:
         # Info, not debug. An expired approval means an action a human was
         # asked to authorise did not happen, and nobody decided that.
-        logger.info("playbook_pause.expired", count=len(run_ids), run_ids=run_ids[:10])
+        logger.info("playbook_pause: %d pause(s) expired: %s", len(run_ids), run_ids[:10])
     return run_ids

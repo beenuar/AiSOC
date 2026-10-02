@@ -803,7 +803,14 @@ async def _create_approval(pr: PlaybookRun, step: PlaybookStep, tenant_id: str, 
         return None
 
 
-async def resume_after_approval(*, approval_id: str, approved: bool, decided_by: str = "", comment: str = "") -> PlaybookRun | None:
+async def resume_after_approval(
+    *,
+    approval_id: str,
+    tenant_id: str,
+    approved: bool,
+    decided_by: str = "",
+    comment: str = "",
+) -> PlaybookRun | None:
     """Continue a run suspended on this approval, or record the denial.
 
     Returns the completed run, or None when there is nothing waiting. The
@@ -811,13 +818,14 @@ async def resume_after_approval(*, approval_id: str, approved: bool, decided_by:
     arrives twice (a double-tap, a retried webhook) resumes once: the
     second attempt matches no `waiting` row.
     """
-    pause = await playbook_pause.find_waiting(approval_id=approval_id)
+    pause = await playbook_pause.find_waiting(approval_id=approval_id, tenant_id=tenant_id)
     if pause is None:
         return None
 
     if not approved:
         await playbook_pause.resolve(
             pause_id=pause.id,
+            tenant_id=pause.tenant_id,
             status="denied",
             resolution=f"denied by {decided_by or 'an analyst'}: {comment}"[:500],
         )
@@ -826,6 +834,7 @@ async def resume_after_approval(*, approval_id: str, approved: bool, decided_by:
 
     claimed = await playbook_pause.resolve(
         pause_id=pause.id,
+        tenant_id=pause.tenant_id,
         status="resumed",
         resolution=f"approved by {decided_by or 'an analyst'}: {comment}"[:500],
     )

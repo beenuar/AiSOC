@@ -229,6 +229,11 @@ RATCHET: dict[str, str] = {
         "matched on the 32-byte single-use state nonce, which is itself the credential"
     ),
     # -- deliberately cross-tenant surfaces ----------------------------------
+    "services/agents/app/playbook/pause.py::expire_due::aisoc_playbook_pauses": (
+        "the approval-expiry sweep: a per-tenant sweep would need a list of tenants to "
+        "iterate, and a tenant missing from that list would have approvals that never "
+        "expire, which is the silent hang the sweep exists to prevent"
+    ),
     "services/api/app/api/v1/endpoints/tenants.py::create_user::User": (
         "platform-admin provisioning: creates users across tenants by design"
     ),
@@ -338,7 +343,12 @@ RATCHET: dict[str, str] = {
 #: was moved out of module scope to earn this entry: keyed on `<module>` the
 #: waiver would have matched any later unscoped query in the same file, which
 #: is an allowlist wearing a ratchet's name.
-MAX_RATCHET = 35
+# 35 before parity 5.2, which added the approval-expiry sweep. It is the
+# one statement in that feature that is cross-tenant by construction: the
+# two lookups beside it (find_waiting, resolve) take a tenant and filter
+# on it, because resuming another tenant's playbook run should take two
+# mistakes rather than one.
+MAX_RATCHET = 36
 
 
 # ---------------------------------------------------------------------------
