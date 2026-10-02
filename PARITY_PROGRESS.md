@@ -519,3 +519,46 @@ pack playbooks into the image), 5.5 (the 133 rules that cannot fire), 5.6
 (case depth: merge, bulk triage, SLA breach, escalation routing, custom
 fields, workload metrics) and 5.7 (report scheduler, SMTP, email approvals,
 Teams cards, outbound webhooks).
+
+## Live QA after Phase 5 (2026-10-02)
+
+Six defects, **five of them mine, none found by the test suites**. Each is
+recorded with the reason it was invisible, because that is the reusable
+part.
+
+| Defect | Why no test caught it |
+|---|---|
+| `tenant_overlay._fetch` selected `rule_id` and `updated_by` from `detection_rules`, which has **neither** — the overlay would have loaded nothing on every deployment | The fakes answered whatever they were asked. A fake more capable than the real schema cannot fail |
+| `run_for_alert` asked for event `alert.created`; all 64 shipped playbooks declare `on: alert`, so **nothing ever matched** — the feature was wired, enabled and dead | Same shape: the fake store returned a playbook whatever event name it was handed |
+| An expired token **locked the user out of the product**: `/login` redirected to `/dashboard`, every call 401'd, nothing sent them back | No test exercised a dead session, and the lockout needs real browser storage to reproduce |
+| `aws_cloudtrail` had **no ingest profile**, so every event collapsed into **one alert** | The pipeline test pushed one event. One event cannot reveal a dedup collapse |
+| `check_raw_sql_columns` parsed `INSERT` and `UPDATE` only | A one-directional gate: an absent column fails a `SELECT` just as hard |
+| A meta-test required an unrunnable step type to **exist** | It broke when 5.2 made `approval` runnable and emptied the category |
+
+### The pattern worth keeping
+
+**Four of the six were invisible for the same reason**: the double was more
+capable than the real thing. A fake store that ignores the event name, a
+fake row that answers for a column the table does not have, a one-event
+pipeline test that cannot show a collapse, a gate that reads writes and not
+reads. In each case the test passed and the product did not work.
+
+The two gates extended here (`SELECT` parsing, and the corpus-derived
+trigger assertion) were both **proven against the real pre-fix defect**:
+re-injected, watched to fail, restored, watched to pass.
+
+### One non-defect, recorded as such
+
+A browser walkthrough initially reported `/playbooks` broken. It was the
+**published image**, built from a different commit than `main`; built from
+source the page lists 12 playbooks correctly. Worth stating plainly rather
+than counted as a fix, and a reminder that the published artefact and the
+repository are different things.
+
+### Semgrep ratchet drift
+
+Two consecutive runs on one branch measured 103/39 and 104/40 with **zero
+scanned files changed**. The workflow pins the semgrep binary and not the
+rule packs, so the ratchet compares against a moving target. Ceiling held
+at 104/40 with the reasoning written in; pinning is
+[#1099](https://github.com/beenuar/AiSOC/issues/1099).
