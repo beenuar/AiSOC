@@ -214,12 +214,28 @@ def test_catches_a_web_surface_that_invents_a_step_type(registries, gate):
 
 
 def test_catches_a_surface_promising_an_execution_the_schema_denies(registries, gate):
+    """The surface claims a step runs where the contract says it does not.
+
+    This used to find its own case by looking for a member the tree
+    already marked `unimplemented`, and raised `StopIteration` the moment
+    there were none left — which is what happened when parity 5.2 turned
+    `approval` into a durable pause and emptied that category entirely.
+
+    A meta-test that needs a defect to already exist in order to test for
+    defects stops working exactly when the tree gets healthy, so it
+    constructs **both** sides now: the schema denies the member and the
+    surface promises it.
+    """
     annotated = next(v for v in registries.ts_vocabularies if v.execution)
-    member = next(k for k, v in annotated.execution.items() if v == "unimplemented")
-    lying = dataclasses.replace(annotated, execution={**annotated.execution, member: "executed"})
+    member = sorted(annotated.execution)[0]
+
+    promising = dataclasses.replace(annotated, execution={**annotated.execution, member: "executed"})
     broken = _perturb(
         registries,
-        ts_vocabularies=tuple(lying if v.ref == annotated.ref else v for v in registries.ts_vocabularies),
+        # The schema side says no handler exists...
+        execution={**registries.execution, member: "unimplemented"},
+        # ...while the editor tells an author the step will run.
+        ts_vocabularies=tuple(promising if v.ref == annotated.ref else v for v in registries.ts_vocabularies),
     )
     assert any("the surface and the contract disagree" in e for e in gate.compare(broken))
 
