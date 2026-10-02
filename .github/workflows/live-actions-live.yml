@@ -1,0 +1,114 @@
+# Governed response actions, against a real HTTP vendor, every pull request.
+#
+# What Stable asserts for a governed capability
+# -----------------------------------------------
+# Not that the product acts on its own. Response actions require a human
+# approver by design, and that is a safety posture rather than an incomplete
+# implementation. What Stable asserts is that the governance machinery is
+# proven — **including that it correctly refuses**.
+#
+# Why a socket rather than a mock
+# ---------------------------------
+# Signatures drift silently here because simulation mode never constructs
+# the client: `SearchSIEMExecutor` passed `max_results=` when the client
+# takes `max_count`, and `CreateNotableEventExecutor` passed
+# `title`/`description`/`fields` when it takes `event_data`. Every live call
+# raised TypeError and every test passed.
+#
+# A mock accepts whatever it is handed. A real HTTP server does not get
+# called at all when the client fails to construct, which is the signal that
+# was missing.
+#
+# No `paths:` filter: `docs/audit/MATURITY_DEFINITION.md` requires a Stable
+# capability to be graded on every pull request.
+name: Live actions (governed)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: live-actions-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  live-actions:
+    name: Governance permits, refuses, and never leaks a refusal to the vendor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install the actions service
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet \
+            "fastapi>=0.117,<0.142" "pydantic>=2,<3" pydantic-settings \
+            httpx structlog "cryptography>=46,<51" "PyJWT>=2.8,<3" \
+            tenacity pyyaml pytest pytest-asyncio
+
+      # Not a `services:` container: the vendor here is a socket the test
+      # owns, started in-process, so it can record exactly which requests
+      # reached it. "Did anything leave the process?" is the one question
+      # a refusal has to answer, and a container would answer it less
+      # directly than a handler that appends to a list.
+      - name: Governance permits, refuses, and does not leak
+        working-directory: services/actions
+        run: python -m pytest ../../tests/isolation/test_live_actions_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # Removes the three governance branches — BLOCKED, QUEUED_APPROVAL
+      # and the DRY_RUN downgrade — and requires the suite to go red.
+      #
+      # Measured: `test_a_refused_action_never_reaches_the_vendor` fails,
+      # because `isolate_host` then actually attempts its CrowdStrike
+      # OAuth call and the stub records it. That is the assertion worth
+      # having: a refusal that still called the vendor is a refusal in
+      # name only, since the containment has already happened.
+      #
+      # Note what this replaced. An earlier version removed only the
+      # approval branch and the suite stayed green — the DRY_RUN
+      # downgrade still held the action, so the control was not proving
+      # what it claimed. Before that, with no executors registered at all,
+      # every dispatch answered `executor_not_found` and all seven tests
+      # passed without governance ever being consulted.
+      - name: The gate fails when governance is removed from the dispatcher
+        working-directory: services/actions
+        run: |
+          cp app/live_actions/dispatcher.py /tmp/dispatcher.bak
+          python - <<'PY'
+          import pathlib, re, sys
+          p = pathlib.Path("app/live_actions/dispatcher.py")
+          s = p.read_text()
+          # Matched on the three AutonomyMode branches by name rather than
+          # on an exact block of text, so reindentation or a reworded log
+          # line does not silently turn this control into a no-op.
+          pattern = re.compile(
+              r"\n *if decision\.mode is AutonomyMode\.BLOCKED:.*?"
+              r"request = request\.model_copy\(update=\{\"dry_run\": True\}\)\n",
+              re.S,
+          )
+          if not pattern.search(s):
+              print("negative control could not find the governance block; the dispatcher "
+                    "has been reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(pattern.sub("\n", s, count=1))
+          PY
+          if python -m pytest ../../tests/isolation/test_live_actions_live.py -q >/dev/null 2>&1; then
+            cp /tmp/dispatcher.bak app/live_actions/dispatcher.py
+            echo "FAIL: the suite passed with every governance branch removed from dispatch."
+            exit 1
+          fi
+          cp /tmp/dispatcher.bak app/live_actions/dispatcher.py
+          echo "OK: removing governance makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_live_actions_live.py -q

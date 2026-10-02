@@ -194,7 +194,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | 68-hunt YAML library, replayed against synthetic events | Alpha | Unit + boundary gate | `full` profile. The NL hunting agent is **not wired** — nothing outside its own test imports it, and the scheduler reads a synthetic corpus rather than tenant data (parity 6.1) |
 | SCIM 2.0, white-label, usage metering | Stable | Live Postgres through the real app, with a negative control | Yes |
 | Entity graph (Neo4j) | Stable | Live Neo4j against the production reader, with a negative control | Yes, `full` profile |
-| Governed response actions | Beta | Unit | Human-approved only |
+| Governed response actions | Stable | Live socket: permits, refuses, never leaks a refusal, with a negative control | Human-approved only |
 | Alert-triggered playbooks, with a durable approval pause | Stable | Live Postgres: suspend, restart, resume, expiry, with a negative control | Yes — three opt-ins deep, preview by default |
 | Per-tenant detection tuning in the live engine | Stable | Live Postgres: tuning written changes what the engine fires, with a negative control | Yes |
 | Scheduled connectors | Stable | Live scheduler polls a stub vendor into ingest, with a negative control | Yes |

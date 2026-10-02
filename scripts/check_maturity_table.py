@@ -110,6 +110,20 @@ class Evidence:
     #: the detection engine's replay proof, say. Those still need a
     #: negative control but have no driver to import.
     static_proof: bool = False
+    #: Set when the real infrastructure is a socket the test owns rather
+    #: than a container.
+    #:
+    #: Narrow on purpose, and verified rather than trusted: the gate
+    #: requires the named test to actually bind an `HTTPServer`. For the
+    #: governed-actions suite a socket is *better* evidence than a
+    #: container, because the question is "did anything leave the
+    #: process", and a handler that appends every request it receives to
+    #: a list answers that more directly than a container would.
+    #:
+    #: It must never become the escape hatch a mock slips through, which
+    #: is why it checks for a bound server rather than taking the flag's
+    #: word for it.
+    owns_a_socket: bool = False
 
 
 #: Evidence for every row the table marks Stable.
@@ -185,6 +199,23 @@ EVIDENCE: dict[str, Evidence] = {
             "the job will ever fire. This drives a real AsyncIOScheduler against real "
             "Postgres and real sockets, and the negative control re-injects that exact "
             "argument."
+        ),
+    ),
+    "Governed response actions": Evidence(
+        tests=("tests/isolation/test_live_actions_live.py",),
+        workflow="live-actions-live.yml",
+        job="live-actions",
+        negative_control=".github/workflows/live-actions-live.yml",
+        negative_marker="The gate fails when governance is removed from the dispatcher",
+        owns_a_socket=True,
+        rationale=(
+            "What Stable asserts for a governed capability is that the machinery is "
+            "proven *including that it correctly refuses*, so the suite's refusing half "
+            "matters more than its executing half. A real socket rather than a mock, "
+            "because simulation mode never constructs the client and that is how two "
+            "executors shipped calling their clients with argument names that do not "
+            "exist. The negative control removes all three governance branches and "
+            "requires the refused isolate to reach the vendor, which fails the suite."
         ),
     ),
     "Entity graph (Neo4j)": Evidence(
@@ -404,6 +435,23 @@ def declares_containers(workflow: str, job: str) -> bool:
     return any(marker in block for marker in _CONTAINER_MARKERS)
 
 
+def binds_a_real_socket(tests: tuple[str, ...]) -> tuple[bool, str]:
+    """Whether one of these tests stands up a real listening server.
+
+    Checked rather than believed. An evidence entry can claim it owns a
+    socket; this confirms the file constructs an `HTTPServer` and serves
+    it, so the claim cannot be made by a suite that only patches.
+    """
+    for test in tests:
+        path = REPO / test
+        if not path.is_file():
+            continue
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if "HTTPServer(" in source and "serve_forever" in source:
+            return True, ""
+    return False, (f"{', '.join(tests)} claims to own a socket and binds no HTTPServer. A flag is not evidence; a listening port is.")
+
+
 def exercises_real_path(test: str) -> tuple[bool, str]:
     """Whether a test drives the real system rather than a stand-in.
 
@@ -507,7 +555,11 @@ def scan() -> Scan:
                 ok, why = exercises_real_path(test)
                 if not ok:
                     result.findings.append(Finding("not-real-path", f"{key}: {why}"))
-            if not declares_containers(entry.workflow, entry.job):
+            if entry.owns_a_socket:
+                ok, why = binds_a_real_socket(entry.tests)
+                if not ok:
+                    result.findings.append(Finding("no-socket", f"{key}: {why}"))
+            elif not declares_containers(entry.workflow, entry.job):
                 result.findings.append(
                     Finding(
                         "no-containers",
@@ -595,7 +647,15 @@ def _self_test() -> int:
     ok, _ = exercises_real_path("tests/e2e/golden_pipeline/this_file_does_not_exist.py")
     cases.append(("detects an evidence file that does not exist", not ok))
 
-    # 6. The table itself going missing.
+    # 6. A `owns_a_socket` claim made by a suite that binds nothing.
+    #
+    # The flag is the one place a mock could get in, so it is checked
+    # rather than trusted: pointing it at a suite with no HTTPServer must
+    # fail.
+    ok, _ = binds_a_real_socket(("tests/isolation/test_ueba_live.py",))
+    cases.append(("refuses an owns-a-socket claim from a suite that binds none", not ok))
+
+    # 7. The table itself going missing.
     _rows, findings = parse_table("# A readme with no maturity table\n")
     cases.append(("refuses a README with no maturity table", bool(findings)))
 
