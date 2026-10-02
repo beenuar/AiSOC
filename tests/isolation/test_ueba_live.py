@@ -119,7 +119,6 @@ class TestTheSchemaIsTheOneTheServiceShips:
         migration 0001, so `score_event` raised on the first scoreable
         event and UEBA could not write an anomaly on any deployment."""
         import sqlalchemy
-
         from app.models.ueba import EntityBaseline
 
         result = await session.execute(
