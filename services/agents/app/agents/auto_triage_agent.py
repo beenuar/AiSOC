@@ -37,6 +37,7 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
+from app.closure.qa_sampling import ClosureQaSampler
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
@@ -375,6 +376,27 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
     }
 
 
+async def _sample_for_qa(state: InvestigationState, *, verdict: str, confidence: float) -> None:
+    """Record this closure for review, if it falls in the sample."""
+    tenant_id = str(getattr(state, "tenant_id", "") or "")
+    alert_id = str(getattr(state, "incident_id", "") or "")
+    if not tenant_id or not alert_id:
+        return
+    try:
+        sampler = ClosureQaSampler(await closure_policy._pool())
+        decision = await sampler.record(
+            tenant_id=tenant_id,
+            alert_id=alert_id,
+            alert_class=_alert_class_of(state),
+            disposition=verdict,
+            confidence=confidence,
+        )
+        if decision.sampled:
+            state.add_finding(f"Selected for closure QA review: an analyst will score this auto-closure (sample rate {decision.rate:.0%}).")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("auto_triage.qa_sample_failed", error=str(exc), incident_id=alert_id)
+
+
 async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     """
     LLM-based auto-triage: classify the alert and decide whether to
@@ -529,6 +551,12 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     if should_auto_close:
         _metrics["auto_resolved_count"] += 1
         state.status = AgentStatus.COMPLETED
+        # Parity 3.5. A fraction of closures goes to an analyst, so there
+        # is a measured closure accuracy on the tenant's own data rather
+        # than only a synthetic-corpus grade and a count of how many were
+        # closed. Best-effort: a sampling failure must not stop a closure
+        # the policy allowed.
+        await _sample_for_qa(state, verdict=verdict, confidence=confidence)
         state.add_finding(f"Auto-closed as {verdict} (confidence {confidence:.2f} >= threshold {closure.threshold:.2f}, {closure.source})")
         logger.info(
             "Auto-triage: auto-closed",
