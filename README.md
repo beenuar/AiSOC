@@ -73,10 +73,10 @@ $ make smoke
 [PASS] alert is retrievable by id from the API
 ```
 
-Open **http://localhost:3000** and sign in with the credentials `make up` printed (API docs at
-**http://localhost:8000/api/docs**). On a server, set `AISOC_CONSOLE_URL` in `.env` — `make up` then
-prints that address rather than localhost, which is the one people can browse to. Stuck?
-`make doctor`.
+Open **http://localhost:3000** and sign in with the credentials `make up` printed. The API is at
+**http://localhost:8000**; its spec is [`docs/openapi.yaml`](docs/openapi.yaml), because interactive
+docs are off in this production-class stack. On a server set `AISOC_CONSOLE_URL` in `.env`, and
+`make up` prints that address rather than localhost. Stuck? `make doctor`.
 
 ## Try it without connecting anything
 

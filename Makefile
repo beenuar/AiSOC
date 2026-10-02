@@ -106,7 +106,8 @@ up: env _ports _refresh
 	@$(MAKE) --no-print-directory _wait
 	@echo ""
 	@echo "  Console:  $(console_url)"
-	@echo "  API:      http://localhost:8000/api/docs"
+	@echo "  API:      http://localhost:8000  (spec: docs/openapi.yaml; interactive"
+	@echo "            docs are off in this production-class stack)"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
 	@$(MAKE) --no-print-directory bootstrap
@@ -155,7 +156,8 @@ up-dev: env _ports _refresh
 	@$(MAKE) --no-print-directory _wait
 	@echo ""
 	@echo "  Console:  $(console_url)"
-	@echo "  API:      http://localhost:8000/api/docs"
+	@echo "  API:      http://localhost:8000  (spec: docs/openapi.yaml; interactive"
+	@echo "            docs are off in this production-class stack)"
 	@echo ""
 	@echo "  Anonymous access is ON. This overlay is for a laptop, not a host"
 	@echo "  anyone else can reach."
@@ -167,7 +169,8 @@ up-full: env _ports _refresh
 	@$(MAKE) --no-print-directory _wait PROFILE=full
 	@echo ""
 	@echo "  Console:  $(console_url)"
-	@echo "  API:      http://localhost:8000/api/docs"
+	@echo "  API:      http://localhost:8000  (spec: docs/openapi.yaml; interactive"
+	@echo "            docs are off in this production-class stack)"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
 	@$(MAKE) --no-print-directory bootstrap

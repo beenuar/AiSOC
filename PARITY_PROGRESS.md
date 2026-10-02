@@ -470,3 +470,21 @@ The console role-assignment UI is not built and is recorded as outstanding.
 copilot), 3.7 (signed evidence bundles), 4.2 (console MFA), 4.3's console
 UI, 4.4 (tenant audit views), 4.5 (operator pages), 4.6 (i18n), and all of
 Phases 5 and 6.
+
+## Live QA fixes, re-applied (2026-10-02)
+
+Both were found by live QA, shipped on their own branch, and **lost** when
+that branch was closed as superseded: the combined phase-2-to-4 branch was
+built from the phase-4 tip, and the QA branch was never in that chain. A
+second live run against merged `main` found the graph 401 storm back at
+five per alert, which is how the loss was caught rather than assumed.
+
+| Defect | Fix |
+|---|---|
+| `make up`, `install.sh` and the README advertised `http://localhost:8000/api/docs`, which **404s** because `make up` starts a production-class stack where the API disables its interactive docs | All five surfaces point at `docs/openapi.yaml`. The pre-existing test that *required* the README to advertise a docs URL was rewritten: the invariant spanning both eras is "advertise one only if the documented path serves one" |
+| Every auto-triage emitted **four 401s per alert** on `graph/neighbors` and `graph/blast-radius` | `ContextBundleBuilder()` is constructed with no token and those routes authenticate a *user*, which a background worker has none of; on CORE there is no Neo4j behind them either. Reported once as "the entity graph runs in the `full` profile and is not part of this deployment" |
+
+One 401 per alert remains on `incident-context`, same root cause, recorded
+open: a guard there broke six tests that exercise the enabled path, and the
+proper fix is a service principal the API accepts, which belongs with 4.1's
+outstanding half.
