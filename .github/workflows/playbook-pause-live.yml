@@ -1,0 +1,120 @@
+# The durable approval pause, against the Postgres it claims to use.
+#
+# Why this exists
+# ---------------
+# The offline suite is 15 tests against `_FakeRows` and `_FakePool`. It is a
+# useful test of the module's logic and cannot prove the thing the feature is
+# named for, because every property that matters belongs to the database:
+# "survives a restart" is a claim about rows on disk, and "a double-tap
+# resolves once" is enforced by a partial unique index that the fake
+# re-implements in Python.
+#
+# A hand-written re-implementation of a constraint is the
+# double-more-capable-than-the-real-thing shape that caused four of six
+# defects in one live-QA pass. The README also claimed "live Postgres
+# suspend/resume" before this file existed, which was simply untrue.
+#
+# No `paths:` filter: `docs/audit/MATURITY_DEFINITION.md` requires a Stable
+# capability to be graded on every pull request.
+name: Playbook pause (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: playbook-pause-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  playbook-pause-live:
+    name: Suspend, resume, expire and isolate against real Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      PLAYBOOK_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install the agents service
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet asyncpg structlog pytest pytest-asyncio \
+            "pydantic>=2,<3" pydantic-settings httpx
+
+      # `002` first: it defines `current_tenant_id()`, which `081`'s RLS
+      # policy calls. Applying `081` alone fails with "function
+      # current_tenant_id() does not exist", which is a useful reminder
+      # that a migration is not independent of the chain it belongs to.
+      - name: Apply the migrations the table needs
+        run: |
+          for m in 001 002 081; do
+            f=$(ls services/api/migrations/${m}_*.sql | head -1)
+            echo "applying $f"
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: The pause suspends, survives, resumes, expires and isolates
+        working-directory: services/agents
+        env:
+          ISOLATION_PLAYBOOK_DSN: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_playbook_pause_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # `aisoc_playbook_pauses_run_idx` is the partial unique index on
+      # `status = 'waiting'` that stops one run having two live pauses. The
+      # offline suite re-implements that rule in Python and so would pass
+      # whether or not the index exists.
+      #
+      # Dropping it must make the suite go red. Measured: one test fails,
+      # `test_two_waiting_pauses_for_one_run_are_refused`, which is exactly
+      # the one that asserts the database refuses rather than the module.
+      #
+      # Note the sibling `test_a_double_tap_resolves_once` keeps passing
+      # without the index, and that is correct — single resolution is
+      # enforced by the atomic `UPDATE ... WHERE status = 'waiting'`, which
+      # is a different mechanism. Two properties, two tests; a control that
+      # broke both would be telling us less, not more.
+      - name: The gate fails when the partial unique index is gone
+        working-directory: services/agents
+        env:
+          ISOLATION_PLAYBOOK_DSN: ${{ env.PLAYBOOK_DSN }}
+        run: |
+          psql -h localhost -U aisoc -d aisoc -q -c \
+            "DROP INDEX IF EXISTS aisoc_playbook_pauses_run_idx;"
+          if python -m pytest ../../tests/isolation/test_playbook_pause_live.py -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed without the partial unique index, so it is not"
+            echo "      proving the database enforces single resolution."
+            exit 1
+          fi
+          echo "OK: dropping the index makes the suite fail, as it must."
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q \
+            -f ../../services/api/migrations/081_playbook_pauses.sql
+          python -m pytest ../../tests/isolation/test_playbook_pause_live.py -q

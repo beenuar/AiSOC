@@ -131,6 +131,19 @@ EVIDENCE: dict[str, Evidence] = {
             "the column migration 0001 forgot, and requires the suite to go red."
         ),
     ),
+    "Alert-triggered playbooks, with a durable approval pause": Evidence(
+        tests=("tests/isolation/test_playbook_pause_live.py",),
+        workflow="playbook-pause-live.yml",
+        job="playbook-pause-live",
+        negative_control=".github/workflows/playbook-pause-live.yml",
+        negative_marker="The gate fails when the partial unique index is gone",
+        rationale=(
+            "Every property the feature is named for belongs to the database: surviving a "
+            "restart is a claim about rows on disk, and single resolution is enforced by a "
+            "partial unique index the offline fake re-implements in Python. The negative "
+            "control drops that index and requires the constraint test to fail."
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",
