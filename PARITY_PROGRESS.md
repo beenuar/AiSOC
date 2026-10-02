@@ -562,3 +562,31 @@ scanned files changed**. The workflow pins the semgrep binary and not the
 rule packs, so the ratchet compares against a moving target. Ceiling held
 at 104/40 with the reasoning written in; pinning is
 [#1099](https://github.com/beenuar/AiSOC/issues/1099).
+
+## First run, measured on a bare clone (2026-10-02)
+
+Everything below came from a clean-room install: a fresh worktree off
+`main`, following the README exactly, on a host that already had a
+Postgres on 5432 and an Ollama on 11434.
+
+| Was | Now |
+|---|---|
+| `make up` **refused to start** on a port conflict and said to edit YAML | Picks a free port, names what held it, moves `AISOC_CONSOLE_URL` with it |
+| `make smoke` probed a hardcoded `:3000` and read a connection failure as **"an uncredentialed caller was served"** | Uses the real console URL, and `000` is a skip |
+| `make doctor` on a never-started clone showed **22 red failures** | Says nothing is running yet and names `make up` |
+| A container dying of a full Docker VM reported as **"zookeeper is not running"** | Names the disk and prints the prune command |
+| A new tenant landed on an all-zero dashboard | Lands on a setup wizard derived from its own data |
+| No way to see the product work without credentials | Five scenarios through the **real ingest path**, labelled, which do not mark setup complete |
+
+**64 seconds** from `git clone` to a working console with three ports
+remapped; `make smoke` 10/10; sample data producing five distinct alerts
+from low to critical with differing AI verdicts.
+
+### The through-line
+
+Four of these were diagnostics that named the wrong thing. A port
+conflict reported as "edit docker-compose.yml", a dead port reported as
+an authentication hole, an unstarted stack reported as eight broken
+services, and a full disk reported as a Zookeeper fault. In each case the
+information needed was already on the machine and the message did not
+carry it.

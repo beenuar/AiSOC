@@ -282,6 +282,15 @@ _wait:
 	    echo ""; \
 	    echo "These services are not running: $$broken"; \
 	    for s in $$broken; do echo "  docker compose logs $$s | tail -30"; done; \
+	    if $(COMPOSE) logs --tail 80 $$broken 2>/dev/null | grep -qiE "no space left on device|disk quota exceeded"; then \
+	      echo ""; \
+	      echo "  Those containers died because the Docker VM ran out of disk,"; \
+	      echo "  not because anything is wrong with them. CORE needs ~20GB."; \
+	      echo ""; \
+	      echo "      docker system prune -af --volumes"; \
+	      echo ""; \
+	      echo "  then 'make up' again. 'make doctor' reports free space up front."; \
+	    fi; \
 	    echo "Run 'make doctor' for the full picture."; \
 	    exit 1; \
 	  fi; \
