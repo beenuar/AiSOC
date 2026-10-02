@@ -47,8 +47,34 @@ jobs:
   retro-hunt-live:
     name: A published indicator sweeps its tenant's recorded data
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
+
+    # The sweep reads its opted-in tenants from Postgres and writes
+    # sightings back under RLS. As the schema owner neither of the two
+    # defects this E2E found would appear, so the suite runs as the
+    # `aisoc_app` runtime role — the one a deployment uses.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
     env:
+      # The suite connects as the runtime role. The owner URL is only
+      # for schema setup and for the fixture that writes the two tenant
+      # rows — named `DATABASE_MIGRATION_URL` so it reads as what it is,
+      # which is also what `check_runtime_db_role.py` looks for.
+      RETRO_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
       # Load-bearing. See the header.
       RETRO_HUNT_ENABLED: "true"
       ISOLATION_CLICKHOUSE_HOST: localhost
@@ -112,6 +138,40 @@ jobs:
         env:
           ISOLATION_REPO_ROOT: ${{ github.workspace }}
         run: python -m pytest ../../tests/isolation/test_retro_hunt_live.py -v --tb=short
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The seam the two suites either side of it never crossed: a real
+      # indicator, published to a real broker in the feed's own envelope,
+      # parsed by the real consumer, swept against real recorded data,
+      # opening a real alert for the one tenant that was exposed.
+      #
+      # It found two defects on its first run, both invisible as the
+      # schema owner: one tenant's pending rows were flushed under the
+      # *next* tenant's RLS context, and a failed flush poisoned the
+      # session so every later tenant was reported failed — the exact
+      # thing the loop's own comment said must not happen.
+      - name: An indicator travels feed → Kafka → sweep → alert
+        working-directory: services/api
+        env:
+          ISOLATION_RETRO_PG_DSN: ${{ env.DATABASE_MIGRATION_URL }}
+          DATABASE_URL: ${{ env.RETRO_DSN }}
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+          CLICKHOUSE_HOST: localhost
+          CLICKHOUSE_PORT: "9000"
+          CLICKHOUSE_USER: default
+        run: python -m pytest ../../tests/isolation/test_retro_hunt_e2e.py -v --tb=short
 
       - name: The consumer tells a working message from poison
         working-directory: services/api

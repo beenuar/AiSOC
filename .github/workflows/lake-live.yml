@@ -33,7 +33,33 @@ jobs:
   lake-live:
     name: The shipped DDL loads and tenant scoping holds
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
+
+    # The route suite authenticates a real user against a real `users`
+    # row, because `get_current_user` resolves the token's `sub` and
+    # 401s on "User not found". A synthetic subject would be refused —
+    # which is the behaviour worth keeping, since it is what makes the
+    # tenant come from the credential rather than from an argument.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      LAKE_ROUTE_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      OTEL_SDK_DISABLED: "true"
+
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -66,14 +92,6 @@ jobs:
 
       # The hunt suite below drives `app.hunt` from services/agents, a
       # different service with a different lock.
-      - name: Install agents from its lockfile
-        working-directory: services/agents
-        run: |
-          set -euo pipefail
-          poetry config virtualenvs.create false
-          poetry install --no-root --no-interaction
-          python -m pip install --quiet clickhouse-driver
-
       # The hunt suite below drives `app.hunt` from services/agents, a
       # different service with a different lock.
       - name: Install agents from its lockfile
@@ -93,6 +111,30 @@ jobs:
             sleep 1
           done
           echo "ClickHouse did not become ready"; docker logs lake-clickhouse | tail -40; exit 1
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The layer `test_lake_live.py` stops short of: the caller is
+      # authenticated, their tenant comes from the token rather than an
+      # argument, and errors map onto status codes an operator reads.
+      - name: A tenant-scoped query round-trips through POST /lake/sql
+        working-directory: services/api
+        env:
+          ISOLATION_LAKE_ROUTE_DSN: ${{ env.LAKE_ROUTE_DSN }}
+          DATABASE_URL: ${{ env.LAKE_ROUTE_DSN }}
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_lake_route_live.py -v --tb=short
 
       - name: The shipped DDL loads and tenant scoping holds
         working-directory: services/api

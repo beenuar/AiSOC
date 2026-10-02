@@ -242,18 +242,51 @@ async def handle_indicator(indicator: IntelIndicator) -> list[TenantSweepReport]
 
         for settings_row in tenants:
             try:
-                await db.execute(
-                    text("SELECT set_config('app.current_tenant_id', :t, true)"),
-                    {"t": str(settings_row.tenant_id)},
-                )
-                reports.append(
-                    await sweep_tenant(
+                # A SAVEPOINT per tenant, and both halves of it are
+                # load-bearing. Found by the end-to-end suite, which runs
+                # as the `aisoc_app` runtime role; as the schema owner
+                # neither defect appears, because RLS does not apply.
+                #
+                # **Rows flushed under the wrong tenant's context.**
+                # `sweep_tenant` deliberately does not commit, so its rows
+                # sat pending. The next iteration rebound
+                # `app.current_tenant_id` to the *next* tenant, and the
+                # first query after that triggered SQLAlchemy's autoflush
+                # — which wrote the previous tenant's rows while the
+                # current tenant's context was active. RLS refused them,
+                # correctly, and retro-hunt wrote nothing. The nested
+                # block flushes each tenant's work inside its own context,
+                # before anything rebinds.
+                #
+                # **One tenant's failure stopped the rest.** The comment
+                # below says it must not, and it did: a failed flush left
+                # the session needing a rollback, so every later tenant
+                # raised `PendingRollbackError` and was reported as
+                # failed. The savepoint rolls back only the tenant that
+                # failed.
+                #
+                # Driven explicitly rather than with `async with`: the
+                # context-manager form attempts its release outside the
+                # greenlet the async driver runs in and raises
+                # `MissingGreenlet`.
+                savepoint = await db.begin_nested()
+                try:
+                    await db.execute(
+                        text("SELECT set_config('app.current_tenant_id', :t, true)"),
+                        {"t": str(settings_row.tenant_id)},
+                    )
+                    report = await sweep_tenant(
                         db,
                         tenant_id=settings_row.tenant_id,
                         indicator=indicator,
                         settings_row=settings_row,
                     )
-                )
+                    await db.flush()
+                except Exception:
+                    await savepoint.rollback()
+                    raise
+                await savepoint.commit()
+                reports.append(report)
             except Exception as exc:  # noqa: BLE001 - one tenant must not stop the rest
                 logger.exception(
                     "retro_hunt.tenant_sweep_failed tenant=%s err=%s",
