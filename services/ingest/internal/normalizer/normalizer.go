@@ -233,7 +233,7 @@ var connectorProfiles = map[string]connectorProfile{
 		classUID:  2001,
 		className: "Security Finding",
 		fieldMap: map[string]string{
-			"created_at":  "time",
+			"created_at": "time",
 			// `title` is the event name (ConsoleLogin, DeleteTrail), which
 			// is what makes two events two alerts rather than one.
 			"title":       "message",
