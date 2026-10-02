@@ -9,9 +9,9 @@
   "counts": {
     "aliases": 2,
     "canonical-fold": 5,
-    "profile": 5,
+    "profile": 6,
     "registry": 84,
-    "total": 94
+    "total": 95
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -22,6 +22,7 @@
     "ai_gateway",
     "ai_guardrail",
     "ai_runtime",
+    "aisoc_sample",
     "auditd",
     "auth0",
     "aws_cloudtrail",
@@ -118,6 +119,7 @@
     "ai_gateway": "registry",
     "ai_guardrail": "profile",
     "ai_runtime": "profile",
+    "aisoc_sample": "profile",
     "auditd": "registry",
     "auth0": "registry",
     "aws_cloudtrail": "registry",

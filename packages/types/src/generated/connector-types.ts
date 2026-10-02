@@ -5,9 +5,9 @@
 // registry that decides what the platform can ingest:
 //
 //    84  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
-//     5  connectorProfiles keys no connector declares under that spelling
+//     6  connectorProfiles keys no connector declares under that spelling
 //     5  alternate spellings connectorTypeCanonical folds onto a declared id
-//    94  total
+//    95  total
 //
 // The union used to be written by hand, which is how ten members came to name
 // nothing: `ibm_qradar` reached no profile and no connector, so strict mode
@@ -20,6 +20,7 @@ export const CONNECTOR_TYPES = [
   "ai_gateway",         // registry
   "ai_guardrail",       // profile
   "ai_runtime",         // profile
+  "aisoc_sample",       // profile
   "auditd",             // registry
   "auth0",              // registry
   "aws_cloudtrail",     // registry

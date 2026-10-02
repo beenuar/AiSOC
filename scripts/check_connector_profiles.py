@@ -85,7 +85,37 @@ PUSH_ONLY_PROFILES: dict[str, str] = {
 # map is what makes the declared id resolve to the same profile. Each entry
 # must be reachable via an alias or still declared in the union, which is
 # checked against those files rather than asserted here.
+
+
+def _profile_vendor_is_aisoc(key: str) -> bool:
+    """Whether an internal profile attributes its alerts to AiSOC."""
+    normalizer = repo_root() / NORMALIZER_REL
+    source = normalizer.read_text() if normalizer.exists() else ""
+    marker = f'"{key}": {{'
+    if marker not in source:
+        return False
+    block = source[source.index(marker) : source.index(marker) + 600]
+    return 'VendorName: "AiSOC"' in block
+
+
 LEGACY_PROFILE_KEYS = {"crowdstrike_falcon", "okta_system_log", "splunk_enterprise"}
+
+# Profiles for telemetry AiSOC generates about itself, which no operator
+# can configure and which must therefore **not** appear in the connector
+# catalog or the ConnectorType union.
+#
+# `aisoc_sample` is the batch the first-run wizard pushes. It needs a
+# profile for the same reason every other source does — without one it
+# falls to the lenient fallback, every event gets the same generic title
+# and no vendor id, and all five collapse onto a single alert — but
+# adding it to the registry to satisfy this gate would put a fake vendor
+# in an 84-connector catalog and inflate a published count. That is the
+# trade this set exists to make explicit rather than to hide.
+#
+# The requirement that keeps it honest is below: an internal profile must
+# name AiSOC as its vendor, so the alert's own source attribution says
+# where it came from.
+INTERNAL_PROFILES = {"aisoc_sample"}
 
 # packages/types' ConnectorType union used to be a third name space written by
 # hand, and it predated the connectors registry. Ten members named no connector
@@ -318,6 +348,18 @@ def evaluate(
             if template not in template_names:
                 failures.append(
                     ("profile-template-missing", f"profile {key!r} is allowed as a push-only template key, but {template} does not exist")
+                )
+            continue
+        if key in INTERNAL_PROFILES:
+            # Not a connector, and must not pretend to be one. The one
+            # thing it does owe a reader is honest attribution.
+            if not _profile_vendor_is_aisoc(key):
+                failures.append(
+                    (
+                        "internal-profile-misattributed",
+                        f"profile {key!r} is internal telemetry but does not name AiSOC as its "
+                        "vendor, so its alerts would be attributed to something that does not exist",
+                    )
                 )
             continue
         if key in LEGACY_PROFILE_KEYS:
