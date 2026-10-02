@@ -8,16 +8,22 @@ from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
 
+import structlog
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.graph.runner import run_full_investigation
+from app.hunt.agent import run_hunt
+from app.llm import safe_ainvoke
+from app.llm.factory import make_chat_model
 from app.models.state import AgentTask, InvestigationState
 from app.security.tenant_scope import (
     TenantPrincipal,
     require_console_or_service_auth,
     scoped_tenant_or_403,
 )
+
+logger = structlog.get_logger(__name__)
 
 router = APIRouter()
 
@@ -112,6 +118,72 @@ async def get_investigation(run_id: str, principal: ScopedPrincipal):
     if not run:
         raise HTTPException(status_code=404, detail="Investigation run not found")
     return run
+
+
+class HuntRequest(BaseModel):
+    """One natural-language hypothesis to hunt against tenant data."""
+
+    tenant_id: UUID
+    hypothesis: str
+
+
+class HuntResponse(BaseModel):
+    """What the hunt found, or why it could not look.
+
+    `checked` and `unavailable_reason` are separate fields on purpose. A
+    hunt that could not run is not a hunt that found nothing, and
+    collapsing the two is how a console ends up showing a reassuring
+    empty result for a search that never happened.
+    """
+
+    hypothesis: str
+    checked: bool
+    matches: list[dict[str, Any]] = []
+    refusals: list[str] = []
+    unavailable_reason: str | None = None
+
+
+@router.post("/hunt", response_model=HuntResponse)
+async def run_nl_hunt(request: HuntRequest, principal: ScopedPrincipal) -> HuntResponse:
+    """Plan and run one natural-language hunt.
+
+    This route is what takes `app/hunt/agent.py` off the unreachable
+    list. The agent was complete and tested, and its only importer
+    repo-wide was its own test — a passing test on a function nothing
+    calls is indistinguishable from a working feature until someone
+    traces the call graph.
+
+    The model never writes a query. `plan_hunt` asks it for a *plan*,
+    validates every attempt against the allowed shape, and records each
+    refusal; `execute_plan` runs the validated plan. A refusal is
+    returned rather than swallowed, because "the model proposed
+    something I would not run" is information an analyst should see.
+    """
+    tenant_id = scoped_tenant_or_403(principal, request.tenant_id)
+    hypothesis = request.hypothesis.strip()
+    if not hypothesis:
+        raise HTTPException(status_code=422, detail="hypothesis must not be empty")
+
+    run_id = str(uuid4())
+    model = make_chat_model("hunt", json_output=True)
+
+    async def _invoke(messages: list[dict[str, str]]) -> Any:
+        # Through `safe_ainvoke`, so the LLM input contract applies here
+        # exactly as it does on every other call site in this service.
+        return await safe_ainvoke(model, messages)
+
+    result = await run_hunt(hypothesis, invoke=_invoke, run_id=run_id)
+    logger.info(
+        "hunt.completed",
+        extra={"tenant_id": str(tenant_id), "run_id": run_id, "checked": result.checked},
+    )
+    return HuntResponse(
+        hypothesis=result.hypothesis,
+        checked=result.checked,
+        matches=list(getattr(result, "matches", []) or []),
+        refusals=list(result.refusals or []),
+        unavailable_reason=result.unavailable_reason,
+    )
 
 
 @router.get("/health")

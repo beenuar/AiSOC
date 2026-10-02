@@ -249,6 +249,21 @@ EVIDENCE: dict[str, Evidence] = {
             "so the loop deciding whether a fault is worth retrying was never graded."
         ),
     ),
+    "68-hunt YAML library": Evidence(
+        tests=("tests/isolation/test_hunt_lake_live.py",),
+        workflow="lake-live.yml",
+        job="lake-live",
+        negative_control=".github/workflows/lake-live.yml",
+        negative_marker="The gate fails when the tenant rewrite is a pass-through",
+        rationale=(
+            "Parity 6.1. The only implemented telemetry provider was `synthetic`, so "
+            "every scheduled hunt on every deployment ran against a fixture corpus — "
+            "findings about events no customer had. The default is now the lake, and two "
+            "tests assert an unreachable lake yields nothing rather than silently "
+            "substituting the fixture, because an operator cannot tell fabricated "
+            "findings from real ones."
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",

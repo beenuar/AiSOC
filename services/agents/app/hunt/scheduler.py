@@ -117,7 +117,7 @@ class HuntScheduler:
     async def _tick(self) -> None:
         """Run every hunt whose interval has elapsed since its last run."""
         now = time.time()
-        events = _load_telemetry()  # one shared snapshot per tick
+        events = _load_telemetry(self._tenant_ref)  # one shared snapshot per tick
 
         for hunt in self._corpus.list():
             if not hunt.schedule.enabled:
@@ -158,7 +158,7 @@ class HuntScheduler:
         hunt = self._corpus.get(hunt_id)
         if hunt is None:
             return {"ok": False, "error": f"hunt {hunt_id} not found"}
-        result = self._engine.run(hunt, _load_telemetry())
+        result = self._engine.run(hunt, _load_telemetry(self._tenant_ref))
         await record_run(
             hunt,
             result,
@@ -180,23 +180,67 @@ class HuntScheduler:
 # ---------------------------------------------------------------------------
 
 
-def _load_telemetry() -> list[dict[str, Any]]:
+#: The provider a deployment gets when nobody chooses.
+#:
+#: Was `synthetic`, which meant every scheduled hunt on every deployment
+#: ran against `synthetic_telemetry.jsonl` — a fixture corpus — rather
+#: than the customer's own events. The benchmark scoreboard still scores
+#: against that corpus deliberately and sets the variable to say so.
+_DEFAULT_PROVIDER = "lake"
+
+
+def _load_telemetry(tenant_ref: str | None = None) -> list[dict[str, Any]]:
     """Resolve and load events according to ``HUNT_TELEMETRY_PROVIDER``.
 
-    Defaults to ``synthetic`` so the scheduler is useful out of the box —
-    that's also what the public benchmark scoreboard scores hunts against.
+    Defaults to `lake`: a tenant's scheduled hunts run against their own
+    recorded events. `synthetic` remains available by explicit opt-in and
+    is what the public benchmark scoreboard uses.
     """
-    provider = os.environ.get("HUNT_TELEMETRY_PROVIDER", "synthetic").strip().lower()
+    provider = os.environ.get("HUNT_TELEMETRY_PROVIDER", _DEFAULT_PROVIDER).strip().lower()
+    if provider == "lake":
+        return _load_lake_events(tenant_ref)
     if provider == "synthetic":
         return _load_synthetic_events()
     if provider == "ingest":
-        # Live event-warehouse path is wired up by the federated search work
-        # in Wave 3 (w3-fed). Until then the scheduler records empty runs
-        # rather than crashing — that's deliberate, it lets ops watch the
-        # job heartbeat without faking findings.
-        return []
+        # Retained as an alias so a deployment that set it explicitly
+        # keeps working; `lake` is the name of the thing it describes.
+        return _load_lake_events(tenant_ref)
     logger.warning("hunt.telemetry.unknown_provider", provider=provider)
     return []
+
+
+def _load_lake_events(tenant_ref: str | None) -> list[dict[str, Any]]:
+    """Read this tenant's recorded events out of the ClickHouse lake.
+
+    The default, and the reason parity 6.1 existed. Before this the only
+    implemented provider was `synthetic`, so every scheduled hunt on
+    every deployment ran against a fixture corpus — producing findings
+    about events no customer had, and finding nothing about events they
+    did.
+
+    **An unreachable lake returns nothing and says so.** It does not fall
+    back to the fixture. A hunt that silently reports findings from
+    synthetic telemetry is worse than one that reports nothing: the
+    operator cannot tell the two apart, and one of them is fabricated
+    data presented as their own.
+    """
+    if not tenant_ref:
+        logger.warning("hunt.telemetry.lake.no_tenant")
+        return []
+    try:
+        from app.hunt.lake_source import fetch_recent_events
+    except ImportError:  # pragma: no cover - the module ships with the service
+        logger.warning("hunt.telemetry.lake.unavailable")
+        return []
+    try:
+        return fetch_recent_events(tenant_ref)
+    except Exception as exc:  # noqa: BLE001 - a hunt must not take the scheduler down
+        logger.warning(
+            "hunt.telemetry.lake.failed",
+            tenant_ref=tenant_ref,
+            error=str(exc)[:200].replace("\r", "").replace("\n", " "),
+        )
+        return []
 
 
 _SYNTHETIC_PATH_OVERRIDE = "HUNT_SYNTHETIC_TELEMETRY_PATH"

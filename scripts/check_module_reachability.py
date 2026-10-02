@@ -89,11 +89,6 @@ ALLOWED_UNREACHABLE: dict[str, str] = {
     # every hosted LLM call through them at the contract layer, so they are
     # reachable now and the entries are gone rather than updated. That is
     # the allowlist shrinking as the plan says it only may.
-    "services/agents/app/hunt/agent.py": (
-        "The NL hunting agent. Only its own test imports it, which is the "
-        "defect the plan records. Wired to the console and MCP by parity 6.1."
-    ),
-    "services/agents/app/hunt/plan.py": "The hunting agent's plan model, reached only through it. Parity 6.1.",
     "services/agents/app/policy/__init__.py": "Package marker for the guardrails below.",
     "services/agents/app/policy/guardrails.py": (
         "Reads the console's per-action closure thresholds, and nothing reads "

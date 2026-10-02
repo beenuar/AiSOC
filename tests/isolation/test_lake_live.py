@@ -48,6 +48,17 @@ TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")
 
 DDL = "services/api/clickhouse/001_init.sql"
 
+# `app.hunt.lake_source` reads CLICKHOUSE_* the way the fusion writer and
+# the API do. This suite is configured with ISOLATION_CLICKHOUSE_*, so
+# bridge them here rather than teaching the production module a second
+# spelling it would only use in tests.
+if os.environ.get("ISOLATION_CLICKHOUSE_HOST"):
+    os.environ.setdefault("CLICKHOUSE_HOST", os.environ["ISOLATION_CLICKHOUSE_HOST"])
+    os.environ.setdefault("CLICKHOUSE_PORT", os.environ.get("ISOLATION_CLICKHOUSE_PORT", "9000"))
+    os.environ.setdefault("CLICKHOUSE_USER", os.environ.get("ISOLATION_CLICKHOUSE_USER", "default"))
+    os.environ.setdefault("CLICKHOUSE_PASSWORD", os.environ.get("ISOLATION_CLICKHOUSE_PASSWORD", ""))
+    os.environ.setdefault("CLICKHOUSE_DATABASE", "aisoc")
+
 
 def _client():  # noqa: ANN202
     host = os.environ.get("ISOLATION_CLICKHOUSE_HOST", "").strip()
