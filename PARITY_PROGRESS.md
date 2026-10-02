@@ -488,3 +488,34 @@ One 401 per alert remains on `incident-context`, same root cause, recorded
 open: a guard there broke six tests that exercise the enabled path, and the
 proper fix is a service principal the API accepts, which belongs with 4.1's
 outstanding half.
+
+## Phase 5, partial (2026-10-02)
+
+| Item | What changed |
+|---|---|
+| **5.1** alert-triggered playbooks | `find_matching()` had **no production caller**. Called from the fused-alert path now, after triage because a playbook's conditions read the verdict, behind three switches that must all agree. Every default is off; anything short of all three runs in **preview** |
+| **5.2** durable approval pause | The engine had no pause and no resume, so `approval` failed closed and **12 shipped playbooks aborted on it**. Migration `081` stores the position and the context; resume advances past the approval step; the pause resolves before the run continues so a double-tap resumes once; expiry is mandatory and recorded |
+| **5.4** tenant tuning in fusion | The engine evaluated the shared corpus and nothing else, so a tenant who disabled a noisy rule **kept getting its alerts while the console showed it disabled**. A versioned overlay with hot reload, applied after the match so a suppressed hit carries the tuning, its author and its reason |
+
+### Two things the plan's own text had moved past
+
+**5.2's premise held, with a larger number.** The plan says eight playbooks
+abort at their approval step. It is **12**. And the engine carried a
+careful, honest argument for leaving `approval` unbridged: every response
+step is separately graded against its capability contract at dispatch and
+returns `pending_approval` on its own, so an approval step in front of one
+gates a decision that is already gated. That reasoning is still true and is
+kept in the code, but it is a reason to leave the step out of a playbook,
+not a reason for the engine to refuse it.
+
+**The test that asserted the old behaviour was rewritten, not deleted.** It
+pinned honest reasoning about the engine that had become wrong about the
+product, which is exactly the shape worth correcting in place.
+
+### Outstanding in Phase 5
+
+5.3 (`http` and `notify` steps that act, the osquery step, packaging the 62
+pack playbooks into the image), 5.5 (the 133 rules that cannot fire), 5.6
+(case depth: merge, bulk triage, SLA breach, escalation routing, custom
+fields, workload metrics) and 5.7 (report scheduler, SMTP, email approvals,
+Teams cards, outbound webhooks).
