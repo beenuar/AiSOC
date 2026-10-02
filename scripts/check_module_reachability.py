@@ -102,10 +102,27 @@ ALLOWED_UNREACHABLE: dict[str, str] = {
     ),
     "services/actions/app/services/unified_autonomy.py": (
         "Unified autonomy policy: maps a verdict and confidence onto an "
-        "action tier. Not on the dispatch path. Parity 2.1 and 2.2 govern "
-        "closure and dispatch, and decide whether this is the mechanism."
+        "action tier. Superseded rather than pending — parity 2.1 shipped "
+        "the per-tenant closure policy (migration 078) read by the real "
+        "`run_auto_triage` path, and `approval_matrix.evaluate_contract` "
+        "is what `dispatcher.py` calls. Kept rather than deleted because "
+        "a third authority on 'may this execute without a human' is a "
+        "safety question, not a tidiness one, and removing one is a "
+        "product decision with a wider blast radius than the import graph "
+        "shows: deleting its sibling below broke two gates that read it "
+        "without importing it."
     ),
-    "services/actions/app/services/autonomy_evidence_rules.py": ("Evidence rules for the same unresolved autonomy path as above."),
+    "services/actions/app/services/autonomy_evidence_rules.py": (
+        "Reached by tooling rather than by import, which is why it appears "
+        "here and why the entry used to be wrong. It is the source of "
+        "truth for what counts as a graded disposition, and two gates read "
+        "it: `check_replay_contract_parity.py` compares its "
+        "GRADED_DISPOSITIONS, ABSTENTION_VERDICTS and MALICIOUS spellings "
+        "against the benchmark's, and `sync_vendored_autonomy_evidence.py "
+        "--check` byte-compares the API's vendored copy, because a safety "
+        "control defined twice is off in whichever copy is more generous. "
+        "An import-graph checker cannot see either. Permanent entry."
+    ),
     # ── Vendor clients reached only through a capability executor ─────────
     # These are constructed by name at dispatch time, not imported. The
     # import graph cannot see that, and inventing a dynamic-loader entry for
