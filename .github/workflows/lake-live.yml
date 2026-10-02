@@ -47,14 +47,42 @@ jobs:
             -e CLICKHOUSE_SKIP_USER_SETUP=1 \
             clickhouse/clickhouse-server:24.3-alpine
 
-      - name: Install the API service
+      # The service's own lockfile, not a hand-curated pip list.
+      #
+      # Four rounds of "ModuleNotFoundError: no module named X" went by
+      # before this: a suite that drives the real service pulls in the
+      # real service's whole import chain, and curating that list by hand
+      # is the anti-pattern this repository already removed from its
+      # images — a set that differs from the lock means the job tests
+      # software nobody ships.
+      - name: Install api from its lockfile
+        working-directory: services/api
         run: |
-          python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet \
-            clickhouse-driver "sqlglot>=30,<31" structlog pyyaml httpx \
-            "pydantic>=2,<3" pydantic-settings "fastapi>=0.117,<0.142" \
-            "sqlalchemy[asyncio]" asyncpg "PyJWT>=2.8,<3" \
-            pytest pytest-asyncio
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio clickhouse-driver
+
+      # The hunt suite below drives `app.hunt` from services/agents, a
+      # different service with a different lock.
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet clickhouse-driver
+
+      # The hunt suite below drives `app.hunt` from services/agents, a
+      # different service with a different lock.
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet clickhouse-driver
 
       - name: Wait for ClickHouse
         run: |

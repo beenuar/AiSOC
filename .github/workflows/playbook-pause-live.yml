@@ -69,13 +69,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install the agents service
+      # The service's own lockfile, not a hand-curated pip list.
+      #
+      # Four rounds of "ModuleNotFoundError: no module named X" went by
+      # before this: a suite that drives the real service pulls in the
+      # real service's whole import chain, and curating that list by hand
+      # is the anti-pattern this repository already removed from its
+      # images — a set that differs from the lock means the job tests
+      # software nobody ships.
+      - name: Install agents from its lockfile
+        working-directory: services/agents
         run: |
-          python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet asyncpg structlog pytest pytest-asyncio \
-            "pydantic>=2,<3" pydantic-settings httpx pyyaml \
-            "langgraph>=0.2,<2" "langchain-core>=0.3,<2" "langchain-openai>=0.2,<2" \
-            "fastapi>=0.117,<0.142" "PyJWT>=2.8,<3" redis tenacity
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio 
 
       # `002` first: it defines `current_tenant_id()`, which `081`'s RLS
       # policy calls. Applying `081` alone fails with "function

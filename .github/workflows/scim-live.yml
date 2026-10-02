@@ -76,16 +76,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install the API service
+      # The service's own lockfile, not a hand-curated pip list.
+      #
+      # Four rounds of "ModuleNotFoundError: no module named X" went by
+      # before this: a suite that drives the real service pulls in the
+      # real service's whole import chain, and curating that list by hand
+      # is the anti-pattern this repository already removed from its
+      # images — a set that differs from the lock means the job tests
+      # software nobody ships.
+      - name: Install api from its lockfile
+        working-directory: services/api
         run: |
-          python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet \
-            "fastapi>=0.117,<0.142" uvicorn "pydantic>=2,<3" "pydantic[email]" \
-            pydantic-settings "sqlalchemy[asyncio]" asyncpg structlog \
-            "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity \
-            pyyaml prometheus-client httpx email-validator "sqlglot>=30,<31" \
-            python-multipart neo4j redis clickhouse-driver \
-            pytest pytest-asyncio
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio 
 
       - name: Apply every migration, in order
         run: |

@@ -71,13 +71,22 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install the UEBA service
+      # The service's own lockfile, not a hand-curated pip list.
+      #
+      # Four rounds of "ModuleNotFoundError: no module named X" went by
+      # before this: a suite that drives the real service pulls in the
+      # real service's whole import chain, and curating that list by hand
+      # is the anti-pattern this repository already removed from its
+      # images — a set that differs from the lock means the job tests
+      # software nobody ships.
+      - name: Install ueba from its lockfile
+        working-directory: services/ueba
         run: |
-          python -m pip install --quiet --upgrade pip
-          python -m pip install --quiet \
-            "sqlalchemy[asyncio]" asyncpg alembic structlog \
-            "pydantic>=2,<3" pydantic-settings \
-            pytest pytest-asyncio
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio 
 
       # The schema comes from the service's own migrations, never from
       # `Base.metadata.create_all`. That is the whole point: the defect was

@@ -39,6 +39,7 @@ all on the path.
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import threading
 import uuid
@@ -46,7 +47,30 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 
-pytestmark = [pytest.mark.asyncio]
+# Skip as a module when the actions service is not importable.
+#
+# This suite has no env var to guard on: its infrastructure is a socket
+# it owns rather than a container. But the offline isolation job collects
+# this directory with only the API on the path, where `app.live_actions`
+# resolves to nothing — a failure about the harness, reported against a
+# capability.
+#
+# `find_spec` *raises* ModuleNotFoundError when the parent package is
+# absent entirely, rather than returning None — so the obvious
+# `is not None` check turned a skip into a collection error, which is
+# the failure it was written to prevent.
+try:
+    _actions_available = importlib.util.find_spec("app.live_actions") is not None
+except ModuleNotFoundError:
+    _actions_available = False
+
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not _actions_available,
+        reason="app.live_actions is not importable; run this from services/actions",
+    ),
+]
 
 
 class _Vendor(BaseHTTPRequestHandler):
