@@ -37,6 +37,9 @@ import jwt as _jwt
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import RedirectResponse, Response
 
+from app.api.v1.deps import DBSession
+from app.auth.sso_provisioning import SsoProvisioningError, complete_sso_login
+
 logger = logging.getLogger(__name__)
 
 _SAFE_REDIRECT_RE = re.compile(r"^/[\w\-./]*$")
@@ -130,6 +133,21 @@ def _saml_settings() -> dict[str, Any]:
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 
+def _idp_entity_id() -> str:
+    """The IdP entity id, which keys the SSO connection row.
+
+    Read from the configured settings rather than from the assertion: the
+    assertion is the thing being authenticated and cannot be the thing that
+    decides which tenant it provisions into.
+    """
+    try:
+        settings_dict = _saml_settings()
+        idp = settings_dict.get("idp") or {}
+        return str(idp.get("entityId") or os.getenv("SAML_IDP_ENTITY_ID", "") or "")
+    except Exception:  # noqa: BLE001
+        return os.getenv("SAML_IDP_ENTITY_ID", "")
+
+
 @router.get("/login")
 async def saml_login(request: Request, redirect: str = "/") -> Response:
     """Initiate SAML SSO — redirect to IdP."""
@@ -156,7 +174,7 @@ async def saml_login(request: Request, redirect: str = "/") -> Response:
 
 
 @router.post("/acs")
-async def saml_acs(request: Request) -> Response:
+async def saml_acs(request: Request, db: DBSession) -> Response:
     """Assertion Consumer Service — process IdP POST-back and issue JWT."""
     try:
         from onelogin.saml2.auth import OneLogin_Saml2_Auth  # type: ignore[import]
@@ -177,19 +195,34 @@ async def saml_acs(request: Request) -> Response:
 
         email_claim = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
         name_claim = "http://schemas.microsoft.com/identity/claims/displayname"
-        token = _issue_jwt(
-            {
-                "sub": name_id,
-                "email": _first(attrs.get("email") or attrs.get(email_claim, [name_id])),
-                "name": _first(attrs.get("displayName") or attrs.get(name_claim, [])),
-                "provider": "saml",
-            }
-        )
+        group_claim = "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"
+
+        # Parity 4.1. Same change as the OIDC callback, and for the same
+        # reason: this issued a JWT with no tenant, no role and no local
+        # user, signed with `JWT_SECRET` rather than the key the API
+        # verifies with, into a cookie the API does not read.
+        groups = [str(g) for g in (attrs.get("groups") or attrs.get(group_claim) or attrs.get("memberOf") or []) if g]
+        try:
+            session = await complete_sso_login(
+                db,
+                provider="saml",
+                # The IdP entity id, which is what the connection is keyed
+                # on. The tenant comes from that row, never from the
+                # assertion.
+                issuer=_idp_entity_id(),
+                email=str(_first(attrs.get("email") or attrs.get(email_claim, [name_id]))),
+                subject=str(name_id or ""),
+                name=_first(attrs.get("displayName") or attrs.get(name_claim, [])),
+                groups=groups,
+            )
+        except SsoProvisioningError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
         relay_state = _safe_redirect(str((await request.form()).get("RelayState", "/")))
-        response = RedirectResponse(url=relay_state, status_code=302)
-        response.set_cookie("aisoc_token", token, httponly=True, samesite="lax", secure=request.url.scheme == "https")
-        return response
+        separator = "&" if "#" in relay_state else "#"
+        # In the fragment, which browsers do not send to the server and
+        # which does not land in an access log or a Referer header.
+        return RedirectResponse(url=f"{relay_state}{separator}access_token={session['access_token']}", status_code=302)
 
     except ImportError as exc:
         # This issued a signed session for a principal called

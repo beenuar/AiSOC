@@ -53,6 +53,13 @@ class ProposedAction(BaseModel):
 class InvestigationState(BaseModel):
     """Full state object passed through the LangGraph workflow."""
 
+    #: Set when the run stopped on its token or model-call budget rather
+    #: than finishing. Carried on the state so the console and the ledger
+    #: can say "this did not conclude" rather than presenting a partial
+    #: run's last verdict as the answer.
+    budget_exhausted: bool = False
+    budget_exhausted_reason: str | None = None
+
     # Identifiers
     run_id: UUID = Field(default_factory=uuid4)
     incident_id: UUID

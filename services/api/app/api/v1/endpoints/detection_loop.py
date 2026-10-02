@@ -43,6 +43,7 @@ from app.api.v1.deps import AuthUser, require_permission
 from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
+from app.services.model_aliases import resolve_model_alias
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +128,13 @@ async def _llm_draft_sigma(
         # is the shape the contract exists to stop leaving the deployment.
         body = await safe_chat_completions_request(
             api_key=api_key,
-            model="gpt-4o-mini",
+            # The gateway alias, not a hosted model id. Hardcoding
+            # `gpt-4o-mini` meant this route could only work against a
+            # hosted provider: on CORE it reaches LiteLLM, which knows the
+            # `aisoc-*` aliases and not that id, so every call 400'd with
+            # `Invalid model name` and fell through to the deterministic
+            # path. In air-gap mode there is no hosted provider at all.
+            model=resolve_model_alias("detection"),
             messages=[
                 {"role": "system", "content": _SYS_PROMPT},
                 {"role": "user", "content": user_msg},

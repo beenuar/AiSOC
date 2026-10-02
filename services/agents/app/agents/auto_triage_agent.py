@@ -27,6 +27,7 @@ from typing import Any
 import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from app import closure as closure_policy
 from app.agents.dispositions import (
     AUTO_CLOSEABLE_DISPOSITIONS,
     BENIGN,
@@ -36,6 +37,7 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
+from app.closure.qa_sampling import ClosureQaSampler
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
@@ -110,6 +112,26 @@ def get_metrics() -> dict[str, Any]:
     m["btp_rate"] = m.get("btp_count", 0) / total if total > 0 else 0.0
     m["avg_confidence"] = m["confidence_sum"] / total if total > 0 else 0.0
     return m
+
+
+def _alert_class_of(state: InvestigationState) -> str | None:
+    """The class a closure policy row keys on.
+
+    Prefers the explicit category the fused alert carries; falls back to the
+    detection rule's category, which is what the shadow-mode grants are
+    scoped by, so a grant and a policy row agree on what "this class" means.
+    """
+    for attribute in ("alert_class", "category", "alert_category"):
+        value = getattr(state, attribute, None)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    raw = getattr(state, "raw_alert", None) or {}
+    if isinstance(raw, dict):
+        for key in ("alert_class", "category", "rule_category"):
+            value = raw.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None
 
 
 def get_threshold() -> float:
@@ -354,6 +376,27 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
     }
 
 
+async def _sample_for_qa(state: InvestigationState, *, verdict: str, confidence: float) -> None:
+    """Record this closure for review, if it falls in the sample."""
+    tenant_id = str(getattr(state, "tenant_id", "") or "")
+    alert_id = str(getattr(state, "incident_id", "") or "")
+    if not tenant_id or not alert_id:
+        return
+    try:
+        sampler = ClosureQaSampler(await closure_policy.shared_pool())
+        decision = await sampler.record(
+            tenant_id=tenant_id,
+            alert_id=alert_id,
+            alert_class=_alert_class_of(state),
+            disposition=verdict,
+            confidence=confidence,
+        )
+        if decision.sampled:
+            state.add_finding(f"Selected for closure QA review: an analyst will score this auto-closure (sample rate {decision.rate:.0%}).")
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("auto_triage.qa_sample_failed", error=str(exc), incident_id=alert_id)
+
+
 async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     """
     LLM-based auto-triage: classify the alert and decide whether to
@@ -470,7 +513,25 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
 
     # Auto-close FP / benign / benign_true_positive (no active threat, no
     # response needed); true_positive and needs_review always escalate.
-    should_auto_close = verdict in AUTO_CLOSEABLE_DISPOSITIONS and confidence >= AUTO_CLOSE_THRESHOLD
+    #
+    # The threshold comes from the tenant's closure policy rather than the
+    # process-wide env var. Additive: a tenant with no policy row gets
+    # `AUTO_CLOSE_THRESHOLD` exactly as before. The policy also consults the
+    # earned `auto_close` grant, which until now had no reader at all, and
+    # the kill switch, which refuses closure outright.
+    closure = await closure_policy.decide(
+        tenant_id=str(state.tenant_id) if getattr(state, "tenant_id", None) else None,
+        alert_class=_alert_class_of(state),
+        confidence=confidence,
+        default_threshold=AUTO_CLOSE_THRESHOLD,
+    )
+    should_auto_close = verdict in AUTO_CLOSEABLE_DISPOSITIONS and closure.allowed
+
+    if verdict in AUTO_CLOSEABLE_DISPOSITIONS and not closure.allowed:
+        # Say why. An operator asking "why was this not closed" gets an
+        # answer rather than an alert that silently stayed open.
+        state.add_finding(f"Auto-close withheld: {closure.reason}")
+        state.confidence_basis.append(f"closure_policy={closure.source}")
 
     # Prompt-injection L0 demotion: a high-severity injection signal always
     # blocks auto-close and routes to a human, regardless of the LLM's verdict.
@@ -490,12 +551,19 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     if should_auto_close:
         _metrics["auto_resolved_count"] += 1
         state.status = AgentStatus.COMPLETED
-        state.add_finding(f"Auto-closed as {verdict} (confidence {confidence:.2f} >= threshold {AUTO_CLOSE_THRESHOLD:.2f})")
+        # Parity 3.5. A fraction of closures goes to an analyst, so there
+        # is a measured closure accuracy on the tenant's own data rather
+        # than only a synthetic-corpus grade and a count of how many were
+        # closed. Best-effort: a sampling failure must not stop a closure
+        # the policy allowed.
+        await _sample_for_qa(state, verdict=verdict, confidence=confidence)
+        state.add_finding(f"Auto-closed as {verdict} (confidence {confidence:.2f} >= threshold {closure.threshold:.2f}, {closure.source})")
         logger.info(
             "Auto-triage: auto-closed",
             verdict=verdict,
             confidence=round(confidence, 2),
-            threshold=AUTO_CLOSE_THRESHOLD,
+            threshold=closure.threshold,
+            threshold_source=closure.source,
             incident_id=str(state.incident_id),
             elapsed_ms=elapsed_ms,
         )
@@ -509,7 +577,8 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
             "Auto-triage: escalating",
             verdict=verdict,
             confidence=round(confidence, 2),
-            threshold=AUTO_CLOSE_THRESHOLD,
+            threshold=closure.threshold,
+            threshold_source=closure.source,
             incident_id=str(state.incident_id),
             elapsed_ms=elapsed_ms,
         )

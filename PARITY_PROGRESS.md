@@ -343,3 +343,130 @@ or a file, not a resolvable import, so the rule would have to parse free text
 to decide what to import. Both halves exist and are enforced separately: every
 row names a runnable gate, and every module has an importer or a reason.
 Recorded rather than faked with a heuristic that would pass on anything.
+
+## Phase 2.1 to 2.4 — closure is governed (2026-10-01)
+
+| Item | What changed |
+|---|---|
+| **2.1** closure policy | Migration `078`. Per-tenant, per-class: enabled flag, threshold, and `require_grant`. Read by the real `run_auto_triage` path. Additive: a tenant with no row behaves exactly as before |
+| **2.1** the grant finally has a reader | An earned `auto_close` grant had **no consumer at all** (its only reader selected `auto_execute` on action verbs), which is why parity 1.1 had to retract the shadow-mode claim |
+| **2.2** kill switch | Global and per tenant, checked **first** and separately from the policy, with a mandatory reason and an audit row per transition |
+| **2.3** human priors | An analyst disposition now writes a human-authored prior. Until now `record_outcome` was called from three agents-side workers and nowhere an analyst could reach, so **every prior was AI-authored** and v15's refusal rule meant repeat suppression could never fire |
+| **2.4** pseudonymized egress | Every hosted LLM call goes through the pseudonymizer at the contract layer, the one place all sixteen agent call sites already pass through. Matrix row 19 restored and re-gated on a call-path test |
+
+### What testing the path found that testing the function could not
+
+Row 19 used to rest on `test_privacy_redactor.py`, which calls the redactor
+and asserts it redacts. True about a function, silent about the product.
+The replacement drives `safe_ainvoke` and inspects what a fake provider
+received, and it immediately found a real gap: **a bare username in prose**
+(`running as priya.raghavan`) went to a hosted model in the clear, because
+usernames were only redacted in the `DOMAIN\user` form or under a user-ish
+key. Closed with a cue-anchored pattern, deliberately narrow so it does not
+mangle process names or rule ids.
+
+The same file pins the trade-off in the other direction: public IOCs are
+**deliberately not** redacted, so a change to that is a visible decision.
+And it carries a test that disables the control and requires the leak
+assertion to fail, so it cannot pass vacuously.
+
+### Three defects in my own work, caught by the gates
+
+- The closure-policy migration had no `OR <tenant context> IS NULL` arm.
+  `check_rls_policy_shape.py` named the exact consequence: the fused-alert
+  worker consumes from Kafka on a connection that binds no tenant, so it
+  would have seen zero rows, fallen through to the process-wide threshold
+  and reported success.
+- Putting `closure.py` under `app/policy/` made `guardrails.py` look
+  reachable, because that package's `__init__` re-exports it. A package
+  marker can launder every dead module in its package, so closure moved to
+  its own package and the reachability verdict stayed honest.
+- `_alert_evidence` passed the ORM's `affected_host` through unchanged,
+  while the canonicaliser looks for `host`. Two alerts on the same rule and
+  different hosts would have shared a key, so a benign prior for one would
+  have suppressed the other. Found by asserting the negative case.
+
+A database that cannot answer **refuses**: an unreadable policy or switch
+means no auto-close, never a fallback to the permissive default. And an
+unreadable switch reports as an error rather than as "kill switch engaged",
+because a diagnostic that names the wrong subsystem sends an operator to
+debug something that is not broken.
+
+## Phase 2.5 and 2.6 — one model path, and budgets that bite (2026-10-01)
+
+**2.5.** Two call sites named a provider model directly and both degraded
+silently. `detection_loop.py` passed `gpt-4o-mini`, so on CORE it reached
+LiteLLM, which knows the `aisoc-*` aliases and not that id: every call
+answered `Invalid model name` and fell through to the deterministic path.
+`nl_query.py` checked the air-gap guard against a hardcoded
+`api.openai.com` rather than the URL the request would use, so the guard
+was refusing a call that never leaves the deployment while saying nothing
+about one that would.
+
+Neither broke a test, because both degrade to a working deterministic
+answer. That is why this needed a **gate** rather than two fixes:
+`check_model_alias_routing.py`, proven by re-injecting the pre-fix defect
+and watching it name the file and line. A new `aisoc-detection` role had to
+be registered in **four** places that a parity test holds together: the
+gateway config, the API resolver's `ROLES`, the agents `_DEFAULT_PINS`, and
+the docs table.
+
+**2.6.** `InvestigationBudget` declared `max_tokens` and `max_tool_calls`
+and only `max_seconds` had a reader. The runner's own docstring said tokens
+were "enforced upstream by the `CostGovernor`", which charges a rolling
+window **across** runs rather than bounding this one, so a single
+investigation could spend any number of tokens inside its two minutes.
+
+Both are now checked after each streamed step, against the live
+`CostTracker` rather than an estimate. An over-budget run ends in a
+labelled `budget_exhausted` state and escalates, because a truncated run
+has not reached a conclusion and returning the graph's last confident
+verdict is how a stopped investigation becomes a confident wrong
+disposition. The test asserts the graph did **not** stream all its nodes,
+so a check that merely reported the overspend would fail it.
+
+Two deliberate choices: an unmeasured run (no tracker bound) is allowed to
+continue, because refusing on the absence of telemetry would stop every run
+in a deployment that has not configured it; and a budget of zero reads as
+"no cap" rather than as zero, which would stop every run before its first
+call and look like a hang.
+
+## Phase 3 and 4, partial (2026-10-01)
+
+### Shipped
+
+| Item | What changed |
+|---|---|
+| **3.1** CORE evidence | The enricher asks the `full`-profile enrichment service, so on CORE it caught a connection error, logged at `debug` and returned `{}`: the agent got "could not check" for every indicator on every alert. Now matches the tenant's own `threat_intel_iocs`, with expiry as a hard SQL gate and a per-type decay half-life |
+| **3.3** Behavioural injection | 27 pairs, 9 families, per-family flip and unsafe-action ceilings. Found `fake_tool_output` at **100% flip, 0% catch** |
+| **3.5** QA sampling | A 5% sample of auto-closures reaches an analyst, scored on the five-part rubric, so closure accuracy is measurable on real data |
+| **2.5** Gateway aliases | Two call sites named a provider model directly and degraded silently; a gate now catches it, proven on the pre-fix defect |
+| **2.6** In-loop budgets | `max_tokens` and `max_tool_calls` were declared and enforced nowhere |
+| **4.1** SSO completes | Both handlers issued a token with no tenant, no role and no local user, signed with the wrong key, into a cookie the API does not read |
+| **4.7** Accessibility | Three of the five operator views now under axe, each asserting it rendered real markup first |
+
+### Deviation D11: 4.3 was already done by the security batch
+
+The plan anticipates this: "If the security batch already did this, record a
+Deviation and add only the console role-assignment UI." Confirmed.
+`services/api/app/api/v1/deps.py` resolves permissions from the database
+during `get_current_user` and caches them, which S13 shipped in `v15.0.0`.
+The console role-assignment UI is not built and is recorded as outstanding.
+
+### What the guards caught in my own work
+
+- The closure-policy migration had no unbound-session arm, so the Kafka
+  worker would have read zero policies and reported success.
+- Putting `closure.py` under `app/policy/` made the dead `guardrails`
+  module look reachable, because that package re-exports it.
+- `_alert_evidence` passed `affected_host` through while the canonicaliser
+  reads `host`, which would have given two different hosts one prior key.
+- The accessibility suite's own non-vacuity guard caught the investigation
+  rail rendering its **error state** while axe reported it clean.
+
+### Outstanding
+
+3.2 (accuracy on the shipped model), 3.4 (before/after), 3.6 (grounded
+copilot), 3.7 (signed evidence bundles), 4.2 (console MFA), 4.3's console
+UI, 4.4 (tenant audit views), 4.5 (operator pages), 4.6 (i18n), and all of
+Phases 5 and 6.

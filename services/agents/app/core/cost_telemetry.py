@@ -471,6 +471,18 @@ class CostTracker:
 
     _token: Any = field(default=None, init=False, repr=False)
 
+    # ── In-loop budget enforcement (parity 2.6) ──────────────────────────
+
+    @property
+    def tokens_used(self) -> int:
+        """Prompt plus completion tokens across every call in this run."""
+        return sum(r.prompt_tokens + r.completion_tokens for r in self._records)
+
+    @property
+    def calls_made(self) -> int:
+        """How many model calls this run has placed."""
+        return len(self._records)
+
     async def __aenter__(self) -> CostTracker:
         # Bind into the current context so nested agents can find us.
         self._token = _current_tracker.set(self)

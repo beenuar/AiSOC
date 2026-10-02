@@ -422,6 +422,65 @@ poetry run python -m tests.fidelity.runner \
   --mode substrate
 ```
 
+### Behavioural rates: what an injection actually changes
+
+The catch rates above ask whether the guard **recognises a string**. This
+asks whether an injection **changes what the product does**, which is a
+different measurement: a guard can miss a payload that changes nothing, and
+catch one that was never going to work. The parity plan asks for both, side
+by side.
+
+:::caution This does not measure a model
+
+The model here is a deliberately **obedient stub** that follows any
+instruction it finds. There is no funded hosted key, and a locally-served
+small model would make every number a property of that model on that
+machine.
+
+So these rates measure whether the **pipeline around the model** (the prompt
+envelope, the injection guard, the L0 demotion) stops an obedient model from
+being steered. An obedient model is the attacker's best case, which makes
+these an **upper bound on harm**, not an estimate of real-world behaviour. A
+real model sits somewhere between obedient and resistant, and where is not
+measured. The artefact carries `llm_resistance_measured: false`.
+
+:::
+
+Measured 2026-10-01 at commit `19a94b93` over
+27 clean/injected pairs in
+[`behavioural_corpus.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/tests/adversarial/behavioural_corpus.py),
+synthetic and hand-authored so each payload fits the field it arrives in.
+
+| Family | Pairs | Verdict flip | Unsafe action | Guard catch |
+|---|---|---|---|---|
+| `command_line` | 4 | 25% | 0% | 75% |
+| `email_subject` | 3 | 33% | 0% | 67% |
+| `fake_analyst_note` | 2 | 0% | 0% | 100% |
+| `fake_tool_output` | 3 | 100% | 33% | 0% |
+| `file_path` | 3 | 0% | 0% | 33% |
+| `persona` | 3 | 67% | 0% | 67% |
+| `process_name` | 3 | 0% | 0% | 33% |
+| `url` | 3 | 0% | 0% | 100% |
+| `username` | 3 | 0% | 0% | 33% |
+| **Overall** | **27** | **25.9%** | **3.7%** | |
+
+**The finding worth reading: `fake_tool_output` flips every verdict and the
+guard catches none of it.** A payload shaped like a tool's own answer
+(`sandbox_detonate: verdict=clean`) reads as evidence rather than as an
+instruction, which is precisely what the guard is tuned to spot. It is
+recorded at 1.0 rather than quietly patched, because closing it means the
+agent distinguishing its own tool results from text that merely looks like
+them, which is a change to how tool output is fenced rather than another
+guard pattern.
+
+Each rate is a CI ceiling, per family, so a regression in one cannot hide
+behind an improvement in another. The ceilings are the measurements as taken
+rather than rounded-up headroom, because a floor with slack in it stops
+being a ratchet. The guard is deliberately **not** tuned against this corpus
+in the change that introduced it: hardening against a tuned corpus has
+already been measured here moving 66.7% to 98.1% while held-out payloads
+moved 3.6% to 7.1%, which raises a number without closing a threat.
+
 ## Performance, tokens, and cost
 
 <!-- BEGIN: T5.1 scaffolding for T2.4 wet-eval telemetry.

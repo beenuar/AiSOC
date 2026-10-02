@@ -35,6 +35,9 @@ import jwt as _jwt
 from fastapi import APIRouter, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
+from app.api.v1.deps import DBSession
+from app.auth.sso_provisioning import SsoProvisioningError, complete_sso_login
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/auth/oidc", tags=["auth-oidc"])
@@ -179,6 +182,7 @@ async def oidc_login(request: Request, redirect: str = "/") -> Response:
 @router.get("/callback", name="oidc_callback")
 async def oidc_callback(
     request: Request,
+    db: DBSession,
     code: str = Query(...),
     state: str = Query(...),
     error: str | None = Query(None),
@@ -245,22 +249,58 @@ async def oidc_callback(
                 userinfo = ui_resp.json()
 
     merged = {**claims, **userinfo}
-    token = _issue_jwt(
-        {
-            "sub": merged.get("sub", ""),
-            "email": merged.get("email", ""),
-            "name": merged.get("name", ""),
-            "picture": merged.get("picture", ""),
-            "provider": "oidc",
-            "iss_upstream": issuer,
-        }
-    )
+
+    # Parity 4.1. This used to issue a JWT carrying `sub`, `email`, `name`
+    # and `picture`, signed with `JWT_SECRET`, and set it as a cookie. That
+    # token authenticated nothing: the API verifies with
+    # `settings.SECRET_KEY`, requires `tenant_id` and `role`, and reads
+    # `Authorization: Bearer`, not a cookie. A user could complete the whole
+    # dance, land on the console, and find every request unauthenticated.
+    #
+    # The tenant comes from the configured connection rather than from the
+    # assertion, because an IdP that can name its own tenant can name
+    # somebody else's.
+    groups = _claim_groups(merged)
+    try:
+        session = await complete_sso_login(
+            db,
+            provider="oidc",
+            issuer=issuer,
+            email=str(merged.get("email") or ""),
+            subject=str(merged.get("sub") or ""),
+            name=merged.get("name"),
+            groups=groups,
+        )
+    except SsoProvisioningError as exc:
+        # A specific reason, not a generic failure. "No SSO connection is
+        # configured for this issuer" is an administrator's next action;
+        # "login failed" is a support ticket.
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
     redirect_url = _safe_redirect(state_data.get("redirect", "/"))
-    response = RedirectResponse(url=redirect_url, status_code=302)
-    response.set_cookie("aisoc_token", token, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+    # The token travels in the fragment, which browsers do not send to the
+    # server and which does not land in an access log or a Referer header,
+    # and the console moves it into the storage its API client reads.
+    separator = "&" if "#" in redirect_url else "#"
+    response = RedirectResponse(url=f"{redirect_url}{separator}access_token={session['access_token']}", status_code=302)
     response.delete_cookie("oidc_state")
     return response
+
+
+def _claim_groups(claims: dict[str, Any]) -> list[str]:
+    """Group names from whichever claim this IdP uses.
+
+    Four spellings, because there is no standard one: Okta and Auth0 emit
+    `groups`, Entra emits `roles` or `groups` depending on the app
+    registration, and Keycloak emits whatever the mapper was named.
+    """
+    for key in ("groups", "roles", "memberOf", "group_membership"):
+        value = claims.get(key)
+        if isinstance(value, list):
+            return [str(v) for v in value if v]
+        if isinstance(value, str) and value:
+            return [part.strip() for part in value.split(",") if part.strip()]
+    return []
 
 
 @router.get("/userinfo")

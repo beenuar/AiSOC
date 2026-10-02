@@ -42,21 +42,30 @@ Rotate `SECRET_KEY` periodically. Doing so invalidates every active session, whi
 
 ### Single Sign-On (SSO)
 
-:::warning Planned, not shipped
+:::info Sign-in completes; the IdP test matrix does not yet
 
-**Neither SSO protocol completes a sign-in today.** Both handlers existed as
-stubs that issued a token for a principal no identity provider had seen; in
-`v15.0.0` those were deleted and both now answer `501 Not Implemented` when
-unconfigured. What is missing is the rest: neither provisions a local user,
-binds a tenant, maps IdP groups to roles, nor issues the bearer token the API
-verifies. `SAML_IDP_METADATA_URL` is read by nothing.
+Both protocols now **complete a sign-in**: the callback provisions a local
+user just in time, binds the tenant from the configured connection, maps IdP
+groups to a role, and issues the same bearer token `POST /auth/login` issues,
+signed with the same key.
 
-Restored by parity 4.1, which adds an end to end CI test against a
-containerised test identity provider for both protocols.
+The tenant comes from the connection row an administrator configured, never
+from the assertion. An identity provider that can name its own tenant can
+name somebody else's, so reading `tenant_id` from a claim would be a
+cross-tenant provisioning hole.
+
+A group can map to `viewer`, `soc_analyst`, `threat_hunter`, `soc_lead` or
+`tenant_admin`. It cannot map to `admin` or `platform_admin`: `v14.0.0` made
+those unreachable from every API route so only `bootstrap_admin` can mint
+one, and a group mapping would be a way back in.
+
+**Still outstanding**: the end to end CI test against a containerised test
+identity provider. What is published here is tested against the provisioning
+path, not against a real Okta, Entra or Keycloak.
 
 :::
 
-The two protocols AiSOC is building toward:
+The two protocols:
 
 - **OIDC**, in `services/api/app/auth/oidc.py`. Discovery URL, client id and
   secret, and IdP group to role mapping.

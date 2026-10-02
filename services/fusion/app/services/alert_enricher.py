@@ -29,6 +29,7 @@ import httpx
 import structlog
 
 from app.models.alert import RawAlert
+from app.services.ioc_match import TenantIocMatcher
 
 logger = structlog.get_logger()
 
@@ -56,10 +57,24 @@ _SOURCE_TO_TI_KEY: dict[str, str] = {
 class AlertEnricher:
     """Calls the enrichment service and maps results into fused.enrichments."""
 
-    def __init__(self, *, base_url: str, timeout_seconds: float = 3.0, malicious_risk_floor: float = 50.0) -> None:
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        timeout_seconds: float = 3.0,
+        malicious_risk_floor: float = 50.0,
+        ioc_matcher: TenantIocMatcher | None = None,
+    ) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
         self._risk_floor = malicious_risk_floor
+        #: Parity 3.1. The enrichment service runs in the `full` profile, so
+        #: on CORE every call below fails and the agent receives "could not
+        #: check" for every indicator on every alert. The tenant's own
+        #: indicator store is in the Postgres fusion already connects to,
+        #: and CORE ships a real CISA KEV feed, so there is something to
+        #: match against on a first run.
+        self._ioc_matcher = ioc_matcher
 
     @staticmethod
     def extract_iocs(alert: RawAlert) -> list[dict[str, str]]:
@@ -80,6 +95,17 @@ class AlertEnricher:
         items = self.extract_iocs(alert)
         if not items:
             return {}
+
+        # The tenant's own store first, because it works without the
+        # `full` profile. Its result is merged under the external one when
+        # both answer, so a deployment that runs enrichment is unaffected.
+        local: dict[str, Any] = {}
+        if self._ioc_matcher is not None and self._ioc_matcher.available:
+            tenant_id = str(getattr(alert, "tenant_id", "") or "")
+            if tenant_id:
+                matches = await self._ioc_matcher.match(tenant_id=tenant_id, indicators=items)
+                local = self._ioc_matcher.to_enrichments(matches)
+
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(f"{self._base_url}/enrich/bulk", json={"items": items})
@@ -87,8 +113,22 @@ class AlertEnricher:
                 results = resp.json().get("results", [])
         except Exception as exc:  # noqa: BLE001 — best-effort; never block fusion
             logger.debug("fuse_enrichment.failed", error=str(exc))
-            return {}
-        return self.to_enrichments(results if isinstance(results, list) else [])
+            # The local match still stands. Before this, a CORE install
+            # returned `{}` here and the agent saw nothing at all.
+            return local
+        external = self.to_enrichments(results if isinstance(results, list) else [])
+        if not local:
+            return external
+        if not external:
+            return local
+        # Both answered. External wins on overlapping keys because it has
+        # the broader corpus, and the local hits are kept under their own
+        # key rather than silently merged into one list a reader would take
+        # as all coming from the same place.
+        merged = dict(external)
+        merged["tenant_ioc_hits"] = local.get("ti_hits", [])
+        merged["tenant_ioc_scope"] = local.get("ti_scope")
+        return merged
 
     def to_enrichments(self, results: list[dict[str, Any]]) -> dict[str, Any]:
         """Map enrichment-service results into the scorer/vuln-boost schema."""

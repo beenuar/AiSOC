@@ -85,17 +85,15 @@ DYNAMIC_LOADERS: dict[str, tuple[str, ...]] = {
 #: reachable, fails the gate rather than lingering as an excuse.
 ALLOWED_UNREACHABLE: dict[str, str] = {
     # ── Named by the parity plan, restored by a later phase ───────────────
+    # The pseudonymizer and its package marker were here. Parity 2.4 routed
+    # every hosted LLM call through them at the contract layer, so they are
+    # reachable now and the entries are gone rather than updated. That is
+    # the allowlist shrinking as the plan says it only may.
     "services/agents/app/hunt/agent.py": (
         "The NL hunting agent. Only its own test imports it, which is the "
         "defect the plan records. Wired to the console and MCP by parity 6.1."
     ),
     "services/agents/app/hunt/plan.py": "The hunting agent's plan model, reached only through it. Parity 6.1.",
-    "services/agents/app/privacy/__init__.py": "Package marker for the pseudonymizer below.",
-    "services/agents/app/privacy/redactor.py": (
-        "The reversible pseudonymizer. It exists, is unit-tested, and sits on "
-        "no LLM path, which is why claim-matrix row 19 was narrowed in parity "
-        "1.1. Routed through the contract layer by parity 2.4."
-    ),
     "services/agents/app/policy/__init__.py": "Package marker for the guardrails below.",
     "services/agents/app/policy/guardrails.py": (
         "Reads the console's per-action closure thresholds, and nothing reads "

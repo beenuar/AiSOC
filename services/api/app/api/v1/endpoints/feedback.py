@@ -72,6 +72,7 @@ from app.services.analyst_feedback import (
     active_statements,
     record_disagreement,
 )
+from app.services.human_priors import record_human_prior
 from app.services.memory_poisoning import plan_redisposition
 from app.services.override_learning import (
     apply_redisposition,
@@ -235,6 +236,23 @@ async def submit_alert_override(
         .values(disposition=payload.corrected_verdict, updated_at=now)
     )
     await db.commit()
+
+    # A human reached this verdict on this evidence, so record a
+    # human-authored outcome prior under the key the triage worker looks up.
+    # Before this, `record_outcome` was called from three agents-side workers
+    # and from nowhere an analyst could reach, so every prior in the system
+    # was AI-authored and v15's "AI priors never suppress" rule meant repeat
+    # suppression could not fire on anything at all.
+    prior_signature = await record_human_prior(
+        db,
+        tenant_id=user.tenant_id,
+        alert=alert,
+        disposition=payload.corrected_verdict,
+        analyst_id=user.user_id,
+        reason=payload.reason,
+    )
+    if prior_signature:
+        await db.commit()
 
     # Persist into institutional memory.
     signature = await record_override(

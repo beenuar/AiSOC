@@ -1357,6 +1357,15 @@ jobs:
         run: python scripts/check_console_route_contract.py --self-test
       - name: Verify every console API path resolves to a route or a rewrite
         run: python scripts/check_console_route_contract.py
+      # Two call sites named a provider model directly, so on CORE they
+      # reached LiteLLM, which knows the `aisoc-*` aliases and not that id,
+      # and both degraded silently to a deterministic answer. Neither broke
+      # a test, because a model path that never runs looks exactly like one
+      # that runs and is cautious.
+      - name: Model alias routing — self-test
+        run: python scripts/check_model_alias_routing.py --self-test
+      - name: Verify every LLM call site resolves a gateway alias
+        run: python scripts/check_model_alias_routing.py
       - name: Duplicate routes — self-test
         run: python scripts/check_route_duplicates.py --self-test
       - name: Verify no method and path pair is registered twice
