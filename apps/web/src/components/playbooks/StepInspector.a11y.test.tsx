@@ -83,7 +83,9 @@ describe('StepInspector — WCAG 2.1 AA', () => {
     const unrunnable = ALL_STEP_TYPES.filter(
       (t) => STEP_SCHEMAS[t].execution === 'unimplemented',
     );
-    expect(unrunnable.length).toBeGreaterThan(0);
+    // Not asserted to be non-empty: every step type runs since `approval`
+    // became a durable pause, and a test that needs an unrunnable step to
+    // exist would fail on the healthier tree rather than on a regression.
     for (const type of unrunnable) {
       const { container } = render(
         <StepInspector step={stepOf(type)} onUpdate={vi.fn()} onDelete={vi.fn()} />,

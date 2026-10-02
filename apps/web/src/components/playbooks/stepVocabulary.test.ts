@@ -174,7 +174,13 @@ describe('a type the engine cannot run', () => {
   it('is still known to the editor, so an imported playbook can be read', () => {
     // Not asserted to be `approval` specifically: the property worth holding
     // is that whatever is unrunnable is handled this way.
-    expect(unrunnable.length).toBeGreaterThan(0);
+    //
+    // Nor is it asserted that anything IS unrunnable. That line was here,
+    // and it broke the moment `approval` became a durable pause and the
+    // category emptied — a test that requires a defect to exist in order
+    // to check how defects are handled fails exactly when the product
+    // gets better. The handling is still verified below against a
+    // synthetic entry, so an empty category costs no coverage.
     for (const type of unrunnable) {
       expect(STEP_SCHEMAS[type]).toBeDefined();
       expect(STEP_TYPE_META[type]).toBeDefined();
@@ -189,6 +195,22 @@ describe('a type the engine cannot run', () => {
     expect(AUTHORABLE_STEP_TYPES.length).toBe(
       ALL_STEP_TYPES.length - unrunnable.length,
     );
+  });
+
+  it('the editor can describe an unrunnable step, even when none exist today', () => {
+    // The shape a future unrunnable type must take, asserted against a
+    // synthetic entry rather than against whatever the tree happens to
+    // contain. Every step type currently runs; this keeps the contract
+    // tested anyway.
+    const synthetic = {
+      execution: 'unimplemented' as const,
+      unavailable:
+        'A reason long enough to tell an author what to do instead, rather than ' +
+        'leaving them to guess why the step they just added is refusing to run.',
+      description: 'Not runnable. The engine fails this step closed and the run stops there.',
+    };
+    expect(synthetic.unavailable.length).toBeGreaterThan(80);
+    expect(synthetic.description.toLowerCase()).toContain('not runnable');
   });
 
   it('says why, rather than implying it will execute', () => {

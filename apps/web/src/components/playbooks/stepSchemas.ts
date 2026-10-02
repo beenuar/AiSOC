@@ -554,14 +554,26 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
     bgColor: '#1e232b',
     icon: '⛔',
     shortCode: 'appr',
-    fields: [],
-    unavailable:
-      'An approval step is a pause, and the engine is a single-threaded index walk with no pause ' +
-      'or resume — there is nothing to suspend and nothing to wake. It is also no longer the ' +
-      'mechanism: every response step is graded against its own capability contract at dispatch ' +
-      'and returns "pending approval" on its own when a human is required, so an approval step in ' +
-      'front of one would gate a decision that is already gated. Remove it, or hold the action in ' +
-      'the actions service, which does queue for an analyst.',
+    fields: [
+      {
+        key: 'prompt',
+        label: 'What is being approved',
+        kind: 'textarea',
+        required: false,
+        placeholder: 'Isolate WIN-FIN-02 and disable the account that logged into it',
+        help: 'Shown to whoever is asked to decide. Say what will happen if they approve.',
+      },
+      {
+        key: 'expires_in_hours',
+        label: 'Expires after (hours)',
+        kind: 'number',
+        required: false,
+        placeholder: '72',
+        help:
+          'Leave blank for the deployment default. An undecided approval expires with a ' +
+          'recorded outcome rather than leaving the run waiting forever.',
+      },
+    ],
   },
   disable_user: {
     type: 'disable_user',

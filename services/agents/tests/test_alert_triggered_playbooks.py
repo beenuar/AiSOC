@@ -20,8 +20,10 @@ the feature and forgets the per-playbook list gets previews, not actions.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
-from app.playbook import alert_trigger
+from app.playbook import alert_trigger, engine, store
 
 
 class _State:
@@ -142,11 +144,8 @@ class TestRunning:
             def find_matching(self, event, context):  # noqa: ANN001, ANN202, ARG002
                 return [_Playbook()]
 
-        import app.playbook.engine as engine_mod
-        import app.playbook.store as store_mod
-
-        monkeypatch.setattr(engine_mod, "PlaybookEngine", _Engine)
-        monkeypatch.setattr(store_mod.PlaybookStore, "default", staticmethod(lambda: _Store()))
+        monkeypatch.setattr(engine, "PlaybookEngine", _Engine)
+        monkeypatch.setattr(store.PlaybookStore, "default", staticmethod(lambda: _Store()))
 
         outcome = await alert_trigger.run_for_alert(_State())
         assert seen == [True], "the playbook ran live without being on the live list"
@@ -178,11 +177,8 @@ class TestRunning:
             def find_matching(self, event, context):  # noqa: ANN001, ANN202, ARG002
                 return [_Playbook()]
 
-        import app.playbook.engine as engine_mod
-        import app.playbook.store as store_mod
-
-        monkeypatch.setattr(engine_mod, "PlaybookEngine", _Engine)
-        monkeypatch.setattr(store_mod.PlaybookStore, "default", staticmethod(lambda: _Store()))
+        monkeypatch.setattr(engine, "PlaybookEngine", _Engine)
+        monkeypatch.setattr(store.PlaybookStore, "default", staticmethod(lambda: _Store()))
 
         outcome = await alert_trigger.run_for_alert(_State())
         assert seen == [False]
@@ -191,12 +187,10 @@ class TestRunning:
     async def test_a_playbook_failure_does_not_lose_the_triage_result(self, monkeypatch) -> None:  # noqa: ANN001
         monkeypatch.setenv(alert_trigger.ENABLED_ENV, "1")
 
-        import app.playbook.store as store_mod
-
         def _boom():  # noqa: ANN202
             raise RuntimeError("store is gone")
 
-        monkeypatch.setattr(store_mod.PlaybookStore, "default", staticmethod(_boom))
+        monkeypatch.setattr(store.PlaybookStore, "default", staticmethod(_boom))
         outcome = await alert_trigger.run_for_alert(_State())
         assert outcome.skipped_reason and "store is gone" in outcome.skipped_reason
 
@@ -279,7 +273,7 @@ class TestTheTriggerEventMatchesTheCorpus:
             )
         )
 
-        matches = store.find_matching(TRIGGER_EVENT, context)
+        matches: list[Any] = list(store.find_matching(TRIGGER_EVENT, context))
         assert matches, (
             f"the real store matched no playbook on an alert built from {wanted.id}'s own "
             "trigger, so the alert-trigger path is wired to nothing"
