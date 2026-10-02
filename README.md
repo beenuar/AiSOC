@@ -195,9 +195,9 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | SCIM 2.0, white-label, usage metering | Beta | Unit + Okta/Entra sequences | Yes |
 | Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
-| Alert-triggered playbooks, with a durable approval pause | Beta | Unit + live Postgres suspend/resume | Yes — three opt-ins deep, preview by default |
-| Per-tenant detection tuning in the live engine | Beta | Unit + live overlay read | Yes |
-| Scheduled connectors | Beta | Contract tests | `full` profile |
+| Alert-triggered playbooks, with a durable approval pause | Beta | Unit (suspend/resume verified by hand against Postgres, not yet in CI) | Yes — three opt-ins deep, preview by default |
+| Per-tenant detection tuning in the live engine | Beta | Unit + a schema check that parses the migration | Yes |
+| Scheduled connectors | Beta | Contract tests, which gate the shape every connector must satisfy rather than any live vendor | Yes |
 | UEBA | Beta | Unit + live migration round-trip | `full` profile |
 | Package distribution (npm/PyPI) | Ready, unpublished | `release.yml` builds and packs all eight on every tag | Install from source — the upload is blocked on registry credentials, which is an account action |
 
