@@ -60,12 +60,30 @@ jobs:
       - name: Check README, SUPPORT, CONTRIBUTING, SECURITY, GOVERNANCE
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
         with:
+          # 5xx is accepted; 404 is not, and that distinction is the whole
+          # point of this list.
+          #
+          # A 404 says the link is wrong, which is this repository's
+          # problem and must fail. A 502/503/504 says the *host* is
+          # broken, which it is not — github.com itself returned 504 for
+          # two contributor profile URLs for several minutes and reddened
+          # a pull request that touched neither. No retry window outlasts
+          # a third-party outage, and a gate that reds on somebody else's
+          # availability trains people to ignore it.
+          #
+          # A 5xx cannot mask a wrong link, because a missing page
+          # answers 404. That is what makes this different from the
+          # 403/429 entries, which *can* mask one: a rate-limited GitHub
+          # URL once looked healthy here while eight wrong-org 404s
+          # survived behind it. The accepted cost is that a permanently
+          # dead host passes this gate; the weekly full-portal sweep is
+          # where that gets caught.
           args: >-
             --no-progress
             --max-retries 3
             --retry-wait-time 5
             --timeout 25
-            --accept 200,206,301,302,307,308,403,429
+            --accept 200,206,301,302,307,308,403,429,500,502,503,504
             README.md SUPPORT.md CONTRIBUTING.md SECURITY.md GOVERNANCE.md
           fail: true
 
