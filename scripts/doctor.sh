@@ -480,5 +480,23 @@ if [ "$FAILURES" -eq 0 ]; then
   exit 0
 fi
 printf '%s%d check(s) failed%s, %d warning(s).\n' "$R$B" "$FAILURES" "$X" "$WARNINGS"
+
+# "Nothing is running" and "something is broken" produce an identical wall
+# of red, and they mean opposite things. On a fresh clone — which is
+# exactly when a nervous first-time operator reaches for this — every
+# service check fails because the stack has simply never been started, and
+# the summary told them to go fix eight things that were not wrong.
+#
+# Keyed on no containers at all rather than on a count: a stack with some
+# services down genuinely is broken and should still read as broken.
+if [ -z "$(docker compose ps -q 2>/dev/null)" ]; then
+  printf '\n%sNothing is running yet%s — that is why the service checks above failed.\n' "$B" "$X"
+  printf 'If you have not started AiSOC on this host, the next step is:\n\n'
+  printf '    %smake up%s\n\n' "$B" "$X"
+  printf 'It generates .env, starts the stack and prints a sign-in password.\n'
+  printf 'Re-run this afterwards if anything still looks wrong.\n\n'
+  exit 1
+fi
+
 printf 'Fix the failures above, then re-run: %s./scripts/doctor.sh%s\n\n' "$B" "$X"
 exit 1

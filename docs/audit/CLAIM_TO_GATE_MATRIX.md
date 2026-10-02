@@ -283,26 +283,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Raw SQL names only columns a migration creates, on reads as well as writes | `docs/audit/REPOSITORY_REALITY.md` | `ci.yml :: Python — Lint & Type-check` (`check_raw_sql_columns.py`, self-tested) | core | GATED | The gate parsed `INSERT` and `UPDATE` only, which is one-directional in the way that matters: an absent column fails a `SELECT` just as hard, and a handler that wraps the read in `except` turns the crash into a warning and an empty result. **Live QA found exactly that**: `tenant_overlay._fetch` selected `rule_id` and `updated_by` from `detection_rules`, which has neither, so the per-tenant tuning overlay would have loaded nothing on every deployment — while every unit test passed, because the fake answered whatever it was asked. A `SELECT` fails only where the gate genuinely knows (table migrated, projection fully read, column absent); osquery virtual tables and the ClickHouse lake are declined rather than failed, because the gate knows which tables are migrated and not which engine a statement targets. Statement coverage 130 to 335, and the self-test is proven against the real pre-fix defect |
 | An expired session sends you to sign in, rather than locking you out | `apps/docs/docs/console/getting-started.md` | `ci.yml :: Web — Unit tests` (`apps/web/src/lib/authExpiry.test.ts`) | core | GATED | Found by a live browser walkthrough and reproduced deterministically: with an expired token in `localStorage`, `/login` redirected to `/dashboard`, every call there answered 401, and **nothing ever sent the user back** — the only way out was clearing browser storage by hand. Two independent causes, so two fixes: `isAuthenticated()` answered "is a token stored", which is a different question from "can this session make a request"; and nothing handled a 401, so a session that died mid-shift left every panel failing with no explanation. Either fix alone leaves a hole — the first still strands a user whose token expires *while* they work, the second still bounces a returning user off `/login` before any request is made. An unreadable token counts as not authenticated, because the pessimistic answer costs a sign-in and the optimistic one costs the lockout |
 | Two different CloudTrail events become two different alerts | `apps/docs/docs/connectors/aws-cloudtrail.md` | `ci.yml :: Go — Tests` (`services/ingest/internal/normalizer/cloudtrail_profile_test.go`) | core | GATED | `aws_cloudtrail` had **no entry in `connectorProfiles`**, so it hit the generic fallback, which titles every event "Security Finding from aws_cloudtrail" and carries no vendor id. The alert id is a v5 UUID derived from that content, so a console login and a `DeleteTrail` **deduplicated onto the same row**: a customer connecting CloudTrail saw exactly one alert no matter what happened in their account, which reads as a quiet estate rather than as a bug. Mapped from the connector's own lowercase keys, not raw CloudTrail names, because the connector has already flattened them — a test asserts that in both directions. `2001` rather than `3005`, matching the Splunk-notable reasoning: the connector ships a curated ~80-event allow-list, so it has already judged these security-relevant and category 2 is always promoted. Proven live: three distinct events produced three alerts with correct titles, vendor ids and severities including `critical` |
+| A port already in use moves AiSOC, it does not stop the install | `README.md` quick start | `ci.yml :: Python — Tests` (`tests/test_port_conflict_resolution.py`) | core | GATED | `make up` used to **refuse to start** when any of sixteen host ports was taken and tell the operator to edit `docker-compose.yml` — a hard stop at step one of the quick start, triggered by the most common condition in this audience's environment (a Postgres on 5432, an Ollama on 11434). It now picks a free port, writes `docker-compose.ports.yml` with `ports: !override` (a plain override *appends*, leaving the conflicting binding published), names what held the port, and propagates a moved console into `AISOC_CONSOLE_URL` so the printed address answers. Two bugs found while building it and pinned here: `SO_REUSEADDR` made the probe **more permissive than the real bind**, reporting a wildcard-held port as free; and `$(wildcard)` in a `:=` variable is expanded at parse time, so the first run generated the overlay and then started compose without it. **Measured: clean install with two conflicts, 56s to a working console, `make smoke` 10/10** |
 
 ## Summary
 
-- GATED: 275
+- GATED: 276
 
 ## Summary
 
-- GATED: 275
+- GATED: 276
 
 ## Summary
 
-- GATED: 275
+- GATED: 276
 
 ## Summary
 
-- GATED: 275
+- GATED: 276
 
 ## Summary
 
-- GATED: 275
+- GATED: 276
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 
