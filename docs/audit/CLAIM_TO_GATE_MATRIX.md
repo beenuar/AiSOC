@@ -280,26 +280,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | An approval step is a durable pause that survives a restart | `apps/docs/docs/console/playbooks.md` | `ci.yml :: Python — Tests` (agents, `test_playbook_pause_resume.py`) | core | GATED | The engine is a single-threaded index walk with no pause and no resume, so `approval` failed closed and **12 shipped playbooks aborted on it**. Failing closed was right (it previously returned `{"skipped": true}` while reporting SUCCESS, letting a run continue into the action a human was meant to authorise) but it is not an approval mechanism. Migration `081` stores the position **and the context**, because the resumed half would otherwise see an empty context and every templated parameter would resolve to nothing. The stored index is the approval step itself and resume advances past it, so a replayed decision continues rather than pausing again. The pause is resolved **before** the run continues, so a double-tap in the responder app resumes once. Expiry is mandatory with a recorded outcome: `expired` is a decision, not the absence of one |
 | A tenant's detection tuning reaches the streaming engine, and only that tenant's | `apps/docs/docs/console/detection-tuning.md` | `ci.yml :: Python — Service unit tests` (`services/fusion/tests/test_tenant_tuning_overlay.py`) | core | GATED | `DetectionEngine` evaluated the shared corpus and nothing else. The console writes a tenant's disables, thresholds and suppressions to `detection_rules`, where the streaming engine never looked, so a tenant who turned a noisy rule off **kept receiving its alerts while the console showed it disabled**, which is the worst shape because it tells the operator the problem is solved. An overlay rather than a per-tenant ruleset: the difference applied over one shared corpus, not N copies of 833 rules. Suppression is applied **after** the match so the hit can be logged with the tuning, its author and its reason, because "no alert" with no explanation is indistinguishable from a rule that did not match. A failed reload **keeps the previous overlay**: falling back to no-tuning would turn the tenant's queue back on and read as a flood rather than a fault |
 | Rules that cannot fire are counted, and the count only goes down | `docs/detections/truth-table.md` | `ci.yml :: Python — Lint & Type-check` (`check_detection_fields.py`, ratchet at 119) | core | GATED | **133 to 119.** The per-tenant-allowlist family (15 rules reading an `<x>_in_allowlist` boolean nothing computed) is closed: the overlay derives it from the allowlists the console already writes, which was the cheapest of the five families because an allowlist is the same decision a tenant expresses as a suppression. Derived per tenant rather than in the shared pass, because a global allowlist would make one tenant's exceptions apply to everybody. An unconfigured allowlist contributes **no key**, not `False`: a `not_in_allowlist` clause against a missing key is true for every event, which is the negation-flips-on-absence failure already recorded for the Sigma import. A test asserts every allowlist boolean the corpus reads is mapped, so a rule cannot stay unreachable while the ratchet says otherwise. The four remaining families (74 windowed, 24 identity, 8 comparison, 8 first-seen, 6 other, 2 baseline) need engine or enrichment work and are named rather than hidden |
+| Raw SQL names only columns a migration creates, on reads as well as writes | `docs/audit/REPOSITORY_REALITY.md` | `ci.yml :: Python — Lint & Type-check` (`check_raw_sql_columns.py`, self-tested) | core | GATED | The gate parsed `INSERT` and `UPDATE` only, which is one-directional in the way that matters: an absent column fails a `SELECT` just as hard, and a handler that wraps the read in `except` turns the crash into a warning and an empty result. **Live QA found exactly that**: `tenant_overlay._fetch` selected `rule_id` and `updated_by` from `detection_rules`, which has neither, so the per-tenant tuning overlay would have loaded nothing on every deployment — while every unit test passed, because the fake answered whatever it was asked. A `SELECT` fails only where the gate genuinely knows (table migrated, projection fully read, column absent); osquery virtual tables and the ClickHouse lake are declined rather than failed, because the gate knows which tables are migrated and not which engine a statement targets. Statement coverage 130 to 335, and the self-test is proven against the real pre-fix defect |
 
 ## Summary
 
-- GATED: 272
+- GATED: 273
 
 ## Summary
 
-- GATED: 272
+- GATED: 273
 
 ## Summary
 
-- GATED: 272
+- GATED: 273
 
 ## Summary
 
-- GATED: 272
+- GATED: 273
 
 ## Summary
 
-- GATED: 272
+- GATED: 273
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 

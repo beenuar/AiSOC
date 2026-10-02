@@ -46,7 +46,11 @@ def _row(rule_id: str, **kw):  # noqa: ANN001, ANN201
         "status": "active",
         "suppression_config": None,
         "threshold_config": None,
-        "updated_by": None,
+        # `detection_rules` has an `author` column and no `updated_by`.
+        # The first version of this fake carried `updated_by`, which is
+        # how a query selecting a column that does not exist passed every
+        # test: the fake answered whatever it was asked.
+        "author": None,
     }
     base.update(kw)
     return base
@@ -92,7 +96,7 @@ class TestSuppression:
                 _row(
                     "det-1",
                     status="disabled",
-                    updated_by="alice@example.com",
+                    author="alice@example.com",
                     suppression_config={"reason": "known noisy on build agents"},
                 )
             ],
@@ -373,3 +377,61 @@ class TestPerTenantAllowlists:
 
         allowed = {"ocsf_event": {"raw_data": '{"src_country": "GB"}'}}
         assert engine.evaluate(allowed, overlay) == [], "an allowlisted country still alerted"
+
+
+class TestTheQueryMatchesTheRealSchema:
+    """The gap that let a non-existent column ship.
+
+    `_fetch` selected `rule_id` and `updated_by` from `detection_rules`,
+    which has neither. Every test above passed, because a fake answers
+    whatever it is asked — so the overlay would have loaded nothing on
+    every deployment while the suite stayed green. Live QA found it.
+
+    This reads the migration rather than a second hand-written list,
+    because a list maintained beside the query drifts in the same
+    direction the query already drifted.
+    """
+
+    def test_every_selected_column_exists_in_the_migration(self) -> None:
+        import pathlib as _p
+        import re
+
+        root = _p.Path(__file__).resolve().parents[3]
+        init = (root / "services/api/migrations/001_init.sql").read_text()
+
+        body = re.search(
+            r"CREATE TABLE (?:IF NOT EXISTS )?detection_rules\s*\((.*?)\n\);",
+            init,
+            re.S | re.I,
+        )
+        assert body, "detection_rules is not created in 001_init.sql; this test is looking in the wrong place"
+
+        declared = {m.group(1).lower() for line in body.group(1).splitlines() if (m := re.match(r"\s*([a-z_][a-z0-9_]*)\s+[A-Za-z]", line))}
+        # Later migrations add columns; pick those up too rather than
+        # failing on a column that exists but arrived after 001.
+        for path in sorted((root / "services/api/migrations").glob("*.sql")):
+            for m in re.finditer(
+                r"ALTER TABLE\s+(?:IF EXISTS\s+)?detection_rules\s+ADD COLUMN\s+(?:IF NOT EXISTS\s+)?([a-z_][a-z0-9_]*)",
+                path.read_text(),
+                re.I,
+            ):
+                declared.add(m.group(1).lower())
+
+        source = (_p.Path(__file__).resolve().parents[1] / "app/services/tenant_overlay.py").read_text()
+        projection = re.search(r"SELECT (.*?)\s+FROM detection_rules", source, re.S)
+        assert projection, "the overlay no longer selects from detection_rules"
+
+        referenced = {token.lower() for token in re.findall(r"\b([a-z_][a-z0-9_]*)\b", projection.group(1))} - {
+            "coalesce",
+            "as",
+            "rule_id",
+            "source_id",
+            "null",
+        }
+
+        missing = referenced - declared
+        assert not missing, (
+            f"the overlay selects column(s) no migration creates: {sorted(missing)}. "
+            "Every execution of this query raises UndefinedColumnError, the handler turns "
+            "it into a warning, and the overlay silently loads nothing."
+        )

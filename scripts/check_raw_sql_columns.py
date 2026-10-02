@@ -265,6 +265,120 @@ def migration_schema(services_dir: pathlib.Path) -> tuple[dict[str, set[str]], d
 # ---------------------------------------------------------------------------
 
 _INSERT = re.compile(r"\bINSERT\s+(?:OR\s+\w+\s+)?INTO\s+([^\s(;]+)", re.I)
+#: A single-table SELECT, with the projection captured.
+#:
+#: This gate checked INSERT and UPDATE only for most of its life, which
+#: made it one-directional in the way that matters: a SELECT naming a
+#: column that does not exist raises `UndefinedColumnError` just as hard,
+#: and a handler that wraps the read in `except` turns that into a
+#: warning and an empty result. The feature then does nothing while every
+#: unit test passes against a fake.
+#:
+#: That is not hypothetical. `tenant_overlay._fetch` selected `rule_id`
+#: and `updated_by` from `detection_rules`, which has neither, so the
+#: per-tenant tuning overlay would have loaded nothing on every
+#: deployment. Live QA found it; this pattern is why it cannot recur.
+#:
+#: Deliberately narrow: one table, no join. A join needs per-table column
+#: resolution and alias tracking, and a pattern that silently mis-resolves
+#: is worse than one that declines to try — those are reported as
+#: unresolvable rather than passed.
+_SELECT = re.compile(
+    r"\bSELECT\s+(?!.*\bJOIN\b)(.+?)\s+FROM\s+(?:ONLY\s+)?([a-z_][a-z0-9_]*)\b",
+    re.I | re.S,
+)
+
+#: Projection items that name no column of the table.
+_SELECT_NOISE = frozenset(
+    {
+        "as",
+        "distinct",
+        "all",
+        "case",
+        "when",
+        "then",
+        "else",
+        "end",
+        "and",
+        "or",
+        "not",
+        "null",
+        "true",
+        "false",
+        "asc",
+        "desc",
+        "cast",
+        "coalesce",
+        "nullif",
+        "count",
+        "sum",
+        "avg",
+        "min",
+        "max",
+        "now",
+        "interval",
+        "over",
+        "partition",
+        "by",
+        "filter",
+        "where",
+        "on",
+        "using",
+        "array",
+        "jsonb",
+        "text",
+        "uuid",
+        "int",
+        "integer",
+        "bigint",
+        "boolean",
+        "timestamptz",
+        "numeric",
+        "float",
+    }
+)
+
+
+def _select_columns(projection: str) -> tuple[list[str], bool]:
+    """Bare column names in a projection, and whether it was fully read.
+
+    `complete` is False for `*`, for a function call whose arguments this
+    cannot attribute, and for an expression with an operator — the caller
+    treats an incomplete projection as unresolvable rather than clean,
+    because a half-read list that reports OK is the failure this gate
+    exists to prevent.
+    """
+    if "*" in projection:
+        return [], False
+    columns: list[str] = []
+    complete = True
+    for item in _split_top_level(projection):
+        item = item.strip()
+        # Strip an alias: `x AS y` names x, not y.
+        item = re.split(r"\s+AS\s+", item, flags=re.I)[0].strip()
+        if not item:
+            continue
+        # A bare identifier is a column. Anything else is an expression
+        # whose operands may or may not be columns of this table.
+        if re.fullmatch(r"[a-z_][a-z0-9_]*", item, re.I):
+            if item.lower() not in _SELECT_NOISE:
+                columns.append(item)
+            continue
+        # A JSONB path (`provenance->>'x'`) names its left operand.
+        jsonb = re.fullmatch(r"([a-z_][a-z0-9_]*)\s*-\>\>?\s*'[^']*'", item, re.I)
+        if jsonb:
+            columns.append(jsonb.group(1))
+            continue
+        # Resolve what is nameable inside an expression, and mark the
+        # projection incomplete so the caller does not read the result as
+        # an exhaustive list.
+        complete = False
+        for token in re.findall(r"[a-z_][a-z0-9_]*", item, re.I):
+            if token.lower() not in _SELECT_NOISE:
+                columns.append(token)
+    return columns, complete
+
+
 _UPDATE = re.compile(r"\bUPDATE\s+(?:ONLY\s+)?([^\s(;]+)\s+SET\b", re.I)
 _DO_UPDATE = re.compile(r"\bDO\s+UPDATE\s+SET\b", re.I)
 
@@ -397,7 +511,8 @@ def statements_in(source: str, relpath: str) -> list[dict]:
         if not isinstance(node, ast.Constant | ast.JoinedStr):
             continue
         text = _render(node)
-        if not text or not ("INSERT" in text.upper() or "UPDATE" in text.upper()):
+        upper = text.upper() if text else ""
+        if not text or not ("INSERT" in upper or "UPDATE" in upper or "SELECT" in upper):
             continue
         line = getattr(node, "lineno", 0)
 
@@ -418,6 +533,20 @@ def statements_in(source: str, relpath: str) -> list[dict]:
             }
             inserts.append((match.start(), statement))
             found.append(statement)
+
+        for match in _SELECT.finditer(text):
+            columns, complete = _select_columns(match.group(1))
+            found.append(
+                {
+                    "kind": "SELECT",
+                    "file": relpath,
+                    "line": line,
+                    "table": match.group(2).strip('"'),
+                    "columns": columns,
+                    "columns_declared": True,
+                    "columns_complete": complete,
+                }
+            )
 
         for match in _UPDATE.finditer(text):
             columns, complete = _set_columns(text, match.end())
@@ -491,6 +620,7 @@ def scan(root: pathlib.Path | None = None) -> dict:
     statements, files_read = service_statements(services_dir, root)
 
     findings: list[dict] = []
+    uncompared: list[dict] = []
     credits: list[dict] = []
     foreign_used: set[str] = set()
     dynamic_used: set[tuple[str, str]] = set()
@@ -507,6 +637,28 @@ def scan(root: pathlib.Path | None = None) -> dict:
         # Only a statement this parser could not read may be excused as
         # dynamic. A file holding one assembled statement does not get its
         # ordinary ones forgiven along with it.
+        # A SELECT is held to a narrower standard than a write, on purpose.
+        #
+        # The gate knows every table a migration creates; it does not know
+        # which *engine* a statement targets. `services/actions` queries
+        # osquery's virtual tables on an endpoint and the lake queries
+        # ClickHouse, and neither has a Postgres migration — failing those
+        # would be the gate asserting something it cannot see.
+        #
+        # So a SELECT fails only where the gate genuinely knows: the table
+        # IS migrated, the projection WAS fully read, and a named column is
+        # absent. Everything else is counted as not-compared rather than
+        # passed, which keeps the summary honest about its own coverage.
+        #
+        # That standard still catches the defect this was built for:
+        # `tenant_overlay._fetch` selected `rule_id` and `updated_by` from
+        # `detection_rules`, which is migrated and whose projection reads
+        # cleanly, so the overlay loaded nothing on every deployment while
+        # every unit test passed against a fake.
+        if statement["kind"] == "SELECT" and (not statement["columns_complete"] or table not in schema):
+            uncompared.append({**statement, "verdict": "select-not-resolved"})
+            continue
+
         if DYNAMIC in table or not statement["columns_complete"]:
             if key in DYNAMIC_SQL:
                 dynamic_used.add(key)
@@ -643,6 +795,42 @@ def _detects_injected_drift() -> list[tuple[str, bool]]:
         ("passes a statement whose table and every column exist", kinds(_GOOD_STATEMENT) == set()),
         ("credits the passing statement rather than skipping it", counted(_GOOD_STATEMENT) == 1),
         ("refuses a statement assembled at runtime rather than skipping it", kinds(dynamic) == {"unparsed-statement"}),
+        # The SELECT direction, added after live QA found a read this gate
+        # could not see. `tenant_overlay._fetch` selected two columns
+        # `detection_rules` does not have, so the per-tenant tuning overlay
+        # loaded nothing on every deployment — and every unit test passed,
+        # because they ran against a fake that answered whatever was asked.
+        #
+        # A gate that checks writes and not reads is one-directional in the
+        # way that matters: an absent column fails a SELECT just as hard,
+        # and a handler that wraps the read in `except` turns the crash
+        # into a warning and an empty result.
+        (
+            "detects a SELECT naming a column no migration creates",
+            kinds("SQL = 'SELECT id, nonexistent_column FROM widgets'\n") == {"unknown-column"},
+        ),
+        (
+            "passes a SELECT whose every column exists",
+            kinds("SQL = 'SELECT id, tenant_id, name FROM widgets'\n") == set(),
+        ),
+        (
+            "resolves a jsonb path to its left operand rather than guessing",
+            kinds("SQL = \"SELECT nonexistent_column->>'x' FROM widgets\"\n") == {"unknown-column"},
+        ),
+        (
+            # The gate knows which tables are migrated, not which engine a
+            # statement targets. osquery's virtual tables and the ClickHouse
+            # lake have no Postgres migration, and failing those would be
+            # the gate asserting something it cannot see.
+            "declines a SELECT against an unmigrated table rather than failing it",
+            kinds("SQL = 'SELECT pid, name FROM processes'\n") == set(),
+        ),
+        (
+            # A half-read projection that reports OK is the failure this
+            # gate exists to prevent, so an unreadable one is not compared.
+            "declines a SELECT whose projection it could not fully read",
+            kinds("SQL = 'SELECT COUNT(*) AS n FROM widgets'\n") == set(),
+        ),
     ]
 
 

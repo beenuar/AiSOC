@@ -198,7 +198,7 @@ def build_overlay(tenant_id: str, rows: list[dict[str, Any]], *, now: float | No
             enabled=str(row.get("status") or "active") == "active",
             min_severity=threshold.get("min_severity"),
             suppress_when=suppress_when,
-            author=row.get("updated_by") or suppression.get("author"),
+            author=row.get("author") or suppression.get("author"),
             reason=suppression.get("reason") or threshold.get("reason"),
         )
 
@@ -337,14 +337,29 @@ class OverlayCache:
         """
         try:
             async with self._pool.acquire() as conn:
+                # `detection_rules` has no `rule_id` or `updated_by` column.
+                # It did not have one when this query was first written
+                # either, and the query failed into the `except` below,
+                # logged a warning and returned None — so the overlay
+                # never loaded and the whole feature silently did nothing
+                # while every unit test passed against a fake.
+                #
+                # The engine's `det-*` id lives in `provenance->>'source_id'`
+                # (migration 036), which is the stable external identifier
+                # by design. `author` is the column that records who
+                # changed the rule.
                 rows = await conn.fetch(
                     """
-                    SELECT rule_id, status, suppression_config, threshold_config, updated_by
+                    SELECT COALESCE(provenance->>'source_id', name) AS rule_id,
+                           status,
+                           suppression_config,
+                           threshold_config,
+                           author
                       FROM detection_rules
                      WHERE tenant_id = $1::uuid
                        AND (status <> 'active'
-                            OR suppression_config IS NOT NULL
-                            OR threshold_config IS NOT NULL)
+                            OR suppression_config <> '{}'::jsonb
+                            OR threshold_config <> '{}'::jsonb)
                     """,
                     tenant_id,
                 )
