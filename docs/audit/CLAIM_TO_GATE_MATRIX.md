@@ -281,26 +281,27 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | A tenant's detection tuning reaches the streaming engine, and only that tenant's | `apps/docs/docs/console/detection-tuning.md` | `ci.yml :: Python — Service unit tests` (`services/fusion/tests/test_tenant_tuning_overlay.py`) | core | GATED | `DetectionEngine` evaluated the shared corpus and nothing else. The console writes a tenant's disables, thresholds and suppressions to `detection_rules`, where the streaming engine never looked, so a tenant who turned a noisy rule off **kept receiving its alerts while the console showed it disabled**, which is the worst shape because it tells the operator the problem is solved. An overlay rather than a per-tenant ruleset: the difference applied over one shared corpus, not N copies of 833 rules. Suppression is applied **after** the match so the hit can be logged with the tuning, its author and its reason, because "no alert" with no explanation is indistinguishable from a rule that did not match. A failed reload **keeps the previous overlay**: falling back to no-tuning would turn the tenant's queue back on and read as a flood rather than a fault |
 | Rules that cannot fire are counted, and the count only goes down | `docs/detections/truth-table.md` | `ci.yml :: Python — Lint & Type-check` (`check_detection_fields.py`, ratchet at 119) | core | GATED | **133 to 119.** The per-tenant-allowlist family (15 rules reading an `<x>_in_allowlist` boolean nothing computed) is closed: the overlay derives it from the allowlists the console already writes, which was the cheapest of the five families because an allowlist is the same decision a tenant expresses as a suppression. Derived per tenant rather than in the shared pass, because a global allowlist would make one tenant's exceptions apply to everybody. An unconfigured allowlist contributes **no key**, not `False`: a `not_in_allowlist` clause against a missing key is true for every event, which is the negation-flips-on-absence failure already recorded for the Sigma import. A test asserts every allowlist boolean the corpus reads is mapped, so a rule cannot stay unreachable while the ratchet says otherwise. The four remaining families (74 windowed, 24 identity, 8 comparison, 8 first-seen, 6 other, 2 baseline) need engine or enrichment work and are named rather than hidden |
 | Raw SQL names only columns a migration creates, on reads as well as writes | `docs/audit/REPOSITORY_REALITY.md` | `ci.yml :: Python — Lint & Type-check` (`check_raw_sql_columns.py`, self-tested) | core | GATED | The gate parsed `INSERT` and `UPDATE` only, which is one-directional in the way that matters: an absent column fails a `SELECT` just as hard, and a handler that wraps the read in `except` turns the crash into a warning and an empty result. **Live QA found exactly that**: `tenant_overlay._fetch` selected `rule_id` and `updated_by` from `detection_rules`, which has neither, so the per-tenant tuning overlay would have loaded nothing on every deployment — while every unit test passed, because the fake answered whatever it was asked. A `SELECT` fails only where the gate genuinely knows (table migrated, projection fully read, column absent); osquery virtual tables and the ClickHouse lake are declined rather than failed, because the gate knows which tables are migrated and not which engine a statement targets. Statement coverage 130 to 335, and the self-test is proven against the real pre-fix defect |
+| An expired session sends you to sign in, rather than locking you out | `apps/docs/docs/console/getting-started.md` | `ci.yml :: Web — Unit tests` (`apps/web/src/lib/authExpiry.test.ts`) | core | GATED | Found by a live browser walkthrough and reproduced deterministically: with an expired token in `localStorage`, `/login` redirected to `/dashboard`, every call there answered 401, and **nothing ever sent the user back** — the only way out was clearing browser storage by hand. Two independent causes, so two fixes: `isAuthenticated()` answered "is a token stored", which is a different question from "can this session make a request"; and nothing handled a 401, so a session that died mid-shift left every panel failing with no explanation. Either fix alone leaves a hole — the first still strands a user whose token expires *while* they work, the second still bounces a returning user off `/login` before any request is made. An unreadable token counts as not authenticated, because the pessimistic answer costs a sign-in and the optimistic one costs the lockout |
 
 ## Summary
 
-- GATED: 273
+- GATED: 274
 
 ## Summary
 
-- GATED: 273
+- GATED: 274
 
 ## Summary
 
-- GATED: 273
+- GATED: 274
 
 ## Summary
 
-- GATED: 273
+- GATED: 274
 
 ## Summary
 
-- GATED: 273
+- GATED: 274
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 
