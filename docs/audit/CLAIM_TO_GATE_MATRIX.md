@@ -271,26 +271,28 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Only a human-confirmed prior can suppress a repeat alert | `apps/docs/docs/concepts/outcome-memory.md` | `ci.yml :: Python — Tests` (`test_outcome_memory.py` and `test_human_priors.py`) | core | GATED | v15.0.0 shipped the refusal half. This adds the half that had no implementation: a human-authored prior is written when an analyst dispositions an alert. Until now `record_outcome` was called from three agents-side workers and nowhere an analyst could reach, so **every prior in the system was AI-authored** and the refusal rule meant repeat suppression could never fire on anything. The prior is keyed with the **vendored** fingerprint, byte-identical by `sync_vendored_fingerprint.py --check`, because a reimplementation free to drift would write priors where nothing looks, which is exactly how `repeat_alerts_suppressed` once could only report zero |
 | Every LLM call resolves through a gateway alias, so CORE and air-gap work | `apps/docs/docs/operations/llm-gateway.md` | `ci.yml :: Python — Tests` (`check_model_alias_routing.py` + `test_litellm_config.py`) | core | GATED | Two call sites named a provider model directly. The detection-tuning loop passed `gpt-4o-mini`, so on CORE it reached LiteLLM, which knows the `aisoc-*` aliases and not that id, and every call answered `Invalid model name` and fell through to the deterministic path. The NL-query route checked the air-gap guard against a hardcoded `api.openai.com` rather than the URL the request would use, so the guard was refusing a call that never leaves the deployment. **Neither broke a test**, because both degrade to a working deterministic answer, which is why this needed a gate rather than a fix: a model path that silently never runs looks exactly like one that runs and is cautious. The gate was proven by re-injecting the pre-fix defect. Four registries must agree on the role set and a parity test holds them together |
 | A budget breach stops the investigation loop rather than being reported after it | `apps/docs/docs/concepts/automation-maturity.md` | `ci.yml :: Python — Tests` (agents, `test_in_loop_budget.py` drives `_run`) | core | GATED | `InvestigationBudget` declared `max_tokens` and `max_tool_calls` and **only `max_seconds` had a reader**; the runner's docstring said tokens were enforced upstream by the `CostGovernor`, which charges a rolling window across runs rather than bounding this one, so a single investigation could spend any number of tokens inside its two minutes. Checked now after each streamed step. An over-budget run ends in a labelled `budget_exhausted` state and escalates: a truncated run has not reached a conclusion, and returning the graph's last confident verdict is how a stopped investigation becomes a confident wrong disposition. The test asserts the graph did **not** stream all its nodes, so a check that only reported the overspend would fail it |
+| CORE gives the investigation agent real indicator evidence | `apps/docs/docs/deployment/docker.md` | `ci.yml :: Python — Service unit tests` (`services/fusion/tests/test_tenant_ioc_match.py`) | core | GATED | `AlertEnricher` asks the enrichment service, which runs in the `full` profile, so on CORE the call failed, was caught, logged at `debug`, and `{}` returned: the agent received "could not check" for every indicator on every alert. The tenant's own `threat_intel_iocs` is in the Postgres fusion already uses and CORE ships a real CISA KEV feed. Expiry is a hard gate in SQL; decay is a per-type half-life on `last_seen`, because an address reassigns in weeks and a file hash identifies the same bytes forever. The half-lives are judgement rather than measurement and say so. A faded hit is reported weakly rather than dropped, because "seen weakly" is different information from "never seen" |
+| Injection flip rate and unsafe-action rate are measured per family | `apps/docs/docs/benchmark.md` | `ci.yml :: Python — Tests` (`tests/adversarial/test_behavioural_injection.py`) | core | GATED | **27 pairs across the 9 families the plan names**, each payload written to fit the field it arrives in: overall flip 25.9%, unsafe action 3.7%, with a per-family ceiling so a regression in one cannot hide behind an improvement in another. It immediately found a real blind spot: **`fake_tool_output` flips every verdict and the guard catches none of it**, because a payload shaped like a tool's own answer reads as evidence rather than as an instruction. Recorded at 1.0 rather than patched, and the guard is deliberately not tuned against this corpus in the same change, because hardening against a tuned corpus has already been measured here moving 66.7% to 98.1% while held-out payloads moved 3.6% to 7.1%. **Measures the pipeline, not a model**: the stub is deliberately obedient, so the rates are an upper bound on harm and the artefact carries `llm_resistance_measured: false` |
 
 ## Summary
 
-- GATED: 263
+- GATED: 265
 
 ## Summary
 
-- GATED: 263
+- GATED: 265
 
 ## Summary
 
-- GATED: 263
+- GATED: 265
 
 ## Summary
 
-- GATED: 263
+- GATED: 265
 
 ## Summary
 
-- GATED: 263
+- GATED: 265
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 
