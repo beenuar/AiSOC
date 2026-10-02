@@ -62,7 +62,7 @@ the session signing key, the five service-to-service credentials and the four da
 creates an administrator and prints its password. That password is generated on your machine, shown once, and stored nowhere:
 copy it, or mint a new one with `make bootstrap ARGS=--reset-password`.
 
-Then **prove it actually works**. `make smoke` posts one real event to the ingest API, follows it
+A port already in use is not a problem: AiSOC publishes on a free one and says so. Then **prove it actually works**. `make smoke` posts one real event to the ingest API, follows it
 through Kafka, detection, correlation and Postgres, and reads the alert back out of the public API.
 Every stage reports PASS or FAIL:
 
@@ -80,7 +80,7 @@ docs are off in this production-class stack. On a server set `AISOC_CONSOLE_URL`
 
 ## Try it without connecting anything
 
-`make demo` loads a **synthetic** dataset — the pipeline shape, not real activity, and never a benchmark, a customer or an incident. Every row is `is_synthetic = true` and labelled in the console.
+Sign in and press **Load sample data** in the setup wizard: five scenarios take the same ingest path a real connector uses, so watching them become alerts means watching the pipeline work. They are labelled `AiSOC` and do **not** mark setup complete, because nothing is connected yet. For the larger fixed corpus used by demos and evals, `make demo` loads a **synthetic** dataset — the pipeline shape, not real activity, and never a benchmark, a customer or an incident. Every row is `is_synthetic = true` and labelled in the console.
 
 ## Connect real data
 

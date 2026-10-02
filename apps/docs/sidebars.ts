@@ -53,6 +53,7 @@ const sidebars: SidebarsConfig = {
       type: "category",
       label: "Console",
       items: [
+        "console/getting-started",
         "console/funnel-kpis",
         "console/queue",
         "console/rule-tuning",
