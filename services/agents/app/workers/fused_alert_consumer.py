@@ -58,6 +58,7 @@ from app.investigator.bundle_prompt import prefetch_context_bundle_dict
 from app.llm.factory import llm_override
 from app.memory.outcomes import AI, suppression_refusal
 from app.models.state import AgentStatus, InvestigationState
+from app.playbook import alert_trigger
 from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
 from app.workers.business_context import BusinessContextApplier
@@ -617,6 +618,28 @@ class FusedAlertTriageWorker:
                     _METRICS["deterministic"] += 1
                 cost = CostSummary.from_tracker(tracker)
                 tokens = tracker.total_tokens
+
+            # Parity 5.1. `find_matching()` had no production caller, so no
+            # playbook ever ran from an alert. Three switches must agree
+            # before one acts (deployment, tenant, playbook) and anything
+            # short of all three runs in **preview**, with its plan and
+            # simulated steps attached to the alert.
+            #
+            # After triage, because a playbook's conditions read the
+            # verdict and the confidence, and before them it would be
+            # matching on an alert nobody has assessed.
+            try:
+                playbook_outcome = await alert_trigger.run_for_alert(state)
+                if playbook_outcome.matched:
+                    state.add_finding(
+                        f"Playbooks matched: {', '.join(playbook_outcome.matched)}"
+                        + (f" ({len(playbook_outcome.executed)} ran, {len(playbook_outcome.previewed)} previewed)")
+                    )
+            except Exception as exc:  # noqa: BLE001
+                # A playbook failure must not lose the triage result it was
+                # attached to.
+                logger.warning("auto_triage_worker.playbook_trigger_failed", error=str(exc))
+
             verdict = state.verdict
             confidence = state.confidence
             # Never complete with a null/empty verdict (issue #571): if both the

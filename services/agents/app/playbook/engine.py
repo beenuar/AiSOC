@@ -23,6 +23,8 @@ from typing import Any
 
 import httpx
 
+from app.playbook import pause as playbook_pause
+
 from . import action_bridge
 from .bounds import clamp_timeout
 from .errors import PermanentStepFailure
@@ -60,6 +62,11 @@ class RunStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     CANCELLED = "cancelled"
+    #: Suspended at an approval step, waiting on a human. Distinct from
+    #: FAILED, which is what an approval step produced before parity 5.2
+    #: and which reads to an operator as a broken playbook rather than as
+    #: one doing exactly what it was written to do.
+    PAUSED = "paused"
 
 
 class StepStatus(str, Enum):
@@ -473,18 +480,18 @@ _TARGET_KEYS: dict[StepType, tuple[str, ...]] = {
 #: reason. The engine reports the reason instead of a bare "no handler", and
 #: the schema's ``x-aisoc-execution`` map records the same state, so an author
 #: can tell before writing the playbook rather than after running it.
-_UNBRIDGEABLE: dict[StepType, str] = {
-    StepType.APPROVAL: (
-        "an approval step is a pause, and this engine is a single-threaded "
-        "index walk with no pause or resume — there is nothing to suspend and "
-        "nothing to wake. It is also no longer the mechanism: every response "
-        "step is now graded against its own capability contract at dispatch "
-        "and returns 'pending_approval' on its own when a human is required, "
-        "so an approval step in front of one would gate a decision that is "
-        "already gated. Remove it, or hold the action in the actions service, "
-        "which does queue for an analyst."
-    ),
-}
+#: Empty since parity 5.2. `approval` was the only entry: the engine had no
+#: pause and no resume, so there was nothing to suspend and nothing to wake,
+#: and the step failed closed while 12 shipped playbooks aborted on it.
+#:
+#: It is a durable pause now (`app.playbook.pause`), so the entry is gone
+#: rather than reworded. The mechanism it argued against is still true and
+#: still worth knowing: every response step is separately graded against
+#: its own capability contract at dispatch and returns `pending_approval`
+#: on its own, so an approval step in front of one gates a decision that is
+#: already gated. That is a reason to leave it out of a playbook, not a
+#: reason for the engine to refuse it.
+_UNBRIDGEABLE: dict[StepType, str] = {}
 
 
 def _resolve_target(step: PlaybookStep, context: dict[str, Any]) -> str:
@@ -716,8 +723,148 @@ async def _emit(run_id: str, event_type: str, payload: dict, http: httpx.AsyncCl
 # ---------------------------------------------------------------------------
 
 
+async def _suspend_for_approval(pr: PlaybookRun, step: PlaybookStep, step_idx: int, http: Any) -> Any:
+    """Create the approval and persist where to resume.
+
+    Order matters. The approval row is created **first**, so the pause can
+    name it: a pause with no approval has nothing for a human to decide
+    against, and a human deciding against an approval with no pause wakes
+    nothing. If the approval cannot be created the pause is not written
+    either, and the caller fails the step closed.
+    """
+    tenant_id = str(pr.context.get("tenant_id") or pr.trigger_context.get("tenant_id") or "")
+    if not tenant_id:
+        logger.warning("Approval step %s has no tenant in context; cannot suspend", step.name)
+        return None
+
+    approval_id = await _create_approval(pr, step, tenant_id, http)
+
+    return await playbook_pause.suspend(
+        tenant_id=tenant_id,
+        run_id=pr.run_id,
+        playbook_id=pr.playbook_id,
+        playbook_name=pr.playbook_name,
+        step_index=step_idx,
+        step_id=step.id,
+        run_context=pr.context,
+        step_results=pr.step_results,
+        approval_id=approval_id,
+        ttl_hours=_approval_ttl(step),
+    )
+
+
+def _approval_ttl(step: PlaybookStep) -> float | None:
+    """A per-step deadline, if the author set one."""
+    raw = step.params.get("expires_in_hours") or step.params.get("timeout_hours")
+    try:
+        return float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+async def _create_approval(pr: PlaybookRun, step: PlaybookStep, tenant_id: str, http: Any) -> str | None:
+    """Ask the API to open an approval. None when it could not be created.
+
+    Posted to the API rather than written here for the same reason
+    `action_bridge` posts there: that service owns the vault and the
+    tenant session, and a second writer to `agent_approvals` would be a
+    second place the responder app's decision has to be kept in step with.
+    """
+    token = os.getenv("AISOC_AGENTS_SERVICE_TOKEN", "").strip() or os.getenv("AISOC_SERVICE_TOKEN", "").strip()
+    if not token:
+        logger.warning(
+            "Approval step %s cannot open an approval: AISOC_AGENTS_SERVICE_TOKEN is unset",
+            step.name,
+        )
+        return None
+    api_url = os.getenv("AISOC_API_URL", "http://api:8000")
+    try:
+        response = await http.post(
+            f"{api_url}/api/v1/approvals",
+            headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": tenant_id},
+            json={
+                "title": step.name or f"Approval for {pr.playbook_name}",
+                "description": str(step.params.get("prompt") or step.params.get("reason") or ""),
+                "requested_by": f"playbook:{pr.playbook_id}",
+                "context": {"run_id": pr.run_id, "step_id": step.id},
+            },
+            timeout=10.0,
+        )
+        if response.status_code >= 400:
+            logger.warning(
+                "Approval creation refused: HTTP %s %s",
+                response.status_code,
+                response.text[:200],
+            )
+            return None
+        return str(response.json().get("id") or "") or None
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Approval creation failed: %s", exc)
+        return None
+
+
+async def resume_after_approval(*, approval_id: str, approved: bool, decided_by: str = "", comment: str = "") -> PlaybookRun | None:
+    """Continue a run suspended on this approval, or record the denial.
+
+    Returns the completed run, or None when there is nothing waiting. The
+    pause is resolved **before** the run continues, so a decision that
+    arrives twice (a double-tap, a retried webhook) resumes once: the
+    second attempt matches no `waiting` row.
+    """
+    pause = await playbook_pause.find_waiting(approval_id=approval_id)
+    if pause is None:
+        return None
+
+    if not approved:
+        await playbook_pause.resolve(
+            pause_id=pause.id,
+            status="denied",
+            resolution=f"denied by {decided_by or 'an analyst'}: {comment}"[:500],
+        )
+        logger.info("Playbook run %s halted: approval denied", pause.run_id)
+        return None
+
+    claimed = await playbook_pause.resolve(
+        pause_id=pause.id,
+        status="resumed",
+        resolution=f"approved by {decided_by or 'an analyst'}: {comment}"[:500],
+    )
+    if not claimed:
+        # Somebody else resumed it first. Not an error.
+        return None
+
+    from app.playbook.store import PlaybookStore
+
+    playbook = PlaybookStore.default().get(pause.playbook_id)
+    if playbook is None:
+        logger.warning(
+            "Cannot resume run %s: playbook %s is no longer in the store",
+            pause.run_id,
+            pause.playbook_id,
+        )
+        return None
+
+    return await PlaybookEngine().resume(playbook, pause)
+
+
 class PlaybookEngine:
     """Executes playbooks step-by-step, emitting realtime events."""
+
+    async def resume(self, playbook: Playbook, pause: Any) -> PlaybookRun:
+        """Continue a suspended run from the step after its approval.
+
+        Rebuilds the run from what was stored rather than re-running the
+        first half: the steps before the approval already executed, and
+        repeating them would re-send notifications and re-dispatch
+        actions.
+        """
+        return await self.run(
+            playbook,
+            pause.run_context,
+            resume_from=pause.resume_index,
+            resume_run_id=pause.run_id,
+            resume_results=pause.step_results,
+        )
 
     async def run(
         self,
@@ -725,8 +872,18 @@ class PlaybookEngine:
         trigger_context: dict[str, Any],
         *,
         dry_run: bool = False,
+        resume_from: int = 0,
+        resume_run_id: str | None = None,
+        resume_results: list[dict[str, Any]] | None = None,
     ) -> PlaybookRun:
         pr = PlaybookRun(playbook, trigger_context)
+        if resume_run_id:
+            # Keep the original run id, so a resumed run stays one run in
+            # the realtime stream and the ledger rather than appearing as
+            # a second, unrelated one that starts halfway through.
+            pr.run_id = resume_run_id
+        if resume_results:
+            pr.step_results = list(resume_results)
         pr.started_at = datetime.now(UTC).isoformat()
         pr.status = RunStatus.RUNNING
 
@@ -736,7 +893,13 @@ class PlaybookEngine:
             # Build a step index for branching
             step_index = {s.id: i for i, s in enumerate(playbook.steps)}
             visited: set[str] = set()
-            current_idx = 0
+            current_idx = resume_from
+            if resume_from:
+                # The steps before the approval already ran. Marking them
+                # visited keeps the cycle detector honest without
+                # re-executing them.
+                for earlier in playbook.steps[:resume_from]:
+                    visited.add(earlier.id)
 
             while current_idx < len(playbook.steps):
                 step = playbook.steps[current_idx]
@@ -780,6 +943,43 @@ class PlaybookEngine:
                 handler = _HANDLERS.get(step.type)
 
                 unbridgeable = _UNBRIDGEABLE.get(step.type)
+
+                # Parity 5.2. An approval step is a pause, and this engine
+                # had nowhere to pause to, so it failed closed and 12
+                # shipped playbooks aborted here. The position and the
+                # context go to Postgres, because "survives restarts" is
+                # the requirement and an in-memory pause is lost by the
+                # thing most likely to interrupt a long approval.
+                if step.type == StepType.APPROVAL and not dry_run:
+                    pause = await _suspend_for_approval(pr, step, current_idx, http)
+                    if pause is not None:
+                        pr.status = RunStatus.PAUSED
+                        pr.step_results.append(
+                            {
+                                "step_id": step.id,
+                                "name": step.name,
+                                "status": StepStatus.PENDING,
+                                "paused": True,
+                                "pause_id": pause.id,
+                                "approval_id": pause.approval_id,
+                                "expires_at": pause.expires_at.isoformat(),
+                            }
+                        )
+                        await _emit(
+                            pr.run_id,
+                            "run.paused",
+                            {"step": step.name, "pause_id": pause.id},
+                            http,
+                        )
+                        break
+                    # The pause could not be written, so nothing can resume
+                    # this run. Falling through fails the step closed, which
+                    # is correct: continuing past an approval nobody can
+                    # grant is the original defect this replaced.
+                    logger.error(
+                        "Approval step %s could not be suspended; failing closed rather than continuing into the action it gates",
+                        step.name,
+                    )
 
                 if handler is None and not dry_run:
                     # Fail closed, and skip the retry loop — a missing handler

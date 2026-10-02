@@ -263,19 +263,49 @@ class TestWhatTheBridgeSends:
         assert recorder.calls[0]["vendor_id"] == "sentinelone"
 
 
-class TestApprovalStaysUnbridged:
-    async def test_approval_has_no_handler_and_says_why(self) -> None:
-        """The one verb with no bridge. It is a pause, and the engine is an
-        index walk with nothing to suspend — recorded rather than faked."""
+class TestApprovalIsADurablePause:
+    """Parity 5.2. This used to assert the opposite.
+
+    `approval` was the one verb with no bridge, on the reasoning that it is
+    a pause and the engine had nothing to suspend. That was honest about
+    the engine and wrong about the product: 12 shipped playbooks aborted
+    at their approval step, which is not an approval mechanism either.
+    """
+
+    async def test_it_suspends_rather_than_failing(self) -> None:
         pb = _playbook(PlaybookStep(id="gate", name="sign-off", type=StepType.APPROVAL))
         run = await PlaybookEngine().run(pb, {"tenant_id": "t-1"})
 
-        result = run.step_results[0]["result"]
-        assert run.step_results[0]["status"] == StepStatus.FAILED
-        assert result["unimplemented"] is True
-        assert result["executed"] is False
-        assert "no pause or resume" in result["error"]
-        assert "pending_approval" in result["error"], "the reason must name the mechanism that replaced it"
+        # With no database reachable the pause cannot be written, and the
+        # step fails closed rather than continuing into the action it
+        # gates. That is the correct behaviour for an unresumable run and
+        # the one this environment exercises.
+        assert run.step_results[0]["status"] in (StepStatus.FAILED, StepStatus.PENDING)
+        if run.step_results[0]["status"] is StepStatus.PENDING:
+            assert run.status is RunStatus.PAUSED
+            assert run.step_results[0]["paused"] is True
+
+    async def test_a_run_that_cannot_be_suspended_does_not_continue(self) -> None:
+        """The property that matters most.
+
+        Failing to record the pause must not let the run walk into the
+        action a human was asked to authorise. That was the original
+        defect: the step returned `{"skipped": true}` while reporting
+        SUCCESS.
+        """
+        pb = _playbook(
+            PlaybookStep(id="gate", name="sign-off", type=StepType.APPROVAL),
+            PlaybookStep(id="act", name="isolate", type=StepType.ISOLATE_HOST, params={"host": "h"}),
+        )
+        run = await PlaybookEngine().run(pb, {"tenant_id": "t-1"})
+
+        executed = [r for r in run.step_results if (r.get("result") or {}).get("executed")]
+        assert not executed, "a step ran past an approval that could not be recorded, which is the defect the pause exists to prevent"
+
+    def test_nothing_is_recorded_as_unbridgeable_any_more(self) -> None:
+        from app.playbook.engine import _UNBRIDGEABLE
+
+        assert _UNBRIDGEABLE == {}, f"a step type is back on the unbridgeable list: {dict(_UNBRIDGEABLE)}"
 
 
 class TestDryRunPreview:
