@@ -83,6 +83,19 @@ jobs:
       # `Base.metadata.create_all`. That is the whole point: the defect was
       # a column in the model and absent from the migration, and building
       # the schema from the model under test would paper straight over it.
+      # UEBA's migration 0003 GRANTs to `aisoc_app` but does not create
+      # it: the role comes from the API's `002_rls.sql`, which a
+      # standalone UEBA database never runs. A deployment sharing one
+      # database already has it.
+      - name: Create the runtime role
+        run: |
+          psql -h localhost -U ueba -d ueba -v ON_ERROR_STOP=1 -q -c \
+            "DO \$\$ BEGIN
+               IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aisoc_app') THEN
+                 CREATE ROLE aisoc_app LOGIN PASSWORD 'aisoc_app_ci_only';
+               END IF;
+             END \$\$;"
+
       - name: Apply the migrations the service ships
         working-directory: services/ueba
         env:

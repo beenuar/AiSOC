@@ -84,6 +84,7 @@ jobs:
             pydantic-settings "sqlalchemy[asyncio]" asyncpg structlog \
             "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" tenacity \
             pyyaml prometheus-client httpx email-validator "sqlglot>=30,<31" \
+            python-multipart \
             pytest pytest-asyncio
 
       - name: Apply every migration, in order

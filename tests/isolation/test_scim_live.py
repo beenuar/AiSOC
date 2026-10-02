@@ -124,20 +124,18 @@ async def tenants(db):  # noqa: ANN001
 
     a, b = await _tenant(db), await _tenant(db)
     minted: dict[str, str] = {}
-    if True:
-        session = db
-        for name, tenant_id in (("a", a), ("b", b)):
-            # `mint_token` returns `(token, raw)` and the raw secret is
-            # the only time it exists outside an IdP's configuration.
-            _token, raw = await tokens.mint_token(
-                session,
-                tenant_id=uuid.UUID(tenant_id),
-                org_id=None,
-                name=f"ci-{name}",
-                created_by=None,
-            )
-            minted[name] = raw
-        await session.commit()
+    for name, tenant_id in (("a", a), ("b", b)):
+        # `mint_token` returns `(token, raw)` and the raw secret is the
+        # only time it exists outside an IdP's configuration.
+        _token, raw = await tokens.mint_token(
+            db,
+            tenant_id=uuid.UUID(tenant_id),
+            org_id=None,
+            name=f"ci-{name}",
+            created_by=None,
+        )
+        minted[name] = raw
+    await db.commit()
 
     yield {"a": a, "b": b, "token_a": minted["a"], "token_b": minted["b"]}
 
