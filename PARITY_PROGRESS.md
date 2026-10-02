@@ -430,3 +430,43 @@ continue, because refusing on the absence of telemetry would stop every run
 in a deployment that has not configured it; and a budget of zero reads as
 "no cap" rather than as zero, which would stop every run before its first
 call and look like a hang.
+
+## Phase 3 and 4, partial (2026-10-01)
+
+### Shipped
+
+| Item | What changed |
+|---|---|
+| **3.1** CORE evidence | The enricher asks the `full`-profile enrichment service, so on CORE it caught a connection error, logged at `debug` and returned `{}`: the agent got "could not check" for every indicator on every alert. Now matches the tenant's own `threat_intel_iocs`, with expiry as a hard SQL gate and a per-type decay half-life |
+| **3.3** Behavioural injection | 27 pairs, 9 families, per-family flip and unsafe-action ceilings. Found `fake_tool_output` at **100% flip, 0% catch** |
+| **3.5** QA sampling | A 5% sample of auto-closures reaches an analyst, scored on the five-part rubric, so closure accuracy is measurable on real data |
+| **2.5** Gateway aliases | Two call sites named a provider model directly and degraded silently; a gate now catches it, proven on the pre-fix defect |
+| **2.6** In-loop budgets | `max_tokens` and `max_tool_calls` were declared and enforced nowhere |
+| **4.1** SSO completes | Both handlers issued a token with no tenant, no role and no local user, signed with the wrong key, into a cookie the API does not read |
+| **4.7** Accessibility | Three of the five operator views now under axe, each asserting it rendered real markup first |
+
+### Deviation D11: 4.3 was already done by the security batch
+
+The plan anticipates this: "If the security batch already did this, record a
+Deviation and add only the console role-assignment UI." Confirmed.
+`services/api/app/api/v1/deps.py` resolves permissions from the database
+during `get_current_user` and caches them, which S13 shipped in `v15.0.0`.
+The console role-assignment UI is not built and is recorded as outstanding.
+
+### What the guards caught in my own work
+
+- The closure-policy migration had no unbound-session arm, so the Kafka
+  worker would have read zero policies and reported success.
+- Putting `closure.py` under `app/policy/` made the dead `guardrails`
+  module look reachable, because that package re-exports it.
+- `_alert_evidence` passed `affected_host` through while the canonicaliser
+  reads `host`, which would have given two different hosts one prior key.
+- The accessibility suite's own non-vacuity guard caught the investigation
+  rail rendering its **error state** while axe reported it clean.
+
+### Outstanding
+
+3.2 (accuracy on the shipped model), 3.4 (before/after), 3.6 (grounded
+copilot), 3.7 (signed evidence bundles), 4.2 (console MFA), 4.3's console
+UI, 4.4 (tenant audit views), 4.5 (operator pages), 4.6 (i18n), and all of
+Phases 5 and 6.
