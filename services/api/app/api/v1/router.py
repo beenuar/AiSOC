@@ -61,6 +61,7 @@ from app.api.v1.endpoints import (
     nl_detection,
     nl_query,
     oauth,
+    onboarding,
     oncall,
     passkeys,
     phishing,
@@ -116,6 +117,10 @@ api_router.include_router(connectors.router)
 # swaps the code, encrypts tokens via the credential vault, and lands the
 # operator back on /onboarding.
 api_router.include_router(oauth.router)
+# The setup wizard the console shows a first-run tenant instead of an
+# empty dashboard, plus the sample-data button it offers an evaluator who
+# does not yet have credentials for anything.
+api_router.include_router(onboarding.router, prefix="/onboarding", tags=["onboarding"])
 api_router.include_router(tenants.router)
 api_router.include_router(usage.router)
 api_router.include_router(detection_rules.router)

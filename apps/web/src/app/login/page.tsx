@@ -15,7 +15,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { authApi } from '@/lib/api';
+import { authApi, onboardingApi } from '@/lib/api';
 import { isDemoMode } from '@/lib/demoMode';
 
 type Phase = 'idle' | 'pending' | 'success' | 'error';
@@ -71,6 +71,30 @@ function LoginInner() {
     }
   }, [next, router]);
 
+/**
+ * Where to send someone after they sign in.
+ *
+ * A tenant with nothing connected and no alerts used to land on
+ * `/dashboard`: every tile zero and nothing saying what to do next. They
+ * go to the setup wizard instead.
+ *
+ * Only when the caller did not ask for somewhere specific. An expired
+ * session that bounced someone off `/alerts` should return them to
+ * `/alerts`, not to a wizard they have seen before.
+ *
+ * Never throws. Failing to work out where to land is not a reason to
+ * fail a sign-in that already succeeded.
+ */
+async function landingRoute(requested: string): Promise<string> {
+  if (requested && requested !== '/dashboard') return requested;
+  try {
+    const status = await onboardingApi.status();
+    return status.first_run ? '/onboarding' : requested || '/dashboard';
+  } catch {
+    return requested || '/dashboard';
+  }
+}
+
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (phase === 'pending') return;
@@ -80,7 +104,7 @@ function LoginInner() {
     try {
       await authApi.login(email.trim(), password);
       setPhase('success');
-      router.replace(next);
+      router.replace(await landingRoute(next));
     } catch (err) {
       console.error('[login] failed', err);
       setPhase('error');

@@ -207,6 +207,39 @@ var connectorProfiles = map[string]connectorProfile{
 			"CRITICAL": 5, "HIGH": 4, "MEDIUM": 3, "LOW": 2, "INFORMATIONAL": 1,
 		},
 	},
+	// aisoc_sample — the batch the first-run wizard pushes.
+	//
+	// It goes through this door rather than being inserted into Postgres
+	// precisely so it proves something: a console full of seeded rows
+	// looks identical whether the pipeline works or is completely broken.
+	// Running the real path means a first-run operator who sees alerts
+	// has also seen ingest, normalisation, fusion and triage work.
+	//
+	// The vendor name says what it is. An alert from this batch is
+	// attributed to "AiSOC (sample data)" in the console's own source
+	// column, so a reader who never saw the wizard can still tell these
+	// apart from real telemetry — honesty that does not depend on anyone
+	// remembering context.
+	//
+	// 2001 for the same reason as the others at this class: these are
+	// already-judged findings with a severity the wizard sets, not raw
+	// telemetry waiting to be assessed.
+	"aisoc_sample": {
+		product:   OcsfProduct{Name: "Sample data", VendorName: "AiSOC"},
+		classUID:  2001,
+		className: "Security Finding",
+		fieldMap: map[string]string{
+			"created_at":  "time",
+			"title":       "message",
+			"description": "finding.desc",
+			"external_id": "finding.uid",
+			"severity":    "severity",
+			"src_ip":      "src_endpoint.ip",
+			"host":        "device.name",
+			"user_name":   "actor.user.name",
+		},
+		severityMap: _canonicalSeverityMap,
+	},
 	// aws_cloudtrail — the audit log of the AWS account itself.
 	//
 	// It had no entry here, and the symptom found in live QA is worse than

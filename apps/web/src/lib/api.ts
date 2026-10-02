@@ -356,6 +356,47 @@ export async function apiFetch(path: string, options: FetchOptions = {}): Promis
   return fetch(url, { ...fetchOptions, headers: apiHeaders(fetchOptions.headers), cache: 'no-store' });
 }
 
+
+// ─── Onboarding ──────────────────────────────────────────────────────────────
+
+export interface SetupStep {
+  key: string;
+  label: string;
+  done: boolean;
+  why: string;
+  href: string | null;
+  detail: string | null;
+}
+
+export interface OnboardingStatus {
+  first_run: boolean;
+  steps: SetupStep[];
+  connectors: number;
+  alerts: number;
+  sample_data_loaded: boolean;
+}
+
+export interface SampleDataResult {
+  accepted: number;
+  rejected: number;
+  scenarios: { key: string; title: string; severity: string; why: string }[];
+  note: string;
+}
+
+/**
+ * What a tenant still has to set up, and the one button that gives an
+ * evaluator something to look at.
+ *
+ * `first_run` is derived from the tenant's own data server-side rather
+ * than from a stored flag, so it stays true if somebody connects a source
+ * through the API or deletes their last one.
+ */
+export const onboardingApi = {
+  status: () => request<OnboardingStatus>('/api/v1/onboarding/status'),
+  loadSampleData: () =>
+    request<SampleDataResult>('/api/v1/onboarding/sample-data', { method: 'POST' }),
+};
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export const AUTH_TOKEN_KEY = 'aisoc.responder.accessToken';
