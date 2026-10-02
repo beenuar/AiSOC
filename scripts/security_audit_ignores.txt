@@ -126,3 +126,34 @@
 # Retire these when metro adopts image-size >= 2.0.3.
 pnpm|GHSA-5p2g-fcmc-qvqq|apps/mobile resolves image-size 1.2.1 through metro 0.83.3; no 1.x fix exists, metro through 0.87.1 still requires ^1.0.2, and image-size 2.x drops the callable default export metro calls in Assets.js. DoS-only and build-time, reachable only from an image already committed to this repo|2026-12-23
 pnpm|GHSA-w3rx-r6r6-pgpr|apps/mobile resolves image-size 1.2.1 through metro 0.83.3; no 1.x fix exists, metro through 0.87.1 still requires ^1.0.2, and image-size 2.x drops the callable default export metro calls in Assets.js. DoS-only and build-time, reachable only from an image already committed to this repo|2026-12-23
+
+# ── 2026-10-01: a third apps/mobile entry, for an advisory with no fix ─────
+#
+# The two image-size entries above are the same shape and the same
+# reasoning: a build-time dependency of the React Native app, excluded from
+# the workspace, with no upstream fix. This is the third.
+#
+# GHSA-86w9-cpqp-85rv, node-forge RSA PKCS#1 v1.5 signature verification
+# accepts extra nested DigestAlgorithm elements. High severity, published
+# while this batch was in flight: the same branch passed `security-audit` at
+# 23:49 and failed at 00:01 with no dependency change.
+#
+# Three facts, each checked rather than asserted:
+#
+#   1. **There is no patched version.** The advisory's
+#      `first_patched_version` is null, so this cannot be resolved by a
+#      bump. That is why it is suppressed rather than fixed.
+#
+#   2. **It is in no AiSOC service image.** `node-forge@1.4.0` is
+#      transitive via `@expo/cli` and `@expo/code-signing-certificates`
+#      inside `apps/mobile`, which `pnpm-workspace.yaml` excludes with
+#      `"!apps/mobile"` and which appears in no Dockerfile. The root
+#      lockfile does not contain it at all.
+#
+#   3. **`apps/mobile` releases through an app store**, not this
+#      repository, and the Expo CLI is build-time tooling for that release.
+#
+# Deliberately NOT scoped out of the audit instead: `apps/mobile` is real
+# released code and `pnpm_install_roots` scans every lockfile on purpose, so
+# excluding it would hide every future advisory there.
+pnpm|GHSA-86w9-cpqp-85rv|No patched version exists upstream. Transitive via @expo/cli in apps/mobile, which pnpm-workspace.yaml excludes and no Dockerfile builds; absent from the root lockfile and from every service image.|2026-12-29
