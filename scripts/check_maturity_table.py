@@ -117,6 +117,20 @@ class Evidence:
 #: rows the definition was derived from. The rest are added as each
 #: capability earns promotion, never before.
 EVIDENCE: dict[str, Evidence] = {
+    "UEBA": Evidence(
+        tests=("tests/isolation/test_ueba_live.py",),
+        workflow="ueba-live.yml",
+        job="ueba-live",
+        negative_control=".github/workflows/ueba-live.yml",
+        negative_marker="The gate fails when the schema loses a column the model declares",
+        rationale=(
+            "The schema comes from the migrations the service ships rather than from "
+            "`Base.metadata.create_all`, because the defect was a column present in the "
+            "model and absent from the migration — building the schema from the model "
+            "under test would paper over it. The negative control drops `peer_group_id`, "
+            "the column migration 0001 forgot, and requires the suite to go red."
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",

@@ -1,0 +1,121 @@
+# UEBA scoring and persistence, against a real Postgres, on every pull request.
+#
+# Why this exists
+# ---------------
+# UEBA's 88 unit tests never open a connection. They are good tests of the
+# arithmetic and structurally incapable of catching the defect that shipped:
+# `EntityBaseline` declared `peer_group_id`, migration 0001 never created the
+# column, and `score_event` raised on the first scoreable event. UEBA could
+# not write an anomaly on any deployment, and every unit test passed
+# throughout — the ORM model and the tests agreed with each other and neither
+# consulted the schema.
+#
+# A live migration round-trip does exist in `integration.yml`, but it is
+# guarded by `if: needs.changes.outputs.migrations == 'true'` and its path set
+# lists only `services/ueba/alembic/`. A change to `scoring.py` or
+# `kafka_consumer.py` never triggers it. `docs/audit/MATURITY_DEFINITION.md`
+# requires a Stable capability to be graded unconditionally, so this job
+# carries no `paths:` filter at all.
+name: UEBA (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# No `paths:` above, deliberately. See the header.
+
+concurrency:
+  group: ueba-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  ueba-live:
+    name: UEBA scores, persists and isolates against a real Postgres
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ueba
+          POSTGRES_PASSWORD: ueba_ci_only
+          POSTGRES_DB: ueba
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ueba"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      UEBA_DSN: postgresql+asyncpg://ueba:ueba_ci_only@localhost:5432/ueba
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install the UEBA service
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet \
+            "sqlalchemy[asyncio]" asyncpg alembic structlog \
+            "pydantic>=2,<3" pydantic-settings \
+            pytest pytest-asyncio
+
+      # The schema comes from the service's own migrations, never from
+      # `Base.metadata.create_all`. That is the whole point: the defect was
+      # a column in the model and absent from the migration, and building
+      # the schema from the model under test would paper straight over it.
+      - name: Apply the migrations the service ships
+        working-directory: services/ueba
+        env:
+          DATABASE_URL: ${{ env.UEBA_DSN }}
+          UEBA_DATABASE_URL: ${{ env.UEBA_DSN }}
+        run: python -m alembic upgrade head
+
+      - name: UEBA scores, persists and isolates
+        working-directory: services/ueba
+        env:
+          ISOLATION_UEBA_DSN: ${{ env.UEBA_DSN }}
+        run: python -m pytest ../../tests/isolation/test_ueba_live.py -v --tb=short
+
+      # The negative control, and the reason this job is evidence rather
+      # than decoration.
+      #
+      # It drops `peer_group_id` — the exact column migration 0001 forgot —
+      # and requires the suite above to go red. Measured locally: four of
+      # the five tests fail, because every query touching the baseline
+      # table raises once the column is gone.
+      #
+      # If the suite still passes, it is not reading the schema it claims
+      # to read, and this job fails rather than reporting a green that
+      # means nothing.
+      - name: The gate fails when the schema loses a column the model declares
+        working-directory: services/ueba
+        env:
+          DATABASE_URL: ${{ env.UEBA_DSN }}
+          UEBA_DATABASE_URL: ${{ env.UEBA_DSN }}
+          ISOLATION_UEBA_DSN: ${{ env.UEBA_DSN }}
+          PGPASSWORD: ueba_ci_only
+        run: |
+          psql -h localhost -U ueba -d ueba -c \
+            "ALTER TABLE ueba_entity_baselines DROP COLUMN IF EXISTS peer_group_id;"
+          if python -m pytest ../../tests/isolation/test_ueba_live.py -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with peer_group_id dropped, so it is not reading the real schema."
+            exit 1
+          fi
+          echo "OK: dropping the column makes the suite fail, as it must."
+          # Restored through the migration rather than by re-adding the
+          # column by hand, so the repair path is exercised too.
+          python -m alembic downgrade 0003
+          python -m alembic upgrade head
+          python -m pytest ../../tests/isolation/test_ueba_live.py -q
