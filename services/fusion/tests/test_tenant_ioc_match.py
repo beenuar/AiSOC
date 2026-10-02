@@ -279,14 +279,17 @@ class TestTheEnricherUsesIt:
             # enrichment service is not running.
             base_url="http://127.0.0.1:1",
             timeout_seconds=0.05,
-            ioc_matcher=_Matcher(),
+            # Duck-typed stand-ins. The enricher only calls `available`,
+            # `match` and `to_enrichments`, and a real `TenantIocMatcher`
+            # would need a live pool to construct.
+            ioc_matcher=_Matcher(),  # type: ignore[arg-type]
         )
 
         class _Alert:
             tenant_id = "00000000-0000-0000-0000-000000000001"
             src_ip = "203.0.113.9"
 
-        result = await enricher.enrich(_Alert())
+        result = await enricher.enrich(_Alert())  # type: ignore[arg-type]
         assert result.get("ti_hits"), (
             "the enrichment service was unreachable and the local match was discarded, which is the CORE behaviour this item exists to fix"
         )

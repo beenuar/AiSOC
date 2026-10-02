@@ -383,7 +383,7 @@ async def _sample_for_qa(state: InvestigationState, *, verdict: str, confidence:
     if not tenant_id or not alert_id:
         return
     try:
-        sampler = ClosureQaSampler(await closure_policy._pool())
+        sampler = ClosureQaSampler(await closure_policy.shared_pool())
         decision = await sampler.record(
             tenant_id=tenant_id,
             alert_id=alert_id,

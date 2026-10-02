@@ -7,6 +7,6 @@ with no caller look reachable to ``scripts/check_module_reachability.py``.
 Placing this here keeps that gate's verdict on ``guardrails`` honest.
 """
 
-from .policy import ClosureDecision, decide, kill_switch_engaged, reset_cache
+from .policy import ClosureDecision, decide, kill_switch_engaged, reset_cache, shared_pool
 
-__all__ = ["ClosureDecision", "decide", "kill_switch_engaged", "reset_cache"]
+__all__ = ["ClosureDecision", "decide", "kill_switch_engaged", "reset_cache", "shared_pool"]

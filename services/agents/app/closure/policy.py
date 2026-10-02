@@ -75,6 +75,16 @@ async def _pool() -> Any | None:
         return None
 
 
+async def shared_pool() -> Any | None:
+    """The pool this package reads, for callers that need their own query.
+
+    Exported rather than left as `_pool`, so a caller does not reach
+    through the package into a private name the type checker refuses and
+    a refactor can silently move.
+    """
+    return await _pool()
+
+
 async def decide(
     *,
     tenant_id: str | None,
