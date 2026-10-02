@@ -223,3 +223,65 @@ class TestTheWiring:
         verdict_at = source.index("verdict = state.verdict")
         assert trigger_at < verdict_at
         assert source.index("tokens = tracker.total_tokens") < trigger_at
+
+
+class TestTheTriggerEventMatchesTheCorpus:
+    """The defect live QA found, and the suite could not.
+
+    `run_for_alert` asked for `alert.created`. Every alert-triggered
+    playbook in the corpus declares `on: alert`, so **nothing ever
+    matched**: the feature was wired, enabled, and dead.
+
+    Every test above passed, because they drive a fake store that returns
+    a playbook whatever event name it is handed. A fake that ignores the
+    argument cannot fail on it — the same shape that let a query select a
+    column `detection_rules` does not have.
+
+    This reads the real store rather than a second hardcoded list, because
+    a list maintained beside the constant drifts with it.
+    """
+
+    def test_the_constant_matches_what_shipped_playbooks_declare(self) -> None:
+        from app.playbook.alert_trigger import TRIGGER_EVENT
+        from app.playbook.store import PlaybookStore
+
+        store = PlaybookStore.default()
+        store.seed_defaults()
+        declared = {str(pb.trigger.get("on")) for pb in store.list()}
+
+        assert TRIGGER_EVENT in declared, (
+            f"run_for_alert asks for {TRIGGER_EVENT!r} and no shipped playbook declares it "
+            f"(they declare {sorted(declared)}), so no playbook can ever start from an alert"
+        )
+
+    def test_the_real_store_matches_a_real_playbook_on_a_real_alert(self) -> None:
+        """End to end through the actual store, not a fake.
+
+        The severity and tag come **from the corpus** rather than being
+        written here. A hardcoded fixture tag passes while describing an
+        alert no shipped playbook wants (this test first used
+        `identity`, which none of the 64 packs declare) and would keep
+        passing if the trigger vocabulary moved underneath it.
+        """
+        from app.playbook.alert_trigger import TRIGGER_EVENT, alert_context
+        from app.playbook.store import PlaybookStore
+
+        store = PlaybookStore.default()
+        store.seed_defaults()
+
+        wanted = next(pb for pb in store.list() if pb.enabled and pb.trigger.get("tags") and pb.trigger.get("severity"))
+        context = alert_context(
+            _State(
+                raw_alert={
+                    "severity": wanted.trigger["severity"][0],
+                    "tags": [wanted.trigger["tags"][0]],
+                }
+            )
+        )
+
+        matches = store.find_matching(TRIGGER_EVENT, context)
+        assert matches, (
+            f"the real store matched no playbook on an alert built from {wanted.id}'s own "
+            "trigger, so the alert-trigger path is wired to nothing"
+        )
+        assert wanted.id in {pb.id for pb in matches}

@@ -44,6 +44,17 @@ ENABLED_ENV = "AISOC_ALERT_PLAYBOOKS_ENABLED"
 LIVE_PLAYBOOKS_ENV = "AISOC_ALERT_PLAYBOOKS_LIVE"
 
 
+#: The trigger event name the shipped playbooks actually declare.
+#:
+#: All 11 alert-triggered playbooks in the corpus use `on: alert`. This
+#: was `alert.created` for the length of one live QA run, which matched
+#: **nothing** — the feature was wired, enabled, and dead, and the unit
+#: tests passed because the fake store returned a playbook whatever event
+#: it was handed. A test now asserts this constant against what the
+#: corpus declares, so the two cannot drift apart again.
+TRIGGER_EVENT = "alert"
+
+
 def deployment_enabled() -> bool:
     return os.getenv(ENABLED_ENV, "").strip().lower() in ("1", "true", "yes")
 
@@ -135,7 +146,7 @@ async def run_for_alert(state: Any) -> TriggerOutcome:
         from app.playbook.store import PlaybookStore
 
         store = PlaybookStore.default()
-        matches: list[Any] = list(store.find_matching("alert.created", context))
+        matches: list[Any] = list(store.find_matching(TRIGGER_EVENT, context))
     except Exception as exc:  # noqa: BLE001
         logger.warning("alert_playbooks.match_failed", error=str(exc))
         outcome.skipped_reason = f"could not match playbooks: {exc}"
