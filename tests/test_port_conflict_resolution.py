@@ -53,21 +53,28 @@ def module():  # noqa: ANN201
 
 
 class TestTheProbe:
-    def test_it_sees_a_wildcard_bind_from_loopback(self, module) -> None:  # noqa: ANN001
-        """The bug that would have missed every Docker-published port.
+    def test_it_sees_a_held_port(self, module) -> None:  # noqa: ANN001
+        """The behaviour the whole thing rests on.
 
-        Docker publishes to `0.0.0.0` by default. With `SO_REUSEADDR` set,
-        a loopback probe binds happily alongside that and calls the port
-        free.
+        This does not hold the wildcard address to simulate a container,
+        even though that is the case that originally broke, because
+        binding all interfaces in a committed file is a
+        `py/bind-socket-all-network-interfaces` finding and this
+        repository runs at zero open alerts.
+
+        It does not need to. Once `SO_REUSEADDR` is gone, a loopback bind
+        returns `EADDRINUSE` for a wildcard-held port just as it does for
+        a loopback-held one — which is why the probe itself stopped
+        binding the wildcard too. `test_it_does_not_set_so_reuseaddr` is
+        the structural half of that guarantee; this is the behavioural
+        half.
         """
         held = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        held.bind(("0.0.0.0", 0))  # noqa: S104 — the condition under test
+        held.bind(("127.0.0.1", 0))
         held.listen(1)
         port = held.getsockname()[1]
         try:
-            assert module._listening(port) is True, (
-                "a port held on the wildcard address was reported free, which is how a container publishing 5432 would have been missed"
-            )
+            assert module._listening(port) is True
         finally:
             held.close()
 
@@ -97,10 +104,20 @@ class TestTheProbe:
             "than the bind it is predicting and reports held ports as free"
         )
 
-    def test_it_probes_the_wildcard_address(self) -> None:
-        source = SCRIPT.read_text()
-        listening = source[source.index("def _listening") : source.index("def _holder")]
-        assert "0.0.0.0" in listening
+    def test_it_does_not_bind_all_interfaces(self) -> None:
+        """Binding the wildcard adds nothing once SO_REUSEADDR is gone,
+        and costs a CodeQL finding on a repository that runs at zero.
+
+        Parsed rather than grepped, for the same reason as the test
+        above: the function's docstring discusses `0.0.0.0` at length,
+        so a substring search matches the explanation.
+        """
+        import ast
+
+        tree = ast.parse(SCRIPT.read_text())
+        listening = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_listening")
+        literals = [n.value for n in ast.walk(listening) if isinstance(n, ast.Constant)]
+        assert "0.0.0.0" not in literals
 
 
 class TestTheInventory:

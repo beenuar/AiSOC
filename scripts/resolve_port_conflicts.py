@@ -102,12 +102,23 @@ def _listening(port: int) -> bool:
     correctly fails. A probe that is easier to satisfy than the thing it
     predicts is worse than no probe.
 
-    **The wildcard address first.** Docker publishes to `0.0.0.0` by
-    default, so that is the bind that actually has to succeed. Loopback is
-    checked too, for a port held only there.
+    **Loopback is enough, once `SO_REUSEADDR` is gone.** Docker publishes
+    to `0.0.0.0`, and the obvious reading is that the probe must bind the
+    wildcard too. It does not: a plain `bind("127.0.0.1", p)` returns
+    `EADDRINUSE` when anything holds `0.0.0.0:p`, on both macOS and Linux.
+    Measured on this machine, with and without the socket option:
+
+        reuse=True   127.0.0.1  -> FREE      <- the original bug
+        reuse=True   0.0.0.0    -> held
+        reuse=False  127.0.0.1  -> held
+        reuse=False  0.0.0.0    -> held
+
+    So binding the wildcard adds nothing, and binding it in a shipped
+    script is a `py/bind-socket-all-network-interfaces` finding for no
+    gain. Dropping it is the fix; suppressing the alert would have been
+    the workaround.
     """
     for family, addr in (
-        (socket.AF_INET, "0.0.0.0"),  # noqa: S104 — probing, never serving
         (socket.AF_INET, "127.0.0.1"),
         (socket.AF_INET6, "::1"),
     ):
@@ -137,14 +148,17 @@ def _holder(port: int) -> str:
     except Exception:  # noqa: BLE001
         pass
     try:
-        out = subprocess.run(
+        # A distinct name: `out` above holds docker's stdout as a string,
+        # and reusing it for a list of lines is the kind of reuse that
+        # type-checks as a contradiction and reads as a typo.
+        lsof_lines = subprocess.run(
             ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN"],
             capture_output=True,
             text=True,
             timeout=10,
         ).stdout.splitlines()
-        if len(out) > 1:
-            return out[1].split()[0]
+        if len(lsof_lines) > 1:
+            return lsof_lines[1].split()[0]
     except Exception:  # noqa: BLE001
         pass
     return "another process"
