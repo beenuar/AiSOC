@@ -269,26 +269,28 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Alert closure obeys per-tenant, per-class policy | `apps/docs/docs/operations/shadow-mode.md` | `ci.yml :: Python — Tests` (agents, `test_closure_policy.py` drives the real `run_auto_triage` path) | core | GATED | Closure used one process-wide threshold for every tenant and class. The earned `auto_close` grant had **no reader at all**: its only consumer selected `auto_execute` on action verbs, so earning it in shadow mode changed nothing, which parity 1.1 had to retract. Additive: a tenant with no policy row behaves exactly as before. Every failure to read a policy is a **refusal** rather than a fallback to the permissive default, because a database blip must not start closing alerts that policy would have held |
 | Autonomous closure and dispatch can be stopped without a restart | `apps/docs/docs/operations/shadow-mode.md` | `ci.yml :: Python — Tests` (`test_kill_switch.py`, API and agents) | core | GATED | Global and per tenant, checked **first** and separately from the closure policy, because it is what somebody reaches for at 3am and must not depend on per-class rows being correct. The reason is mandatory: a switch with no reason is one nobody can safely disengage. An unreadable switch refuses rather than permits |
 | Only a human-confirmed prior can suppress a repeat alert | `apps/docs/docs/concepts/outcome-memory.md` | `ci.yml :: Python — Tests` (`test_outcome_memory.py` and `test_human_priors.py`) | core | GATED | v15.0.0 shipped the refusal half. This adds the half that had no implementation: a human-authored prior is written when an analyst dispositions an alert. Until now `record_outcome` was called from three agents-side workers and nowhere an analyst could reach, so **every prior in the system was AI-authored** and the refusal rule meant repeat suppression could never fire on anything. The prior is keyed with the **vendored** fingerprint, byte-identical by `sync_vendored_fingerprint.py --check`, because a reimplementation free to drift would write priors where nothing looks, which is exactly how `repeat_alerts_suppressed` once could only report zero |
+| Every LLM call resolves through a gateway alias, so CORE and air-gap work | `apps/docs/docs/operations/llm-gateway.md` | `ci.yml :: Python — Tests` (`check_model_alias_routing.py` + `test_litellm_config.py`) | core | GATED | Two call sites named a provider model directly. The detection-tuning loop passed `gpt-4o-mini`, so on CORE it reached LiteLLM, which knows the `aisoc-*` aliases and not that id, and every call answered `Invalid model name` and fell through to the deterministic path. The NL-query route checked the air-gap guard against a hardcoded `api.openai.com` rather than the URL the request would use, so the guard was refusing a call that never leaves the deployment. **Neither broke a test**, because both degrade to a working deterministic answer, which is why this needed a gate rather than a fix: a model path that silently never runs looks exactly like one that runs and is cautious. The gate was proven by re-injecting the pre-fix defect. Four registries must agree on the role set and a parity test holds them together |
+| A budget breach stops the investigation loop rather than being reported after it | `apps/docs/docs/concepts/automation-maturity.md` | `ci.yml :: Python — Tests` (agents, `test_in_loop_budget.py` drives `_run`) | core | GATED | `InvestigationBudget` declared `max_tokens` and `max_tool_calls` and **only `max_seconds` had a reader**; the runner's docstring said tokens were enforced upstream by the `CostGovernor`, which charges a rolling window across runs rather than bounding this one, so a single investigation could spend any number of tokens inside its two minutes. Checked now after each streamed step. An over-budget run ends in a labelled `budget_exhausted` state and escalates: a truncated run has not reached a conclusion, and returning the graph's last confident verdict is how a stopped investigation becomes a confident wrong disposition. The test asserts the graph did **not** stream all its nodes, so a check that only reported the overspend would fail it |
 
 ## Summary
 
-- GATED: 261
+- GATED: 263
 
 ## Summary
 
-- GATED: 261
+- GATED: 263
 
 ## Summary
 
-- GATED: 261
+- GATED: 263
 
 ## Summary
 
-- GATED: 261
+- GATED: 263
 
 ## Summary
 
-- GATED: 261
+- GATED: 263
 - PARTIAL: 0
 - NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
 

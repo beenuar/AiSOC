@@ -391,3 +391,42 @@ means no auto-close, never a fallback to the permissive default. And an
 unreadable switch reports as an error rather than as "kill switch engaged",
 because a diagnostic that names the wrong subsystem sends an operator to
 debug something that is not broken.
+
+## Phase 2.5 and 2.6 — one model path, and budgets that bite (2026-10-01)
+
+**2.5.** Two call sites named a provider model directly and both degraded
+silently. `detection_loop.py` passed `gpt-4o-mini`, so on CORE it reached
+LiteLLM, which knows the `aisoc-*` aliases and not that id: every call
+answered `Invalid model name` and fell through to the deterministic path.
+`nl_query.py` checked the air-gap guard against a hardcoded
+`api.openai.com` rather than the URL the request would use, so the guard
+was refusing a call that never leaves the deployment while saying nothing
+about one that would.
+
+Neither broke a test, because both degrade to a working deterministic
+answer. That is why this needed a **gate** rather than two fixes:
+`check_model_alias_routing.py`, proven by re-injecting the pre-fix defect
+and watching it name the file and line. A new `aisoc-detection` role had to
+be registered in **four** places that a parity test holds together: the
+gateway config, the API resolver's `ROLES`, the agents `_DEFAULT_PINS`, and
+the docs table.
+
+**2.6.** `InvestigationBudget` declared `max_tokens` and `max_tool_calls`
+and only `max_seconds` had a reader. The runner's own docstring said tokens
+were "enforced upstream by the `CostGovernor`", which charges a rolling
+window **across** runs rather than bounding this one, so a single
+investigation could spend any number of tokens inside its two minutes.
+
+Both are now checked after each streamed step, against the live
+`CostTracker` rather than an estimate. An over-budget run ends in a
+labelled `budget_exhausted` state and escalates, because a truncated run
+has not reached a conclusion and returning the graph's last confident
+verdict is how a stopped investigation becomes a confident wrong
+disposition. The test asserts the graph did **not** stream all its nodes,
+so a check that merely reported the overspend would fail it.
+
+Two deliberate choices: an unmeasured run (no tracker bound) is allowed to
+continue, because refusing on the absence of telemetry would stop every run
+in a deployment that has not configured it; and a budget of zero reads as
+"no cap" rather than as zero, which would stop every run before its first
+call and look like a hang.

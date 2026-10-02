@@ -57,6 +57,12 @@ _DEFAULT_PINS: dict[str, ModelPin] = {
     # Gap-closure Phase 8.3. The hunting agent turns a hypothesis into a
     # structured plan in a closed vocabulary; it never writes query text.
     "hunt": ModelPin("hunt", "aisoc-hunt", [DETERMINISTIC]),
+    # Parity 2.5. The detection-tuning loop rewrites a Sigma rule from an
+    # analyst note. It hardcoded `gpt-4o-mini`, so on CORE it reached the
+    # gateway, which knows the aliases and not that id, and every call
+    # answered `Invalid model name` and fell through to the deterministic
+    # path without anything saying so.
+    "detection": ModelPin("detection", "aisoc-detection", [DETERMINISTIC]),
 }
 
 

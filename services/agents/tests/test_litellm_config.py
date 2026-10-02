@@ -35,6 +35,7 @@ EXPECTED_ALIASES = {
     "aisoc-report",
     "aisoc-nl",
     "aisoc-hunt",
+    "aisoc-detection",
 }
 
 

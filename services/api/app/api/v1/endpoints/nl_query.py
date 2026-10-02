@@ -66,6 +66,7 @@ from app.services.event_warehouse import (
 )
 from app.services.event_warehouse.elasticsearch import elastic_auth_header
 from app.services.lake_hunt import HuntCompileError, compile_hunt
+from app.services.model_aliases import chat_completions_url, resolve_model_alias
 
 if TYPE_CHECKING:
     # Static-only re-export so type checkers can see the dataclass fields and
@@ -287,7 +288,19 @@ async def _translate(
     if not api_key:
         return deterministic, "deterministic"
 
-    completions_url = "https://api.openai.com/v1/chat/completions"
+    # The URL this call will actually use, not a hardcoded hosted one.
+    # `enhance_with_llm` resolves through `chat_completions_url()`, so
+    # checking `api.openai.com` asked the air-gap guard about a host the
+    # request may never touch: on CORE it goes to LiteLLM on the internal
+    # network, and the guard was refusing a call that never leaves the
+    # deployment while saying nothing about the one that would.
+    try:
+        completions_url = chat_completions_url(resolve_model_alias("nl"))
+    except Exception:  # noqa: BLE001
+        # No gateway configured, so there is no LLM path to check. The
+        # deterministic translation is the honest answer, and it is the
+        # same one an unset API key already produces.
+        return deterministic, "deterministic"
     try:
         enforce_airgap_for_url(completions_url)
     except AirgapViolation:

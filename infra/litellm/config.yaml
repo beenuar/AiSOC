@@ -105,6 +105,18 @@ model_list:
       api_base: os.environ/AISOC_LLM_API_BASE
       api_key: os.environ/OPENAI_API_KEY
 
+  # Parity 2.5. The detection-tuning loop rewrites a Sigma rule from an
+  # analyst note and the fields of a misfiring alert. It hardcoded
+  # `gpt-4o-mini`, so on CORE it reached LiteLLM, which knows the `aisoc-*`
+  # aliases and not that id, and every call 400'd with `Invalid model name`
+  # and fell through to the deterministic path. Fast model: the output is
+  # JSON against a fixed schema rather than reasoning.
+  - model_name: aisoc-detection
+    litellm_params:
+      model: os.environ/AISOC_LLM_MODEL_FAST
+      api_base: os.environ/AISOC_LLM_API_BASE
+      api_key: os.environ/OPENAI_API_KEY
+
   # ── Other backends ────────────────────────────────────────────────────────────
   # The two variables above take any LiteLLM model string, so most swaps need no
   # edit here at all:
