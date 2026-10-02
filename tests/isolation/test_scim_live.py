@@ -52,7 +52,19 @@ import pytest_asyncio
 # dies with "Event loop is closed" — a message about the harness that
 # says nothing about the code. Each test still gets its own tenants, so
 # they remain independent of one another.
-pytestmark = [pytest.mark.asyncio(loop_scope="module")]
+# Skip as a *module*, not only in the fixture.
+#
+# The offline isolation job collects this directory with no stores
+# running. With the skip only in the fixture, any test that does not take
+# it ran anyway and failed there — which is a failure about the harness,
+# reported against a capability.
+pytestmark = [
+    pytest.mark.asyncio(loop_scope="module"),
+    pytest.mark.skipif(
+        not os.environ.get("ISOLATION_SCIM_DSN", "").strip(),
+        reason="ISOLATION_SCIM_DSN is not set; this suite needs live infrastructure",
+    ),
+]
 
 SCIM_CONTENT_TYPE = "application/scim+json"
 

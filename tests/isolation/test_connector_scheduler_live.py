@@ -42,7 +42,19 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import pytest
 import pytest_asyncio
 
-pytestmark = [pytest.mark.asyncio(loop_scope="module")]
+# Skip as a *module*, not only in the fixture.
+#
+# The offline isolation job collects this directory with no stores
+# running. With the skip only in the fixture, any test that does not take
+# it ran anyway and failed there — which is a failure about the harness,
+# reported against a capability.
+pytestmark = [
+    pytest.mark.asyncio(loop_scope="module"),
+    pytest.mark.skipif(
+        not os.environ.get("ISOLATION_CONNECTOR_DSN", "").strip(),
+        reason="ISOLATION_CONNECTOR_DSN is not set; this suite needs live infrastructure",
+    ),
+]
 
 #: What the stub vendor returns, and what the stub ingest receives.
 VENDOR_EVENTS = [

@@ -143,19 +143,27 @@ a reachability finding for 1.4 rather than a claim edit.
 
 ## Phase 1: Make every claim true on the default path
 
-- [ ] **1.1** Retract or narrow the overclaims
-- [ ] **1.2** Clear the documentation drift
-- [ ] **1.3** Repair the broken console paths
-- [ ] **1.4** Make the gates path-aware
+> **How these boxes are set.** A box is ticked only where this file's own
+> per-phase section below records what changed, or where a later change
+> closed it and said so in the same commit. The ones still unticked are
+> genuinely open — several are partial, and a partial item reads better
+> unticked than ticked with a footnote. Nothing is ticked on the strength
+> of a plan entry alone, which is the failure this document exists to
+> avoid.
+
+- [x] **1.1** Retract or narrow the overclaims
+- [x] **1.2** Clear the documentation drift
+- [x] **1.3** Repair the broken console paths
+- [x] **1.4** Make the gates path-aware
 
 ## Phase 2: Govern and protect alert closure
 
-- [ ] **2.1** Per-tenant, per-class closure policy
-- [ ] **2.2** Kill switch
-- [ ] **2.3** Learn only from humans — the urgent half ships as security S10
-- [ ] **2.4** Pseudonymize before hosted egress
-- [ ] **2.5** One model path for every LLM call
-- [ ] **2.6** Enforced budgets
+- [x] **2.1** Per-tenant, per-class closure policy
+- [x] **2.2** Kill switch
+- [x] **2.3** Learn only from humans — the urgent half ships as security S10
+- [x] **2.4** Pseudonymize before hosted egress
+- [x] **2.5** One model path for every LLM call
+- [x] **2.6** Enforced budgets
 
 ## Phase 3: Prove verdict quality on the default install
 
@@ -179,17 +187,17 @@ a reachability finding for 1.4 rather than a claim edit.
 
 ## Phase 5: Close the response and detection loop
 
-- [ ] **5.1** Alert-triggered playbooks
-- [ ] **5.2** Approval as a durable pause
-- [ ] **5.3** Steps that do something
-- [ ] **5.4** Tenant tuning inside fusion
+- [x] **5.1** Alert-triggered playbooks
+- [x] **5.2** Approval as a durable pause
+- [x] **5.3** Steps that do something
+- [x] **5.4** Tenant tuning inside fusion
 - [ ] **5.5** Rules that can fire
 - [ ] **5.6** Case depth
 - [ ] **5.7** Delivery
 
 ## Phase 6: Agent parity, then platform depth
 
-- [ ] **6.1** Hunting
+- [x] **6.1** Hunting
 - [ ] **6.2** Detection engineering
 - [ ] **6.3** Custom agents
 - [ ] **6.4** Phishing operations
@@ -590,3 +598,101 @@ an authentication hole, an unstarted stack reported as eight broken
 services, and a full disk reported as a Zookeeper fault. In each case the
 information needed was already on the machine and the message did not
 carry it.
+
+## Maturity — every capability Stable, earned rather than relabelled (2026-10-02)
+
+The Project maturity table in `README.md` published a status for fifteen
+capabilities and **nothing checked any of them**. No definition of
+Stable, Beta or Alpha existed anywhere, no gate parsed the table, and the
+labels appeared in no other file. Promoting a capability was a one-line
+edit — the exact shape Phase 1.1 retracted twelve of.
+
+It was also already wrong in three places, all found by the new gate:
+playbooks claimed "live Postgres suspend/resume" against a suite driving
+`_FakeRows`, tuning claimed a "live overlay read" that regex-parses a
+migration, and connectors named the `full` profile when it ships in CORE.
+
+`docs/audit/MATURITY_DEFINITION.md` now defines the labels, derived from
+the four rows that already held Stable rather than invented, so no
+existing row had to be demoted to fit a standard written afterwards.
+Stable requires four properties: unconditionally graded, the real
+production path, a proven negative control, and real infrastructure.
+`scripts/check_maturity_table.py` enforces it on every pull request and
+runs in both directions, so an entry for a demoted row fails too.
+
+| Row | What it took |
+|---|---|
+| Entity graph | Live suite drives `graph_service.py` against real Neo4j. Also fixed `get_blast_radius`'s plain-Cypher fallback, which was unreachable on the missing-APOC condition it existed for |
+| UEBA | Schema from the service's own migrations, never `create_all` — the defect was a column in the model and absent from the migration |
+| Playbook pause | Every property the feature is named for belongs to the database; the offline fake re-implements the partial unique index in Python |
+| Tenant tuning | `_fetch` fails soft, so a permanently broken overlay is indistinguishable from a tenant with no tuning |
+| SCIM | Real `create_application()` and real Postgres, replacing SQLite with `@compiles` shims for the four types the two disagree about most |
+| Scheduled connectors | A real `AsyncIOScheduler`: `next_run_time=None` registers as PAUSED, which no mock can see |
+| Governed actions | A socket, not a mock — simulation mode never constructs the client, which is how two executors shipped calling theirs with argument names that do not exist |
+| Event lake | Executes the shipped `001_init.sql` verbatim rather than a hand-written subset |
+| Retro-hunts | Graded with `RETRO_HUNT_ENABLED` **on**; the consumer had no coverage and its path filter omitted its own module |
+| 68-hunt library | `run_hunt` wired to `POST /hunt`; the scheduler reads the tenant's lake instead of a fixture corpus, and refuses to fall back to it |
+| AI triage + ledger | `live-agent-smoke` dispatches the real LangGraph per commit and fails on `llm_calls_placed: 0`; the ledger's `_FakeConn` test replaced with live Postgres |
+
+Every negative control was proven by injecting the defect and watching
+the suite go red, not asserted.
+
+**Two findings worth more than the promotions.** The agents image shipped
+**zero of the 62 pack playbooks** — the Dockerfile's build context cannot
+reach outside itself, and the loader's `exists()` guard made an absent
+pack indistinguishable from an empty one. And `autonomy_evidence_rules.py`
+was listed as unwired when two gates read it without importing it; the
+import graph understates what depends on a module.
+
+**The limit that stays.** No hosted provider has ever been exercised. AI
+triage is Stable on the bundled local model; hosted-provider accuracy is
+a separate claim and remains unmade.
+
+## Maturity — every capability Stable, earned rather than relabelled (2026-10-02)
+
+The Project maturity table in `README.md` published a status for fifteen
+capabilities and **nothing checked any of them**. No definition of
+Stable, Beta or Alpha existed anywhere, no gate parsed the table, and the
+labels appeared in no other file. Promoting a capability was a one-line
+edit — the exact shape Phase 1.1 retracted twelve of.
+
+It was also already wrong in three places, all found by the new gate:
+playbooks claimed "live Postgres suspend/resume" against a suite driving
+`_FakeRows`, tuning claimed a "live overlay read" that regex-parses a
+migration, and connectors named the `full` profile when it ships in CORE.
+
+`docs/audit/MATURITY_DEFINITION.md` now defines the labels, derived from
+the four rows that already held Stable rather than invented, so no
+existing row had to be demoted to fit a standard written afterwards.
+Stable requires four properties: unconditionally graded, the real
+production path, a proven negative control, and real infrastructure.
+`scripts/check_maturity_table.py` enforces it on every pull request and
+runs in both directions, so an entry for a demoted row fails too.
+
+| Row | What it took |
+|---|---|
+| Entity graph | Live suite drives `graph_service.py` against real Neo4j. Also fixed `get_blast_radius`'s plain-Cypher fallback, which was unreachable on the missing-APOC condition it existed for |
+| UEBA | Schema from the service's own migrations, never `create_all` — the defect was a column in the model and absent from the migration |
+| Playbook pause | Every property the feature is named for belongs to the database; the offline fake re-implements the partial unique index in Python |
+| Tenant tuning | `_fetch` fails soft, so a permanently broken overlay is indistinguishable from a tenant with no tuning |
+| SCIM | Real `create_application()` and real Postgres, replacing SQLite with `@compiles` shims for the four types the two disagree about most |
+| Scheduled connectors | A real `AsyncIOScheduler`: `next_run_time=None` registers as PAUSED, which no mock can see |
+| Governed actions | A socket, not a mock — simulation mode never constructs the client, which is how two executors shipped calling theirs with argument names that do not exist |
+| Event lake | Executes the shipped `001_init.sql` verbatim rather than a hand-written subset |
+| Retro-hunts | Graded with `RETRO_HUNT_ENABLED` **on**; the consumer had no coverage and its path filter omitted its own module |
+| 68-hunt library | `run_hunt` wired to `POST /hunt`; the scheduler reads the tenant's lake instead of a fixture corpus, and refuses to fall back to it |
+| AI triage + ledger | `live-agent-smoke` dispatches the real LangGraph per commit and fails on `llm_calls_placed: 0`; the ledger's `_FakeConn` test replaced with live Postgres |
+
+Every negative control was proven by injecting the defect and watching
+the suite go red, not asserted.
+
+**Two findings worth more than the promotions.** The agents image shipped
+**zero of the 62 pack playbooks** — the Dockerfile's build context cannot
+reach outside itself, and the loader's `exists()` guard made an absent
+pack indistinguishable from an empty one. And `autonomy_evidence_rules.py`
+was listed as unwired when two gates read it without importing it; the
+import graph understates what depends on a module.
+
+**The limit that stays.** No hosted provider has ever been exercised. AI
+triage is Stable on the bundled local model; hosted-provider accuracy is
+a separate claim and remains unmade.

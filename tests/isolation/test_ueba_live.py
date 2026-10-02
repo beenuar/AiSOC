@@ -37,7 +37,19 @@ import uuid
 import pytest
 import pytest_asyncio
 
-pytestmark = [pytest.mark.asyncio]
+# Skip as a *module*, not only in the fixture.
+#
+# The offline isolation job collects this directory with no stores
+# running. With the skip only in the fixture, any test that does not take
+# it ran anyway and failed there — which is a failure about the harness,
+# reported against a capability.
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not os.environ.get("ISOLATION_UEBA_DSN", "").strip(),
+        reason="ISOLATION_UEBA_DSN is not set; this suite needs live infrastructure",
+    ),
+]
 
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")

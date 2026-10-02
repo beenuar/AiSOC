@@ -39,7 +39,19 @@ import uuid
 import pytest
 import pytest_asyncio
 
-pytestmark = [pytest.mark.asyncio]
+# Skip as a *module*, not only in the fixture.
+#
+# The offline isolation job collects this directory with no stores
+# running. With the skip only in the fixture, any test that does not take
+# it ran anyway and failed there — which is a failure about the harness,
+# reported against a capability.
+pytestmark = [
+    pytest.mark.asyncio,
+    pytest.mark.skipif(
+        not os.environ.get("ISOLATION_TUNING_DSN", "").strip(),
+        reason="ISOLATION_TUNING_DSN is not set; this suite needs live infrastructure",
+    ),
+]
 
 #: One rule, defined here rather than loaded from the 2,603-rule corpus,
 #: so the test states exactly what it expects to fire. The engine under

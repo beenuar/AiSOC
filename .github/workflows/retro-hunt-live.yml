@@ -84,7 +84,8 @@ jobs:
             clickhouse-driver "kafka-python>=2,<3" "sqlglot>=30,<31" \
             structlog "pydantic>=2,<3" pydantic-settings \
             "fastapi>=0.117,<0.142" "sqlalchemy[asyncio]" asyncpg \
-            "PyJWT>=2.8,<3" pytest pytest-asyncio
+            "PyJWT>=2.8,<3" httpx pyyaml prometheus-client \
+            "cryptography>=46,<51" tenacity pytest pytest-asyncio
 
       - name: Wait for the stores
         run: |

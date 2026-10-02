@@ -51,7 +51,7 @@ jobs:
         run: |
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet \
-            clickhouse-driver "sqlglot>=30,<31" structlog \
+            clickhouse-driver "sqlglot>=30,<31" structlog pyyaml httpx \
             "pydantic>=2,<3" pydantic-settings "fastapi>=0.117,<0.142" \
             "sqlalchemy[asyncio]" asyncpg "PyJWT>=2.8,<3" \
             pytest pytest-asyncio

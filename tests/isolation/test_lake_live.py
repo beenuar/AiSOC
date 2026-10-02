@@ -40,8 +40,20 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
+
+# Skip as a *module*, not only in the fixture.
+#
+# The offline isolation job collects this directory with no stores
+# running. With the skip only in the fixture, any test that does not take
+# it ran anyway and failed there — which is a failure about the harness,
+# reported against a capability.
+pytestmark = pytest.mark.skipif(
+    not os.environ.get("ISOLATION_CLICKHOUSE_HOST", "").strip(),
+    reason="ISOLATION_CLICKHOUSE_HOST is not set; this suite needs live infrastructure",
+)
 
 TENANT_A = uuid.UUID("11111111-1111-1111-1111-111111111111")
 TENANT_B = uuid.UUID("22222222-2222-2222-2222-222222222222")
@@ -90,8 +102,8 @@ def lake():
     from app.core.config import settings  # noqa: F401 — import check only
 
     client = _client()
-    root = os.environ.get("ISOLATION_REPO_ROOT", ".")
-    ddl = open(os.path.join(root, DDL), encoding="utf-8").read()  # noqa: SIM115, PTH123
+    root = Path(os.environ.get("ISOLATION_REPO_ROOT", "."))
+    ddl = (root / DDL).read_text(encoding="utf-8")
     for statement in _statements(ddl):
         client.execute(statement)
 

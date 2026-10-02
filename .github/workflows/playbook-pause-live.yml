@@ -73,7 +73,9 @@ jobs:
         run: |
           python -m pip install --quiet --upgrade pip
           python -m pip install --quiet asyncpg structlog pytest pytest-asyncio \
-            "pydantic>=2,<3" pydantic-settings httpx
+            "pydantic>=2,<3" pydantic-settings httpx pyyaml \
+            "langgraph>=0.2,<2" "langchain-core>=0.3,<2" "langchain-openai>=0.2,<2" \
+            "fastapi>=0.117,<0.142" "PyJWT>=2.8,<3" redis tenacity
 
       # `002` first: it defines `current_tenant_id()`, which `081`'s RLS
       # policy calls. Applying `081` alone fails with "function

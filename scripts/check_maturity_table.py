@@ -702,11 +702,14 @@ def _self_test() -> int:
             key = _match_key(stable.capability)
             removed = EVIDENCE.pop(key, None) if key else None
             try:
-                unbacked = _match_key(stable.capability) is None
+                # Its own name: the branch above binds `unbacked` to a
+                # list of rows, and reusing it here for a bool is the
+                # kind of thing the type checker is for.
+                now_unbacked = _match_key(stable.capability) is None
             finally:
                 if key and removed is not None:
                     EVIDENCE[key] = removed
-            cases.append((f"detects {stable.capability[:34]!r} Stable once its evidence is gone", unbacked))
+            cases.append((f"detects {stable.capability[:34]!r} Stable once its evidence is gone", now_unbacked))
 
     # 2. An entry whose workflow is path-filtered.
     ok, _ = workflow_is_unconditional("isolation-live.yml", "live-stores")
