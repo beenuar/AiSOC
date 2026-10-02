@@ -54,7 +54,28 @@ PROFILE_ARG := $(if $(PROFILE),--profile $(PROFILE),)
 # a console URL behind a reverse proxy says nothing about where the API port
 # is, so deriving one from the other would trade a wrong address for a guess.
 CONSOLE_URL = $(shell sed -n 's/^AISOC_CONSOLE_URL=//p' .env 2>/dev/null | tail -n1 | tr -d '\r')
-console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:3000)
+#
+# The port the console was actually published on, which is not always
+# 3000. `scripts/resolve_port_conflicts.py` moves a published port when
+# the host already has it, and writes the mapping into
+# `docker-compose.ports.yml`. A clean-room run found 3000 taken, the
+# console served happily on 15000, and `make up` printed 3000 — a first
+# impression of a product that does not start.
+#
+# Read from the overlay rather than re-probed, because the overlay is
+# what compose acted on; probing again would answer a different question
+# and could disagree.
+# Two things this expression has to avoid, both of which produced a
+# `Makefile: *** unterminated call to function 'shell'` rather than a
+# wrong answer. A sed capture group's `\(` `\)` unbalances the parens
+# `make` is counting, and a literal `#` anywhere in the command starts a
+# `make` comment that swallows the closing paren. So: no capture group,
+# and the pattern starts after the comment marker.
+#
+# The overlay line reads `  # web: 3000 was in use, published on 15000
+# instead`, so the digits are the original and then the replacement.
+CONSOLE_PORT = $(shell grep -m1 'web: 3000 was in use, published on' docker-compose.ports.yml 2>/dev/null | tr -cd '0-9 ' | tr ' ' '\n' | grep -v '^$$' | tail -n1)
+console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:$(if $(strip $(CONSOLE_PORT)),$(strip $(CONSOLE_PORT)),3000))
 
 .PHONY: help install env up up-dev up-full pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
         bootstrap ingest-token api-token test test-unit test-integration test-e2e stats papers \
