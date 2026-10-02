@@ -213,8 +213,20 @@ export function isTokenExpired(token: string, nowSeconds?: number): boolean {
   }
 }
 
-/** Routes that must not trigger the 401 self-heal. */
-const AUTH_EXEMPT_PATHS = ['/api/v1/auth/login', '/api/v1/auth/refresh', '/api/v1/auth/register'];
+/**
+ * Routes that must not trigger the 401 self-heal.
+ *
+ * Signing in is where a 401 means "wrong password", not "your session
+ * died" — redirecting there would replace the form's error message with a
+ * reload of the same form.
+ *
+ * `/auth/register` was listed here for one commit and the console
+ * route-contract gate rejected it: the API serves `login`, `refresh`,
+ * `me` and `me/preferences`, and nothing else under `/auth`. An exemption
+ * for a route that does not exist is dead weight that reads like a
+ * promise.
+ */
+const AUTH_EXEMPT_PATHS = ['/api/v1/auth/login', '/api/v1/auth/refresh'];
 
 /**
  * Clear a dead session and send the user to sign in again.
