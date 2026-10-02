@@ -135,22 +135,6 @@ def effective_confidence(
     return float(confidence) * decay_factor(age_days, half_life), age_days, half_life
 
 
-#: `(ioc_type, value)` pairs are read from these alert fields. Mirrors
-#: `AlertEnricher._IOC_FIELDS` so the two see the same indicators; a
-#: divergence would mean the enrichment service and the local store
-#: disagree about what the alert contains.
-_SELECT = """
-    SELECT ioc_type, value, confidence, severity, source, last_seen,
-           threat_actor, malware_family
-      FROM threat_intel_iocs
-     WHERE tenant_id = $1::uuid
-       AND is_active = TRUE
-       AND false_positive = FALSE
-       AND (expires_at IS NULL OR expires_at > NOW())
-       AND (ioc_type, value) = ANY($2::record[])
-"""
-
-
 class TenantIocMatcher:
     """Reads `threat_intel_iocs` directly. No enrichment service required.
 
@@ -203,6 +187,10 @@ class TenantIocMatcher:
         # index the migration already creates.
         types = [str(i.get("ioc_type") or "").lower() for i in indicators]
         values = [str(i.get("value") or "") for i in indicators]
+        # Two text arrays rather than `= ANY(record[])`, which is awkward
+        # across drivers, and this uses the `(tenant_id, ioc_type, value)`
+        # index migration 016 already creates. The pair is re-checked in
+        # Python below, because two arrays match a cross-product.
         query = """
             SELECT ioc_type, value, confidence, severity, source, last_seen,
                    threat_actor, malware_family
