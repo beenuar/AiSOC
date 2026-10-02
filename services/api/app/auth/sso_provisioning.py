@@ -181,8 +181,12 @@ async def provision_user(
     user_id = uuid.uuid4()
     now = datetime.now(UTC)
     await db.execute(
+        # `username`, not `full_name`. The first draft invented a column
+        # name and `check_raw_sql_columns.py` caught it: the insert would
+        # have raised at runtime on the first SSO sign-in, which is exactly
+        # the path that has no other test coverage.
         text("""
-            INSERT INTO users (id, tenant_id, email, full_name, role, is_active,
+            INSERT INTO users (id, tenant_id, email, username, role, is_active,
                                hashed_password, created_at, updated_at)
             VALUES (:id, :t, :e, :n, :r, TRUE, :pw, :now, :now)
         """).bindparams(
