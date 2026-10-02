@@ -86,15 +86,21 @@ jobs:
           poetry install --no-root --no-interaction
           python -m pip install --quiet pytest pytest-asyncio 
 
-      # `002` first: it defines `current_tenant_id()`, which `081`'s RLS
-      # policy calls. Applying `081` alone fails with "function
-      # current_tenant_id() does not exist", which is a useful reminder
-      # that a migration is not independent of the chain it belongs to.
-      - name: Apply the migrations the table needs
+      # The whole chain, in order.
+      #
+      # This started as a cherry-picked 001/002/081 — enough for the pause
+      # table, and `002` is needed because `081`'s RLS policy calls
+      # `current_tenant_id()`, which a migration applied alone does not
+      # have. Then the ledger suite joined this job and failed on
+      # `relation "investigation_runs" does not exist`, because its tables
+      # arrive later in the chain.
+      #
+      # A cherry-picked subset builds a schema no deployment has, which is
+      # the opposite of the point. Applying everything costs seconds and
+      # cannot be wrong in this direction.
+      - name: Apply every migration, in order
         run: |
-          for m in 001 002 081; do
-            f=$(ls services/api/migrations/${m}_*.sql | head -1)
-            echo "applying $f"
+          for f in services/api/migrations/*.sql; do
             psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
           done
 
