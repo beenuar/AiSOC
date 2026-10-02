@@ -133,8 +133,16 @@ ceilings:
     # same five configs the workflow passes: 205 rules over the one new
     # file, exactly 1 finding. CI measured the whole tree at 104/40 against
     # the ceiling of 103, which is the +1 and nothing else.
-    total: 104
-    error: 40
+    #
+    # 104/40 -> 103/39. Both went down by one, and the ratchet asked for
+    # it rather than letting the improvement evaporate: the alert-trigger
+    # test in parity 5.1 imported its monkeypatch targets inline in three
+    # places, which CodeQL flagged as `py/import-and-import-from`, and
+    # moving them to a single from-import at the top removed a semgrep
+    # finding of each kind alongside it. Lowering here is what stops the
+    # number drifting back up for free.
+    total: 103
+    error: 39
     measured_with: "1.86.0"
   checkov:
     failed: 219
