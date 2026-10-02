@@ -54,7 +54,15 @@ jobs:
           --health-retries 20
 
     env:
-      UEBA_DSN: postgresql+asyncpg://ueba:ueba_ci_only@localhost:5432/ueba
+      # Two roles, as the deployment ships them. `ueba` owns the schema and
+      # runs the migrations; `aisoc_app` is the DML-only runtime role that
+      # migration 0003 grants and that the RLS policies apply to, so it is
+      # the one the suite connects as. A superuser ignores every policy
+      # even under FORCE ROW LEVEL SECURITY, which would let the tenant
+      # isolation assertions pass for the wrong reason.
+      UEBA_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/ueba
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://ueba:ueba_ci_only@localhost:5432/ueba
+      PGPASSWORD: ueba_ci_only
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -78,9 +86,17 @@ jobs:
       - name: Apply the migrations the service ships
         working-directory: services/ueba
         env:
-          DATABASE_URL: ${{ env.UEBA_DSN }}
-          UEBA_DATABASE_URL: ${{ env.UEBA_DSN }}
+          DATABASE_URL: ${{ env.DATABASE_MIGRATION_URL }}
+          UEBA_DATABASE_URL: ${{ env.DATABASE_MIGRATION_URL }}
         run: python -m alembic upgrade head
+
+      # Migration 0003 grants `aisoc_app` but cannot know its password.
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U ueba -d ueba -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U ueba -d ueba -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
 
       - name: UEBA scores, persists and isolates
         working-directory: services/ueba
@@ -102,8 +118,8 @@ jobs:
       - name: The gate fails when the schema loses a column the model declares
         working-directory: services/ueba
         env:
-          DATABASE_URL: ${{ env.UEBA_DSN }}
-          UEBA_DATABASE_URL: ${{ env.UEBA_DSN }}
+          DATABASE_URL: ${{ env.DATABASE_MIGRATION_URL }}
+          UEBA_DATABASE_URL: ${{ env.DATABASE_MIGRATION_URL }}
           ISOLATION_UEBA_DSN: ${{ env.UEBA_DSN }}
           PGPASSWORD: ueba_ci_only
         run: |

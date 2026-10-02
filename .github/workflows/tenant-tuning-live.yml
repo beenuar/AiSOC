@@ -53,7 +53,14 @@ jobs:
           --health-retries 20
 
     env:
-      TUNING_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      # Two roles, as the default deployment ships them. `aisoc` owns the
+      # schema and runs the migrations; `aisoc_app` is DML-only and is the
+      # role the RLS policies apply to, so it is the one the suite connects
+      # as. A superuser ignores every policy even under FORCE ROW LEVEL
+      # SECURITY, which would let a cross-tenant assertion pass for the
+      # wrong reason — `check_runtime_db_role.py` refuses that wiring.
+      TUNING_DSN: postgresql://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
       PGPASSWORD: aisoc_ci_only
 
     steps:
@@ -79,6 +86,16 @@ jobs:
           for f in services/api/migrations/*.sql; do
             psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
           done
+
+      # `002_rls.sql` creates `aisoc_app` with a placeholder password. Set
+      # the real one here, after the migrations have run, so the suite can
+      # connect as the role the policies apply to.
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
 
       - name: Tuning in the database changes what the engine fires
         working-directory: services/fusion

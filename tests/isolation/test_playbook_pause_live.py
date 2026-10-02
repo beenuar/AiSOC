@@ -171,7 +171,10 @@ class TestSurvivingARestart:
         async def _resolve():  # noqa: ANN202
             return pool
 
-        reloaded._pool = _resolve
+        # `reload` returns `ModuleType`, so the checker cannot see the
+        # module-level `_pool` it declares. Patching it is the point of
+        # the test — a fresh process is what a restart leaves behind.
+        reloaded._pool = _resolve  # type: ignore[attr-defined]
         found = await reloaded.find_waiting(approval_id=approval, tenant_id=tenant)
 
         assert found is not None, "the pause did not survive a module reload"
