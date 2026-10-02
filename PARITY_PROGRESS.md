@@ -696,3 +696,44 @@ import graph understates what depends on a module.
 **The limit that stays.** No hosted provider has ever been exercised. AI
 triage is Stable on the bundled local model; hosted-provider accuracy is
 a separate claim and remains unmade.
+
+### What the maturity plan asked for and did not get (2026-10-02)
+
+Re-reading that plan clause by clause against the tree found four
+sub-clauses that had not landed. Three are now closed and listed above:
+the `POST /lake/sql` round-trip, the feed → Kafka → sweep → alert E2E,
+and the hunting agent's console and MCP callers. Two are not, and the
+reason is worth more than a tick would have been.
+
+**"Close parity 3.2, 3.4, 3.6 and 3.7."** These are four substantial
+features, not gaps in the maturity work: accuracy measurement on the
+shipped model across labelled replay sets, before-and-after measurement,
+a copilot with the investigation agent's read tools and ledger citations,
+and signed replayable evidence bundles mapped to OCSF's `ai_agent`
+object. They stay open and unticked.
+
+The AI triage row does not rest on them. What it rests on is the
+Investigation Ledger proven against real Postgres and a commit-level
+agent check that fails when `llm_calls_placed` is zero, both of which
+shipped. Measured verdict accuracy is a *different* claim, and it is one
+this tree still cannot make: **no hosted provider has ever been
+exercised**, and the only live floor is groundedness over a deterministic
+prefix on a locally-served small model.
+
+**"Shrink the reachability allowlist by six entries."** It shrank by two,
+and both of those were the hunting agent's. The other four named in that
+clause are `services/actions/app/clients/{aisoc_direct,fleetdm,osctrl}_client.py`
+and `osquery_allowlist.py` — vendor clients constructed by capability
+name at dispatch time rather than imported. The import graph cannot see
+that, and the allowlist's own comment already records the decision:
+inventing a dynamic-loader entry for a factory that takes a string would
+excuse more than it explains.
+
+The two autonomy modules in that clause were examined and **kept**, with
+their entries corrected. `autonomy_evidence_rules.py` is not unwired at
+all: two gates read it without importing it, which an import-graph
+checker cannot see — a fact established by deleting it and immediately
+breaking both. `unified_autonomy.py` is genuinely off the production
+path and superseded by parity 2.1's closure policy, and a third authority
+on "may this execute without a human" is a safety question rather than a
+tidiness one.

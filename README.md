@@ -165,9 +165,8 @@ thing in a fresh install that is neither synthetic nor yours.
 | **Test fixtures** | `tests/`, `**/tests/` | Never shipped in an image |
 
 **Production never silently falls back to synthetic data.** An unreachable backend makes the console
-name the failure, not invent an investigation, and an unmeasured figure reads *not measured*, never
-`0`. That was not always true — [the reality audit](docs/audit/REPOSITORY_REALITY.md) records where
-it was wrong and how it was fixed.
+name the failure rather than invent an investigation, and an unmeasured figure reads *not measured*,
+never `0`. It was not always so: [the reality audit](docs/audit/REPOSITORY_REALITY.md) records each case.
 
 ## AI agents
 
@@ -181,6 +180,11 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 - **No vendor is touched without a human**, unless a tenant has explicitly granted autonomy for that verb. Every response step is graded against its own capability contract at dispatch, so approving a playbook never authorises whatever its steps happen to contain, and an approver must hold the required permission tier and must not be the person who requested the action.
 
 ## Project maturity
+
+**Stable is defined, and a gate enforces it.** It was ungated prose until three rows were found
+describing coverage that did not exist. A row is Stable only with a check that runs on every pull
+request with no path filter, drives the real production path against real infrastructure, and has a
+**negative control proven by breaking the thing and watching the check go red**. ([the bar](docs/audit/MATURITY_DEFINITION.md))
 
 | Capability | Status | Tested | Production ready |
 |---|---|---|---|
@@ -208,28 +212,25 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 - **Not able to see telemetry you have not connected.** There is no discovery.
 - **Not autonomous by default.** Response requires explicit policy
   authorization and a human approver.
-- **Demo and sample incidents are not real incidents**, and benchmark numbers are substrate
-  self-consistency measures rather than live agent accuracy — labelled as such wherever published.
+- **Demo and sample incidents are not real incidents**, and benchmark numbers are substrate self-consistency measures rather than live agent accuracy — labelled as such wherever published.
 
 ## Troubleshooting
 
-`make doctor` checks host tools, memory and disk, every port, each datastore by *querying* it rather
-than asking whether its container is up, and whether `.env` still holds placeholders — then prints
-the command to run next. A container killed by a full Docker VM is named as that, not reported as
-the service that happened to die. The six failures it is most often right about are tabulated under
-[Installation](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
+`make doctor` checks host tools, memory, disk, every port and each datastore by *querying* it rather
+than asking whether its container is up — then prints the command to run next. A container killed by
+a full Docker VM is named as that, not reported as the service that happened to die. The six it is
+most often right about: [Installation](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
 
 ## Security
 
 Secrets are generated per deployment and never committed; connector credentials are encrypted at
-rest. Services connect to Postgres as a DML-only role, so the row-level-security policies actually
-apply to them, and tenant isolation is enforced at the query layer in every store. RBAC gates every
-mutating route, ingest is authenticated, and the default install sends no prompt anywhere — the
-model runs beside it.
+rest. Services connect to Postgres as a DML-only role, so row-level security actually applies to
+them, and tenant isolation is enforced at the query layer in every store. RBAC gates every mutating
+route, ingest is authenticated, and the default install sends no prompt anywhere — the model runs
+beside it.
 
-**A service with no credential refuses to serve rather than serving unauthenticated**, and `make up`
-generates every secret it needs. The [changelog](CHANGELOG.md) records each fixed vulnerability;
-report via [SECURITY.md](SECURITY.md).
+**A service with no credential refuses to serve rather than serving unauthenticated.** The
+[changelog](CHANGELOG.md) records each fixed vulnerability; report via [SECURITY.md](SECURITY.md).
 
 ## Developing
 
@@ -241,9 +242,8 @@ make stats       # recount every figure this README publishes
 
 Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) ·
 [add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
-[plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle) ·
-[contributing](CONTRIBUTING.md). Every count above is recounted from the tree by `make stats`, and
-CI fails if this README disagrees with it.
+[plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle). Every count above is
+recounted from the tree, and CI fails if this README disagrees with it.
 
 ## Roadmap · Contributing · License
 

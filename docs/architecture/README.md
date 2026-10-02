@@ -415,3 +415,33 @@ API. It reaches past nothing. Each stage reports PASS or FAIL separately, so
 a break names the boundary that broke.
 
 Source: [`tests/e2e/golden_pipeline/`](../../tests/e2e/golden_pipeline/).
+
+### What CI proves about each piece above
+
+`make smoke` is the whole pipeline. Each capability in it also has a check
+that runs on **every pull request with no path filter**, drives the real
+production path against real infrastructure, and carries a negative control
+— something that breaks the thing and is required to turn the check red.
+The bar, and why it is that bar, is in
+[`docs/audit/MATURITY_DEFINITION.md`](../audit/MATURITY_DEFINITION.md).
+
+| What it proves | Workflow | What breaking it looks like |
+|---|---|---|
+| Graph reads are tenant-scoped in `graph_service.py` | `graph-live.yml` | Remove the anchor's tenant predicate → 1 test fails |
+| UEBA scores and persists against the shipped migrations | `ueba-live.yml` | Drop `peer_group_id` → 4 of 5 fail |
+| An approval pause survives a restart and resolves once | `playbook-pause-live.yml` | Drop the partial unique index → the constraint test fails |
+| The Investigation Ledger persists, scopes and refuses | `playbook-pause-live.yml` | — |
+| Tenant tuning changes what the engine fires | `tenant-tuning-live.yml` | Re-add the two columns the table lacks → 6 of 10 fail |
+| SCIM provisions and isolates through the real app | `scim-live.yml` | Remove the tenant predicate → the isolation test fails |
+| A connector polls a vendor and reaches ingest | `connector-scheduler-live.yml` | `next_run_time=None` → 4 of 5 fail |
+| Governance permits, refuses, and leaks no refusal | `live-actions-live.yml` | Remove all three branches → the refused isolate reaches the vendor |
+| The shipped ClickHouse DDL loads; `POST /lake/sql` scopes | `lake-live.yml` | Make the rewrite a pass-through → 6 of 7 fail |
+| Scheduled hunts read tenant data, never the fixture | `lake-live.yml` | — |
+| Intel travels feed → Kafka → sweep → alert | `retro-hunt-live.yml` | Remove the per-tenant savepoint → 5 of 8 fail |
+| The agent places a real LLM call on this commit | `live-agent-eval.yml` | `llm_calls_placed: 0` fails the job |
+
+Two of those rows exist because the suite behind them found a defect no
+offline test could: the connector scheduler registered every poll job
+**paused**, so connecting a source never pulled data; and the retro-hunt
+fan-out flushed one tenant's rows under the *next* tenant's RLS context,
+so it persisted nothing on any deployment using the runtime role.
