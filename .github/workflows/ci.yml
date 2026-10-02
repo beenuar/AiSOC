@@ -814,6 +814,21 @@ jobs:
       # hold the four properties in docs/audit/MATURITY_DEFINITION.md. The
       # gate runs in both directions, so an entry for a row that is no
       # longer Stable fails too.
+      # `playbooks/packs/v1/` holds 62 production playbooks and the agents
+      # image shipped **none** of them: the Dockerfile's build context is
+      # `services/agents`, a context cannot reach outside itself, and the
+      # loader's pack branch is guarded by `exists()` — so an absent pack
+      # was silently the same as an empty one and a deployment's library
+      # was 62 entries short with no error anywhere.
+      #
+      # They are now vendored inside the package, where `COPY app/ ./app/`
+      # picks them up, the same arrangement fusion uses for its compiled
+      # ruleset. Two copies drift, so this compares them in both
+      # directions.
+      - name: The agents image ships the playbook pack
+        run: |
+          python3 scripts/sync_vendored_playbook_packs.py --self-test
+          python3 scripts/sync_vendored_playbook_packs.py --check
       - name: Every Stable capability has earned the label
         run: |
           python3 scripts/check_maturity_table.py --self-test

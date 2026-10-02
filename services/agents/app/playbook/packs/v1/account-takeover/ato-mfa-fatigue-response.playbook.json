@@ -1,0 +1,116 @@
+{
+  "id": "ato-mfa-fatigue-response-v1",
+  "name": "ATO: MFA Fatigue \u2014 Challenge & Reset",
+  "description": "Triggered when a user receives an unusual burst of MFA prompts. Enforces step-up auth and resets MFA factors after approval.",
+  "version": "1.0.0",
+  "tags": [
+    "account-takeover",
+    "ato",
+    "identity",
+    "mfa",
+    "mitre.t1621"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "medium",
+      "high"
+    ],
+    "tags": [
+      "account-takeover"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich user device posture",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.user"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "inv",
+      "name": "Score MFA-fatigue likelihood",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "step-up",
+      "name": "Force step-up auth challenge",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/factors/challenge",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "n1",
+      "name": "DM user on Slack",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "We've challenged your sign-in due to repeated MFA prompts. Approve only if you initiated.",
+        "webhook_env": "SLACK_USER_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "approve",
+      "name": "Wait for human approval",
+      "type": "condition",
+      "params": {},
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 5,
+      "condition": {
+        "field": "context.approved_by_oncall",
+        "operator": "eq",
+        "value": true
+      },
+      "next_true": "reset-mfa"
+    },
+    {
+      "id": "reset-mfa",
+      "name": "Reset enrolled MFA factors",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/factors",
+        "method": "DELETE"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "t1",
+      "name": "Open MFA-fatigue case",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P3",
+        "title_template": "MFA fatigue investigation: {{alert.user}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

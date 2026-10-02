@@ -1,0 +1,90 @@
+{
+  "id": "exfil-large-upload-v1",
+  "name": "Exfil: Large Outbound Upload",
+  "description": "Triggered when a host uploads >X GB to a non-corporate destination in a short window. Blocks destination and investigates.",
+  "version": "1.0.0",
+  "tags": [
+    "data-exfil",
+    "exfil",
+    "dlp",
+    "mitre.t1567"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "data-exfil"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich destination",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.dst_host"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "block",
+      "name": "Block destination at proxy",
+      "type": "http",
+      "params": {
+        "url": "${PROXY_URL}/policy/block",
+        "method": "POST",
+        "body_template": "{\"host\":\"{{alert.dst_host}}\",\"reason\":\"large-upload\"}"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Investigate exfil pattern",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify SOC",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "Large upload {{alert.bytes_out}} from {{alert.host}} to {{alert.dst_host}} blocked.",
+        "webhook_env": "SLACK_SOC_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open exfil ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "Large upload: {{alert.host}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

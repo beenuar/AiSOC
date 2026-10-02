@@ -50,7 +50,25 @@ def _resolve_repo_root() -> Path:
 
 
 _REPO_ROOT = _resolve_repo_root()
-_DEFAULT_PACK_ROOT = _REPO_ROOT / "playbooks" / "packs" / "v1"
+
+#: The pack that ships *inside* the package, and the one a container has.
+#:
+#: `_resolve_repo_root` walks up looking for an ancestor holding
+#: `playbooks/packs`. That works in a checkout and finds nothing in the
+#: image: `services/agents/Dockerfile` has a build context of
+#: `services/agents` and copies only `app/`, and a build context cannot
+#: reach outside itself.
+#:
+#: So the shipped image carried **zero** pack playbooks, silently — the
+#: loader's pack branch is guarded by `exists()`, which makes an absent
+#: pack indistinguishable from an empty one. A deployment's library was
+#: 62 entries shorter than the repository's with no error anywhere.
+#:
+#: `scripts/sync_vendored_playbook_packs.py --check` keeps this copy
+#: byte-identical to `playbooks/packs/v1/`, the same arrangement
+#: `services/fusion` uses for its compiled detection ruleset.
+_VENDORED_PACK_ROOT = Path(__file__).resolve().parent / "packs" / "v1"
+_DEFAULT_PACK_ROOT = _VENDORED_PACK_ROOT if _VENDORED_PACK_ROOT.is_dir() else _REPO_ROOT / "playbooks" / "packs" / "v1"
 
 
 class PlaybookStore:

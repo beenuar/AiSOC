@@ -1,0 +1,78 @@
+{
+  "id": "cloud-cloudtrail-disabled-v1",
+  "name": "Cloud: CloudTrail Disabled \u2014 Re-enable",
+  "description": "Triggered when a CloudTrail trail is stopped. Restarts trail and audits API calls in the dark window.",
+  "version": "1.0.0",
+  "tags": [
+    "cloud-misconfig",
+    "cloud",
+    "aws",
+    "logging",
+    "mitre.t1562.008"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "cloud-misconfig"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "start",
+      "name": "Re-enable CloudTrail",
+      "type": "http",
+      "params": {
+        "url": "${AWS_URL}/cloudtrail/{{alert.trail}}/start",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Audit dark-window calls",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "cloud"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page cloud-sec",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "CloudTrail {{alert.trail}} restarted.",
+        "service_key_env": "PD_CLOUD_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open CloudTrail ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "CloudTrail disabled: {{alert.trail}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

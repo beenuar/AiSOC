@@ -1,0 +1,78 @@
+{
+  "id": "cloud-cross-account-trust-v1",
+  "name": "Cloud: Unexpected Cross-Account Trust",
+  "description": "Triggered when a role trust policy adds an external account ID not on the allow-list. Revokes and audits.",
+  "version": "1.0.0",
+  "tags": [
+    "cloud-misconfig",
+    "cloud",
+    "aws",
+    "iam",
+    "mitre.t1078.004"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "cloud-misconfig"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "revoke-trust",
+      "name": "Remove cross-account trust",
+      "type": "http",
+      "params": {
+        "url": "${AWS_URL}/iam/{{alert.role}}/trust/{{alert.external_account}}",
+        "method": "DELETE"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Audit assumptions in dark window",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "cloud"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page cloud-sec",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Cross-account trust to {{alert.external_account}} removed from {{alert.role}}.",
+        "service_key_env": "PD_CLOUD_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open cross-account ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Cross-account trust: {{alert.role}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

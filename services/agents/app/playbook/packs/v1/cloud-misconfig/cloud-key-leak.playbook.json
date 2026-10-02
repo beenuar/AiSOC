@@ -1,0 +1,89 @@
+{
+  "id": "cloud-key-leak-v1",
+  "name": "Cloud: Cloud Access Key Leaked",
+  "description": "Triggered when a long-lived access key is found in a public repo or paste site. Rotates the key and scans for downstream use.",
+  "version": "1.0.0",
+  "tags": [
+    "cloud-misconfig",
+    "cloud",
+    "secrets",
+    "mitre.t1552.001"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "cloud-misconfig"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "disable",
+      "name": "Disable leaked key",
+      "type": "http",
+      "params": {
+        "url": "${AWS_URL}/iam/users/{{alert.user}}/keys/{{alert.key_id}}",
+        "method": "DELETE"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "rotate",
+      "name": "Rotate access key",
+      "type": "http",
+      "params": {
+        "url": "${AWS_URL}/iam/users/{{alert.user}}/keys/rotate",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Find downstream use of key",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "cloud"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page cloud-sec",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "Leaked key {{alert.key_id}} disabled and rotated.",
+        "service_key_env": "PD_CLOUD_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open key-leak ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "Leaked key: {{alert.key_id}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "id": "lateral-psexec-detected-v1",
+  "name": "Lateral: PsExec / Remote Service Creation",
+  "description": "Triggered by remote service creation patterns indicative of PsExec / Impacket. Isolates target and source, investigates.",
+  "version": "1.0.0",
+  "tags": [
+    "lateral-movement",
+    "lateral",
+    "endpoint",
+    "mitre.t1021.002"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "lateral-movement"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "iso-dst",
+      "name": "Isolate target host",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.dst_host"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "iso-src",
+      "name": "Isolate source host",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.src_host"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "inv",
+      "name": "Investigate lateral chain",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page on-call",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "PsExec lateral {{alert.src_host}} -> {{alert.dst_host}}. Both isolated.",
+        "service_key_env": "PD_SOC_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open lateral ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "PsExec lateral: {{alert.src_host}} -> {{alert.dst_host}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

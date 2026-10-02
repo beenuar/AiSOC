@@ -1,0 +1,195 @@
+{
+  "id": "phishing-investigation-v1",
+  "name": "Phishing: Email Investigation & Remediation",
+  "description": "Triggered by a phishing alert from email gateway or user report. Extracts IOCs, retracts the message fleet-wide, blocks sender domain, and resets any credentials that may have been compromised.",
+  "version": "1.0.0",
+  "author": "Beenu - beenu@cyble.com",
+  "tags": [
+    "phishing",
+    "email",
+    "identity",
+    "mitre.t1566",
+    "mitre.t1566.001"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": ["high", "critical"],
+    "tags": ["phishing", "email-security"]
+  },
+  "enabled": true,
+  "dry_run_support": true,
+  "created_at": "2026-05-10T08:00:00+00:00",
+  "updated_at": "2026-05-10T08:00:00+00:00",
+  "inputs": {
+    "message_id": {
+      "description": "Email message ID from the alert",
+      "field": "alert.message_id",
+      "required": true
+    },
+    "sender_domain": {
+      "description": "Sender domain extracted from the From header",
+      "field": "alert.sender_domain",
+      "required": true
+    },
+    "recipient_user": {
+      "description": "Primary recipient user identity",
+      "field": "alert.recipient_user",
+      "required": true
+    },
+    "attachment_hash": {
+      "description": "SHA-256 of any malicious attachment",
+      "field": "alert.file_hash",
+      "required": false
+    }
+  },
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Enrich sender domain reputation",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.sender_domain",
+        "indicator_type": "domain"
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "e2",
+      "name": "Enrich attachment hash (if present)",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.file_hash",
+        "indicator_type": "hash",
+        "skip_if_empty": true
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "retract",
+      "name": "Retract phishing email fleet-wide",
+      "type": "http",
+      "params": {
+        "url": "${EMAIL_GATEWAY_URL}/v1/messages/retract",
+        "method": "POST",
+        "body_template": "{\"message_id\": \"{{inputs.message_id}}\", \"reason\": \"phishing\"}",
+        "dry_run": "{{dry_run}}"
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "approval_block_domain",
+      "name": "Approval gate — block sender domain",
+      "type": "approval",
+      "params": {
+        "message": "Block sender domain '{{inputs.sender_domain}}' at email gateway and DNS firewall?",
+        "approvers": ["soc-lead", "security-manager"],
+        "timeout_seconds": 900,
+        "auto_approve_severity": ["critical"]
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 920
+    },
+    {
+      "id": "block_domain",
+      "name": "Block sender domain",
+      "type": "block_ip",
+      "params": {
+        "ip_field": "alert.sender_domain",
+        "block_type": "domain",
+        "duration": "72h",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_block_domain.outcome == 'approved'",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "check_clicked",
+      "name": "Check if recipient clicked link / opened attachment",
+      "type": "http",
+      "params": {
+        "url": "${SIEM_URL}/search",
+        "method": "POST",
+        "body_template": "{\"query\": \"email_message_id={{inputs.message_id}} AND (url_click=true OR attachment_open=true)\", \"earliest\": \"-1h\"}"
+      },
+      "on_failure": "continue",
+      "retry_max": 1,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "approval_reset",
+      "name": "Approval gate — force password reset (if click detected)",
+      "type": "approval",
+      "params": {
+        "message": "Recipient '{{inputs.recipient_user}}' may have clicked link. Force password reset + MFA?",
+        "approvers": ["soc-lead"],
+        "timeout_seconds": 600,
+        "condition_skip": "context.click_detected == false"
+      },
+      "condition": "context.click_detected == true",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 620
+    },
+    {
+      "id": "reset_pw",
+      "name": "Force password reset for recipient",
+      "type": "reset_password",
+      "params": {
+        "user_field": "inputs.recipient_user",
+        "dry_run": "{{dry_run}}"
+      },
+      "condition": "steps.approval_reset.outcome == 'approved'",
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "inv",
+      "name": "Phishing investigation",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "phishing"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Notify security team",
+      "type": "notify",
+      "params": {
+        "channel": "slack",
+        "message_template": "Phishing alert: {{inputs.sender_domain}} → {{inputs.recipient_user}}. Message retracted: {{context.retract_success}}. Domain blocked: {{context.domain_blocked}}.",
+        "webhook_env": "SLACK_SOC_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open phishing ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "Phishing: {{inputs.sender_domain}} targeting {{inputs.recipient_user}}",
+        "queue": "soc",
+        "labels": ["phishing", "email"]
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

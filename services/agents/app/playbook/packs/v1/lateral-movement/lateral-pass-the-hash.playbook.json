@@ -1,0 +1,99 @@
+{
+  "id": "lateral-pass-the-hash-v1",
+  "name": "Lateral: Pass-The-Hash",
+  "description": "Triggered by NTLM relay / PTH detection. Disables the user and isolates source + destination.",
+  "version": "1.0.0",
+  "tags": [
+    "lateral-movement",
+    "lateral",
+    "ad",
+    "mitre.t1550.002"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "critical"
+    ],
+    "tags": [
+      "lateral-movement"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "disable-user",
+      "name": "Disable account",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/disable",
+        "method": "POST"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "iso-src",
+      "name": "Isolate source host",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.src_host"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "iso-dst",
+      "name": "Isolate destination host",
+      "type": "isolate_host",
+      "params": {
+        "host_field": "alert.dst_host"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "inv",
+      "name": "Investigate PTH chain",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "forensics"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "n1",
+      "name": "Page on-call",
+      "type": "notify",
+      "params": {
+        "channel": "pagerduty",
+        "message_template": "PTH detected: {{alert.user}} {{alert.src_host}} -> {{alert.dst_host}}. Account disabled.",
+        "service_key_env": "PD_SOC_KEY"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "t1",
+      "name": "Open PTH ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P1",
+        "title_template": "PTH: {{alert.user}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    }
+  ]
+}

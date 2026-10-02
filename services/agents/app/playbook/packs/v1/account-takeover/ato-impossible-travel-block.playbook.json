@@ -1,0 +1,146 @@
+{
+  "id": "ato-impossible-travel-block-v1",
+  "name": "ATO: Impossible Travel \u2014 Block & Reset",
+  "description": "Triggered by impossible-travel detections. Blocks the source IP, force-revokes active sessions for the user, and requires human approval before forcing a password reset.",
+  "version": "1.0.0",
+  "tags": [
+    "account-takeover",
+    "ato",
+    "identity",
+    "mitre.t1078"
+  ],
+  "trigger": {
+    "on": "alert",
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "account-takeover"
+    ]
+  },
+  "author": "AiSOC",
+  "enabled": true,
+  "created_at": "2026-05-03T00:00:00+00:00",
+  "updated_at": "2026-05-03T00:00:00+00:00",
+  "steps": [
+    {
+      "id": "e1",
+      "name": "Geo-enrich source IP",
+      "type": "enrich",
+      "params": {
+        "indicator_field": "alert.source_ip"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 30
+    },
+    {
+      "id": "inv",
+      "name": "Investigate user activity",
+      "type": "investigate",
+      "params": {
+        "case_id_field": "alert.case_id",
+        "focus": "identity"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 180
+    },
+    {
+      "id": "b1",
+      "name": "Block source IP at edge",
+      "type": "block_ip",
+      "params": {
+        "ip_field": "alert.source_ip",
+        "duration": "12h"
+      },
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "rev",
+      "name": "Revoke active sessions",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/sessions",
+        "method": "DELETE",
+        "headers_env": "IDP_BEARER_HEADERS"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "n1",
+      "name": "Notify user via email",
+      "type": "notify",
+      "params": {
+        "channel": "email",
+        "message_template": "Suspicious sign-in from {{alert.source_ip}} blocked. Reset your password.",
+        "webhook_env": "EMAIL_WEBHOOK"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10
+    },
+    {
+      "id": "approve",
+      "name": "Wait for human approval",
+      "type": "condition",
+      "params": {},
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 5,
+      "condition": {
+        "field": "context.approved_by_oncall",
+        "operator": "eq",
+        "value": true
+      },
+      "next_true": "reset"
+    },
+    {
+      "id": "reset",
+      "name": "Force password reset",
+      "type": "http",
+      "params": {
+        "url": "${IDP_BASE_URL}/users/{{alert.user}}/password/reset",
+        "method": "POST",
+        "headers_env": "IDP_BEARER_HEADERS"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "t1",
+      "name": "Open ATO investigation ticket",
+      "type": "create_ticket",
+      "params": {
+        "priority": "P2",
+        "title_template": "ATO suspected: {{alert.user}} from {{alert.source_ip}}",
+        "queue": "soc"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 20
+    },
+    {
+      "id": "close-fp",
+      "name": "Close if false positive",
+      "type": "close_case",
+      "params": {
+        "resolution": "false_positive"
+      },
+      "on_failure": "continue",
+      "retry_max": 0,
+      "timeout_seconds": 10,
+      "condition": {
+        "field": "verdict",
+        "operator": "eq",
+        "value": "false_positive"
+      }
+    }
+  ]
+}
