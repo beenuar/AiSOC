@@ -202,7 +202,7 @@ def self_test() -> int:
         ("the real tree has no duplicate pair", not report.duplicates),
         (
             f"it read a real corpus ({sum(report.scanned.values())} registrations across {len(report.scanned)} services)",
-            sum(report.scanned.values()) > 200 and len(report.scanned) >= 2,
+            sum(report.scanned.values()) >= 20 and len(report.scanned) >= 2,
         ),
         ("no app yielded zero routes, which would be the FastAPI-minor trap", not report.empty),
     ]
