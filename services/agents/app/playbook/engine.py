@@ -418,7 +418,12 @@ async def _handle_notify(step: PlaybookStep, context: dict[str, Any], http: http
             raise SSRFError(f"notify step rejected: {exc}") from exc
         r = await http.post(url, json={"text": message}, timeout=step.timeout_seconds)
         return {"status": r.status_code}
-    return {"channel": channel, "message": message, "delivered": False, "reason": "no url"}
+    # Why it did not deliver, accurately. This said "no url" whatever the
+    # cause, including when a url *was* supplied and the channel simply
+    # was not `webhook` — so an operator debugging a silent playbook went
+    # looking for a missing field that was right there in front of them.
+    reason = "no url" if not url else f"channel {channel!r} has no sender; only 'webhook' delivers, and a url was supplied"
+    return {"channel": channel, "message": message, "delivered": False, "reason": reason}
 
 
 async def _handle_http(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:

@@ -24,9 +24,16 @@ handlers before they hand a URL to ``httpx``. It rejects:
 
 Operators can:
 
-* Set ``AISOC_SSRF_ALLOW_PRIVATE=1`` to relax the private/loopback check
-  for on-prem deployments where playbooks must reach internal services
-  (still rejects cloud-metadata literals and link-local/multicast).
+* Set ``AISOC_SSRF_ALLOW_PRIVATE=1`` to relax the **private-range** check
+  for on-prem deployments where playbooks must reach internal services.
+  It does not relax loopback, and this header used to say it did —
+  directly contradicting :func:`_is_disallowed_address`'s own docstring
+  two hundred lines below, which has always said loopback is rejected
+  either way. The code is the correct half: a playbook that can reach
+  ``127.0.0.1`` can reach every unauthenticated service on the host
+  running the engine, which is a larger hole than the one the flag
+  exists to open. Link-local, multicast, reserved, unspecified and
+  cloud-metadata literals are likewise always rejected.
 * Set ``AISOC_SSRF_EXTRA_BLOCKED_HOSTS=foo.internal,bar.svc`` to extend
   the metadata host blocklist.
 
