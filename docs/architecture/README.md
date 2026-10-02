@@ -50,6 +50,23 @@ before it was allowed into the compiled ruleset. Separately it decides whether t
 a vendor finding (OCSF category 2) or anything at severity ≥ high becomes an
 alert; routine telemetry does not.
 
+Each match is then checked against that tenant's **tuning overlay**
+([`tenant_overlay.py`](../../services/fusion/app/services/tenant_overlay.py)):
+the disables, severity floors and suppressions the console writes to
+`detection_rules`. Before this existed the engine evaluated the shared corpus
+and nothing else, so a tenant who turned a noisy rule off kept receiving its
+alerts while the console showed it disabled — the worst shape a defect can
+have, because it tells the operator the problem is solved.
+
+It is an overlay rather than a per-tenant ruleset: the *difference* applied
+over one shared corpus, not N copies of 2,603 rules rebuilt whenever anyone
+edits anything. Suppression is applied **after** the match so the dropped hit
+is logged with the tuning, its author and its reason — "no alert" with no
+explanation is indistinguishable from a rule that simply did not match. A
+reload that fails keeps the previous overlay rather than falling back to
+no-tuning, since losing a tenant's suppressions on a transient database error
+would turn their queue back on and read as a flood rather than a fault.
+
 **5. Fusion correlates.** A new alert is matched against open incidents using
 a correlation key of `{tenant}:{entity}:{tactic}`. It either joins an
 existing incident or opens a new one, so ten related alerts become one thing
@@ -67,13 +84,36 @@ LLM — a verdict, a confidence, and proposed actions.
 prompt, tool call and citation, so a verdict can be audited rather than
 trusted.
 
-**9. Response stays governed.** Nothing executes automatically. An action is
-proposed; a human with the right permission approves it; the result is
-verified against the vendor rather than assumed from an HTTP 200.
+**9. A playbook may start from the alert.** The fused-alert path matches it
+against the playbook library
+([`alert_trigger.py`](../../services/agents/app/playbook/alert_trigger.py)),
+*after* triage, because a playbook's conditions read the verdict and the
+confidence. Three switches must all agree before one acts — the deployment,
+the tenant, and the playbook — and **every default is off**. Anything short of
+all three runs in **preview**, with its plan and simulated steps attached to
+the alert so an analyst can read what it would have done. Preview is the
+default state rather than a mode somebody has to remember to use first.
 
-> **Where it stops.** Step 9 has no automatic trigger — there is no code path
-> that dispatches a response without a human. That is deliberate, and it is
-> the honest boundary of "autonomous" in this project.
+**10. An approval step is a durable pause.** A playbook that reaches one
+suspends to Postgres (migration `081`) rather than failing: the step index and
+the whole run context, so the run survives a restart and resumes from the step
+*after* the approval when a human decides. Undecided approvals expire with a
+recorded outcome, because `expired` is a decision and a pause with no deadline
+is a run that hangs forever while nobody learns it did.
+
+**11. Response stays governed.** An action is proposed; a human with the right
+permission approves it; the result is verified against the vendor rather than
+assumed from an HTTP 200.
+
+> **Where it stops, stated precisely.** A *playbook* can now be triggered
+> automatically — that changed, and the three switches above are what bound
+> it. What did not change is the thing that matters: every response step is
+> still graded against its own capability contract at dispatch and returns
+> `pending_approval` on its own when a human is required. So approving a
+> playbook never authorises whatever its steps happen to contain, and there
+> is still no code path that touches a vendor without either a human or an
+> explicit per-tenant autonomy policy. That is the honest boundary of
+> "autonomous" in this project.
 
 ---
 
@@ -262,14 +302,23 @@ One architecture, three profiles of it — not three architectures.
 
 | Profile | Command | Services | RAM | What you get |
 |---|---|---|---|---|
-| **core** | `make up` | 14 | ~8 GB | Ingest → detect → correlate → alert → triage → console, plus the LLM gateway, the local model behind it, and the CISA KEV threat feed with its vector store. |
+| **core** | `make up` | 16 | ~8 GB | Ingest → detect → correlate → alert → triage → console, plus the LLM gateway, the local model behind it, the CISA KEV threat feed with its vector store, and the connector and response services the agent's vendor tools reach. |
 | **full** | `make up-full` | 22 | ~12 GB | Core plus event lake, entity graph, full-text search, enrichment, scheduled connectors. |
-| **demo** | `make up && make demo` | 14 | ~8 GB | Core plus clearly-labelled synthetic data. |
+| **demo** | `make up && make demo` | 16 | ~8 GB | Core plus clearly-labelled synthetic data. |
 
 `full` is 22 services, not the 30 published here previously: 30 is `full` plus
 the `monitoring`, `chatops`, `extras` and `osquery` profiles, which
-`make up-full` does not start. (The CORE count is fourteen long-running
-containers; `ollama-pull` is a fifteenth that runs once and exits.)
+`make up-full` does not start. The CORE count is **16 long-running
+containers**; `ollama-pull` is a seventeenth that runs once and exits, and is
+excluded because "long-running services" is the figure these documents
+publish.
+
+This page said 14 for as long as `connectors` and `actions` had been in CORE,
+because it was the one place publishing a service count that
+[`scripts/check_profile_service_counts.py`](../../scripts/check_profile_service_counts.py)
+did not know about. It is registered now, so the next change to the compose
+file fails the build here too rather than only in the eight places that were
+already covered.
 
 CORE is not a toy. It is the smallest deployment that can take a real event
 and produce a real alert, which is the thing the product is for — **and it does
@@ -300,6 +349,59 @@ AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true \
 pair — so the documented command and the tested command are the same command.
 
 ---
+
+## What a first run does differently
+
+Nothing above changes on a fresh install — that is the point of this section.
+The paths a new deployment takes are the same paths, arranged so an operator
+can reach them.
+
+**The host decides the ports, not the compose file.** `make up` probes the
+sixteen host ports CORE publishes and moves any that are taken, writing
+`docker-compose.ports.yml` with `ports: !override` and naming what held each
+one. Only the published side moves: service-to-service traffic uses container
+ports and service names, so nothing in any diagram above is affected. If the
+console itself moves, `AISOC_CONSOLE_URL` moves with it so the address printed
+at the end is the one that answers.
+
+This replaced a refusal. `make up` used to stop and tell the operator to edit
+`docker-compose.yml`, which is a hard stop at step one of the quick start for
+the most common condition in this audience's environment — a Postgres on 5432,
+or an Ollama on 11434.
+
+**The console asks the database what is set up, not a flag.**
+`GET /api/v1/onboarding/status` derives first-run state from the tenant's own
+rows. A stored `onboarded` boolean drifts the moment somebody connects a source
+through the API, deletes their last one, or restores a backup, and a wizard
+insisting you are finished while your estate is empty is worse than no wizard.
+A tenant with no connectors and no alerts lands on the setup checklist rather
+than on an all-zero dashboard.
+
+**Sample data takes the real path.** `POST /api/v1/onboarding/sample-data`
+pushes five scenarios through `POST /v1/ingest/batch` — step 1 above, the same
+door a connector uses — so they are normalised, correlated and triaged exactly
+like real telemetry. Inserting rows would have been easier and would have
+proved nothing: a console full of seeded alerts looks identical whether the
+pipeline works or is completely broken. Because these take the real path,
+seeing them arrive means the operator has watched steps 1 through 8 work.
+
+Three constraints keep that honest, and each is asserted by test rather than
+left to care:
+
+* **It does not clear `first_run`.** Somebody who has only looked at samples
+  still has nothing connected.
+* **It refuses on a tenant that already has real alerts.** A sample sitting in
+  a live queue is indistinguishable from a real one at a glance, and an analyst
+  dismissing a genuine alert because they assumed otherwise is the worse
+  outcome.
+* **It is obviously synthetic.** Every address is an RFC 5737 documentation
+  range and every domain RFC 2606 reserved, and `aisoc_sample` has its own
+  ingest profile naming AiSOC as the vendor — so the alert's own source column
+  says where it came from, without anyone needing to remember context.
+
+That profile exists for the same reason every other one does. Without it the
+batch would fall to the generic profile, every event would get the same title
+and no vendor id, and all five would deduplicate onto one alert.
 
 ## Verifying any of this
 

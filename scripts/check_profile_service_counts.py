@@ -82,6 +82,14 @@ CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
     ("apps/docs/docs/deployment/docker.md", "core", r"CORE is (\d+) long-running services here"),
     ("apps/docs/docs/deployment/docker.md", "prod:full", r"`--profile full`\s*\n?is (\d+) rather than"),
     ("apps/docs/docs/deployment/docker.md", "full", r"is \d+ rather than (\d+), the difference being"),
+    # The architecture page. Unregistered until now, and the only place
+    # publishing a service count that this gate did not know about — so it
+    # sat at 14 for as long as `connectors` and `actions` had been in CORE
+    # while all eight registered sites stayed correct. An unregistered
+    # figure is one nobody notices going stale.
+    ("docs/architecture/README.md", "core", r"\| \*\*core\*\* \| `make up` \| (\d+) \|"),
+    ("docs/architecture/README.md", "full", r"\| \*\*full\*\* \| `make up-full` \| (\d+) \|"),
+    ("docs/architecture/README.md", "core", r"CORE count is \*\*(\d+) long-running"),
     ("README.md", "core", r"\|\s*\*\*core\*\*\s*\|\s*`make up`\s*\|\s*(\d+)\s*\|"),
     ("README.md", "full", r"\|\s*\*\*full\*\*\s*\|\s*`make up-full`\s*\|\s*(\d+)\s*\|"),
     ("README.md", "core", r"\|\s*\*\*demo\*\*\s*\|\s*`make up && make demo`\s*\|\s*(\d+)\s*\|"),

@@ -125,8 +125,22 @@ def _compose_services() -> dict[str, int]:
         return {}
     doc = yaml.safe_load(f.read_text(encoding="utf-8")) or {}
     services = doc.get("services") or {}
-    core = [n for n, s in services.items() if not (s or {}).get("profiles")]
-    return {"core": len(core), "total": len(services), "optional": len(services) - len(core)}
+    # One-shots are excluded, matching `scripts/check_profile_service_counts.py`,
+    # which is the gate that holds every published figure to the compose file.
+    #
+    # This counted them, so it printed "17 core" against the 16 that gate
+    # enforces and the README states. Two scripts disagreeing about one
+    # number is how a reader learns not to trust either: "long-running
+    # services" is the figure the documents publish, and `ollama-pull`
+    # fetches the model and exits.
+    one_shot = frozenset({"ollama-pull"})
+    core = [n for n, svc in services.items() if not (svc or {}).get("profiles") and n not in one_shot]
+    resident = [n for n in services if n not in one_shot]
+    return {
+        "core": len(core),
+        "total": len(resident),
+        "optional": len(resident) - len(core),
+    }
 
 
 def _claim_gate_rows() -> dict[str, int]:
@@ -135,13 +149,25 @@ def _claim_gate_rows() -> dict[str, int]:
     if not f.is_file():
         return {}
     counts = {"GATED": 0, "PARTIAL": 0, "NO GATE": 0}
+
+    # The status column is located by reading the header, not by index.
+    # It was hardcoded to cells[3], and when a `Profile` column was
+    # inserted ahead of it every row's status became "core" — so this
+    # figure read **0 rows, 0 gated** against a real 278 for as long as
+    # that column has existed. Nothing caught it because the README does
+    # not publish this number, so no comparison existed to fail.
+    status_idx: int | None = None
     for line in f.read_text(encoding="utf-8").splitlines():
         if not line.startswith("| ") or line.startswith("| ---"):
             continue
         cells = [c.strip() for c in line.strip().strip("|").split("|")]
-        if len(cells) < 4:
+        if status_idx is None:
+            if "Status" in cells:
+                status_idx = cells.index("Status")
             continue
-        status = cells[3].upper()
+        if len(cells) <= status_idx:
+            continue
+        status = cells[status_idx].upper()
         # `GATED (ratchet)` counts as gated; check NO GATE first so the
         # substring "GATE" does not swallow it.
         if "NO GATE" in status:

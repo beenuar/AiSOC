@@ -20,22 +20,19 @@
 
 ## What AiSOC does
 
-Telemetry arrives from your security tools. AiSOC normalizes it, runs the 2603 executable
-rules of its 6991-rule library, groups what fires into incidents, investigates each one with
-an AI agent whose every prompt and tool call is recorded, and proposes an action. New threat
-intelligence re-sweeps the history you already collected. A human approves before anything runs.
+Telemetry arrives from your security tools. AiSOC normalizes it, runs the 2603 executable rules of
+its 6991-rule library, groups what fires into incidents, investigates each one with an AI agent whose
+every prompt and tool call is recorded, and proposes an action. New threat intelligence re-sweeps the
+history you already collected, and a human approves before anything reaches a vendor.
 
 ## What it looks like running
 
 <a href="apps/web/public/demo/demo.mp4"><img src="apps/web/public/demo/hero.gif" alt="AiSOC on one host: make up brings the stack up and prints the sign-in address, the console shows real CISA KEV rows, a pushed event becomes an alert, and the cost dashboard reports the tokens triage spent" /></a>
 
 **[Watch the full three minutes](apps/web/public/demo/demo.mp4)** — install to AI verdict on one
-server, against the published images. Terminal waits are shortened, which the recording says on
-screen. ([step by step](apps/docs/docs/deployment/walkthrough.mdx))
-
-Stills from earlier runs under the same rules — no seeded rows, no demo mode, no mockups. The events
-were authored to be representative; everything downstream is the product doing its job.
-([what is real](apps/web/public/screenshots/README.md))
+server against the published images, terminal waits shortened and the recording saying so on screen.
+The stills below are earlier runs under the same rules: no seeded rows, no demo mode, no mockups.
+([step by step](apps/docs/docs/deployment/walkthrough.mdx) · [what is real](apps/web/public/screenshots/README.md))
 
 | | |
 |---|---|
@@ -52,77 +49,85 @@ make up
 ```
 
 Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM**, plus `python3`
-(3.9+) and `bash` — `make doctor` checks all of it, and
+(3.9+) and `bash`; `make doctor` checks all of it and
 [Installation](https://beenuar.github.io/AiSOC/docs/installation#requirements) says what each number
-was measured against. The first run downloads a ~2 GB language model into a named volume; only
-`make clean` fetches it again.
+was measured against. The first run downloads a ~2 GB model into a volume only `make clean` clears.
 
-`make up` also creates `.env` and generates the **fourteen** secrets in it — the credential vault,
-the session signing key, the five service-to-service credentials and the four datastore passwords — then
-creates an administrator and prints its password. That password is generated on your machine, shown once, and stored nowhere:
-copy it, or mint a new one with `make bootstrap ARGS=--reset-password`.
+`make up` also creates `.env` and generates the **fourteen** secrets in it — the credential vault, the
+session signing key, five service-to-service credentials and four datastore passwords — then creates
+an administrator and prints its password, generated on your machine, shown once and stored nowhere.
+Copy it, or mint another with `make bootstrap ARGS=--reset-password`.
 
-A port already in use is not a problem: AiSOC publishes on a free one and says so. Then **prove it actually works**. `make smoke` posts one real event to the ingest API, follows it
-through Kafka, detection, correlation and Postgres, and reads the alert back out of the public API.
-Every stage reports PASS or FAIL:
+**A port already in use does not stop the install.** AiSOC publishes on a free one, names what held
+the old one, and moves the console address with it — measured on a bare clone with 5432 and 11434
+both taken, 64 seconds to a signed-in console.
+
+Then **prove it works**. `make smoke` posts one real event to the ingest API and follows it through
+Kafka, detection, correlation and Postgres, then reads the alert back out of the public API. Every
+stage reports PASS or FAIL:
 
 ```
 $ make smoke
 [PASS] raw telemetry accepted by ingest
 [PASS] event traversed the spine and became an alert
 [PASS] alert is retrievable by id from the API
+PASS: 10/10 stages
 ```
 
-Open **http://localhost:3000** and sign in with the credentials `make up` printed. The API is at
-**http://localhost:8000**; its spec is [`docs/openapi.yaml`](docs/openapi.yaml), because interactive
-docs are off in this production-class stack. On a server set `AISOC_CONSOLE_URL` in `.env`, and
-`make up` prints that address rather than localhost. Stuck? `make doctor`.
+Sign in at the address `make up` printed. A tenant with nothing connected lands on a **setup
+wizard** rather than an all-zero dashboard, and its state is read from your own data so it stays
+right if you connect a source through the API. The spec is
+[`docs/openapi.yaml`](docs/openapi.yaml) — interactive docs are off in this production-class stack.
+Stuck? `make doctor`, which on a host where you have not run `make up` yet says exactly that.
 
 ## Try it without connecting anything
 
-Sign in and press **Load sample data** in the setup wizard: five scenarios take the same ingest path a real connector uses, so watching them become alerts means watching the pipeline work. They are labelled `AiSOC` and do **not** mark setup complete, because nothing is connected yet. For the larger fixed corpus used by demos and evals, `make demo` loads a **synthetic** dataset — the pipeline shape, not real activity, and never a benchmark, a customer or an incident. Every row is `is_synthetic = true` and labelled in the console.
+Press **Load sample data** in the wizard. Five scenarios take the same ingest path a real connector uses — not inserted rows — so watching them become alerts means watching the pipeline work. They span low to critical on purpose, because a first run where everything is a crisis teaches you nothing about how triage separates signal from routine. They are attributed to `AiSOC` in the source column, refuse to load into a tenant that already has real alerts, and do **not** mark setup complete. ([what each step proves](https://beenuar.github.io/AiSOC/docs/console/getting-started)) For the larger fixed corpus used by demos and evals, `make demo` loads a **synthetic** dataset — the pipeline shape, never a benchmark, a customer or an incident. Every row is `is_synthetic = true` and labelled in the console.
 
 ## Connect real data
 
-Two ways in. Push, with a credential from `make ingest-token` (the tenant comes from it, not from a header):
+Push, with a credential from `make ingest-token` (the tenant comes from it, not a header):
 
 ```bash
 curl -X POST http://localhost:8081/v1/ingest/batch \
   -H 'Content-Type: application/json' -H "Authorization: Bearer $AISOC_INGEST_TOKEN" \
-  -d '{"connector_id":"edr-1","connector_type":"crowdstrike","source_format":"json",
-       "events":[{"severity":"high","title":"Encoded PowerShell from Office",
-                  "host":"WIN-FIN-01","process_name":"powershell.exe"}]}'
+  -d '{"connector_id":"edr-1","connector_type":"crowdstrike","events":[{"severity":"high",
+       "title":"Encoded PowerShell from Office","host":"WIN-FIN-01"}]}'
 ```
 
-Or pull, by configuring one of **84 click-and-connect data connectors** in **Settings →
-Connectors** (needs the `full` profile). Those with vendor-specific normalization and live
-setup docs include Splunk, Microsoft Sentinel, Elastic, CrowdStrike, Okta, AWS (GuardDuty /
-CloudTrail / Security Hub), Wiz, and Kubernetes audit logs — full list in the
-[connector docs](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage). Without a
-vendor profile a connector still ingests through a generic mapping that resolves host, user
-and source IP from the usual spellings.
+Or pull, by configuring one of **84 click-and-connect data connectors** in **Settings → Connectors**
+(needs the `full` profile) — Splunk, Sentinel, Elastic, CrowdStrike, Okta, AWS and Kubernetes audit
+among those with vendor-specific normalization and setup docs
+([coverage](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage)). Without a vendor profile
+a connector still ingests through a generic mapping that resolves host, user and source IP.
 
 ## How it works
 
-Ingest normalizes to a common shape and Kafka carries it. Then
-fusion runs 2603 executable detection rules, of 6991 on disk, and decides what becomes an
-alert, correlation groups related alerts, an agent investigates and writes its reasoning to
-the Investigation Ledger, and a human approves any response. Separately, new threat intelligence
-sweeps the lake for sightings you already collected, and a hypothesis becomes a hunt without
-anyone writing a query — the model fills a closed schema and every value it supplies is bound
-as a parameter, so it cannot express a query at all.
+Ingest normalizes to a common shape and Kafka carries it, then
+fusion runs 2603 executable detection rules, of 6991 on disk, applies **your tenant's own tuning**
+on top — the disables, floors and suppressions the console writes, so a rule you turned off actually
+stops firing — and decides what becomes an alert. Correlation groups related alerts, an agent investigates and writes its reasoning
+to the Investigation Ledger, and a playbook may start from the result. Separately, new threat
+intelligence sweeps the lake for sightings you already collected, and a hypothesis becomes a hunt
+without anyone writing a query — the model fills a closed schema and every value it supplies is
+bound as a parameter, so it cannot express a query at all.
 
-**Executable is earned, not declared.** A rule enters the compiled ruleset only after a
-vendor-shaped event has been replayed through the real connector and this engine and that
-rule was *watched to fire*, with an empty event of the same shape producing nothing — never
-inferred from a directory or an `enabled:` flag. The proof can fail: `--prove-gate` reverts
-the Windows connector and requires all 1,687 Windows rules to go silent. It means the rule
-is reachable, not that it detects an attack.
-([how, and why 1,362 were refused](docs/detections/sigma-compilation.md))
+**A playbook triggered by an alert previews before it acts.** Three switches must agree — the
+deployment, the tenant, and the playbook — and every default is off; anything less runs in preview
+with its plan attached to the alert. An approval step inside one is a durable pause: the run suspends
+to Postgres, survives a restart, resumes from the step after the approval, and expires with a
+recorded outcome rather than hanging.
 
-Both **[docs/architecture/README.md](docs/architecture/README.md)** and the
-[docs portal](https://beenuar.github.io/AiSOC/docs/architecture) walk that path one step at
-a time, and every box in every diagram links to the code that implements it.
+**Executable is earned, not declared.** A rule enters the compiled ruleset only after a vendor-shaped
+event has been replayed through the real connector and this engine and that rule was *watched to
+fire* — never inferred from a directory or an `enabled:` flag. The proof can fail: `--prove-gate`
+reverts the Windows connector and requires all 1,687 Windows rules to go silent. It means the rule is
+reachable, not that it detects an attack. 119 still cannot fire on any connector, counted by family
+rather than hidden. ([how, and why 1,362 were refused](docs/detections/sigma-compilation.md))
+
+**[docs/architecture/README.md](docs/architecture/README.md)** walks that path one step at a time —
+eleven steps, five diagrams, every box linking to the code that implements it — and
+[mirrors to the docs portal](https://beenuar.github.io/AiSOC/docs/architecture).
 
 ## Deployment profiles
 
@@ -132,24 +137,21 @@ a time, and every box in every diagram links to the code that implements it.
 | **full** | `make up-full` | 22 | ~12 GB | Core plus event lake, entity graph, full-text search, enrichment |
 | **demo** | `make up && make demo` | 16 | ~8 GB | Core plus labelled synthetic data |
 
-CORE is the smallest deployment that takes a real event and produces a real
-alert, and **it needs no credentials to do either** — for two reasons.
+CORE is the smallest deployment that takes a real event and produces a real alert, and **it needs no
+credentials to do either.**
 
-**The model ships with the gateway.** Ollama runs a pinned ~2 GB
-`llama3.2:3b-instruct-q4_K_M` sized for CPU-only inference, so `make up` produces real triage
-verdicts with real token counts in the Investigation Ledger — not a stub. It is not a frontier
-model: over 50 alerts it gave triage usable output 44 times before the reply was constrained to
-JSON and 50 after ([method](scripts/measure_triage_reliability.py)); the rail labels which path
-answered. To upgrade, set `OPENAI_API_KEY`, `AISOC_LLM_MODEL_FAST`, `AISOC_LLM_MODEL_DEEP` and an
-empty `AISOC_LLM_API_BASE`. **No hosted provider has ever been exercised here** — there is no
-funded key, so per-model rows read *not measured* rather than zero.
+**The model ships with the gateway.** Ollama runs a pinned ~2 GB `llama3.2:3b-instruct-q4_K_M`
+sized for CPU-only inference, so `make up` produces real triage verdicts with real token counts in
+the Investigation Ledger — not a stub. It is not a frontier model: over 50 alerts it gave triage
+usable output 44 times before the reply was constrained to JSON and 50 after
+([method](scripts/measure_triage_reliability.py)), and the rail labels which path answered. Upgrade
+by setting `OPENAI_API_KEY` and the model pins. **No hosted provider has ever been exercised
+here** — there is no funded key, so per-model rows read *not measured* rather than zero.
 ([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
 
 **One real external feed ships too.** `services/threatintel` polls the CISA Known Exploited
-Vulnerabilities catalog — authoritative, public, no API key — into the console's Threat
-Intelligence page: the one thing in a fresh install that is neither synthetic nor yours.
-`cisa.gov` answers 403 to whole networks regardless of user agent, so it falls back to CISA's
-own GitHub mirror rather than sitting at zero rows and calling that a clean estate.
+Vulnerabilities catalog — public, no API key — into the console's Threat Intelligence page: the one
+thing in a fresh install that is neither synthetic nor yours.
 
 ## Real vs synthetic data
 
@@ -157,14 +159,15 @@ own GitHub mirror rather than sitting at zero rows and calling that a clean esta
 |---|---|---|
 | **Real** | Your connectors and the ingest API | `is_synthetic = false` (the default) |
 | **Real, and not yours** | The CISA KEV feed on the Threat Intelligence page | Every row carries `source: cisa-kev`; it is the public catalog, unmodified |
+| **Sample** | The wizard's **Load sample data** | Source column reads `AiSOC`; RFC 5737 / RFC 2606 reserved addresses only |
 | **Demo** | `make demo` | `is_synthetic = true`, labelled in the console |
 | **Benchmark** | `services/agents/tests/eval_data/` | Every published row carries `substrate: true` |
 | **Test fixtures** | `tests/`, `**/tests/` | Never shipped in an image |
 
-**Production never silently falls back to synthetic data.** When a backend is unreachable
-the console names the failure, not an invented investigation — and an unmeasured figure
-reads *not measured*, never `0`. That was not always true; see
-[the reality audit](docs/audit/REPOSITORY_REALITY.md) for where it was wrong and how it was fixed.
+**Production never silently falls back to synthetic data.** An unreachable backend makes the console
+name the failure, not invent an investigation, and an unmeasured figure reads *not measured*, never
+`0`. That was not always true — [the reality audit](docs/audit/REPOSITORY_REALITY.md) records where
+it was wrong and how it was fixed.
 
 ## AI agents
 
@@ -175,10 +178,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 - **Everything is logged** to the Investigation Ledger: prompts, tool calls, citations, the verdict, and token cost.
 - **Grounding is checked.** A verdict citing an indicator the evidence never contained is demoted to human review rather than auto-closed.
 - **A prompt is validated before it is sent.** Raw logs, OCSF payloads and secret-shaped values are refused, not redacted after the fact.
-- **Nothing executes without a human.** An approver must hold the required permission tier and must not be the person who requested the action.
-
-The bundled model means agents reason for real out of the box. When it returns something the schema
-rejects, triage falls back to a deterministic path and the rail shows which one answered — it never fabricates a verdict.
+- **No vendor is touched without a human**, unless a tenant has explicitly granted autonomy for that verb. Every response step is graded against its own capability contract at dispatch, so approving a playbook never authorises whatever its steps happen to contain, and an approver must hold the required permission tier and must not be the person who requested the action.
 
 ## Project maturity
 
@@ -191,10 +191,12 @@ rejects, triage falls back to a deterministic path and the rail shows which one 
 | AI triage + Investigation Ledger | Beta | Unit + substrate eval + local-model run | Yes, copilot mode |
 | Event lake + hunting (ClickHouse) | Beta | Unit | Yes, `full` profile |
 | Retro-hunts when new intel arrives | Beta | Unit + live ClickHouse replay | Yes, `full` profile |
-| 68-hunt YAML library, replayed against synthetic events | Alpha | Unit + boundary gate | Yes, `full` profile. The NL hunting agent is **not wired**: nothing outside its own test imports it, and the scheduler reads a synthetic JSONL corpus rather than tenant data. Restored by parity 6.1 |
+| 68-hunt YAML library, replayed against synthetic events | Alpha | Unit + boundary gate | `full` profile. The NL hunting agent is **not wired** — nothing outside its own test imports it, and the scheduler reads a synthetic corpus rather than tenant data (parity 6.1) |
 | SCIM 2.0, white-label, usage metering | Beta | Unit + Okta/Entra sequences | Yes |
 | Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
+| Alert-triggered playbooks, with a durable approval pause | Beta | Unit + live Postgres suspend/resume | Yes — three opt-ins deep, preview by default |
+| Per-tenant detection tuning in the live engine | Beta | Unit + live overlay read | Yes |
 | Scheduled connectors | Beta | Contract tests | `full` profile |
 | UEBA | Beta | Unit + live migration round-trip | `full` profile |
 | Package distribution (npm/PyPI) | Ready, unpublished | `release.yml` builds and packs all eight on every tag | Install from source — the upload is blocked on registry credentials, which is an account action |
@@ -206,17 +208,16 @@ rejects, triage falls back to a deterministic path and the rail shows which one 
 - **Not able to see telemetry you have not connected.** There is no discovery.
 - **Not autonomous by default.** Response requires explicit policy
   authorization and a human approver.
-- **Demo incidents are not real incidents**, and benchmark corpora are not
-  customer telemetry.
-- **Benchmark numbers are substrate self-consistency measures**, not live
-  agent accuracy, and are labelled as such wherever published.
+- **Demo and sample incidents are not real incidents**, and benchmark numbers are substrate
+  self-consistency measures rather than live agent accuracy — labelled as such wherever published.
 
 ## Troubleshooting
 
-`make doctor` checks the host tools, memory and disk in the Docker VM, every port, each
-datastore by querying it rather than by asking whether its container is up, and whether `.env`
-still holds placeholders — then prints the command to run next. The six failures it is most
-often right about are tabulated under [Installation](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
+`make doctor` checks host tools, memory and disk, every port, each datastore by *querying* it rather
+than asking whether its container is up, and whether `.env` still holds placeholders — then prints
+the command to run next. A container killed by a full Docker VM is named as that, not reported as
+the service that happened to die. The six failures it is most often right about are tabulated under
+[Installation](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
 
 ## Security
 
@@ -226,10 +227,9 @@ apply to them, and tenant isolation is enforced at the query layer in every stor
 mutating route, ingest is authenticated, and the default install sends no prompt anywhere — the
 model runs beside it.
 
-**A service with no credential refuses to serve rather than serving unauthenticated.** As of v12.0.0
-the actions service and the realtime edge fail closed on a missing secret; `make up` generates all
-six, including into an `.env` that already exists. Eight reported vulnerabilities were fixed in that
-release — the [changelog](CHANGELOG.md) says what each was. Report via [SECURITY.md](SECURITY.md).
+**A service with no credential refuses to serve rather than serving unauthenticated**, and `make up`
+generates every secret it needs. The [changelog](CHANGELOG.md) records each fixed vulnerability;
+report via [SECURITY.md](SECURITY.md).
 
 ## Developing
 
@@ -242,8 +242,8 @@ make stats       # recount every figure this README publishes
 Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) ·
 [add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
 [plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle) ·
-[contributing](CONTRIBUTING.md). Every count above is recounted from the tree by
-`scripts/project_stats.py`, and CI fails if this README disagrees with it.
+[contributing](CONTRIBUTING.md). Every count above is recounted from the tree by `make stats`, and
+CI fails if this README disagrees with it.
 
 ## Roadmap · Contributing · License
 
