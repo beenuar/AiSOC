@@ -10,6 +10,7 @@ from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
 from app.memory.provider import MemoryPriorProvider
+from app.services import ioc_match
 from app.services.alert_enricher import AlertEnricher
 from app.services.alert_sink import AlertSink
 from app.services.attack_chain_grouper import AttackChainGrouper
@@ -20,6 +21,7 @@ from app.services.detection_engine import DetectionEngine
 from app.services.dlq_sink import PostgresDLQ
 from app.services.entity_risk import EntityRiskEngine
 from app.services.fusion_engine import FusionEngine
+from app.services.ioc_match import TenantIocMatcher
 from app.services.lake_writer import LakeWriter
 from app.services.ueba_signal import UebaSignalCache
 from app.services.windowed_detection import WindowedDetectionEngine
@@ -64,11 +66,19 @@ async def lifespan(app: FastAPI):
         else None
     )
     # Wave 1 — fuse-time TI/vuln enrichment via the enrichment service.
+    # Parity 3.1. The matcher reads `threat_intel_iocs` from the Postgres
+    # this service already connects to, so it works on CORE where the
+    # enrichment service (a `full` profile component) does not run. Without
+    # it, `enrich()` caught a connection error, logged at debug and
+    # returned `{}`, and the investigation agent received "could not check"
+    # for every indicator on every alert.
+    ioc_matcher = TenantIocMatcher(settings.database_url) if ioc_match.enabled() else None
     enricher = (
         AlertEnricher(
             base_url=settings.enrichment_service_url,
             timeout_seconds=settings.fuse_enrichment_timeout_seconds,
             malicious_risk_floor=settings.fuse_enrichment_risk_floor,
+            ioc_matcher=ioc_matcher,
         )
         if settings.fuse_enrichment_enabled
         else None
