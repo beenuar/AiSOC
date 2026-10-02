@@ -44,6 +44,7 @@ nobody has.
 from __future__ import annotations
 
 import argparse
+import ast
 import re
 import sys
 from dataclasses import dataclass, field
@@ -155,6 +156,20 @@ EVIDENCE: dict[str, Evidence] = {
             "from a tenant with no tuning — both suppress nothing. The negative control "
             "re-injects the real defect, the two columns `detection_rules` does not have, "
             "and requires six of the ten tests to fail."
+        ),
+    ),
+    "SCIM 2.0, white-label, usage metering": Evidence(
+        tests=("tests/isolation/test_scim_live.py",),
+        workflow="scim-live.yml",
+        job="scim-live",
+        negative_control=".github/workflows/scim-live.yml",
+        negative_marker="The gate fails when SCIM stops scoping to the token's tenant",
+        rationale=(
+            "The offline suite runs on SQLite with `@compiles` shims for the four types "
+            "Postgres and SQLite disagree about most, and mounts the router on a bare "
+            "`FastAPI()` rather than the real application. This drives "
+            "`create_application()` against real Postgres as the runtime role, and the two "
+            "static contract gates move here from a path-filtered workflow."
         ),
     ),
     "Entity graph (Neo4j)": Evidence(
@@ -394,10 +409,38 @@ def exercises_real_path(test: str) -> tuple[bool, str]:
             f"{test} defines {names}, so the system under test is replaced rather than "
             "exercised. A double that answers whatever it is asked cannot fail."
         )
-    intercepted = [name for name in INTERCEPTORS if name in source]
+    code = _without_prose(source)
+    intercepted = [name for name in INTERCEPTORS if name in code]
     if intercepted:
         return False, (f"{test} uses {', '.join(intercepted)}, which intercepts the boundary it claims to cross.")
     return True, ""
+
+
+def _without_prose(source: str) -> str:
+    """The source with docstrings and comments removed.
+
+    A live suite's docstring routinely *names* the thing it refuses to
+    use — the SCIM one explains at length why the offline harness's
+    SQLite shims cannot certify the capability. Grepping the whole file
+    flagged that explanation as the offence it describes, which is the
+    same mistake as searching for a socket option in a function whose
+    docstring exists to say why it must not be set.
+
+    Falls back to the raw source when the file does not parse: a syntax
+    error should surface as a failing test, not as a silently relaxed
+    rule here.
+    """
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return source
+
+    skip: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str) and node.end_lineno:
+            skip.update(range(node.lineno, node.end_lineno + 1))
+
+    return "\n".join("" if index in skip or raw.lstrip().startswith("#") else raw for index, raw in enumerate(source.splitlines(), start=1))
 
 
 def has_negative_control(entry: Evidence) -> tuple[bool, str]:
@@ -497,11 +540,26 @@ def _self_test() -> int:
     original = dict(EVIDENCE)
 
     # 1. A row marked Stable with no evidence entry at all.
+    #
+    # The victim is chosen from the table rather than named, because this
+    # case originally hardcoded a capability that was later promoted. The
+    # replacement then matched nothing, the case found nothing unbacked,
+    # and a self-test that silently stops testing is worse than one that
+    # was never written. If every row is Stable there is nothing to
+    # perturb, so the case reports honestly rather than passing.
     text = README.read_text(encoding="utf-8", errors="replace")
-    faked = text.replace("| UEBA | Beta |", "| UEBA | Stable |", 1)
-    rows, _ = parse_table(faked)
-    unbacked = [r for r in rows if r.status == "Stable" and _match_key(r.capability) is None]
-    cases.append(("detects a row marked Stable with no evidence entry", bool(unbacked)))
+    victim = next((r for r in baseline.rows if r.status in ("Beta", "Alpha")), None)
+    if victim is None:
+        cases.append(("no Beta or Alpha row left to perturb for this case", False))
+    else:
+        faked = text.replace(
+            f"| {victim.capability} | {victim.status} |",
+            f"| {victim.capability} | Stable |",
+            1,
+        )
+        rows, _ = parse_table(faked)
+        unbacked = [r for r in rows if r.status == "Stable" and _match_key(r.capability) is None]
+        cases.append((f"detects {victim.capability[:38]!r} marked Stable with no evidence", bool(unbacked)))
 
     # 2. An entry whose workflow is path-filtered.
     ok, _ = workflow_is_unconditional("isolation-live.yml", "live-stores")

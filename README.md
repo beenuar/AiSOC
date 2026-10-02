@@ -192,7 +192,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | Event lake + hunting (ClickHouse) | Beta | Unit | Yes, `full` profile |
 | Retro-hunts when new intel arrives | Beta | Unit + live ClickHouse replay | Yes, `full` profile |
 | 68-hunt YAML library, replayed against synthetic events | Alpha | Unit + boundary gate | `full` profile. The NL hunting agent is **not wired** — nothing outside its own test imports it, and the scheduler reads a synthetic corpus rather than tenant data (parity 6.1) |
-| SCIM 2.0, white-label, usage metering | Beta | Unit + Okta/Entra sequences | Yes |
+| SCIM 2.0, white-label, usage metering | Stable | Live Postgres through the real app, with a negative control | Yes |
 | Entity graph (Neo4j) | Stable | Live Neo4j against the production reader, with a negative control | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
 | Alert-triggered playbooks, with a durable approval pause | Stable | Live Postgres: suspend, restart, resume, expiry, with a negative control | Yes — three opt-ins deep, preview by default |
