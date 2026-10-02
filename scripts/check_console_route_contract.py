@@ -76,6 +76,47 @@ KNOWN_UNRESOLVED: dict[str, str] = {
 }
 
 
+def _run_isolated(argv: list[str], *, cwd: pathlib.Path, timeout: int):
+    """Run a probe in its own process group, and kill the group on timeout.
+
+    Not a fix for an observed hang. A CI job appeared stuck on this step
+    for ninety minutes and the diagnosis was that a grandchild holding the
+    pipes defeats `subprocess.run(timeout=...)`; that was **wrong**, proven
+    by reproducing the shape and watching the plain call time out in three
+    seconds. The job had in fact completed in 23 minutes and the GitHub
+    API was reporting a stale state.
+
+    Kept anyway, for two reasons that stand on their own: killing the
+    process group closes every inherited pipe rather than only the child's,
+    which is correct even where the plain call happens to cope; and
+    `stdin` is closed, so a probe that decides to prompt dies instead of
+    waiting. The timeout also drops from 240s to 90s, which caps the worst
+    case at six minutes across six services rather than twenty-four.
+    """
+    import os
+    import signal
+
+    process = subprocess.Popen(  # noqa: S603
+        argv,
+        cwd=cwd,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        stdout, stderr = process.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            process.kill()
+        process.communicate()
+        return None
+    return subprocess.CompletedProcess(argv, process.returncode, stdout, stderr)
+
+
 @dataclass
 class Report:
     console_paths: set[str] = field(default_factory=set)
@@ -146,14 +187,10 @@ def _service_paths(root: pathlib.Path, service: str) -> set[str]:
     """Paths one FastAPI service publishes, from its own OpenAPI document."""
     script = "import json,sys;sys.path.insert(0,'.');from app.main import app;print(json.dumps(sorted(app.openapi().get('paths',{}))))"
     try:
-        out = subprocess.run(
-            [sys.executable, "-c", script],
-            cwd=root / "services" / service,
-            capture_output=True,
-            text=True,
-            timeout=180,
-        )
+        out = _run_isolated([sys.executable, "-c", script], cwd=root / "services" / service, timeout=90)
     except (OSError, subprocess.TimeoutExpired):
+        return set()
+    if out is None:
         return set()
     for line in reversed(out.stdout.splitlines()):
         line = line.strip()
