@@ -77,8 +77,16 @@ class TenantOverlay:
 
     tenant_id: str
     overrides: dict[str, RuleOverride] = field(default_factory=dict)
+    #: Field name to the values this tenant has declared fine. Feeds the
+    #: `<x>_in_allowlist` booleans 15 rules read and nothing computed.
+    allowlists: dict[str, list[str]] = field(default_factory=dict)
     version: str = ""
     loaded_at: float = 0.0
+
+    def derived_allowlist_fields(self, event: dict[str, Any]) -> dict[str, bool]:
+        if not self.allowlists:
+            return {}
+        return allowlist_fields(self.allowlists, event)
 
     def suppresses(self, rule_id: str, event: dict[str, Any]) -> str | None:
         """Why this rule must not fire for this tenant, or None.
@@ -194,12 +202,80 @@ def build_overlay(tenant_id: str, rows: list[dict[str, Any]], *, now: float | No
             reason=suppression.get("reason") or threshold.get("reason"),
         )
 
+    # A tenant's allowlists live beside their suppressions: the console
+    # writes both, and an allowlist is the same decision expressed for a
+    # field rather than for a rule.
+    allowlists: dict[str, list[str]] = {}
+    for row in rows:
+        suppression = row.get("suppression_config") or {}
+        if isinstance(suppression, str):
+            try:
+                suppression = json.loads(suppression)
+            except ValueError:
+                continue
+        raw = suppression.get("allowlists") if isinstance(suppression, dict) else None
+        if isinstance(raw, dict):
+            for key, value in raw.items():
+                values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
+                allowlists.setdefault(str(key), []).extend(values)
+
     return TenantOverlay(
         tenant_id=tenant_id,
         overrides=overrides,
+        allowlists=allowlists,
         version=_version_of(rows),
         loaded_at=now if now is not None else time.monotonic(),
     )
+
+
+# ── Per-tenant allowlists (parity 5.5) ──────────────────────────────────
+#
+# 15 of the 133 rules that cannot fire need an `<x>_in_allowlist` boolean
+# that nothing computed. They were the cheapest family to close, because
+# an allowlist is the same thing a tenant already configures as a
+# suppression: a list of values they have decided are fine.
+#
+# Each entry maps the boolean a rule reads to the event field its value
+# comes from. Derived here rather than in `derived_fields.py` because the
+# answer is per tenant, and a shared derived field would make one tenant's
+# allowlist apply to everybody.
+ALLOWLIST_FIELDS: dict[str, str] = {
+    "image_registry_in_allowlist": "image_registry",
+    "dst_registry_in_allowlist": "dst_registry",
+    "external_account_in_allowlist": "external_account",
+    "impersonator_in_allowlist": "impersonator",
+    "share_target_domain_in_allowlist": "share_target_domain",
+    "backup_dst_in_allowlist": "backup_dst",
+    "src_country_in_allowlist": "src_country",
+    "src_country_not_in_allowlist": "src_country",
+    "source_image_not_in_allowlist": "source_image",
+    "source_image_basename_not_in_allowlist": "source_image_basename",
+    "image_basename_in_allowlist": "image_basename",
+    "dst_in_allowlist": "dst",
+    "src_in_allowlist": "src",
+}
+
+
+def allowlist_fields(allowlists: dict[str, list[str]], event: dict[str, Any]) -> dict[str, bool]:
+    """The `<x>_in_allowlist` booleans this event's values produce.
+
+    An absent allowlist yields **no key at all** rather than `False`. The
+    distinction matters: `not_in_allowlist` with an unconfigured list
+    would be `True` for every event and the rule would fire on all of
+    them, which is exactly the "a negation flips on a missing field"
+    failure recorded for the Sigma import.
+    """
+    out: dict[str, bool] = {}
+    for boolean, source in ALLOWLIST_FIELDS.items():
+        configured = allowlists.get(source)
+        if configured is None:
+            continue
+        value = event.get(source)
+        if value is None:
+            continue
+        member = str(value) in {str(v) for v in configured}
+        out[boolean] = member if boolean.endswith("_in_allowlist") and "_not_in_" not in boolean else not member
+    return out
 
 
 #: An overlay with nothing in it. Returned for a tenant that has tuned

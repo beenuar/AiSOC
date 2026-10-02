@@ -281,3 +281,95 @@ class TestTheOverlayType:
     def test_empty_is_shared_and_carries_no_overrides(self) -> None:
         assert isinstance(EMPTY, TenantOverlay)
         assert EMPTY.overrides == {}
+
+
+class TestPerTenantAllowlists:
+    """Parity 5.5. The cheapest of the five unreachable families.
+
+    15 rules read an `<x>_in_allowlist` boolean that nothing computed, so
+    they could never fire on any connector. An allowlist is the same
+    decision a tenant already expresses as a suppression, so the overlay
+    was the natural place for it: 133 unreachable rules became 119.
+
+    Per tenant rather than in the shared derived-field pass, because a
+    global allowlist would make one tenant's exceptions apply to
+    everybody.
+    """
+
+    def test_a_member_is_in_the_allowlist(self) -> None:
+        from app.services.tenant_overlay import allowlist_fields
+
+        out = allowlist_fields({"src_country": ["GB", "US"]}, {"src_country": "GB"})
+        assert out["src_country_in_allowlist"] is True
+        assert out["src_country_not_in_allowlist"] is False
+
+    def test_a_stranger_is_not(self) -> None:
+        from app.services.tenant_overlay import allowlist_fields
+
+        out = allowlist_fields({"src_country": ["GB"]}, {"src_country": "RU"})
+        assert out["src_country_in_allowlist"] is False
+        assert out["src_country_not_in_allowlist"] is True
+
+    def test_an_unconfigured_allowlist_contributes_no_key(self) -> None:
+        """The property that matters most.
+
+        A `not_in_allowlist` clause against a missing key is true for
+        every event, so the rule would fire on all of them. That is the
+        negation-flips-on-absence failure already recorded for the Sigma
+        import, and `False` would be just as wrong in the other
+        direction.
+        """
+        from app.services.tenant_overlay import allowlist_fields
+
+        assert allowlist_fields({}, {"src_country": "RU"}) == {}
+
+    def test_an_absent_event_field_contributes_no_key(self) -> None:
+        from app.services.tenant_overlay import allowlist_fields
+
+        assert allowlist_fields({"src_country": ["GB"]}, {"user": "j.doe"}) == {}
+
+    def test_every_allowlist_boolean_the_corpus_reads_is_mapped(self) -> None:
+        """Otherwise a rule stays unreachable while the ratchet says it is
+        not."""
+        import json
+        import pathlib as _p
+        import re
+
+        from app.services.tenant_overlay import ALLOWLIST_FIELDS
+
+        corpus = _p.Path(__file__).resolve().parents[1] / "app/data/detection_ruleset.json"
+        rules = json.loads(corpus.read_text())
+        rules = rules if isinstance(rules, list) else rules.get("rules", [])
+        wanted = set()
+        for rule in rules:
+            wanted.update(re.findall(r'"([a-z_]+_(?:not_)?in_allowlist)"', json.dumps(rule.get("match_when") or {})))
+        missing = wanted - set(ALLOWLIST_FIELDS)
+        assert not missing, f"the corpus reads allowlist booleans nothing derives: {sorted(missing)}"
+
+    def test_a_rule_that_could_never_fire_now_can(self) -> None:
+        """End to end through the real engine."""
+        from app.services.detection_engine import DetectionEngine
+        from app.services.tenant_overlay import build_overlay
+
+        rules = [
+            {
+                "id": "r1",
+                "name": "Login from an unexpected country",
+                "severity": "high",
+                "category": "identity",
+                "match_when": {"src_country_not_in_allowlist": True},
+            }
+        ]
+        engine = DetectionEngine(rules=rules)
+        event = {"ocsf_event": {"raw_data": '{"src_country": "RU"}'}}
+
+        assert engine.evaluate(event) == [], "the rule fired with no allowlist configured"
+
+        overlay = build_overlay(
+            "t-1",
+            [_row("other", suppression_config={"allowlists": {"src_country": ["GB"]}})],
+        )
+        assert len(engine.evaluate(event, overlay)) == 1, "the rule still cannot fire"
+
+        allowed = {"ocsf_event": {"raw_data": '{"src_country": "GB"}'}}
+        assert engine.evaluate(allowed, overlay) == [], "an allowlisted country still alerted"

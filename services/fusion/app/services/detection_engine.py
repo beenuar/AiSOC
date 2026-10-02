@@ -191,6 +191,22 @@ class DetectionEngine:
         # values were already present and nothing was computing the answer,
         # so those rules could never fire.
         fields = enrich(fields, self._derived_wanted)
+
+        # Parity 5.5. 15 rules read an `<x>_in_allowlist` boolean that
+        # nothing computed, so they could never fire. The answer is per
+        # tenant, which is why it comes from the overlay rather than from
+        # the shared derived-field pass: a global allowlist would make one
+        # tenant's exceptions apply to everybody.
+        #
+        # An unconfigured allowlist contributes **no key**, not False. A
+        # `not_in_allowlist` clause against a missing key would be true for
+        # every event, which is the negation-flips-on-absence failure the
+        # Sigma import already recorded.
+        if overlay is not None:
+            derived = overlay.derived_allowlist_fields(fields)
+            if derived:
+                fields = {**fields, **derived}
+
         hits: list[DetectionHit] = []
         for rule in self._candidates(""):
             try:

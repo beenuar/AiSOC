@@ -72,7 +72,11 @@ NORMALIZER = ROOT / "services" / "ingest" / "internal" / "normalizer" / "normali
 #: Current number of engine-loaded rules that depend on a DERIVED or STATEFUL
 #: field. This may only ever decrease. Lower it in the same PR that fixes
 #: rules; never raise it to make a red build green.
-MAX_UNREACHABLE = 133
+# 133 before parity 5.5, which closed the 15-rule per-tenant-allowlist
+# family by deriving the booleans from the tenant overlay. 14 rules moved
+# (one rule carried two clauses), leaving the four families that genuinely
+# need engine or enrichment work.
+MAX_UNREACHABLE = 119
 
 #: Fields that no telemetry carries because they are computed, not observed:
 #: sliding-window counters, allowlist membership, privilege flags, and
@@ -94,9 +98,19 @@ MAX_UNREACHABLE = 133
 #: moved none of these rules off this list and the count did not move either.
 #:
 #: Migrating one means *authoring* a `wd-*` rule, not flipping a flag.
+#: Parity 5.5 removed `_in_allowlist` from this pattern. It is no longer
+#: a field nothing computes: `services/fusion/app/services/tenant_overlay.py`
+#: derives it per tenant from the allowlists the console writes, and the
+#: engine merges it into the match namespace before evaluating.
+#:
+#: Per tenant rather than in the shared derived-field pass, deliberately:
+#: a global allowlist would make one tenant's exceptions apply to
+#: everybody. An unconfigured allowlist contributes no key at all rather
+#: than `False`, because a `not_in_allowlist` clause against a missing key
+#: is true for every event, which is the negation-flips-on-absence failure
+#: already recorded for the Sigma import.
 _DERIVED_FIELD_PATTERN = re.compile(
     r"(_count$|^count_|_per_|time_window|_window_"
-    r"|_in_allowlist$|_not_in_allowlist$"
     r"|_priv$|_is_admin$|_is_dc$|_eq_|_neq|^is_"
     r"|_age_days$|_age_hours$|_ratio$|_percent$"
     r"|^active_|_baseline|_is_first_|_seen_before$|_deviation)"
