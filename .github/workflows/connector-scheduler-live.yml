@@ -1,0 +1,137 @@
+# The connector scheduler, against real Postgres and a real HTTP vendor.
+#
+# Why this exists
+# ---------------
+# The defect this job exists for is the reason "connect a source" never
+# pulled data on any deployment: `reload_jobs` added every poll job with
+# `next_run_time=None`, which APScheduler 3.x registers as PAUSED. The
+# scheduler started, the job list looked right, `last_sync` stayed null for
+# every instance, and nothing logged an error — nothing had gone wrong,
+# exactly. The jobs were never going to run.
+#
+# No mock catches that. A test asserting `add_job` was called with the right
+# arguments passes whether or not APScheduler will ever fire it; only a real
+# AsyncIOScheduler knows what `next_run_time=None` means.
+#
+# The vendor and ingest are stubs because this is not a test of Okta's API —
+# but they are *sockets*, not patched methods, so the connector's own client
+# and the real IngestClient are both on the path.
+#
+# No `paths:` filter: `docs/audit/MATURITY_DEFINITION.md` requires a Stable
+# capability to be graded on every pull request.
+name: Connector scheduler (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: connector-scheduler-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  connector-scheduler-live:
+    name: An enabled connector polls and reaches ingest
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The runtime role, not the owner: a superuser ignores every RLS
+      # policy even under FORCE ROW LEVEL SECURITY.
+      CONNECTOR_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      AISOC_CONNECTORS_DISABLE_SCHEDULER: "0"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install the connectors service
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet \
+            "sqlalchemy[asyncio]" asyncpg apscheduler httpx structlog \
+            "pydantic>=2,<3" pydantic-settings "cryptography>=46,<51" \
+            pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: Mint a credential key for the vault
+        run: |
+          KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          echo "AISOC_CREDENTIAL_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: An enabled connector polls, reaches ingest, records last_sync
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: python -m pytest ../../tests/isolation/test_connector_scheduler_live.py -v --tb=short
+
+      # The negative control, and it re-injects the real defect.
+      #
+      # `next_run_time=None` is what shipped. Measured: four of the five
+      # tests fail with it back — the job is PAUSED, no event reaches
+      # ingest, no tenant header arrives and `last_sync` stays null.
+      #
+      # If the suite still passes, it is not driving a real scheduler, and
+      # that is worth failing the build over: the alternative is a green
+      # check over a product where connecting a source does nothing.
+      - name: The gate fails when poll jobs are registered paused
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: |
+          cp app/scheduler.py /tmp/scheduler.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/scheduler.py")
+          s = p.read_text()
+          if "next_run_time=first_run," not in s:
+              print("negative control could not find the next_run_time argument; the "
+                    "scheduler has been reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(s.replace("next_run_time=first_run,", "next_run_time=None,", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_connector_scheduler_live.py -q >/dev/null 2>&1; then
+            cp /tmp/scheduler.bak app/scheduler.py
+            echo "FAIL: the suite passed with every poll job registered PAUSED."
+            echo "      It is not driving a real APScheduler."
+            exit 1
+          fi
+          cp /tmp/scheduler.bak app/scheduler.py
+          echo "OK: re-injecting the paused-job defect makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_connector_scheduler_live.py -q

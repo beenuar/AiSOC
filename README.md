@@ -197,7 +197,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | Governed response actions | Beta | Unit | Human-approved only |
 | Alert-triggered playbooks, with a durable approval pause | Stable | Live Postgres: suspend, restart, resume, expiry, with a negative control | Yes — three opt-ins deep, preview by default |
 | Per-tenant detection tuning in the live engine | Stable | Live Postgres: tuning written changes what the engine fires, with a negative control | Yes |
-| Scheduled connectors | Beta | Contract tests, which gate the shape every connector must satisfy rather than any live vendor | Yes |
+| Scheduled connectors | Stable | Live scheduler polls a stub vendor into ingest, with a negative control | Yes |
 | UEBA | Stable | Live Postgres: migrations, scoring, persistence, isolation, with a negative control | Yes, `full` profile |
 | Package distribution (npm/PyPI) | Ready, unpublished | `release.yml` builds and packs all eight on every tag | Install from source — the upload is blocked on registry credentials, which is an account action |
 

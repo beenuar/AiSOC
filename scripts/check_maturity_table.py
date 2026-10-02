@@ -172,6 +172,21 @@ EVIDENCE: dict[str, Evidence] = {
             "static contract gates move here from a path-filtered workflow."
         ),
     ),
+    "Scheduled connectors": Evidence(
+        tests=("tests/isolation/test_connector_scheduler_live.py",),
+        workflow="connector-scheduler-live.yml",
+        job="connector-scheduler-live",
+        negative_control=".github/workflows/connector-scheduler-live.yml",
+        negative_marker="The gate fails when poll jobs are registered paused",
+        rationale=(
+            "The defect that meant connecting a source never pulled data was "
+            "`next_run_time=None`, which APScheduler registers as PAUSED — invisible to "
+            "any mock, because a test asserting `add_job` was called passes whether or not "
+            "the job will ever fire. This drives a real AsyncIOScheduler against real "
+            "Postgres and real sockets, and the negative control re-injects that exact "
+            "argument."
+        ),
+    ),
     "Entity graph (Neo4j)": Evidence(
         tests=("tests/isolation/test_graph_service_live.py",),
         workflow="graph-live.yml",
