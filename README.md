@@ -193,7 +193,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | Retro-hunts when new intel arrives | Beta | Unit + live ClickHouse replay | Yes, `full` profile |
 | 68-hunt YAML library, replayed against synthetic events | Alpha | Unit + boundary gate | `full` profile. The NL hunting agent is **not wired** — nothing outside its own test imports it, and the scheduler reads a synthetic corpus rather than tenant data (parity 6.1) |
 | SCIM 2.0, white-label, usage metering | Beta | Unit + Okta/Entra sequences | Yes |
-| Entity graph (Neo4j) | Beta | Unit | Yes, `full` profile |
+| Entity graph (Neo4j) | Stable | Live Neo4j against the production reader, with a negative control | Yes, `full` profile |
 | Governed response actions | Beta | Unit | Human-approved only |
 | Alert-triggered playbooks, with a durable approval pause | Beta | Unit (suspend/resume verified by hand against Postgres, not yet in CI) | Yes — three opt-ins deep, preview by default |
 | Per-tenant detection tuning in the live engine | Beta | Unit + a schema check that parses the migration | Yes |

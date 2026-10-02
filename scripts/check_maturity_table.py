@@ -117,6 +117,20 @@ class Evidence:
 #: rows the definition was derived from. The rest are added as each
 #: capability earns promotion, never before.
 EVIDENCE: dict[str, Evidence] = {
+    "Entity graph (Neo4j)": Evidence(
+        tests=("tests/isolation/test_graph_service_live.py",),
+        workflow="graph-live.yml",
+        job="graph-live",
+        negative_control=".github/workflows/graph-live.yml",
+        negative_marker="The gate fails when tenant scoping is removed",
+        rationale=(
+            "Every query comes from `graph_service.py` and runs through the driver a "
+            "deployment uses, against a Neo4j started the way the shipped compose starts "
+            "it, on every pull request with no path filter. The negative control removes "
+            "the anchor's tenant predicate — the exact defect that function's docstring "
+            "records — and requires the suite to go red."
+        ),
+    ),
     "Ingest → detect → correlate → alert": Evidence(
         tests=("tests/e2e/golden_pipeline/run_golden_pipeline.py",),
         workflow="golden-pipeline.yml",
@@ -293,12 +307,21 @@ def _job_block(text: str, job: str) -> str | None:
     return rest[: following.start()] if following else rest
 
 
+#: Ways a job can stand up real infrastructure. `docker run` is here
+#: because `isolation-live.yml` says in its own comment that it starts
+#: single-container stores that way deliberately — and leaving it out made
+#: this gate reject a job that starts a real Neo4j, which is the false
+#: negative that teaches people to work around a gate instead of trusting
+#: it.
+_CONTAINER_MARKERS = ("make up", "docker compose", "docker run")
+
+
 def declares_containers(workflow: str, job: str) -> bool:
     """Whether the job runs real infrastructure.
 
-    Either a `services:` block, or it brings the stack up itself — the
-    golden pipeline runs `make up`, which is more real than any `services:`
-    declaration.
+    A `services:` block, or the job standing the thing up itself. The
+    golden pipeline runs `make up`, which is more real than any
+    `services:` declaration.
     """
     path = WORKFLOWS / workflow
     if not path.is_file():
@@ -306,7 +329,9 @@ def declares_containers(workflow: str, job: str) -> bool:
     block = _job_block(path.read_text(encoding="utf-8", errors="replace"), job)
     if block is None:
         return False
-    return bool(re.search(r"^\s+services:", block, re.M)) or "make up" in block or "docker compose" in block
+    if re.search(r"^\s+services:", block, re.M):
+        return True
+    return any(marker in block for marker in _CONTAINER_MARKERS)
 
 
 def exercises_real_path(test: str) -> tuple[bool, str]:

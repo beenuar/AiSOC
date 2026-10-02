@@ -399,15 +399,34 @@ async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hop
     RETURN all_nodes
     """
 
-    async with get_session() as s:
-        result = await s.run(
-            cypher,
-            entity_id=entity_id,
-            tenant_id=tenant_id,
-            hops=hops,
-            global_labels=list(_GLOBAL_LABELS),
+    try:
+        async with get_session() as s:
+            result = await s.run(
+                cypher,
+                entity_id=entity_id,
+                tenant_id=tenant_id,
+                hops=hops,
+                global_labels=list(_GLOBAL_LABELS),
+            )
+            record = await result.single()
+    except Exception as exc:  # noqa: BLE001
+        # The fallback existed for exactly this and could not be reached by
+        # it. `if not record` only fires when the query *succeeds and
+        # returns nothing*; a Neo4j without the APOC plugin, or one where
+        # `apoc.*` is not in `dbms.security.procedures.unrestricted`,
+        # raises instead — and the route answered 500 rather than
+        # degrading to the plain-Cypher expansion sitting right below.
+        #
+        # The shipped compose installs APOC, so this never fired here. It
+        # fires for anyone pointing AiSOC at a managed or hardened Neo4j,
+        # which is the deployment least able to debug it.
+        if not _is_missing_procedure(exc):
+            raise
+        logger.warning(
+            "blast_radius.apoc_unavailable falling back to plain Cypher: %s",
+            str(exc)[:200].replace("\r", "").replace("\n", " "),
         )
-        record = await result.single()
+        return await _blast_radius_fallback(entity_id, entity_type, tenant_id, hops)
 
     if not record:
         return await _blast_radius_fallback(entity_id, entity_type, tenant_id, hops)
@@ -427,6 +446,28 @@ async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hop
         "type_breakdown": type_counts,
         "blast_radius_score": _calc_blast_score(type_counts),
     }
+
+
+def _is_missing_procedure(exc: Exception) -> bool:
+    """Whether Neo4j refused because a procedure is not installed.
+
+    Matched on the message rather than the exception type: the driver
+    raises `ClientError` for a large family of conditions, and catching
+    the type would also swallow a genuine Cypher error in the query above
+    — turning a bug into a silently degraded answer, which is worse than
+    the 500 this replaces.
+    """
+    # The driver's `code` attribute first. Neo4j publishes
+    # `Neo.ClientError.Procedure.ProcedureNotFound` as a stable
+    # identifier, and matching it is exact where matching prose is not:
+    # the first version of this looked for "was not registered" and the
+    # server actually says "registered for this database instance", so it
+    # missed the only condition it was written for.
+    code = getattr(exc, "code", "") or ""
+    if "ProcedureNotFound" in code:
+        return True
+    text = str(exc).lower()
+    return "procedurenotfound" in text or "no procedure with the name" in text or "not registered for this database" in text
 
 
 async def _blast_radius_fallback(entity_id: str, entity_type: str, tenant_id: str, hops: int) -> dict[str, Any]:

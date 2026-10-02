@@ -1,0 +1,142 @@
+# The production graph reader, against a real Neo4j, on every pull request.
+#
+# Why this is its own workflow rather than a step in isolation-live.yml
+# ---------------------------------------------------------------------
+# `docs/audit/MATURITY_DEFINITION.md` requires a Stable capability to be
+# graded unconditionally: no `paths:` filter, no `if:` that could skip it. A
+# required check that never reports is weaker than no check, because it looks
+# green on every commit it did not read.
+#
+# `isolation-live.yml` carries a path filter, and widening it would not fix
+# the property — a filter that lists more files is still a filter. Removing
+# that filter instead would run Neo4j, Redis, ClickHouse and Kafka on every
+# pull request, which is a lot of minutes to buy one capability's coverage.
+#
+# So the graph gets its own job with the one container it needs. Neo4j alone
+# is ready in about twenty seconds, which is cheap enough to run always —
+# and "always" is the whole point.
+name: Graph (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# No `paths:` above, deliberately. See the header.
+
+concurrency:
+  # Per commit on a push and per pull request otherwise. Keying on `ref`
+  # alone lets a push to main cancel the run before it: across 1,000 push
+  # runs this repository lost 259 that way, and a cancelled run reports
+  # neither pass nor fail.
+  group: graph-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  graph-live:
+    name: Tenant scoping holds in the production graph reader
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # APOC is installed because the shipped compose installs it, so the
+      # blast-radius query takes the same path here as it does in a real
+      # deployment. The plain-Cypher fallback is still reachable for a
+      # managed Neo4j that restricts `apoc.*`, and a unit test covers that
+      # branch — but this job should look like production, not like the
+      # degraded case.
+      - name: Start Neo4j the way docker-compose.yml does
+        run: |
+          docker run -d --name graph-neo4j -p 7687:7687 \
+            -e NEO4J_AUTH=neo4j/testpassword123 \
+            -e NEO4J_PLUGINS='["apoc"]' \
+            -e NEO4J_dbms_security_procedures_unrestricted='apoc.*' \
+            neo4j:5.15-community
+
+      - name: Install the API service and the Neo4j driver
+        run: |
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet \
+            "fastapi>=0.117,<0.142" "pydantic>=2,<3" pydantic-settings \
+            "sqlalchemy[asyncio]" asyncpg structlog neo4j \
+            pytest pytest-asyncio httpx "PyJWT>=2.8,<3"
+
+      - name: Wait for Neo4j
+        run: |
+          for i in $(seq 1 60); do
+            if docker exec graph-neo4j cypher-shell -u neo4j -p testpassword123 "RETURN 1" >/dev/null 2>&1; then
+              echo "Neo4j ready after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "Neo4j did not become ready"; docker logs graph-neo4j | tail -40; exit 1
+
+      - name: The production reader scopes every read to its tenant
+        working-directory: services/api
+        env:
+          ISOLATION_NEO4J_URI: bolt://localhost:7687
+          ISOLATION_NEO4J_USER: neo4j
+          ISOLATION_NEO4J_PASSWORD: testpassword123
+        run: python -m pytest ../../tests/isolation/test_graph_service_live.py -v --tb=short
+
+      # The negative control, and the reason this job is evidence rather
+      # than decoration.
+      #
+      # `get_entity_neighbors` once accepted `tenant_id` and never bound it:
+      # any authenticated user could read any other tenant's host, user or
+      # IOC node with all of its properties by naming the id. Its unit tests
+      # asserted on Cypher *text* through a fake session and passed
+      # throughout, because a text assertion cannot notice a missing
+      # parameter.
+      #
+      # So this removes the anchor's tenant predicate and requires the suite
+      # above to go red. If it does not, the suite is not testing what its
+      # name says, and this job fails rather than reporting a green that
+      # means nothing.
+      #
+      # Note the predicate removed is the *anchor* one. An earlier version
+      # of the suite could not tell the two apart: the neighbour predicate
+      # masked an unscoped anchor, and all six tests stayed green with the
+      # anchor scope deleted. The fixture now attaches a global MITRE
+      # Technique to the other tenant's host, which `_scoped` admits for
+      # everyone, so the anchor is exercised on its own.
+      - name: The gate fails when tenant scoping is removed
+        working-directory: services/api
+        env:
+          ISOLATION_NEO4J_URI: bolt://localhost:7687
+          ISOLATION_NEO4J_USER: neo4j
+          ISOLATION_NEO4J_PASSWORD: testpassword123
+        run: |
+          cp app/services/graph_service.py /tmp/graph_service.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/graph_service.py")
+          s = p.read_text()
+          needle = '    MATCH (n:{label} {{{id_prop}: $entity_id}})\n    WHERE {_scoped("n")}\n'
+          if needle not in s:
+              print("negative control could not find the predicate to remove; "
+                    "it has been renamed or reformatted and this control is no "
+                    "longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, '    MATCH (n:{label} {{{id_prop}: $entity_id}})\n    WHERE true\n', 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_graph_service_live.py -q >/dev/null 2>&1; then
+            cp /tmp/graph_service.bak app/services/graph_service.py
+            echo "FAIL: the suite passed with tenant scoping removed, so it is not testing tenant scoping."
+            exit 1
+          fi
+          cp /tmp/graph_service.bak app/services/graph_service.py
+          echo "OK: removing the tenant predicate makes the suite fail, as it must."
+
+      - name: Neo4j logs on failure
+        if: failure()
+        run: docker logs graph-neo4j | tail -80
