@@ -40,6 +40,7 @@ from sqlalchemy import and_, func, select
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.core.config import settings
+from app.core.security import ROLE_PERMISSIONS, has_permission
 from app.db.rls import TenantDBSession
 from app.models.responder import AgentApproval
 from app.services.actions_client import ActionsServiceError, decide_action, submit_action
@@ -311,11 +312,24 @@ async def _dispatch_decision(
     # identifier. Without that, "which action did this approval authorise"
     # requires a join nobody wrote.
     action_id = str(row.id)
+    # CurrentUser carries role/scopes/resolved_permissions — not a flat
+    # `.permissions` / `.roles` list, so `getattr(user, "permissions", [])`
+    # silently shipped an empty set and every approval dispatch failed the
+    # actions service's least-privilege gate ("approver lacks
+    # 'actions:execute:high'") even for platform admins. Resolve the real
+    # grant set through the same three-way order CurrentUser itself uses.
+    if getattr(user, "scopes", None) is not None:
+        permissions = list(user.scopes)
+    elif getattr(user, "resolved_permissions", None) is not None:
+        permissions = sorted(user.resolved_permissions)
+    else:
+        permissions = list(ROLE_PERMISSIONS.get(user.role, []))
     principal = {
         "user_id": str(user.user_id),
+        "tenant_id": str(user.tenant_id),
         "email": getattr(user, "email", None),
-        "roles": list(getattr(user, "roles", []) or []),
-        "permissions": list(getattr(user, "permissions", []) or []),
+        "roles": [user.role] if getattr(user, "role", None) else [],
+        "permissions": permissions,
     }
 
     try:
