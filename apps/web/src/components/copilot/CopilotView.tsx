@@ -475,6 +475,23 @@ export function CopilotView() {
       // fires because the request technically succeeded.
       const source = (res as { source?: string }).source;
       const notice = (res as { notice?: string }).notice;
+      // Parity 3.6: a model answer that names an IP, a hash or a CVE is
+      // making a claim about this estate. The backend grades each such
+      // claim against the records it was given; an analyst has no other
+      // way to tell one drawn from the evidence from one the model
+      // produced because it sounded right.
+      //
+      // The warning is appended rather than used to suppress or edit the
+      // answer. Hiding the unsupported half would show the analyst a
+      // different answer than the model gave, edited by something that
+      // cannot reliably tell which half was wrong.
+      const grounding = (res as { grounding?: { label?: string; uncited?: string[] } }).grounding;
+      const uncited = grounding?.uncited ?? [];
+      const groundingWarning =
+        uncited.length > 0
+          ? `Not supported by anything this answer was given: ${uncited.join(', ')}. Verify before acting.`
+          : null;
+
       const reply =
         source === 'template'
           ? {
@@ -488,7 +505,9 @@ export function CopilotView() {
                 res.reply.content,
               ].join('\n'),
             }
-          : res.reply;
+          : groundingWarning
+            ? { ...res.reply, content: [groundingWarning, '', '---', '', res.reply.content].join('\n') }
+            : res.reply;
       setMessages((prev) => [...prev, reply]);
       setEverSucceeded(true);
     } catch (err) {

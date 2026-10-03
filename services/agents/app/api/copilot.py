@@ -28,6 +28,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from app.api import conversation_store
+from app.api.copilot_grounding import ground_answer, sources_from_context
 from app.security.tenant_scope import (
     TenantPrincipal,
     TenantScopeError,
@@ -71,6 +72,11 @@ class CopilotChatResponse(BaseModel):
     #: analysis of the user's environment.
     source: Literal["llm", "template"] = "llm"
     notice: str | None = None
+    #: Which factual claims in `reply` cite a record, and which cite
+    #: nothing (parity 3.6). The console renders the label beside the
+    #: answer: an analyst has no other way to tell a claim drawn from the
+    #: evidence from one the model produced because it sounded right.
+    grounding: dict[str, Any] | None = None
 
 
 class CopilotConversation(BaseModel):
@@ -81,7 +87,12 @@ class CopilotConversation(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# In-memory store (demo: resets on restart; production would use Postgres)
+# Conversation store
+#
+# Tenant-scoped and persistent. This said "in-memory (demo: resets on
+# restart)" long after `conversation_store` took both a tenant and a
+# database, which is the kind of stale comment that makes a reader
+# distrust the ones that are true.
 # ---------------------------------------------------------------------------
 
 
@@ -274,10 +285,17 @@ async def chat(
         new_messages=[user_msg, assistant_msg],
     )
 
+    # Grade the answer against what it was given, and say so either way.
+    # A template reply is not graded: it asserts nothing about this
+    # estate, and labelling generic guidance "uncited" would put a
+    # warning where there is no claim to warn about.
+    grounding = ground_answer(reply_text, sources_from_context(req.context)).as_dict() if reply_source == "llm" else None
+
     return CopilotChatResponse(
         conversationId=stored.id,
         reply=CopilotMessage(**assistant_msg),
         source=reply_source,
+        grounding=grounding,
         notice=(
             "This reply came from a built-in template, not a language model. "
             "It is generic guidance and is not analysis of your environment. "
