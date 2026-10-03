@@ -155,8 +155,19 @@ ceilings:
     # is the real fix and is tracked in issue #1099 rather than done here,
     # because it
     # re-baselines every count in this file and belongs in its own change.
-    total: 104
-    error: 40
+    #
+    # 104 -> 103 and 40 -> 39, and this one is a real reduction rather
+    # than the ±1 the note above warns about. `main` reported exactly
+    # 40/104 on three consecutive runs while this branch reported 39/103,
+    # so the delta is the tree, not the scanner. The finding that went is
+    # an unused module-level `logger` in the new marketplace-installs
+    # service, removed because nothing logged through it.
+    #
+    # Lowering locks the improvement in, which is what a shrink-only
+    # ratchet is for. Raising one to make a scan pass is the thing that
+    # is never allowed.
+    total: 103
+    error: 39
     measured_with: "1.86.0"
   checkov:
     failed: 219
