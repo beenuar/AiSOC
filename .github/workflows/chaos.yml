@@ -1,0 +1,127 @@
+name: Chaos
+
+# Gap-closure wave 5.
+#
+# `scripts/chaos/fusion_restart.py` grades exactly-once event delivery
+# against real Postgres and is good. CI ran **only its self-test**, and
+# the live harness had been executed once, by hand. A harness nobody
+# triggers is a harness that rots: the thing it grades drifts, and the
+# first anyone finds out is during an incident.
+#
+# Three things run here that did not run anywhere before:
+#
+#   1. The event harness, live, against a real stack rather than its
+#      own self-test.
+#   2. Actions. Only events were covered, and the failure modes are not
+#      comparable — a lost event is a gap in a timeline, a lost action
+#      is a host that was never isolated while the console says it was.
+#   3. Store outages. Only Postgres and fusion were exercised; the
+#      platform also depends on ClickHouse, Neo4j, Qdrant, Redis and
+#      Kafka, and each has a *different* correct answer when it goes
+#      away.
+#
+# Scheduled plus dispatchable rather than per-PR: it takes a stack up
+# and tears it down repeatedly, and a job that slow on every pull
+# request gets disabled within a month.
+
+on:
+  schedule:
+    # Mondays 04:00 UTC, ahead of the week rather than after it.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      stores:
+        description: "Comma-separated stores to take down, or 'all'"
+        required: false
+        default: "all"
+  pull_request:
+    # On a PR only when the harness itself changes, so a change to the
+    # grader is graded by the grader.
+    paths:
+      - "scripts/chaos/**"
+      - ".github/workflows/chaos.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  # Per commit on push, per pull request otherwise. Keying on the ref
+  # alone lets a push cancel the run before it, which across this
+  # repository lost 259 runs of 1,000.
+  group: chaos-${{ github.event_name == 'pull_request' && github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  graders:
+    # Unconditional and fast. These prove the three graders separate
+    # the outcomes they claim to, with no stack at all — so a broken
+    # grader is caught even when the live legs below cannot run.
+    name: Chaos graders self-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Event exactly-once grader
+        run: python3 scripts/chaos/fusion_restart.py --self-test
+
+      - name: Action exactly-once grader
+        # A duplicate action is worse than a delay and both are worse
+        # than a refusal, so the grader has to tell three outcomes
+        # apart rather than pass/fail.
+        run: python3 scripts/chaos/action_exactly_once.py --self-test
+
+      - name: Store outage grader
+        # The question is not "does it crash" — crashing is fine. It is
+        # whether readiness admits the dependency is gone, which is the
+        # failure UEBA shipped: consumer detached, container `running`,
+        # `/health` 200, permanently.
+        run: python3 scripts/chaos/store_outage.py --self-test
+
+  store-outages:
+    name: Store outages (live containers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: graders
+    # Never on a pull request: this stops and starts containers
+    # repeatedly and would make the PR queue unusable.
+    if: github.event_name != 'pull_request'
+    strategy:
+      # One store's result must not cancel the others — the interesting
+      # output is which of the six behave and which do not.
+      fail-fast: false
+      matrix:
+        store: [clickhouse, neo4j, qdrant, redis, kafka, postgres]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bring the stack up
+        id: boot
+        run: |
+          set -euo pipefail
+          docker compose up -d --wait --wait-timeout 300 || {
+            echo "::error::the stack did not come up; the outage below would grade nothing"
+            docker compose ps
+            exit 1
+          }
+
+      - name: Take ${{ matrix.store }} down and grade what the services say
+        env:
+          STORE: ${{ matrix.store }}
+        run: |
+          set -euo pipefail
+          python3 scripts/chaos/store_outage.py \
+            --store "$STORE" \
+            --readiness-url http://127.0.0.1:8000/api/v1/health/ready \
+            --dependent-url "api=http://127.0.0.1:8000/api/v1/health" \
+            --dependent-url "ingest=http://127.0.0.1:8080/health"
+
+      - name: Logs, on failure
+        if: failure()
+        run: docker compose logs --tail 200

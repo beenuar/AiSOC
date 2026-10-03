@@ -21,6 +21,7 @@ Design constraints:
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
@@ -169,6 +170,43 @@ def _entities(fused: FusedAlert) -> list[dict[str, str]]:
     return out
 
 
+def _insert_args(fused: FusedAlert) -> tuple[Any, ...]:
+    """The positional arguments `_INSERT_SQL` takes, in order.
+
+    One definition, used by both the single and the batch path. They
+    were two copies of a 25-element tuple, which is the kind of pair
+    that drifts by one column and inserts a confidence score into a
+    narrative without anything failing.
+    """
+    alert = fused.alert
+    return (
+        fused.id,
+        alert.tenant_id,
+        alert.title[:500],
+        alert.description or None,
+        alert.severity.value,
+        json.dumps(alert.mitre_tactics),
+        json.dumps(alert.mitre_techniques),
+        json.dumps(_iocs(fused)),
+        json.dumps(_entities(fused)),
+        json.dumps(alert.raw_event, default=str),
+        alert.fingerprint(),
+        int(round(fused.confidence_score * 100)),
+        fused.confidence_label.value,
+        json.dumps([f.model_dump() for f in fused.confidence_rationale]),
+        fused.narrative,
+        fused.anomaly_score,
+        alert.event_time,
+        alert.connector_id,
+        alert.connector_type,
+        json.dumps(alert.source_event_ids),
+        alert.ocsf_class_uid,
+        alert.rule_id,
+        alert.rule_name,
+        alert.external_id,
+    )
+
+
 class AlertSink:
     """asyncpg-backed writer from the fusion pipeline into the alert store."""
 
@@ -221,33 +259,7 @@ class AlertSink:
         alert = fused.alert
         try:
             async with pool.acquire() as conn:
-                row = await conn.fetchrow(
-                    _INSERT_SQL,
-                    fused.id,
-                    alert.tenant_id,
-                    alert.title[:500],
-                    alert.description or None,
-                    alert.severity.value,
-                    json.dumps(alert.mitre_tactics),
-                    json.dumps(alert.mitre_techniques),
-                    json.dumps(_iocs(fused)),
-                    json.dumps(_entities(fused)),
-                    json.dumps(alert.raw_event, default=str),
-                    alert.fingerprint(),
-                    int(round(fused.confidence_score * 100)),
-                    fused.confidence_label.value,
-                    json.dumps([f.model_dump() for f in fused.confidence_rationale]),
-                    fused.narrative,
-                    fused.anomaly_score,
-                    alert.event_time,
-                    alert.connector_id,
-                    alert.connector_type,
-                    json.dumps(alert.source_event_ids),
-                    alert.ocsf_class_uid,
-                    alert.rule_id,
-                    alert.rule_name,
-                    alert.external_id,
-                )
+                row = await conn.fetchrow(_INSERT_SQL, *_insert_args(fused))
             if row is None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
                 return PersistResult(PersistOutcome.DUPLICATE, canonical_id)
@@ -261,6 +273,78 @@ class AlertSink:
         except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
             logger.error("alert_sink.persist_failed", error=str(exc))
             return PersistResult(PersistOutcome.FAILED, None)
+
+    async def persist_many(self, fused_batch: Sequence[FusedAlert]) -> list[PersistResult]:
+        """Insert a batch of fused alerts over one connection.
+
+        Gap-closure wave 7. `persist` acquires a pooled connection and
+        makes a round trip **per alert**, so a deployment taking 200
+        alerts/s makes 200 acquisitions and 200 round trips a second,
+        and the alert path spends most of its time waiting rather than
+        working.
+
+        Three things are deliberately preserved, because a faster path
+        that changes semantics is a different feature:
+
+        * **One result per input, in order.** Callers already branch on
+          `PersistOutcome`, and a batch that returned a summary would
+          make a duplicate indistinguishable from an insert.
+        * **One bad row does not take the batch.** Each insert is
+          attempted inside the shared connection and a failure is
+          recorded against that row alone — the same contract as the
+          single path, where a malformed alert must not wedge the
+          consumer.
+        * **The dedup behaviour is the database's, not ours.** The
+          `SELECT ... WHERE NOT EXISTS` in `_INSERT_SQL` still decides,
+          so batching cannot introduce a duplicate the single path
+          would have caught.
+
+        Not a transaction spanning the batch: one rollback would then
+        discard every alert in the window because of one bad row, which
+        trades a per-row failure for a whole-window one.
+        """
+        if not fused_batch:
+            return []
+
+        results: list[PersistResult] = []
+        pool = await self._ensure_pool()
+        if pool is None:
+            if not self._connect_failed_logged:
+                logger.error("alert_sink.unavailable_dropping_persistence")
+                self._connect_failed_logged = True
+            return [PersistResult(PersistOutcome.UNAVAILABLE, str(f.id)) for f in fused_batch]
+        self._connect_failed_logged = False
+
+        async with pool.acquire() as conn:
+            for fused in fused_batch:
+                canonical_id = str(fused.id)
+                if fused.fusion_decision == FusionDecision.DUPLICATE:
+                    results.append(PersistResult(PersistOutcome.DUPLICATE, canonical_id))
+                    continue
+                try:
+                    row = await conn.fetchrow(_INSERT_SQL, *_insert_args(fused))
+                except asyncpg.ForeignKeyViolationError:
+                    logger.warning("alert_sink.unknown_tenant", tenant_id=str(fused.alert.tenant_id))
+                    results.append(PersistResult(PersistOutcome.FAILED, None))
+                    continue
+                except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the batch
+                    logger.error("alert_sink.persist_failed", error=str(exc))
+                    results.append(PersistResult(PersistOutcome.FAILED, None))
+                    continue
+
+                if row is None:
+                    results.append(PersistResult(PersistOutcome.DUPLICATE, canonical_id))
+                    continue
+                results.append(PersistResult(PersistOutcome.INSERTED, str(row["id"])))
+
+        # Source links after the inserts, on their own connections. They
+        # are best-effort and a slow vendor lookup must not hold the
+        # batch's connection open.
+        for fused, result in zip(fused_batch, results, strict=True):
+            if result.outcome is PersistOutcome.INSERTED and result.alert_id:
+                await self._link_source_finding(pool, fused.alert, alert_id=result.alert_id)
+
+        return results
 
     async def _link_source_finding(self, pool: asyncpg.Pool, alert: Any, *, alert_id: Any) -> None:
         """Record which vendor finding produced this alert, when there is one.
