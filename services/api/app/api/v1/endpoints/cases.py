@@ -47,6 +47,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
@@ -71,6 +72,16 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 # to the agents service so the front end has a single, stable API origin.
 _AGENTS_URL = (os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL") or "http://agents:8084").rstrip("/")
 
+# The agents service guards its routes with require_console_or_service_auth:
+# it accepts a console JWT or the shared service token paired with an explicit
+# tenant header, and fails closed (401 "missing bearer credential") otherwise.
+# This proxy forwards the user's *claims* but must present a credential of its
+# own: the agents service does not share the API's user database. Resolve the
+# same per-service token the agents service verifies (specific first, then
+# shared), matching tenant_scope.resolve_service_token's precedence.
+_AGENTS_SERVICE_TOKEN = (os.getenv("AISOC_AGENTS_SERVICE_TOKEN") or os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+
+
 # Tight allowlist for proxied request paths. We only ever proxy to a fixed
 # upstream (`_AGENTS_URL`) on a known set of investigation routes, so the
 # path must be a pure relative path — no scheme, no host, no control bytes,
@@ -93,7 +104,9 @@ def _validate_agents_path(path: str) -> str:
 # Pydantic schemas
 # ────────────────────────────────────────────────────────────────────────────
 
-CaseStatus = Literal["new", "triaged", "investigating", "contained", "resolved", "closed"]
+CaseStatus = Literal["new", "triaged", "investigating", "contained", "resolved", "closed",
+                  # legacy/console aliases, normalized to the ladder above in update_case
+                  "open", "in_progress", "pending", "pending_closure", "cancelled"]
 CaseSeverity = Literal["info", "low", "medium", "high", "critical"]
 
 # Valid forward-only state transitions
@@ -102,6 +115,29 @@ CaseSeverity = Literal["info", "low", "medium", "high", "critical"]
 # machine cannot produce — so two surfaces disagreed about what a case
 # status even is.
 _TRANSITIONS: dict[str, set[str]] = case_status.TRANSITIONS
+
+# The console historically spoke a second vocabulary (open/in_progress/pending/
+# cancelled — see packages/types CaseStatus), so every status the UI can send
+# is normalized onto the canonical ladder *before* the transition gate above
+# runs. Aliases never bypass validation; they only translate the vocabulary.
+_STATUS_ALIASES: dict[str, str] = {
+    "open": "new",
+    "in_progress": "investigating",
+    "pending": "contained",
+    "pending_closure": "contained",
+    "cancelled": "closed",
+}
+
+
+def _normalize_status(status: str) -> str:
+    return _STATUS_ALIASES.get(status, status)
+
+
+def _status_transition_ok(current: str, target: str) -> bool:
+    """Upstream's canonical gate: every move must be a declared edge in
+    `case_status.TRANSITIONS`. Backwards moves and undeclared skips are
+    rejected; reopening goes through the explicit reopen action."""
+    return target in _TRANSITIONS.get(current, set())
 
 
 class CreateCaseRequest(BaseModel):
@@ -537,12 +573,13 @@ async def update_case(
     if not existing:
         raise HTTPException(status_code=404, detail="Case not found.")
 
+    if body.status is not None:
+        body.status = _normalize_status(body.status)
     if body.status and body.status != existing.status:
-        allowed = _TRANSITIONS.get(existing.status, set())
-        if body.status not in allowed:
+        if not _status_transition_ok(existing.status, body.status):
             raise HTTPException(
                 status_code=422,
-                detail=f"Invalid status transition: {existing.status} → {body.status}. Allowed: {sorted(allowed) or 'none'}",
+                detail=f"Invalid status transition: {existing.status} → {body.status}. Allowed: {sorted(_TRANSITIONS.get(existing.status, set())) or 'none'}; reopening requires the reopen action.",
             )
 
     now = datetime.now(UTC)
@@ -1200,9 +1237,12 @@ async def _agents_proxy(method: str, path: str, **kwargs: Any) -> httpx.Response
     safe_path = _validate_agents_path(path)
     url = f"{_AGENTS_URL}{safe_path}"
     timeout = kwargs.pop("timeout", 30.0)
+    headers = dict(kwargs.pop("headers", None) or {})
+    if _AGENTS_SERVICE_TOKEN:
+        headers.setdefault("Authorization", f"Bearer {_AGENTS_SERVICE_TOKEN}")
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            return await client.request(method, url, **kwargs)
+            return await client.request(method, url, headers=headers, **kwargs)
     except httpx.HTTPError as exc:
         logger.exception(
             "agents_proxy.request_failed",
@@ -1237,10 +1277,13 @@ async def case_investigate(
     # to the real tenant instead of falling back to the "default" placeholder,
     # which the demo seed no longer maps to any tenant (issue #601). The ledger
     # is scoped by tenant_id, so without this the whole run is never persisted.
+    # Service-token path requires the acting tenant on the header, not just
+    # in the body: tenant_scope refuses a service token with no tenant.
     resp = await _agents_proxy(
         "POST",
         f"/api/v1/cases/{cid}/investigate",
         json={"alert_summary": body.alert_summary or "", "tenant_id": str(user.tenant_id)},
+        headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)},
     )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
@@ -1260,15 +1303,39 @@ async def list_case_investigations(
     """
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     try:
-        resp = await _agents_proxy("GET", f"/api/v1/cases/{cid}/investigations")
-        if resp.status_code == 404:
-            return {"runs": []}
-        if resp.status_code >= 400:
-            return {"runs": []}
-        return resp.json()
+        resp = await _agents_proxy("GET", f"/api/v1/cases/{cid}/investigations", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
+        if resp.status_code < 400:
+            return resp.json()
     except HTTPException:
-        # Agents service unavailable — render a soft-empty list instead of 503.
-        return {"runs": []}
+        pass
+    # Agents service has no list route (or is unreachable) — fall back to the
+    # local ledger, which every run persists to anyway.
+    from app.models.investigation import InvestigationRun
+    rows = (
+        await db.execute(
+            select(InvestigationRun)
+            .where(InvestigationRun.tenant_id == user.tenant_id)
+            .where(InvestigationRun.case_id.in_([str(cid), str(case_id)]))
+            .order_by(InvestigationRun.created_at.desc())
+            .limit(20)
+        )
+    ).scalars().all()
+    return {
+        "runs": [
+            {
+                "run_id": str(r.id),
+                "case_id": r.case_id,
+                "status": r.status,
+                "model": r.model_used,
+                "iterations": r.iterations,
+                "total_tokens": r.total_tokens,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "error": r.error,
+            }
+            for r in rows
+        ]
+    }
 
 
 @router.get("/{case_id}/investigations/{run_id}", summary="Get investigation run")
@@ -1296,7 +1363,7 @@ async def case_investigation_run(
     # URL-encode the user-supplied run_id so it cannot inject `/`, `?`, `#`,
     # CR/LF, or other URL syntax into the proxied path.
     safe_run_id = quote(run_id, safe="")
-    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}")
+    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     run = resp.json()
@@ -1335,7 +1402,7 @@ async def case_investigation_report_md(
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
     safe_run_id = quote(run_id, safe="")
 
-    meta = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}")
+    meta = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
     if meta.status_code >= 400:
         raise HTTPException(status_code=meta.status_code, detail=meta.text)
     run_case_id = meta.json().get("case_id")
@@ -1345,7 +1412,7 @@ async def case_investigation_report_md(
             detail="Investigation run not found for this case",
         )
 
-    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.md")
+    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.md", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     return PlainTextResponse(content=resp.text, media_type="text/markdown; charset=utf-8")
@@ -1498,7 +1565,7 @@ async def case_investigation_pdf(
     user: AuthUser,
 ) -> Response:
     safe_run_id = quote(run_id, safe="")
-    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.pdf")
+    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.pdf", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)
     safe_case_id = _safe_filename_segment(case_id)
