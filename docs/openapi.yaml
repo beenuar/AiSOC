@@ -8681,6 +8681,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/investigations/{run_id}/bundle:
+    get:
+      tags:
+      - investigations
+      summary: Export Evidence Bundle
+      description: 'Export this investigation as a signed, replayable evidence bundle.
+
+
+        Two exports of one run produce identical bytes, so an auditor can
+
+        diff them, re-hash them, and check the signature without trusting
+
+        this endpoint. Prompts travel as digests rather than text, because a
+
+        bundle is the artefact most likely to leave the customer''s control
+
+        and a prompt carries their hostnames and usernames.
+
+
+        Served as a download rather than JSON so what the auditor verifies is
+
+        the same byte sequence the signature was computed over. A client that
+
+        re-serialised a parsed body would change the bytes and the signature
+
+        would stop matching for a reason nobody could see.'
+      operationId: export_evidence_bundle_api_v1_investigations__run_id__bundle_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: run_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Run Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/kill-switch:
     get:
       tags:

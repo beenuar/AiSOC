@@ -34,19 +34,21 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import func, select, text
 from sqlalchemy.engine import RowMapping
 
 from app.api.v1.deps import AuthUser, require_permission
+from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.models.investigation import (
     InvestigationArtifact,
     InvestigationEvent,
     InvestigationRun,
 )
+from app.services.evidence_bundle import build_bundle, bundle_filename, serialize_bundle
 
 router = APIRouter(prefix="/investigations", tags=["investigations"])
 
@@ -1102,3 +1104,55 @@ def _render_pdf(markdown_text: str, run_id: str) -> bytes:
         header = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
         body = markdown_text.encode("utf-8", errors="replace")
         return header + body
+
+
+# ---------------------------------------------------------------------------
+# Evidence bundle export (parity 3.7)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/{run_id}/bundle")
+async def export_evidence_bundle(
+    run_id: uuid.UUID,
+    current_user: Annotated[AuthUser, Depends(require_permission("cases:read"))],
+    db: TenantDBSession,
+) -> Response:
+    """Export this investigation as a signed, replayable evidence bundle.
+
+    Two exports of one run produce identical bytes, so an auditor can
+    diff them, re-hash them, and check the signature without trusting
+    this endpoint. Prompts travel as digests rather than text, because a
+    bundle is the artefact most likely to leave the customer's control
+    and a prompt carries their hostnames and usernames.
+
+    Served as a download rather than JSON so what the auditor verifies is
+    the same byte sequence the signature was computed over. A client that
+    re-serialised a parsed body would change the bytes and the signature
+    would stop matching for a reason nobody could see.
+    """
+    run = await _fetch_run(db, run_id, current_user.tenant_id)
+
+    events = (
+        (await db.execute(select(InvestigationEvent).where(InvestigationEvent.run_id == run_id).order_by(InvestigationEvent.seq)))
+        .scalars()
+        .all()
+    )
+    artifacts = (await db.execute(select(InvestigationArtifact).where(InvestigationArtifact.run_id == run_id))).scalars().all()
+
+    bundle = build_bundle(
+        run={c.name: getattr(run, c.name, None) for c in run.__table__.columns},
+        events=[{c.name: getattr(e, c.name, None) for c in e.__table__.columns} for e in events],
+        artifacts=[{c.name: getattr(a, c.name, None) for c in a.__table__.columns} for a in artifacts],
+        # Approvals live in the actions service rather than this schema.
+        # An empty list is honest: this bundle records none, which is a
+        # different statement from "none were required" and is why the
+        # field is present and empty rather than omitted.
+        approvals=[],
+        signing_key=settings.SECRET_KEY,
+    )
+
+    return Response(
+        content=serialize_bundle(bundle),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{bundle_filename(run_id)}"'},
+    )

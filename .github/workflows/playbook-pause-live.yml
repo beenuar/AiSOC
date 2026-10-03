@@ -33,7 +33,7 @@ permissions:
 
 jobs:
   playbook-pause-live:
-    name: Playbook pause and Investigation Ledger against real Postgres
+    name: Playbook pause, ledger and evidence bundles against real Postgres
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -129,6 +129,18 @@ jobs:
         env:
           ISOLATION_LEDGER_DSN: ${{ env.PLAYBOOK_DSN }}
         run: python -m pytest ../../tests/isolation/test_ledger_live.py -v --tb=short
+
+      # Parity 3.7. The format's own suite builds bundles from dicts, so
+      # it cannot show that the *route* assembles one from ledger rows —
+      # where `raw_alert` is JSONB, `started_at` is tz-aware, ids are
+      # UUIDs and cost is Numeric, every one of which has a repr JSON
+      # cannot serialise.
+      - name: An evidence bundle exports, verifies and stays tenant-scoped
+        working-directory: services/api
+        env:
+          ISOLATION_BUNDLE_DSN: ${{ env.PLAYBOOK_DSN }}
+          DATABASE_URL: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_evidence_bundle_live.py -v --tb=short
 
       # The negative control.
       #
