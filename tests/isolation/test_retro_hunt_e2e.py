@@ -114,28 +114,39 @@ def opted_in(lake):  # noqa: ANN001
     against a feature nobody switched on, which is a different test from
     the one it claims to be.
     """
-    import psycopg2  # noqa: PLC0415 - optional, resolved at call time
+    # `asyncpg`, not `psycopg2`. Every live job installs from its
+    # service's own lockfile — the fix for four rounds of
+    # ModuleNotFoundError — and `psycopg2` is not in it. Adding a second
+    # Postgres driver for two INSERTs of test setup would reintroduce
+    # exactly the hand-curated dependency this repository removed from
+    # its images.
+    import asyncio  # noqa: PLC0415 - kept beside its only use
+
+    import asyncpg  # noqa: PLC0415
 
     dsn = os.environ.get("ISOLATION_RETRO_PG_DSN", "").strip()
     if not dsn:
         pytest.skip("ISOLATION_RETRO_PG_DSN is not set; the sweep reads its tenants from Postgres")
 
-    conn = psycopg2.connect(dsn)
-    conn.autocommit = True
-    try:
-        with conn.cursor() as cur:
+    async def _seed() -> None:
+        conn = await asyncpg.connect(dsn.replace("postgresql+asyncpg://", "postgresql://"))
+        try:
             for tenant, slug in ((TENANT_WITH, "e2e-with"), (TENANT_WITHOUT, "e2e-without")):
-                cur.execute(
-                    "INSERT INTO tenants (id, name, slug) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-                    (str(tenant), slug, slug),
+                await conn.execute(
+                    "INSERT INTO tenants (id, name, slug) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+                    tenant,
+                    slug,
+                    slug,
                 )
-                cur.execute(
-                    "INSERT INTO retro_hunt_settings (tenant_id, enabled) VALUES (%s, true) "
+                await conn.execute(
+                    "INSERT INTO retro_hunt_settings (tenant_id, enabled) VALUES ($1, true) "
                     "ON CONFLICT (tenant_id) DO UPDATE SET enabled = true",
-                    (str(tenant),),
+                    tenant,
                 )
-    finally:
-        conn.close()
+        finally:
+            await conn.close()
+
+    asyncio.run(_seed())
     yield
 
 
