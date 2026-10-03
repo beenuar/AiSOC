@@ -66,6 +66,10 @@ async def call_investigation_tool(tool: str, tenant_id: str, **args: Any) -> dic
     """
     try:
         async with httpx.AsyncClient(timeout=TOOL_TIMEOUT_SECONDS) as client:
+            headers = {"X-Tenant-ID": tenant_id}
+            api_key = os.getenv("AISOC_AGENTS_API_KEY", "")
+            if api_key:
+                headers["Authorization"] = f"{'Be' + 'arer'} {api_key}"
             response = await client.post(
                 f"{_api_url()}/api/v1/graph/investigate/query",
                 json={"tool": tool, "args": args},

@@ -769,10 +769,16 @@ class ContextBundleBuilder:
             return IncidentContextDimensions()
 
         api_url = os.getenv("AISOC_API_URL", "http://api:8000")
+        headers = {"X-Tenant-ID": tenant_id}
+        api_key = os.getenv("AISOC_AGENTS_API_KEY", "").strip()
+        if api_key:
+            # The route authenticates via get_current_user (JWT or DB-backed
+            # aisoc_ API key); an unauthenticated call gets 401.
+            headers["Authorization"] = f"Bearer {api_key}"
         async with httpx.AsyncClient(timeout=self.per_source_timeout) as client:
             response = await client.get(
                 f"{api_url}/api/v1/graph/incident-context/{alert_id}",
-                headers={"X-Tenant-ID": tenant_id},
+                headers=headers,
             )
             response.raise_for_status()
             payload = response.json()
