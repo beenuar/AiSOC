@@ -151,6 +151,18 @@ class ProposalResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+#: Whether a proposal's author is barred from approving it.
+#:
+#: On by default: this is the surface that writes code into the
+#: detection engine, and it was the only governed surface in the
+#: product with no second-person requirement at all.
+_SEPARATION_OF_DUTIES_ENFORCED = os.getenv("AISOC_DETECTION_SOD_ENFORCED", "1").strip().lower() not in {
+    "0",
+    "false",
+    "no",
+}
+
+
 class CreateProposalRequest(BaseModel):
     name: str = Field(..., max_length=255)
     description: str | None = None
@@ -908,6 +920,30 @@ async def decide_proposal(
         )
 
     if request.decision == "approve":
+        # Separation of duties. `proposed_by_id` was written at creation
+        # and compared against nothing, so the author of a rule could
+        # approve their own rule — on the one surface in this product
+        # that writes code into the detection engine. Every other
+        # governance control here separates the two: action approval,
+        # playbook dispatch, MSSP overrides.
+        #
+        # Approval only. Rejecting your own proposal is withdrawing it,
+        # which needs no second person.
+        #
+        # Overridable by configuration because a single-analyst
+        # deployment would otherwise be unable to ship a detection at
+        # all, and a control that forces people to disable it entirely
+        # is worse than one that is off by choice and recorded.
+        if _SEPARATION_OF_DUTIES_ENFORCED and proposal.proposed_by_id is not None and proposal.proposed_by_id == current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "You proposed this rule, so you cannot approve it. A second reviewer "
+                    "must approve a detection before it reaches the engine. Set "
+                    "AISOC_DETECTION_SOD_ENFORCED=0 on a single-analyst deployment."
+                ),
+            )
+
         eval_result = proposal.eval_result or {}
         # Phase 4 — de-circularised gate. Approval requires the candidate rule
         # to have been evaluated against its own fixtures and passed (fires on
