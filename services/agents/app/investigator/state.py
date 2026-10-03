@@ -12,7 +12,7 @@ from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 def _stable_hash(payload: Any) -> str:
@@ -77,6 +77,24 @@ class ForensicFindings(BaseModel):
 
     timeline: list[dict[str, Any]] = Field(default_factory=list)  # [{ts, event, src}]
     artefacts: list[str] = Field(default_factory=list)
+
+    @field_validator("blast_radius", "root_cause_hypothesis", "summary", mode="before")
+    @classmethod
+    def _stringify_llm_json(cls, v: Any) -> Any:
+        """The forensic LLM sometimes returns nested objects where prose is
+        expected (e.g. blast_radius as {"systems": [...]}). Coerce to a
+        readable string instead of failing the whole investigation run."""
+        if isinstance(v, dict):
+            parts = []
+            for key, val in v.items():
+                if isinstance(val, (list, tuple)):
+                    val = ", ".join(str(x) for x in val)
+                parts.append(f"{key}: {val}")
+            return "; ".join(parts)
+        if isinstance(v, (list, tuple)):
+            return ", ".join(str(x) for x in v)
+        return v
+
     root_cause_hypothesis: str = ""
     blast_radius: str = ""
     confidence: float = 0.0  # 0–1
