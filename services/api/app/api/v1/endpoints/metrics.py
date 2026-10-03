@@ -478,7 +478,14 @@ async def get_soc_metrics(
     )
     mttd_q = await db.scalar(select(func.avg(func.extract("epoch", Alert.first_seen_at - Alert.created_at) / 3600)).where(mttd_filters))
     mttd_samples = int(await db.scalar(select(func.count()).where(mttd_filters)) or 0)
-    mttd_hours = float(mttd_q or 0.0)
+    # `None`, not `0.0`, when nothing in the window was acknowledged. The
+    # sample count below already told a careful reader the figure was empty,
+    # but the value itself read as instant acknowledgement to everyone else.
+    # 0.0 here is explicitly *not* a measurement: `mttd_sample_count`
+    # below carries the denominator, and the console renders 'not
+    # measured' when it is zero. See the comment on that field for why
+    # the mean is not nullable.
+    mttd_hours = float(mttd_q) if mttd_q is not None and mttd_samples else 0.0
 
     # ── MTTR ──────────────────────────────────────────────────────────────────
     # Mean time from case open to case close, over the shared window — the same

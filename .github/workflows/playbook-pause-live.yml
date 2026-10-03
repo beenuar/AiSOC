@@ -143,6 +143,17 @@ jobs:
           ISOLATION_LEDGER_DSN: ${{ env.PLAYBOOK_DSN }}
         run: python -m pytest ../../tests/isolation/test_ledger_live.py -v --tb=short
 
+      # Gap-closure wave 0. Each of these covers a mechanism that was
+      # complete, tested and unreachable because the table or column it
+      # depended on had no writer — which is precisely what a unit test
+      # cannot see, since the code was correct and the data never arrived.
+      - name: The wave-0 no-writer defects are closed
+        working-directory: services/api
+        env:
+          ISOLATION_WAVE0_DSN: ${{ env.PLAYBOOK_DSN }}
+          DATABASE_URL: ${{ env.PLAYBOOK_DSN }}
+        run: python -m pytest ../../tests/isolation/test_wave0_integrity_live.py -v --tb=short
+
       # Parity 3.7. The format's own suite builds bundles from dicts, so
       # it cannot show that the *route* assembles one from ledger rows —
       # where `raw_alert` is JSONB, `started_at` is tz-aware, ids are

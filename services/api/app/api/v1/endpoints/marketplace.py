@@ -40,14 +40,16 @@ from __future__ import annotations
 import hashlib
 import json
 import threading
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
+from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, require_permission
+from app.db.rls import TenantDBSession
+from app.services import marketplace_installs
 
 router = APIRouter(prefix="/marketplace", tags=["marketplace"])
 
@@ -124,27 +126,6 @@ def _load_index() -> dict[str, Any]:
 
 # Keyed by (tenant_id, type, item_id) → install record. Replace with a real
 # table when we move installed-set tracking into Postgres.
-_installed: dict[tuple[str, str, str], dict[str, Any]] = {}
-_installed_lock = threading.Lock()
-
-
-def _install_record(
-    tenant_id: str,
-    item: dict[str, Any],
-    sha256: str,
-    user_email: str,
-) -> dict[str, Any]:
-    return {
-        "id": item["id"],
-        "type": item["type"],
-        "name": item.get("name", item["id"]),
-        "version": item.get("version", "1.0.0"),
-        "path": item.get("path"),
-        "content_sha256": sha256,
-        "installed_at": datetime.now(UTC).isoformat(),
-        "installed_by": user_email,
-        "tenant_id": tenant_id,
-    }
 
 
 def _resolve_item_path(item: dict[str, Any]) -> Path:
@@ -284,6 +265,7 @@ class MarketplaceListResponse(BaseModel):
 @router.get("", response_model=MarketplaceListResponse)
 async def list_marketplace(
     current_user: AuthUser,
+    db: TenantDBSession,
     type_filter: Literal["detection", "playbook", "plugin"] | None = Query(None, alias="type"),
     mitre: str | None = Query(
         None,
@@ -335,8 +317,7 @@ async def list_marketplace(
         ]
 
     tenant_id = str(current_user.tenant_id)
-    with _installed_lock:
-        installed_ids = [key[2] for key in _installed if key[0] == tenant_id]
+    installed_ids = await marketplace_installs.installed_item_ids(db, tenant_id=tenant_id)
 
     return MarketplaceListResponse(
         total=len(items),
@@ -368,6 +349,7 @@ def _summarise(i: dict[str, Any]) -> dict[str, Any]:
 async def install_marketplace_item(
     body: InstallRequest,
     current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+    db: TenantDBSession,
 ) -> InstallResponse:
     """Activate a marketplace item for the caller's tenant.
 
@@ -409,38 +391,27 @@ async def install_marketplace_item(
     sha = _content_sha256(match)
 
     tenant_id = str(current_user.tenant_id)
-    key = (tenant_id, body.type, body.id)
     user_email = current_user.email or str(current_user.user_id)
 
-    with _installed_lock:
-        existing = _installed.get(key)
-        if existing:
-            # Idempotent: re-installing returns the existing record but
-            # refreshes the sha (e.g. file edited since last install).
-            existing["content_sha256"] = sha
-            existing["installed_at"] = datetime.now(UTC).isoformat()
-            return InstallResponse(
-                id=existing["id"],
-                type=existing["type"],
-                name=existing["name"],
-                version=existing["version"],
-                content_sha256=existing["content_sha256"],
-                installed_at=existing["installed_at"],
-                installed_by=existing["installed_by"],
-                already_installed=True,
-            )
-        record = _install_record(tenant_id, match, sha, user_email)
-        _installed[key] = record
+    installed_at, already = await marketplace_installs.record_install(
+        db,
+        tenant_id=tenant_id,
+        item_id=body.id,
+        item_type=body.type,
+        version=str(match.get("version") or ""),
+        content_sha256=sha,
+        installed_by=current_user.user_id,
+    )
 
     return InstallResponse(
-        id=record["id"],
-        type=record["type"],
-        name=record["name"],
-        version=record["version"],
-        content_sha256=record["content_sha256"],
-        installed_at=record["installed_at"],
-        installed_by=record["installed_by"],
-        already_installed=False,
+        id=body.id,
+        type=body.type,
+        name=str(match.get("name") or body.id),
+        version=str(match.get("version") or ""),
+        content_sha256=sha,
+        installed_at=installed_at.isoformat(),
+        installed_by=user_email,
+        already_installed=already,
     )
 
 
@@ -449,13 +420,12 @@ async def uninstall_marketplace_item(
     type: Literal["detection", "playbook", "plugin"],
     id: str,
     current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+    db: TenantDBSession,
 ) -> dict[str, Any]:
     """Remove a previously installed marketplace item from the tenant."""
     tenant_id = str(current_user.tenant_id)
-    key = (tenant_id, type, id)
-    with _installed_lock:
-        removed = _installed.pop(key, None)
-    if removed is None:
+    removed = await marketplace_installs.remove_install(db, tenant_id=tenant_id, item_id=id)
+    if not removed:
         raise HTTPException(
             status_code=404,
             detail=f"Item not installed for this tenant: {type}:{id}",
@@ -466,12 +436,27 @@ async def uninstall_marketplace_item(
 @router.get("/installed")
 async def list_installed(
     current_user: AuthUser,
+    db: TenantDBSession,
 ) -> dict[str, Any]:
     """List all marketplace items installed for the caller's tenant."""
-    tenant_id = str(current_user.tenant_id)
-    with _installed_lock:
-        items = [v for k, v in _installed.items() if k[0] == tenant_id]
-    items.sort(key=lambda r: (r["type"], r["id"]))
+    rows = await db.execute(
+        text("""
+            SELECT item_id, item_type, version, image_digest, installed_at
+              FROM marketplace_installs
+             WHERE tenant_id = CAST(:t AS uuid)
+             ORDER BY item_type, item_id
+        """).bindparams(t=str(current_user.tenant_id))
+    )
+    items = [
+        {
+            "id": r[0],
+            "type": r[1],
+            "version": r[2],
+            "content_sha256": r[3],
+            "installed_at": r[4].isoformat() if r[4] else None,
+        }
+        for r in rows.all()
+    ]
     return {"total": len(items), "items": items}
 
 

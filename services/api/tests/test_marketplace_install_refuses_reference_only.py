@@ -55,20 +55,55 @@ def _first(predicate: Callable[[dict[str, Any]], bool]) -> dict[str, Any]:
     return match
 
 
-def _install(item: dict[str, Any]):
+def _install(item: dict[str, Any], db: _FakeDB | None = None):
+    """Drive the real handler. Pass a `db` to inspect what it wrote."""
     return asyncio.run(
         marketplace.install_marketplace_item(
             marketplace.InstallRequest(type=item["type"], id=item["id"]),
             _Principal(),
+            db if db is not None else _FakeDB(),
         )
     )
 
 
-@pytest.fixture(autouse=True)
-def _clean_install_store():
-    marketplace._installed.clear()
-    yield
-    marketplace._installed.clear()
+class _FakeDB:
+    """Records what reached the database.
+
+    Install state moved out of a process-local dict into
+    `marketplace_installs`, so a refusal is no longer "the dict stayed
+    empty" — it is "no INSERT was issued". This double exists to assert
+    that, which is a stronger claim than the dict version made: the old
+    test could not distinguish a refusal from a write that silently
+    failed.
+    """
+
+    def __init__(self) -> None:
+        self.statements: list[str] = []
+        self.committed = 0
+
+    async def execute(self, statement, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        self.statements.append(str(statement))
+        return _FakeRows()
+
+    async def scalar(self, statement, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        self.statements.append(str(statement))
+        return None
+
+    async def commit(self) -> None:
+        self.committed += 1
+
+    @property
+    def inserts(self) -> list[str]:
+        return [s for s in self.statements if "INSERT INTO marketplace_installs" in s]
+
+
+class _FakeRows:
+    def all(self) -> list:
+        return []
+
+    @property
+    def rowcount(self) -> int:
+        return 0
 
 
 class TestReferenceOnlyIsRefused:
@@ -94,9 +129,10 @@ class TestReferenceOnlyIsRefused:
         # A refusal that still wrote the marker would leave the console
         # showing "Installed" for a rule that cannot fire.
         item = _first(lambda i: i.get("executable") is False)
+        db = _FakeDB()
         with pytest.raises(HTTPException):
-            _install(item)
-        assert marketplace._installed == {}
+            _install(item, db)
+        assert db.inserts == [], "a refused install still wrote to marketplace_installs"
 
 
 class TestExecutableStillInstalls:
@@ -104,10 +140,11 @@ class TestExecutableStillInstalls:
         # The other direction. Refusing everything would satisfy the class
         # above and break the marketplace.
         item = _first(lambda i: bool(i["type"] == "detection") and i.get("executable") is True)
-        result = _install(item)
+        db = _FakeDB()
+        result = _install(item, db)
         assert result.id == item["id"]
         assert result.already_installed is False
-        assert len(marketplace._installed) == 1
+        assert len(db.inserts) == 1, "an accepted install did not reach marketplace_installs"
 
     def test_an_entry_with_no_executable_field_installs(self) -> None:
         # Playbooks and plugins are not engine rules and carry no

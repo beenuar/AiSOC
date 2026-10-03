@@ -55,10 +55,50 @@ export function DetectionProposalsView() {
 
   const proposals = data ?? [];
 
+  /**
+   * Run the candidate rule against its own fixtures.
+   *
+   * `/decide` with `approve` answers HTTP 412 unless `eval_result
+   * .candidate_rule` exists, and `/evaluate-rule` is the only thing that
+   * writes it. The console had no caller for that route, so Approve could
+   * not succeed from the UI at all — the button rendered, the request
+   * went out, and the operator got a precondition failure naming a gate
+   * they had no way to run.
+   */
+  const evaluateRule = async (p: DetectionProposal) => {
+    const positives = (p.positive_fixtures ?? []) as Array<Record<string, unknown>>;
+    const negatives = (p.negative_fixtures ?? []) as Array<Record<string, unknown>>;
+    if (positives.length === 0) {
+      toast.error(
+        'This proposal carries no positive fixtures, so there is nothing to prove it fires on. Add one before approving.',
+      );
+      return false;
+    }
+    try {
+      await detectionProposalsApi.evaluateRule(p.id, {
+        positive_fixtures: positives,
+        negative_fixtures: negatives,
+      });
+      return true;
+    } catch (err) {
+      console.warn('Candidate-rule evaluation failed', err);
+      toast.error(
+        'The candidate rule did not pass its own fixtures: it must fire on every positive and stay silent on every negative.',
+      );
+      return false;
+    }
+  };
+
   const decide = async (
     p: DetectionProposal,
     decision: 'approve' | 'reject',
   ) => {
+    // Approval requires the fixture gate; rejection does not, because
+    // refusing a rule needs no proof that it works.
+    if (decision === 'approve' && !p.eval_result?.candidate_rule) {
+      const passed = await evaluateRule(p);
+      if (!passed) return;
+    }
     try {
       await detectionProposalsApi.decide(p.id, { decision });
       toast.success(decision === 'approve' ? 'Approved' : 'Rejected');

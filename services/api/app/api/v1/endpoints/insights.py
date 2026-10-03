@@ -108,7 +108,18 @@ class InsightTile(BaseModel):
 
     key: str = Field(description="Stable identifier — used as a React key.")
     label: str = Field(description="Human-readable tile heading.")
-    value: float = Field(description="Headline metric for the current window.")
+    value: float = Field(
+        description=(
+            "Headline metric for the current window. Read it with `sample_count`: a mean "
+            "over zero rows is reported as 0.0 and is *not* a measurement. The mean is not "
+            "nullable because that is a breaking response change for every existing client, "
+            "which is the same decision `/metrics/soc` took with `mttd_sample_count`."
+        ),
+    )
+    sample_count: int | None = Field(
+        default=None,
+        description="Rows behind `value`. A mean over three and over three thousand differ.",
+    )
     unit: str = Field(
         description=(
             "Display unit. The UI picks formatting per unit "
@@ -159,9 +170,15 @@ def _window_to_timedelta(window: str) -> timedelta:
     return timedelta(days=_VALID_WINDOWS[window])
 
 
-def _delta_pct(current: float, previous: float) -> float | None:
-    """Percent change. ``None`` when previous is zero (undefined)."""
-    if previous == 0:
+def _delta_pct(current: float | None, previous: float | None) -> float | None:
+    """Percent change, or ``None`` when there is no honest one to give.
+
+    Three cases return `None` rather than a number: an undefined division
+    by a zero baseline, and either side being unmeasured. That last one is
+    the important addition — treating an unmeasured window as zero turns
+    "we did not measure this before" into a 100% improvement.
+    """
+    if current is None or previous is None or previous == 0:
         return None
     return round(((current - previous) / previous) * 100.0, 2)
 
@@ -175,8 +192,18 @@ async def _mean_hours(
     start_col,
     end_col,
     extra_filters=(),
-) -> float:
-    """Mean hours between two alert timestamp columns over [start, end)."""
+) -> tuple[float, int]:
+    """Mean hours between two alert timestamp columns, with its denominator.
+
+    Returns `(mean, count)`. The count is the point: this used to return
+    the mean alone through `round(float(result or 0.0), 2)`, so an empty
+    average was indistinguishable from a real zero — and for MTTA that was
+    every deployment, because `alerts.first_seen_at` had no writer at all.
+    A bare zero there reads as instant acknowledgement.
+
+    The count travels with the mean because a mean over three alerts and a
+    mean over three thousand are the same number and different facts.
+    """
     filters = [
         Alert.tenant_id == tenant_id,
         Alert.created_at >= start,
@@ -185,8 +212,19 @@ async def _mean_hours(
         end_col.isnot(None),
     ]
     filters.extend(extra_filters)
-    result = await db.scalar(select(func.avg(func.extract("epoch", end_col - start_col) / 3600)).where(and_(*filters)))
-    return round(float(result or 0.0), 2)
+    row = (
+        await db.execute(
+            select(
+                func.avg(func.extract("epoch", end_col - start_col) / 3600),
+                func.count(),
+            ).where(and_(*filters))
+        )
+    ).first()
+    if row is None or row[1] == 0 or row[0] is None:
+        # 0.0 with a count of 0. The pair is the measurement: the count is
+        # what distinguishes "responded instantly" from "nobody responded".
+        return 0.0, 0
+    return round(float(row[0]), 2), int(row[1])
 
 
 async def _count(db, model, tenant_id: uuid.UUID, start: datetime, end: datetime, *extra) -> int:
@@ -412,7 +450,7 @@ async def get_soc_insights(
     window_days = max(_VALID_WINDOWS[window], 1)
 
     # ── Window-current values ─────────────────────────────────────────────
-    mtta_hours = await _mean_hours(
+    mtta_hours, mtta_n = await _mean_hours(
         db,
         tenant_id,
         start,
@@ -420,7 +458,7 @@ async def get_soc_insights(
         start_col=Alert.created_at,
         end_col=Alert.first_seen_at,
     )
-    mttr_hours = await _mean_hours(
+    mttr_hours, mttr_n = await _mean_hours(
         db,
         tenant_id,
         start,
@@ -442,7 +480,7 @@ async def get_soc_insights(
     )
 
     # ── Previous-window comparisons for delta ─────────────────────────────
-    prev_mtta = await _mean_hours(
+    prev_mtta, _prev_mtta_n = await _mean_hours(
         db,
         tenant_id,
         prev_start,
@@ -450,7 +488,7 @@ async def get_soc_insights(
         start_col=Alert.created_at,
         end_col=Alert.first_seen_at,
     )
-    prev_mttr = await _mean_hours(
+    prev_mttr, _prev_mttr_n = await _mean_hours(
         db,
         tenant_id,
         prev_start,
@@ -493,18 +531,26 @@ async def get_soc_insights(
             key="mtta",
             label="MTTA",
             value=mtta_hours,
+            sample_count=mtta_n,
             unit="hours",
             previous_value=prev_mtta,
-            delta_pct=_delta_pct(mtta_hours, prev_mtta),
+            delta_pct=_delta_pct(
+                mtta_hours if mtta_n else None,
+                prev_mtta if _prev_mtta_n else None,
+            ),
             sparkline=InsightSparkline(points=alert_spark),
         ),
         InsightTile(
             key="mttr",
             label="MTTR",
             value=mttr_hours,
+            sample_count=mttr_n,
             unit="hours",
             previous_value=prev_mttr,
-            delta_pct=_delta_pct(mttr_hours, prev_mttr),
+            delta_pct=_delta_pct(
+                mttr_hours if mttr_n else None,
+                prev_mttr if _prev_mttr_n else None,
+            ),
             sparkline=InsightSparkline(points=alert_spark),
         ),
         InsightTile(

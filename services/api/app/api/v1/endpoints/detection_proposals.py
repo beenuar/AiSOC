@@ -120,6 +120,8 @@ _EVAL_SCRIPT = _REPO_ROOT / "scripts" / "run_evals.py"
 
 
 class ProposalResponse(BaseModel):
+    positive_fixtures: list[dict[str, Any]] = Field(default_factory=list)
+    negative_fixtures: list[dict[str, Any]] = Field(default_factory=list)
     id: uuid.UUID
     tenant_id: uuid.UUID | None
     base_rule_id: uuid.UUID | None
@@ -161,6 +163,11 @@ class CreateProposalRequest(BaseModel):
     mitre_techniques: list[str] = Field(default_factory=list)
     tags: list[str] = Field(default_factory=list)
     base_rule_id: uuid.UUID | None = None
+    #: What this rule claims to catch, and what it claims to ignore.
+    #: Carried on the proposal so `/evaluate-rule` has something to replay
+    #: without an operator re-deriving fixtures the drafter already had.
+    positive_fixtures: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
+    negative_fixtures: list[dict[str, Any]] = Field(default_factory=list, max_length=200)
 
 
 class ReviewCommentRequest(BaseModel):
@@ -199,10 +206,14 @@ class EvaluateRuleRequest(BaseModel):
     """
 
     positive_fixtures: list[dict[str, Any]] = Field(
-        ...,
-        min_length=1,
+        default_factory=list,
         max_length=200,
-        description="Events the rule MUST fire on (the attacks it claims to catch). At least one required.",
+        description=(
+            "Events the rule MUST fire on. Optional: when omitted, the fixtures the "
+            "proposal was created with are replayed instead. The handler refuses if "
+            "neither source yields a positive, because a rule that cannot be shown to "
+            "catch anything must not be approved."
+        ),
     )
     negative_fixtures: list[dict[str, Any]] = Field(
         default_factory=list,
@@ -410,6 +421,8 @@ async def create_proposal(
         tags=request.tags,
         status="proposed",
         proposed_by_id=current_user.user_id,
+        positive_fixtures=request.positive_fixtures,
+        negative_fixtures=request.negative_fixtures,
     )
     db.add(proposal)
     await db.commit()
@@ -712,12 +725,33 @@ async def evaluate_rule(
             detail=f"Proposal is {proposal.status}; candidate-rule eval cannot be re-run",
         )
 
+    # Fall back to the fixtures the proposal was created with. Requiring
+    # them in the body meant an operator had to re-derive the very fixtures
+    # the drafter produced and threw away, which is why this gate had no
+    # console caller and no realistic path to being run.
+    positives = request.positive_fixtures or list(proposal.positive_fixtures or [])
+    negatives = request.negative_fixtures or list(proposal.negative_fixtures or [])
+    if not positives:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "This proposal carries no positive fixtures and none were supplied, so there is "
+                "nothing to prove the rule fires on. A rule that cannot be shown to catch "
+                "anything must not be approved."
+            ),
+        )
+
     result = evaluate_candidate_rule(
         rule_language=proposal.rule_language,
         rule_body=proposal.rule_body,
-        positive_fixtures=request.positive_fixtures,
-        negative_fixtures=request.negative_fixtures,
+        positive_fixtures=positives,
+        negative_fixtures=negatives,
     )
+
+    # Keep what was actually evaluated, so a later reader can see the proof
+    # rather than only the verdict.
+    proposal.positive_fixtures = positives
+    proposal.negative_fixtures = negatives
 
     # Merge into eval_result so the benchmark verdict (if already attached) is
     # preserved alongside the candidate-rule verdict.

@@ -39,6 +39,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
 from app.models.sla import TenantSLAConfig
+from app.services import sla_events
 from app.services.sla import DEFAULT_SLA_TARGETS
 
 # Severities that show up in the *unassigned* bucket of the queue.
@@ -469,7 +470,22 @@ async def claim_alert(
     update_result = await db.execute(
         update(Alert)
         .where(Alert.id == alert_id, Alert.tenant_id == tenant_id, Alert.assigned_to_id.is_(None))
-        .values(assigned_to_id=user_id, assigned_at=now, updated_at=now)
+        .values(
+            assigned_to_id=user_id,
+            assigned_at=now,
+            updated_at=now,
+            # Acknowledgement time, written once. `alerts.first_seen_at` had
+            # no writer anywhere, so `/insights/soc` MTTA and `/metrics/soc`
+            # mttd_hours both averaged over NULL and published a confident
+            # `0.0` through `float(result or 0.0)` — a zero that read as
+            # "instant acknowledgement" while meaning "nobody measured".
+            #
+            # COALESCE rather than a plain assignment: a claim after a
+            # release is still the same alert, and resetting the clock on
+            # re-assignment would make MTTA measure the last handoff rather
+            # than the first human response.
+            first_seen_at=func.coalesce(Alert.first_seen_at, now),
+        )
         .returning(Alert.assigned_to_id)
     )
     winner = update_result.scalar_one_or_none()
@@ -486,6 +502,17 @@ async def claim_alert(
             return alert
         raise AlertAlreadyClaimedError(alert_id=alert_id, owner_id=actual_owner)
 
+    # The claim is the acknowledgement, so it is also the `acknowledged`
+    # SLA event. Emitted here rather than from a sweep so the timestamp is
+    # the moment it happened.
+    await sla_events.record_event(
+        db,
+        alert_id=alert_id,
+        tenant_id=tenant_id,
+        event_type="acknowledged",
+        actor_id=user_id,
+        occurred_at=now,
+    )
     await db.commit()
     await db.refresh(alert)
     return alert

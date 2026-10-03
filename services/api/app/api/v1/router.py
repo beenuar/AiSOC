@@ -82,6 +82,7 @@ from app.api.v1.endpoints import (
     saved_views,
     scim_tokens,
     sla,
+    sso_connections,
     stix_taxii,
     tenant_provision,
     tenant_skills,
@@ -227,6 +228,7 @@ api_router.include_router(saved_views.router)
 # Administering SCIM credentials, which is a console action. The SCIM
 # surface those credentials authenticate is mounted at /scim/v2 in main.py.
 api_router.include_router(scim_tokens.router)
+api_router.include_router(sso_connections.router)
 
 # Wave 3 — operational maturity
 api_router.include_router(assets.router)

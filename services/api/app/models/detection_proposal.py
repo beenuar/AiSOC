@@ -35,6 +35,12 @@ class DetectionRuleProposal(Base):
     mitre_techniques: Mapped[list] = mapped_column(JSONB, default=list)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
 
+    # The proposal's own proof. `/evaluate-rule` replays these through the
+    # real engine, and `/decide` refuses an approval without that verdict —
+    # so a proposal that did not keep its fixtures could never be approved.
+    positive_fixtures: Mapped[list] = mapped_column(JSONB, default=list)
+    negative_fixtures: Mapped[list] = mapped_column(JSONB, default=list)
+
     status: Mapped[str] = mapped_column(String(20), default="proposed", index=True)
     eval_result: Mapped[dict] = mapped_column(JSONB, default=dict)
     review_comments: Mapped[list] = mapped_column(JSONB, default=list)

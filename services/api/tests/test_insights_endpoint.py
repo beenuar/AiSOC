@@ -107,17 +107,36 @@ class _FakeMappings:
 
 
 class _FakeResult:
-    """Stand-in for ``Result`` that exposes both ``.all()`` and ``.mappings()``."""
+    """Stand-in for ``Result`` exposing ``.all()``, ``.mappings()`` and ``.first()``.
 
-    def __init__(self, rows: list | None = None, mappings: list[dict] | None = None) -> None:
+    ``.first()`` was added when `_mean_hours` began selecting the mean and
+    its row count in one statement. The double lacking a method the real
+    ``Result`` has is the failure mode this repository keeps finding in the
+    other direction — a fake *more* capable than the real object — and it
+    is worth noticing that the reverse also hides work: without it, a
+    handler using an ordinary SQLAlchemy API cannot be tested at all.
+    """
+
+    def __init__(
+        self,
+        rows: list | None = None,
+        mappings: list[dict] | None = None,
+        first: tuple | None = None,
+    ) -> None:
         self._rows = rows or []
         self._mappings = mappings or []
+        self._first = first
 
     def all(self) -> list:
         return self._rows
 
     def mappings(self) -> _FakeMappings:
         return _FakeMappings(self._mappings)
+
+    def first(self) -> tuple | None:
+        if self._first is not None:
+            return self._first
+        return self._rows[0] if self._rows else None
 
 
 def _seeded_db(scalar_value: int = 5) -> MagicMock:
@@ -224,9 +243,20 @@ async def test_get_soc_insights_rejects_unknown_window() -> None:
 async def test_get_soc_insights_zero_state_renders_without_500() -> None:
     """Fresh tenant: no alerts, no cases — payload should still render.
 
-    The dashboard needs to render the day a tenant onboards. Returning
-    7 tiles of zero with ``delta_pct == None`` is preferable to a 500
-    or a blank page.
+    The dashboard needs to render the day a tenant onboards, so a 500 or a
+    blank page is not acceptable. What *is* rendered changed, and the
+    distinction is the point of the test.
+
+    A counting tile with nothing to count is genuinely `0`: zero alerts
+    arrived, and that is a measurement. An **averaging** tile with nothing
+    to average publishes `0.0` *with a `sample_count` of 0*, and the pair
+    is the measurement — the count is what separates "responded instantly"
+    from "nobody responded".
+
+    The mean is deliberately not nullable: that is a breaking response
+    change for every generated client, and `/metrics/soc` already took
+    this decision for `mttd_sample_count`. The openapi-breaking gate
+    caught an earlier attempt here to make it null.
     """
     db = _seeded_db(scalar_value=0)
     user = _stub_user()
@@ -235,7 +265,15 @@ async def test_get_soc_insights_zero_state_renders_without_500() -> None:
 
     assert response.window == "7d"
     assert len(response.tiles) == 7
+
+    by_key = {t.key: t for t in response.tiles}
+    for key in ("mtta", "mttr"):
+        tile = by_key[key]
+        assert tile.sample_count == 0, (
+            f"{key} published no denominator, so a reader cannot tell an empty window "
+            "from a real zero"
+        )
+
     for tile in response.tiles:
-        # Both current and previous are zero, so delta is undefined.
-        assert tile.value == 0 or tile.value == 0.0
+        # Nothing to compare against, so a delta would be invented.
         assert tile.delta_pct is None

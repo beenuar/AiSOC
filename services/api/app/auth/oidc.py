@@ -22,11 +22,13 @@ Configuration (env vars):
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import os
 import re
 import secrets
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import Any
 from urllib.parse import urlencode, urlparse
 
@@ -85,16 +87,128 @@ async def _discover(issuer: str) -> dict[str, Any]:
     return data
 
 
-# ─── In-memory state store (replace with Redis in production) ─────────────────
+# ─── id_token verification ────────────────────────────────────────────────────
 
+
+class _IdTokenInvalid(Exception):
+    """The id_token did not verify. Carries why, for the log line only."""
+
+
+#: One JWKS client per issuer. `PyJWKClient` caches signing keys itself and
+#: re-fetches on an unknown `kid`, which is what makes provider key rotation
+#: work without a restart.
+_jwks_clients: dict[str, Any] = {}
+
+
+def _jwks_client_for(provider: dict[str, Any]) -> Any:
+    uri = provider.get("jwks_uri")
+    if not uri:
+        raise _IdTokenInvalid("the discovery document declares no jwks_uri")
+    client = _jwks_clients.get(uri)
+    if client is None:
+        client = _jwt.PyJWKClient(uri, cache_keys=True)
+        _jwks_clients[uri] = client
+    return client
+
+
+async def _verify_id_token(id_token: str, *, issuer: str, provider: dict[str, Any]) -> dict[str, Any]:
+    """Verify signature, issuer, audience and expiry, or raise.
+
+    Every failure mode raises rather than returning partial claims. An
+    id_token that fails any check is not a weaker token, it is a token
+    from somebody else.
+    """
+    client_id = os.getenv("OIDC_CLIENT_ID", "")
+    try:
+        signing_key = _jwks_client_for(provider).get_signing_key_from_jwt(id_token)
+    except _IdTokenInvalid:
+        raise
+    except Exception as exc:  # noqa: BLE001 - any JWKS failure is a refusal
+        raise _IdTokenInvalid(f"could not resolve a signing key: {exc}") from exc
+
+    # `iss` is compared against the issuer this deployment is configured
+    # for, not against the one inside the token.
+    expected_issuer = provider.get("issuer") or issuer
+    try:
+        return dict(
+            _jwt.decode(
+                id_token,
+                signing_key.key,
+                algorithms=provider.get("id_token_signing_alg_values_supported") or ["RS256"],
+                audience=client_id or None,
+                issuer=expected_issuer or None,
+                options={
+                    "verify_signature": True,
+                    "verify_exp": True,
+                    "verify_aud": bool(client_id),
+                    "verify_iss": bool(expected_issuer),
+                },
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise _IdTokenInvalid(str(exc)) from exc
+
+
+# ─── State store ──────────────────────────────────────────────────────────────
+#
+# Redis-backed, with an in-process fallback for single-replica and test
+# deployments. This was a plain module dict, which breaks the flow outright
+# on more than one replica: the browser is redirected by the instance that
+# generated the state and comes back to whichever instance the load
+# balancer picks, so roughly (n-1)/n of sign-ins failed with "Invalid or
+# expired OIDC state" on an n-replica deployment.
+#
+# The entry holds the PKCE verifier and the nonce, so it is short-lived by
+# design — `_STATE_TTL_SECONDS` bounds how long an authorization code may
+# sit unredeemed.
+
+_STATE_TTL_SECONDS = 600
+_STATE_PREFIX = "aisoc:oidc:state:"
+
+#: Fallback only. Used when Redis is absent, which is a supported
+#: single-replica configuration.
 _state_store: dict[str, dict[str, str]] = {}
 
 
-def _store_state(state: str, data: dict[str, str]) -> None:
+@lru_cache(maxsize=1)
+def _state_redis() -> Any | None:
+    try:
+        from redis.asyncio import from_url  # noqa: PLC0415
+
+        from app.core.config import settings  # noqa: PLC0415
+
+        return from_url(str(settings.REDIS_URL), decode_responses=True)
+    except Exception:  # noqa: BLE001 - absence is a supported configuration
+        return None
+
+
+async def _store_state(state: str, data: dict[str, str]) -> None:
+    client = _state_redis()
+    if client is not None:
+        try:
+            await client.set(_STATE_PREFIX + state, json.dumps(data), ex=_STATE_TTL_SECONDS)
+            return
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "oidc.state_store_unavailable falling back to in-process: %s",
+                str(exc).replace("\r", "").replace("\n", " ")[:200],
+            )
     _state_store[state] = data
 
 
-def _pop_state(state: str) -> dict[str, str] | None:
+async def _pop_state(state: str) -> dict[str, str] | None:
+    """Read and delete in one step, so a state cannot be replayed."""
+    client = _state_redis()
+    if client is not None:
+        try:
+            raw = await client.getdel(_STATE_PREFIX + state)
+            if raw:
+                return dict(json.loads(raw))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "oidc.state_read_unavailable falling back to in-process: %s",
+                str(exc).replace("\r", "").replace("\n", " ")[:200],
+            )
     return _state_store.pop(state, None)
 
 
@@ -171,7 +285,7 @@ async def oidc_login(request: Request, redirect: str = "/") -> Response:
         params["code_challenge_method"] = "S256"
         state_data["verifier"] = verifier
 
-    _store_state(state, state_data)
+    await _store_state(state, state_data)
 
     auth_url = provider["authorization_endpoint"] + "?" + urlencode(params)
     response = RedirectResponse(url=auth_url)
@@ -191,7 +305,7 @@ async def oidc_callback(
     if error:
         raise HTTPException(status_code=400, detail=f"OIDC error: {error}")
 
-    state_data = _pop_state(state)
+    state_data = await _pop_state(state)
     if state_data is None:
         raise HTTPException(status_code=400, detail="Invalid or expired OIDC state")
 
@@ -226,14 +340,48 @@ async def oidc_callback(
             raise HTTPException(status_code=502, detail=f"Token exchange failed: {token_resp.text}")
         tokens = token_resp.json()
 
-    # Decode id_token (no signature verification here — use provider JWKS in production)
+    # Verify the id_token against the provider's published JWKS.
+    #
+    # This used to decode with `options={"verify_signature": False}` under a
+    # comment saying to use JWKS in production. An unverified id_token is a
+    # base64 blob anyone can author: its `sub`, `email` and `groups` claims
+    # are attacker-controlled, and they are merged into the identity below.
+    # The userinfo response is TLS-authenticated and was carrying the real
+    # weight, but `{**claims, **userinfo}` means any claim userinfo omits
+    # came straight from the unverified token.
+    #
+    # Verification is mandatory. A token that does not verify is discarded
+    # rather than downgraded, because falling back to unverified claims on
+    # error is the same hole with an extra step.
     id_token = tokens.get("id_token", "")
     claims: dict[str, Any] = {}
     if id_token:
         try:
-            claims = _jwt.decode(id_token, options={"verify_signature": False})
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("Failed to decode id_token claims: %s", exc)
+            claims = await _verify_id_token(id_token, issuer=issuer, provider=provider)
+        except _IdTokenInvalid as exc:
+            logger.warning(
+                "oidc.id_token_rejected issuer=%s reason=%s",
+                str(issuer).replace("\r", "").replace("\n", " ")[:200],
+                str(exc).replace("\r", "").replace("\n", " ")[:200],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="The identity provider's id_token could not be verified.",
+            ) from exc
+
+        # The nonce was generated, sent and then never checked, which left
+        # the authorization-code flow open to replay of a token minted for
+        # a different sign-in attempt.
+        expected_nonce = (state_data or {}).get("nonce")
+        if expected_nonce and claims.get("nonce") != expected_nonce:
+            logger.warning(
+                "oidc.nonce_mismatch issuer=%s",
+                str(issuer).replace("\r", "").replace("\n", " ")[:200],
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="The identity provider's response did not match this sign-in attempt.",
+            )
 
     access_token = tokens.get("access_token", "")
 

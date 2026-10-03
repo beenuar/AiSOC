@@ -67,6 +67,7 @@ from app.api.v1.endpoints.alert_writeback import optional_user, service_token_va
 from app.db.rls import set_rls_context
 from app.models.alert import Alert
 from app.security.tenant_scope import scoped_tenant_or_403
+from app.services import sla_events
 from app.services.analyst_feedback import (
     REASON_CODES,
     active_statements,
@@ -234,6 +235,19 @@ async def submit_alert_override(
         update(Alert)
         .where(Alert.id == alert_uuid, Alert.tenant_id == user.tenant_id)
         .values(disposition=payload.corrected_verdict, updated_at=now)
+    )
+    # A disposition is the analyst declaring the alert resolved, which is
+    # the `resolved` half of every SLA figure. `alert_sla_events` had one
+    # writer — a manual POST nothing calls — so `services/sla.py` computed
+    # MTTD, MTTR and MTTC over an empty table on every deployment.
+    await sla_events.record_event(
+        db,
+        alert_id=alert_uuid,
+        tenant_id=user.tenant_id,
+        event_type="resolved",
+        actor_id=user.user_id,
+        occurred_at=now,
+        metadata={"disposition": payload.corrected_verdict},
     )
     await db.commit()
 

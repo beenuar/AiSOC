@@ -33,6 +33,7 @@ Endpoints
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -49,6 +50,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
+from app.services import evidence_custody
 from app.services.case_fanout import (
     FanoutResult,
     fanout_create_case,
@@ -591,6 +593,16 @@ async def update_case(
         row = (await db.execute(q)).fetchone()
         if row is None:
             raise HTTPException(status_code=404, detail="Case not found.")
+        if body.status is not None:
+            await _append_custody(
+                db,
+                case_id=cid,
+                tenant_id=user.tenant_id,
+                user=user,
+                action="case_closed" if body.status == "closed" else "status_changed",
+                item=body.status,
+                detail={"to": body.status},
+            )
         await db.commit()
     except Exception as exc:
         await db.rollback()
@@ -641,6 +653,63 @@ async def update_case(
     return response
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Evidence custody
+#
+# `evidence_chain` had three readers and no writer, so the report an auditor
+# exports from `GET /cases/{id}/evidence` was always `[]` under a heading
+# saying "Evidence Chain" — which reads as "no evidence was handled" rather
+# than "this product does not record custody".
+#
+# Appended in the same statement that performs the mutation being recorded,
+# so a custody entry cannot exist for a change that did not commit, and a
+# change cannot commit without its entry.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+async def _append_custody(
+    db: Any,
+    *,
+    case_id: Any,
+    tenant_id: Any,
+    user: AuthUser,
+    action: str,
+    item: str | None = None,
+    detail: dict[str, Any] | None = None,
+) -> None:
+    """Append one custody entry to this case's chain.
+
+    Reads the current chain to link the hash, then writes the extended
+    chain back. Best-effort by design: a custody write that failed must
+    not roll back the case change an analyst just made, because losing
+    the work is worse than losing one audit line. The failure is logged
+    at `warning` so it is visible rather than silent.
+    """
+    try:
+        current = await db.scalar(
+            text("SELECT evidence_chain FROM aisoc_cases WHERE id = :id AND tenant_id = :t").bindparams(id=case_id, t=tenant_id)
+        )
+        chain = evidence_custody.append_entry(
+            list(current or []),
+            action=action,
+            actor_id=getattr(user, "user_id", None),
+            actor_email=getattr(user, "email", None),
+            item=item,
+            detail=detail,
+        )
+        await db.execute(
+            text("UPDATE aisoc_cases SET evidence_chain = CAST(:c AS jsonb) WHERE id = :id AND tenant_id = :t").bindparams(
+                c=json.dumps(chain), id=case_id, t=tenant_id
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 - never fail the caller's mutation
+        logger.warning(
+            "cases.custody_append_failed action=%s error=%s",
+            str(action).replace("\r", "").replace("\n", " ")[:80],
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+
+
 @router.post("/{case_id}/alerts", response_model=CaseResponse, summary="Link alerts to a case")
 async def add_alerts(
     case_id: str, body: AddAlertsRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("cases:write"))]
@@ -658,8 +727,20 @@ async def add_alerts(
         row = (await db.execute(q)).fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Case not found.")
+        await _append_custody(
+            db,
+            case_id=cid,
+            tenant_id=user.tenant_id,
+            user=user,
+            action="alert_linked",
+            item=",".join(ids_str[:20]),
+            detail={"count": len(ids_str)},
+        )
         await db.commit()
-        return _row_to_case(row)
+        refreshed = (
+            await db.execute(text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :t").bindparams(id=cid, t=user.tenant_id))
+        ).fetchone()
+        return _row_to_case(refreshed or row)
     except HTTPException:
         raise
     except Exception as exc:

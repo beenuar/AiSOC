@@ -10101,6 +10101,126 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/sso-connections:
+    get:
+      tags:
+      - sso
+      summary: List Sso Connections
+      description: Every SSO connection this tenant has configured.
+      operationId: list_sso_connections_api_v1_sso_connections_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/SsoConnectionOut'
+                type: array
+                title: Response List Sso Connections Api V1 Sso Connections Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - sso
+      summary: Create Sso Connection
+      description: 'Configure an identity provider for this tenant.
+
+
+        Until one of these exists, every SAML and OIDC sign-in answers 403 —
+
+        `resolve_connection` finds no row and refuses rather than guessing a
+
+        tenant from the assertion.'
+      operationId: create_sso_connection_api_v1_sso_connections_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SsoConnectionIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SsoConnectionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/sso-connections/{connection_id}:
+    patch:
+      tags:
+      - sso
+      summary: Update Sso Connection
+      description: 'Replace a connection''s configuration.
+
+
+        The tenant is not settable: moving a connection between tenants would
+
+        silently re-home every user who signs in through it.'
+      operationId: update_sso_connection_api_v1_sso_connections__connection_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: connection_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Connection Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SsoConnectionIn'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SsoConnectionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - sso
+      summary: Delete Sso Connection
+      description: Remove a connection. Sign-ins through that issuer start answering
+        403 again.
+      operationId: delete_sso_connection_api_v1_sso_connections__connection_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: connection_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Connection Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/assets:
     get:
       tags:
@@ -21798,6 +21918,20 @@ components:
             format: uuid
           - type: 'null'
           title: Base Rule Id
+        positive_fixtures:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          maxItems: 200
+          title: Positive Fixtures
+        negative_fixtures:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          maxItems: 200
+          title: Negative Fixtures
       type: object
       required:
       - name
@@ -22879,10 +23013,11 @@ components:
             type: object
           type: array
           maxItems: 200
-          minItems: 1
           title: Positive Fixtures
-          description: Events the rule MUST fire on (the attacks it claims to catch).
-            At least one required.
+          description: 'Events the rule MUST fire on. Optional: when omitted, the
+            fixtures the proposal was created with are replayed instead. The handler
+            refuses if neither source yields a positive, because a rule that cannot
+            be shown to catch anything must not be approved.'
         negative_fixtures:
           items:
             additionalProperties: true
@@ -22892,8 +23027,6 @@ components:
           title: Negative Fixtures
           description: Benign near-miss events the rule MUST NOT fire on.
       type: object
-      required:
-      - positive_fixtures
       title: EvaluateRuleRequest
       description: 'Evaluate the candidate rule body against its own fixtures (Phase
         4).
@@ -25528,7 +25661,17 @@ components:
         value:
           type: number
           title: Value
-          description: Headline metric for the current window.
+          description: 'Headline metric for the current window. Read it with `sample_count`:
+            a mean over zero rows is reported as 0.0 and is *not* a measurement. The
+            mean is not nullable because that is a breaking response change for every
+            existing client, which is the same decision `/metrics/soc` took with `mttd_sample_count`.'
+        sample_count:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Sample Count
+          description: Rows behind `value`. A mean over three and over three thousand
+            differ.
         unit:
           type: string
           title: Unit
@@ -28828,6 +28971,18 @@ components:
       title: PromotionResponse
     ProposalResponse:
       properties:
+        positive_fixtures:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Positive Fixtures
+        negative_fixtures:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Negative Fixtures
         id:
           type: string
           format: uuid
@@ -31983,6 +32138,114 @@ components:
       - disposition
       title: SourceWritebackRequest
       description: What the caller believes about the alert.
+    SsoConnectionIn:
+      properties:
+        provider:
+          type: string
+          title: Provider
+        issuer:
+          type: string
+          maxLength: 512
+          minLength: 1
+          title: Issuer
+        display_name:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Display Name
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+        group_role_mapping:
+          additionalProperties:
+            type: string
+          type: object
+          title: Group Role Mapping
+        default_role:
+          type: string
+          title: Default Role
+          default: viewer
+        metadata_url:
+          anyOf:
+          - type: string
+            maxLength: 1024
+          - type: 'null'
+          title: Metadata Url
+        metadata_xml:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Metadata Xml
+      type: object
+      required:
+      - provider
+      - issuer
+      title: SsoConnectionIn
+    SsoConnectionOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        tenant_id:
+          type: string
+          title: Tenant Id
+        provider:
+          type: string
+          title: Provider
+        issuer:
+          type: string
+          title: Issuer
+        display_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Display Name
+        enabled:
+          type: boolean
+          title: Enabled
+        group_role_mapping:
+          additionalProperties:
+            type: string
+          type: object
+          title: Group Role Mapping
+        default_role:
+          type: string
+          title: Default Role
+        metadata_url:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Metadata Url
+        has_metadata_xml:
+          type: boolean
+          title: Has Metadata Xml
+        created_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Created At
+        updated_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Updated At
+      type: object
+      required:
+      - id
+      - tenant_id
+      - provider
+      - issuer
+      - display_name
+      - enabled
+      - group_role_mapping
+      - default_role
+      - metadata_url
+      - has_metadata_xml
+      - created_at
+      - updated_at
+      title: SsoConnectionOut
     StartReplayRequest:
       properties:
         connector_id:

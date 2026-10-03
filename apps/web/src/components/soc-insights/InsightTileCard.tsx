@@ -65,6 +65,16 @@ export function InsightTileCard({ tile, sparkline }: InsightTileCardProps) {
 // ---------------------------------------------------------------------------
 
 function formatValue(tile: InsightTile): string {
+  // An averaging tile that averaged nothing publishes 0.0 with a
+  // `sample_count` of 0, because making the mean nullable would break
+  // every generated client. The pair is the measurement, so the console
+  // has to read both: rendering "0.0h" for MTTA on a tenant where nobody
+  // acknowledged anything claims instant response.
+  //
+  // `=== 0` rather than falsiness, and only when the field is present, so
+  // an older server that does not send it is unaffected.
+  if (tile.sample_count === 0) return 'not measured';
+
   switch (tile.unit) {
     case 'hours':
       return `${tile.value.toFixed(1)}h`;
