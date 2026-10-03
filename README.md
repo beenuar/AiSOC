@@ -100,8 +100,9 @@ a connector still ingests through a generic mapping that resolves host, user and
 
 ## How it works
 
-Ingest normalizes to a common shape and Kafka carries it, then fusion runs 2603 executable detection
-rules, of 6991 on disk, applies **your tenant's own tuning** on top — the disables, floors and
+Ingest normalizes to a common shape and Kafka carries it, then
+fusion runs 2603 executable detection rules, of 6991 on disk, applies **your tenant's own tuning**
+on top — the disables, floors and
 suppressions the console writes, so a rule you turned off actually stops firing — and decides what
 becomes an alert. Correlation groups related alerts, an agent investigates and writes its reasoning
 to the Investigation Ledger, and a playbook may start from the result. Separately, new threat
@@ -122,14 +123,13 @@ Windows connector and requires all 1,687 Windows rules to go silent. It means re
 detects an attack. 119 still cannot fire, counted by family rather than hidden.
 ([why 1,362 were refused](docs/detections/sigma-compilation.md))
 
-**Every answer carries its receipts.** The copilot cites each checkable claim to the ledger entry
-behind it and labels the rest *uncited* rather than dropping them, and any investigation exports as a
-**signed evidence bundle** — byte-identical across exports, prompts as digests, mapped to OCSF 1.9.0.
-([evidence bundles](docs/architecture/evidence-bundles.md))
+**Every answer carries its receipts.** The copilot cites each checkable claim to the ledger entry behind
+it and labels the rest *uncited* rather than dropping them, and any investigation exports as a **signed
+evidence bundle** — byte-identical, prompts as digests, OCSF 1.9.0. ([how](docs/architecture/evidence-bundles.md))
 
-**[docs/architecture/README.md](docs/architecture/README.md)** walks that path one step at a time —
-eleven steps, five diagrams, every box linking to the code that implements it — and [mirrors to the
-docs portal](https://beenuar.github.io/AiSOC/docs/architecture).
+**[docs/architecture/README.md](docs/architecture/README.md)** walks that path one step at a time — eleven
+steps, five diagrams, every box linking to the code — and [mirrors to the docs
+portal](https://beenuar.github.io/AiSOC/docs/architecture).
 
 ## Deployment profiles
 
@@ -175,7 +175,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 
 - **They read** the alert, its correlated siblings, entity context, and prior verdicts for the same signature.
 - **They call typed tools** — lake queries, graph traversals, enrichment lookups. The model chooses a tool and passes arguments; it never writes SQL.
-- **Everything is logged** to the Investigation Ledger — prompts, tool calls, citations, verdict and token cost — and exports as a signed bundle.
+- **Everything is logged** to the Investigation Ledger — prompts, tool calls, citations, verdict, token cost — and exports as a signed bundle.
 - **Grounding is checked.** A verdict citing an indicator the evidence never contained is demoted to human review rather than auto-closed.
 - **A prompt is validated before it is sent.** Raw logs, OCSF payloads and secret-shaped values are refused, not redacted after the fact.
 - **No vendor is touched without a human**, unless a tenant has explicitly granted autonomy for that verb. Every response step is graded against its own capability contract at dispatch, so approving a playbook never authorises whatever its steps happen to contain, and an approver must hold the required permission tier and must not be the person who requested the action.
