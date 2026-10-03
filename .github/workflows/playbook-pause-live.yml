@@ -86,6 +86,19 @@ jobs:
           poetry install --no-root --no-interaction
           python -m pip install --quiet pytest pytest-asyncio 
 
+      # The evidence-bundle suite drives the **API** service through a
+      # real ASGI client, so it pulls in that service's import chain —
+      # which is not the agents one. It failed on `bcrypt`, reached
+      # through app.core.security, and the fix is the same as the comment
+      # above: install from the service's own lockfile rather than adding
+      # the missing name to a hand-curated list, which only works until
+      # the next import.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          poetry install --no-root --no-interaction
+
       # The whole chain, in order.
       #
       # This started as a cherry-picked 001/002/081 — enough for the pause

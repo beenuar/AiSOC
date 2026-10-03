@@ -114,3 +114,7 @@ services/connectors/tests/connectors/test_snowflake.py:private-key:17
 # invented inbox token for a schema assertion.
 services/connectors/tests/test_kubernetes_audit.py:generic-api-key:218
 
+# Evidence-bundle test fixture. "test-signing-key-at-least-32-characters-long" is a
+# literal the suite signs with so it can then prove a *different* key fails to verify;
+# it authenticates nothing and exists in no deployment.
+services/api/tests/test_evidence_bundle.py:generic-api-key:26
