@@ -26,7 +26,8 @@
 #   AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY / AWS_ENDPOINT_URL
 #
 # Usage:
-#   ./scripts/restore.sh --timestamp 20260503T120000Z [--component postgres|clickhouse|plugins|all]
+#   ./scripts/restore.sh --timestamp 20260503T120000Z \
+#       [--component postgres|clickhouse|plugins|neo4j|qdrant|redis|all]
 #   ./scripts/restore.sh --latest [--component all]
 #   ./scripts/restore.sh --list   # show available backups
 
@@ -367,17 +368,168 @@ restore_plugins() {
 }
 
 # ── run selected components ───────────────────────────────────────────────────
+# ── Neo4j ─────────────────────────────────────────────────────────────────────
+#
+# Gap-closure wave 15. Neo4j, Qdrant and Redis each had a backup path
+# and **no restore**, which is a backup nobody has ever proven they can
+# use — and the first time anyone finds out is during the recovery.
+#
+# Neo4j is restored by replaying the Cypher the backup exported.
+# `neo4j-admin load` is not an option here for the same reason the
+# backup does not use `neo4j-admin dump`: it needs the database
+# stopped, and a restore that requires downtime on a store the rest of
+# the platform degrades gracefully without is a worse trade than a
+# slower replay.
+restore_neo4j() {
+  log "--- Neo4j restore ---"
+  local base="neo4j-${TIMESTAMP}.cypher.gz"
+  local local_file="${RESTORE_DIR}/${base}"
+
+  if ! fetch_artifact "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/neo4j" "$base" "$local_file"; then
+    log "No Neo4j backup for ${TIMESTAMP}; skipping"
+    return
+  fi
+  verify_artifact "$local_file" "neo4j/${base}"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "[dry-run] Would replay $(gzip -dc "$local_file" | grep -c . || echo 0) Cypher statements"
+    return
+  fi
+
+  # Statement at a time rather than one transaction: the export is
+  # large, and a single failing MERGE must not discard the whole graph
+  # restore. Failures are counted and reported rather than swallowed —
+  # a restore that reports success having skipped half the graph is
+  # the failure this whole wave is about.
+  local applied=0 failed=0 stmt
+  while IFS= read -r stmt; do
+    [[ -z "$stmt" || "$stmt" == //* ]] && continue
+    if curl -sf -u "${NEO4J_USER}:${NEO4J_PASSWORD}" \
+         -H 'Content-Type: application/json' \
+         -d "$(python3 -c 'import json,sys; print(json.dumps({"statements":[{"statement":sys.stdin.read()}]}))' <<<"$stmt")" \
+         "${NEO4J_HTTP_URL}/db/neo4j/tx/commit" >/dev/null 2>&1; then
+      applied=$((applied + 1))
+    else
+      failed=$((failed + 1))
+    fi
+  done < <(gzip -dc "$local_file")
+
+  log "Neo4j: ${applied} statements applied, ${failed} failed"
+  if [[ "$failed" -gt 0 ]]; then
+    echo "ERROR: ${failed} Cypher statements failed; the graph is incomplete" >&2
+    return 1
+  fi
+}
+
+# ── Qdrant ────────────────────────────────────────────────────────────────────
+#
+# Restored per collection from the snapshot API. Collections are
+# recreated by the upload rather than pre-created here: the vector
+# dimension is immutable, and creating one with the wrong dimension
+# would make the restore fail in a way that looks like corrupt data.
+restore_qdrant() {
+  log "--- Qdrant restore ---"
+  local prefix="${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/qdrant"
+  # shellcheck disable=SC2046
+  local collections
+  collections=$(aws s3 ls $(s3_args) "${prefix}/" 2>/dev/null | awk '{print $2}' | sed 's|/$||' || echo "")
+
+  if [[ -z "$collections" ]]; then
+    log "No Qdrant backup directories found; skipping"
+    return
+  fi
+
+  local restored=0
+  while IFS= read -r collection; do
+    [[ -z "$collection" ]] && continue
+    local base="${collection}-${TIMESTAMP}.snapshot"
+    local local_file="${RESTORE_DIR}/qdrant-${base}"
+
+    if ! fetch_artifact "${prefix}/${collection}" "$base" "$local_file"; then
+      log "No snapshot for collection ${collection} at ${TIMESTAMP}; skipping"
+      continue
+    fi
+    verify_artifact "$local_file" "qdrant/${collection}/${base}"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+      log "[dry-run] Would upload snapshot to collection ${collection}"
+      continue
+    fi
+
+    if curl -sf -X POST \
+         -H 'api-key: '"${QDRANT_API_KEY:-}" \
+         -F "snapshot=@${local_file}" \
+         "${QDRANT_URL}/collections/${collection}/snapshots/upload?priority=snapshot" >/dev/null; then
+      restored=$((restored + 1))
+    else
+      echo "ERROR: Qdrant collection ${collection} failed to restore" >&2
+      return 1
+    fi
+  done <<< "$collections"
+
+  log "Qdrant: ${restored} collection(s) restored"
+}
+
+# ── Redis ─────────────────────────────────────────────────────────────────────
+#
+# Redis holds cache, the OIDC state store and rate-limit counters —
+# all of which the platform rebuilds. So this restores the RDB only
+# when explicitly asked, and the default guidance is to start empty:
+# replacing a running cache with an hours-old one serves stale answers
+# with full confidence, which is worse than a cold start.
+restore_redis() {
+  log "--- Redis restore ---"
+  local base="redis-${TIMESTAMP}.rdb"
+  local local_file="${RESTORE_DIR}/${base}"
+
+  if ! fetch_artifact "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/redis" "$base" "$local_file"; then
+    log "No Redis backup for ${TIMESTAMP}; skipping"
+    return
+  fi
+  verify_artifact "$local_file" "redis/${base}"
+
+  if [[ "${REDIS_RESTORE_CONFIRM:-}" != "yes" ]]; then
+    log "Redis holds only rebuildable state (cache, OIDC states, rate limits)."
+    log "A restored cache serves stale answers with full confidence, which is worse"
+    log "than a cold start. Set REDIS_RESTORE_CONFIRM=yes to restore it anyway."
+    return
+  fi
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "[dry-run] Would load ${base} into ${REDIS_URL}"
+    return
+  fi
+
+  # The RDB has to be placed where the server reads it, which means
+  # the restore runs against the container rather than the protocol.
+  if ! command -v docker &>/dev/null; then
+    echo "ERROR: Redis restore needs docker to place the RDB; none found" >&2
+    return 1
+  fi
+  docker cp "$local_file" "${REDIS_CONTAINER:-redis}:/data/dump.rdb"
+  docker restart "${REDIS_CONTAINER:-redis}" >/dev/null
+  log "Redis: RDB restored and the server restarted"
+}
+
 case "$COMPONENT" in
   postgres)   restore_postgres ;;
   clickhouse) restore_clickhouse ;;
   plugins)    restore_plugins ;;
+  neo4j)      restore_neo4j ;;
+  qdrant)     restore_qdrant ;;
+  redis)      restore_redis ;;
   all)
     restore_postgres
     restore_clickhouse
     restore_plugins
+    # Added in wave 15. Each had a backup path and no restore, which
+    # is a backup nobody has proven they can use.
+    restore_neo4j
+    restore_qdrant
+    restore_redis
     ;;
   *)
-    echo "Unknown component: $COMPONENT (choose: postgres|clickhouse|plugins|all)" >&2
+    echo "Unknown component: $COMPONENT (choose: postgres|clickhouse|plugins|neo4j|qdrant|redis|all)" >&2
     exit 1
     ;;
 esac
