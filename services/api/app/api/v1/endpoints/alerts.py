@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -144,10 +144,14 @@ class AlertListResponse(BaseModel):
 
 
 class AlertUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     status: str | None = None
     priority: int | None = None
     tags: list[str] | None = None
-    assigned_to_id: uuid.UUID | None = None
+    # The queue UI releases alerts with {"assignee": null}; accept both the
+    # canonical field name and that alias.
+    assigned_to_id: uuid.UUID | None = Field(default=None, alias="assignee")
     case_id: uuid.UUID | None = None
 
 
@@ -838,9 +842,12 @@ async def update_alert(
         updates["priority"] = request.priority
     if request.tags is not None:
         updates["tags"] = request.tags
-    if request.assigned_to_id is not None:
+    # Explicit null clears the assignment (release back to the pool);
+    # absent field means "leave as-is". Key presence, not value truthiness,
+    # decides — `is not None` here made release a silent no-op.
+    if "assigned_to_id" in request.model_fields_set or "assignee" in request.model_fields_set:
         updates["assigned_to_id"] = request.assigned_to_id
-        updates["assigned_at"] = datetime.now(UTC)
+        updates["assigned_at"] = datetime.now(UTC) if request.assigned_to_id else None
     if request.case_id is not None:
         updates["case_id"] = request.case_id
 

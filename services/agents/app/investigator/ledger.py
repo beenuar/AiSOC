@@ -579,7 +579,16 @@ async def persist_auto_triage(
                                ai_score = $4,
                                ai_summary = $5,
                                ai_recommendations = $6::jsonb,
-                               status = CASE WHEN $7 AND NOT $10 THEN 'resolved' ELSE status END,
+                                   -- If the agent produced a verdict, the alert has
+                               -- been triaged: surface that on the status badge
+                               -- so investigated alerts stop showing as 'new'.
+                               -- Never downgrades a further-along status; shadow
+                               -- runs leave it untouched.
+                               status = CASE
+                               WHEN $7 AND NOT $10 THEN 'resolved'
+                               WHEN status = 'new' AND NOT $10 THEN 'triaged'
+                               ELSE status
+                           END,
                                resolved_at = CASE WHEN $7 AND NOT $10 THEN now() ELSE resolved_at END,
                                -- Nullable on purpose: NULL is "not scored",
                                -- which is a different fact from "scored zero".

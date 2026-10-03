@@ -8,6 +8,7 @@ export type AlertStatus =
   | "new"
   | "open"
   | "in_progress"
+  | "triaged"
   | "pending_action"
   | "resolved"
   | "false_positive"

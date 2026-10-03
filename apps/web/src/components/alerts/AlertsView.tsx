@@ -147,7 +147,7 @@ function FiltersBar({
   total: number;
 }) {
   const severities = ['all', 'critical', 'high', 'medium', 'low', 'info'] as const;
-  const statuses = ['all', 'new', 'investigating', 'resolved', 'false_positive'] as const;
+  const statuses = ['all', 'new', 'investigating', 'triaged', 'resolved', 'false_positive'] as const;
 
   return (
     <div className="flex items-center gap-3 flex-wrap py-3 px-4 bg-gray-900/40 border border-gray-800/60 rounded-xl">
