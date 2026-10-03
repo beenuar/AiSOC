@@ -490,7 +490,10 @@ BENIGN_CASES: list[dict[str, Any]] = [
                 "source": "asset_inventory",
                 "ip": "198.51.100.200",
                 "hostname": "artifact-mirror.example.com",
-                "note": "Internal artifact mirror. Classified external by the rule because it sits outside the RFC1918 ranges the rule checks.",
+                "note": (
+                    "Internal artifact mirror. Classified external by the rule "
+                    "because it sits outside the RFC1918 ranges the rule checks."
+                ),
             },
         ],
         why=(
