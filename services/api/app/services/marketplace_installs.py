@@ -27,13 +27,10 @@ that stopped holding the moment there were two processes.
 
 from __future__ import annotations
 
-import logging
 from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import text
-
-logger = logging.getLogger(__name__)
 
 __all__ = ["installed_item_ids", "record_install", "remove_install"]
 
