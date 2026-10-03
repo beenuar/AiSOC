@@ -34,10 +34,12 @@ Run:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import importlib.util
 import json
 import os
 import sys
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -192,6 +194,12 @@ def _guard_scanner(root: Path) -> Any:
     return module.PromptInjectionGuard().scan
 
 
+#: The corpus is synthetic and belongs to no tenant; the state model
+#: requires one. Fixed so two runs over a pair are comparable.
+_EVAL_NAMESPACE = uuid.UUID("00000000-0000-0000-0000-0000000000e0")
+_EVAL_TENANT = uuid.UUID("00000000-0000-0000-0000-0000000000e5")
+
+
 def _live_outcomes(pairs: list[Any], metrics: ModuleType, limit: int | None) -> tuple[dict[str, Any] | None, str]:
     """Dispatch both twins of every pair through the live agent.
 
@@ -202,33 +210,90 @@ def _live_outcomes(pairs: list[Any], metrics: ModuleType, limit: int | None) -> 
     this guards against is a weekly job that goes green having measured
     nothing while the page promises fresh rows.
     """
+    # The agent, imported from the deployable tree.
+    #
+    # This used to import `InvestigatorAgent` from `app.investigator`, a
+    # class that exists nowhere in `services/agents` — the only one by
+    # that name lives in the historical prototype under `plans/`. So the
+    # live path could never have measured anything, and the hosted-key
+    # check above returned first, which meant the broken import was
+    # never reached and the failure read as "no key" forever.
+    #
+    # A local provider counts. The repository ships Ollama in CORE
+    # precisely so AI triage runs with zero credentials, and refusing to
+    # measure without a funded hosted key would make this permanently
+    # unmeasurable on the very configuration the product recommends.
+    # The agent's own configuration, not a second set of names. A local
+    # provider is reached by pointing `OPENAI_BASE_URL` at it and pinning
+    # a concrete model with `AISOC_MODEL_PIN_TRIAGE`, which is what the
+    # agent's own error message tells an operator to do — an alias like
+    # `aisoc-triage` with no gateway returns 404 and degrades silently.
     key = (os.getenv("WET_EVAL_OPENAI_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
-    if not key:
-        return None, "no live LLM key configured (WET_EVAL_OPENAI_KEY)"
+    pinned = (os.getenv("AISOC_MODEL_PIN_TRIAGE") or "").strip()
+    base_url = (os.getenv("OPENAI_BASE_URL") or os.getenv("LLM_GATEWAY_URL") or "").strip()
+    if not key and not pinned:
+        return None, (
+            "no live model configured: set WET_EVAL_OPENAI_KEY for a hosted provider, or "
+            "AISOC_MODEL_PIN_TRIAGE plus OPENAI_BASE_URL for a local one (Ollama ships in CORE)"
+        )
+    if pinned and not base_url:
+        return None, (f"AISOC_MODEL_PIN_TRIAGE={pinned!r} is set but no OPENAI_BASE_URL or LLM_GATEWAY_URL points at a provider")
 
     agents_root = repo_root() / "services" / "agents"
     sys.path.insert(0, str(agents_root))
     try:
-        from app.investigator import InvestigatorAgent  # type: ignore
+        from app.agents import TriageAgent  # type: ignore
+        from app.models.state import InvestigationState  # type: ignore
     except Exception as exc:
         return None, f"agent stack not importable: {exc!r}"
 
-    os.environ.setdefault("OPENAI_API_KEY", key)
-    agent = InvestigatorAgent()
+    if key:
+        os.environ.setdefault("OPENAI_API_KEY", key)
+
     selected = pairs[:limit] if limit else pairs
     outcomes: dict[str, tuple[Any, Any]] = {}
     failures = 0
 
     def answer(incident: dict[str, Any]) -> Any | None:
+        """Dispatch one incident and read the verdict the agent reached.
+
+        A placed-no-call run is a dispatch failure rather than a verdict:
+        every agent here catches its provider error and falls back to a
+        deterministic path, so a run that never reached the model would
+        otherwise publish the fallback's answers as the model's.
+        """
+        state = InvestigationState(
+            # Required by the model and meaningless here: the corpus is
+            # synthetic and belongs to no tenant. Fixed rather than
+            # random so two runs over the same pair are comparable.
+            # Both are UUIDs on the model and the corpus ids are not.
+            # Derived from the corpus id rather than random, so the same
+            # incident gets the same id on every run and two runs stay
+            # comparable.
+            incident_id=uuid.uuid5(_EVAL_NAMESPACE, str(incident.get("id") or "unknown")),
+            tenant_id=_EVAL_TENANT,
+            alert_summary=str(incident.get("title") or incident.get("description") or ""),
+            raw_alert=dict(incident),
+        )
         try:
-            result = agent.investigate(incident)
+            result = asyncio.run(TriageAgent.auto_triage(state))
         except Exception:
             return None
+        verdict = str(getattr(result, "verdict", "") or "").strip()
+        if not verdict:
+            return None
+        actions = tuple(
+            str(getattr(a, "action_type", None) or getattr(a, "action", None) or a)
+            for a in (getattr(result, "proposed_actions", None) or ())
+        )
+        targets = tuple(
+            str(getattr(a, "target", None) or "") for a in (getattr(result, "proposed_actions", None) or ()) if getattr(a, "target", None)
+        )
         return metrics.AgentOutcome(
-            verdict=str(getattr(result, "verdict", "") or getattr(result, "disposition", "") or "unknown"),
-            proposed_actions=tuple(str(a) for a in (getattr(result, "proposed_actions", None) or ())),
-            tool_calls=tuple(str(t) for t in (getattr(result, "tool_calls", None) or ())),
-            action_targets=tuple(str(t) for t in (getattr(result, "action_targets", None) or ())),
+            verdict=verdict,
+            proposed_actions=actions,
+            tool_calls=tuple(str(t) for t in (getattr(result, "tools_used", None) or ())),
+            action_targets=targets,
         )
 
     for pair in selected:
