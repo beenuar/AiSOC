@@ -73,8 +73,10 @@ class TestTimeToVerdict:
         runs = [_run(f"i{n}", seconds_to_verdict=float(n)) for n in range(1, 21)]
         score = score_agent_quality(runs)
         assert score.timed_runs == 20
-        assert score.median_seconds_to_verdict is not None
-        assert score.p95_seconds_to_verdict >= score.median_seconds_to_verdict
+        median = score.median_seconds_to_verdict
+        p95 = score.p95_seconds_to_verdict
+        assert median is not None and p95 is not None, "timings were recorded but no percentile came back"
+        assert p95 >= median
 
     def test_untimed_runs_are_absent_not_instant(self) -> None:
         score = score_agent_quality([_run("a")])

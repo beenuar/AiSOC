@@ -175,6 +175,21 @@ EMPTY_TREE_EXCEPTIONS: dict[str, dict[str, tuple[str, str]]] = {
             "partial and dry-run secrets.",
         )
     },
+    "check_backup_restore_parity.py": {
+        ANY_SHAPE: (
+            "passed",
+            "Its entire subject is scripts/backup.sh and scripts/restore.sh, and scripts/ is the "
+            "one directory the scratch tree has to keep for a gate to be runnable at all. So the "
+            "probe cannot pose the question: the two files it compares are present in the scratch "
+            "tree, it reads them, and exit 0 is a real finding about a tree it genuinely opened "
+            "rather than a tree it never did. The same situation as security_audit's "
+            "validate-ignores arm below, for the same reason. The case the probe is reaching for "
+            "— a tree where those files are absent — is covered directly: the gate exits 2 naming "
+            "the directory it looked in, verified by running it from a bare repository, and it "
+            "exits 2 again if backup.sh declares no backup functions, so a parse that silently "
+            "matched nothing cannot read as parity either.",
+        )
+    },
     "security_audit.py": {
         ANY_SHAPE: (
             "passed",

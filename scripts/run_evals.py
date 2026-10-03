@@ -749,6 +749,21 @@ def _build_per_investigation_block(model: str, *, keep_records: bool) -> dict:
     return block
 
 
+def grade_agent_quality(runs: list[Any]) -> dict[str, Any]:
+    """Tool selection, evidence completeness and time to verdict.
+
+    Wired into the harness because a metric nothing computes is a
+    module. These three had zero hits anywhere in the tree: the eleven
+    existing suites grade outcomes, and an agent that reaches the
+    right verdict by reading the alert title scores identically to one
+    that investigated.
+    """
+    sys.path.insert(0, str(repo_root() / "services" / "agents"))
+    from app.eval.agent_quality import score_agent_quality  # noqa: PLC0415
+
+    return score_agent_quality(runs).as_dict()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AiSOC Pillar-1 unified evaluation runner.")
     parser.add_argument(

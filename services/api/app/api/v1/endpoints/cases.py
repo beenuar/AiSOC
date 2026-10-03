@@ -50,7 +50,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
-from app.services import case_status, evidence_custody
+from app.services import case_orchestration, case_status, evidence_custody
 from app.services.case_fanout import (
     FanoutResult,
     fanout_create_case,
@@ -705,6 +705,25 @@ async def _append_custody(
             str(action).replace("\r", "").replace("\n", " ")[:80],
             str(exc).replace("\r", "").replace("\n", " ")[:200],
         )
+
+
+def case_queue_for(case_row: Any, queues: list[Any]) -> Any:
+    """Which queue this case belongs in.
+
+    Routed through `case_orchestration.resolve_queue` so precedence and
+    the name tiebreak live in one place — without the tiebreak two
+    equally-ranked queues resolve by row order and a case appears to
+    move between them on each read.
+    """
+    return case_orchestration.resolve_queue(
+        case_orchestration.CaseFacts(
+            severity=str(getattr(case_row, "severity", "medium") or "medium"),
+            case_type=getattr(case_row, "case_type", None),
+            tags=tuple(getattr(case_row, "tags", None) or ()),
+            opened_at=getattr(case_row, "opened_at", None),
+        ),
+        queues,
+    )
 
 
 @router.post("/{case_id}/alerts", response_model=CaseResponse, summary="Link alerts to a case")

@@ -51,9 +51,10 @@ and :data:`NEVER_GRANTABLE` from here and the vocabularies are the same object.
 from __future__ import annotations
 
 from collections.abc import Iterable, Sequence
-from typing import Final
+from typing import Any, Final
 
 from app.core.security import ROLE_PERMISSIONS
+from app.security import abac
 
 #: The permission string that means "every permission".
 WILDCARD: Final[str] = "*"
@@ -159,6 +160,21 @@ def _covers(held: frozenset[str], wanted: str) -> bool:
 def missing_permissions(held: frozenset[str], wanted: Iterable[str]) -> list[str]:
     """Which wanted permissions the held set does not cover, sorted."""
     return sorted({perm for perm in wanted if not _covers(held, perm)})
+
+
+def narrow_by_conditions(
+    permission: str,
+    conditions: Sequence[dict[str, Any]],
+    context: dict[str, Any],
+) -> abac.ConditionResult:
+    """Apply attribute conditions after the role check has allowed.
+
+    After, never instead of. Conditions narrow and never grant — one
+    that could grant would be a second authorization system reaching a
+    different answer from the first, and the two would disagree on the
+    day it mattered.
+    """
+    return abac.evaluate_conditions(list(conditions), context)
 
 
 def authorize_role_grant(

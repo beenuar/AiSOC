@@ -170,10 +170,16 @@ CREATE INDEX IF NOT EXISTS ix_case_transitions ON case_status_transitions (case_
 
 -- ── Task dependencies ──────────────────────────────────────────────────────
 
-ALTER TABLE case_tasks ADD COLUMN IF NOT EXISTS depends_on_task_id UUID REFERENCES case_tasks(id) ON DELETE SET NULL;
-ALTER TABLE case_tasks ADD COLUMN IF NOT EXISTS blocked_reason TEXT;
+-- `aisoc_case_tasks`, not `case_tasks`. Migration 027 created it under
+-- the prefixed name and the ORM maps to that; writing the unprefixed
+-- one aborted this migration before its RLS block ran, which then
+-- made `060_rls_coverage` fail on five tables that would have been
+-- covered. One wrong table name, two failing migrations, and the
+-- second error named the wrong cause entirely.
+ALTER TABLE aisoc_case_tasks ADD COLUMN IF NOT EXISTS depends_on_task_id UUID REFERENCES aisoc_case_tasks(id) ON DELETE SET NULL;
+ALTER TABLE aisoc_case_tasks ADD COLUMN IF NOT EXISTS blocked_reason TEXT;
 
-COMMENT ON COLUMN case_tasks.depends_on_task_id IS
+COMMENT ON COLUMN aisoc_case_tasks.depends_on_task_id IS
     'A task cannot be completed before the one it depends on. Enforced at the '
     'application layer, not by a constraint, because the useful behaviour is a clear '
     'refusal naming the blocker rather than a foreign-key error.';

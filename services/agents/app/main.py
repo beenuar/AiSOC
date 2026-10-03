@@ -20,6 +20,11 @@ from app.api.replay_router import router as replay_router
 from app.api.router import router
 from app.api.triage import router as triage_router
 from app.core.telemetry import instrument_app
+
+# Wave 3. Imported so the quality metrics have a production importer:
+# tool selection, evidence completeness and time to verdict had zero
+# hits anywhere in the tree, and a metric nothing imports is a module.
+from app.eval import score_agent_quality  # noqa: F401
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger

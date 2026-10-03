@@ -28,7 +28,9 @@ class TestQueueRoutingIsDeterministic:
             QueueRule(id="b", name="catch-all", precedence=500),
             QueueRule(id="a", name="critical", precedence=10, match_severity=("critical",)),
         ]
-        assert resolve_queue(case, queues).id == "a"
+        chosen = resolve_queue(case, queues)
+        assert chosen is not None, "no queue matched a case that two queues declare"
+        assert chosen.id == "a"
 
     def test_the_name_breaks_a_precedence_tie(self) -> None:
         """Not cosmetic. Without it two equally-ranked queues resolve
@@ -38,8 +40,11 @@ class TestQueueRoutingIsDeterministic:
             QueueRule(id="z", name="zulu", precedence=100),
             QueueRule(id="a", name="alpha", precedence=100),
         ]
-        assert resolve_queue(case, queues).id == "a"
-        assert resolve_queue(case, list(reversed(queues))).id == "a"
+        forward = resolve_queue(case, queues)
+        reverse = resolve_queue(case, list(reversed(queues)))
+        assert forward is not None and reverse is not None
+        assert forward.id == reverse.id == "a", "row order decided the queue"
+
 
     def test_criteria_are_anded_not_ored(self) -> None:
         """A queue declaring critical AND pci means critical PCI cases.
@@ -73,6 +78,7 @@ class TestThreeClocksNotOne:
             SlaPolicy(id="p", severity="high", resolve_minutes=240),
             now=NOW,
         )
+        assert targets.resolve_due_at is not None, "no resolution target was set"
         assert targets.resolve_due_at < NOW, "the deadline moved when the case was re-read"
 
     def test_no_policy_gives_no_target_and_says_why(self) -> None:
