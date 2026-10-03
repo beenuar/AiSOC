@@ -97,7 +97,7 @@ async def db():
 async def _teardown(session) -> None:
     await session.rollback()
     await session.execute(
-        text("DELETE FROM cases WHERE tenant_id = ANY(:ids)"),
+        text("DELETE FROM aisoc_cases WHERE tenant_id = ANY(:ids)"),
         {"ids": [str(t) for t in _ALL_TENANTS]},
     )
     await session.execute(text("DELETE FROM organizations WHERE id = :id"), {"id": str(ORG)})
@@ -115,7 +115,7 @@ async def _case(session, *, tenant, number, opened_minutes_ago, duration_minutes
     await session.execute(
         text(
             """
-            INSERT INTO cases (id, tenant_id, case_number, title, status, created_at, closed_at, updated_at)
+            INSERT INTO aisoc_cases (id, tenant_id, case_number, title, status, created_at, closed_at, updated_at)
             VALUES (:id, :tenant, :number, :title, :status, :created, :closed_at, :updated)
             """
         ),
@@ -173,7 +173,7 @@ async def test_cases_closed_windows_on_closed_at_not_updated_at(db) -> None:
         duration_minutes=10,
     )
     await db.execute(
-        text("UPDATE cases SET updated_at = now() - interval '400 days' WHERE case_number = :n"),
+        text("UPDATE aisoc_cases SET updated_at = now() - interval '400 days' WHERE case_number = :n"),
         {"n": f"PAR-{TENANT.hex[:6]}-3"},
     )
     await db.commit()

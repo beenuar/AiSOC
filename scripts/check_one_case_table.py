@@ -92,8 +92,15 @@ def _tracked_sources() -> list[Path]:
     out: list[Path] = []
     for pattern in ("services/**/*.py", "services/**/*.sql", "scripts/**/*.py"):
         for path in ROOT.glob(pattern):
-            if "__pycache__" in path.parts or "/tests/" in str(path):
+            if "__pycache__" in path.parts:
                 continue
+            # Tests are **not** excluded. The first draft skipped them,
+            # and four live references survived in
+            # `test_resolution_time_parity.py` and
+            # `test_mssp_portfolio_isolation.py` — found by CI against
+            # real Postgres rather than by the gate written to find
+            # exactly that. A test that seeds the retired table is a
+            # test asserting the consolidation did not happen.
             out.append(path)
     return sorted(out)
 

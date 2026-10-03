@@ -299,7 +299,7 @@ detection number describes nothing.
 <!-- BEGIN:injection-eval -->
 **Against payloads it has not seen, this guard detects 7.1% (2/28).** That is the number to carry away. It scores 98.1% (53/54) on the corpus it was hardened against, and the 91-point gap is the honest measure of how much of that hardening was pattern-fitting rather than threat coverage. Both are published below, tuned first for continuity with earlier runs; neither means anything read alone.
 
-Corpus: **54 injected incidents** and **17 benign controls**, each paired with a clean twin (71 pairs, 142 incidents). Synthetic, generated deterministically. Digest `d67f4eb82e74fc3e`.
+Corpus: **54 injected incidents** and **17 benign controls**, each paired with a clean twin (71 pairs, 142 incidents). Synthetic, generated deterministically. Digest `eb21ba6075c344ac`.
 
 | Metric | Measures | Rate | What it is |
 |---|---|---|---|
@@ -321,7 +321,7 @@ Guard detection by surface, which is where the result is actionable:
 | `ticket_text` | 21/21 |
 | `user_agent` | 3/3 |
 
-Held-out corpus: **28 injected incidents** and **6 benign controls**, authored after the guard was frozen and never consulted while its patterns were written. Synthetic, generated deterministically. Digest `4601dada34b78726`.
+Held-out corpus: **28 injected incidents** and **6 benign controls**, authored after the guard was frozen and never consulted while its patterns were written. Synthetic, generated deterministically. Digest `8c4b3ff79a2b8a9c`.
 
 | Metric | Measures | Rate | What it is |
 |---|---|---|---|
