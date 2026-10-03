@@ -101,6 +101,15 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Generate the secrets the stack refuses to start without
+        # `make up` runs this; a workflow that calls `docker compose up`
+        # directly does not, and then provisions an environment with
+        # every generated secret empty. ingest refuses to start without
+        # JWT_SECRET and the API without METRICS_TOKEN, so the outage
+        # below would grade a stack that never came up — which is the
+        # vacuous pass this whole programme is about.
+        run: python3 scripts/ensure_env.py
+
       - name: Bring the stack up
         id: boot
         run: |

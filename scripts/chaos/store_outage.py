@@ -240,9 +240,22 @@ def _container_action(container: str, action: str) -> bool:
         return False
 
 
+#: Readiness endpoints are local to the stack under test. The prefix
+#: check is the same mitigation `check_codeql_alerts` uses for its own
+#: `urlopen`: build from a fixed root and refuse anything that does
+#: not start with it, so the `file://` read the scanner warns about is
+#: unreachable.
+_ALLOWED_PROBE_PREFIXES = ("http://127.0.0.1:", "http://localhost:", "https://127.0.0.1:")
+
+
 def _probe(url: str, timeout: float = 4.0) -> dict[str, Any] | None:
+    if not url.startswith(_ALLOWED_PROBE_PREFIXES):
+        raise ValueError(
+            f"refusing to probe {url!r}: this harness only reads readiness endpoints on the "
+            f"local stack it is taking down, which must start with one of {_ALLOWED_PROBE_PREFIXES}"
+        )
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - fixed scheme below
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - prefix-checked above
             return dict(json.loads(response.read().decode("utf-8")))
     except (urllib.error.URLError, TimeoutError, ValueError, OSError):
         return None
