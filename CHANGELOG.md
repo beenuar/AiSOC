@@ -7,6 +7,174 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [15.1.0] - 2026-10-03
+
+No breaking changes. Two routes are added and none removed, so every
+generated SDK client keeps working.
+
+The theme is the gap between a capability existing and a user reaching it.
+`v15.0.0` closed thirteen security defects that shared one shape — a
+control that exists, passes its tests and never runs. This release applies
+the same reading to the product: first run, the response loop, the claims
+in the README, and the numbers on the benchmark page.
+
+Three things are worth reading before upgrading. **First run changed
+substantially** — `make up` now resolves a port conflict instead of
+refusing to start, and a new tenant lands on a setup wizard rather than an
+empty dashboard. **CloudTrail users will see more alerts**, because every
+event used to collapse onto a single one. And **the project-maturity table
+now means something**: `Stable` has a written definition and a gate, and
+the rows that claimed coverage they did not have were fixed rather than
+relabelled.
+
+### Added
+
+- **Signed, replayable evidence bundles.** Any investigation exports from
+  `GET /api/v1/investigations/{run_id}/bundle`, or from a download control
+  on the investigation timeline. Two exports of one run produce identical
+  bytes, so an auditor can diff and re-hash a bundle without trusting the
+  exporter — which rules out sorted-key-order, `now()` timestamps, host
+  names, and ledger rows arriving in whatever order the query planner
+  chose. Prompts travel as SHA-256 digests rather than text, because a
+  bundle is the artefact most likely to leave a customer's control and a
+  prompt carries their hostnames and usernames.
+
+  The OCSF mapping declares **1.9.0**, and that is deliberate rather than
+  careless. Each object was checked against the published schema first:
+  `ai_agent` 404s on 1.1.0 and 1.8.0 and exists only in 1.9.0,
+  `ai_operation` exists from 1.8.0, `record_integrity` exists in 1.9.0
+  under that exact spelling. The ingest spine stays at the 1.1.0 its
+  normalizer emits — that is its contract with connectors — but a bundle
+  declaring 1.1.0 while carrying an `ai_agent` would be a false claim
+  about a public standard.
+
+  The signature is HMAC-SHA256 and the bundle says what that is worth in
+  its own `algorithm_note`: tamper-evidence, not non-repudiation. Anyone
+  holding the deployment key can forge one.
+
+- **The copilot cites its claims.** Every checkable claim in an answer —
+  an IP, a hash, a CVE, an ATT&CK technique — now cites the ledger entry
+  or alert behind it, addressed as `ledger:<run>#<seq>` so an analyst can
+  open it. Claims that cite nothing are labelled **uncited** rather than
+  dropped, because hiding the unsupported half shows the analyst a
+  different answer than the model gave. There are three outcomes, not two:
+  an answer asserting nothing concrete reads *no checkable claims*, and
+  one supported claim beside one invented one reads *partially uncited*.
+
+- **A natural-language hunting route and MCP tool.** `POST /api/v1/agents/hunt`
+  reaches the hunting agent from the console, and `aisoc_run_hunt` is the
+  nineteenth tool on the MCP server. The agent fills a closed schema and
+  every value it supplies is bound as a parameter, so it cannot express a
+  query at all.
+
+- **A first-run setup wizard.** A new tenant lands on a wizard instead of
+  a dashboard of zeros. Its state derives from the tenant's own rows
+  rather than an `onboarded` flag, so it cannot drift when somebody
+  connects a source through the API. **Load sample data** pushes five
+  scenarios through the *same ingest endpoint a real connector uses* — a
+  console full of inserted rows looks identical whether the pipeline works
+  or is completely broken — and it refuses on a tenant that already has
+  real alerts. Every address in those scenarios is an RFC 5737
+  documentation range, asserted by test.
+
+- **A written definition of Stable, and a gate that enforces it.**
+  `docs/audit/MATURITY_DEFINITION.md` sets four criteria: the check
+  triggers unconditionally with no path filter, drives the real production
+  path with nothing stubbed, runs against real infrastructure rather than
+  fakes, and carries a negative control proven by breaking the thing and
+  watching the check go red. `scripts/check_maturity_table.py` holds the
+  README's table to it in both directions.
+
+### Changed
+
+- **`make up` resolves a port conflict instead of refusing to start.** It
+  publishes on a free port, names what held the old one, and moves the
+  console address with it. Measured on a bare clone with 5432 and 11434
+  both taken: 64 seconds from `git clone` to a signed-in console, on a
+  host that previously could not install at all.
+
+- **Every capability in the project-maturity table is now Stable**, and
+  each row was earned rather than relabelled. Two rows had claimed live
+  testing that existed nowhere in CI — manual verifications from an
+  earlier session written into the "Tested" column, which a reader takes
+  to mean CI coverage. Those now have real gated suites against real
+  containers.
+
+- **`make doctor` names the real cause.** A full Docker VM is reported as
+  a full Docker VM, not as the service that happened to die; a busy port
+  is reported as reassignable rather than fatal; and a red check before
+  `make up` says so instead of listing 22 failures.
+
+### Fixed
+
+- **Every CloudTrail event collapsed into a single alert.** A one-event
+  pipeline test cannot reveal this, which is why it survived: a customer
+  would have seen one alert no matter what happened in their AWS account.
+
+- **Playbooks could not act.** `find_matching()` had no production caller,
+  so no playbook had ever run from an alert; the `approval` step was
+  documented as a durable pause with nowhere to suspend to, so twelve
+  shipped playbooks aborted there. Both are wired, and an approval now
+  suspends to Postgres, survives a restart, resumes from the step after
+  the approval, and expires with a recorded outcome rather than hanging.
+
+- **A tenant's detection tuning never reached the streaming engine**, so a
+  rule turned off in the console kept firing while the console showed it
+  disabled.
+
+- **Two cross-tenant defects in retro-hunt**, found by an end-to-end test
+  rather than a unit test: pending rows for one tenant were flushed under
+  another's RLS context during autoflush, and the fan-out loop had no
+  savepoint to roll back to.
+
+- **Playbook packs shipped empty in the agents image.** The build context
+  excluded `playbooks/packs/v1`, so the container loaded zero pack
+  playbooks while the repository had 62. They are vendored with a
+  bidirectional sync gate.
+
+### Benchmark
+
+- **Verdict accuracy is now published as *not measured*, with the reason.**
+  Every labelled corpus in this repository is entirely malicious by
+  construction — `synthetic_incidents.json` and `adversary_incidents.json`
+  are 200 incidents each and all are real attacks, with `response_class`
+  naming the action to take rather than whether the finding was true. An
+  agent answering "true positive" to everything, without reading anything,
+  would post **100% accuracy and 100% malicious recall**.
+
+  `scripts/score_replay_set.py` refuses such a corpus and names the
+  counts, and a test asserts that **this tree's own two corpora are
+  refused** — that is the finding, not a bug to route around. There is no
+  `--force`.
+
+- **The live-agent eval grades the shipped model.** It is now a matrix over
+  `qwen2.5:0.5b` and `llama3.2:3b-instruct-q4_K_M`, the model
+  `docker-compose.yml` actually pulls. The smaller one stays because the
+  published floor was measured on it. No hosted provider has ever been
+  exercised, and every hosted row reads *not measured* rather than `0`.
+
+- **Before-and-after deltas refuse the comparisons that would read as
+  results.** An axis measured before and not after reports *not
+  comparable*, never a regression — the arithmetic would say
+  `0.62 - 0 = -0.62` and claim the agent got much worse when nobody asked
+  it. Two runs over different datasets are refused outright, a mean whose
+  support changed materially carries both counts, and latency is reported
+  but never graded because it measures the machine.
+
+### Documentation
+
+- **Cyble is credited for funding and supporting the project** in the
+  README, `.github/CREDITS.md`, the docs-portal footer and
+  `.github/FUNDING.yml`. No `custom:` sponsor button was added: that would
+  tell a reader they can fund AiSOC at that link, and they cannot — Cyble
+  funds the project, the project collects nothing.
+
+- **Thirteen security advisories** for the `v15.0.0` defects are drafted in
+  `docs/security/v15-advisory-drafts.md`.
+
+- The claim-to-gate matrix stands at **285 rows, all GATED**, with no
+  `PARTIAL` and no `NO GATE`.
+
 ## [15.0.0] - 2026-10-01
 
 A security release. Thirteen defects, each found by reading the code at
