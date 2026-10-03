@@ -455,6 +455,21 @@ jobs:
         run: python3 scripts/check_deployment_auth_posture.py --self-test
       - name: Verify every documented path is production-class
         run: python3 scripts/check_deployment_auth_posture.py
+
+      # Wave 10. A pack referencing a rule id nobody ships is the exact
+      # failure the format exists to prevent: an operator adopts it,
+      # nothing fires, and no error appears anywhere. Checked against
+      # the compiled ruleset the engine loads, not the YAML on disk,
+      # which carries thousands of rules the engine never compiles.
+      - name: Content packs resolve against the shipped corpus
+        run: python3 scripts/check_content_packs.py
+
+      # Wave 15. backup.sh backed up five stores and restore.sh
+      # restored two, which is a backup nobody had proven they could
+      # use. Runs in the direction that drifts — a store gains a
+      # backup long before it gains a restore.
+      - name: Every backed-up store has a restore path
+        run: python3 scripts/check_backup_restore_parity.py
       # Sending a customer file to a third party is a disclosure, and for the
       # first commercial provider wired here it is a disclosure to the public
       # internet: a stored report carries `visibility: "public"` and
