@@ -45,6 +45,10 @@ git clone https://github.com/beenuar/AiSOC && cd AiSOC
 make up
 ```
 
+A **22-page technical guide** covers all of this in depth — workstation and server install, every
+failure mode with its cause and fix, the REST API, MCP, and screenshots of each console surface:
+[AiSOC Technical Guide (PDF)](apps/web/public/papers/aisoc-technical-guide.pdf).
+
 Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM**, plus `python3`
 (3.9+) and `bash`; `make doctor` checks all of it and
 [Installation](https://beenuar.github.io/AiSOC/docs/installation#requirements) says what each number

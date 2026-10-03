@@ -26,6 +26,11 @@ on:
     branches: [main]
     paths:
       - "apps/web/content/papers/**.md"
+      # Papers embed console captures, so refreshing a screenshot
+      # changes the rendered PDF while leaving every other path here
+      # untouched — the published PDF would keep showing the old
+      # console and nothing would say so.
+      - "apps/web/public/screenshots/**"
       - "apps/web/public/papers/render-manifest.json"
       - "scripts/render_white_paper.py"
       - "Makefile"
@@ -33,6 +38,11 @@ on:
   pull_request:
     paths:
       - "apps/web/content/papers/**.md"
+      # Papers embed console captures, so refreshing a screenshot
+      # changes the rendered PDF while leaving every other path here
+      # untouched — the published PDF would keep showing the old
+      # console and nothing would say so.
+      - "apps/web/public/screenshots/**"
       - "apps/web/public/papers/render-manifest.json"
       - "scripts/render_white_paper.py"
       - "Makefile"

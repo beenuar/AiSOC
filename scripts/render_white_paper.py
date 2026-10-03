@@ -65,6 +65,12 @@ PRINT_CSS = """
         font-size: 9pt;
         color: #6b7280;
     }
+    @bottom-left {
+        content: "Funded and supported by Cyble — cyble.com";
+        font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
+        font-size: 8pt;
+        color: #6b7280;
+    }
     @top-right {
         content: string(paper-title);
         font-family: "Inter", "Helvetica Neue", Arial, sans-serif;
@@ -93,6 +99,23 @@ h2 {
     color: #0f172a;
     page-break-after: avoid;
 }
+figure {
+    margin: 1.4em 0;
+    page-break-inside: avoid;
+}
+figure img, p > img {
+    width: 100%;
+    max-width: 100%;
+    border: 1px solid #d1d5db;
+    border-radius: 3px;
+}
+figcaption, .figure-caption {
+    font-size: 8.5pt;
+    color: #4b5563;
+    margin-top: 0.4em;
+    font-style: italic;
+}
+
 h3 {
     font-size: 12pt;
     margin: 1.2em 0 0.3em 0;
@@ -172,6 +195,36 @@ COVER_HTML = """
 """
 
 
+_IMG_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")
+
+
+def _assert_images_resolved(markdown_path: Path, output_path: Path) -> None:
+    """Refuse a PDF whose figures point at files that are not there.
+
+    WeasyPrint renders a missing image as nothing at all, so the
+    caption survives and describes a blank space. A reader takes that
+    as a layout bug; it is actually a claim about a screenshot the
+    document does not have.
+
+    Checked against the source markdown rather than the rendered PDF
+    because the PDF is where the evidence has already been lost.
+    """
+    source = markdown_path.read_text(encoding="utf-8")
+    missing = [
+        ref
+        for ref in _IMG_RE.findall(source)
+        if not ref.startswith(("http://", "https://", "data:")) and not (repo_root() / ref.lstrip("/")).is_file()
+    ]
+    if missing:
+        output_path.unlink(missing_ok=True)
+        raise SystemExit(
+            f"[render_white_paper] {markdown_path.name} references "
+            f"{len(missing)} image(s) that do not exist: {', '.join(missing[:5])}. "
+            "A caption describing an absent screenshot is worse than no screenshot, "
+            "so the PDF was not written."
+        )
+
+
 def _strip_frontmatter(source: str) -> tuple[dict[str, str], str]:
     """Return (metadata, body) after stripping YAML frontmatter."""
     if not source.startswith("---"):
@@ -241,10 +294,17 @@ def _render_one(markdown_path: Path, output_path: Path) -> None:
     html = re.sub(r"<h1[^>]*>.*?</h1>", "", html, count=1)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    HTML(string=html).write_pdf(
+    # `base_url` is the repository root so a paper can reference the
+    # real console captures under `apps/web/public/screenshots/` by
+    # repo-relative path. Without it WeasyPrint resolves relative `src`
+    # against the current directory and silently renders nothing where
+    # the image should be — a figure caption describing an absent
+    # screenshot, which is worse than no screenshot.
+    HTML(string=html, base_url=str(repo_root())).write_pdf(
         str(output_path),
         stylesheets=[CSS(string=PRINT_CSS)],
     )
+    _assert_images_resolved(markdown_path, output_path)
     size = output_path.stat().st_size
     print(
         f"[render_white_paper] wrote {output_path} ({size:,} bytes)",
