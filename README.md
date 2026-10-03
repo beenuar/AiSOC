@@ -98,6 +98,12 @@ among those with vendor-specific normalization and setup docs
 ([coverage](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage)). Without a vendor profile
 a connector still ingests through a generic mapping that resolves host, user and source IP.
 
+Bringing existing detections? `packages/aisoc-migrate` translates Splunk SPL, Sentinel KQL and
+Elastic EQL, and **refuses rather than approximating** what it cannot carry — an almost-right rule is
+harder to find than a missing one. On the 2,005 Splunk rules bundled here, 1,734 translate and 1,711
+of those are partial: field matches carried, thresholds did not
+([what to do with a partial](https://beenuar.github.io/AiSOC/docs/migration/from-splunk)).
+
 ## How it works
 
 Ingest normalizes to a common shape and Kafka carries it, then
@@ -164,9 +170,7 @@ thing in a fresh install that is neither synthetic nor yours.
 | **Demo** | `make demo` | `is_synthetic = true`, labelled in the console |
 | **Benchmark / fixtures** | `services/agents/tests/eval_data/`, `**/tests/` | Published rows carry `substrate: true`; fixtures never ship in an image |
 
-**Production never silently falls back to synthetic data.** An unreachable backend makes the console
-name the failure rather than invent an investigation, and an unmeasured figure reads *not measured*,
-never `0`. It was not always so: [the reality audit](docs/audit/REPOSITORY_REALITY.md) has each case.
+**Production never silently falls back to synthetic data.** An unreachable backend makes the console name the failure rather than invent an investigation, and an unmeasured figure reads *not measured*, never `0`. It was not always so: [the reality audit](docs/audit/REPOSITORY_REALITY.md) has each case.
 
 ## AI agents
 
@@ -181,10 +185,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 
 ## Project maturity
 
-**Stable is defined, and a gate enforces it.** It was ungated prose until three rows were found
-describing coverage that did not exist. A row is Stable only with a check that runs on every pull
-request with no path filter, drives the real production path against real infrastructure, and has a
-**negative control proven by breaking the thing and watching it go red**. ([the bar](docs/audit/MATURITY_DEFINITION.md))
+**Stable is defined, and a gate enforces it.** It was ungated prose until three rows were found describing coverage that did not exist. A row is Stable only with a check that runs on every pull request with no path filter, drives the real production path against real infrastructure, and has a **negative control proven by breaking the thing and watching it go red**. ([the bar](docs/audit/MATURITY_DEFINITION.md))
 
 | Capability | Status | Tested | Production ready |
 |---|---|---|---|
@@ -214,18 +215,16 @@ request with no path filter, drives the real production path against real infras
 
 ## Troubleshooting
 
-`make doctor` checks host tools, memory, disk, every port and each datastore by *querying* it rather than
-asking whether its container is up, then prints the command to run next. A container killed by a full
-Docker VM is named as that, not as the service that happened to die.
+`make doctor` checks host tools, memory, disk, every port and each datastore by *querying* it rather than asking whether its container is up, then prints the command to run next. A container killed by a full Docker VM is named as that, not as the service that happened to die.
 ([the six most common failures](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures))
 
 ## Security
 
-Secrets are generated per deployment and never committed; connector credentials are encrypted at
-rest. Services connect to Postgres as a DML-only role, so row-level security actually applies, and
-tenant isolation is enforced at the query layer in every store. RBAC gates every mutating route,
-ingest is authenticated, and the default install sends no prompt anywhere — the model runs beside
-it.
+Secrets are generated per deployment and never committed; connector credentials are encrypted at rest. Services connect to Postgres as a DML-only role, so row-level security actually applies, and tenant isolation is enforced at the query layer in every store. RBAC gates every mutating route, ingest is authenticated, and the default install sends no prompt anywhere — the model runs beside it.
+
+SAML and OIDC sign-in with per-connection tenant and group mapping, SCIM provisioning, attribute
+conditions that narrow a permission, and time-boxed elevation instead of standing admin
+([setup](https://beenuar.github.io/AiSOC/docs/operations/enterprise-sso)).
 
 **A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fix; report via [SECURITY.md](SECURITY.md).
 
@@ -237,14 +236,10 @@ make smoke       # the golden pipeline, against a running stack
 make stats       # recount every figure this README publishes
 ```
 
-Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) · [add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
-[plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle). Every count above is
-recounted from the tree, and CI fails if this README disagrees.
+Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) · [add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) · [plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle). Every count above is recounted from the tree, and CI fails if this README disagrees.
 
 ## Funding · Roadmap · Contributing · License
 
-Development is funded and supported by **[Cyble](https://cyble.com)**, who pay for the engineering time behind AiSOC
-and release it under the MIT licence rather than keeping it. That buys no special treatment here — no Cyble-only
-features, no gated modules, no telemetry. ([full credits](.github/CREDITS.md))
+Development is funded and supported by **[Cyble](https://cyble.com)**, who pay for the engineering time behind AiSOC and release it under the MIT licence rather than keeping it. That buys no special treatment here — no Cyble-only features, no gated modules, no telemetry. ([full credits](.github/CREDITS.md))
 
 [ROADMAP.md](ROADMAP.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · MIT

@@ -39,6 +39,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   writes `closed_at`. Both now read from `app.services.case_status`.
 
 
+### Fixed
+
+- **SSO could not sign anyone in.** `aisoc_sso_connections` was created by migration `080` and
+  written by nothing, so `resolve_connection` found no row and both SAML and OIDC answered **403
+  on every deployment**. There is now a tenant-scoped CRUD surface for it. The OIDC `id_token` is
+  verified against the provider's JWKS — it was decoded with `verify_signature: False` — and the
+  `nonce` is compared, having been generated and never checked. Sign-in state moved to Redis: as a
+  process dictionary it broke roughly (n-1)/n of sign-ins on an n-replica deployment.
+- **MTTA published a confident `0.0`.** `alerts.first_seen_at` had no writer, so the mean was taken
+  over NULL. It is written when an analyst claims an alert, with `COALESCE` so a re-claim does not
+  reset the clock to measure the last handoff.
+- **The evidence chain was always empty.** Three readers, no writer, so `GET /cases/{id}/evidence`
+  returned `[]` under a heading reading "Evidence Chain". Entries are appended on alert links and
+  status changes, hash-chained so an edit or removal is detectable. Tamper *evidence*, not tamper
+  proofing — a test asserts a consistently rewritten chain still verifies, so nobody concludes
+  otherwise.
+- **SLA reporting had nothing to aggregate.** `alert_sla_events` had one writer, a manual POST
+  nothing called, so 350 lines of correct MTTD/MTTR/MTTC arithmetic ran over an empty table.
+- **The console's rule-Approve button could not succeed.** `/decide` answers 412 without a
+  `candidate_rule` verdict and `/evaluate-rule` is its only writer, which had no web client — and
+  fixtures were never stored, so even calling it directly meant re-deriving fixtures the drafter
+  had discarded. Migration `082` stores them on the proposal.
+- **Marketplace installs were lost on restart** and disagreed between replicas. The
+  `marketplace_installs` table from migration `056` had no reader or writer.
+- **The author of a detection rule could approve it.** `proposed_by_id` was compared against
+  nothing, on the one surface that writes executable code into the engine. Overridable with
+  `AISOC_DETECTION_SOD_ENFORCED=0` for a single-analyst deployment.
+- **The live agent evaluation could never have measured anything.** It imported
+  `InvestigatorAgent`, a class that exists only in the historical prototype, and the hosted-key
+  check returned first so the broken import was never reached. Repointed at the real agent, it
+  measures a **9.3% verdict-flip rate** against a local model.
+- **Three stores had a backup and no restore.** `backup.sh` covered five, `restore.sh` covered two.
+  Neo4j, Qdrant and Redis now restore, and `check_backup_restore_parity.py` fails CI on the next
+  store that gains a backup without one.
+
+### Added
+
+- **Content packs** bundle detections, correlations, an investigation plan, response and
+  validation — a pack was a playbook, which is the last fifth of the thing its name implies.
+- **Inbound detection migration** from Splunk SPL, Sentinel KQL and Elastic EQL. On the 2,005
+  quarantined Splunk rules bundled here, 1,734 translate; **1,711 of those are partial**, because
+  the corpus is aggregation-heavy and thresholds do not carry. The suite asserts that ratio so the
+  headline cannot be read as a finished migration.
+- **Alert prioritisation** from asset criticality, identity privilege and Known Exploited
+  Vulnerability exposure. Context multiplies severity and never sums, so it reorders within a tier
+  and cannot invert a severity gap.
+- **Case queues, three SLA clocks, escalation, shift handoff and transition history.** Escalation
+  keys on the acknowledgement clock, because a case somebody is working on is not the failure a
+  ladder addresses.
+- **Legal hold, data residency, field-level access and per-subject deletion.** A hold outranks
+  retention unconditionally.
+- **Workload identities, API-key rotation in place, time-boxed privilege grants and ABAC
+  conditions.** Conditions narrow and never grant, and a condition the request carries no data for
+  denies rather than passes.
+- **Detection lifecycle**: dev/staging/production, shadow mode independent of environment, and
+  version history so a promotion can be rolled back.
+- **Chaos coverage** for actions as well as events, and for ClickHouse, Neo4j, Qdrant, Redis and
+  Kafka, on a weekly trigger — the existing harness had run live once, by hand.
+- **Load profiles** — ramp, burst, backpressure and 24/72-hour soak. No `--duration` flag existed,
+  so there had never been a soak. The long profiles have **not been run** and no figure is claimed.
+- Documentation for each of the above, under **Operations** and **Migrating to AiSOC**.
+
+### Changed
+
+- **The detection-efficacy corpus can now grade.** An agent answering "true positive" to everything
+  scored **1.000** and now scores **0.727**. The benign class was derived from `response_class ==
+  "monitor"`, and those incidents are BloodHound enumeration tagged T1087.002 — a real attack with
+  a monitoring response. 75 benign and false-positive cases are now authored, and 423 negative
+  fixtures that tested an impossible `not-<value>` string became 18.
+- Throughput is published as **four separate claims** — ingest, lake, alert path and detection
+  coverage — because one number described three pipelines that differ by orders of magnitude.
+- Three real routable address ranges, including a known Tor exit range, were replaced with RFC 5737
+  documentation ranges across the corpus and generators.
+
 ## [15.1.0] - 2026-10-03
 
 No breaking changes. Two routes are added and none removed, so every
