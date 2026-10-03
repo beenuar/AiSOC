@@ -19,10 +19,9 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Iterable
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Iterable
 
 
 @dataclass
@@ -100,7 +99,7 @@ class Ledger:
             tool_calls=tool_calls or [],
             decision=decision,
             latency_ms=latency_ms,
-            timestamp_utc=datetime.now(UTC).isoformat(),
+            timestamp_utc=datetime.now(timezone.utc).isoformat(),
         )
         self._steps.append(step)
         return step

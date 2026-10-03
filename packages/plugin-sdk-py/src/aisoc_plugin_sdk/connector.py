@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from collections.abc import AsyncIterator
-from typing import Any
+from typing import Any, AsyncIterator
 
 from pydantic import BaseModel, Field
 

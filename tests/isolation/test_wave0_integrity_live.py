@@ -40,6 +40,19 @@ def _pg_dsn() -> str:
     return _dsn().replace("postgresql+asyncpg://", "postgresql://")
 
 
+async def _bind_tenant(connection, tenant) -> None:  # noqa: ANN001
+    """Bind the session to a tenant, as every real request does.
+
+    `aisoc_sso_connections` carries `WITH CHECK (tenant_id =
+    current_tenant_id())`, so an unbound session cannot insert. This
+    suite passed locally against a superuser — who bypasses RLS entirely
+    — and failed in CI, where the job connects as the DML-only
+    `aisoc_app` role. The local database was the more permissive test
+    double, which is the same failure shape as an over-capable mock.
+    """
+    await connection.execute("SELECT set_config('app.current_tenant_id', $1, false)", str(tenant))
+
+
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def conn():
     asyncpg = pytest.importorskip("asyncpg")
@@ -64,6 +77,7 @@ class TestSsoConnectionsCanExist:
 
     async def test_a_connection_can_be_written_and_resolved(self, conn) -> None:  # noqa: ANN001
         issuer = f"https://idp.example.com/{uuid.uuid4().hex[:8]}"
+        await _bind_tenant(conn, TENANT)
         await conn.execute(
             "INSERT INTO aisoc_sso_connections "
             "(tenant_id, provider, issuer, display_name, enabled, group_role_mapping, default_role) "
@@ -87,17 +101,22 @@ class TestSsoConnectionsCanExist:
         ambiguous about which tenant it provisions into."""
         asyncpg = pytest.importorskip("asyncpg")
         issuer = f"https://idp.example.com/{uuid.uuid4().hex[:8]}"
+        await _bind_tenant(conn, TENANT)
         await conn.execute(
             "INSERT INTO aisoc_sso_connections (tenant_id, provider, issuer) VALUES ($1,'saml',$2)",
             TENANT,
             issuer,
         )
+        # The second tenant binds to itself, so the refusal below is the
+        # unique index rather than RLS.
+        await _bind_tenant(conn, OTHER_TENANT)
         with pytest.raises(asyncpg.UniqueViolationError):
             await conn.execute(
                 "INSERT INTO aisoc_sso_connections (tenant_id, provider, issuer) VALUES ($1,'saml',$2)",
                 OTHER_TENANT,
                 issuer,
             )
+        await _bind_tenant(conn, TENANT)
 
     async def test_a_disabled_connection_does_not_resolve(self, conn) -> None:  # noqa: ANN001
         """So an administrator can stage one before turning it on."""
@@ -209,7 +228,7 @@ class TestMarketplaceInstallsSurviveARestart:
 
 class TestSlaEventsHaveSomethingToAggregate:
     """`alert_sla_events` had one writer: a manual POST nothing calls. So
-    `services/sla.py` computed MTTD, MTTR and MTTC over an empty table on
+    `services/api/app/services/sla.py` computed MTTD, MTTR and MTTC over an empty table on
     every deployment — correct arithmetic with no data."""
 
     async def test_a_detected_acknowledged_pair_yields_an_mttd(self, conn) -> None:  # noqa: ANN001

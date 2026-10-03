@@ -788,12 +788,6 @@ export interface ConfidenceFactor {
   factor: string;
   label: string;
   value: number;
-  /**
-   * Rows the mean was averaged over. `0` means the window measured
-   * nothing, and `value` is then a placeholder rather than a result.
-   * Optional so an older server is handled without a cast.
-   */
-  sample_count?: number;
   contribution: number;
   weight: number;
 }
@@ -2512,6 +2506,13 @@ export interface InsightTile {
   key: string;
   label: string;
   value: number;
+  /**
+   * Rows the mean was averaged over. `0` means the window measured
+   * nothing, so `value` is a placeholder rather than a result — the
+   * console renders "not measured" instead. Optional so a server that
+   * predates the field is handled without a cast.
+   */
+  sample_count?: number;
   unit: 'hours' | 'pct' | 'count' | 'usd' | 'hours_saved';
   previous_value: number;
   delta_pct: number | null;
@@ -4426,6 +4427,12 @@ export interface DetectionProposalEvalVerdict {
   max_regression_pp?: number;
   regressed?: boolean;
   passed?: boolean;
+  /**
+   * Written only by `POST /{id}/evaluate-rule`. `/decide` answers HTTP
+   * 412 without it, which is why the Approve button could not succeed
+   * before the console had a caller for that route.
+   */
+  candidate_rule?: { passed?: boolean; ran_at?: string };
 }
 
 export interface DetectionProposal {

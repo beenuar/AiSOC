@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import httpx
 import pytest
+import httpx
 
 from aisoc_plugin_sdk import AiSOCClient, AiSOCClientError, PluginContext
 

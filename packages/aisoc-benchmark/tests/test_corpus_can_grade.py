@@ -26,6 +26,8 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 from aisoc_benchmark.replay import GRADED_DISPOSITIONS, MALICIOUS, score_replay
@@ -33,14 +35,14 @@ from aisoc_benchmark.replay import GRADED_DISPOSITIONS, MALICIOUS, score_replay
 CORPUS = Path(__file__).resolve().parents[1] / "corpus" / "soc-agent-benchmark-v1.json"
 
 
-def _incidents() -> list[dict]:
+def _incidents() -> list[dict[str, Any]]:
     raw = json.loads(CORPUS.read_text(encoding="utf-8"))
     items = raw if isinstance(raw, list) else next((v for v in raw.values() if isinstance(v, list)), [])
     assert items, "the corpus is empty — this suite would prove nothing"
     return items
 
 
-def _grade(verdict_for) -> dict:  # noqa: ANN001
+def _grade(verdict_for: Callable[[dict[str, Any]], str]) -> dict[str, Any]:
     decisions = [
         {
             "expected_disposition": i["expected_disposition"],

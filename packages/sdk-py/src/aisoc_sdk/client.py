@@ -10,7 +10,7 @@ Usage::
 
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import Any, Optional, Type, TypeVar
 
 import httpx
 from pydantic import TypeAdapter
@@ -55,8 +55,8 @@ class _ResourceClient:
     async def _get(
         self,
         path: str,
-        params: dict[str, Any] | None = None,
-        model: type[T] | None = None,
+        params: Optional[dict[str, Any]] = None,
+        model: Optional[Type[T]] = None,
     ) -> Any:
         r = await self._http.get(path, params=self._clean(params))
         self._raise(r)
@@ -64,21 +64,21 @@ class _ResourceClient:
             return TypeAdapter(model).validate_python(r.json())
         return r.json()
 
-    async def _post(self, path: str, body: Any, model: type[T] | None = None) -> Any:
+    async def _post(self, path: str, body: Any, model: Optional[Type[T]] = None) -> Any:
         r = await self._http.post(path, json=body)
         self._raise(r)
         if model is not None:
             return TypeAdapter(model).validate_python(r.json())
         return r.json()
 
-    async def _patch(self, path: str, body: Any, model: type[T] | None = None) -> Any:
+    async def _patch(self, path: str, body: Any, model: Optional[Type[T]] = None) -> Any:
         r = await self._http.patch(path, json=body)
         self._raise(r)
         if model is not None:
             return TypeAdapter(model).validate_python(r.json())
         return r.json()
 
-    async def _put(self, path: str, body: Any, model: type[T] | None = None) -> Any:
+    async def _put(self, path: str, body: Any, model: Optional[Type[T]] = None) -> Any:
         r = await self._http.put(path, json=body)
         self._raise(r)
         if model is not None:
@@ -90,7 +90,7 @@ class _ResourceClient:
         self._raise(r)
 
     @staticmethod
-    def _clean(params: dict[str, Any] | None) -> dict[str, Any]:
+    def _clean(params: Optional[dict[str, Any]]) -> dict[str, Any]:
         if params is None:
             return {}
         return {k: v for k, v in params.items() if v is not None}
@@ -109,7 +109,7 @@ class _ResourceClient:
 
 
 class AlertsClient(_ResourceClient):
-    async def list(self, filters: AlertFilters | None = None, **kwargs: Any) -> Page[Alert]:
+    async def list(self, filters: Optional[AlertFilters] = None, **kwargs: Any) -> Page[Alert]:
         params = filters.model_dump(exclude_none=True) if filters else self._clean(kwargs)
         return await self._get("/api/v1/alerts", params, Page[Alert])
 
@@ -121,7 +121,7 @@ class AlertsClient(_ResourceClient):
 
 
 class CasesClient(_ResourceClient):
-    async def list(self, filters: CaseFilters | None = None, **kwargs: Any) -> Page[Case]:
+    async def list(self, filters: Optional[CaseFilters] = None, **kwargs: Any) -> Page[Case]:
         params = filters.model_dump(exclude_none=True) if filters else self._clean(kwargs)
         return await self._get("/api/v1/cases", params, Page[Case])
 
@@ -185,7 +185,7 @@ class PlaybooksClient(_ResourceClient):
     async def run(
         self,
         playbook_id: str,
-        trigger_data: dict[str, Any] | None = None,
+        trigger_data: Optional[dict[str, Any]] = None,
     ) -> PlaybookRun:
         return await self._post(
             f"/api/v1/playbooks/{playbook_id}/run",
@@ -239,13 +239,13 @@ class AiSOCClient:
         token: str,
         *,
         timeout: float = 30.0,
-        headers: dict[str, str] | None = None,
+        headers: Optional[dict[str, str]] = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._token = token
         self._timeout = timeout
         self._extra_headers = headers or {}
-        self._http: httpx.AsyncClient | None = None
+        self._http: Optional[httpx.AsyncClient] = None
 
         # Placeholders — initialised in __aenter__
         self.alerts: AlertsClient
@@ -255,7 +255,7 @@ class AiSOCClient:
         self.playbooks: PlaybooksClient
         self.api_keys: ApiKeysClient
 
-    async def __aenter__(self) -> AiSOCClient:
+    async def __aenter__(self) -> "AiSOCClient":
         self._http = httpx.AsyncClient(
             base_url=self._base_url,
             headers={
@@ -273,7 +273,7 @@ class AiSOCClient:
         self.api_keys = ApiKeysClient(self._http)
         return self
 
-    async def __aexit__(self, *_: object) -> None:
+    async def __aexit__(self, *_: Any) -> None:
         if self._http is not None:
             await self._http.aclose()
             self._http = None
@@ -281,7 +281,7 @@ class AiSOCClient:
     async def graphql(
         self,
         query: str,
-        variables: dict[str, Any] | None = None,
+        variables: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]:
         """Execute a GraphQL query against the /graphql endpoint."""
         if self._http is None:

@@ -99,7 +99,7 @@ async def test_on_load_defaults_to_sha256(ctx: PluginContext) -> None:
     await plugin.on_load(ctx)
 
     # The tutorial promises the default algorithm is sha256.
-    assert plugin._algorithm == "sha256"
+    assert getattr(plugin, "_algorithm") == "sha256"
 
 
 async def test_on_load_accepts_configured_algorithm() -> None:
@@ -112,7 +112,7 @@ async def test_on_load_accepts_configured_algorithm() -> None:
 
     await plugin.on_load(ctx)
 
-    assert plugin._algorithm == "sha512"
+    assert getattr(plugin, "_algorithm") == "sha512"
 
 
 async def test_on_load_rejects_unknown_algorithm() -> None:

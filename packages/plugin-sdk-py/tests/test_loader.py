@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from aisoc_plugin_sdk import PluginLoadError, load_manifest
+from aisoc_plugin_sdk import load_manifest, PluginLoadError
 from aisoc_plugin_sdk.loader import load_plugin_from_directory
 
 

@@ -26,12 +26,13 @@ import argparse
 import json
 import sys
 import time
-from collections.abc import Sequence
+from typing import Sequence
 
 from . import __version__
 from .investigation import run_investigation
 from .ledger import Ledger
 from .scenarios import available_scenarios, emit_scenario_index, load_scenario
+
 
 _PROG = "aisoc-sandbox"
 _DESCRIPTION = "Run an AiSOC agent investigation offline in under 30 seconds. No Docker, no API key, no network."

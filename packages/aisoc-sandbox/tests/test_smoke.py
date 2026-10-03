@@ -14,6 +14,7 @@ import json
 import time
 
 import pytest
+
 from aisoc_sandbox import (
     Ledger,
     available_scenarios,
@@ -21,6 +22,7 @@ from aisoc_sandbox import (
     run_investigation,
 )
 from aisoc_sandbox.cli import main
+
 
 # ---------------------------------------------------------------------------
 # Scenarios are real, loadable, well-formed.

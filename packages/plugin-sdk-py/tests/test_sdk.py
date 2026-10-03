@@ -3,18 +3,19 @@
 import pytest
 
 from aisoc_plugin_sdk import (
-    ActionPlugin,
-    ActionRequest,
-    ActionResult,
+    PluginManifest,
+    PluginContext,
     EnricherPlugin,
     EnrichmentRequest,
     EnrichmentResult,
-    PluginContext,
-    PluginManifest,
+    ActionPlugin,
+    ActionRequest,
+    ActionResult,
     PluginRegistry,
-    action,
     enricher,
+    action,
 )
+
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
