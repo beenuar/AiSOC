@@ -102,8 +102,7 @@ a connector still ingests through a generic mapping that resolves host, user and
 
 Ingest normalizes to a common shape and Kafka carries it, then
 fusion runs 2603 executable detection rules, of 6991 on disk, applies **your tenant's own tuning**
-on top — the disables, floors and
-suppressions the console writes, so a rule you turned off actually stops firing — and decides what
+on top — the disables, floors and suppressions the console writes, so a rule you turned off actually stops firing — and decides what
 becomes an alert. Correlation groups related alerts, an agent investigates and writes its reasoning
 to the Investigation Ledger, and a playbook may start from the result. Separately, new threat
 intelligence sweeps the lake for sightings you already collected, and a hypothesis becomes a hunt
@@ -174,7 +173,7 @@ never `0`. It was not always so: [the reality audit](docs/audit/REPOSITORY_REALI
 Agents triage alerts and investigate incidents. What they can and cannot do:
 
 - **They read** the alert, its correlated siblings, entity context, and prior verdicts for the same signature.
-- **They call typed tools** — lake queries, graph traversals, enrichment lookups. The model chooses a tool and passes arguments; it never writes SQL.
+- **They call typed tools** — lake queries, graph traversals, enrichment lookups. The model picks the tool and passes arguments; it never writes SQL.
 - **Everything is logged** to the Investigation Ledger — prompts, tool calls, citations, verdict, token cost — and exports as a signed bundle.
 - **Grounding is checked.** A verdict citing an indicator the evidence never contained is demoted to human review rather than auto-closed.
 - **A prompt is validated before it is sent.** Raw logs, OCSF payloads and secret-shaped values are refused, not redacted after the fact.
@@ -208,18 +207,16 @@ request with no path filter, drives the real production path against real infras
 
 ## What AiSOC is not
 
-- **Not a drop-in SIEM replacement.** It correlates and investigates; it does
-  not replace long-term log retention and compliance search.
+- **Not a drop-in SIEM replacement.** It correlates and investigates; it does not replace long-term log retention and compliance search.
 - **Not able to see telemetry you have not connected.** There is no discovery.
-- **Not autonomous by default.** Response requires explicit policy
-  authorization and a human approver.
-- **Demo and sample incidents are not real incidents**, and benchmark numbers are substrate self-consistency measures rather than live agent accuracy — labelled as such wherever published.
+- **Not autonomous by default.** Response requires explicit policy authorization and a human approver.
+- **Demo and sample incidents are not real incidents**, and benchmark numbers are substrate self-consistency measures, not live agent accuracy — labelled as such wherever published.
 
 ## Troubleshooting
 
-`make doctor` checks host tools, memory, disk, every port and each datastore by *querying* it rather
-than asking whether its container is up, then prints the command to run next. A container killed by a
-full Docker VM is named as that, not as the service that happened to die.
+`make doctor` checks host tools, memory, disk, every port and each datastore by *querying* it rather than
+asking whether its container is up, then prints the command to run next. A container killed by a full
+Docker VM is named as that, not as the service that happened to die.
 ([the six most common failures](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures))
 
 ## Security
@@ -230,7 +227,7 @@ tenant isolation is enforced at the query layer in every store. RBAC gates every
 ingest is authenticated, and the default install sends no prompt anywhere — the model runs beside
 it.
 
-**A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fixed vulnerability; report via [SECURITY.md](SECURITY.md).
+**A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fix; report via [SECURITY.md](SECURITY.md).
 
 ## Developing
 
@@ -240,11 +237,14 @@ make smoke       # the golden pipeline, against a running stack
 make stats       # recount every figure this README publishes
 ```
 
-Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) ·
-[add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) · [plugin
-lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle). Every count above is recounted
-from the tree, and CI fails if this README disagrees.
+Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) · [add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
+[plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle). Every count above is
+recounted from the tree, and CI fails if this README disagrees.
 
-## Roadmap · Contributing · License
+## Funding · Roadmap · Contributing · License
+
+Development is funded and supported by **[Cyble](https://cyble.com)**, who pay for the engineering time behind AiSOC
+and release it under the MIT licence rather than keeping it. That buys no special treatment here — no Cyble-only
+features, no gated modules, no telemetry. ([full credits](.github/CREDITS.md))
 
 [ROADMAP.md](ROADMAP.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [SECURITY.md](SECURITY.md) · MIT

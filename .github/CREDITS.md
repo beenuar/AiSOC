@@ -6,6 +6,33 @@ If you've contributed and your name is missing, please open a PR against this fi
 
 ---
 
+## Funding and sponsorship
+
+**AiSOC's development is funded and supported by [Cyble](https://cyble.com).**
+
+Cyble provides the engineering time, infrastructure and threat-intelligence
+expertise that make this project possible. The platform you can clone and run
+today — the ingest spine, the detection corpus, the agent pipeline, the
+console — exists because that work was paid for and then released under the
+MIT licence rather than kept.
+
+What that does and does not mean:
+
+- **AiSOC is and stays MIT-licensed, and open to anyone.** Sponsorship buys no
+  special treatment in the codebase: there are no Cyble-only features, no
+  gated modules, and no telemetry reporting back to anyone.
+- **You do not need a Cyble relationship to run AiSOC.** `make up` brings up a
+  complete, self-hosted stack with a local model and a real public threat feed,
+  and the project takes no payment from self-hosters.
+- **Cyble also ships a commercial product built on this platform.** That is a
+  separate, closed offering; nothing in this repository depends on it, and
+  nothing here is a trial of it.
+
+If your organisation depends on AiSOC and wants to support it the same way,
+open an issue — contributed engineering time is as welcome as funding.
+
+---
+
 ## Security researchers
 
 We deeply appreciate everyone who takes the time to report a security issue responsibly. Reporters listed here have made AiSOC measurably safer for everyone running it.

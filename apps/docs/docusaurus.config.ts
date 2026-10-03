@@ -232,7 +232,7 @@ const config: Config = {
           ],
         },
       ],
-      copyright: `Copyright © ${new Date().getFullYear()} AiSOC Contributors. MIT License.`,
+      copyright: `Copyright © ${new Date().getFullYear()} AiSOC Contributors. MIT License. Development funded and supported by <a href="https://cyble.com">Cyble</a>.`,
     },
     prism: {
       theme: prismThemes.github,
