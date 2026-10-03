@@ -171,11 +171,17 @@ def _orm_to_connector(row: Connector) -> ConnectorType:
     )
 
 
+_AGENTS_SERVICE_TOKEN = (os.getenv("AISOC_AGENTS_SERVICE_TOKEN") or os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+
+
 async def _proxy_get(path: str, params: dict | None = None):  # noqa: ANN201
     """Call the agents service and return JSON, or raise on failure."""
     url = f"{_AGENTS_URL}/api/v1/playbooks{path}"
+    _h = {}
+    if _AGENTS_SERVICE_TOKEN:
+        _h["Authorization"] = f"Bearer {_AGENTS_SERVICE_TOKEN}"
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.get(url, params=params or {})
+        r = await client.get(url, params=params or {}, headers=_h)
     r.raise_for_status()
     return r.json()
 

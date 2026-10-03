@@ -32,6 +32,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from app.api.v1.deps import AuthUser, require_permission
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL", "http://agents:8084")
+# See cases.py: the agents router fails closed without a bearer credential.
+_AGENTS_SERVICE_TOKEN = (os.getenv("AISOC_AGENTS_SERVICE_TOKEN") or os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
 
 router = APIRouter(prefix="/playbooks", tags=["playbooks"])
 
@@ -63,9 +65,12 @@ def _validate_path_id(value: str, name: str = "id") -> str:
 async def _proxy(method: str, path: str, **kwargs) -> Any:
     """Forward a request to the agents service and return the JSON body."""
     url = f"{_AGENTS_URL}/api/v1/playbooks{path}"
+    headers = dict(kwargs.pop("headers", None) or {})
+    if _AGENTS_SERVICE_TOKEN:
+        headers.setdefault("Authorization", f"Bearer {_AGENTS_SERVICE_TOKEN}")
     try:
         async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.request(method, url, **kwargs)
+            r = await client.request(method, url, headers=headers, **kwargs)
         if r.status_code >= 400:
             raise HTTPException(status_code=r.status_code, detail="Upstream service error")
         if r.status_code == 204:
