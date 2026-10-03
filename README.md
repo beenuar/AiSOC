@@ -102,7 +102,7 @@ Bringing existing detections? `packages/aisoc-migrate` translates Splunk SPL, Se
 Elastic EQL, and **refuses rather than approximating** what it cannot carry — an almost-right rule is
 harder to find than a missing one. On the 2,005 Splunk rules bundled here, 1,734 translate and 1,711
 of those are partial: field matches carried, thresholds did not
-([what to do with a partial](https://beenuar.github.io/AiSOC/docs/migration/from-splunk)).
+([what to do with a partial](apps/docs/docs/migration/from-splunk.md)).
 
 ## How it works
 
@@ -224,7 +224,7 @@ Secrets are generated per deployment and never committed; connector credentials 
 
 SAML and OIDC sign-in with per-connection tenant and group mapping, SCIM provisioning, attribute
 conditions that narrow a permission, and time-boxed elevation instead of standing admin
-([setup](https://beenuar.github.io/AiSOC/docs/operations/enterprise-sso)).
+([setup](apps/docs/docs/operations/enterprise-sso.md)).
 
 **A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fix; report via [SECURITY.md](SECURITY.md).
 
