@@ -67,26 +67,22 @@ async def _close_a_case(conn, *, minutes: int) -> uuid.UUID:  # noqa: ANN001
 
 
 class TestThereIsOneCaseTable:
-    async def test_cases_is_a_view_over_the_surviving_table(self, conn) -> None:  # noqa: ANN001
-        """`cases` survives as a read-only view, and that is deliberate.
+    async def test_the_retired_table_is_gone(self, conn) -> None:  # noqa: ANN001
+        """`cases` no longer exists under that name, and reading it now
+        fails loudly.
 
-        The first attempt simply renamed it, and the upgrade test caught
-        the consequence: a self-hoster with a Grafana panel or a
-        scheduled export against `cases` would silently start erroring.
-        External readers keep working through a view, while
-        `scripts/check_one_case_table.py` keeps our own source off the
-        old name — the gate governs what we write, the view governs what
-        we already told other people to rely on.
+        A read-only view was tried and withdrawn: every historical
+        migration doing `ALTER TABLE` or `CREATE INDEX` on `cases` fails
+        on re-run against a view, and guarding each of them would
+        scatter one decision through the whole migration history.
 
-        What must not exist is a second *table*, which is what let the
-        two row sets diverge in the first place.
+        Erroring is the better outcome anyway. External SQL against
+        `cases` now fails with "relation does not exist" rather than
+        quietly returning the pre-consolidation rows.
         """
-        kind = await conn.fetchval("SELECT table_type FROM information_schema.tables WHERE table_name = 'cases'")
-        assert kind == "VIEW", f"`cases` is a {kind}, not a view — two tables can diverge again"
-
-    async def test_the_view_shows_the_surviving_rows(self, conn) -> None:  # noqa: ANN001
-        case_id = await _close_a_case(conn, minutes=10)
-        assert await conn.fetchval("SELECT count(*) FROM cases WHERE id = $1", case_id) == 1
+        assert await conn.fetchval("SELECT to_regclass('public.cases') IS NULL"), (
+            "`cases` still exists, so a query naming it reads a second set of rows"
+        )
 
     async def test_the_pre_consolidation_rows_are_kept(self, conn) -> None:  # noqa: ANN001
         """Renamed, not dropped. A consolidation that lost a row nobody

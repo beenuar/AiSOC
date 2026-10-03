@@ -83,14 +83,11 @@ ALLOWED_GLOBALS: dict[tuple[str, str], str] = {
         "re-emits a log line, which is the correct behaviour for a new process."
     ),
     # ── Caches of a static artefact ────────────────────────────────────────
-    (
-        "services/api/app/api/v1/endpoints/marketplace.py",
-        "_installed",
-    ): (
-        "Marketplace installs are in-process and lost on restart, which the feature- "
-        "completeness audit records as a known gap. Parity plan 5.4 makes install write rows "
-        "that fusion reads, which is where this gets a table."
-    ),
+    #
+    # `_installed` was here, excused on the grounds that installs being
+    # lost on restart was "a known gap" a later plan would close. It is
+    # closed: install state lives in `marketplace_installs`, the table
+    # migration 056 created for it and nothing had ever read or written.
     (
         "services/api/app/api/v1/endpoints/marketplace.py",
         "_index_cache",

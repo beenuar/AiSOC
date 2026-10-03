@@ -178,7 +178,7 @@ jobs:
         run: |
           set -euo pipefail
           psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" \
-            -c "\copy (select 'alerts', count(*) from alerts union all select 'cases', count(*) from cases union all select 'tenants', count(*) from tenants union all select 'users', count(*) from users order by 1) to '/tmp/after.tsv'"
+            -c "\copy (select 'alerts', count(*) from alerts union all select 'cases', count(*) from aisoc_cases union all select 'tenants', count(*) from tenants union all select 'users', count(*) from users order by 1) to '/tmp/after.tsv'"
           echo "before:"; cat /tmp/before.tsv
           echo "after:";  cat /tmp/after.tsv
           diff /tmp/before.tsv /tmp/after.tsv || {
@@ -189,8 +189,18 @@ jobs:
           # number of fabricated rows would pass the diff above.
           psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c \
             "select title from alerts where id = '11111111-1111-1111-1111-111111111111'" | grep -q 'pre-upgrade alert'
+          # Read from `aisoc_cases`, not `cases`. Migration 083
+          # consolidated the two case tables that had never synchronised
+          # and renamed the old one to `cases_pre_consolidation`; the row
+          # moved, which is what this check is for. Following the data is
+          # the point — asserting the old table name would be asserting
+          # that the consolidation did not happen.
           psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c \
-            "select title from cases where id = '22222222-2222-2222-2222-222222222222'" | grep -q 'pre-upgrade case'
+            "select title from aisoc_cases where id = '22222222-2222-2222-2222-222222222222'" | grep -q 'pre-upgrade case'
+          # And the archive still holds what it held, so a consolidation
+          # that lost a row is detectable after the fact.
+          psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c \
+            "select count(*) from cases_pre_consolidation" >/dev/null
           echo "OK: the rows that were there before the upgrade are still there, by id."
 
       # The runtime role is what every service connects as, and a migration

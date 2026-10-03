@@ -59,7 +59,18 @@ DO $$
 DECLARE
     r RECORD;
 BEGIN
-    IF to_regclass('public.cases') IS NULL THEN
+    -- Only when `cases` is still a base TABLE.
+    --
+    -- `to_regclass` alone is not enough and the idempotency check caught
+    -- why: the compatibility view at the bottom of this file is also
+    -- called `cases`, so a second run found it non-null and tried to
+    -- migrate from the view into the table it reads — failing on
+    -- `COALESCE types uuid[] and jsonb cannot be matched`, because the
+    -- view already exposes the converted column.
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables
+         WHERE table_schema = 'public' AND table_name = 'cases' AND table_type = 'BASE TABLE'
+    ) THEN
         RETURN;
     END IF;
 
@@ -131,51 +142,28 @@ BEGIN
         );
     END LOOP;
 
-    -- Renamed, not dropped. If this consolidation lost a row, the evidence
-    -- of what was lost has to still exist.
-    ALTER TABLE cases RENAME TO cases_pre_consolidation;
+    -- Renamed, not dropped. If this consolidation lost a row, the
+    -- evidence of what was lost has to still exist.
+    --
+    -- Idempotency needs care here, and the fresh-apply-then-re-run check
+    -- is what showed why. On a second pass `001_init.sql` recreates
+    -- `cases` empty via CREATE TABLE IF NOT EXISTS, so this block runs
+    -- again with nothing to move and an archive that already exists.
+    -- Renaming then collides. The empty recreation is dropped instead,
+    -- which keeps the original archive intact.
+    --
+    -- A compatibility VIEW named `cases` was tried first and is the
+    -- wrong answer: every historical migration that does ALTER TABLE or
+    -- CREATE INDEX on `cases` then fails on re-run against a view, and
+    -- guarding each of them scatters this decision through the history.
+    IF to_regclass('public.cases_pre_consolidation') IS NULL THEN
+        ALTER TABLE cases RENAME TO cases_pre_consolidation;
+    ELSE
+        DROP TABLE cases;
+    END IF;
 END
 $$;
 
 COMMENT ON COLUMN aisoc_cases.sla_deadline IS
     'Same fact as sla_due_at, kept under both names so readers of either '
     'side of the pre-consolidation split keep working.';
-
--- ── Read compatibility for anything outside this repository ────────────────
---
--- Renaming the table is right for our own code and wrong for everyone
--- else's: a self-hoster with a Grafana panel, a scheduled export or any
--- SQL of their own against `cases` would silently start erroring on
--- upgrade, and the upgrade test caught exactly that.
---
--- So `cases` comes back as a **view** over the surviving table. External
--- readers keep working; our own code does not, because
--- `scripts/check_one_case_table.py` refuses `FROM cases` in tracked
--- source. That split is deliberate — the gate governs what we write, the
--- view governs what we already told other people to rely on.
---
--- Deliberately not updatable. A write through the view would bypass the
--- six-state machine the console enforces, and failing loudly on INSERT
--- is better than accepting a row nothing can transition.
-
-DO $$
-BEGIN
-    IF to_regclass('public.cases') IS NULL THEN
-        EXECUTE $view$
-            CREATE VIEW cases AS
-            SELECT id, tenant_id, case_number, title, description, status, priority,
-                   severity, case_type, mitre_tactics, mitre_techniques,
-                   assigned_to_id, assigned_at, created_by_id,
-                   sla_deadline, sla_breached, alert_ids, ioc_ids, artifact_ids,
-                   tags, ticket_refs, summary, closed_at, created_at, updated_at,
-                   resolution, lessons_learned
-              FROM aisoc_cases
-        $view$;
-    END IF;
-END
-$$;
-
-COMMENT ON VIEW cases IS
-    'Read-only compatibility view over aisoc_cases, kept so SQL written '
-    'against the pre-consolidation schema keeps working. New code reads '
-    'aisoc_cases; scripts/check_one_case_table.py enforces that.';

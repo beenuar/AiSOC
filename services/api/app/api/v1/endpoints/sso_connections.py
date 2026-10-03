@@ -48,6 +48,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.core import role_grants
@@ -179,44 +180,55 @@ async def create_sso_connection(
     """
     _assert_roles_grantable(current_user, body)
 
-    taken = await db.scalar(
-        text("SELECT 1 FROM aisoc_sso_connections WHERE provider = :p AND issuer = :i").bindparams(p=body.provider, i=body.issuer)
-    )
-    if taken:
+    # The conflict is detected by letting the unique index raise, not by
+    # a SELECT first. Two reasons, and the tenant-predicate gate found
+    # the first:
+    #
+    # A cross-tenant `SELECT 1 ... WHERE issuer = :i` cannot work here.
+    # The session runs as the DML-only role with a bound tenant, so RLS
+    # shows it only this tenant's rows — it would miss the very case it
+    # exists to catch and then fail on the insert anyway, with a raw
+    # integrity error instead of a 409.
+    #
+    # And check-then-insert is a race: two tenants registering one issuer
+    # at the same moment both see nothing and both proceed.
+    try:
+        row = (
+            (
+                await db.execute(
+                    text("""
+                    INSERT INTO aisoc_sso_connections
+                        (tenant_id, provider, issuer, display_name, enabled,
+                         group_role_mapping, default_role, metadata_url, metadata_xml)
+                    VALUES (CAST(:t AS uuid), :p, :i, :d, :e,
+                            CAST(:m AS jsonb), :r, :mu, :mx)
+                    RETURNING id, tenant_id, provider, issuer, display_name, enabled,
+                              group_role_mapping, default_role, metadata_url, metadata_xml,
+                              created_at, updated_at
+                """).bindparams(
+                        t=str(current_user.tenant_id),
+                        p=body.provider,
+                        i=body.issuer,
+                        d=body.display_name,
+                        e=body.enabled,
+                        m=json.dumps(body.group_role_mapping),
+                        r=body.default_role,
+                        mu=body.metadata_url,
+                        mx=body.metadata_xml,
+                    )
+                )
+            )
+            .mappings()
+            .first()
+        )
+    except IntegrityError as exc:
+        await db.rollback()
         # Deliberately does not say which tenant holds it.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"issuer {body.issuer!r} is already registered for {body.provider}",
-        )
+        ) from exc
 
-    row = (
-        (
-            await db.execute(
-                text("""
-                INSERT INTO aisoc_sso_connections
-                    (tenant_id, provider, issuer, display_name, enabled,
-                     group_role_mapping, default_role, metadata_url, metadata_xml)
-                VALUES (CAST(:t AS uuid), :p, :i, :d, :e,
-                        CAST(:m AS jsonb), :r, :mu, :mx)
-                RETURNING id, tenant_id, provider, issuer, display_name, enabled,
-                          group_role_mapping, default_role, metadata_url, metadata_xml,
-                          created_at, updated_at
-            """).bindparams(
-                    t=str(current_user.tenant_id),
-                    p=body.provider,
-                    i=body.issuer,
-                    d=body.display_name,
-                    e=body.enabled,
-                    m=json.dumps(body.group_role_mapping),
-                    r=body.default_role,
-                    mu=body.metadata_url,
-                    mx=body.metadata_xml,
-                )
-            )
-        )
-        .mappings()
-        .first()
-    )
     if row is None:  # pragma: no cover - RETURNING always yields on success
         raise HTTPException(status_code=500, detail="connection was not created")
     return _row_to_out(row)

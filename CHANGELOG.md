@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **The `cases` table is gone. Its rows live in `aisoc_cases`.**
+
+  The product shipped with two case tables that never synchronised. The
+  console wrote `aisoc_cases`; `resolution_time` — which owns the single
+  shared MTTR definition — read `cases`, as did the metrics endpoints,
+  the executive digest, the MSSP portfolio and the GraphQL layer. **Every
+  case an analyst created was invisible to every case metric.** A tenant
+  could close fifty cases and watch MTTR stay null.
+
+  Migration 083 moves the rows, repoints the child foreign keys and
+  renames the old table to `cases_pre_consolidation` so nothing is lost.
+
+  **What to change.** Any SQL of your own against `cases` — a Grafana
+  panel, a scheduled export, a report — reads `aisoc_cases` instead. It
+  will fail loudly with "relation does not exist" rather than returning
+  stale rows, which is the intended behaviour: a query that silently
+  returned the pre-consolidation set would be worse than one that stops.
+
+  A compatibility view was tried and withdrawn. Every historical
+  migration that does `ALTER TABLE` or `CREATE INDEX` on `cases` fails
+  on re-run against a view, and guarding each of them would scatter this
+  one decision through the whole migration history.
+
+  **The status vocabulary moved with it.** Readers filtered `"open"` and
+  `"in_progress"`; the console's machine is new → triaged →
+  investigating → contained → resolved → closed, so those counters were
+  structurally zero. `resolved` is also not terminal — only `closed`
+  writes `closed_at`. Both now read from `app.services.case_status`.
+
+
 ## [15.1.0] - 2026-10-03
 
 No breaking changes. Two routes are added and none removed, so every
