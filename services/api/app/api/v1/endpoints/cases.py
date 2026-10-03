@@ -1265,13 +1265,14 @@ async def case_investigate(
     user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
 ) -> dict[str, Any]:
     cid = await _resolve_case_id(case_id, db, user.tenant_id)
-    exists = (
+    case_row = (
         await db.execute(
-            text("SELECT 1 FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+            text("SELECT alert_ids FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
         )
     ).fetchone()
-    if not exists:
+    if not case_row:
         raise HTTPException(status_code=404, detail="Case not found.")
+    case_alert_ids = [str(a) for a in (case_row.alert_ids or [])]
 
     # Forward the authenticated tenant so the agents service attributes the run
     # to the real tenant instead of falling back to the "default" placeholder,
@@ -1279,10 +1280,56 @@ async def case_investigate(
     # is scoped by tenant_id, so without this the whole run is never persisted.
     # Service-token path requires the acting tenant on the header, not just
     # in the body: tenant_scope refuses a service token with no tenant.
+    # The agents service stores raw_alert on the run and every downstream
+    # agent reads it; forwarding {} meant the forensic/report models got an
+    # empty payload and filled the gap with fabricated artefacts
+    # (C:\\Windows\\Temp\\malware.exe and friends). Load the case's linked
+    # alerts and pass their real content, truncated so the prompt stays
+    # bounded and free of multi-MB raw blobs.
+    raw_alert_payload: dict[str, Any] = {}
+    try:
+        if case_alert_ids:
+            rows = (
+                await db.execute(
+                    text(
+                        "SELECT id, title, description, severity, connector_type, "
+                        "affected_ips, affected_hosts, affected_users, event_time, raw_event "
+                        "FROM alerts WHERE id::text = ANY(:ids) AND tenant_id = :tenant_id "
+                        "ORDER BY event_time DESC LIMIT 3"
+                    ).bindparams(ids=case_alert_ids, tenant_id=user.tenant_id)
+                )
+            ).mappings().all()
+            alerts_out = []
+            for r in rows:
+                raw = r["raw_event"] if isinstance(r["raw_event"], dict) else {}
+                full_log = raw.get("full_log") or ""
+                alerts_out.append(
+                    {
+                        "id": str(r["id"]),
+                        "title": r["title"],
+                        "description": (r["description"] or "")[:1000],
+                        "severity": r["severity"],
+                        "source": r["connector_type"],
+                        "affected_ips": list(r["affected_ips"] or [])[:20],
+                        "affected_hosts": list(r["affected_hosts"] or [])[:20],
+                        "affected_users": list(r["affected_users"] or [])[:20],
+                        "event_time": r["event_time"].isoformat() if r["event_time"] else None,
+                        "full_log": str(full_log)[:4000],
+                    }
+                )
+            if alerts_out:
+                raw_alert_payload = {"alerts": alerts_out}
+    except Exception:  # noqa: BLE001 - never block launch on enrichment
+        logger.warning("investigate.launch.raw_alert_enrichment_failed", case_id=str(cid), exc_info=True)
+
     resp = await _agents_proxy(
         "POST",
         f"/api/v1/cases/{cid}/investigate",
-        json={"alert_summary": body.alert_summary or "", "tenant_id": str(user.tenant_id)},
+        json={
+            "alert_summary": body.alert_summary or (raw_alert_payload.get("alerts", [{}])[0].get("title") if raw_alert_payload.get("alerts") else ""),
+            "raw_alert": raw_alert_payload,
+            "tenant_id": str(user.tenant_id),
+        },
         headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)},
     )
     if resp.status_code >= 400:
