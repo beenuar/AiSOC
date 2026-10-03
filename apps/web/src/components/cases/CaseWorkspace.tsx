@@ -154,11 +154,18 @@ const SEVERITY_BADGE: Record<CaseSeverity, string> = {
 };
 
 const STATUS_LABEL: Record<CaseStatus, string> = {
+  // canonical ladder (backend) + legacy console vocabulary
+  new: 'New',
+  triaged: 'Triaged',
+  investigating: 'Investigating',
+  contained: 'Contained',
+  resolved: 'Resolved',
+  closed: 'Closed',
   open: 'Open',
   in_progress: 'In progress',
   pending: 'Pending',
-  resolved: 'Resolved',
-  closed: 'Closed',
+  pending_closure: 'Pending closure',
+  cancelled: 'Cancelled',
 };
 
 const STATUS_DOT: Record<CaseStatus, string> = {
@@ -167,7 +174,12 @@ const STATUS_DOT: Record<CaseStatus, string> = {
   pending: 'bg-amber-400',
   resolved: 'bg-emerald-400',
   closed: 'bg-slate-600',
-};
+  new: 'bg-slate-400',
+  triaged: 'bg-amber-400',
+  investigating: 'bg-blue-400 animate-pulse',
+  contained: 'bg-teal-400',
+  pending_closure: 'bg-violet-400',
+  cancelled: 'bg-slate-500'};
 
 const TASK_STATUS_BADGE: Record<CaseTask['status'], string> = {
   todo: 'bg-slate-500/15 text-slate-300 ring-slate-500/30',
@@ -326,6 +338,8 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
   }, [data, useFallback, caseId]);
 
   // ─── Investigation state ───────────────────────────────────────────────────
+  const [fetchedTimeline, setFetchedTimeline] = useState<CaseTimelineEvent[]>([]);
+
   const [investigating, setInvestigating] = useState(false);
   const [investigationRunId, setInvestigationRunId] = useState<string | null>(null);
   const [investigationStatus, setInvestigationStatus] = useState<string>('idle');
@@ -350,6 +364,57 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
   }, []);
 
   useEffect(() => () => { stopPolling(); closeWs(); }, [stopPolling, closeWs]);
+
+  // The case detail payload carries no timeline; the dedicated
+  // /cases/{id}/timeline endpoint synthesises opened/status/investigation
+  // events. Fetch it so the Overview timeline is never blank by silence.
+  useEffect(() => {
+    let cancelled = false;
+    casesApi.getTimeline(caseId).then((res) => {
+      if (!cancelled && Array.isArray(res?.events)) setFetchedTimeline(res.events);
+    }).catch(() => { /* overview falls back to inline timeline */ });
+    return () => { cancelled = true; };
+  }, [caseId]);
+
+  // Restore the latest terminal run on mount — run state lives only in
+  // memory, so a refresh left the Investigation tab on its idle prompt even
+  // though completed runs exist server-side (the ledger fetched its own list
+  // and therefore looked fine).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const resp = await apiFetch(`/api/v1/cases/${caseId}/investigations`);
+        if (!resp.ok || cancelled) return;
+        const body = (await resp.json()) as { runs?: Array<Record<string, unknown>> };
+        const runs = body.runs ?? [];
+        const latest = runs.find(
+          (r) => typeof r?.run_id === "string" && (r.status === "completed" || r.status === "failed"),
+        );
+        if (!latest || cancelled) return;
+        const runId = String(latest.run_id);
+        let skip = false;
+        setInvestigationRunId((prev) => {
+          if (prev) skip = true;
+          return prev ?? runId;
+        });
+        if (skip) return;
+        setInvestigationStatus(String(latest.status ?? "completed"));
+        const inv = (await casesApi.getInvestigation(caseId, runId)) as Record<string, unknown>;
+        if (cancelled) return;
+        setInvestigationData(inv);
+        setInvestigationStatus(String(inv.status ?? latest.status ?? "completed"));
+        if (inv.status === "completed") {
+          const rep = await apiFetch(`/api/v1/cases/${caseId}/investigations/${runId}/report.md`);
+          if (!cancelled && rep.ok) setReportMd(await rep.text());
+        }
+      } catch {
+        /* best-effort restore; tab falls back to its idle prompt */
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [caseId]);
 
   /** Connect to the realtime service WebSocket for this run_id */
   const connectWs = useCallback((runId: string) => {
@@ -616,7 +681,8 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     );
   }
 
-  const sortedTimeline = [...(caseRecord.timeline ?? [])].sort(
+  const sortedTimeline = [...new Map([...fetchedTimeline, ...(caseRecord.timeline ?? [])]
+    .map((e) => [e.id, e])).values()].sort(
     (a, b) =>
       new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   );
@@ -693,7 +759,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               disabled={statusUpdating}
               className="rounded-md border border-slate-700/70 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none"
             >
-              {(['open', 'in_progress', 'pending', 'resolved', 'closed'] as CaseStatus[]).map(
+              {(['new', 'triaged', 'investigating', 'contained', 'resolved', 'closed'] as unknown as CaseStatus[]).map(
                 (s) => (
                   <option key={s} value={s}>
                     {STATUS_LABEL[s]}
@@ -1171,13 +1237,28 @@ function InvestigationPanel({
           <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-300">Response</h4>
           {responder?.summary != null && <p className="text-xs text-slate-400">{String(responder.summary)}</p>}
           {Array.isArray(responder?.recommended_actions) && (
-            <ul className="space-y-1">
-              {(responder.recommended_actions as string[]).slice(0, 4).map((action, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-xs text-slate-300">
-                  <span className="mt-0.5 h-1.5 w-1.5 flex-none rounded-full bg-amber-400" />
-                  {action}
-                </li>
-              ))}
+            <ul className="space-y-1.5">
+              {(responder.recommended_actions as Array<unknown>).slice(0, 4).map((raw, i) => {
+                const a = (raw ?? {}) as Record<string, unknown>;
+                const text = typeof raw === "string" ? raw : String(a.action ?? "");
+                const prio = typeof a.priority === "number" ? a.priority : null;
+                const risk = a.risk != null ? String(a.risk) : null;
+                return (
+                  <li key={i} className="flex items-start gap-1.5 text-xs text-slate-300">
+                    <span className="mt-0.5 h-1.5 w-1.5 flex-none rounded-full bg-amber-400" />
+                    <span>
+                      {prio != null && <span className="mr-1 text-[10px] font-semibold text-amber-300">P{prio}</span>}
+                      {text}
+                      {risk != null && risk.toLowerCase() !== "low" && (
+                        <span className="ml-1 rounded bg-red-500/10 px-1 py-0.5 text-[9px] uppercase text-red-300 ring-1 ring-red-500/20">{risk}</span>
+                      )}
+                      {a.rationale != null && String(a.rationale).length > 0 && (
+                        <span className="block text-[10px] text-slate-500">{String(a.rationale)}</span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
           )}
           {responder?.risk_level != null && (

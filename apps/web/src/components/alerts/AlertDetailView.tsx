@@ -9,7 +9,7 @@ import {
   alertsApi,
   casesApi,
   ledgerApi,
-  feedbackApi,
+  feedbackApi, computeRedispositionToken,
   type Alert,
   type ConfidenceFactor,
   type ConfidenceLabel,
@@ -543,9 +543,12 @@ function AnalystOverridePanel({
     if (!verdict || selectedIds.size === 0) return;
     setApplying(true);
     try {
+      const ids = Array.from(selectedIds);
+      const token = await computeRedispositionToken(ids, verdict);
       const resp = await feedbackApi.applyRedisposition({
-        alert_ids: Array.from(selectedIds),
+        alert_ids: ids,
         new_disposition: verdict,
+        confirmation_token: token,
       });
       toast.success(
         `Re-dispositioned ${resp.updated} past alert${resp.updated === 1 ? '' : 's'}`,
