@@ -538,6 +538,38 @@ export default function InvestigationTimeline({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [focusedSeq, setFocusedSeq] = useState<number | null>(null);
+  const [bundleState, setBundleState] = useState<'idle' | 'downloading'>('idle');
+  const [bundleError, setBundleError] = useState<string | null>(null);
+
+  // Parity 3.7: export this investigation as a signed, replayable
+  // bundle. A failure says so rather than silently doing nothing — a
+  // download button that no-ops is indistinguishable from a slow one.
+  const downloadBundle = useCallback(async () => {
+    if (!runId) return;
+    setBundleState('downloading');
+    setBundleError(null);
+    try {
+      const res = await fetch(`${apiBase}/investigations/${runId}/bundle`, {
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `aisoc-investigation-${runId}.bundle.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      setBundleError(
+        e instanceof Error
+          ? `Could not export the evidence bundle: ${e.message}`
+          : 'Could not export the evidence bundle.',
+      );
+    } finally {
+      setBundleState('idle');
+    }
+  }, [runId, apiBase]);
   const focusedRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -640,15 +672,36 @@ export default function InvestigationTimeline({
           </p>
         </div>
 
-        {focusedSeq !== null && (
+        <div className="flex items-center gap-3">
+          {/* Parity 3.7. The bytes are written to disk exactly as the
+              server sent them: the signature is computed over that
+              sequence, so re-serialising a parsed body here would break
+              verification for a reason the auditor could not see. */}
           <button
-            className="text-xs text-slate-400 hover:text-white"
-            onClick={() => setFocusedSeq(null)}
+            className="text-xs text-slate-400 hover:text-white disabled:opacity-40"
+            disabled={bundleState === 'downloading'}
+            onClick={downloadBundle}
+            title="Signed, replayable record of this investigation"
           >
-            ✕ clear focus
+            {bundleState === 'downloading' ? 'Preparing…' : '⤓ Evidence bundle'}
           </button>
-        )}
+
+          {focusedSeq !== null && (
+            <button
+              className="text-xs text-slate-400 hover:text-white"
+              onClick={() => setFocusedSeq(null)}
+            >
+              ✕ clear focus
+            </button>
+          )}
+        </div>
       </div>
+
+      {bundleError && (
+        <p className="text-[11px] text-amber-300" role="status">
+          {bundleError}
+        </p>
+      )}
 
       {/* Scrubber */}
       {nodes.length > 1 && (

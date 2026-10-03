@@ -74,15 +74,37 @@ concurrency:
 
 jobs:
   live-agent:
-    name: Dispatch the real agent against a local model
+    name: Dispatch the real agent (${{ matrix.model }})
     # The deep run stays on the schedule and on demand: ten incidents
     # through a CPU-hosted model is a 90-minute budget, which is not a
     # pull-request shape. The PR gate is `live-agent-smoke` below.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+
+    # Parity 3.2's first clause: grade the **shipped** model, not only
+    # the small one that fits a runner comfortably.
+    #
+    # `qwen2.5:0.5b` is what the floor in `live_agent_floor.json` was
+    # measured on, so it stays — removing it would orphan the floor. But
+    # a number measured on a model nobody deploys describes the agent on
+    # whatever the pins happened to resolve to, which is a different
+    # claim from the one a reader takes from it.
+    # `llama3.2:3b-instruct-q4_K_M` is what `docker-compose.yml` actually
+    # pulls, so it is what a deployment runs.
+    #
+    # `fail-fast: false` because one model failing is a result about that
+    # model, and cancelling the other would throw away the comparison
+    # that is the entire point of a matrix.
+    strategy:
+      fail-fast: false
+      matrix:
+        model:
+          - qwen2.5:0.5b
+          - llama3.2:3b-instruct-q4_K_M
+
     env:
-      OLLAMA_MODEL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+      OLLAMA_MODEL: ${{ github.event.inputs.model || matrix.model }}
       INCIDENT_LIMIT: ${{ github.event.inputs.incidents || '10' }}
 
     steps:
@@ -140,14 +162,14 @@ jobs:
           # `AISOC_MODEL_PIN_<ROLE>`. Left as it was, every agent would have
           # asked Ollama for a gateway alias (`aisoc-recon`) that Ollama has
           # never heard of.
-          AISOC_MODEL_PIN_TRIAGE: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
-          AISOC_MODEL_PIN_RECON: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_TRIAGE: ${{ env.OLLAMA_MODEL }}
+          AISOC_MODEL_PIN_RECON: ${{ env.OLLAMA_MODEL }}
           AISOC_MODEL_PIN_INVESTIGATION: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
           AISOC_MODEL_PIN_COPILOT: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
           AISOC_MODEL_PIN_SUMMARY: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
           AISOC_MODEL_PIN_REPORT: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
-          AISOC_MODEL_PIN_NL: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
-          AISOC_MODEL_PIN_HUNT: ${{ github.event.inputs.model || 'qwen2.5:0.5b' }}
+          AISOC_MODEL_PIN_NL: ${{ env.OLLAMA_MODEL }}
+          AISOC_MODEL_PIN_HUNT: ${{ env.OLLAMA_MODEL }}
         run: |
           set -euo pipefail
           python3 scripts/run_evals.py \
@@ -200,6 +222,43 @@ jobs:
               print(f"- warning: {w}")
           PY
 
+      # Parity 3.4 / gap-closure 6.4: replay before and after, publish
+      # the delta. Without this the comparator would be a library nobody
+      # calls, which this repository has shipped enough of.
+      #
+      # The previous run's report comes from the last successful run of
+      # this workflow on this model. When there is none — a first run, a
+      # new matrix leg, an expired artefact — the step says so and stops
+      # rather than inventing a baseline of zeros, because a delta
+      # against an absent run is exactly the "not measured is not zero"
+      # failure the comparator exists to refuse.
+      - name: Delta against the previous run of this model
+        if: always()
+        continue-on-error: true
+        id: delta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MODEL: ${{ matrix.model }}
+        run: |
+          set -uo pipefail
+          slug=$(printf '%s' "$MODEL" | tr -c 'a-zA-Z0-9' '-')
+          prev=$(gh run list --workflow=live-agent-eval.yml --branch=main \
+                   --status=success --limit 10 --json databaseId --jq '.[].databaseId' | head -5)
+          for run in $prev; do
+            if gh run download "$run" -n "live-agent-eval-$run" -D /tmp/prev 2>/dev/null; then
+              break
+            fi
+          done
+          if [ ! -f /tmp/prev/live-agent-eval.json ]; then
+            echo "No previous report for $MODEL. Reporting that, rather than a delta against" \
+                 "a baseline of zeros — which is the failure the comparator exists to refuse."
+            exit 0
+          fi
+          python3 scripts/compare_eval_runs.py \
+            --before /tmp/prev/live-agent-eval.json \
+            --after live-agent-eval.json \
+            --out "delta-$slug.md" | tee -a "$GITHUB_STEP_SUMMARY"
+
       - name: Upload report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -208,6 +267,7 @@ jobs:
           path: |
             live-agent-eval.json
             live-agent-eval.wet.json
+            delta-*.md
           if-no-files-found: warn
           retention-days: 30
 

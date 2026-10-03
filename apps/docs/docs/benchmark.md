@@ -95,6 +95,69 @@ the numbers.
 3. **The CI gate runs on every PR targeting `main` / `develop`** — [latest run](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml). (CI is currently scoped to those two branches; PRs to long-lived feature branches are not gated.)
 4. **Historical numbers are queryable** — every successful build pushes its report (written by `scripts/run_evals.py --out`) to the [`eval-results`](https://github.com/beenuar/AiSOC/tree/eval-results) branch as `eval/results/<commit_sha>.json`.
 
+## Verdict accuracy, and why it is not measured here
+
+Parity 3.2 asks for verdict accuracy, per-class precision and recall,
+malicious recall with a confidence interval, and false-negative counts.
+The scoring for every one of those exists in
+[`aisoc_benchmark.replay`](https://github.com/beenuar/AiSOC/blob/main/packages/aisoc-benchmark/aisoc_benchmark/replay.py)
+and is tested. What does not exist is a corpus that could produce an
+honest number from it.
+
+**Every labelled set in this repository is entirely malicious by
+construction.** `synthetic_incidents.json` and `adversary_incidents.json`
+are 200 incidents each and every one is a real attack. Their
+`response_class` field says which action to take — `isolate_host`,
+`disable_account` — not whether the finding was true. There is no benign
+case and no false positive anywhere in `services/agents/tests/eval_data/`.
+
+Score an agent against that and **an agent that answers "true positive"
+to everything, without reading anything, posts 100% accuracy and 100%
+malicious recall.** Publishing that figure would be the exact mirror of
+the failure `replay.py` already guards against at the other end, where it
+withholds headline accuracy below 30 malicious cases because 98% on a
+corpus of three is misleading in the direction that sells.
+
+So nothing publishes it. `scripts/score_replay_set.py` refuses a corpus
+whose minority class is under 5% of the set, names the counts in the
+refusal, and a test asserts that **this tree's own two corpora are
+refused** — because that is the finding, not a bug to route around.
+
+| Metric | Shipped model `llama3.2:3b-instruct-q4_K_M` | `qwen2.5:0.5b` | Any hosted model |
+|---|---|---|---|
+| Verdict accuracy | not measured — no corpus with a benign class | not measured — same | not measured — no funded key |
+| Per-class precision / recall | not measured — same | not measured — same | not measured — no funded key |
+| Malicious recall (95% CI) | not measured — same | not measured — same | not measured — no funded key |
+| False-negative count | not measured — same | not measured — same | not measured — no funded key |
+| Groundedness | graded weekly by `live-agent-eval.yml` | floor 0.40, measured over 12 runs | not measured — no funded key |
+
+The numbers that would fill that table need one of two things: a customer
+replaying their own closed findings, which the replay path exists for and
+runs entirely on their infrastructure; or a balanced corpus built here
+with real benign cases in it. Manufacturing the second from the corpora
+above by labelling everything `true_positive` would produce a table of
+100%s, which is why the guard exists rather than a `--force` flag.
+
+**No hosted provider has ever been exercised.** Every hosted column reads
+*not measured* rather than `0`, because a zero in an accuracy column says
+the model got everything wrong and "nobody has run it" is a different
+fact with a different remedy.
+
+## Before and after
+
+`scripts/compare_eval_runs.py` publishes the delta between two runs, and
+most of its work is refusing comparisons that would read as results:
+
+- an axis measured before and not after is **not comparable**, not a
+  regression — the arithmetic would say `0.62 - 0 = -0.62` and the report
+  would claim the agent got much worse when nobody asked it;
+- two runs over different datasets are **refused outright**, because that
+  delta measures the corpus;
+- a mean whose support changed materially carries both counts, since a
+  precision of 1.00 over two predictions and over two hundred are the
+  same number and different facts;
+- latency is reported and never graded, because it measures the machine.
+
 ## Latest results
 
 The numbers below are produced by `scripts/run_evals.py`. The MITRE,

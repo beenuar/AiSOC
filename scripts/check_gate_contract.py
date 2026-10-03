@@ -150,6 +150,20 @@ EMPTY_TREE_EXCEPTIONS: dict[str, dict[str, tuple[str, str]]] = {
             "probe reporting a held port as held and the overlay using `ports: !override`.",
         )
     },
+    "compare_eval_runs.py": {
+        ANY_SHAPE: (
+            "inconclusive",
+            "Not a check of the repository. It is a two-input comparator: it takes --before and "
+            "--after eval reports and publishes the delta between them, so there is no tree for "
+            "it to credit and argparse correctly refuses a probe that supplies neither. Asking "
+            "it whether an empty tree is clean is a question it cannot be asked, rather than one "
+            "it answers wrongly. What it must get right instead is refusing comparisons that "
+            "would read as results, and that is covered by scripts/tests/test_compare_eval_runs.py "
+            "in both directions: an axis measured before and not after reports 'not comparable' "
+            "rather than a -0.62 regression, two runs over different datasets are refused "
+            "outright, and a balanced pair still compares so the refusals are not vacuous.",
+        )
+    },
     "wet_eval_check.py": {
         ANY_SHAPE: (
             "passed",
