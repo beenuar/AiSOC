@@ -38,12 +38,17 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from gate_toolkit import self_test_if_requested  # noqa: E402
+from gate_toolkit import repo_root, self_test_if_requested  # noqa: E402
 
 self_test_if_requested(__file__)
+
+# Ask git which tree this is, rather than counting directories above this
+# file. Two levels up is whatever happens to be there — a worktree, a
+# tarball, a container build context — and a gate that certifies the
+# wrong tree is worse than one that fails.
+ROOT = repo_root()
 
 #: The table that no longer exists under this name.
 RETIRED_TABLE = "cases"
