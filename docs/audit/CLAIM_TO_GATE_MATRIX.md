@@ -286,117 +286,22 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | A port already in use moves AiSOC, it does not stop the install | `README.md` quick start | `ci.yml :: Python — Tests` (`tests/test_port_conflict_resolution.py`) | core | GATED | `make up` used to **refuse to start** when any of sixteen host ports was taken and tell the operator to edit `docker-compose.yml` — a hard stop at step one of the quick start, triggered by the most common condition in this audience's environment (a Postgres on 5432, an Ollama on 11434). It now picks a free port, writes `docker-compose.ports.yml` with `ports: !override` (a plain override *appends*, leaving the conflicting binding published), names what held the port, and propagates a moved console into `AISOC_CONSOLE_URL` so the printed address answers. Two bugs found while building it and pinned here: `SO_REUSEADDR` made the probe **more permissive than the real bind**, reporting a wildcard-held port as free; and `$(wildcard)` in a `:=` variable is expanded at parse time, so the first run generated the overlay and then started compose without it. **Measured: clean install with two conflicts, 56s to a working console, `make smoke` 10/10** |
 | A first-run tenant gets a setup wizard, not an empty dashboard | `apps/docs/docs/console/getting-started.md` | `ci.yml :: Python — Tests` (`services/api/tests/test_onboarding_wizard.py`) | core | GATED | A brand-new operator signed in and landed on `/dashboard`: every tile zero, every panel an honest empty state, and nothing saying what to do next. The empty states were **correct** — that work was already done — but correct and useful are different things, and "0 connected sources" is not a button. `GET /onboarding/status` derives what is set up from the tenant's own rows rather than a stored flag, because a `tenant.onboarded` boolean drifts the moment somebody connects a source through the API or deletes their last one. A missing table returns zero rather than 500-ing, since a half-migrated deployment is exactly when somebody reaches for the thing meant to help |
 | Sample data runs the real pipeline, and does not fake completion | `apps/docs/docs/console/getting-started.md` | `ci.yml :: Python — Tests` (`test_onboarding_wizard.py`) | core | GATED | `POST /onboarding/sample-data` pushes five scenarios through the **same ingest endpoint a real connector uses**, not into Postgres: a console full of inserted rows looks identical whether ingest, fusion and triage work or are completely broken, so running the real path means an operator who sees alerts has also seen the product work. **Sample data does not clear `first_run`** — somebody who has only looked at samples still has nothing connected. It refuses on a tenant with real alerts (a sample in a live queue is indistinguishable at a glance). Every address is an RFC 5737 documentation range and every domain RFC 2606, asserted by test. The scenario set is deliberately **not all critical**, so the console can show what a benign verdict looks like. Proven live: 5 accepted, 5 distinct alerts spanning low to critical, differing AI verdicts |
+| An investigation exports as a signed, replayable evidence bundle | `README.md`, `docs/architecture/evidence-bundles.md` | `ci.yml :: Python — Tests` (`services/api/tests/test_evidence_bundle.py`), `playbook-pause-live.yml` (`tests/isolation/test_evidence_bundle_live.py`) | core | GATED | Two exports of one run produce identical bytes, so an auditor can diff and re-hash a bundle without trusting the exporter. Everything that makes JSON non-deterministic is excluded: sorted keys, fixed separators, the ledger's own timestamps rather than `now()`, no host name, and events sorted by sequence — otherwise a ledger read returning rows in a different order changes the digest and the signature becomes a property of the query plan. Served as a **download**, because a client re-serialising a parsed body would break verification for a reason nobody could see. `verify_bundle()` recomputes digest *and* signature from the payload, so editing both together still fails. Prompts travel as digests, never text — a bundle leaves the customer's control and a prompt carries their hostnames — and a step with no prompt gains no hash field, since a hash of the empty string merges 'there was no prompt' with 'the prompt hashed to something'. The live suite is what proves it works on real rows: UUIDs, tz-aware datetimes, `Numeric` and `JSONB` all have reprs JSON cannot serialise |
+| The evidence bundle declares the OCSF version that actually has its objects | `docs/architecture/evidence-bundles.md` | `ci.yml :: Python — Tests` (`test_evidence_bundle.py::TestTheOcsfMapping`) | core | GATED | Each object was checked against schema.ocsf.io before use: `ai_agent` 404s on 1.1.0 and 1.8.0 and exists only in **1.9.0**; `ai_operation` exists from 1.8.0; `record_integrity` exists in 1.9.0 under that exact spelling. The ingest spine stays at the 1.1.0 its normalizer emits — that is its contract with connectors — but a bundle declaring 1.1.0 while carrying an `ai_agent` would be **a false claim about a public standard**, which is worse than not mapping at all. Field names come from the schema rather than invention: `ai_model` nested inside `ai_agent`, `attestation_list` carrying `fingerprint` and `signatures`. A run with no model carries `null` rather than a placeholder that would read as a real one |
+| The signature says what it is worth, rather than implying more | `docs/architecture/evidence-bundles.md` | `ci.yml :: Python — Tests` (`test_evidence_bundle.py::TestItSaysWhatTheSignatureIsWorth`) | core | GATED | HMAC-SHA256 keyed from the deployment's own secret is **tamper-evidence, not non-repudiation**: anyone holding the key can forge a bundle. The qualification travels inside every bundle's `algorithm_note` rather than only in the docs, because an auditor who assumes public-key signing from the word 'signed' has been misled by us rather than by the format |
+| The copilot cites every checkable claim, or labels it uncited | `README.md` | `ci.yml :: Python — Tests` (`services/agents/tests/test_copilot_grounding.py`) | core | GATED | An answer naming an IP, a hash or a CVE is a claim about the customer's network, and the analyst has no way to tell one drawn from the evidence from one the model produced because it sounded right. Each claim now cites a ledger coordinate (`ledger:<run>#<seq>`) or an alert id — things that can be opened — and context without an identifier is deliberately **not** citable, because pointing a citation at a page title is unfalsifiable. What counts as checkable is imported from `app.confidence.groundedness` rather than re-implemented, and a test asserts the two are the same function object; a second definition would drift while still looking like the same number. **Three outcomes, not two:** 'asserted nothing concrete' and 'supported every claim' get different labels, and one supported plus one invented reads *partially uncited* rather than *cited*. The ungrounded answer is returned, not suppressed — hiding the unsupported half shows the analyst a different answer than the model gave, edited by something that cannot reliably tell which half was wrong |
+| No accuracy number is published from a corpus that would flatter | `apps/docs/docs/benchmark.md` | `ci.yml :: Python — Tests` (`scripts/tests/test_score_replay_set.py`) | core | GATED | Every labelled corpus in this repository is **entirely malicious by construction**: `synthetic_incidents.json` and `adversary_incidents.json` are 200 incidents each, all real attacks, and `response_class` says which action to take rather than whether the finding was true. An agent answering 'true positive' to everything, without reading anything, would post **100% accuracy and 100% malicious recall** — the exact mirror of the failure `aisoc_benchmark.replay` already guards against at the other end. `score_replay_set.py` refuses no labels, one class, or a minority class under 5%, and names the counts. A test asserts **this tree's own two corpora are refused**, because that is the finding rather than a bug to route around. There is no `--force`. `benchmark.md` publishes *not measured* with the reason in every accuracy cell |
+| The live-agent eval grades the model a deployment actually runs | `apps/docs/docs/benchmark.md` | `live-agent-eval.yml :: Dispatch the real agent` (matrix) | core | GATED | A number measured only on `qwen2.5:0.5b` describes the agent on whatever the pins resolved to, which is a different claim from the one a reader takes from it. The job is now a matrix over that model **and `llama3.2:3b-instruct-q4_K_M`, the model `docker-compose.yml` pulls**. The small one stays because the floor in `live_agent_floor.json` was measured on it and removing it would orphan the floor. `fail-fast: false`, because one model failing is a result about that model and cancelling the other throws away the comparison that is the point of a matrix |
+| A before-and-after delta refuses the comparisons that would read as results | `apps/docs/docs/benchmark.md` | `ci.yml :: Python — Tests` (`scripts/tests/test_compare_eval_runs.py`), `live-agent-eval.yml :: Delta against the previous run` | core | GATED | Subtracting two numbers is easy; subtracting them honestly is where it goes wrong, and three of the four failures produce a plausible figure rather than an error. An axis measured before and not after reports **not comparable**, never a regression — the arithmetic says `0.62 - 0 = -0.62` and claims the agent got much worse when nobody asked it. Two runs over different datasets are **refused outright**, because that delta measures the corpus. A mean whose support changed materially carries both counts, since a precision of 1.00 over two predictions and over two hundred are the same number and different facts. Latency is reported and never graded, because it measures the machine. Wired into `live-agent-eval.yml` so the delta is *published* rather than merely available; with no previous report it says so instead of diffing against a baseline of zeros |
 
 ## Summary
 
-- GATED: 278
-
-## Summary
-
-- GATED: 278
-
-## Summary
-
-- GATED: 278
-
-## Summary
-
-- GATED: 278
-
-## Summary
-
-- GATED: 278
+- Total: 285
+- GATED: 285
 - PARTIAL: 0
-- NO GATE: 0 (**every claim is backed by a failing test, and none is now a named deferral either.** The last NO GATE — the weekly benchmark scoreboard running live against `main` — closed in Phase E1: `scripts/check_scoreboard.py` ties the published scoreboard to a deterministic per-PR live-agent MITRE-accuracy run, while the funded weekly `wet-eval.yml` appends the LLM-tier rows. The last two PARTIAL rows closed with `scripts/check_live_agent_floor.py` and a floor derived from ten runs across two environments, not by relabelling. Recount with `scripts/check_claim_gate_matrix.py` rather than trusting these three numbers: they move weekly, and a count copied into prose goes stale in silence.)
+- NO GATE: 0
 
-> **Counting note.** These figures previously read 46 / 9, which did not match
-> what the ratchet script counted. `_parse_status_rows` stops at the first
-> non-table line, and three blank lines had crept in between rows, so the last
-> three sections of the table were invisible to it — the script was scoring 43
-> GATED while the summary claimed 46. The blank lines are removed and the
-> counts above are what `scripts/check_claim_gate_matrix.py` now reports.
-> A governance artifact whose own totals are unverified is the exact failure
-> mode it exists to prevent, so the numbers are now derived rather than typed.
->
-> **They drifted again.** The summary read 93 GATED while the script counted
-> 99 on the commit before this one: rows were appended without re-running it,
-> which is the same failure the note above describes and the reason the
-> lesson is that the summary must be *recomputed*, never typed. The ratchet
-> only enforces the NO GATE ceiling, so a stale GATED total does not fail CI
-> — the number above is now what `scripts/check_claim_gate_matrix.py` prints,
-> and re-running it is the only way to change it.
->
-> **And once more, outside this file.** `readme_gates.py` compares the tally
-> in the README, in this file's Summary, and in a compliance page — but
-> `ROADMAP.md` was not on that list, so its tally line sat at 136 rows /
-> 128 GATED against a matrix holding 139 / 131 with every check green. The
-> line even tells the reader to recount with the script "rather than trusting
-> a figure quoted in prose — this line has gone stale before". A gate that
-> names the documents it covers will miss the one nobody added; `ROADMAP.md`
-> and `RELEASES.md` are now on the list, the *row total* is compared as well
-> as the GATED/PARTIAL split, and a figure the prose explicitly dates
-> ("the count at that time") is exempted so history need not be rewritten.
-
-### On the PARTIAL rows (all closed)
-
-They are not closed by editing this column. Each names a gate that does not
-exist yet. Relabelling any of them GATED without building the gate would make
-this file a liability rather than a control, since its whole value is that a
-reader can trust the Status column without reading the workflows.
-
-Six of the eight closed in one pass, and every one was built rather than
-relabelled — the ledger's replay contract, the per-language SDK surface, the
-platform-wide egress default, the raw-SQL column contract, the live
-tenant-scoped lake fetch, and the scanner ratchet. Each was proven to fail
-before it was trusted, and four of them found a live defect on the way in: the
-SDKs called four operations the API does not serve; `detection_rule_proposals`
-had never had the `source` column three raw INSERTs name, so every automated
-proposal path raised on its first row; `services/purple-team` published a
-public CDN default nothing in the service read; and the writer stores OCSF
-`raw_data` into a column named `raw_payload`, so the backtest's payload
-expansion had never run on a real lake row. Three of the six rows also had a
-**gap statement that was wrong in the repository's favour** — they credited an
-"api integration" job and an "integration gate" that do not run those paths —
-which is its own lesson: a PARTIAL row's caveat needs re-deriving, not just
-clearing.
-
-The last two closed together, and what they cost is worth recording. Both
-rested on the live-agent eval workflow, which "had never run" — and the reason
-was not the scheduling window this file blamed. Its live path imported
-`InvestigatorAgent`, a class that exists nowhere in `services/agents`, so the
-first dispatch failed in 92 seconds and every later one would have. Two more
-defects on the same path would each have published a number nobody measured:
-MITRE accuracy read a corpus key that is not there, so a live run would have
-reported `0.0000` — graded and failed, for a comparison that never happened —
-and a self-hosted model was priced against the gpt-4o rate card. Groundedness
-itself was scored per incident and then dropped before the report was written,
-so a successful run would have published none.
-
-The floor is 0.40 on a deterministic 10-incident slice, and it came from runs:
-seven local ones returned 0.5561 to four decimal places, because the agents
-decode greedily at temperature 0 and on one machine the measurement is a point
-mass. It is not a point mass across machines — three GitHub-runner runs
-returned 0.5821, 0.5329 and 0.5933 — and setting the floor from the local
-stability rather than that spread would have been the tempting mistake. The
-declaration in `services/agents/tests/eval_data/live_agent_floor.json` carries
-every run behind it, and the loader refuses a floor above its own evidence.
-
-The lesson generalises past this row. A gate can look green while measuring
-nothing: with the model pins unset, every agent caught its provider error and
-used its deterministic path, and the run reported a groundedness of 0.8050 at
-0.11 seconds per investigation — flattering, and faster than a network round
-trip. `--wet-require-live` could not see that shape, because records existed
-and the stack had imported. The harness now refuses a run that placed no LLM
-call at all, and the report carries `llm_calls_placed` beside the mean.
-
-"Cross-tenant isolation (Postgres)" left this list the only way it may: its gap
-read "compiled-SQL not live DB", and `tests/isolation/test_postgres_rls.py` is
-that live DB — the real migration chain on `postgres:16`, two tenants seeded
-into every RLS-covered table, read back as a role that does not bypass RLS. The
-row's caveat column now carries what the gate still does *not* prove (it reads
-as a probe role, not as the deployed one) rather than dropping the caveat with
-the status.
-
-The ratchet is enforced by `scripts/check_claim_gate_matrix.py` (wired into `security.yml`): the NO GATE count may only decrease.
-
-The Definition of Done requires zero `NO GATE` and zero unclosed `PARTIAL`. Each row's "Closes in" column is the binding commitment.
+Counts come from `scripts/check_claim_gate_matrix.py`, which is also the gate. Recompute
+rather than editing a number here: a count copied into prose goes stale silently, and the
+parser stops at the first blank line inside the table, so a stray blank desynchronises this
+block from the rows above it without failing anything.

@@ -6,11 +6,8 @@
 
 **An open-source, self-hostable AI Security Operations Center.** It ingests your security telemetry, detects and correlates threats, investigates them with AI agents whose reasoning is fully auditable, and proposes responses a human approves.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-15.0.0-f59e0b?style=flat-square)](CHANGELOG.md)
-[![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
-[![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml)
-[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT) [![Version](https://img.shields.io/badge/version-15.0.0-f59e0b?style=flat-square)](CHANGELOG.md) [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC)
 
 [Docs](https://beenuar.github.io/AiSOC/) · [Architecture](docs/architecture/README.md) · [What actually works](docs/audit/REPOSITORY_REALITY.md) · [Discussions](https://github.com/beenuar/AiSOC/discussions)
 
@@ -103,31 +100,36 @@ a connector still ingests through a generic mapping that resolves host, user and
 
 ## How it works
 
-Ingest normalizes to a common shape and Kafka carries it, then
-fusion runs 2603 executable detection rules, of 6991 on disk, applies **your tenant's own tuning**
-on top — the disables, floors and suppressions the console writes, so a rule you turned off actually
-stops firing — and decides what becomes an alert. Correlation groups related alerts, an agent investigates and writes its reasoning
+Ingest normalizes to a common shape and Kafka carries it, then fusion runs 2603 executable detection
+rules, of 6991 on disk, applies **your tenant's own tuning** on top — the disables, floors and
+suppressions the console writes, so a rule you turned off actually stops firing — and decides what
+becomes an alert. Correlation groups related alerts, an agent investigates and writes its reasoning
 to the Investigation Ledger, and a playbook may start from the result. Separately, new threat
 intelligence sweeps the lake for sightings you already collected, and a hypothesis becomes a hunt
-without anyone writing a query — the model fills a closed schema and every value it supplies is
-bound as a parameter, so it cannot express a query at all.
+without anyone writing a query — the model fills a closed schema and every value is bound as a
+parameter, so it cannot express a query at all.
 
 **A playbook triggered by an alert previews before it acts.** Three switches must agree — the
-deployment, the tenant, and the playbook — and every default is off; anything less runs in preview
-with its plan attached to the alert. An approval step inside one is a durable pause: the run suspends
-to Postgres, survives a restart, resumes from the step after the approval, and expires with a
-recorded outcome rather than hanging.
+deployment, the tenant, the playbook — and every default is off; anything less runs in preview with
+its plan attached to the alert. An approval step is a durable pause: the run suspends to Postgres,
+survives a restart, resumes after the approval, and expires with a recorded outcome rather than
+hanging.
 
-**Executable is earned, not declared.** A rule enters the compiled ruleset only after a vendor-shaped
-event has been replayed through the real connector and this engine and that rule was *watched to
-fire* — never inferred from a directory or an `enabled:` flag. The proof can fail: `--prove-gate`
-reverts the Windows connector and requires all 1,687 Windows rules to go silent. It means the rule is
-reachable, not that it detects an attack. 119 still cannot fire on any connector, counted by family
-rather than hidden. ([how, and why 1,362 were refused](docs/detections/sigma-compilation.md))
+**Executable is earned, not declared.** A rule joins the compiled ruleset only after a vendor-shaped
+event is replayed through the real connector and engine and that rule is *watched to fire* — never
+inferred from a directory or an `enabled:` flag. The proof can fail: `--prove-gate` reverts the
+Windows connector and requires all 1,687 Windows rules to go silent. It means reachable, not that it
+detects an attack. 119 still cannot fire, counted by family rather than hidden.
+([why 1,362 were refused](docs/detections/sigma-compilation.md))
+
+**Every answer carries its receipts.** The copilot cites each checkable claim to the ledger entry
+behind it and labels the rest *uncited* rather than dropping them, and any investigation exports as a
+**signed evidence bundle** — byte-identical across exports, prompts as digests, mapped to OCSF 1.9.0.
+([evidence bundles](docs/architecture/evidence-bundles.md))
 
 **[docs/architecture/README.md](docs/architecture/README.md)** walks that path one step at a time —
-eleven steps, five diagrams, every box linking to the code that implements it — and
-[mirrors to the docs portal](https://beenuar.github.io/AiSOC/docs/architecture).
+eleven steps, five diagrams, every box linking to the code that implements it — and [mirrors to the
+docs portal](https://beenuar.github.io/AiSOC/docs/architecture).
 
 ## Deployment profiles
 
@@ -145,8 +147,8 @@ sized for CPU-only inference, so `make up` produces real triage verdicts with re
 the Investigation Ledger — not a stub. It is not a frontier model: over 50 alerts it gave triage
 usable output 44 times before the reply was constrained to JSON and 50 after
 ([method](scripts/measure_triage_reliability.py)), and the rail labels which path answered. Upgrade
-by setting `OPENAI_API_KEY` and the model pins. **No hosted provider has ever been exercised
-here** — there is no funded key, so per-model rows read *not measured* rather than zero.
+by setting `OPENAI_API_KEY` and the model pins. **No hosted provider has ever been exercised here**
+— there is no funded key, so per-model rows read *not measured* rather than zero.
 ([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
 
 **One real external feed ships too.** `services/threatintel` polls the CISA Known Exploited
@@ -161,12 +163,11 @@ thing in a fresh install that is neither synthetic nor yours.
 | **Real, and not yours** | The CISA KEV feed on the Threat Intelligence page | Every row carries `source: cisa-kev`; it is the public catalog, unmodified |
 | **Sample** | The wizard's **Load sample data** | Source column reads `AiSOC`; RFC 5737 / RFC 2606 reserved addresses only |
 | **Demo** | `make demo` | `is_synthetic = true`, labelled in the console |
-| **Benchmark** | `services/agents/tests/eval_data/` | Every published row carries `substrate: true` |
-| **Test fixtures** | `tests/`, `**/tests/` | Never shipped in an image |
+| **Benchmark / fixtures** | `services/agents/tests/eval_data/`, `**/tests/` | Published rows carry `substrate: true`; fixtures never ship in an image |
 
 **Production never silently falls back to synthetic data.** An unreachable backend makes the console
 name the failure rather than invent an investigation, and an unmeasured figure reads *not measured*,
-never `0`. It was not always so: [the reality audit](docs/audit/REPOSITORY_REALITY.md) records each case.
+never `0`. It was not always so: [the reality audit](docs/audit/REPOSITORY_REALITY.md) has each case.
 
 ## AI agents
 
@@ -174,7 +175,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 
 - **They read** the alert, its correlated siblings, entity context, and prior verdicts for the same signature.
 - **They call typed tools** — lake queries, graph traversals, enrichment lookups. The model chooses a tool and passes arguments; it never writes SQL.
-- **Everything is logged** to the Investigation Ledger: prompts, tool calls, citations, the verdict, and token cost.
+- **Everything is logged** to the Investigation Ledger — prompts, tool calls, citations, verdict and token cost — and exports as a signed bundle.
 - **Grounding is checked.** A verdict citing an indicator the evidence never contained is demoted to human review rather than auto-closed.
 - **A prompt is validated before it is sent.** Raw logs, OCSF payloads and secret-shaped values are refused, not redacted after the fact.
 - **No vendor is touched without a human**, unless a tenant has explicitly granted autonomy for that verb. Every response step is graded against its own capability contract at dispatch, so approving a playbook never authorises whatever its steps happen to contain, and an approver must hold the required permission tier and must not be the person who requested the action.
@@ -184,7 +185,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 **Stable is defined, and a gate enforces it.** It was ungated prose until three rows were found
 describing coverage that did not exist. A row is Stable only with a check that runs on every pull
 request with no path filter, drives the real production path against real infrastructure, and has a
-**negative control proven by breaking the thing and watching the check go red**. ([the bar](docs/audit/MATURITY_DEFINITION.md))
+**negative control proven by breaking the thing and watching it go red**. ([the bar](docs/audit/MATURITY_DEFINITION.md))
 
 | Capability | Status | Tested | Production ready |
 |---|---|---|---|
@@ -217,20 +218,19 @@ request with no path filter, drives the real production path against real infras
 ## Troubleshooting
 
 `make doctor` checks host tools, memory, disk, every port and each datastore by *querying* it rather
-than asking whether its container is up — then prints the command to run next. A container killed by
-a full Docker VM is named as that, not reported as the service that happened to die. The six it is
-most often right about: [Installation](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures).
+than asking whether its container is up, then prints the command to run next. A container killed by a
+full Docker VM is named as that, not as the service that happened to die.
+([the six most common failures](https://beenuar.github.io/AiSOC/docs/installation#the-six-most-common-failures))
 
 ## Security
 
 Secrets are generated per deployment and never committed; connector credentials are encrypted at
-rest. Services connect to Postgres as a DML-only role, so row-level security actually applies to
-them, and tenant isolation is enforced at the query layer in every store. RBAC gates every mutating
-route, ingest is authenticated, and the default install sends no prompt anywhere — the model runs
-beside it.
+rest. Services connect to Postgres as a DML-only role, so row-level security actually applies, and
+tenant isolation is enforced at the query layer in every store. RBAC gates every mutating route,
+ingest is authenticated, and the default install sends no prompt anywhere — the model runs beside
+it.
 
-**A service with no credential refuses to serve rather than serving unauthenticated.** The
-[changelog](CHANGELOG.md) records each fixed vulnerability; report via [SECURITY.md](SECURITY.md).
+**A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fixed vulnerability; report via [SECURITY.md](SECURITY.md).
 
 ## Developing
 
@@ -241,9 +241,9 @@ make stats       # recount every figure this README publishes
 ```
 
 Guides: [add a connector](https://beenuar.github.io/AiSOC/docs/plugins/hello-plugin) ·
-[add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) ·
-[plugin lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle). Every count above is
-recounted from the tree, and CI fails if this README disagrees with it.
+[add a detection](https://beenuar.github.io/AiSOC/docs/detections/hello-hunt) · [plugin
+lifecycle](https://beenuar.github.io/AiSOC/docs/plugins/lifecycle). Every count above is recounted
+from the tree, and CI fails if this README disagrees.
 
 ## Roadmap · Contributing · License
 
