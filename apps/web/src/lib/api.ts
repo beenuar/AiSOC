@@ -856,6 +856,9 @@ export interface Alert {
   mitreAttack?: MitreAttack[];
   iocs?: AlertIOC[];
   rawEvent?: Record<string, unknown>;
+  /** Where-in-Wazuh coordinates (rule id, agent, original alert id) parsed
+   *  server-side from the ingested payload - search Wazuh with these. */
+  wazuhLocator?: Record<string, unknown>;
   assignee?: string;
   caseId?: string;
   tags?: string[];
@@ -1104,6 +1107,9 @@ function normalizeAlert(raw: unknown): Alert {
     rawEvent:
       (r.raw_event as Record<string, unknown> | undefined) ??
       (r.rawEvent as Record<string, unknown> | undefined),
+    wazuhLocator:
+      (r.wazuh_locator as Record<string, unknown> | undefined) ??
+      (r.wazuhLocator as Record<string, unknown> | undefined),
     assignee: pickStr('assignee', 'assignee'),
     caseId: pickStr('case_id', 'caseId'),
     tags,

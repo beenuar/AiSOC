@@ -1044,7 +1044,32 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
 
       {activeTab === 'raw' && (
         <Section title="Raw Event Data">
-          <pre className="text-xs text-gray-400 font-mono bg-gray-950/60 rounded-lg p-4 overflow-x-auto">
+          {alert.wazuhLocator && Object.keys(alert.wazuhLocator).length > 0 && (
+              <div className="mb-3 rounded-md border border-border bg-muted/40 p-3 text-xs">
+                <div className="mb-2 font-semibold text-foreground">
+                  Find this event in Wazuh
+                </div>
+                <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 font-mono">
+                  {Object.entries(alert.wazuhLocator)
+                    .filter(([k]) => k !== 'full_log')
+                    .map(([k, v]) => (
+                      <div key={k} className="contents">
+                        <dt className="text-muted-foreground">{k}</dt>
+                        <dd className="break-all select-all">{String(v)}</dd>
+                      </div>
+                    ))}
+                </dl>
+                {typeof alert.wazuhLocator.full_log === 'string' && (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-muted-foreground">full_log</summary>
+                    <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded bg-background p-2 select-all">
+                      {alert.wazuhLocator.full_log}
+                    </pre>
+                  </details>
+                )}
+              </div>
+            )}
+            <pre className="text-xs text-gray-400 font-mono bg-gray-950/60 rounded-lg p-4 overflow-x-auto">
             {JSON.stringify(alert.rawEvent || { message: 'Raw event data not available for this alert.' }, null, 2)}
           </pre>
         </Section>
