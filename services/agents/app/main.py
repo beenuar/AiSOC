@@ -24,7 +24,12 @@ from app.core.telemetry import instrument_app
 # Wave 3. Imported so the quality metrics have a production importer:
 # tool selection, evidence completeness and time to verdict had zero
 # hits anywhere in the tree, and a metric nothing imports is a module.
-from app.eval import score_agent_quality  # noqa: F401
+from app.eval import score_agent_quality
+
+# Re-exported rather than left as a bare import: an import with a
+# `noqa` and no reader is indistinguishable from a stale one, and
+# CodeQL reads it as unused. `__all__` states the intent.
+__all__ = ["score_agent_quality"]
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger

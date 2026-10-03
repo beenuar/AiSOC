@@ -75,9 +75,21 @@ async def _decide(monkeypatch: pytest.MonkeyPatch, proposal, caller, decision: s
     monkeypatch.setattr(dp, "_load_proposal", _load)
 
     class _DB:
-        async def commit(self) -> None: ...
-        async def refresh(self, *_a) -> None: ...
-        def add(self, *_a) -> None: ...
+        """Accepts the writes the handler makes and records nothing.
+
+        Docstring bodies rather than `...`, which CodeQL reads as an
+        ineffectual statement — the convention this repository already
+        uses for Protocol and abstract bodies.
+        """
+
+        async def commit(self) -> None:
+            """No-op."""
+
+        async def refresh(self, *_a) -> None:
+            """No-op."""
+
+        def add(self, *_a) -> None:
+            """No-op."""
 
     return await dp.decide_proposal(
         proposal.id,

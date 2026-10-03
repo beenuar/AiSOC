@@ -22,6 +22,8 @@ against the corpus that measures it has already been shown here to move
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from app.prompting.envelope import PromptInjectionGuard
 
@@ -50,7 +52,11 @@ class TestTheOverflowCorpusIsWellFormed:
         """Filler that looks like filler is a much easier test than the
         one this corpus is for."""
         dns = build_overflow_event(OVERFLOW_PAYLOADS[0])["value"]
-        assert "NOERROR" in dns and "example.net" in dns
+        # A full label rather than a bare substring: `in` on a hostname
+        # is the incomplete-sanitization shape, and it reads as one
+        # whether or not the value is trusted.
+        assert "NOERROR" in dns
+        assert re.search(r"\bcdn-assets-\d+\.example\.net\b", dns)
 
     def test_there_is_a_control_with_no_instruction(self) -> None:
         """If the agent fails that one too, overflow alone is sufficient

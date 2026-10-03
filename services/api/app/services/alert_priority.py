@@ -159,13 +159,12 @@ def score_alert_priority(
 
     if asset is not None:
         criticality = (asset.criticality or "medium").strip().lower()
-        factor = _CRITICALITY_FACTOR.get(criticality)
-        if factor is None:
-            factor = 1.0
+        known_criticality = _CRITICALITY_FACTOR.get(criticality)
+        if known_criticality is None:
             rationale.append({"factor": 1.0, "reason": f"asset criticality {asset.criticality!r} unrecognised"})
-        elif factor != 1.0:
-            score *= factor
-            rationale.append({"factor": factor, "reason": f"asset criticality is {criticality}"})
+        elif known_criticality != 1.0:
+            score *= known_criticality
+            rationale.append({"factor": known_criticality, "reason": f"asset criticality is {criticality}"})
 
         if asset.has_kev_vulnerability:
             score *= _KEV_FACTOR
@@ -190,10 +189,10 @@ def score_alert_priority(
 
     if identity is not None:
         tier = (identity.privilege_tier or "standard").strip().lower()
-        factor = _PRIVILEGE_FACTOR.get(tier, 1.0)
-        if factor != 1.0:
-            score *= factor
-            rationale.append({"factor": factor, "reason": f"the principal holds {tier} privilege"})
+        privilege_factor = _PRIVILEGE_FACTOR.get(tier, 1.0)
+        if privilege_factor != 1.0:
+            score *= privilege_factor
+            rationale.append({"factor": privilege_factor, "reason": f"the principal holds {tier} privilege"})
 
         if identity.is_break_glass:
             score *= _BREAK_GLASS_FACTOR

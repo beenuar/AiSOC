@@ -45,7 +45,6 @@ class TestQueueRoutingIsDeterministic:
         assert forward is not None and reverse is not None
         assert forward.id == reverse.id == "a", "row order decided the queue"
 
-
     def test_criteria_are_anded_not_ored(self) -> None:
         """A queue declaring critical AND pci means critical PCI cases.
         Under OR it collects every critical case in the estate, which
