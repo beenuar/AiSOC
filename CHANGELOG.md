@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [16.0.0] - 2026-10-03
+
 ### BREAKING
 
 - **The `cases` table is gone. Its rows live in `aisoc_cases`.**
