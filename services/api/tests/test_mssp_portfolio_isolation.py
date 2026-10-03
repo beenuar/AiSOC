@@ -109,7 +109,7 @@ async def db():
 
 async def _teardown(session) -> None:
     await session.rollback()
-    for table in ("alerts", "cases", "connectors"):
+    for table in ("alerts", "aisoc_cases", "connectors"):
         await session.execute(
             text(f"DELETE FROM {table} WHERE tenant_id = ANY(:ids)"),
             {"ids": [str(t) for t in _ALL_TENANTS]},

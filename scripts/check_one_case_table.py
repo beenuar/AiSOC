@@ -59,6 +59,25 @@ SURVIVING_TABLE = "aisoc_cases"
 #: positives is a gate people learn to skip.
 _BARE_TABLE_RE = re.compile(r"\b(?:FROM|JOIN|INTO|UPDATE)\s+cases\b(?!_pre_consolidation)")
 
+#: A table name reached through interpolation rather than written out.
+#:
+#: `for table in ("alerts", "cases", "connectors")` building
+#: `f"DELETE FROM {table}"` is invisible to the pattern above, and that
+#: is where the last surviving reference hid — found by CI against real
+#: Postgres, twice, after the literal search came back clean.
+#:
+#: Narrow on purpose. The first version matched any `"cases"` string
+#: before a comma or bracket and produced 22 findings, every one a
+#: false positive: a route prefix, a saved-view type, a permission
+#: resource, a UI label. A file only qualifies if it *also* interpolates
+#: a name straight into a SQL verb, which is the thing that makes a
+#: string in a list become a table.
+_TABLE_LIST_RE = re.compile(r"""["']cases["']\s*(?=[,)\]])""")
+_SQL_INTERPOLATION_RE = re.compile(
+    r"""(?:FROM|JOIN|INTO|UPDATE|TABLE)\s+\{""",
+    re.IGNORECASE,
+)
+
 #: Comments are stripped before matching, so prose describing the change
 #: does not trip the check on the change.
 _PY_COMMENT_RE = re.compile(r"#.*$")
@@ -117,6 +136,12 @@ def find_retired_table_reads(paths: list[Path]) -> list[str]:
             continue
         for number, raw in enumerate(text.splitlines(), 1):
             line = _without_comments(raw, path.suffix)
+            if _TABLE_LIST_RE.search(line) and _SQL_INTERPOLATION_RE.search(text):
+                findings.append(
+                    f"[interpolated-table] {rel}:{number} puts {RETIRED_TABLE!r} in a list of table "
+                    f"names. Interpolated into SQL it reads the retired table just as surely as "
+                    f"writing it out; use {SURVIVING_TABLE!r}"
+                )
             if _BARE_TABLE_RE.search(line):
                 findings.append(
                     f"[retired-table] {rel}:{number} queries `{RETIRED_TABLE}`, which migration 083 "

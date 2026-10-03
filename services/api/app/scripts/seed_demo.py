@@ -3214,7 +3214,7 @@ _REANCHOR_TABLES: tuple[tuple[str, tuple[str, ...]], ...] = (
             "snoozed_until",
         ),
     ),
-    ("cases", ("created_at", "updated_at", "closed_at", "assigned_at", "sla_deadline")),
+    ("aisoc_cases", ("created_at", "updated_at", "closed_at", "assigned_at", "sla_deadline")),
     ("case_tasks", ("created_at", "due_date", "completed_at")),
     ("case_timeline", ("created_at",)),
     ("remediation_gate_log", ("created_at",)),
