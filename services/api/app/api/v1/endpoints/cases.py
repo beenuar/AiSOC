@@ -50,7 +50,7 @@ from sqlalchemy import text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
-from app.services import evidence_custody
+from app.services import case_status, evidence_custody
 from app.services.case_fanout import (
     FanoutResult,
     fanout_create_case,
@@ -97,14 +97,11 @@ CaseStatus = Literal["new", "triaged", "investigating", "contained", "resolved",
 CaseSeverity = Literal["info", "low", "medium", "high", "critical"]
 
 # Valid forward-only state transitions
-_TRANSITIONS: dict[str, set[str]] = {
-    "new": {"triaged"},
-    "triaged": {"investigating"},
-    "investigating": {"contained", "resolved"},
-    "contained": {"resolved"},
-    "resolved": {"closed"},
-    "closed": set(),
-}
+# One copy, in `case_status`. This used to be declared here and the
+# metrics layer filtered on `"open"` and `"in_progress"` — states this
+# machine cannot produce — so two surfaces disagreed about what a case
+# status even is.
+_TRANSITIONS: dict[str, set[str]] = case_status.TRANSITIONS
 
 
 class CreateCaseRequest(BaseModel):

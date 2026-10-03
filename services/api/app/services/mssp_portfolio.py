@@ -199,7 +199,7 @@ async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[Tenant
                         tenant_id,
                         count(*)                                                           AS open_cases,
                         count(*) FILTER (WHERE COALESCE(sla_breached, FALSE))              AS sla_breached_cases
-                    FROM cases
+                    FROM aisoc_cases
                     WHERE tenant_id = ANY(:tenant_ids) AND status = ANY(:open_case_statuses)
                     GROUP BY tenant_id
                 ) c ON c.tenant_id = t.id
@@ -207,7 +207,7 @@ async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[Tenant
                     SELECT
                         tenant_id,
                         {MTTR_MINUTES_EXPR}                                    AS mttr_minutes
-                    FROM cases
+                    FROM aisoc_cases
                     WHERE tenant_id = ANY(:tenant_ids)
                       AND {CLOSED_CASE_PREDICATE}
                       AND closed_at >= :mttr_since

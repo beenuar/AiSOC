@@ -59,6 +59,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.api.v1.deps import AuthUser, DBSession
 from app.models.alert import Alert
 from app.models.case import Case
+from app.services import case_status
 
 logger = logging.getLogger(__name__)
 
@@ -476,7 +477,9 @@ async def get_soc_insights(
         tenant_id,
         start,
         now,
-        Case.status == "resolved",
+        # `closed`, not `resolved`. A resolved case is still on a queue;
+        # only `closed` writes `closed_at` and means the work finished.
+        Case.status.in_(case_status.CLOSED_STATUSES),
     )
 
     # ── Previous-window comparisons for delta ─────────────────────────────

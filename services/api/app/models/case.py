@@ -4,14 +4,19 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, ForeignKey, String, Text
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.database import Base
 
 
 class Case(Base):
-    __tablename__ = "cases"
+    # Gap-closure wave 1. This pointed at `cases` while the console wrote
+    # `aisoc_cases`, and the two never synchronised — so MTTR, the case
+    # counts, the executive digest and the MSSP portfolio were all blind
+    # to every case an analyst created. Migration 083 moved the rows and
+    # renamed the old table to `cases_pre_consolidation`.
+    __tablename__ = "aisoc_cases"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
@@ -39,7 +44,9 @@ class Case(Base):
     sla_breached: Mapped[bool] = mapped_column(default=False)
 
     # Linked data
-    alert_ids: Mapped[list] = mapped_column(JSONB, default=list)
+    # `uuid[]`, not JSONB: that is what the surviving table declares, and
+    # the ORM matching the column beats the column matching the ORM.
+    alert_ids: Mapped[list] = mapped_column(ARRAY(UUID(as_uuid=True)), default=list)
     ioc_ids: Mapped[list] = mapped_column(JSONB, default=list)
     artifact_ids: Mapped[list] = mapped_column(JSONB, default=list)
     tags: Mapped[list] = mapped_column(JSONB, default=list)
@@ -68,7 +75,7 @@ class CaseTask(Base):
     __tablename__ = "case_tasks"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cases.id"), nullable=False, index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aisoc_cases.id"), nullable=False, index=True)
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -85,7 +92,7 @@ class CaseTimeline(Base):
     __tablename__ = "case_timeline"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("cases.id"), nullable=False, index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("aisoc_cases.id"), nullable=False, index=True)
     tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)  # comment/status_change/assignment/etc
     content: Mapped[str] = mapped_column(Text, nullable=False)

@@ -298,7 +298,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "being isolated."
         ),
         "severity": "critical",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "WIN-FIN-DB01",
         "user": "svc-backup@example.com",
         "src_ip": "203.0.113.42",
@@ -507,7 +507,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "login + MFA-push approval from a never-seen device."
         ),
         "severity": "high",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "WIN-HR-DESKTOP",
         "user": "alice@example.com",
         "src_ip": "45.155.205.88",
@@ -576,7 +576,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "from a non-corp IP. Key has been disabled."
         ),
         "severity": "high",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "ec2-build-worker-09",
         "user": "iam-user/build-runner",
         "src_ip": "104.244.42.193",
@@ -690,7 +690,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "was unpublished from the registry 18 minutes after install."
         ),
         "severity": "high",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "LIN-K8S-NODE-03",
         "user": "ci-runner",
         "src_ip": "5.39.222.7",
@@ -759,7 +759,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "with TXT-record payloads to `azonly-cdn.io`."
         ),
         "severity": "critical",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "WIN-DEVOPS-LT",
         "user": "carol@example.com",
         "src_ip": "10.0.5.27",
@@ -840,7 +840,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "rejected the call but the attempt is high-confidence."
         ),
         "severity": "critical",
-        "status": "open",
+        "status": "new",
         "host": "WIN-DEVOPS-LT",
         "user": "carol@example.com",
         "src_ip": "10.0.5.27",
@@ -937,7 +937,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "on the node. Detected by Falco, validated via kube-audit + auditd."
         ),
         "severity": "critical",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "LIN-K8S-NODE-03",
         "user": "system:serviceaccount:dev:builder-sa",
         "src_ip": "10.0.4.91",
@@ -998,7 +998,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "180 MB. Matches dnscat2 behaviour."
         ),
         "severity": "high",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "MAC-SARAH-LT",
         "user": "sarah@example.com",
         "src_ip": "10.0.6.19",
@@ -1133,7 +1133,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "approved on the 21st prompt, granting access from a Russia-based IP."
         ),
         "severity": "high",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "MAC-EVE-LT",
         "user": "eve@example.com",
         "src_ip": "5.188.86.69",
@@ -1195,7 +1195,7 @@ _REALISTIC_INCIDENTS: list[dict] = [
             "connection to DC01. Host has been isolated."
         ),
         "severity": "high",
-        "status": "open",
+        "status": "new",
         "host": "WIN-PROD-WEB02",
         "user": "administrator",
         "src_ip": "185.220.101.6",
@@ -2541,7 +2541,7 @@ _DEMO_QUICK_INCIDENTS: list[dict] = [
             "forwarding rule that hides external mail."
         ),
         "severity": "high",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "MAC-ALICE-LT",
         "user": "alice@example.com",
         "src_ip": "185.199.108.153",
@@ -2632,7 +2632,7 @@ _DEMO_QUICK_INCIDENTS: list[dict] = [
             "from `corp-hr-backups`. Key has not yet been disabled."
         ),
         "severity": "critical",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "ec2-build-worker-09",
         "user": "iam-user/build-runner",
         "src_ip": "104.244.42.193",
@@ -2722,7 +2722,7 @@ _DEMO_QUICK_INCIDENTS: list[dict] = [
             "account. DLP egress proxy blocked the second batch."
         ),
         "severity": "high",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "WIN-HR-DESKTOP",
         "user": "dave@example.com",
         "src_ip": "10.42.7.119",
@@ -2808,7 +2808,7 @@ _DEMO_QUICK_INCIDENTS: list[dict] = [
             "is queued."
         ),
         "severity": "critical",
-        "status": "in_progress",
+        "status": "investigating",
         "host": "WIN-FIN-DB01",
         "user": "svc-backup@example.com",
         "src_ip": "10.42.1.87",

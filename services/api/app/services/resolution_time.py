@@ -68,7 +68,7 @@ async def tenant_case_mttr_minutes(db: AsyncSession, tenant_id) -> float | None:
         text(
             f"""
             SELECT {MTTR_MINUTES_EXPR} AS mttr_minutes
-              FROM cases
+              FROM aisoc_cases
              WHERE tenant_id = :tenant_id
                AND {CLOSED_CASE_PREDICATE}
                AND closed_at >= :since
@@ -89,7 +89,7 @@ async def tenant_cases_closed(db: AsyncSession, tenant_id, since: datetime) -> i
         text(
             f"""
             SELECT count(*)
-              FROM cases
+              FROM aisoc_cases
              WHERE tenant_id = :tenant_id
                AND {CLOSED_CASE_PREDICATE}
                AND closed_at >= :since

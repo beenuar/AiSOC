@@ -26,6 +26,7 @@ on:
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
+      - "scripts/check_one_case_table.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -50,6 +51,7 @@ on:
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
+      - "scripts/check_one_case_table.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -205,6 +207,16 @@ jobs:
 
       - name: No bind parameter is followed by a `::` cast
         run: python scripts/check_text_bind_casts.py
+
+      # Two case tables that never synchronised meant every case metric
+      # was blind to every case an analyst created — MTTR could stay null
+      # while a tenant closed cases all week. Nothing errored: both
+      # tables existed and both queries were valid.
+      - name: One case table gate self-test
+        run: python scripts/check_one_case_table.py --self-test
+
+      - name: One case table, and one status vocabulary
+        run: python scripts/check_one_case_table.py
 
       # The second layer, which was decoration until 061_runtime_app_role.sql:
       # every service connected as a superuser, and a superuser ignores RLS

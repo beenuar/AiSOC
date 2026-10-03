@@ -37,6 +37,7 @@ from app.models.case import Case
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
 from app.models.remediation import RemediationGateLog
+from app.services import case_status
 from app.services.resolution_time import (
     MTTR_WINDOW,
     tenant_case_mttr_minutes,
@@ -282,14 +283,27 @@ async def get_dashboard_metrics(
     )
 
     # ── Case counts ───────────────────────────────────────────────────────────
-    open_cases_q = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status == "open")))
-    in_progress_q = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status == "in_progress")))
+    # These filtered `"open"` and `"in_progress"`, neither of which the
+    # console's state machine can produce, so both counters were
+    # structurally zero rather than merely empty. The vocabulary now comes
+    # from one place.
+    open_cases_q = await db.scalar(
+        select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status.in_(case_status.OPEN_STATUSES)))
+    )
+    in_progress_q = await db.scalar(
+        select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status.in_(case_status.WORKING_STATUSES)))
+    )
+    # Closed, not resolved, and clocked off `closed_at` rather than
+    # `updated_at`. `resolved` is an intermediate state — a resolved case
+    # is still on a queue — and `updated_at` moves whenever anyone edits
+    # the case, so the old pair counted the wrong rows at the wrong time.
     resolved_week_q = await db.scalar(
         select(func.count()).where(
             and_(
                 Case.tenant_id == tenant_id,
-                Case.status == "resolved",
-                Case.updated_at >= week_start,
+                Case.status.in_(case_status.CLOSED_STATUSES),
+                Case.closed_at.isnot(None),
+                Case.closed_at >= week_start,
             )
         )
     )

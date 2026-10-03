@@ -269,10 +269,7 @@ async def test_get_soc_insights_zero_state_renders_without_500() -> None:
     by_key = {t.key: t for t in response.tiles}
     for key in ("mtta", "mttr"):
         tile = by_key[key]
-        assert tile.sample_count == 0, (
-            f"{key} published no denominator, so a reader cannot tell an empty window "
-            "from a real zero"
-        )
+        assert tile.sample_count == 0, f"{key} published no denominator, so a reader cannot tell an empty window from a real zero"
 
     for tile in response.tiles:
         # Nothing to compare against, so a delta would be invented.
