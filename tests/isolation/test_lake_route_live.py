@@ -125,7 +125,19 @@ async def client(lake, users):  # noqa: ANN001
     """The real application, as `create_application()` builds it."""
     pytest.importorskip("httpx")
     os.environ["DATABASE_URL"] = _dsn()
-    os.environ.setdefault("ENVIRONMENT", "development")
+    # `test`, never `development`.
+    #
+    # `AUTH_BYPASS_ENVIRONMENTS` holds development/dev/local/demo, and a
+    # request with no credentials in one of those resolves to a demo
+    # principal with role `admin` — which would answer 200 to the very
+    # assertion below that an uncredentialed caller is refused, and make
+    # this suite certify auth-derived tenancy while credentials were
+    # optional.
+    #
+    # `test` is in `DEV_ENVIRONMENTS` and deliberately not in the bypass
+    # set; `test_dev_mode_unification.py` pins that distinction for
+    # exactly this reason.
+    os.environ["ENVIRONMENT"] = "test"
     os.environ.setdefault("CLICKHOUSE_HOST", os.environ.get("ISOLATION_CLICKHOUSE_HOST", "localhost"))
     os.environ.setdefault("CLICKHOUSE_PORT", os.environ.get("ISOLATION_CLICKHOUSE_PORT", "9000"))
     os.environ.setdefault("CLICKHOUSE_USER", os.environ.get("ISOLATION_CLICKHOUSE_USER", "default"))

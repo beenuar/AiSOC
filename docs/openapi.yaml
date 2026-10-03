@@ -3010,7 +3010,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/app__api__v1__endpoints__detection_rules__HuntRequest'
+              $ref: '#/components/schemas/HuntRequest'
         required: true
       responses:
         '200':
@@ -16116,7 +16116,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/app__api__v1__endpoints__agents__HuntRequest'
+              $ref: '#/components/schemas/AgentHuntRequest'
         required: true
       responses:
         '200':
@@ -16124,7 +16124,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/app__api__v1__endpoints__agents__HuntResponse'
+                $ref: '#/components/schemas/AgentHuntResponse'
         '422':
           description: Validation Error
           content:
@@ -17550,6 +17550,76 @@ components:
       - expires_at
       - url
       title: AdminInviteWire
+    AgentHuntRequest:
+      properties:
+        hypothesis:
+          type: string
+          maxLength: 2000
+          minLength: 1
+          title: Hypothesis
+      type: object
+      required:
+      - hypothesis
+      title: AgentHuntRequest
+      description: 'One natural-language hypothesis to hunt against tenant data.
+
+
+        Named `AgentHuntRequest`, not `HuntRequest`, and the reason is a
+
+        published-contract one rather than a stylistic one.
+
+        `detection_rules.py` already exports a `HuntRequest`, and FastAPI
+
+        resolves a name collision by qualifying **both** models with their
+
+        full module path. So adding a second `HuntRequest` deleted the plain
+
+        `HuntRequest` schema from the spec and renamed the existing one —
+
+        breaking every generated SDK client, for a route that had not
+
+        changed. The openapi-breaking gate caught it.'
+    AgentHuntResponse:
+      properties:
+        hypothesis:
+          type: string
+          title: Hypothesis
+        checked:
+          type: boolean
+          title: Checked
+        matches:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Matches
+          default: []
+        refusals:
+          items:
+            type: string
+          type: array
+          title: Refusals
+          default: []
+        unavailable_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Unavailable Reason
+      type: object
+      required:
+      - hypothesis
+      - checked
+      title: AgentHuntResponse
+      description: 'What the hunt found, or why it could not look.
+
+
+        `checked` and `unavailable_reason` are separate fields deliberately.
+
+        A hunt that could not run is not a hunt that found nothing, and
+
+        collapsing the two is how a console shows a reassuring empty result
+
+        for a search that never happened.'
     AgentToolDescriptor:
       properties:
         name:
@@ -24583,6 +24653,36 @@ components:
       - timestamp
       - source
       title: HuntPreviewItem
+    HuntRequest:
+      properties:
+        rule_ids:
+          anyOf:
+          - items:
+              type: string
+              format: uuid
+            type: array
+          - type: 'null'
+          title: Rule Ids
+          description: Specific rule IDs to hunt with; omit to use all active rules
+        rule_language:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Rule Language
+          description: Filter rules by language (sigma, yara, kql, eql)
+        events:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          maxItems: 5000
+          title: Events
+          description: Events to hunt through
+      type: object
+      required:
+      - events
+      title: HuntRequest
+      description: Payload for threat hunting across events.
     HuntRunResponse:
       properties:
         id:
@@ -34730,59 +34830,6 @@ components:
       - approved_by
       - created_at
       title: WhitelistOut
-    app__api__v1__endpoints__agents__HuntRequest:
-      properties:
-        hypothesis:
-          type: string
-          maxLength: 2000
-          minLength: 1
-          title: Hypothesis
-      type: object
-      required:
-      - hypothesis
-      title: HuntRequest
-      description: One natural-language hypothesis to hunt against tenant data.
-    app__api__v1__endpoints__agents__HuntResponse:
-      properties:
-        hypothesis:
-          type: string
-          title: Hypothesis
-        checked:
-          type: boolean
-          title: Checked
-        matches:
-          items:
-            additionalProperties: true
-            type: object
-          type: array
-          title: Matches
-          default: []
-        refusals:
-          items:
-            type: string
-          type: array
-          title: Refusals
-          default: []
-        unavailable_reason:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Unavailable Reason
-      type: object
-      required:
-      - hypothesis
-      - checked
-      title: HuntResponse
-      description: 'What the hunt found, or why it could not look.
-
-
-        `checked` and `unavailable_reason` are separate fields deliberately.
-
-        A hunt that could not run is not a hunt that found nothing, and
-
-        collapsing the two is how a console shows a reassuring empty result
-
-        for a search that never happened.'
     app__api__v1__endpoints__business_context__UpdateRuleRequest:
       properties:
         yaml:
@@ -34836,36 +34883,6 @@ components:
       required:
       - events
       title: TimelineResponse
-    app__api__v1__endpoints__detection_rules__HuntRequest:
-      properties:
-        rule_ids:
-          anyOf:
-          - items:
-              type: string
-              format: uuid
-            type: array
-          - type: 'null'
-          title: Rule Ids
-          description: Specific rule IDs to hunt with; omit to use all active rules
-        rule_language:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Rule Language
-          description: Filter rules by language (sigma, yara, kql, eql)
-        events:
-          items:
-            additionalProperties: true
-            type: object
-          type: array
-          maxItems: 5000
-          title: Events
-          description: Events to hunt through
-      type: object
-      required:
-      - events
-      title: HuntRequest
-      description: Payload for threat hunting across events.
     app__api__v1__endpoints__detection_rules__HuntResponse:
       properties:
         hunt_id:

@@ -360,13 +360,23 @@ async def list_agent_tools(
 # console's Hunt page are what make it reachable.
 
 
-class HuntRequest(BaseModel):
-    """One natural-language hypothesis to hunt against tenant data."""
+class AgentHuntRequest(BaseModel):
+    """One natural-language hypothesis to hunt against tenant data.
+
+    Named `AgentHuntRequest`, not `HuntRequest`, and the reason is a
+    published-contract one rather than a stylistic one.
+    `detection_rules.py` already exports a `HuntRequest`, and FastAPI
+    resolves a name collision by qualifying **both** models with their
+    full module path. So adding a second `HuntRequest` deleted the plain
+    `HuntRequest` schema from the spec and renamed the existing one —
+    breaking every generated SDK client, for a route that had not
+    changed. The openapi-breaking gate caught it.
+    """
 
     hypothesis: str = Field(min_length=1, max_length=2000)
 
 
-class HuntResponse(BaseModel):
+class AgentHuntResponse(BaseModel):
     """What the hunt found, or why it could not look.
 
     `checked` and `unavailable_reason` are separate fields deliberately.
@@ -382,11 +392,11 @@ class HuntResponse(BaseModel):
     unavailable_reason: str | None = None
 
 
-@router.post("/hunt", response_model=HuntResponse)
+@router.post("/hunt", response_model=AgentHuntResponse)
 async def run_hunt(
-    body: HuntRequest,
+    body: AgentHuntRequest,
     current_user: Annotated[AuthUser, Depends(require_permission("hunts:read"))],
-) -> HuntResponse:
+) -> AgentHuntResponse:
     """Plan and run one natural-language hunt for the caller's tenant.
 
     The tenant comes from the authenticated principal and is never read
@@ -401,4 +411,4 @@ async def run_hunt(
     )
     if response.status_code >= 400:
         raise HTTPException(status_code=response.status_code, detail=response.text[:400])
-    return HuntResponse(**response.json())
+    return AgentHuntResponse(**response.json())
