@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import structlog
 
-from .plugin import AiSOCPlugin, PluginContext
-from .enricher import EnricherPlugin
 from .action import ActionPlugin
 from .connector import ConnectorPlugin
+from .enricher import EnricherPlugin
+from .plugin import AiSOCPlugin, PluginContext
 
 logger = structlog.get_logger(__name__)
 

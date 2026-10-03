@@ -1,5 +1,5 @@
 {
-  "event_type": "not-exec",
+  "event_type": "http_request",
   "process_path": "prefix-/hyperkit-suffix",
   "process_path_not": "/Applications/-tail"
 }

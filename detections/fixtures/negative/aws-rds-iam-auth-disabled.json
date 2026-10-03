@@ -1,4 +1,4 @@
 {
-  "event_name": "not-ModifyDBInstance",
+  "event_name": "AttachUserPolicy",
   "iam_database_authentication_enabled": false
 }

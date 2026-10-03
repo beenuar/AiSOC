@@ -1,4 +1,4 @@
 {
-  "syscall": "not-ptrace",
+  "syscall": "openat",
   "target_pid": 1
 }

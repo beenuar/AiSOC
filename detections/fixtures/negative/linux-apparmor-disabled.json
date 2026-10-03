@@ -1,5 +1,5 @@
 {
   "argv": "prefix--R-suffix",
   "exe": "head-/aa-disable",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

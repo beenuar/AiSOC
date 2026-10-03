@@ -1,4 +1,4 @@
 {
-  "event_name": "not-AddPreference",
+  "event_name": "AttachUserPolicy",
   "exclusion_path": "prefix-\\users\\-suffix"
 }

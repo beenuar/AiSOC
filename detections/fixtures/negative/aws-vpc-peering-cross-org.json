@@ -1,4 +1,4 @@
 {
-  "event_name": "not-CreateVpcPeeringConnection",
+  "event_name": "AttachUserPolicy",
   "peer_account_external": true
 }

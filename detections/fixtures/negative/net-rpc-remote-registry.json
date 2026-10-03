@@ -1,5 +1,5 @@
 {
-  "event_type": "not-rpc_call",
+  "event_type": "http_request",
   "interface": "winreg",
   "operation": "BaseRegSetValue",
   "src_role": "workstation"

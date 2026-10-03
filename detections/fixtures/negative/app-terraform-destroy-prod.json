@@ -1,5 +1,5 @@
 {
   "command": "destroy",
-  "event_type": "not-terraform_run",
+  "event_type": "http_request",
   "workspace": "prod"
 }

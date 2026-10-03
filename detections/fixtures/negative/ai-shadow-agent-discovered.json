@@ -1,3 +1,3 @@
 {
-  "finding_type": "not-shadow_ai"
+  "finding_type": "prompt_injection"
 }

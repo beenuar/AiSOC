@@ -16,7 +16,13 @@ Run:  python3 packages/aisoc-benchmark/build_corpus.py
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from aisoc_benchmark import replay  # noqa: E402
+from corpus.benign_cases import benign_corpus_records  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 EVAL_DATA = REPO_ROOT / "services" / "agents" / "tests" / "eval_data"
@@ -39,19 +45,32 @@ RESPONSE_CLASS_ACTIONS: dict[str, list[str]] = {
 
 
 def _disposition(record: dict) -> str:
-    """Derive the expected disposition from severity and response class.
+    """Every harness incident is a real attack, so every one is a true positive.
 
-    The harness corpus does not carry one directly. Monitoring-only incidents
-    are the benign tail; everything with a containment response is malicious.
-    Stated here rather than inferred at scoring time so the mapping is
-    reviewable.
+    This used to derive three classes from ``response_class``, and both
+    the mapping and the vocabulary were wrong.
+
+    **The vocabulary** was ``malicious | suspicious | benign`` while
+    `aisoc_benchmark.replay` grades
+    ``true_positive | benign_true_positive | false_positive | benign`` —
+    one label of four in common, so the corpus was ungradeable by this
+    package's own scorer and nothing noticed.
+
+    **The mapping** was worse. ``response_class == "monitor"`` became
+    ``benign``, and those eight incidents are BloodHound domain
+    enumeration tagged T1087.002 at medium severity. That is a real
+    attack with a monitoring response. Calling it benign conflates
+    "low-severity threat" with "not a threat", which is the distinction
+    a triage agent exists to make — so the corpus claimed a benign class
+    it did not have, and an agent answering "true positive" to
+    everything would still have scored 100%.
+
+    `response_class` says which action to take. It says nothing about
+    whether the finding was true, and nothing in the harness corpus
+    does. The benign and false-positive cases are authored separately in
+    ``corpus/benign_cases.py``.
     """
-    response = str(record.get("response_class", ""))
-    if response in ("monitor", ""):
-        return "benign"
-    if response == "escalate":
-        return "suspicious"
-    return "malicious"
+    return replay.MALICIOUS
 
 
 def build() -> dict:
@@ -86,6 +105,11 @@ def build() -> dict:
                 "expected_actions": RESPONSE_CLASS_ACTIONS.get(response, []),
             }
         )
+
+    # The authored benign and false-positive cases. Without them the
+    # corpus has one class and `score_replay_set.assert_gradeable`
+    # correctly refuses it.
+    incidents.extend(benign_corpus_records())
 
     return {
         "corpus_id": "soc-agent-benchmark-v1",

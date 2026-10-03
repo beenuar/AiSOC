@@ -23,7 +23,7 @@ from .injection_metrics import attributable_hits, score
 
 #: Pinned on the same terms as the corpus digest next door: a corpus that can
 #: change silently is not a measurement.
-EXPECTED_DIGEST = "4601dada34b787269459768f130ceee0900cc30cafd044106735d47fda3550dc"
+EXPECTED_DIGEST = "8c4b3ff79a2b8a9c376588ed0fc781df2987f40d852453286cba1735a4b21e6d"
 
 
 @pytest.fixture(scope="module")

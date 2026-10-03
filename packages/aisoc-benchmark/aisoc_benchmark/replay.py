@@ -178,6 +178,16 @@ class ReplayScore:
     malicious_recall: float | None = None
     malicious_recall_ci: tuple[float, float] | None = None
     malicious_precision: float | None = None
+    #: Malicious cases the agent did not call malicious, as a count and a
+    #: rate. Derivable from the confusion matrix and from `1 - recall`,
+    #: and published as its own field anyway: a false negative is a
+    #: missed attack, and a reader should not have to compute the number
+    #: that matters most from the one that reads best.
+    false_negatives: int = 0
+    false_negative_rate: float | None = None
+    #: What the agent said instead, counted. "It abstained on 40" and
+    #: "it called 40 benign" are different failures with different fixes.
+    false_negative_verdicts: dict[str, int] = field(default_factory=dict)
 
     # ---- headline, withheld on a thin corpus -----------------------------
     headline_accuracy: float | None = None
@@ -436,6 +446,18 @@ def score_replay(
         resamples=bootstrap_resamples,
         seed=bootstrap_seed,
     )
+
+    # False negatives, named. Every one is an attack the agent let
+    # through, which is the outcome an operator is actually buying
+    # against, and `1 - recall` is a worse way to say it.
+    missed = [d for d in malicious_rows if d.get("verdict") != MALICIOUS]
+    score.false_negatives = len(missed)
+    score.false_negative_rate = _ratio(len(missed), len(malicious_rows))
+    verdicts: dict[str, int] = {}
+    for d in missed:
+        key = str(d.get("verdict") or "") or "(empty)"
+        verdicts[key] = verdicts.get(key, 0) + 1
+    score.false_negative_verdicts = dict(sorted(verdicts.items()))
 
     # ---- calibration ------------------------------------------------------
     score.calibration, score.expected_calibration_error = _calibration(answered)

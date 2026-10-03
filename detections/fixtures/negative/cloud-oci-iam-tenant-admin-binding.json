@@ -1,5 +1,5 @@
 {
   "compartment": "tenancy",
-  "event_name": "not-AddUserToGroup",
+  "event_name": "AttachUserPolicy",
   "group": "Administrators"
 }

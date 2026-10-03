@@ -1,4 +1,4 @@
 {
-  "event_type": "not-auth_success",
+  "event_type": "http_request",
   "mfa_factor": "backup_code"
 }

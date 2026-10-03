@@ -43,7 +43,7 @@ class AiSOCClient:
 
     # ── Context-manager helpers ───────────────────────────────────────────────
 
-    async def __aenter__(self) -> "AiSOCClient":
+    async def __aenter__(self) -> AiSOCClient:
         self._http = httpx.AsyncClient(
             base_url=self._ctx.api_base_url,
             headers={
@@ -54,7 +54,7 @@ class AiSOCClient:
         )
         return self
 
-    async def __aexit__(self, *_: Any) -> None:
+    async def __aexit__(self, *_: object) -> None:
         if self._http:
             await self._http.aclose()
             self._http = None

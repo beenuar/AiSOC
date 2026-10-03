@@ -1,5 +1,5 @@
 {
   "argv": "write com.apple.loginwindow",
-  "event_type": "not-exec",
+  "event_type": "http_request",
   "process_path": "head-/defaults"
 }

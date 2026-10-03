@@ -1,4 +1,4 @@
 {
-  "event_name": "not-CreateFargateProfile",
+  "event_name": "AttachUserPolicy",
   "namespace": "default"
 }

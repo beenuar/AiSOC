@@ -107,15 +107,27 @@ USERS = [
     "ops-lead@example.com",
 ]
 
+# Documentation ranges only (RFC 5737) plus RFC 1918.
+#
+# Three real routable addresses shipped here for a long time —
+# 185.220.101.7 (a known Tor exit range), 45.142.122.111 and
+# 91.134.231.15 — reaching 138 occurrences across the generated corpus,
+# which is published and read by third-party agents through the
+# benchmark adapter. Two problems with that: an agent exercised on this
+# corpus can propose blocking an address that belongs to somebody, and a
+# reader who takes the corpus at face value may go and scan them.
+#
+# A detection corpus is a place where fabricated addresses are the
+# correct choice, and these three were the only ones that were not.
 ATTACKER_IPS = [
     "192.168.1.100",
     "10.0.99.42",
     "172.16.50.7",
     "203.0.113.45",
     "198.51.100.23",
-    "185.220.101.7",
-    "45.142.122.111",
-    "91.134.231.15",
+    "198.51.100.7",
+    "203.0.113.111",
+    "192.0.2.15",
 ]
 
 CAMPAIGNS = [

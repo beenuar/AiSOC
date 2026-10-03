@@ -1,6 +1,6 @@
 {
   "current_state": "approve",
-  "event_type": "not-mfa_state_change",
+  "event_type": "http_request",
   "previous_state": "deny",
   "seconds_between": -40.0
 }

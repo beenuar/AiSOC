@@ -1,5 +1,5 @@
 {
-  "event_type": "not-token_use",
+  "event_type": "http_request",
   "ip_changed": true,
   "seconds_after_issue": -99.0
 }

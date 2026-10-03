@@ -1,4 +1,4 @@
 {
-  "event_type": "not-system.api_token.create",
+  "event_type": "http_request",
   "scope": "prefix-admin-suffix"
 }

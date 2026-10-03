@@ -1,5 +1,5 @@
 {
-  "event_type": "not-flow",
+  "event_type": "http_request",
   "protocol_number": 47,
   "src_role": "workstation"
 }

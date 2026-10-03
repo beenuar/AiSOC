@@ -1,4 +1,4 @@
 {
-  "event_name": "not-login_failure",
+  "event_name": "AttachUserPolicy",
   "type": "suspicious_login"
 }

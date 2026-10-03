@@ -1,4 +1,4 @@
 {
-  "event_type": "not-firewall_state_change",
+  "event_type": "http_request",
   "state": "disabled"
 }

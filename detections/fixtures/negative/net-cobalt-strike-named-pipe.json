@@ -1,4 +1,4 @@
 {
-  "event_type": "not-smb_pipe",
+  "event_type": "http_request",
   "pipe_name": "msagent_"
 }

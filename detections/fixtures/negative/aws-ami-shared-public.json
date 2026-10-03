@@ -1,4 +1,4 @@
 {
   "ami_made_public": true,
-  "event_name": "not-ModifyImageAttribute"
+  "event_name": "AttachUserPolicy"
 }

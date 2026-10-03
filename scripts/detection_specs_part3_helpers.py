@@ -142,8 +142,64 @@ def _pos_for(op: str, expected: Any) -> Any:
     return expected
 
 
-def _neg_for(op: str, expected: Any) -> Any:
-    """Return a value that breaks the (op, expected) clause."""
+# ── Realistic negatives ───────────────────────────────────────────────────
+#
+# A negative fixture of `{"event_type": "not-process_create"}` proves the
+# rule ignores a value that cannot occur. It says nothing about whether
+# the rule fires on *realistic benign traffic*, which is what a false
+# positive actually is — so 423 of the 878 negatives were testing a
+# property nobody cares about.
+#
+# The fields carrying them are enumerated: `event_type` (267 of them),
+# `event_name` (54), `syscall` (50), and a tail of `action`, `verb`,
+# `operation_name`. Each takes values from a known vocabulary, so the
+# right negative is **another real value from that vocabulary** — the
+# other thing this log source genuinely emits.
+#
+# Harvested from the corpus rather than hand-listed, so it stays correct
+# as rules are added and cannot drift from what the positives claim the
+# field holds.
+
+_FIELD_VOCABULARY: dict[str, list[str]] = {}
+
+
+def register_field_value(field: str, value: Any) -> None:
+    """Record a real value seen for `field` in a positive fixture."""
+    if not isinstance(value, str) or not value or value.startswith("not-"):
+        return
+    seen = _FIELD_VOCABULARY.setdefault(field, [])
+    if value not in seen:
+        seen.append(value)
+
+
+def realistic_alternative(field: str, expected: Any) -> Any | None:
+    """A different real value for this field, or None if none is known.
+
+    Deterministic: the vocabulary is ordered by first appearance and the
+    choice is the first entry that differs, so regenerating the corpus
+    does not churn the fixtures.
+    """
+    if not isinstance(expected, str):
+        return None
+    for candidate in _FIELD_VOCABULARY.get(field, []):
+        if candidate != expected:
+            return candidate
+    return None
+
+
+def _neg_for(op: str, expected: Any, field: str | None = None) -> Any:
+    """Return a value that breaks the (op, expected) clause.
+
+    Prefers a *real* alternative value for the field over a synthetic
+    `not-<value>` string: a negative built from something the log source
+    genuinely emits tests what a false positive actually is, where a
+    negative built from an impossible value tests only that the matcher
+    does string comparison.
+    """
+    if field is not None:
+        alternative = realistic_alternative(field, expected)
+        if alternative is not None and op in {"eq", "in", "match_any", "contains", "contains_any", "contains_all"}:
+            return alternative
     if op == "neq":
         # The inverse of neq is equality, so the negative carries the
         # excluded value. That is the clause the rule is *about*, which is
@@ -432,6 +488,10 @@ def build_positive(when: dict[str, Any]) -> dict[str, Any]:
         if len(constraints) == 1:
             op, exp = constraints[0]
             pos[field] = _pos_for(op, exp)
+            # Every real value a positive fixture uses joins the field's
+            # vocabulary, so a later rule's negative can be built from
+            # something this log source genuinely emits.
+            register_field_value(field, pos[field])
         else:
             pos[field] = _compose_field_value(constraints)
 
@@ -496,7 +556,7 @@ def build_negative(
         neg_field, target_op = split_op(first_key)
         target_expected = when[first_key]
 
-    neg[neg_field] = _neg_for(target_op, target_expected)
+    neg[neg_field] = _neg_for(target_op, target_expected, neg_field)
     return neg
 
 

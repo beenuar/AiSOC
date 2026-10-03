@@ -1,4 +1,4 @@
 {
-  "event_name": "not-CreateFunction",
+  "event_name": "AttachUserPolicy",
   "runtime": "nodejs10.x"
 }

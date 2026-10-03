@@ -1,4 +1,4 @@
 {
-  "event_type": "not-llmnr",
+  "event_type": "http_request",
   "self_response_for_external_query": true
 }

@@ -1,4 +1,4 @@
 {
-  "operation_name": "not-Update application",
+  "operation_name": "Consent to application",
   "permissions_added": "prefix-Directory.ReadWrite.All-suffix"
 }

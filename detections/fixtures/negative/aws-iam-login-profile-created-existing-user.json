@@ -1,4 +1,4 @@
 {
-  "event_name": "not-CreateLoginProfile",
+  "event_name": "AttachUserPolicy",
   "user_existed": true
 }

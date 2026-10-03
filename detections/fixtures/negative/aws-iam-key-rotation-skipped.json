@@ -1,4 +1,4 @@
 {
-  "event_name": "not-ListAccessKeys",
+  "event_name": "AttachUserPolicy",
   "key_age_days": 465.0
 }

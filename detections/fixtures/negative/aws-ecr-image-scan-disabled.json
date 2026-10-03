@@ -1,4 +1,4 @@
 {
-  "event_name": "not-PutImageScanningConfiguration",
+  "event_name": "AttachUserPolicy",
   "scan_on_push": false
 }

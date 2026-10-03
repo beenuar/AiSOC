@@ -1,5 +1,5 @@
 {
   "allow_privilege_escalation": true,
   "environment": "prod",
-  "event_type": "not-create_pod"
+  "event_type": "http_request"
 }

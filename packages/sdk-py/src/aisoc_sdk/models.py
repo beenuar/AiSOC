@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Generic, List, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict
-
 
 # ── Enums ─────────────────────────────────────────────────────────────────────
 
@@ -55,10 +54,10 @@ class Alert(BaseModel):
     severity: AlertSeverity
     status: AlertStatus
     source: str
-    source_ref: Optional[str] = None
-    mitre_tactics: List[str] = []
-    ai_score: Optional[float] = None
-    case_id: Optional[str] = None
+    source_ref: str | None = None
+    mitre_tactics: list[str] = []
+    ai_score: float | None = None
+    case_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -72,9 +71,9 @@ class Case(BaseModel):
     title: str
     status: CaseStatus
     priority: CasePriority
-    assignee: Optional[str] = None
-    mitre_tactics: List[str] = []
-    alert_ids: List[str] = []
+    assignee: str | None = None
+    mitre_tactics: list[str] = []
+    alert_ids: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -85,7 +84,7 @@ class DetectionRule(BaseModel):
     id: str
     tenant_id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     rule_language: str
     severity: AlertSeverity
     enabled: bool
@@ -113,9 +112,9 @@ class PlaybookStep(BaseModel):
     id: str
     name: str
     type: str
-    action: Optional[str] = None
-    parameters: Optional[dict[str, Any]] = None
-    next_steps: List[str] = []
+    action: str | None = None
+    parameters: dict[str, Any] | None = None
+    next_steps: list[str] = []
 
 
 class Playbook(BaseModel):
@@ -123,10 +122,10 @@ class Playbook(BaseModel):
 
     id: str
     name: str
-    description: Optional[str] = None
+    description: str | None = None
     version: str
-    steps: List[PlaybookStep] = []
-    trigger_conditions: Optional[dict[str, Any]] = None
+    steps: list[PlaybookStep] = []
+    trigger_conditions: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -138,9 +137,9 @@ class PlaybookRun(BaseModel):
     playbook_id: str
     status: str
     started_at: datetime
-    completed_at: Optional[datetime] = None
-    trigger_data: Optional[dict[str, Any]] = None
-    step_results: Optional[dict[str, Any]] = None
+    completed_at: datetime | None = None
+    trigger_data: dict[str, Any] | None = None
+    step_results: dict[str, Any] | None = None
 
 
 class ApiKey(BaseModel):
@@ -149,9 +148,9 @@ class ApiKey(BaseModel):
     id: str
     name: str
     prefix: str
-    scopes: List[str]
-    expires_at: Optional[datetime] = None
-    last_used_at: Optional[datetime] = None
+    scopes: list[str]
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
     created_at: datetime
 
 
@@ -163,7 +162,7 @@ T = TypeVar("T")
 class Page(BaseModel, Generic[T]):
     model_config = _M
 
-    items: List[T]
+    items: list[T]
     total: int
     page: int
     page_size: int
@@ -175,10 +174,10 @@ class Page(BaseModel, Generic[T]):
 class AlertFilters(BaseModel):
     model_config = _M
 
-    severity: Optional[AlertSeverity] = None
-    status: Optional[AlertStatus] = None
-    case_id: Optional[str] = None
-    search: Optional[str] = None
+    severity: AlertSeverity | None = None
+    status: AlertStatus | None = None
+    case_id: str | None = None
+    search: str | None = None
     page: int = 1
     page_size: int = 20
 
@@ -186,9 +185,9 @@ class AlertFilters(BaseModel):
 class CaseFilters(BaseModel):
     model_config = _M
 
-    status: Optional[CaseStatus] = None
-    priority: Optional[CasePriority] = None
-    assignee: Optional[str] = None
+    status: CaseStatus | None = None
+    priority: CasePriority | None = None
+    assignee: str | None = None
     page: int = 1
     page_size: int = 20
 
@@ -197,8 +196,8 @@ class ApiKeyCreateRequest(BaseModel):
     model_config = _M
 
     name: str
-    scopes: List[str]
-    expires_at: Optional[datetime] = None
+    scopes: list[str]
+    expires_at: datetime | None = None
 
 
 class ApiKeyCreateResponse(BaseModel):

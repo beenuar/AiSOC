@@ -1,4 +1,4 @@
 {
   "deletion_protection": false,
-  "event_name": "not-ModifyDBInstance"
+  "event_name": "AttachUserPolicy"
 }

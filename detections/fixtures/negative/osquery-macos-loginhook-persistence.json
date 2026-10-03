@@ -1,4 +1,4 @@
 {
   "cmdline": "defaults write loginwindow LoginHook",
-  "event_type": "not-osquery_query_row"
+  "event_type": "http_request"
 }

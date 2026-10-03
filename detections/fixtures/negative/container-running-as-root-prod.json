@@ -1,5 +1,5 @@
 {
   "environment": "prod",
-  "event_type": "not-container_start",
+  "event_type": "http_request",
   "user_uid": 0
 }

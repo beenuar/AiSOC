@@ -1,4 +1,4 @@
 {
-  "event_type": "not-icmp",
+  "event_type": "http_request",
   "payload_size_bytes": 1124.0
 }

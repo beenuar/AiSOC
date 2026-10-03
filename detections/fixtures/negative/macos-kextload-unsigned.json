@@ -1,5 +1,5 @@
 {
-  "event_type": "not-exec",
+  "event_type": "http_request",
   "kext_signed": false,
   "process_path": "head-/kextload"
 }

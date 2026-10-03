@@ -1,4 +1,4 @@
 {
   "auth_type": "NONE",
-  "event_name": "not-CreateFunctionUrlConfig"
+  "event_name": "AttachUserPolicy"
 }

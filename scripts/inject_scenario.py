@@ -82,7 +82,7 @@ SCENARIO: list[dict] = [
         "source": "ndr",
         "raw": {
             "src_ip": "10.0.4.42",
-            "dst_ip": "185.220.101.47",
+            "dst_ip": "198.51.100.47",
             "dst_port": 443,
             "beacon_interval_seconds": 60,
             "jitter_pct": 10,

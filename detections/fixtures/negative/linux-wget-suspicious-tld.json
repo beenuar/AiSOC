@@ -1,5 +1,5 @@
 {
   "argv": "prefix-.xyz-suffix",
   "exe": "head-/wget",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

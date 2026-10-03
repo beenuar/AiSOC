@@ -348,7 +348,7 @@ CLOUD: list[dict] = [
         "match_when": {"risk_event_type": "anonymizedIPAddress"},
         "fp": ["Researchers using Tor for testing (must be tagged research-account)"],
         "playbook": "tpl-account-compromise",
-        "positive": {"risk_event_type": "anonymizedIPAddress", "user": "ceo@corp.com", "src_ip": "185.220.101.5"},
+        "positive": {"risk_event_type": "anonymizedIPAddress", "user": "ceo@corp.com", "src_ip": "198.51.100.5"},
         "negative": {"risk_event_type": "atypicalTravel", "user": "ceo@corp.com", "src_ip": "98.97.96.95"},
     },
     {

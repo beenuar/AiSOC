@@ -1,4 +1,4 @@
 {
-  "event_name": "not-GENERATE_APP_PASSWORD",
+  "event_name": "AttachUserPolicy",
   "user_priv": true
 }

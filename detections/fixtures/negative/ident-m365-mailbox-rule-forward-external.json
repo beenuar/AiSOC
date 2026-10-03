@@ -1,4 +1,4 @@
 {
   "forward_external": true,
-  "operation": "not-New-InboxRule"
+  "operation": "rules.create"
 }

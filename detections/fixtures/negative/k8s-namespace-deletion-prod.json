@@ -1,5 +1,5 @@
 {
   "object_name": "prod",
   "object_resource": "namespaces",
-  "verb": "not-delete"
+  "verb": "create"
 }

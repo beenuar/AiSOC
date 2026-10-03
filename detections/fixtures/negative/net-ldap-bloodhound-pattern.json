@@ -1,5 +1,5 @@
 {
-  "event_type": "not-ldap_search",
+  "event_type": "http_request",
   "filter": "prefix-objectCategory=group-suffix",
   "search_count_5min": 200.0
 }

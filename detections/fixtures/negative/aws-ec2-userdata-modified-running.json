@@ -1,5 +1,5 @@
 {
   "attribute": "userData",
-  "event_name": "not-ModifyInstanceAttribute",
+  "event_name": "AttachUserPolicy",
   "instance_state": "running"
 }

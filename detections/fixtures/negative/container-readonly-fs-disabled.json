@@ -1,5 +1,5 @@
 {
   "environment": "prod",
-  "event_type": "not-container_create",
+  "event_type": "http_request",
   "readonly_root_fs": false
 }

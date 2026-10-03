@@ -1,5 +1,5 @@
 {
   "destination_in_known_tor_relay": true,
-  "event_type": "not-tls_session",
+  "event_type": "http_request",
   "src_role": "workstation"
 }

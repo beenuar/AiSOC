@@ -1,4 +1,4 @@
 {
-  "operation": "not-Consent to application",
+  "operation": "rules.create",
   "permissions": "prefix-Mail.Read-suffix"
 }

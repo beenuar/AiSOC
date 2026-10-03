@@ -1,5 +1,5 @@
 {
-  "event_name": "not-SetDefaultPolicyVersion",
+  "event_name": "AttachUserPolicy",
   "policy_action": "*",
   "policy_resource": "*"
 }

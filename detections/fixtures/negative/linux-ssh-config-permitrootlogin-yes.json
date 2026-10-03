@@ -1,5 +1,5 @@
 {
   "path": "/etc/ssh/sshd_config",
-  "syscall": "not-openat",
+  "syscall": "execve",
   "value": "prefix-PermitRootLogin yes-suffix"
 }

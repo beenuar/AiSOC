@@ -1,4 +1,4 @@
 {
   "channel_type": "external",
-  "event_type": "not-file_shared"
+  "event_type": "http_request"
 }

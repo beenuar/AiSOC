@@ -1,5 +1,5 @@
 {
   "argv": "prefix--F-suffix",
   "exe": "head-/iptables",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

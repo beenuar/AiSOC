@@ -2,5 +2,5 @@
   "argv": "prefix-stop-suffix",
   "exe": "head-/systemctl",
   "stops_5min": 105.0,
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

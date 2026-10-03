@@ -1,4 +1,4 @@
 {
-  "event_name": "not-CreateRole",
+  "event_name": "AttachUserPolicy",
   "trust_principal": "anonymous"
 }

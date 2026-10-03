@@ -1,4 +1,4 @@
 {
   "fd_path": "/memfd:-tail",
-  "syscall": "not-execveat"
+  "syscall": "openat"
 }

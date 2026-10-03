@@ -1,4 +1,4 @@
 {
   "object_resource": "validatingwebhookconfigurations",
-  "verb": "not-delete"
+  "verb": "create"
 }

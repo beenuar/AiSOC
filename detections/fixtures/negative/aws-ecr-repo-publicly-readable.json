@@ -1,4 +1,4 @@
 {
-  "event_name": "not-SetRepositoryPolicy",
+  "event_name": "AttachUserPolicy",
   "policy_principal": "*"
 }

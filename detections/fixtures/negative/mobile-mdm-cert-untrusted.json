@@ -1,4 +1,4 @@
 {
-  "event_type": "not-cert_install",
+  "event_type": "http_request",
   "trust_level": "user_trusted"
 }

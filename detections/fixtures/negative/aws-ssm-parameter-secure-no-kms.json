@@ -1,5 +1,5 @@
 {
-  "event_name": "not-PutParameter",
+  "event_name": "AttachUserPolicy",
   "key_id": null,
   "type": "SecureString"
 }

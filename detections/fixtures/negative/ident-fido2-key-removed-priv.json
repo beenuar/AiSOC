@@ -1,5 +1,5 @@
 {
-  "event_type": "not-factor_remove",
+  "event_type": "http_request",
   "factor_type": "fido2",
   "user_priv": true
 }

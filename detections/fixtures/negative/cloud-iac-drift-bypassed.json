@@ -1,5 +1,5 @@
 {
-  "action": "not-manual_override",
+  "action": "disabled",
   "approver": "self",
   "out_of_hours": true
 }

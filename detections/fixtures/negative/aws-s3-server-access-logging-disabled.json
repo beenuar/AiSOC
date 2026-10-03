@@ -1,4 +1,4 @@
 {
-  "event_name": "not-PutBucketLogging",
+  "event_name": "AttachUserPolicy",
   "logging_enabled": false
 }

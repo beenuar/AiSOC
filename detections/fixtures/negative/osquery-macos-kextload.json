@@ -1,4 +1,4 @@
 {
-  "event_type": "not-osquery_query_row",
+  "event_type": "http_request",
   "name": "kextload"
 }

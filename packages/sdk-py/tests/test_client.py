@@ -11,7 +11,6 @@ from pytest_httpx import HTTPXMock
 from aisoc_sdk import AiSOCClient, AiSOCError
 from aisoc_sdk.models import AlertSeverity, AlertStatus
 
-
 BASE_URL = "https://aisoc.test"
 TOKEN = "aisoc_test_token"
 

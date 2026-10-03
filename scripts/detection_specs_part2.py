@@ -646,7 +646,7 @@ NETWORK: list[dict] = [
         "match_when": {"dst_ip_in_tor_list": True},
         "fp": ["Researcher / red team workstation (allowlist src)"],
         "playbook": "tpl-c2",
-        "positive": {"dst_ip_in_tor_list": True, "src_host": "wks-001", "dst_ip": "185.220.101.5"},
+        "positive": {"dst_ip_in_tor_list": True, "src_host": "wks-001", "dst_ip": "198.51.100.5"},
         "negative": {"dst_ip_in_tor_list": False, "src_host": "wks-001", "dst_ip": "1.1.1.1"},
     },
     {

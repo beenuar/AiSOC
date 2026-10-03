@@ -1,6 +1,6 @@
 {
   "destination_port": 5985,
   "destination_role": "domain-controller",
-  "event_type": "not-flow",
+  "event_type": "http_request",
   "src_role": "workstation"
 }

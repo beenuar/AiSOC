@@ -1,4 +1,4 @@
 {
-  "event_type": "not-create_clusterrolebinding",
+  "event_type": "http_request",
   "subject_group": "system:masters"
 }

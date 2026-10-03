@@ -1,4 +1,4 @@
 {
   "argv": "tar curl",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

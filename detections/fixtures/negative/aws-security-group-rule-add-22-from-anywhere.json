@@ -1,6 +1,6 @@
 {
   "cidr": "0.0.0.0/0",
-  "event_name": "not-AuthorizeSecurityGroupIngress",
+  "event_name": "AttachUserPolicy",
   "from_port": 22,
   "ip_protocol": "tcp",
   "to_port": 22

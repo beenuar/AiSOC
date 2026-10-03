@@ -1,4 +1,4 @@
 {
-  "operation": "not-Add-MailboxPermission",
+  "operation": "rules.create",
   "trustee_external": true
 }

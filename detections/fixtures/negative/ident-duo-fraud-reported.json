@@ -1,4 +1,4 @@
 {
-  "event_type": "not-auth",
+  "event_type": "http_request",
   "result": "fraud"
 }

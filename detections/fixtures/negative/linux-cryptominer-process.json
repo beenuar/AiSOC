@@ -1,4 +1,4 @@
 {
   "exe": "head-/xmrig",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

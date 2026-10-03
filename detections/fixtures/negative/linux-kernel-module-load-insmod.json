@@ -1,4 +1,4 @@
 {
   "exe": "head-/insmod",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

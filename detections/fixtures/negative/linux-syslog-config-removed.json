@@ -1,4 +1,4 @@
 {
   "path": "prefix-/etc/rsyslog.d/-suffix",
-  "syscall": "not-unlinkat"
+  "syscall": "openat"
 }

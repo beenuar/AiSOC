@@ -1,4 +1,4 @@
 {
-  "event_name": "not-RegisterTaskDefinition",
+  "event_name": "AttachUserPolicy",
   "privileged": true
 }

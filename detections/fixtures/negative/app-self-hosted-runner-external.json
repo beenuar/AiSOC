@@ -1,4 +1,4 @@
 {
-  "event_type": "not-runner_register",
+  "event_type": "http_request",
   "ip_is_internal": false
 }

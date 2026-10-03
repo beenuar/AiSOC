@@ -1,4 +1,4 @@
 {
   "challenge_reused_across_hosts": true,
-  "event_type": "not-ntlm_auth"
+  "event_type": "http_request"
 }

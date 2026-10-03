@@ -1,4 +1,4 @@
 {
-  "event_name": "not-UpdateAssumeRolePolicy",
+  "event_name": "AttachUserPolicy",
   "trust_principal": "*"
 }

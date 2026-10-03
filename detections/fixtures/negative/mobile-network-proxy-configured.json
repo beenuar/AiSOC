@@ -1,4 +1,4 @@
 {
-  "event_type": "not-config_change",
+  "event_type": "http_request",
   "key": "http_proxy"
 }

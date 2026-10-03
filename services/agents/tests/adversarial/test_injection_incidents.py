@@ -29,7 +29,7 @@ from .injection_metrics import Rate, attributable_hits, score
 #: base incident moves this, which is the point: the corpus is a gate's
 #: subject, and a subject that can change silently is not one. Updating it is
 #: a one-line deliberate act with the diff beside it.
-EXPECTED_DIGEST = "d67f4eb82e74fc3ebf62fb0ca9ab06c308bab27f6fcab0c1cba58c89885080fc"
+EXPECTED_DIGEST = "eb21ba6075c344acfdea96457ebc66a0b7314c4e76d01a12bde8d4b1c29bf237"
 
 #: The floors this suite enforces. The standalone gate that publishes these
 #: rates reads the same two numbers, and a test there asserts the two

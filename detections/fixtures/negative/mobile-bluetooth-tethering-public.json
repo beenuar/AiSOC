@@ -1,5 +1,5 @@
 {
-  "event_type": "not-compliance",
+  "event_type": "http_request",
   "geofence_in_restricted_zone": true,
   "tethering_enabled": true
 }

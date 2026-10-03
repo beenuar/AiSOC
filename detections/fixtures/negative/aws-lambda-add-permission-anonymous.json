@@ -1,4 +1,4 @@
 {
-  "event_name": "not-AddPermission",
+  "event_name": "AttachUserPolicy",
   "principal": "*"
 }

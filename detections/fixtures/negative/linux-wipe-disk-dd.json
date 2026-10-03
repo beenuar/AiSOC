@@ -1,5 +1,5 @@
 {
   "argv": "if=/dev/zero of=/dev/",
   "exe": "head-/dd",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

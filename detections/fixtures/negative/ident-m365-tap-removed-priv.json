@@ -1,4 +1,4 @@
 {
-  "operation": "not-Add temporary access pass",
+  "operation": "rules.create",
   "target_user_priv": true
 }

@@ -1,4 +1,4 @@
 {
-  "event_name": "not-PutEventSelectors",
+  "event_name": "AttachUserPolicy",
   "selector_includes_management_events": false
 }

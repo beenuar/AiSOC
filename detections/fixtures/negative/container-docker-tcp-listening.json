@@ -1,4 +1,4 @@
 {
   "address": "prefix-tcp://0.0.0.0-suffix",
-  "event_type": "not-daemon_listening"
+  "event_type": "http_request"
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-02T04:17:51Z",
+  "generated": "2026-10-03T15:14:21Z",
   "categories": [
     {
       "id": "playbooks",

@@ -1,5 +1,5 @@
 {
   "path": "/etc/yum.repos.d/-tail",
-  "syscall": "not-openat",
+  "syscall": "execve",
   "value": "prefix-baseurl=http://-suffix"
 }

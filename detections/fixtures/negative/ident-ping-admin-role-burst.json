@@ -1,4 +1,4 @@
 {
-  "event_type": "not-ADMIN_ROLE_GRANT",
+  "event_type": "http_request",
   "events_per_minute": 105.0
 }

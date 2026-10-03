@@ -1,4 +1,4 @@
 {
   "argv": "prefix--R-suffix",
-  "event_type": "not-ssh_command"
+  "event_type": "http_request"
 }

@@ -1,5 +1,5 @@
 {
   "exe": "__benign__",
   "path": "/etc/passwd",
-  "syscall": "not-openat"
+  "syscall": "execve"
 }

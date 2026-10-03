@@ -1,5 +1,5 @@
 {
   "cert_self_signed": true,
   "destination_is_internal": false,
-  "event_type": "not-tls_session"
+  "event_type": "http_request"
 }

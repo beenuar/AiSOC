@@ -2,5 +2,5 @@
   "added_caps": [
     "CAP_SYS_ADMIN"
   ],
-  "event_type": "not-container_create"
+  "event_type": "http_request"
 }

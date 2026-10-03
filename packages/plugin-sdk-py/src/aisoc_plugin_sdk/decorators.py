@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
-from .plugin import PluginManifest
-from .enricher import EnricherPlugin, EnrichmentRequest, EnrichmentResult
 from .action import ActionPlugin, ActionRequest, ActionResult
+from .enricher import EnricherPlugin, EnrichmentRequest, EnrichmentResult
+from .plugin import PluginManifest
 
 
 def enricher(

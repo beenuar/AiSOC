@@ -1,4 +1,4 @@
 {
   "exe": "head-/rclone",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

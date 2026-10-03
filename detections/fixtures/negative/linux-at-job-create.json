@@ -1,4 +1,4 @@
 {
   "exe": "head-/at",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

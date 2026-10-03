@@ -1,4 +1,4 @@
 {
   "action": "disabled",
-  "event_type": "__benign__"
+  "event_type": "http_request"
 }

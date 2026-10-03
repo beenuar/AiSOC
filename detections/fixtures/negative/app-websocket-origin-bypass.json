@@ -1,4 +1,4 @@
 {
-  "event_type": "not-ws_upgrade",
+  "event_type": "http_request",
   "origin_matches_allowed_list": false
 }

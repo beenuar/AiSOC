@@ -1,5 +1,5 @@
 {
   "distribution_age_days": 130.0,
-  "event_name": "not-UpdateDistribution",
+  "event_name": "AttachUserPolicy",
   "origin_changed": true
 }

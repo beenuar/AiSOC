@@ -1,5 +1,5 @@
 {
   "object_namespace": "prod",
   "object_resource": "pods/attach",
-  "verb": "not-create"
+  "verb": "get"
 }

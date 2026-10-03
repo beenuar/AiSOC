@@ -1,5 +1,5 @@
 {
   "argv": "prefix-0-suffix",
   "exe": "head-/setenforce",
-  "syscall": "not-execve"
+  "syscall": "openat"
 }

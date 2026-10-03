@@ -1,4 +1,4 @@
 {
-  "event_type": "not-dns_query",
+  "event_type": "http_request",
   "homoglyph_score": 100.85
 }

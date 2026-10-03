@@ -1,4 +1,4 @@
 {
   "auth_method": "PAP",
-  "event_type": "not-radius_auth"
+  "event_type": "http_request"
 }

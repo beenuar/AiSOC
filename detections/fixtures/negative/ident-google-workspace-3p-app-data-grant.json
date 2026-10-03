@@ -1,4 +1,4 @@
 {
-  "event_name": "not-AUTHORIZE",
+  "event_name": "AttachUserPolicy",
   "scope": "prefix-https://www.googleapis.com/auth/drive-suffix"
 }

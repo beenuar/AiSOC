@@ -351,7 +351,7 @@ def _agent_assertion_text(state: Any) -> str:
     measurement one rather than a flattering one. The report writer is handed a
     flattened dump of the enrichment cache under an ``enrichment_sample.``
     prefix, and a small model echoes those keys straight into its markdown, so
-    the indicator extractor pulls tokens like ``45.142.122.111.error`` out of
+    the indicator extractor pulls tokens like ``203.0.113.111.error`` out of
     the rendered report. Those are the agent repeating its own prompt
     scaffolding, not asserting a security indicator, and scoring them measures
     the report template rather than the model.
