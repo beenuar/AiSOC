@@ -391,3 +391,36 @@ unreachable checks, one of them `check_vendor_catalog_ids.py` from item 1.3:
 **the ci.yml edit for that gate had silently failed on an anchor mismatch, and
 the coverage gate's own blindness had hidden it.** Both are now wired and the
 pass is real.
+
+### Wave 1: three things CI found that local verification did not
+
+Recorded because each is the same class of defect this pass is about.
+
+**The published spec gained a 422 on all 456 operations.** Declaring the
+service tenant as a `Header` parameter on `get_current_user` puts it on every
+route that depends on authentication, and a parameter that exists can fail
+validation. It is how a peer *service* names the tenant it acts for, not part
+of the contract a customer codes against, so it is read off the `Request` and
+the spec is unchanged. `Request | None` is not a valid FastAPI annotation, and
+the parameter has to precede the defaulted ones.
+
+**Semgrep went 104 to 106.** Both findings were mine, and both were
+`python-logger-credential-disclosure` firing on the word "token" inside a log
+event name. Neither call logs a secret: one logs a header name, the other a
+tenant id. The events are renamed to describe the *caller* rather than its
+credential, which is also the more accurate name, and the count is back at the
+ceiling. **The ceiling did not move.**
+
+**Both new live suites ran in no workflow.** They skip themselves when their
+DSN is unset, and nothing set one, so neither would ever have executed.
+`.github/workflows/agent-auth-live.yml` now applies every migration, connects
+as the DML-only runtime role so RLS is not bypassed, and asserts at the end
+that the DSN was set, because a skipped live suite reports the same word as a
+passing one.
+
+**One limitation, stated rather than papered over.** The live auth suite passes
+alone and fails three assertions when run in the same process as the full
+`services/api` suite, which sets the dev-mode environment the suite needs
+absent. CI runs them in separate jobs, and `ci.yml` excludes
+`tests/isolation/` for this reason, so the arrangement is sound. It is recorded
+here because "passes only in isolation" is a fragility, not a result.
