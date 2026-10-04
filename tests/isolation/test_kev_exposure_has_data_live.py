@@ -230,6 +230,38 @@ class TestAfterTheConnectorSyncs:
 
         assert before == after, "a re-poll moved first_found"
 
+    async def test_a_re_poll_cannot_touch_another_tenants_row(self, engine, tenant) -> None:
+        """The write carries its own tenant predicate.
+
+        The id handed to the UPDATE comes from a tenant-scoped SELECT, which is
+        not the same as the write being scoped: how a row was addressed is
+        irrelevant to what the statement can reach. `check_tenant_query_predicates`
+        caught this on the first version of this module, and this pins it.
+        """
+        from sqlalchemy import text
+
+        await _sync(engine, tenant)
+        async with engine.connect() as conn:
+            row_id = (await conn.execute(text("SELECT id FROM asset_vulnerabilities WHERE tenant_id = :t"), {"t": tenant})).scalar_one()
+
+        module = _load_connectors_vulnerabilities()
+        other = uuid.uuid4()
+        async with engine.begin() as conn:
+            touched = (
+                await conn.execute(
+                    module._TOUCH_VULN,
+                    {
+                        "id": str(row_id),
+                        "tenant_id": str(other),
+                        "now": __import__("datetime").datetime.now(__import__("datetime").UTC),
+                        "severity": "info",
+                        "title": "hijacked",
+                    },
+                )
+            ).rowcount
+
+        assert touched == 0, "a caller naming another tenant's id reached this row"
+
 
 class TestTenantScoping:
     async def test_one_tenants_findings_are_invisible_to_another(self, engine, tenant) -> None:

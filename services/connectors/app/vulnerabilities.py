@@ -95,13 +95,20 @@ _INSERT_VULN = text(
 #: `first_found` is deliberately untouched. A re-poll of a finding that has
 #: been present for a month must not reset the clock an exposure window is
 #: measured against.
+#:
+#: The `tenant_id` predicate is not redundant with the tenant-scoped SELECT
+#: that produced the id. How a row was *addressed* is irrelevant to whether the
+#: write is scoped -- an id arriving from anywhere else, now or after a later
+#: edit, would reach another tenant's row. `scripts/check_tenant_query_predicates.py`
+#: makes that the rule rather than a convention.
 _TOUCH_VULN = text(
     """
     UPDATE asset_vulnerabilities
        SET last_found = :now,
            severity   = :severity,
            title      = :title
-     WHERE id = CAST(:id AS uuid)
+     WHERE id        = CAST(:id AS uuid)
+       AND tenant_id = CAST(:tenant_id AS uuid)
     """
 )
 
@@ -192,7 +199,7 @@ async def sync_findings(
                 "now": stamp,
             }
             if existing is not None:
-                await conn.execute(_TOUCH_VULN, {**params, "id": str(existing[0])})
+                await conn.execute(_TOUCH_VULN, {**params, "id": str(existing[0]), "tenant_id": tenant})
                 touched += 1
             else:
                 await conn.execute(
