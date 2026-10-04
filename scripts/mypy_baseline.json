@@ -405,9 +405,6 @@
     "tests/test_credential_vault_envelope.py": {
       "misc": 1
     },
-    "tests/test_detection_loop_tenant_isolation.py": {
-      "misc": 1
-    },
     "tests/test_effective_permissions_aws.py": {
       "attr-defined": 1
     },

@@ -1,7 +1,7 @@
 {
   "id": "phishing-investigation-v1",
   "name": "Phishing: Email Investigation & Remediation",
-  "description": "Triggered by a phishing alert from email gateway or user report. Extracts IOCs, retracts the message fleet-wide, blocks sender domain, and resets any credentials that may have been compromised.",
+  "description": "Triggered by a phishing alert from an email gateway or a user report. Extracts IOCs, blocks the sender domain, and resets credentials that may have been compromised. The retraction step requires EMAIL_GATEWAY_URL, which no compose file or .env.example sets, so on a default deployment the message is NOT retracted and the step is skipped.",
   "version": "1.0.0",
   "author": "Beenu - beenu@cyble.com",
   "tags": [
@@ -13,8 +13,14 @@
   ],
   "trigger": {
     "on": "alert",
-    "severity": ["high", "critical"],
-    "tags": ["phishing", "email-security"]
+    "severity": [
+      "high",
+      "critical"
+    ],
+    "tags": [
+      "phishing",
+      "email-security"
+    ]
   },
   "enabled": true,
   "dry_run_support": true,
@@ -70,7 +76,7 @@
     },
     {
       "id": "retract",
-      "name": "Retract phishing email fleet-wide",
+      "name": "Retract the message (requires EMAIL_GATEWAY_URL; skipped when unset)",
       "type": "http",
       "params": {
         "url": "${EMAIL_GATEWAY_URL}/v1/messages/retract",
@@ -80,17 +86,23 @@
       },
       "on_failure": "continue",
       "retry_max": 1,
-      "timeout_seconds": 30
+      "timeout_seconds": 30,
+      "description": "Posts to the tenant's own email gateway. `EMAIL_GATEWAY_URL` is set by nothing in this repository, so unconfigured this call cannot resolve and `on_failure: continue` lets the rest of the playbook proceed. That is the right behaviour -- a failed retraction must not stop a credential reset -- but it means the playbook's outcome must not be read as the message having been retracted."
     },
     {
       "id": "approval_block_domain",
-      "name": "Approval gate — block sender domain",
+      "name": "Approval gate \u2014 block sender domain",
       "type": "approval",
       "params": {
         "message": "Block sender domain '{{inputs.sender_domain}}' at email gateway and DNS firewall?",
-        "approvers": ["soc-lead", "security-manager"],
+        "approvers": [
+          "soc-lead",
+          "security-manager"
+        ],
         "timeout_seconds": 900,
-        "auto_approve_severity": ["critical"]
+        "auto_approve_severity": [
+          "critical"
+        ]
       },
       "on_failure": "abort",
       "retry_max": 0,
@@ -126,11 +138,13 @@
     },
     {
       "id": "approval_reset",
-      "name": "Approval gate — force password reset (if click detected)",
+      "name": "Approval gate \u2014 force password reset (if click detected)",
       "type": "approval",
       "params": {
         "message": "Recipient '{{inputs.recipient_user}}' may have clicked link. Force password reset + MFA?",
-        "approvers": ["soc-lead"],
+        "approvers": [
+          "soc-lead"
+        ],
         "timeout_seconds": 600,
         "condition_skip": "context.click_detected == false"
       },
@@ -170,7 +184,7 @@
       "type": "notify",
       "params": {
         "channel": "slack",
-        "message_template": "Phishing alert: {{inputs.sender_domain}} → {{inputs.recipient_user}}. Message retracted: {{context.retract_success}}. Domain blocked: {{context.domain_blocked}}.",
+        "message_template": "Phishing alert: {{inputs.sender_domain}} \u2192 {{inputs.recipient_user}}. Message retracted: {{context.retract_success}}. Domain blocked: {{context.domain_blocked}}.",
         "webhook_env": "SLACK_SOC_WEBHOOK"
       },
       "on_failure": "continue",
@@ -185,7 +199,10 @@
         "priority": "P2",
         "title_template": "Phishing: {{inputs.sender_domain}} targeting {{inputs.recipient_user}}",
         "queue": "soc",
-        "labels": ["phishing", "email"]
+        "labels": [
+          "phishing",
+          "email"
+        ]
       },
       "on_failure": "continue",
       "retry_max": 0,

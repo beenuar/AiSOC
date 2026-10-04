@@ -35,7 +35,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from app.api.v1.deps import CurrentUser, get_current_user
-from app.api.v1.endpoints import detection_loop, graph, hunts, nl_detection, nl_query, saved_hunts, translation
+from app.api.v1.endpoints import graph, hunts, nl_detection, nl_query, saved_hunts, translation
 from app.db.database import get_db
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -73,7 +73,6 @@ GATED: list[tuple[Any, str, str, str, str, dict[str, Any] | None]] = [
         "/api/v1/translation/translate",
         {"rule": "title: x", "source_format": "sigma", "target_formats": ["spl"]},
     ),
-    (detection_loop, "suggest_fp_fix", "rules:read", "POST", "/api/v1/detection-loop/suggest", {"alert_id": str(uuid.uuid4())}),
 ]
 
 #: A role holding each permission. `soc_analyst` for `lake:query` on purpose:
@@ -186,11 +185,6 @@ class TestUnentitledCallersAreRefused:
         status, _ = _request(graph, "viewer", "POST", "/api/v1/graph/investigate/query", {"tool": "host_processes", "args": {}})
         assert status == 403
 
-    def test_a_viewer_cannot_read_detection_logic_through_a_draft(self) -> None:
-        """`POST /detection-loop/suggest` returns the rule body it drafts from."""
-        status, _ = _request(detection_loop, "viewer", "POST", "/api/v1/detection-loop/suggest", {"alert_id": str(uuid.uuid4())})
-        assert status == 403
-
 
 class TestEntitledCallersStillWork:
     """The half that catches a permission applied too strongly."""
@@ -241,7 +235,7 @@ class TestWiring:
         assert _permissions_on(_route_for(module, handler)) == [permission]
 
     @pytest.mark.parametrize(
-        "module", [hunts, saved_hunts, nl_query, nl_detection, translation, detection_loop], ids=lambda m: m.__name__.rsplit(".", 1)[-1]
+        "module", [hunts, saved_hunts, nl_query, nl_detection, translation], ids=lambda m: m.__name__.rsplit(".", 1)[-1]
     )
     def test_no_state_changing_route_in_these_modules_is_unguarded(self, module: Any) -> None:
         """These six are now fully gated, so the invariant is "all of them".

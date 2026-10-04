@@ -733,7 +733,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Explain Alert Api V1 Alerts  Alert Id  Explain Post
         '422':
           description: Validation Error
@@ -791,7 +790,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Write Back Api V1 Alerts  Alert Id  Source Writeback
                   Post
         '422':
@@ -1372,7 +1370,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Case Investigate Api V1 Cases  Case Id  Investigate
                   Post
         '422':
@@ -1409,7 +1406,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response List Case Investigations Api V1 Cases  Case Id  Investigations
                   Get
         '422':
@@ -1447,7 +1443,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Case Investigation Run Api V1 Cases  Case Id  Investigations  Run
                   Id  Get
         '422':
@@ -1651,7 +1646,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response List Related Cases Api V1 Cases  Case Id  Related
                   Get
         '422':
@@ -1705,7 +1699,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Get Attack Chain Api V1 Cases  Case Id  Attack Chain
                   Get
         '422':
@@ -1736,7 +1729,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response List Catalog Api V1 Connectors Catalog Get
       security:
@@ -1794,7 +1786,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Test Connection Api V1 Connectors Test Post
         '422':
@@ -2040,7 +2031,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Test Existing Connector Api V1 Connectors  Connector
                   Id  Test Post
         '422':
@@ -2551,7 +2541,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Delete My Tenant Api V1 Tenants Me Delete Post
         '422':
@@ -2688,7 +2677,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Get Usage Api V1 Usage Get
         '422':
           description: Validation Error
@@ -2734,7 +2722,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Get Reconciliation Api V1 Usage Reconciliation Get
         '422':
           description: Validation Error
@@ -3845,7 +3832,7 @@ paths:
         required: false
         schema:
           type: boolean
-          default: true
+          default: false
           title: Create Proposals
       responses:
         '200':
@@ -4188,7 +4175,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response List Backends Api V1 Agent Tools Backends Get
       security:
@@ -4219,7 +4205,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Search Siem Api V1 Agent Tools Siem Search Post
         '422':
@@ -4260,7 +4245,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Vendor Read Api V1 Agent Tools Vendor Read Post
         '422':
@@ -4301,7 +4285,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Execute Hunt Plan Api V1 Agent Tools Hunt Plan Execute
                   Post
@@ -4530,7 +4513,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response List Investigation Tools Api V1 Graph Investigate
                   Tools Get
@@ -4555,7 +4537,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Run Investigation Tool Api V1 Graph Investigate Query
                   Post
@@ -4602,7 +4583,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Import Graph Context Api V1 Graph Context Import Post
         '422':
@@ -5071,7 +5051,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Dispatch Playbook Step Api V1 Playbook Steps Dispatch
                   Post
         '422':
@@ -5403,7 +5382,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Publish Plugin Api V1 Community Plugins Publish Post
       security:
@@ -5577,7 +5555,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Rate Community Plugin Api V1 Community Plugins  Plugin
                   Id  Rate Post
         '422':
@@ -5645,7 +5622,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Publish Detection Api V1 Community Detections Publish
                   Post
@@ -5729,7 +5705,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response List Community Detections Api V1 Community Detections
                   Get
         '422':
@@ -5759,7 +5734,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Get Community Detection Api V1 Community Detections  Detection
                   Id  Get
         '422':
@@ -5812,7 +5786,6 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: true
               type: object
               title: Definition
         required: true
@@ -5822,7 +5795,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Submit Playbook Api V1 Community Playbooks Submit
                   Post
@@ -5882,7 +5854,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response List Community Playbooks Api V1 Community Playbooks
                   Get
         '422':
@@ -6127,7 +6098,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Uninstall Marketplace Item Api V1 Marketplace Install
                   Delete
         '422':
@@ -6149,7 +6119,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response List Installed Api V1 Marketplace Installed Get
       security:
@@ -6172,7 +6141,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Mitre Coverage Api V1 Marketplace Mitre Get
       security:
@@ -7032,7 +7000,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Get Branding Api V1 Branding Get
       security:
@@ -7055,7 +7022,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Put Branding Api V1 Branding Put
         '422':
@@ -7102,7 +7068,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Upload Asset Api V1 Branding Assets  Kind  Post
         '422':
           description: Validation Error
@@ -7624,7 +7589,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Get Alert Trend Api V1 Metrics Alerts Trend Get
         '422':
           description: Validation Error
@@ -7744,7 +7708,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Get Fleet Health Api V1 Health Fleet Get
       security:
@@ -7798,7 +7761,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Get Dead Letters Api V1 Health Dead Letters Get
         '422':
           description: Validation Error
@@ -7866,7 +7828,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Get Audit Chain Health Api V1 Health Audit Chain Get
       security:
@@ -7902,7 +7863,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Get Shadow Reconciliation Health Api V1 Health Shadow
                   Reconciliation Get
@@ -8984,7 +8944,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response List Providers Api V1 Identity Effective Permissions
                   Providers Get
@@ -9038,7 +8997,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Get Effective Permissions Api V1 Identity  Principal
                   Id  Effective Permissions Get
         '422':
@@ -9155,7 +9113,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Get Public Key Api V1 Push Public Key Get
   /api/v1/push/subscribe:
@@ -9169,7 +9126,6 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: true
               type: object
               title: Body
         required: true
@@ -9179,7 +9135,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Subscribe Api V1 Push Subscribe Post
         '422':
@@ -9201,7 +9156,6 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: true
               type: object
               title: Body
         required: true
@@ -9211,7 +9165,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Unsubscribe Api V1 Push Unsubscribe Post
         '422':
@@ -9237,8 +9190,7 @@ paths:
           application/json:
             schema:
               anyOf:
-              - additionalProperties: true
-                type: object
+              - type: object
               - type: 'null'
               title: Body
       responses:
@@ -9247,7 +9199,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Test Notify Api V1 Push Test Post
         '422':
@@ -9558,7 +9509,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Passkey Register Begin Api V1 Passkeys Register Begin
                   Post
@@ -9626,7 +9576,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Passkey Authenticate Begin Api V1 Passkeys Authenticate
                   Begin Post
@@ -9820,7 +9769,6 @@ paths:
         content:
           application/json:
             schema:
-              additionalProperties: true
               type: object
               title: Body
         required: true
@@ -11414,7 +11362,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Add Tenants To Portfolio Api V1 Mssp Organizations
                   Current Tenants Post
@@ -12863,104 +12810,6 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
-  /api/v1/detection-loop/suggest:
-    post:
-      tags:
-      - detection_rules
-      - detection_loop
-      summary: Draft Sigma improvement for a FP alert
-      description: 'Retrieve the triggering rule + alert evidence, then draft a Sigma
-        improvement.
-
-
-        Tenant isolation: the alert and rule lookups are scoped to ``user.tenant_id``
-
-        so a caller cannot pull another tenant''s evidence by guessing an ``alert_id``.
-
-        ``TenantDBSession`` also sets the Postgres RLS context for defense in depth.'
-      operationId: suggest_fp_fix_api_v1_detection_loop_suggest_post
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SuggestRequest'
-        required: true
-      responses:
-        '201':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuggestionResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
-  /api/v1/detection-loop/suggestions:
-    get:
-      tags:
-      - detection_rules
-      - detection_loop
-      summary: List LLM-drafted Sigma suggestions
-      description: 'List suggestions drafted by *this* tenant only.
-
-
-        Tenant isolation: ``_SUGGESTIONS`` is process-wide and shared across all
-
-        tenants. Filtering on the stored ``tenant_id`` ensures one tenant never
-
-        sees another tenant''s drafts, rule names, or evidence-derived rationale.'
-      operationId: list_suggestions_api_v1_detection_loop_suggestions_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuggestionListResponse'
-      security:
-      - HTTPBearer: []
-  /api/v1/detection-loop/suggestions/{suggestion_id}:
-    get:
-      tags:
-      - detection_rules
-      - detection_loop
-      summary: Get one Sigma suggestion
-      description: 'Return one suggestion if and only if it belongs to the caller''s
-        tenant.
-
-
-        Tenant isolation: a cross-tenant lookup returns 404 (not 403) to avoid
-
-        leaking the existence of a suggestion that belongs to another tenant.'
-      operationId: get_suggestion_api_v1_detection_loop_suggestions__suggestion_id__get
-      security:
-      - HTTPBearer: []
-      parameters:
-      - name: suggestion_id
-        in: path
-        required: true
-        schema:
-          type: string
-          format: uuid
-          title: Suggestion Id
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SuggestionResponse'
-        '422':
-          description: Validation Error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/nl-query/translate:
     post:
       tags:
@@ -13972,7 +13821,6 @@ paths:
                 type: array
                 items:
                   type: object
-                  additionalProperties: true
                 title: Response Get Replay Decisions Api V1 Evaluations Replay  Evaluation
                   Id  Decisions Get
         '422':
@@ -14850,7 +14698,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Destination Preview Api V1 Posture Destinations Preview
                   Post
@@ -14888,7 +14735,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Trigger Easm Scan Api V1 Easm Scan Post
         '422':
@@ -14952,7 +14798,6 @@ paths:
                 type: array
                 items:
                   type: object
-                  additionalProperties: true
                 title: Response List External Assets Api V1 Easm Assets Get
         '422':
           description: Validation Error
@@ -15010,7 +14855,6 @@ paths:
                 type: array
                 items:
                   type: object
-                  additionalProperties: true
                 title: Response List External Asset Drift Api V1 Easm Drift Get
         '422':
           description: Validation Error
@@ -15596,7 +15440,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Validate Report Api V1 Report Builder Validate Post
         '422':
@@ -15631,7 +15474,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Render Api V1 Report Builder Render Post
         '422':
@@ -15660,7 +15502,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Get Airgap Status Api V1 Airgap Status Get
       security:
@@ -15686,7 +15527,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Get Llm Status Api V1 Llm Status Get
       security:
@@ -16076,7 +15916,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Fusion Health Api V1 Fusion Health Get
       security:
@@ -16093,7 +15932,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Fusion Metrics Api V1 Fusion Metrics Get
       security:
@@ -16110,7 +15948,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Ml Status Api V1 Fusion Ml Status Get
   /api/v1/fusion/entity-risk/queue:
@@ -16154,7 +15991,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Entity Risk Queue Api V1 Fusion Entity Risk Queue
                   Get
         '422':
@@ -16188,7 +16024,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Entity Risk Stats Api V1 Fusion Entity Risk Stats
                   Get
         '422':
@@ -16234,7 +16069,6 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties: true
                 title: Response Entity Risk Detail Api V1 Fusion Entity Risk  Entity
                   Type   Entity Value  Get
         '422':
@@ -17157,7 +16991,6 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
               title: Body
       responses:
         '201':
@@ -17226,7 +17059,6 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
               title: Body
       responses:
         '200':
@@ -17266,7 +17098,6 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
               title: Body
       responses:
         '200':
@@ -17379,7 +17210,6 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
               title: Body
       responses:
         '201':
@@ -17446,7 +17276,6 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
               title: Body
       responses:
         '200':
@@ -17488,7 +17317,6 @@ paths:
           application/json:
             schema:
               type: object
-              additionalProperties: true
               title: Body
       responses:
         '200':
@@ -17573,7 +17401,6 @@ paths:
           content:
             application/json:
               schema:
-                additionalProperties: true
                 type: object
                 title: Response Health Check Health Get
   /metrics:
@@ -17686,7 +17513,6 @@ components:
       properties:
         findings:
           items:
-            additionalProperties: true
             type: object
           type: array
           minItems: 1
@@ -17758,7 +17584,6 @@ components:
           title: Checked
         matches:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Matches
@@ -17830,7 +17655,6 @@ components:
           title: Description
           description: Human-readable summary of the verb, surfaced in tool prompts.
         input_schema:
-          additionalProperties: true
           type: object
           title: Input Schema
           description: JSON-Schema for the verb's arguments. Empty by default; concrete
@@ -18051,7 +17875,6 @@ components:
           title: Threat Intel Age Hours
         checks:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Checks
@@ -18690,7 +18513,6 @@ components:
       properties:
         events:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Events
@@ -18916,7 +18738,6 @@ components:
           title: Risk Level
           default: medium
         action:
-          additionalProperties: true
           type: object
           title: Action
         expires_at:
@@ -19026,7 +18847,6 @@ components:
           type: string
           title: Risk Level
         action:
-          additionalProperties: true
           type: object
           title: Action
         status:
@@ -19308,7 +19128,6 @@ components:
           - type: 'null'
           title: Owner Email
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       type: object
@@ -19378,7 +19197,6 @@ components:
           - type: 'null'
           title: Owner Email
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
         id:
@@ -19402,7 +19220,6 @@ components:
           type: string
           title: First Seen
         asset_metadata:
-          additionalProperties: true
           type: object
           title: Asset Metadata
       type: object
@@ -19478,7 +19295,6 @@ components:
           - type: 'null'
           title: Owner Email
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       type: object
@@ -19572,8 +19388,7 @@ components:
           title: Resource Id
         changes:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Changes
         created_at:
@@ -19660,7 +19475,6 @@ components:
           title: Records Considered
         suggestions:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Suggestions
@@ -19811,7 +19625,6 @@ components:
           title: Hit Rate
         sample_matches:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Sample Matches
@@ -19849,7 +19662,6 @@ components:
           type: number
           title: Score
         payload:
-          additionalProperties: true
           type: object
           title: Payload
         is_active:
@@ -20288,12 +20100,10 @@ components:
           type: array
           title: Alert Ids
         observable_graph:
-          additionalProperties: true
           type: object
           title: Observable Graph
         evidence_chain:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Evidence Chain
@@ -20338,7 +20148,6 @@ components:
           - type: 'null'
           title: Created By
         tags:
-          additionalProperties: true
           type: object
           title: Tags
         sla_due_at:
@@ -20465,7 +20274,6 @@ components:
           minLength: 5
           title: Summary
         raw_payload:
-          additionalProperties: true
           type: object
           title: Raw Payload
         case_id:
@@ -20644,7 +20452,8 @@ components:
           title: Tags
           default: []
         status:
-          $ref: '#/components/schemas/PublishStatus'
+          allOf:
+          - $ref: '#/components/schemas/PublishStatus'
           default: pending
         install_count:
           type: integer
@@ -20957,7 +20766,6 @@ components:
           type: boolean
           title: Is Enabled
         connector_config:
-          additionalProperties: true
           type: object
           title: Connector Config
         health_status:
@@ -20998,8 +20806,7 @@ components:
           title: Last Schema Drift At
         last_drift_details:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Last Drift Details
         last_event_at:
@@ -21121,25 +20928,21 @@ components:
       properties:
         departments:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Departments
         employees:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Employees
         applications:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Applications
         cloud_accounts:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Cloud Accounts
@@ -21668,7 +21471,6 @@ components:
           type: number
           title: Score
         payload:
-          additionalProperties: true
           type: object
           title: Payload
       type: object
@@ -21803,11 +21605,9 @@ components:
           title: Category
           description: Optional override; defaults to the catalog entry's category.
         auth_config:
-          additionalProperties: true
           type: object
           title: Auth Config
         connector_config:
-          additionalProperties: true
           type: object
           title: Connector Config
         tags:
@@ -21920,14 +21720,12 @@ components:
           title: Base Rule Id
         positive_fixtures:
           items:
-            additionalProperties: true
             type: object
           type: array
           maxItems: 200
           title: Positive Fixtures
         negative_fixtures:
           items:
-            additionalProperties: true
             type: object
           type: array
           maxItems: 200
@@ -22041,15 +21839,13 @@ components:
           minLength: 1
           title: Name
         filters:
-          additionalProperties: true
           type: object
           title: Filters
         columns:
           anyOf:
           - items: {}
             type: array
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Columns
         is_default:
@@ -22214,7 +22010,6 @@ components:
       properties:
         resources:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Resources
@@ -22225,7 +22020,6 @@ components:
       properties:
         findings:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Findings
@@ -22236,7 +22030,6 @@ components:
           title: Summary
         evidence:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Evidence
@@ -22456,7 +22249,6 @@ components:
           title: Kind
           description: opsgenie | email | webhook
         alert:
-          additionalProperties: true
           type: object
           title: Alert
         recipients:
@@ -22788,7 +22580,6 @@ components:
           - type: 'null'
           title: Valid Until
         evidence:
-          additionalProperties: true
           type: object
           title: Evidence
       type: object
@@ -22821,7 +22612,6 @@ components:
           - type: 'null'
           title: Valid Until
         evidence:
-          additionalProperties: true
           type: object
           title: Evidence
         id:
@@ -22922,7 +22712,6 @@ components:
           - type: 'null'
           title: Override Note
         parameter_overrides:
-          additionalProperties: true
           type: object
           title: Parameter Overrides
       type: object
@@ -22968,7 +22757,6 @@ components:
           - type: 'null'
         neighbors:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Neighbors
@@ -22986,7 +22774,6 @@ components:
     EvalAttachRequest:
       properties:
         eval_report:
-          additionalProperties: true
           type: object
           title: Eval Report
           description: Full JSON output of `python3 scripts/run_evals.py --baseline
@@ -23009,7 +22796,6 @@ components:
       properties:
         positive_fixtures:
           items:
-            additionalProperties: true
             type: object
           type: array
           maxItems: 200
@@ -23020,7 +22806,6 @@ components:
             be shown to catch anything must not be approved.'
         negative_fixtures:
           items:
-            additionalProperties: true
             type: object
           type: array
           maxItems: 200
@@ -23129,14 +22914,12 @@ components:
           title: Is Terminal
         score:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Score
         method:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Method
         report_markdown:
@@ -23325,8 +23108,7 @@ components:
           title: Summary
         payload:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Payload
         input_hash:
@@ -23422,7 +23204,6 @@ components:
           title: Compliance Frameworks
         evidence_chain:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Evidence Chain
@@ -23472,7 +23253,6 @@ components:
           type: string
           title: Summary
         raw_payload:
-          additionalProperties: true
           type: object
           title: Raw Payload
         payload_hash:
@@ -23529,7 +23309,6 @@ components:
       properties:
         events:
           items:
-            additionalProperties: true
             type: object
           type: array
           maxItems: 1000
@@ -23562,7 +23341,6 @@ components:
           title: Match Count
         matched_events:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Matched Events
@@ -23789,7 +23567,6 @@ components:
       properties:
         rows:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Rows
@@ -23836,7 +23613,6 @@ components:
           title: Poll Interval
           default: 3600
         config:
-          additionalProperties: true
           type: object
           title: Config
       type: object
@@ -23848,7 +23624,6 @@ components:
       properties:
         indicators:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Indicators
@@ -23913,7 +23688,6 @@ components:
           title: Poll Interval
           default: 3600
         config:
-          additionalProperties: true
           type: object
           title: Config
         id:
@@ -24000,7 +23774,6 @@ components:
           - type: 'null'
           title: Control Ids
         evidence:
-          additionalProperties: true
           type: object
           title: Evidence
         remediation_guide:
@@ -24072,7 +23845,6 @@ components:
           - type: 'null'
           title: Control Ids
         evidence:
-          additionalProperties: true
           type: object
           title: Evidence
         remediation_guide:
@@ -24122,7 +23894,6 @@ components:
     FinishRequest:
       properties:
         credential:
-          additionalProperties: true
           type: object
           title: Credential
         challenge:
@@ -24541,7 +24312,6 @@ components:
           title: Grants
         demoted_now:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Demoted Now
@@ -24576,8 +24346,7 @@ components:
           title: Is Override
         evidence:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Evidence
         granted_at:
@@ -24636,7 +24405,6 @@ components:
           type: string
           title: Label
         properties:
-          additionalProperties: true
           type: object
           title: Properties
       type: object
@@ -24826,7 +24594,6 @@ components:
           - type: 'null'
           title: Severity
         fields:
-          additionalProperties: true
           type: object
           title: Fields
       type: object
@@ -24854,7 +24621,6 @@ components:
           description: Filter rules by language (sigma, yara, kql, eql)
         events:
           items:
-            additionalProperties: true
             type: object
           type: array
           maxItems: 5000
@@ -24892,7 +24658,6 @@ components:
           title: Hit Count
         result_sample:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Result Sample
@@ -24986,7 +24751,6 @@ components:
           - type: 'null'
           title: Linked Alerts
         context:
-          additionalProperties: true
           type: object
           title: Context
       type: object
@@ -25062,7 +24826,6 @@ components:
           - type: 'null'
           title: Linked Alerts
         context:
-          additionalProperties: true
           type: object
           title: Context
         id:
@@ -25363,31 +25126,26 @@ components:
           title: Tenant Id
         identities:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Identities
         assets:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Assets
         cloud:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Cloud
         business:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Business
         threat:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Threat
@@ -25449,7 +25207,6 @@ components:
           - type: 'null'
           title: Source Alert Id
         evidence:
-          additionalProperties: true
           type: object
           title: Evidence
         occurred_at:
@@ -25509,7 +25266,6 @@ components:
           - type: 'null'
           title: Source Alert Id
         evidence:
-          additionalProperties: true
           type: object
           title: Evidence
         occurred_at:
@@ -25774,7 +25530,6 @@ components:
           type: string
           title: Tool
         args:
-          additionalProperties: true
           type: object
           title: Args
       type: object
@@ -26261,8 +26016,7 @@ components:
           title: Api Key
         settings:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Settings
         enabled:
@@ -26314,7 +26068,6 @@ components:
           type: boolean
           title: Has Api Key
         settings:
-          additionalProperties: true
           type: object
           title: Settings
         enabled:
@@ -26450,11 +26203,9 @@ components:
           type: integer
           title: Total
         stats:
-          additionalProperties: true
           type: object
           title: Stats
         mitre_coverage:
-          additionalProperties: true
           type: object
           title: Mitre Coverage
         items:
@@ -26483,7 +26234,6 @@ components:
           minimum: 0.0
           title: Maturity Tier
         action_overrides:
-          additionalProperties: true
           type: object
           title: Action Overrides
       type: object
@@ -26504,7 +26254,6 @@ components:
           type: integer
           title: Maturity Tier
         action_overrides:
-          additionalProperties: true
           type: object
           title: Action Overrides
         changed_at:
@@ -26559,8 +26308,7 @@ components:
           title: Args
         credential:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Credential
         tool_allowlist:
@@ -26703,8 +26451,7 @@ components:
           title: Args
         credential:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Credential
         tool_allowlist:
@@ -26839,8 +26586,7 @@ components:
           description: One-line description, plain text
         payload:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Payload
         duration_ms:
@@ -26904,7 +26650,6 @@ components:
     MispDryRunResponse:
       properties:
         event:
-          additionalProperties: true
           type: object
           title: Event
         attribute_count:
@@ -27377,7 +27122,6 @@ components:
           type: string
           title: Sigma
         fixtures:
-          additionalProperties: true
           type: object
           title: Fixtures
         model_used:
@@ -27607,7 +27351,6 @@ components:
           - type: 'null'
           title: Last Activity
         attributes:
-          additionalProperties: true
           type: object
           title: Attributes
       type: object
@@ -27647,7 +27390,6 @@ components:
           - type: 'null'
           title: Last Activity
         attributes:
-          additionalProperties: true
           type: object
           title: Attributes
         id:
@@ -28028,7 +27770,6 @@ components:
           - type: 'null'
           title: Created At
         value:
-          additionalProperties: true
           type: object
           title: Value
       type: object
@@ -28083,7 +27824,6 @@ components:
           type: string
           title: Label
         attributes:
-          additionalProperties: true
           type: object
           title: Attributes
       type: object
@@ -28115,7 +27855,6 @@ components:
           - type: 'null'
           title: Severity
         attributes:
-          additionalProperties: true
           type: object
           title: Attributes
       type: object
@@ -28135,7 +27874,6 @@ components:
           title: Enabled
           default: true
         parameter_overrides:
-          additionalProperties: true
           type: object
           title: Parameter Overrides
           default: {}
@@ -28161,7 +27899,6 @@ components:
           type: boolean
           title: Enabled
         parameter_overrides:
-          additionalProperties: true
           type: object
           title: Parameter Overrides
         created_at:
@@ -28189,7 +27926,6 @@ components:
           default: generic
         transforms:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Transforms
@@ -28215,7 +27951,6 @@ components:
           title: Source
         transforms:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Transforms
@@ -28234,12 +27969,10 @@ components:
       properties:
         transforms:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Transforms
         sample_event:
-          additionalProperties: true
           type: object
           title: Sample Event
       type: object
@@ -28250,7 +27983,6 @@ components:
     ParserTestOut:
       properties:
         event:
-          additionalProperties: true
           type: object
           title: Event
         warnings:
@@ -28310,7 +28042,6 @@ components:
           - type: 'null'
           title: Description
         criteria:
-          additionalProperties: true
           type: object
           title: Criteria
       type: object
@@ -28328,7 +28059,6 @@ components:
           - type: 'null'
           title: Description
         criteria:
-          additionalProperties: true
           type: object
           title: Criteria
         id:
@@ -28466,7 +28196,6 @@ components:
           type: array
           title: Tags
         config_schema:
-          additionalProperties: true
           type: object
           title: Config Schema
       type: object
@@ -28818,7 +28547,6 @@ components:
     PreferencesPatch:
       properties:
         preferences:
-          additionalProperties: true
           type: object
           title: Preferences
       type: object
@@ -28834,7 +28562,6 @@ components:
           title: Yaml
         alerts:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Alerts
@@ -28880,11 +28607,9 @@ components:
           type: array
           title: Matched Rule Ids
         before:
-          additionalProperties: true
           type: object
           title: Before
         after:
-          additionalProperties: true
           type: object
           title: After
         suppressed:
@@ -28953,7 +28678,6 @@ components:
           type: array
           title: Refusals
         evidence:
-          additionalProperties: true
           type: object
           title: Evidence
         changed:
@@ -28973,13 +28697,11 @@ components:
       properties:
         positive_fixtures:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Positive Fixtures
         negative_fixtures:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Negative Fixtures
@@ -29044,7 +28766,6 @@ components:
           type: string
           title: Status
         eval_result:
-          additionalProperties: true
           type: object
           title: Eval Result
         review_comments:
@@ -29194,7 +28915,6 @@ components:
           type: string
           title: Case Id
         snapshot:
-          additionalProperties: true
           type: object
           title: Snapshot
         view_count:
@@ -29223,7 +28943,6 @@ components:
           type: string
           title: Title
         snapshot:
-          additionalProperties: true
           type: object
           title: Snapshot
         alias_map:
@@ -29908,7 +29627,6 @@ components:
           title: Name
         widgets:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Widgets
@@ -30239,7 +29957,6 @@ components:
           - type: 'null'
           title: Severity Override
         parameter_overrides:
-          additionalProperties: true
           type: object
           title: Parameter Overrides
           default: {}
@@ -30281,7 +29998,6 @@ components:
           - type: 'null'
           title: Severity Override
         parameter_overrides:
-          additionalProperties: true
           type: object
           title: Parameter Overrides
         created_at:
@@ -30597,7 +30313,6 @@ components:
     RunEvalResponse:
       properties:
         report:
-          additionalProperties: true
           type: object
           title: Report
         exit_code:
@@ -30637,12 +30352,10 @@ components:
     RunRequest:
       properties:
         payload:
-          additionalProperties: true
           type: object
           title: Payload
           default: {}
         context:
-          additionalProperties: true
           type: object
           title: Context
           default: {}
@@ -30654,7 +30367,6 @@ components:
           type: string
           title: Plugin Id
         result:
-          additionalProperties: true
           type: object
           title: Result
       type: object
@@ -30870,7 +30582,6 @@ components:
           - type: 'null'
           title: Occurred At
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       type: object
@@ -30900,7 +30611,6 @@ components:
           format: date-time
           title: Occurred At
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       type: object
@@ -31045,7 +30755,6 @@ components:
           title: Created
         objects:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Objects
@@ -31059,7 +30768,6 @@ components:
       properties:
         objects:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Objects
@@ -31085,7 +30793,6 @@ components:
           title: Created
         objects:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Objects
@@ -31304,7 +31011,6 @@ components:
           title: Rejected
         scenarios:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Scenarios
@@ -31346,8 +31052,7 @@ components:
           default: false
         report:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Report
         handle:
@@ -31362,8 +31067,7 @@ components:
           title: Poll After Seconds
         decision:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Decision
         warnings:
@@ -31477,15 +31181,13 @@ components:
           type: string
           title: Name
         filters:
-          additionalProperties: true
           type: object
           title: Filters
         columns:
           anyOf:
           - items: {}
             type: array
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Columns
         is_default:
@@ -31883,7 +31585,6 @@ components:
           type: boolean
           title: Expired
         body:
-          additionalProperties: true
           type: object
           title: Body
         source_yaml:
@@ -31954,7 +31655,6 @@ components:
           format: date-time
           title: Expires At
         body:
-          additionalProperties: true
           type: object
           title: Body
         source_yaml:
@@ -32304,7 +32004,6 @@ components:
           description: Host, user, address or id the verb acts on.
           default: ''
         params:
-          additionalProperties: true
           type: object
           title: Params
         vendor_id:
@@ -32467,7 +32166,6 @@ components:
           title: Confidence
         indicators:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Indicators
@@ -32591,84 +32289,6 @@ components:
       required:
       - url
       title: SubmitUrlRequest
-    SuggestRequest:
-      properties:
-        alert_id:
-          type: string
-          format: uuid
-          title: Alert Id
-          description: ID of the FP-flagged alert.
-        analyst_note:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Analyst Note
-          description: Free-text note explaining why this is a FP.
-      type: object
-      required:
-      - alert_id
-      title: SuggestRequest
-    SuggestionListResponse:
-      properties:
-        suggestions:
-          items:
-            $ref: '#/components/schemas/SuggestionResponse'
-          type: array
-          title: Suggestions
-        total:
-          type: integer
-          title: Total
-      type: object
-      required:
-      - suggestions
-      - total
-      title: SuggestionListResponse
-    SuggestionResponse:
-      properties:
-        suggestion_id:
-          type: string
-          format: uuid
-          title: Suggestion Id
-        alert_id:
-          type: string
-          format: uuid
-          title: Alert Id
-        base_rule_id:
-          anyOf:
-          - type: string
-            format: uuid
-          - type: 'null'
-          title: Base Rule Id
-        draft_rule_name:
-          type: string
-          title: Draft Rule Name
-        draft_sigma_yaml:
-          type: string
-          title: Draft Sigma Yaml
-        rationale:
-          type: string
-          title: Rationale
-        proposal_id:
-          anyOf:
-          - type: string
-            format: uuid
-          - type: 'null'
-          title: Proposal Id
-        created_at:
-          type: string
-          format: date-time
-          title: Created At
-      type: object
-      required:
-      - suggestion_id
-      - alert_id
-      - base_rule_id
-      - draft_rule_name
-      - draft_sigma_yaml
-      - rationale
-      - proposal_id
-      - created_at
-      title: SuggestionResponse
     SuppressRequest:
       properties:
         reason:
@@ -32814,7 +32434,6 @@ components:
           default: UTC
         sections:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Sections
@@ -32853,7 +32472,6 @@ components:
           default: UTC
         sections:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Sections
@@ -33171,11 +32789,9 @@ components:
           type: boolean
           title: Is Active
         settings:
-          additionalProperties: true
           type: object
           title: Settings
         limits:
-          additionalProperties: true
           type: object
           title: Limits
         mssp_role:
@@ -33230,11 +32846,9 @@ components:
           minLength: 1
           title: Connector Type
         auth_config:
-          additionalProperties: true
           type: object
           title: Auth Config
         connector_config:
-          additionalProperties: true
           type: object
           title: Connector Config
       type: object
@@ -33327,7 +32941,6 @@ components:
           - type: 'null'
           title: Last Activity
         context:
-          additionalProperties: true
           type: object
           title: Context
       type: object
@@ -33393,7 +33006,6 @@ components:
           - type: 'null'
           title: Last Activity
         context:
-          additionalProperties: true
           type: object
           title: Context
         id:
@@ -33519,8 +33131,7 @@ components:
           title: Tool Name
         tool_args:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Tool Args
         tool_result_summary:
@@ -34254,14 +33865,12 @@ components:
           title: Is Enabled
         auth_config:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Auth Config
         connector_config:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Connector Config
         tags:
@@ -34369,16 +33978,14 @@ components:
           title: Name
         filters:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Filters
         columns:
           anyOf:
           - items: {}
             type: array
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Columns
         is_default:
@@ -34431,7 +34038,6 @@ components:
     UpdateTenantSettingsRequest:
       properties:
         settings:
-          additionalProperties: true
           type: object
           title: Settings
           default: {}
@@ -34588,7 +34194,6 @@ components:
           type: boolean
           title: Is Active
         preferences:
-          additionalProperties: true
           type: object
           title: Preferences
           default: {}
@@ -34751,7 +34356,6 @@ components:
           title: Vendor
           default: ''
         params:
-          additionalProperties: true
           type: object
           title: Params
       type: object
@@ -34822,7 +34426,6 @@ components:
           - type: 'null'
           title: External Id
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
       type: object
@@ -34882,7 +34485,6 @@ components:
           - type: 'null'
           title: External Id
         metadata:
-          additionalProperties: true
           type: object
           title: Metadata
         id:
@@ -34905,7 +34507,6 @@ components:
           - type: 'null'
           title: Remediated At
         asset_metadata:
-          additionalProperties: true
           type: object
           title: Asset Metadata
       type: object
@@ -35084,7 +34685,6 @@ components:
           type: string
           title: Blast Radius
         constraints:
-          additionalProperties: true
           type: object
           title: Constraints
         expires_at:
@@ -35107,7 +34707,6 @@ components:
           type: string
           title: Blast Radius
         constraints:
-          additionalProperties: true
           type: object
           title: Constraints
         expires_at:
@@ -35211,13 +34810,11 @@ components:
           title: Total Events Scanned
         matched_events:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Matched Events
         match_summary:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Match Summary
@@ -35326,7 +34923,6 @@ components:
           title: Query Kql
         findings:
           items:
-            additionalProperties: true
             type: object
           type: array
           title: Findings
@@ -35423,8 +35019,7 @@ components:
           title: Mitre Technique
         raw:
           anyOf:
-          - additionalProperties: true
-            type: object
+          - type: object
           - type: 'null'
           title: Raw
       type: object

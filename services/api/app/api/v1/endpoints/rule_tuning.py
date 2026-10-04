@@ -79,7 +79,12 @@ async def auto_suggest_tuning(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
     db: TenantDBSession,
     window_days: int = Query(default=30, ge=1, le=180),
-    create_proposals: bool = Query(default=True),
+    # Default off. A stub proposal is only dangerous once it is in the
+    # governed queue, and this defaulted to True, so calling the endpoint
+    # at all seeded the queue with comment-only bodies nobody intended to
+    # promote. `/decide` now refuses such a body outright; this stops them
+    # being created in the first place.
+    create_proposals: bool = Query(default=False),
 ) -> AutoSuggestResponse:
     """Derive human-approval-gated tuning suggestions from disposition history.
 

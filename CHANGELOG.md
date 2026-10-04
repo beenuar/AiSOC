@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **`POST /api/v1/detection-loop/suggest` and its two sibling routes.** They
+  queried `aisoc_alerts` and `aisoc_detection_rules`, which no migration
+  creates, plus `alerts.evidence`, which does not exist either -- so a rename
+  could not have fixed them. Their own test built "a fake `aisoc_alerts` row
+  exposing the columns the endpoint reads", so three routes passed CI for as
+  long as they shipped while being unable to succeed on any deployment, and
+  they held their drafts in a process-global dict no second replica could see.
+  No console surface called them.
+
+### Fixed
+
+- **Three more routes were reading a table that does not exist.** Emptying the
+  `KNOWN_MISSING_TABLES` debt list in `scripts/check_raw_sql_columns.py` --
+  which had recorded the two names above -- immediately surfaced the business
+  context preview, the case timeline's linked-alert hydration and the identity
+  timeline, all three naming `aisoc_alerts`. The identity timeline also named
+  `evidence` and `mitre_technique` where the real columns are `raw_event` and
+  `mitre_techniques`, so it had reported **no alerts for every identity on
+  every deployment**. The business-context preview swallowed its error and
+  returned `[]` under a comment blaming "test envs without the schema", so an
+  analyst asking to preview a rule against their last 50 alerts silently got
+  the console's built-in illustrative samples instead. All three now name
+  `alerts` and its real columns, and the debt list is empty and gated.
+- **A proposal whose body is only comments can no longer be promoted.**
+  `POST /api/v1/detection/tuning/auto-suggest` opened proposals whose
+  `rule_body` was a header, a rationale and a `TODO(analyst)`, with a null
+  `base_rule_id` -- which takes the "new rule" branch in
+  `/detection-proposals/{id}/decide`, so an approver clicking through would
+  have written a rule with no detection logic into the engine. `/decide` now
+  refuses such a body, and the auto-tuner no longer seeds the queue by default.
+
+### Changed
+
+- **Retracted claims for schema that nothing reads.** Migration 084's
+  detection lifecycle (`environment`, `shadow_until`, `detection_rule_versions`,
+  `detection_shadow_matches`) and migration 087's enterprise IAM
+  (`workload_identities`, `privilege_grants`, `permission_conditions`,
+  `narrow_by_conditions`) each have **zero readers** in `services/`. A rule set
+  to `dev` still raises alerts, a future `shadow_until` still pages, and there
+  is no rollback route. Separation of duties on detection proposals is real and
+  the claim for it stands. The docs page, README and changelog now say which
+  half is which.
+- **Three docs-portal overclaims corrected.** Qdrant holds the MITRE technique
+  corpus for lookup, which is a reference index and not agent memory; there is
+  no coverage advisor that recommends rules for uncovered techniques and no
+  one-click generation route; and `GET /taxii/collections` calls `_demo_only()`
+  and returns a fixed list, so TAXII collection management is demo-only and the
+  intel sharing is one-way.
+- **The phishing playbook no longer claims a retraction it cannot perform.**
+  Its "Retract phishing email fleet-wide" step posts to `${EMAIL_GATEWAY_URL}`,
+  which no compose file or `.env.example` sets, under `on_failure: continue`.
+  The step and the playbook description now say the message is not retracted
+  when the gateway is unconfigured.
+
 ### Fixed
 
 - **The MCP client could not complete a single real call, and every tool it
@@ -197,11 +253,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ladder addresses.
 - **Legal hold, data residency, field-level access and per-subject deletion.** A hold outranks
   retention unconditionally.
-- **Workload identities, API-key rotation in place, time-boxed privilege grants and ABAC
-  conditions.** Conditions narrow and never grant, and a condition the request carries no data for
-  denies rather than passes.
-- **Detection lifecycle**: dev/staging/production, shadow mode independent of environment, and
-  version history so a promotion can be rolled back.
+- **Workload identities, time-boxed privilege grants and ABAC conditions: schema only.**
+  Migration 087 creates `workload_identities`, `privilege_grants` and
+  `permission_conditions`, and **nothing reads any of them**;
+  `narrow_by_conditions` has no caller. API-key rotation in place does work.
+  The condition semantics described here -- narrow and never grant, deny when
+  the request carries no data for a condition -- are the design the evaluator
+  implements, not behaviour any route reaches today.
+- **Detection lifecycle: separation of duties works, the rest is schema only.**
+  `POST /api/v1/detection-proposals/{id}/decide` refuses an approval from the
+  rule's own author, which is real. The `environment`, `shadow_until`,
+  `detection_rule_versions` and `detection_shadow_matches` that migration 084
+  adds are **read by nothing**: a rule set to `dev` still raises alerts, a
+  future `shadow_until` still pages, and there is no rollback route.
 - **Chaos coverage** for actions as well as events, and for ClickHouse, Neo4j, Qdrant, Redis and
   Kafka, on a weekly trigger — the existing harness had run live once, by hand.
 - **Load profiles** — ramp, burst, backpressure and 24/72-hour soak. No `--duration` flag existed,

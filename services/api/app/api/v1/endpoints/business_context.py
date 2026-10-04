@@ -355,20 +355,34 @@ async def _fetch_sample_alerts(
 ) -> list[dict[str, Any]]:
     """Pull the last ``limit`` alerts for the tenant.
 
-    The dry-run preview surfaces "what would happen to my last 50
-    alerts?" so the analyst gets a tangible feel for the rule before
-    saving. Returns an empty list when the alerts table isn't reachable
-    (test envs without the schema, demo Fly.io stack) — the UI then
-    falls back to its built-in illustrative samples.
+    The dry-run preview surfaces "what would happen to my last 50 alerts?" so
+    the analyst gets a tangible feel for the rule before saving.
+
+    This used to read ``aisoc_alerts``, a table no migration creates, naming
+    five columns the real ``alerts`` table does not have either. The ``except``
+    below swallowed the error and returned ``[]`` under a comment blaming
+    "test envs without the schema", so on **every** deployment the preview fell
+    through to the UI's built-in illustrative samples while telling the analyst
+    it had used their own alerts.
+
+    The column mapping is the part worth reading: the real table stores the
+    source as ``connector_type`` and the entities as jsonb arrays
+    (``affected_ips`` and friends), so the single-valued fields the rule
+    grammar references are taken from the first element rather than invented.
     """
     try:
         result = await db.execute(
             text(
                 """
-                SELECT id, severity, title, source, src_ip, hostname, username,
-                       tags, metadata
-                FROM aisoc_alerts
-                WHERE tenant_id = :tenant_id
+                SELECT id, severity, title,
+                       connector_type AS source,
+                       affected_ips->>0  AS src_ip,
+                       affected_hosts->>0 AS hostname,
+                       affected_users->>0 AS username,
+                       tags,
+                       raw_event AS metadata
+                FROM alerts
+                WHERE tenant_id = CAST(:tenant_id AS uuid)
                 ORDER BY created_at DESC
                 LIMIT :limit
                 """

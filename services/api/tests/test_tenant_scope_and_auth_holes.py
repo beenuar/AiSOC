@@ -194,7 +194,7 @@ class TestPlaybookRoutesRequirePermission:
 class TestCaseTimelineAlertHydrationIsScoped:
     def test_linked_alert_lookup_binds_a_tenant(self) -> None:
         source = Path(cases_module.__file__).read_text()
-        matches = [ln for ln in source.splitlines() if "FROM aisoc_alerts WHERE id" in ln]
+        matches = [ln for ln in source.splitlines() if "FROM alerts WHERE id" in ln]
         assert matches, "the linked-alert hydration query moved; re-point this test"
         for line in matches:
             assert "tenant_id" in line, f"unscoped alert read: {line.strip()}"

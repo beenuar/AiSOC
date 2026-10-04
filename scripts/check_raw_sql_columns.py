@@ -248,14 +248,18 @@ PARSER_ARTEFACTS: dict[tuple[str, str], str] = {
 #: An entry here is a debt with an owner, not an exemption. Both of these are
 #: fix-pass item 6.5, which either points the two detection-tuning routes at
 #: the real tables or removes them.
-KNOWN_MISSING_TABLES: dict[str, str] = {
-    "aisoc_alerts": (
-        "No migration creates this. The detection-loop suggestion route and the business-context "
-        "reader query it, so both return nothing on every deployment. Fix-pass item 6.5 removes "
-        "this entry by pointing them at `alerts` or removing the routes."
-    ),
-    "aisoc_detection_rules": ("No migration creates this. Same two routes, same item 6.5."),
-}
+#: Tables a statement names that no migration creates and that are not
+#: foreign either: a defect, recorded with the item that removes it.
+#:
+#: **Empty, and it must stay empty.** It held `aisoc_alerts` and
+#: `aisoc_detection_rules`. `detection_loop.py` queried both plus
+#: `alerts.evidence`, none of which exist, and its own test built "a fake
+#: `aisoc_alerts` row exposing the columns the endpoint reads" -- so three
+#: routes passed CI for as long as they shipped while being unable to succeed
+#: anywhere. Fix-pass item 6.5 removed those routes rather than renaming the
+#: table, because the column does not exist either, and repointed the
+#: business-context preview at `alerts` with the real column names.
+KNOWN_MISSING_TABLES: dict[str, str] = {}
 
 #: Statements whose table or column list is assembled at runtime, and so
 #: cannot be compared against anything, with the reason.

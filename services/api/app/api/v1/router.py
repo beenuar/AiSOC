@@ -27,7 +27,6 @@ from app.api.v1.endpoints import (
     data_lifecycle,
     deployment,
     detection_compat,
-    detection_loop,
     detection_proposals,
     detection_rules,
     easm,
@@ -255,7 +254,6 @@ api_router.include_router(business_context.router)
 api_router.include_router(nl_detection.router)
 
 # Closed-loop detection engineering: FP → LLM Sigma draft → DAC proposal (Tier 2)
-api_router.include_router(detection_loop.router)
 
 # Natural-language query → ES|QL / SPL / KQL translation + execution (Tier 2)
 api_router.include_router(nl_query.router)

@@ -226,9 +226,9 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 
 Secrets are generated per deployment and never committed; connector credentials are encrypted at rest. Services connect to Postgres as a DML-only role, so row-level security actually applies, and tenant isolation is enforced at the query layer in every store. RBAC gates every mutating route, ingest is authenticated, and the default install sends no prompt anywhere — the model runs beside it.
 
-SAML and OIDC sign-in with per-connection tenant and group mapping, SCIM provisioning, attribute
-conditions that narrow a permission, and time-boxed elevation instead of standing admin
-([setup](apps/docs/docs/operations/enterprise-sso.md)).
+SAML and OIDC sign-in with per-connection tenant and group mapping, and SCIM provisioning
+([setup](apps/docs/docs/operations/enterprise-sso.md)). Attribute conditions and time-boxed
+elevation are schema only: migration 087 creates the tables and no code reads them yet.
 
 **A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fix; report via [SECURITY.md](SECURITY.md).
 

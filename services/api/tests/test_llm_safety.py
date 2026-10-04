@@ -122,7 +122,6 @@ GUARDED_CALL_SITES = (
     "api/v1/endpoints/knowledge_base.py",
     "api/v1/endpoints/hunts.py",
     "api/v1/endpoints/nl_detection.py",
-    "api/v1/endpoints/detection_loop.py",
     "services/alert_explain.py",
 )
 

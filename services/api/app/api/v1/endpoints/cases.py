@@ -1000,7 +1000,9 @@ async def case_timeline(case_id: str, db: DBSession, user: AuthUser) -> Timeline
                 # nothing and a poisoned ``alert_ids`` array would otherwise
                 # hydrate another tenant's alert title into this timeline.
                 await db.execute(
-                    text("SELECT id, title, severity, created_at FROM aisoc_alerts WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                    text(
+                        "SELECT id, title, severity, created_at FROM alerts WHERE id = :id AND tenant_id = CAST(:tenant_id AS uuid)"
+                    ).bindparams(
                         id=alert_id,
                         tenant_id=str(user.tenant_id),
                     )

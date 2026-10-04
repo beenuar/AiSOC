@@ -121,11 +121,16 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 6: Retract what is not built
 
-- [ ] **6.1** The v16 detection lifecycle
-- [ ] **6.2** Enterprise IAM
-- [ ] **6.3** Overclaims in `apps/docs/docs/intro.md`
-- [ ] **6.4** The phishing playbook's fleet-wide retraction
-- [ ] **6.5** Two broken detection-tuning routes
+- [x] **6.1** The v16 detection lifecycle
+  - Retracted. `detection_rule_versions`, `detection_shadow_matches` and `shadow_until` have zero readers in `services/`; the only `rollback` in the detection endpoints is a DB transaction rollback. Docs page, README and CHANGELOG now mark the four sections schema-only. Separation of duties is real and its claim stands.
+- [x] **6.2** Enterprise IAM
+  - Retracted. `workload_identities`, `privilege_grants`, `permission_conditions` have zero readers; `narrow_by_conditions` has zero callers. README and CHANGELOG narrowed; API-key rotation, which does work, kept.
+- [x] **6.3** Overclaims in `apps/docs/docs/intro.md`
+  - Retracted three intro.md overclaims: Qdrant holds the MITRE corpus for lookup (not agent memory), no coverage advisor or one-click generation route exists, and `GET /taxii/collections` calls `_demo_only()`.
+- [x] **6.4** The phishing playbook's fleet-wide retraction
+  - Corrected. The retraction step posts to an unset `EMAIL_GATEWAY_URL` under `on_failure: continue`; step name and playbook description now say the message is not retracted when unconfigured. Both copies identical.
+- [x] **6.5** Two broken detection-tuning routes
+  - Removed `detection_loop.py` (3 routes) -- `aisoc_alerts`, `aisoc_detection_rules` and `alerts.evidence` all absent, so a rename could not work; its test mocked the missing row. Emptying the gate debt list surfaced **three more** callers (business context preview, case timeline, identity timeline), all repointed at `alerts` with real column names. Added a guard refusing promotion of a comment-only body and defaulted the auto-tuner off. `KNOWN_MISSING_TABLES` is now empty and gated.
 
 ## Wave 7: Close the books
 

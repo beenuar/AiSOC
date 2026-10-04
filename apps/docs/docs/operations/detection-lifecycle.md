@@ -56,60 +56,53 @@ POST /api/v1/detection-proposals/{id}/evaluate-rule
 The request body is optional. Omit it and the proposal's own fixtures
 are replayed; supply fixtures to override them for one run.
 
-## Environments
 
-| Environment | Evaluates | Raises alerts | For |
+:::warning Schema only: not yet read by anything
+
+Everything from here to "Related" describes **columns and tables migration
+087 creates and no code reads**. Verified on a fully-migrated database:
+`detection_rule_versions` and `detection_shadow_matches` have zero readers in
+`services/`, `shadow_until` has zero, and the only `rollback` in the detection
+endpoints is a database transaction rollback.
+
+So a rule set to `dev` still raises alerts, a `shadow_until` in the future
+still pages, and there is no route that rolls a rule back. The schema is kept
+because the design is settled and the migration has shipped; the behaviour is
+not claimed until the PR that wires it lands, under the parity plan.
+
+**What does work is above:** separation of duties on
+`POST /api/v1/detection-proposals/{id}/decide`, which compares the caller
+against `proposed_by_id` and refuses an approval from the same person.
+
+:::
+
+## Environments (schema only)
+
+| Environment | Column accepts | Evaluates | Raises alerts |
 |---|---|---|---|
-| `dev` | Yes | No | A rule nobody has reviewed |
-| `staging` | Yes | No | A reviewed rule earning confidence on live traffic |
-| `production` | Yes | Yes | Live detection |
+| `dev` | yes | yes | **yes, today** |
+| `staging` | yes | yes | **yes, today** |
+| `production` | yes | yes | yes |
 
-## Shadow mode
+The engine does not read `environment`, so all three behave identically.
 
-`shadow_until` is a timestamp, and it is **independent of
-environment** — a production rule can be shadowed during a tuning
-change without being demoted and losing its history.
+## Shadow mode (schema only)
 
-While it is set and in the future, the rule is evaluated and its
-matches recorded, and it raises nothing.
+`shadow_until` is a timestamp column. Nothing reads it, and
+`detection_shadow_matches` is never written, so a rule with a future
+`shadow_until` raises alerts exactly as it would without one.
 
-Matches land in `detection_shadow_matches`, a separate table rather
-than a flag on `alerts`. That is the whole point: no query and no
-person can mistake a shadow match for an alert.
+## Versions and rollback (schema only)
 
-```sql
-SELECT rule_id, count(*) AS would_have_fired
-  FROM detection_shadow_matches
- WHERE matched_at > now() - interval '24 hours'
- GROUP BY rule_id
- ORDER BY would_have_fired DESC;
-```
+`detection_rule_versions` exists and nothing writes to it, so a promotion
+still overwrites in place and "roll back the rule we shipped on Tuesday" still
+has no answer other than reconstructing it from a pull request.
 
-A rule at the top of that list would have been your noisiest detection.
+## Ownership and expiry (schema only)
 
-## Versions and rollback
-
-Every body a rule has ever had live is kept in
-`detection_rule_versions`. Promotion used to overwrite in place, so
-"roll back the rule we shipped on Tuesday" had no answer other than
-reconstructing it from a pull request — which is exactly the question
-asked when a detection starts firing on everything overnight.
-
-Versions are numbered with a **monotonic integer, not a timestamp**.
-Two promotions in the same second are ordinary during a tuning session,
-and "the version before this one" has to have exactly one answer.
-
-A rollback writes a **new version carrying an old body** rather than
-deleting rows, so the history of what was live when stays intact and
-`rolled_back_from` records where the body came from.
-
-## Ownership and expiry
-
-| Field | Why |
-|---|---|
-| `owner_email`, `owner_team` | A rule written for an incident three years ago was indistinguishable from one somebody maintains |
-| `expires_at` | Nullable. A rule with no expiry is permanent, which is a legitimate choice — what was missing was the ability to say otherwise |
-| `review_due_at` | A prompt to re-check a rule that is still correct but no longer load-bearing |
+`owner_email`, `owner_team`, `expires_at` and `review_due_at` are columns a
+caller can set. Nothing reads them, so an expiry does not expire a rule and a
+review date prompts nobody.
 
 ## Related
 

@@ -387,6 +387,30 @@ def _evaluate_eval_report(
 # ────────────────────────────────────────────────────────────────────────────
 
 
+def body_has_detection_logic(rule_body: str | None) -> bool:
+    """Whether this body could match anything at all.
+
+    The auto-tuner opened proposals whose `rule_body` was **entirely
+    comments** -- a header, a rationale and a `TODO(analyst)` -- with a null
+    `base_rule_id`. A null base takes the "new rule" branch below, so an
+    approver clicking through would have written a rule with no detection
+    logic into the engine: a rule that matches nothing, published as though it
+    detects something.
+
+    Comment-stripping only. This deliberately does not try to validate Sigma:
+    a parser here would be a second opinion that can disagree with the
+    compiler, and the question being asked is narrower than "is this valid",
+    it is "is there anything here but prose".
+    """
+    if not rule_body:
+        return False
+    for line in rule_body.splitlines():
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#"):
+            return True
+    return False
+
+
 @router.get("", response_model=list[ProposalResponse])
 async def list_proposals(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
@@ -1015,6 +1039,19 @@ async def promote_proposal(
         raise HTTPException(
             status_code=status.HTTP_412_PRECONDITION_FAILED,
             detail=f"Proposal must be approved before promotion (current status: {proposal.status})",
+        )
+
+    # Before either branch. An approved proposal whose body is all prose is a
+    # rule that matches nothing, and promoting one publishes a detection that
+    # cannot fire. The auto-tuner produced exactly that shape.
+    if not body_has_detection_logic(proposal.rule_body):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "This proposal's body contains no detection logic, only comments. "
+                "Promoting it would publish a rule that matches nothing. Attach a real "
+                "rule body and fixtures before approving."
+            ),
         )
 
     if proposal.base_rule_id is not None:

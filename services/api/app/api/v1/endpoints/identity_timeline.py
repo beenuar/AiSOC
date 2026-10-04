@@ -122,9 +122,16 @@ async def build_timeline(
         alert_rows = await db.execute(
             text(
                 """
-                SELECT id, created_at, severity, title, evidence, mitre_technique
-                FROM aisoc_alerts
-                WHERE tenant_id = :tenant_id
+                -- `aisoc_alerts` exists in no migration, and neither did
+                -- `evidence` or `mitre_technique` on the real table: the
+                -- columns are `raw_event` and `mitre_techniques`. So this
+                -- query could not run anywhere, and the identity timeline
+                -- reported no alerts for every identity on every deployment.
+                SELECT id, created_at, severity, title,
+                       raw_event AS evidence,
+                       mitre_techniques AS mitre_technique
+                FROM alerts
+                WHERE tenant_id = CAST(:tenant_id AS uuid)
                   AND created_at BETWEEN :from_ts AND :to_ts
                   AND (
                     evidence::text ILIKE :pat
