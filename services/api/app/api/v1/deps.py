@@ -28,7 +28,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, Security, status
+from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWTError
 from sqlalchemy import select, update
@@ -357,9 +357,9 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
 
 
 async def get_current_user(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_scheme)],
     db: AsyncSession = Depends(get_db),
-    x_aisoc_tenant_id: Annotated[str | None, Header(alias=SERVICE_TENANT_HEADER)] = None,
 ) -> CurrentUser:
     """Resolve Bearer token to CurrentUser.
 
@@ -403,7 +403,13 @@ async def get_current_user(
     # Ahead of the JWT path because a service token is not a JWT and would
     # otherwise be decoded, fail, and answer "Could not validate credentials",
     # which is what it did.
-    service_principal = await _resolve_service_principal(token, x_aisoc_tenant_id, db)
+    # Read off the request rather than declared as a `Header` parameter.
+    # Declaring it adds a 422 response to all 456 operations in the published
+    # spec, because a parameter that exists can fail validation -- and this is
+    # how a peer *service* names the tenant it acts for, not part of the
+    # contract a customer codes against.
+    declared_tenant = request.headers.get(SERVICE_TENANT_HEADER)
+    service_principal = await _resolve_service_principal(token, declared_tenant, db)
     if service_principal is not None:
         return service_principal
 
