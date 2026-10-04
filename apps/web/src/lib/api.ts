@@ -1801,6 +1801,19 @@ export function normalizeCasesResponse(raw: unknown, filters: CaseFilters = {}):
 }
 
 export const casesApi = {
+  /** Explicit reopen — the sanctioned backwards status move (PATCH is
+   * forward-only and answers 422 on backwards transitions). */
+  async reopen(
+    caseId: string,
+    opts: { reason: string; target_status?: 'new' | 'triaged' | 'investigating' },
+  ): Promise<Case> {
+    const raw = await request<unknown>(`/api/v1/cases/${encodeURIComponent(caseId)}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify(opts),
+    });
+    return normalizeCase(raw);
+  },
+
   list: async (filters: CaseFilters = {}) => {
     // Statuses travel in the canonical vocabulary end-to-end; display
     // groupings (Open = new+triaged etc.) are a presentation concern in

@@ -140,6 +140,11 @@ def _status_transition_ok(current: str, target: str) -> bool:
     return target in _TRANSITIONS.get(current, set())
 
 
+class ReopenCaseRequest(BaseModel):
+    reason: str = Field(..., min_length=3, max_length=500)
+    target_status: Literal["new", "triaged", "investigating"] = "investigating"
+
+
 class CreateCaseRequest(BaseModel):
     title: str = Field(..., min_length=3)
     description: str | None = None
@@ -762,6 +767,67 @@ def case_queue_for(case_row: Any, queues: list[Any]) -> Any:
         queues,
     )
 
+@router.post("/{case_id}/reopen", response_model=CaseResponse, summary="Reopen a case")
+async def reopen_case(
+    case_id: str,
+    body: ReopenCaseRequest,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+) -> CaseResponse:
+    """Explicit reopen — the sanctioned backwards status move.
+
+    PATCH /cases/{id} is forward-only by design (see _status_transition_ok);
+    this endpoint is the 'reopen action' its 422 refers to. It resets the
+    future-stage timestamps so the reopened case reads cleanly on the board,
+    and records a timeline event.
+    """
+    import json as _json
+
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    existing = (
+        await db.execute(
+            text("SELECT status FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    if _status_transition_ok(existing.status, body.target_status):
+        raise HTTPException(
+            status_code=422,
+            detail=f"{existing.status} → {body.target_status} is a forward transition; use PATCH /cases/{case_id}.",
+        )
+
+    now = datetime.now(UTC)
+    row = (
+        await db.execute(
+            text(
+                "UPDATE aisoc_cases SET status = :status, reopened_at = :now, "
+                "triaged_at = NULL, resolved_at = NULL, closed_at = NULL, updated_at = :now "
+                "WHERE id = :id AND tenant_id = :tenant_id RETURNING *"
+            ).bindparams(id=cid, tenant_id=user.tenant_id, status=body.target_status, now=now)
+        )
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Case not found.")
+    try:
+        await db.execute(
+            text(
+                "INSERT INTO case_timeline_events (case_id, tenant_id, event_type, actor_type, summary, detail) "
+                "VALUES (:case_id, :tenant_id, 'status_change', 'user', :summary, CAST(:detail AS JSONB))"
+            ).bindparams(
+                case_id=cid,
+                tenant_id=user.tenant_id,
+                summary=f"Case reopened: {existing.status} → {body.target_status}",
+                detail=_json.dumps({"reason": body.reason, "from": existing.status, "to": body.target_status}),
+            )
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("cases.reopen.timeline_event_failed case=%s", cid)
+        raise HTTPException(status_code=503, detail="Database error") from exc
+    return _row_to_case(row)
+
 
 @router.post("/{case_id}/alerts", response_model=CaseResponse, summary="Link alerts to a case")
 async def add_alerts(
@@ -1321,6 +1387,28 @@ async def case_investigate(
                 raw_alert_payload = {"alerts": alerts_out}
     except Exception:  # noqa: BLE001 - never block launch on enrichment
         logger.warning("investigate.launch.raw_alert_enrichment_failed", case_id=str(cid), exc_info=True)
+
+    # Launching an agent investigation IS an analyst action: advance
+    # new/triaged cases to 'investigating' in the same request so the
+    # board reflects reality without a separate PATCH. Forward-only, same
+    # ladder rule — a contained/resolved case is never pulled backwards
+    # by a re-run.
+    try:
+        st_row = (
+            await db.execute(
+                text("SELECT status FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+            )
+        ).fetchone()
+        if st_row and st_row.status != "investigating" and _status_transition_ok(st_row.status, "investigating"):
+            await db.execute(
+                text("UPDATE aisoc_cases SET status = 'investigating', updated_at = :now WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                    id=cid, tenant_id=user.tenant_id, now=datetime.now(UTC)
+                )
+            )
+            await db.commit()
+    except Exception:  # noqa: BLE001 — never block the launch on the status bump
+        await db.rollback()
+        logger.warning("investigate.launch.status_advance_failed", case_id=str(cid), exc_info=True)
 
     resp = await _agents_proxy(
         "POST",

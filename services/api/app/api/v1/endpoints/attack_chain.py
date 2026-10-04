@@ -26,7 +26,6 @@ from sqlalchemy import select, text
 
 from app.api.v1.deps import AuthUser, DBSession
 from app.models.alert import Alert
-from app.models.case import Case
 from app.services.attack_chain import (
     AttackChain,
     PostgresAttackChainLoader,
@@ -68,7 +67,17 @@ async def get_attack_chain(
         # but a future schema change could relax that — fail closed.
         raise HTTPException(status_code=400, detail=f"unknown window: {window}")
 
-    case_row = (await db.execute(select(Case).where(Case.id == case_id, Case.tenant_id == user.tenant_id))).scalar_one_or_none()
+    # Read the case via raw SQL against ``aisoc_cases``: the live schema
+    # stores cases there, while the ``Case`` ORM still points at the empty
+    # legacy ``cases`` table — ``select(Case)`` 404'd every real case.
+    case_row = (
+        await db.execute(
+            text(
+                "SELECT id, tenant_id, alert_ids FROM aisoc_cases "
+                "WHERE id = :id AND tenant_id = :tenant_id"
+            ).bindparams(id=case_id, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     if case_row is None:
         raise HTTPException(status_code=404, detail="case_not_found")
 
@@ -77,8 +86,9 @@ async def get_attack_chain(
     # on ``alerts.case_id`` if that list is empty so a freshly-linked
     # case still resolves.
     seed_alert_id: uuid.UUID | None = None
-    if case_row.alert_ids:
-        candidate_ids = [uuid.UUID(str(a)) if not isinstance(a, uuid.UUID) else a for a in case_row.alert_ids]
+    raw_ids = case_row.alert_ids or []
+    if raw_ids:
+        candidate_ids = [uuid.UUID(str(a)) if not isinstance(a, uuid.UUID) else a for a in raw_ids]
         seed_row = (
             await db.execute(
                 select(Alert)

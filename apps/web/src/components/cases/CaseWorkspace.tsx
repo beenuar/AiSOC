@@ -536,8 +536,18 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     setStatusUpdating(true);
     void mutate({ ...caseRecord, status }, { revalidate: false });
     try {
-      await casesApi.update(caseRecord.id, { status });
-      toast.success(`Status set to ${statusMeta(status).label}`);
+      // Backwards moves go through the explicit reopen endpoint — the
+      // PATCH ladder is forward-only and rejects them with 422.
+      if (CASE_STATUS_ORDER.indexOf(status) < CASE_STATUS_ORDER.indexOf(previous)) {
+        await casesApi.reopen(caseRecord.id, {
+          reason: `Reopened to ${statusMeta(status).label} from analyst console`,
+          target_status: status === 'new' || status === 'triaged' || status === 'investigating' ? status : 'investigating',
+        });
+        toast.success(`Case reopened — status set to ${statusMeta(status).label}`);
+      } else {
+        await casesApi.update(caseRecord.id, { status });
+        toast.success(`Status set to ${statusMeta(status).label}`);
+      }
     } catch (e: unknown) {
       // The optimistic mutation has to come back off. Leaving it applied
       // showed a status the database does not have, on the one screen an
