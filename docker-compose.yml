@@ -732,6 +732,16 @@ services:
       SECRET_KEY: ${SECRET_KEY:-}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
       AISOC_API_SERVICE_TOKEN: ${AISOC_API_SERVICE_TOKEN:-}
+      # Air-gap posture and the SSRF guard, both off by default.
+      #
+      # Passed through because an operator could not set them at all before:
+      # the MCP client reads all three and compose delivered none, so an
+      # internal MCP server was unreachable with no way to permit it. Note
+      # that ALLOW_PRIVATE permits RFC1918 and never loopback, so a sidecar
+      # on 127.0.0.1 stays refused by design.
+      AISOC_AIRGAPPED: ${AISOC_AIRGAPPED:-}
+      AISOC_AIRGAP_ALLOWLIST: ${AISOC_AIRGAP_ALLOWLIST:-}
+      AISOC_SSRF_ALLOW_PRIVATE: ${AISOC_SSRF_ALLOW_PRIVATE:-}
       # The agents service's own service credential, used in both directions:
       # presented as `X-AiSOC-Service-Token` on the API's internal context
       # routes, and verified by `app.security.tenant_scope` when the API calls

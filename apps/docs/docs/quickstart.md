@@ -553,8 +553,12 @@ aisoc mcp install --host <editor>
 
 `aisoc mcp serve` prefers the local TypeScript build at
 `services/mcp/dist/index.js` when present, and falls back to
-`npx @aisoc/mcp` otherwise — so it works on a fresh clone before you've
-run `pnpm build`.
+`npx @aisoc/mcp` otherwise.
+
+**Run `pnpm build` first.** `@aisoc/mcp` is not published to npm yet
+(`registry.npmjs.org/@aisoc/mcp` answers 404), so on a fresh clone the
+fallback cannot resolve and only the local build works. Publishing is tracked
+with the rest of the package work.
 
 ### 7. Tear down
 

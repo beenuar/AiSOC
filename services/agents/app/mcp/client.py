@@ -95,16 +95,17 @@ def _airgap_blocked(url: str) -> str | None:
 class _CappedTransport(httpx.AsyncBaseTransport):
     """Wrap a transport so a response body cannot exceed ``limit`` bytes."""
 
-    def __init__(self, inner: httpx.AsyncBaseTransport, limit: int) -> None:
+    def __init__(self, inner: httpx.AsyncBaseTransport, limit: int, marker: CapMarker) -> None:
         self._inner = inner
         self._limit = limit
+        self._marker = marker
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         response = await self._inner.handle_async_request(request)
         return httpx.Response(
             status_code=response.status_code,
             headers=response.headers,
-            stream=_CappedStream(response.stream, self._limit),
+            stream=_CappedStream(response.stream, self._limit, self._marker),
             extensions=response.extensions,
             request=request,
         )
@@ -113,21 +114,83 @@ class _CappedTransport(httpx.AsyncBaseTransport):
         await self._inner.aclose()
 
 
-class _CappedStream:
-    """An async byte stream that raises once the running total passes the cap."""
+class CapMarker:
+    """Why a call failed, when the reason cannot survive the exception.
 
-    def __init__(self, inner: Any, limit: int) -> None:
+    The cap is enforced inside the response stream, which the MCP library
+    reads in its own ``anyio`` task. Raising there cancels the task group, and
+    what reaches the caller is ``ExceptionGroup -> ExceptionGroup ->
+    TimeoutError`` with the ``ResponseTooLarge`` nowhere in the tree.
+    Measured by walking the group on a 400 KB body under a 4 KB cap, not
+    assumed.
+
+    A ``ContextVar`` was tried first and cannot work: a context propagates
+    *into* a child task, so a value set by the reader is invisible to the
+    coroutine that awaited it. This is shared by reference instead, from the
+    client down to the stream that trips it.
+
+    It matters because ``app.mcp.tools._failure`` reports
+    ``type(exc).__name__`` to the model and to the ledger. Left alone, a
+    tenant's own byte cap firing is recorded as the server being slow, which
+    sends an operator to look at a server that is not the problem.
+    """
+
+    __slots__ = ("reason",)
+
+    def __init__(self) -> None:
+        self.reason: str | None = None
+
+
+def _surface_cap_refusal(marker: CapMarker, exc: BaseException) -> None:
+    """Re-raise as :class:`ResponseTooLarge` when the cap was the real cause.
+
+    ``exc`` is whatever the MCP library surfaced, usually a timeout. If the
+    cap tripped during this call, that timeout is a consequence of closing the
+    connection and the honest exception is the refusal.
+    """
+    if marker.reason is not None:
+        reason, marker.reason = marker.reason, None
+        raise ResponseTooLarge(reason) from exc
+    if isinstance(exc, ResponseTooLarge):
+        raise exc
+
+
+class _CappedStream(httpx.AsyncByteStream):
+    """An async byte stream that raises once the running total passes the cap.
+
+    The base class is load-bearing, not decoration. ``httpx`` asserts
+    ``isinstance(response.stream, AsyncByteStream)`` in
+    ``_send_single_request`` before it wraps the body, so a plain class here
+    raised ``AssertionError`` on **every** real ``list_tools`` and
+    ``call_tool``. Nothing caught it, because every test drives ``McpClient``
+    through its ``session_factory``, which exists so a test can run a real MCP
+    server in-process and which therefore never constructs this transport at
+    all. The byte-cap test exercised this class directly, so the cap was
+    genuinely proven and the path to it was not.
+
+    ``__aiter__`` is a plain ``def`` returning an async generator. Declaring
+    it ``async def`` makes the object an *awaitable*, not an async iterable,
+    so ``async for`` over it fails even once the isinstance check passes.
+    """
+
+    def __init__(self, inner: Any, limit: int, marker: CapMarker) -> None:
         self._inner = inner
         self._limit = limit
+        self._marker = marker
 
-    async def __aiter__(self) -> AsyncIterator[bytes]:
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        return self._iterate()
+
+    async def _iterate(self) -> AsyncIterator[bytes]:
         seen = 0
         async for chunk in self._inner:
             seen += len(chunk)
             if seen > self._limit:
-                raise ResponseTooLarge(
-                    f"the MCP server sent more than the configured {self._limit} bytes; the connection was closed mid-response"
-                )
+                reason = f"the MCP server sent more than the configured {self._limit} bytes; the connection was closed mid-response"
+                # Recorded before raising, because this exception does not
+                # reach the caller: see `CapMarker`.
+                self._marker.reason = reason
+                raise ResponseTooLarge(reason)
             yield chunk
 
     async def aclose(self) -> None:
@@ -136,7 +199,7 @@ class _CappedStream:
             await aclose()
 
 
-def _client_factory(limit: int):
+def _client_factory(limit: int, marker: CapMarker):
     """An ``McpHttpClientFactory`` whose clients cannot over-read."""
 
     def factory(
@@ -144,7 +207,7 @@ def _client_factory(limit: int):
         timeout: httpx.Timeout | None = None,
         auth: httpx.Auth | None = None,
     ) -> httpx.AsyncClient:
-        kwargs: dict[str, Any] = {"transport": _CappedTransport(httpx.AsyncHTTPTransport(), limit)}
+        kwargs: dict[str, Any] = {"transport": _CappedTransport(httpx.AsyncHTTPTransport(), limit, marker)}
         if timeout is not None:
             kwargs["timeout"] = timeout
         if headers is not None:
@@ -166,6 +229,10 @@ class McpClient:
     """
 
     def __init__(self, config: McpServerConfig, *, session_factory: Any | None = None) -> None:
+        # One marker per client, shared by reference down to the stream that
+        # trips it. See :class:`CapMarker` for why the reason cannot travel on
+        # the exception.
+        self._cap = CapMarker()
         self.config = config
         self._session_factory = session_factory
 
@@ -208,7 +275,7 @@ class McpClient:
             url,
             headers=self.config.headers() or None,
             timeout=self.config.timeout_seconds,
-            httpx_client_factory=_client_factory(self.config.max_response_bytes),
+            httpx_client_factory=_client_factory(self.config.max_response_bytes, self._cap),
         ) as (read_stream, write_stream, _get_session_id):
             async with ClientSession(read_stream, write_stream) as session:
                 await session.initialize()
@@ -216,8 +283,12 @@ class McpClient:
 
     async def list_tools(self) -> list[Any]:
         """Discover the server's tools, under the tenant's timeout."""
-        async with self.session() as session:
-            result = await asyncio.wait_for(session.list_tools(), timeout=self.config.timeout_seconds)
+        try:
+            async with self.session() as session:
+                result = await asyncio.wait_for(session.list_tools(), timeout=self.config.timeout_seconds)
+        except BaseException as exc:
+            _surface_cap_refusal(self._cap, exc)
+            raise
         return list(getattr(result, "tools", []) or [])
 
     async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
@@ -228,5 +299,9 @@ class McpClient:
         has to happen before anything opens a socket. ``app.mcp.tools`` checks
         it, twice, on the way in.
         """
-        async with self.session() as session:
-            return await asyncio.wait_for(session.call_tool(name, arguments), timeout=self.config.timeout_seconds)
+        try:
+            async with self.session() as session:
+                return await asyncio.wait_for(session.call_tool(name, arguments), timeout=self.config.timeout_seconds)
+        except BaseException as exc:
+            _surface_cap_refusal(self._cap, exc)
+            raise

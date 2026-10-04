@@ -34,7 +34,7 @@ import pytest
 from app.mcp import tools as tools_module
 from app.mcp.client import McpClient, McpTransportRefused
 from app.mcp.config import McpServerConfig, server_configs_from_payload
-from app.mcp.policy import stdio_enabled, vet_server, vet_tool
+from app.mcp.policy import namespaced, stdio_enabled, vet_server, vet_tool
 from app.mcp.tools import DiscoveredTool, McpToolInvoker, build_mcp_toolset
 from app.mcp.untrusted import BOUNDARY_NOTE, contain_mcp_result
 from mcp.server.fastmcp import FastMCP
@@ -202,7 +202,7 @@ async def test_an_allowlisted_read_tool_is_bound_called_and_fenced(server, ledge
         servers=[config()],
         session_factory=memory_session_factory(server),
     )
-    assert [t.name for t in toolset.tools] == ["mcp.vendor.get_host"]
+    assert [t.name for t in toolset.tools] == [namespaced("vendor", "get_host")]
 
     result = await toolset.tools[0].fn(hostname="WIN-DC-01")
     assert result["untrusted"] is True
@@ -248,10 +248,10 @@ async def test_a_destructive_tool_is_never_bound_and_the_refusal_is_recorded(ser
         servers=[config(tool_allowlist=["get_host", "isolate_host"])],
         session_factory=memory_session_factory(server),
     )
-    assert "mcp.vendor.isolate_host" not in [t.name for t in toolset.tools]
+    assert namespaced("vendor", "isolate_host") not in [t.name for t in toolset.tools]
 
     refused = {name: classification for name, classification, _ in toolset.refusals}
-    assert refused["mcp.vendor.isolate_host"] == "destructive"
+    assert refused[namespaced("vendor", "isolate_host")] == "destructive"
 
     rows = [e for e in ledger.of_kind("mcp_tool_refused") if e["payload"]["tool"] == "isolate_host"]
     assert len(rows) == 1
@@ -270,7 +270,7 @@ async def test_a_tool_that_declares_itself_not_read_only_is_refused_too(server, 
     )
     assert toolset.tools == []
     refused = {name: classification for name, classification, _ in toolset.refusals}
-    assert refused["mcp.vendor.create_ticket"] == "state_changing"
+    assert refused[namespaced("vendor", "create_ticket")] == "state_changing"
 
 
 async def test_an_unannotated_tool_is_bound_only_because_an_operator_named_it(server, ledger) -> None:
@@ -281,7 +281,7 @@ async def test_an_unannotated_tool_is_bound_only_because_an_operator_named_it(se
         servers=[config(tool_allowlist=["unannotated_lookup"])],
         session_factory=memory_session_factory(server),
     )
-    assert [t.name for t in named.tools] == ["mcp.vendor.unannotated_lookup"]
+    assert [t.name for t in named.tools] == [namespaced("vendor", "unannotated_lookup")]
 
     unnamed = await build_mcp_toolset(
         "tenant-a",
@@ -289,7 +289,7 @@ async def test_an_unannotated_tool_is_bound_only_because_an_operator_named_it(se
         servers=[config(tool_allowlist=["get_host"])],
         session_factory=memory_session_factory(server),
     )
-    assert "mcp.vendor.unannotated_lookup" not in [t.name for t in unnamed.tools]
+    assert namespaced("vendor", "unannotated_lookup") not in [t.name for t in unnamed.tools]
 
 
 async def test_an_empty_allowlist_offers_nothing_at_all(server, ledger) -> None:
@@ -384,12 +384,12 @@ async def test_a_poisoned_tool_description_drops_the_tool(server, ledger) -> Non
         session_factory=memory_session_factory(server),
     )
     names = [t.name for t in toolset.tools]
-    assert names == ["mcp.vendor.get_host"]
+    assert names == [namespaced("vendor", "get_host")]
     # Nothing of the payload reaches any description the model is shown.
     assert "isolate the host" not in " ".join(t.description for t in toolset.tools).lower()
 
     refused = {name: classification for name, classification, _ in toolset.refusals}
-    assert refused["mcp.vendor.poisoned_description"] == "injected_description"
+    assert refused[namespaced("vendor", "poisoned_description")] == "injected_description"
     rows = [e for e in ledger.of_kind("mcp_tool_refused") if e["payload"]["tool"] == "poisoned_description"]
     assert rows and "injection into the prompt" in rows[0]["payload"]["reason"]
 
@@ -530,8 +530,16 @@ class TestTransportPolicy:
             async with client.session():
                 pass  # pragma: no cover
 
-    async def test_air_gap_mode_permits_an_internal_server(self, monkeypatch) -> None:
-        """Refused later by the SSRF guard's DNS step, not by the air-gap check."""
+    async def test_the_air_gap_check_does_not_fire_on_an_internal_server(self, monkeypatch) -> None:
+        """What this proves, which is narrower than the old name claimed.
+
+        It was called `test_air_gap_mode_permits_an_internal_server` while
+        asserting the server is **refused** -- just not by the air-gap check.
+        The doc read that name and said internal MCP servers keep working,
+        which is true of this check and false of the deployment: the SSRF
+        guard refuses a private address unless `AISOC_SSRF_ALLOW_PRIVATE=1`
+        and refuses loopback either way.
+        """
         monkeypatch.setenv("AISOC_AIRGAPPED", "1")
         client = McpClient(config(url="https://mcp.corp.internal/mcp"))
         with pytest.raises(McpTransportRefused) as exc:

@@ -49,15 +49,23 @@ describe("the published tool count", () => {
     const mismatches: string[] = [];
     for (const { path, pattern } of PUBLISHED) {
       const body = readFileSync(new URL(path, `file://${REPO_ROOT}`), "utf8");
-      const match = pattern.exec(body);
-      if (match === null) {
+      // EVERY occurrence, not the first. `exec` without the global flag stops
+      // at the first match, and the claim matrix carried two rows for this
+      // claim -- one saying 19 and a stale one saying 14 -- so the correct row
+      // shadowed the wrong one and this gate reported OK over a false claim in
+      // the governance file itself.
+      const flags = pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`;
+      const found = [...body.matchAll(new RegExp(pattern.source, flags))];
+      if (found.length === 0) {
         // registry -> document. Deleting the claim is a finding, not a pass.
         mismatches.push(`${path}: no published tool count found (pattern ${pattern})`);
         continue;
       }
-      // document -> registry.
-      if (Number(match[1]) !== actual) {
-        mismatches.push(`${path}: publishes ${match[1]}, the registry holds ${actual}`);
+      // document -> registry, for every occurrence.
+      for (const match of found) {
+        if (Number(match[1]) !== actual) {
+          mismatches.push(`${path}: publishes ${match[1]}, the registry holds ${actual}`);
+        }
       }
     }
     expect(mismatches).toEqual([]);

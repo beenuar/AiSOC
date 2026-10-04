@@ -167,7 +167,15 @@ a statement about what the model sees.
   the enforcing check is the one at connect time.
 - **Air-gap.** With `AISOC_AIRGAPPED` set, a server outside
   `AISOC_AIRGAP_ALLOWLIST` that is not an internal host or a private address
-  is refused. Internal MCP servers keep working.
+  is refused by the air-gap check.
+- **An internal server still needs the SSRF guard's permission, and that is a
+  separate switch.** Clearing the air-gap check is not the same as being
+  reachable. Measured against `validate_outbound_url`: an RFC1918 address is
+  refused unless `AISOC_SSRF_ALLOW_PRIVATE=1`, and a **loopback** address is
+  refused with or without it. So a sidecar MCP server on `127.0.0.1` cannot be
+  reached at all, and one on a private address needs that variable set. This
+  used to read "internal MCP servers keep working", which was true of the
+  air-gap check and false of the deployment.
 - **stdio.** Off. A stdio server is a local process the agents container would
   start, which is code execution rather than an HTTP request. Two switches
   turn it on:

@@ -79,10 +79,10 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 2: The MCP client works over a real connection
 
-- [ ] **2.1** Transport: `_CappedStream` is a real `httpx.AsyncByteStream`
-- [ ] **2.2** Tool names match the function-name pattern
-- [ ] **2.3** SSRF re-resolution and air-gap: code, test and doc agree
-- [ ] **2.4** Docs and claim rows: generated tool count, unpublished package, stale counts
+- [x] **2.1** Transport: `_CappedStream` is a real `httpx.AsyncByteStream`
+- [x] **2.2** Tool names match the function-name pattern
+- [x] **2.3** Air-gap: code, test, doc and compose agree. SSRF re-resolution recorded as a stated limit
+- [x] **2.4** Docs and claim rows: tool count gated per occurrence, unpublished package stated
 
 ## Wave 3: Replay, shadow mode and evaluation measure the real thing
 
@@ -424,3 +424,101 @@ alone and fails three assertions when run in the same process as the full
 absent. CI runs them in separate jobs, and `ci.yml` excludes
 `tests/isolation/` for this reason, so the arrangement is sound. It is recorded
 here because "passes only in isolation" is a fragility, not a result.
+
+## Wave 2: the MCP client over a real connection
+
+### 2.1 Transport
+
+**Reproduced.** `services/agents/tests/test_mcp_real_transport.py` runs a real
+`FastMCP` streamable-HTTP server on a loopback socket and connects with **no
+`session_factory`**. Pre-fix: `AssertionError` raised inside
+`httpx/_client.py:1732`, `assert isinstance(response.stream, AsyncByteStream)`.
+
+`_CappedStream` was a plain class, and its `__aiter__` was `async def`, which
+makes the object an awaitable rather than an async iterable. Both are fixed.
+
+**Why the existing suite could not see it.** Every test in
+`test_mcp_client.py` drives `McpClient` through `session_factory`, which exists
+so a test can run a real MCP server in-process. That is a good harness for the
+policy questions it asks and it bypasses the transport entirely, so the one
+thing it cannot test is the transport. The byte-cap test exercised
+`_CappedStream` directly, so the cap was genuinely proven and the path to it
+was not.
+
+**A second defect found by fixing the first.** With the isinstance error gone,
+the byte cap fired and the *reason was unrecoverable*: the cap raises inside
+the stream, the MCP library reads that stream in its own `anyio` task, and
+what reaches the caller is `ExceptionGroup -> ExceptionGroup -> TimeoutError`
+with the `ResponseTooLarge` nowhere in the tree. Measured by walking the group,
+not assumed. That matters because `tools._failure` reports
+`type(exc).__name__` to the model and the ledger, so a tenant's own cap firing
+was recorded as the server being slow -- a diagnostic naming the wrong cause.
+
+`CapMarker` carries the reason by reference from the client down to the stream.
+A `ContextVar` was tried first and cannot work: a context propagates *into* a
+child task, so a value set by the reader is invisible to the coroutine that
+awaited it.
+
+**Negative control:** reverting the base class alone returns 3 failures.
+
+### 2.2 Tool names
+
+**Reproduced:** `'mcp.fixpass.lookup_host' is not a callable function name`.
+A dot is outside `^[a-zA-Z0-9_-]{1,64}$`, so **every MCP tool offered to a
+model was rejected by the provider**, and nothing local could see it because
+the name is only validated at the far end.
+
+`namespaced` now emits `mcp__<server>__<tool>` with each part escaped, and
+`parse_namespaced` reverses it. Dispatch is by dict lookup and never needed
+parsing; the reverse exists so a ledger row names the server that answered.
+Readability is the cost: `get_host` encodes as `get_5fhost`, because escaping
+`_` is what keeps the `__` separator unambiguous.
+
+The existing tests hardcoded `mcp.vendor.get_host`. They now derive the
+expected name from `namespaced()`, so a future encoding change cannot diverge
+silently again.
+
+**Negative control:** restoring the dotted form fails 6 of the 9.
+
+### 2.3 Air-gap: four sources, four different answers
+
+Measured against `validate_outbound_url` rather than read off the doc:
+
+| Target | `ALLOW_PRIVATE` unset | set |
+|---|---|---|
+| `127.0.0.1` | refused, loopback | **still refused** |
+| RFC1918 | refused, private | allowed |
+
+So the doc's "Internal MCP servers keep working" was true of the air-gap check
+and false of the deployment. The test named
+`test_air_gap_mode_permits_an_internal_server` **asserted the server is
+refused** -- its own docstring said so -- and the doc had read the name.
+
+Corrected: the doc states both switches and that loopback never works; the
+test is renamed to what it proves; and compose now passes `AISOC_AIRGAPPED`,
+`AISOC_AIRGAP_ALLOWLIST` and `AISOC_SSRF_ALLOW_PRIVATE`, none of which it
+delivered, so an operator could not permit an internal server at all.
+
+**The check-then-resolve-again half is a stated limit, not a fix.** The guard
+resolves a hostname and httpx resolves it again when it connects. Pinning the
+connection to the vetted address needs a custom transport resolver, which is
+out of scope for a fix pass; it is recorded here and in the doc rather than
+left implied.
+
+### 2.4 Docs and claim rows
+
+* `@aisoc/mcp` answers **404** on npm, so the quickstart's "works on a fresh
+  clone before you've run `pnpm build`" was false. Corrected to say the build
+  is required and why.
+* The claim matrix carried **two rows for the same claim**, one saying 19 tools
+  and a stale one saying 14 that cited a README line which does not mention
+  tools. The real count, generated from `ALL_TOOLS`, is **19**.
+* **The gate that should have caught it was blind.**
+  `tests/published-count.test.ts` used `pattern.exec(body)`, which returns the
+  first match and stops, so the correct row shadowed the wrong one and the gate
+  reported OK over a false claim in the governance file itself. It now checks
+  every occurrence, and with that change it names
+  `publishes 14, the registry holds 19` before the row was removed.
+* Removing the row took the matrix 291 -> 290, which `readme_gates` caught in
+  three more documents quoting the old figure. That is the copied-count failure
+  working as designed.

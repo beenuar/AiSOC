@@ -129,9 +129,100 @@ class ToolVerdict:
     parameters: dict[str, Any] = field(default_factory=dict)
 
 
+#: What an OpenAI-compatible provider accepts as a function name.
+#:
+#: This is the whole reason the encoding below exists. The id used to be
+#: ``mcp.<server>.<tool>``, and a dot is not in this set, so **every MCP tool
+#: offered to a model was rejected by the provider**. Nothing local could see
+#: it: the name is only validated at the far end.
+FUNCTION_NAME_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
+
+#: Separates the prefix, the server and the tool. Two underscores cannot occur
+#: inside an encoded part, because :func:`_encode_part` only ever emits a
+#: single ``_`` followed by two hex digits.
+_SEPARATOR = "__"
+
+_NAME_PREFIX = "mcp"
+
+#: Characters an encoded part may contain unescaped. Deliberately excludes
+#: ``_``, so the separator stays unambiguous.
+_SAFE_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-")
+
+
+def _encode_part(part: str) -> str:
+    """One name component, reversibly, using only safe characters.
+
+    Every character outside :data:`_SAFE_CHARS` becomes ``_`` plus two hex
+    digits, which covers the dot that broke this, the underscore that would
+    otherwise collide with the separator, and anything else an operator puts
+    in a server name.
+    """
+    out: list[str] = []
+    for char in part:
+        if char in _SAFE_CHARS:
+            out.append(char)
+        else:
+            code = ord(char)
+            if code > 0xFF:
+                # Above Latin-1 this scheme has no room. A server name is
+                # operator-supplied configuration, so refusing with the reason
+                # is better than emitting a name the provider rejects.
+                raise ValueError(f"cannot encode {char!r} in an MCP tool name; use ASCII in the server name and tool id")
+            out.append(f"_{code:02x}")
+    return "".join(out)
+
+
+def _decode_part(part: str) -> str:
+    out: list[str] = []
+    index = 0
+    while index < len(part):
+        char = part[index]
+        if char == "_" and index + 2 < len(part) + 1:
+            hex_digits = part[index + 1 : index + 3]
+            if len(hex_digits) == 2:
+                try:
+                    out.append(chr(int(hex_digits, 16)))
+                except ValueError:
+                    out.append(char)
+                    index += 1
+                    continue
+                index += 3
+                continue
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
 def namespaced(server: str, tool: str) -> str:
-    """The id the model sees: ``mcp.<server>.<tool>``."""
-    return f"mcp.{server}.{tool}"
+    """The id the model sees, as a name a provider will actually accept.
+
+    ``mcp__<server>__<tool>`` with each part escaped. This used to be
+    ``mcp.<server>.<tool>``; see :data:`FUNCTION_NAME_PATTERN`.
+
+    Raises ``ValueError`` when the result cannot be a valid function name,
+    which is a configuration problem an operator can fix by shortening the
+    server name. Returning an invalid name instead would move the failure to
+    the provider, where the message says nothing about this deployment.
+    """
+    name = f"{_NAME_PREFIX}{_SEPARATOR}{_encode_part(server)}{_SEPARATOR}{_encode_part(tool)}"
+    if not FUNCTION_NAME_PATTERN.match(name):
+        raise ValueError(
+            f"{name!r} is not a callable function name ({len(name)} characters; the limit is 64). Shorten the MCP server name."
+        )
+    return name
+
+
+def parse_namespaced(name: str) -> tuple[str, str]:
+    """``(server, tool)`` from a name :func:`namespaced` produced.
+
+    Dispatch does not need this -- the registry looks a tool up by name and
+    the closure already holds its server -- but a ledger row and a log line
+    do, so an operator reading one can tell which server answered.
+    """
+    parts = name.split(_SEPARATOR)
+    if len(parts) != 3 or parts[0] != _NAME_PREFIX:
+        raise ValueError(f"{name!r} is not an MCP tool name")
+    return _decode_part(parts[1]), _decode_part(parts[2])
 
 
 def vet_server(

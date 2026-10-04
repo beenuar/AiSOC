@@ -30,6 +30,7 @@ import pytest
 from app.llm.tool_loop import run_with_tools
 from app.mcp import tools as tools_module
 from app.mcp.config import McpServerConfig
+from app.mcp.policy import namespaced
 from app.mcp.tools import LEDGER_SEQ_BASE, build_mcp_toolset
 from app.tools.registry import ToolRegistry
 from mcp.server.fastmcp import FastMCP
@@ -134,31 +135,31 @@ async def test_done_when_an_investigation_calls_a_read_tool_and_refuses_a_destru
     # The destructive tool is not merely refused at call time: it is never put
     # in front of the model, so it cannot be talked into naming it.
     bound = [t.name for t in toolset.tools]
-    assert bound == ["mcp.vendor.get_detections"]
+    assert bound == [namespaced("vendor", "get_detections")]
 
     registry = ToolRegistry(toolset.tools)
     llm = _ScriptedLLM(
         [
-            _tool_call("mcp.vendor.get_detections", {"hostname": "WIN-DC-01"}),
+            _tool_call(namespaced("vendor", "get_detections"), {"hostname": "WIN-DC-01"}),
             # The model asks for the destructive tool anyway. It was never
             # bound, so the loop's own registry refuses it.
-            _tool_call("mcp.vendor.isolate_host", {"hostname": "WIN-DC-01"}, cid="c2"),
+            _tool_call(namespaced("vendor", "isolate_host"), {"hostname": "WIN-DC-01"}, cid="c2"),
             _final("One detection on WIN-DC-01; containment was not available to me."),
         ]
     )
     loop = await run_with_tools(llm, system="You are an analyst.", user="Investigate WIN-DC-01.", registry=registry)
 
     advertised = {s["function"]["name"] for s in (llm.bound_tools or [])}
-    assert "mcp.vendor.isolate_host" not in advertised
+    assert namespaced("vendor", "isolate_host") not in advertised
 
     trace = {entry["tool"]: entry["result_preview"] for entry in loop["tool_trace"]}
-    assert set(trace) == {"mcp.vendor.get_detections", "mcp.vendor.isolate_host"}
+    assert set(trace) == {namespaced("vendor", "get_detections"), namespaced("vendor", "isolate_host")}
     # The loop's own registry has no such tool, because it was never bound.
-    assert "unknown tool" in trace["mcp.vendor.isolate_host"]
+    assert "unknown tool" in trace[namespaced("vendor", "isolate_host")]
     # The read tool's result did carry the server's data, fenced. Asserted
     # against the registry the loop used rather than against the trace, whose
     # preview is a 200-character debug string.
-    direct = await registry.execute("mcp.vendor.get_detections", {"hostname": "WIN-DC-01"})
+    direct = await registry.execute(namespaced("vendor", "get_detections"), {"hostname": "WIN-DC-01"})
     assert "DET-4471" in direct["content"]
     assert direct["untrusted"] is True
 
@@ -249,6 +250,6 @@ async def test_a_run_with_no_run_id_still_works_and_writes_nothing(monkeypatch) 
         servers=[McpServerConfig(name="vendor", url="https://mcp.vendor.example/mcp", tool_allowlist=["get_detections"])],
         session_factory=memory_session_factory(server),
     )
-    assert [t.name for t in toolset.tools] == ["mcp.vendor.get_detections"]
+    assert [t.name for t in toolset.tools] == [namespaced("vendor", "get_detections")]
     assert await toolset.tools[0].fn(hostname="WIN-DC-01")
     assert rows == []
