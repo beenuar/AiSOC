@@ -480,9 +480,6 @@
     "app/connectors/okta.py": {
       "override": 1
     },
-    "app/connectors/tenable.py": {
-      "arg-type": 1
-    },
     "tests/test_pipeline_filter_rules.py": {
       "arg-type": 1
     },

@@ -34,7 +34,6 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -54,13 +53,33 @@ MAX_LATENCY_MARGIN = 20.0
 
 
 def _harness_args() -> str:
+    """The `run:` block that invokes the harness with its assertions.
+
+    Raises rather than falling through: a single exit keeps the return type a
+    `str` for both mypy and CodeQL's mixed-return check, and `pytest.fail()`
+    as the last statement reads as a value-returning path to both.
+    """
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     for job in workflow["jobs"].values():
         for step in job.get("steps") or []:
             run = step.get("run") or ""
             if "load_harness.py" in run and "--assert-eps-floor" in run:
-                return run
-    pytest.fail("perf.yml no longer runs load_harness.py with an eps floor")
+                return str(run)
+    raise AssertionError("perf.yml no longer runs load_harness.py with an eps floor")
+
+
+def _flag(name: str) -> float:
+    """One numeric flag out of the harness invocation.
+
+    The `re.search(...).group(1)` chain this replaces is four `union-attr`
+    findings and an unhandled `None` on the day somebody renames a flag --
+    which would surface as `AttributeError: 'NoneType'` rather than as the
+    gate saying what it could not find.
+    """
+    match = re.search(rf"--{re.escape(name)}\s+([\d.]+)", _harness_args())
+    if match is None:
+        raise AssertionError(f"perf.yml no longer passes --{name} to the harness")
+    return float(match.group(1))
 
 
 def _published(label: str) -> float:
@@ -73,7 +92,8 @@ def _published(label: str) -> float:
     text = PAGE.read_text(encoding="utf-8")
     compose = text[text.index("## Single host, Docker Compose") :]
     row = re.search(rf"^\|\s*{re.escape(label)}\s*\|([^|]+)\|([^|]+)\|", compose, flags=re.M)
-    assert row is not None, f"no `{label}` row in the compose table"
+    if row is None:
+        raise AssertionError(f"no `{label}` row in the compose table")
     # Column two is steady state, which the page itself calls "the row to plan
     # against"; saturation is a backlog measurement and a floor set from it
     # would describe the queue rather than the pipeline.
@@ -85,7 +105,7 @@ def _published(label: str) -> float:
 class TestTheThresholdsRelateToWhatIsPublished:
     def test_the_throughput_floor_is_within_a_stated_factor(self) -> None:
         published = _published("Pipeline drain rate")
-        floor = float(re.search(r"--assert-eps-floor\s+([\d.]+)", _harness_args()).group(1))
+        floor = _flag("assert-eps-floor")
 
         margin = published / floor
         assert margin <= MAX_THROUGHPUT_MARGIN, (
@@ -95,7 +115,7 @@ class TestTheThresholdsRelateToWhatIsPublished:
 
     def test_the_latency_ceiling_is_within_a_stated_factor(self) -> None:
         published = _published("Event-to-alert p95")
-        ceiling = float(re.search(r"--assert-p95-ceiling-ms\s+([\d.]+)", _harness_args()).group(1))
+        ceiling = _flag("assert-p95-ceiling-ms")
 
         margin = ceiling / published
         assert margin <= MAX_LATENCY_MARGIN, f"the ceiling is {ceiling} ms against a published {published} ms p95 -- {margin:.0f}x above."
@@ -104,9 +124,8 @@ class TestTheThresholdsRelateToWhatIsPublished:
         """The negative control. Thresholds tuned to the measurement would flap
         on a shared runner and be switched off within a week, so this asserts
         the gate has *not* been tightened to the published figure."""
-        args = _harness_args()
-        floor = float(re.search(r"--assert-eps-floor\s+([\d.]+)", args).group(1))
-        ceiling = float(re.search(r"--assert-p95-ceiling-ms\s+([\d.]+)", args).group(1))
+        floor = _flag("assert-eps-floor")
+        ceiling = _flag("assert-p95-ceiling-ms")
 
         assert floor < _published("Pipeline drain rate"), "the floor is at or above the published rate"
         assert ceiling > _published("Event-to-alert p95"), "the ceiling is at or below the published p95"
