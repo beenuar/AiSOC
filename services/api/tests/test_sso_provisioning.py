@@ -207,4 +207,40 @@ class TestRefusals:
                 issuer="https://idp.example",
                 email="",
                 subject="s",
+                # Verified, so the refusal under test is unambiguously the
+                # missing email and not the claim added by GHSA-qjjc-q2h2-56cg.
+                email_verified=True,
             )
+
+    async def test_no_subject_raises_rather_than_matching_on_email_alone(self) -> None:
+        """Without a subject there is nothing to bind, so an account could only
+        be selected by address -- the shape GHSA-qjjc-q2h2-56cg describes.
+
+        Both providers always send one: OIDC `sub` is mandatory and a SAML
+        assertion with no NameID is malformed, so this is a refusal for a case
+        that should not arise rather than a limitation.
+        """
+        with pytest.raises(SsoProvisioningError, match="no subject"):
+            await sso_provisioning.complete_sso_login(
+                None,  # type: ignore[arg-type]
+                provider="oidc",
+                issuer="https://idp.example",
+                email="someone@example.test",
+                subject="",
+                email_verified=True,
+            )
+
+
+@pytest.mark.asyncio
+class TestTheVerifiedEmailClaim:
+    """GHSA-qjjc-q2h2-56cg: only an affirmative assertion counts."""
+
+    @pytest.mark.parametrize("value", [True, "true", "True", "1", "yes"])
+    def test_an_affirmative_claim_is_read_as_verified(self, value: object) -> None:
+        assert oidc._claim_is_true(value) is True
+
+    @pytest.mark.parametrize("value", [None, False, "false", "", "no", 0, "maybe", [], {}])
+    def test_everything_else_is_not(self, value: object) -> None:
+        """Including absence. OIDC makes the claim optional, so "the provider
+        did not say" must not read as "the provider said yes"."""
+        assert oidc._claim_is_true(value) is False

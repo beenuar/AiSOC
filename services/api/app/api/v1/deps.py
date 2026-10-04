@@ -414,6 +414,28 @@ async def get_current_user(
         return service_principal
 
     # --- JWT path ---
+    return await resolve_jwt_principal(token, db)
+
+
+async def resolve_jwt_principal(token: str, db: AsyncSession) -> CurrentUser:
+    """Turn an access token into the principal the API acts for.
+
+    **The one place a JWT becomes a principal.** It was inlined in
+    `get_current_user`, and `graph_ws.py` resolved its own copy by hand for the
+    WebSocket upgrade -- under a docstring claiming "we reuse the same helpers
+    `get_current_user` uses so the auth contract is identical". It did not: the
+    copy checked neither session revocation nor database RBAC, so a
+    de-provisioned principal kept a live subscription to the tenant graph
+    stream while the same token was answered 401 over HTTP
+    (GHSA-25fh-rxp8-67j8).
+
+    Two implementations of one security contract diverge, and the question is
+    only when. So there is one, and both callers use it.
+
+    Raises `HTTPException(401)` on every rejection; the WebSocket caller
+    translates that into a close frame, because an upgrade response cannot
+    carry `WWW-Authenticate`.
+    """
     try:
         payload = decode_token(token)
         user_id: str = payload.get("sub")  # type: ignore[assignment]
@@ -426,8 +448,16 @@ async def get_current_user(
             detail="Could not validate credentials",
         ) from e
 
+    try:
+        subject_uuid = uuid.UUID(user_id)
+    except ValueError as exc:
+        # A `sub` that is not a UUID used to raise `ValueError` out of this
+        # function and become a 500. It is a malformed credential, which is a
+        # 401.
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
+
     result = await db.execute(
-        select(User).where(User.id == uuid.UUID(user_id), User.is_active == True)  # noqa: E712
+        select(User).where(User.id == subject_uuid, User.is_active == True)  # noqa: E712
     )
     user = result.scalar_one_or_none()
     if user is None:

@@ -214,6 +214,14 @@ async def saml_acs(request: Request, db: DBSession) -> Response:
                 subject=str(name_id or ""),
                 name=_first(attrs.get("displayName") or attrs.get(name_claim, [])),
                 groups=groups,
+                # A SAML assertion is signed by the identity provider, and the
+                # address it asserts *is* the provider's statement about the
+                # user -- there is no separate `email_verified` claim to
+                # consult, and the signature is the assurance OIDC uses that
+                # claim to provide. Stated here rather than defaulted inside
+                # `complete_sso_login`, so a reader of either caller can see
+                # which assurance applies.
+                email_verified=True,
             )
         except SsoProvisioningError as exc:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc

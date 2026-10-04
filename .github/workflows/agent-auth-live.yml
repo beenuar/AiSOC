@@ -150,6 +150,18 @@ jobs:
           ISOLATION_KEV_DSN: ${{ env.LIVE_DSN }}
         run: python -m pytest ../../tests/isolation/test_kev_exposure_has_data_live.py -v --tb=short -rs
 
+      - name: A revoked session cannot hold the graph WebSocket open
+        working-directory: services/api
+        env:
+          ISOLATION_WS_AUTH_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_graph_ws_revocation_live.py -v --tb=short -rs
+
+      - name: An unverified email claim cannot take over an account
+        working-directory: services/api
+        env:
+          ISOLATION_SSO_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_sso_account_binding_live.py -v --tb=short -rs
+
       - name: No suite may report success having skipped
         run: |
           set -euo pipefail
@@ -158,4 +170,4 @@ jobs:
             exit 1
           fi
           echo "LIVE_DSN was set, and the cross-service step sets ISOLATION_CROSS_SERVICE,"
-          echo "so none of the five suites took its skip path."
+          echo "so none of the seven suites took its skip path."

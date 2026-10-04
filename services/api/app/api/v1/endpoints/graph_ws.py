@@ -59,11 +59,9 @@ from fastapi import (
     WebSocketDisconnect,
     status,
 )
-from jwt import PyJWTError
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser, _resolve_api_key
+from app.api.v1.deps import CurrentUser, _resolve_api_key, resolve_jwt_principal
 from app.api.v1.dev_auth import (
     DEMO_TENANT_ID,
     DEMO_USER_EMAIL,
@@ -71,9 +69,7 @@ from app.api.v1.dev_auth import (
     DEMO_USER_ROLE,
     is_dev_mode,
 )
-from app.core.security import decode_token
 from app.db.database import get_db
-from app.models.tenant import User
 
 logger = logging.getLogger(__name__)
 
@@ -136,33 +132,30 @@ async def _authenticate_ws(
             )
             return None
 
-    # JWT path
+    # JWT path.
+    #
+    # Delegated, not reimplemented. This block used to decode the token, load
+    # the user and build a `CurrentUser` by hand, which skipped the two things
+    # the HTTP dependency does after that: the session-revocation check against
+    # `users.sessions_revoked_at`, and `resolve_permissions`. So a
+    # de-provisioned principal kept a live subscription to the tenant graph
+    # stream for the remaining lifetime of its access token while the same
+    # token was answered `401 Session revoked` over HTTP, and
+    # `require_permission` below fell back to the static role map because
+    # `resolved_permissions` was `None` -- where a wildcard role passes
+    # unconditionally (GHSA-25fh-rxp8-67j8).
+    #
+    # The upgrade response cannot carry `WWW-Authenticate`, which is the only
+    # reason this is not a plain `Depends`, so the 401 is translated into a
+    # close frame here and nowhere else.
     try:
-        payload = decode_token(token)
-    except PyJWTError:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="invalid token")
+        return await resolve_jwt_principal(token, db)
+    except HTTPException as exc:
+        await websocket.close(
+            code=status.WS_1008_POLICY_VIOLATION,
+            reason=str(exc.detail)[:120],
+        )
         return None
-    sub = payload.get("sub")
-    token_type = payload.get("type", "access")
-    if not sub or token_type != "access":
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="invalid token")
-        return None
-    try:
-        user_uuid = uuid.UUID(sub)
-    except ValueError:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="invalid subject")
-        return None
-    result = await db.execute(select(User).where(User.id == user_uuid, User.is_active.is_(True)))
-    user = result.scalar_one_or_none()
-    if user is None:
-        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="user not found")
-        return None
-    return CurrentUser(
-        user_id=user.id,
-        tenant_id=user.tenant_id,
-        role=user.role,
-        email=user.email,
-    )
 
 
 @router.websocket("/stream")

@@ -199,16 +199,20 @@ RATCHET: dict[str, str] = {
     "services/api/app/api/v1/endpoints/auth.py::refresh_token::User": (
         "refresh presents a signed token, not a tenant; the row it names assigns one"
     ),
-    "services/api/app/api/v1/deps.py::get_current_user::User": "bearer-token subject lookup; runs before any tenant exists on the request",
+    # One entry where there were two. The bearer-token subject lookup was
+    # inlined in `get_current_user` *and* copied into `_authenticate_ws`;
+    # that copy skipped the session-revocation check and database RBAC
+    # (GHSA-25fh-rxp8-67j8), so the two are now one function and this is
+    # its one exemption.
+    "services/api/app/api/v1/deps.py::resolve_jwt_principal::User": (
+        "bearer-token subject lookup; runs before any tenant exists on the request"
+    ),
     "services/api/app/api/v1/deps.py::_resolve_api_key::ApiKey": (
         "API-key hash lookup; the key row is the credential that carries the tenant"
     ),
     "services/api/app/services/scim/tokens.py::verify_token::ScimToken": (
         "SCIM bearer-token digest lookup; the token row is what assigns the tenant, "
         "and RFC 7643 defines no tenant attribute a caller could have supplied"
-    ),
-    "services/api/app/api/v1/endpoints/graph_ws.py::_authenticate_ws::User": (
-        "websocket ticket verification, same pre-auth shape as get_current_user"
     ),
     "services/api/app/api/v1/endpoints/passkeys.py::_consume_challenge::PasskeyChallenge": (
         "single-use WebAuthn challenge, matched on its own high-entropy value"

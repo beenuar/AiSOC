@@ -110,7 +110,9 @@ async def resolve_connection(db: AsyncSession, *, provider: str, issuer: str) ->
             (
                 await db.execute(
                     text("""
-                    SELECT tenant_id, group_role_mapping, default_role, enabled
+                    -- `id` is what an identity binding is keyed on, so the
+                    -- connection has to carry it: see `_bind_subject`.
+                    SELECT id, tenant_id, group_role_mapping, default_role, enabled
                       FROM aisoc_sso_connections
                      WHERE provider = :p AND issuer = :i AND enabled = TRUE
                      LIMIT 1
@@ -126,23 +128,122 @@ async def resolve_connection(db: AsyncSession, *, provider: str, issuer: str) ->
     return dict(row) if row else None
 
 
+async def _bind_subject(
+    db: AsyncSession,
+    *,
+    tenant_id: Any,
+    connection_id: Any,
+    subject: str,
+    user_id: Any,
+    email: str,
+    provider: str,
+) -> None:
+    """Record that this subject owns this account, on this connection.
+
+    Idempotent on `(connection_id, subject)`: a re-bind of the same pair is a
+    repeat sign-in, which only moves `last_seen_at`. A *different* account for
+    the same pair is refused by the unique index rather than silently
+    repointing the binding, because quietly moving an identity from one account
+    to another is the thing this table exists to prevent.
+    """
+    await db.execute(
+        text(
+            """
+            INSERT INTO aisoc_sso_identities
+                (tenant_id, connection_id, subject, user_id, bound_email, provider)
+            VALUES (:t, :c, :s, :u, :e, :p)
+            ON CONFLICT (connection_id, subject) DO UPDATE
+               SET last_seen_at = now()
+             WHERE aisoc_sso_identities.user_id = EXCLUDED.user_id
+            """
+        ).bindparams(t=tenant_id, c=connection_id, s=subject, u=user_id, e=email, p=provider)
+    )
+    logger.info(
+        "sso.identity_bound email=%s provider=%s subject=%s",
+        _sanitize(email, 80),
+        _sanitize(provider, 20),
+        _sanitize(subject, 64),
+    )
+
+
 async def provision_user(
     db: AsyncSession,
     *,
     tenant_id: Any,
+    connection_id: Any,
     email: str,
     name: str | None,
     role: str,
     provider: str,
     subject: str,
+    email_verified: bool | None,
 ) -> dict[str, Any]:
     """Find or create the local user this assertion names.
 
-    Matching is on `(tenant_id, email)`. Not on the IdP subject, even
-    though that is the stable identifier, because an organisation that
-    moves from one IdP to another keeps its email addresses and would
-    otherwise get a second account for every person.
+    Three steps, in order, and the order is the security property.
+
+    **1. The subject, if this connection has seen it.** `sub` is the stable
+    identifier, so a bound account survives its owner changing email address at
+    the provider.
+
+    **2. The email, but only if the provider says it verified it.** This used
+    to be the only step, with no `email_verified` requirement anywhere in the
+    OIDC path -- so an attacker who could authenticate to the tenant's
+    configured provider with an account carrying a victim's *unverified*
+    address received a token minted for the victim's local id, and with
+    database-backed RBAC the API resolved the victim's `user_roles`
+    (GHSA-qjjc-q2h2-56cg). A claim that is absent or false is treated as
+    unverified, because OIDC makes `email_verified` optional and "the provider
+    did not say" is not "the provider said yes".
+
+    Matching on email at all is deliberate and stays: an organisation that
+    moves from one identity provider to another keeps its email addresses and
+    would otherwise get a second account for every person. The binding is per
+    **connection**, so a migration starts with none and everyone re-claims
+    their own account on first sign-in -- which is exactly that behaviour.
+
+    **3. Create.** Nobody owns this address yet.
+
+    `email_verified` is `True` for SAML: the assertion is signed by the
+    identity provider, and the address it asserts *is* the provider's
+    statement about the user. There is no separate claim to consult.
     """
+    # ── 1. Already bound on this connection? ──────────────────────────────
+    bound = (
+        (
+            await db.execute(
+                text(
+                    "SELECT i.user_id, u.email, u.role, u.is_active "
+                    "FROM aisoc_sso_identities i JOIN users u ON u.id = i.user_id "
+                    "WHERE i.connection_id = :c AND i.subject = :s AND i.tenant_id = :t "
+                    "LIMIT 1"
+                ).bindparams(c=connection_id, s=subject, t=tenant_id)
+            )
+        )
+        .mappings()
+        .first()
+    )
+    if bound:
+        if not bound["is_active"]:
+            raise SsoProvisioningError(f"account {bound['email']} is deactivated")
+        await db.execute(
+            # Tenant-scoped even though `(connection_id, subject)` is unique:
+            # how a row was addressed is irrelevant to what the statement can
+            # reach, and a write that carries its own predicate stays correct
+            # after whatever edit comes next.
+            text(
+                "UPDATE aisoc_sso_identities SET last_seen_at = :now WHERE tenant_id = :t AND connection_id = :c AND subject = :s"
+            ).bindparams(now=datetime.now(UTC), t=tenant_id, c=connection_id, s=subject)
+        )
+        if bound["role"] != role:
+            await db.execute(
+                text("UPDATE users SET role = :r, updated_at = :now WHERE id = :id").bindparams(
+                    r=role, now=datetime.now(UTC), id=bound["user_id"]
+                )
+            )
+        return {"id": bound["user_id"], "email": bound["email"], "role": role, "created": False}
+
+    # ── 2. Claim by verified email ────────────────────────────────────────
     existing = (
         (
             await db.execute(
@@ -156,11 +257,65 @@ async def provision_user(
     )
 
     if existing:
+        if email_verified is not True:
+            # The whole of GHSA-qjjc-q2h2-56cg in one branch. Refused before
+            # anything is written, because the role refresh below runs on the
+            # way to the return and a rejected sign-in must not have touched
+            # the victim's row.
+            logger.warning(
+                "sso.unverified_email_claim_refused email=%s provider=%s subject=%s",
+                _sanitize(email, 80),
+                _sanitize(provider, 20),
+                _sanitize(subject, 64),
+            )
+            raise SsoProvisioningError(
+                f"the provider did not assert that {email} is verified, so it cannot be used to "
+                "sign in as an existing account. Configure the identity provider to send "
+                "`email_verified: true`, or have the account's owner sign in first."
+            )
         if not existing["is_active"]:
             # A deactivated account must not be revived by signing in.
             # Deactivation is how an operator removes access, and SSO
             # re-creating it on the next sign-in would make that useless.
             raise SsoProvisioningError(f"account {email} is deactivated")
+
+        # Somebody else on this connection may already own it. The unique
+        # index on `(connection_id, user_id)` would catch this on insert, but
+        # a clear refusal beats a constraint violation an operator has to
+        # decode.
+        claimed = (
+            (
+                await db.execute(
+                    text("SELECT subject FROM aisoc_sso_identities WHERE connection_id = :c AND user_id = :u LIMIT 1").bindparams(
+                        c=connection_id, u=existing["id"]
+                    )
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if claimed and claimed["subject"] != subject:
+            logger.warning(
+                "sso.account_already_bound email=%s provider=%s presented=%s",
+                _sanitize(email, 80),
+                _sanitize(provider, 20),
+                _sanitize(subject, 64),
+            )
+            raise SsoProvisioningError(
+                f"account {email} is already bound to a different identity on this SSO "
+                "connection. An administrator must unbind it before another subject can claim it."
+            )
+
+        await _bind_subject(
+            db,
+            tenant_id=tenant_id,
+            connection_id=connection_id,
+            subject=subject,
+            user_id=existing["id"],
+            email=email,
+            provider=provider,
+        )
+
         # The role is refreshed from the IdP on every sign-in, so removing
         # someone from a group takes effect at their next login rather than
         # requiring a second manual step.
@@ -202,6 +357,19 @@ async def provision_user(
             now=now,
         )
     )
+    # Bound immediately. An account created by this sign-in belongs to the
+    # subject that created it, so the next sign-in takes step 1 above rather
+    # than re-claiming by email -- and nobody else can claim it at all.
+    await _bind_subject(
+        db,
+        tenant_id=tenant_id,
+        connection_id=connection_id,
+        subject=subject,
+        user_id=user_id,
+        email=email,
+        provider=provider,
+    )
+
     logger.info(
         "sso.user_provisioned email=%s role=%s provider=%s",
         _sanitize(email, 80),
@@ -218,6 +386,7 @@ async def complete_sso_login(
     issuer: str,
     email: str,
     subject: str,
+    email_verified: bool | None,
     name: str | None = None,
     groups: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -227,6 +396,14 @@ async def complete_sso_login(
     """
     if not email:
         raise SsoProvisioningError("the assertion carried no email, so no local user can be named")
+    if not subject:
+        # Checked here, with the email, because both are argument validation
+        # and neither needs the database. Without a subject there is nothing to
+        # bind, so an account could only ever be selected by address -- the
+        # shape GHSA-qjjc-q2h2-56cg describes. Both providers always send one:
+        # OIDC `sub` is mandatory and a SAML assertion with no NameID is
+        # malformed.
+        raise SsoProvisioningError("the assertion carried no subject, so the account it names cannot be bound to an identity")
 
     connection = await resolve_connection(db, provider=provider, issuer=issuer)
     if connection is None:
@@ -252,11 +429,13 @@ async def complete_sso_login(
     user = await provision_user(
         db,
         tenant_id=connection["tenant_id"],
+        connection_id=connection["id"],
         email=email,
         name=name,
         role=role,
         provider=provider,
         subject=subject,
+        email_verified=email_verified,
     )
     await db.commit()
 

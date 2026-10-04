@@ -416,6 +416,13 @@ async def oidc_callback(
             issuer=issuer,
             email=str(merged.get("email") or ""),
             subject=str(merged.get("sub") or ""),
+            # OIDC makes `email_verified` optional, and it arrives as a bool
+            # from most providers and the string "true" from a few. Anything
+            # that is not an affirmative is passed through as not-verified:
+            # "the provider did not say" is not "the provider said yes", and
+            # treating absence as consent is the whole of
+            # GHSA-qjjc-q2h2-56cg.
+            email_verified=_claim_is_true(merged.get("email_verified")),
             name=merged.get("name"),
             groups=groups,
         )
@@ -433,6 +440,21 @@ async def oidc_callback(
     response = RedirectResponse(url=f"{redirect_url}{separator}access_token={session['access_token']}", status_code=302)
     response.delete_cookie("oidc_state")
     return response
+
+
+def _claim_is_true(value: Any) -> bool:
+    """Whether a provider affirmatively asserted a boolean claim.
+
+    Returns `False` for `None`, for a missing claim, and for any string that
+    is not an affirmative. There is deliberately no "unknown" third state: the
+    only question the caller asks is "may this claim select an existing
+    account", and the answer to that for an unasserted claim is no.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"true", "1", "yes"}
+    return False
 
 
 def _claim_groups(claims: dict[str, Any]) -> list[str]:
