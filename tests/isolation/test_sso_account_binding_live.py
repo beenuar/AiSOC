@@ -120,11 +120,30 @@ async def tenant_with_victim(engine):
             await conn.execute(text("DELETE FROM tenants WHERE id = :id"), {"id": tenant})
 
 
-async def _provision(engine, *, fixture, subject: str, email: str, verified: bool, connection=None):
+async def _provision(engine, *, fixture, subject: str, email: str, verified: bool | None, connection=None):
+    """Call `provision_user` the way `complete_sso_login` does.
+
+    Including the RLS context. A sign-in callback has no authenticated
+    principal, so the session it arrives on carries none, and
+    `aisoc_sso_identities` is tenant-scoped with a `WITH CHECK` that has no
+    null escape -- an unscoped session that could insert any `tenant_id` is not
+    a control. `complete_sso_login` sets it from the connection once the tenant
+    is known, and `TestTheCallbackSetsTheTenantContext` below pins that; this
+    helper mirrors it so these tests exercise the same conditions.
+
+    The fixtures run as the owner because they create tenants and users, which
+    is DDL-adjacent setup. The calls under test run through the application's
+    own session, which in CI is the DML-only `aisoc_app` role -- and that is
+    the role that found this: under the owner, RLS does not apply at all and
+    every one of these passed while SSO login would have been refused on every
+    real deployment.
+    """
     from app.auth.sso_provisioning import provision_user
+    from app.db.rls import set_rls_context
     from sqlalchemy.ext.asyncio import AsyncSession
 
     async with AsyncSession(engine) as session:
+        await set_rls_context(session, fixture["tenant_id"])
         result = await provision_user(
             session,
             tenant_id=fixture["tenant_id"],
@@ -310,3 +329,36 @@ class TestIdpMigrationStillWorks:
             "an IdP migration created a second account, which is what matching on email exists to prevent"
         )
         assert migrated["created"] is False
+
+
+class TestTheCallbackSetsTheTenantContext:
+    """The defect CI found that a permissive local database could not.
+
+    `aisoc_sso_identities` is tenant-scoped, and its `WITH CHECK` has no
+    `current_tenant_id() IS NULL` escape -- on purpose, because a session with
+    no tenant context that can insert any `tenant_id` is not an isolation
+    control. A sign-in callback carries no principal and therefore no context,
+    so without this the identity binding is refused on every deployment running
+    as the DML-only `aisoc_app` role, which is every deployment: SSO login
+    would have failed outright.
+
+    Read as source because driving `complete_sso_login` needs a configured
+    connection row, a signed assertion and token minting; what has to be
+    pinned is narrow and structural -- that the context is set, and set
+    *before* the provisioning call rather than after it.
+    """
+
+    def test_the_context_is_set_from_the_connection(self) -> None:
+        import inspect
+
+        from app.auth import sso_provisioning
+
+        source = inspect.getsource(sso_provisioning.complete_sso_login)
+
+        assert "set_rls_context" in source, (
+            "complete_sso_login does not set the tenant context, so the identity binding "
+            "is refused under the DML-only role and SSO login fails"
+        )
+        assert source.index("set_rls_context") < source.index("provision_user("), (
+            "the context is set after provisioning, which is too late for the insert it guards"
+        )

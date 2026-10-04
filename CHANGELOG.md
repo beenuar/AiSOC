@@ -44,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   assertion is signed, and the signature is the assurance OIDC uses the claim
   to provide.
 
+  The identity binding also has to set the tenant context before it writes.
+  A sign-in callback has no authenticated principal, so the session it arrives
+  on carries none, and the new table's `WITH CHECK` has no
+  `current_tenant_id() IS NULL` escape -- deliberately, because an unscoped
+  session that can insert any `tenant_id` is not a control. `complete_sso_login`
+  sets it from the connection, which is the only thing that decides the tenant
+  on this path. Without it the binding is refused under the DML-only
+  `aisoc_app` role and SSO login fails outright; CI found that because it runs
+  as that role, and a local database connected as the owner cannot, since RLS
+  does not apply to the owner at all.
+
 [GHSA-25fh-rxp8-67j8]: https://github.com/beenuar/AiSOC/security/advisories/GHSA-25fh-rxp8-67j8
 [GHSA-qjjc-q2h2-56cg]: https://github.com/beenuar/AiSOC/security/advisories/GHSA-qjjc-q2h2-56cg
 

@@ -46,6 +46,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.security import create_access_token, create_refresh_token
+from app.db.rls import set_rls_context
 
 logger = logging.getLogger(__name__)
 
@@ -425,6 +426,19 @@ async def complete_sso_login(
         role = connection.get("default_role") or DEFAULT_ROLE
     if role not in ASSIGNABLE_ROLES:
         role = DEFAULT_ROLE
+
+    # The tenant is known now, and not before: a sign-in callback has no
+    # authenticated principal, so the session it arrives on carries no RLS
+    # context and `current_tenant_id()` is NULL.
+    #
+    # `aisoc_sso_identities` is tenant-scoped with the standard policy, whose
+    # `WITH CHECK` has no null escape -- deliberately, since an unscoped
+    # session that could insert any `tenant_id` is not a control. So the
+    # context is set here, from the connection, which is also the only thing
+    # that decides the tenant on this path. Without it the identity binding
+    # would be refused on every deployment running as the DML-only `aisoc_app`
+    # role, which is every deployment: SSO login would fail outright.
+    await set_rls_context(db, connection["tenant_id"])
 
     user = await provision_user(
         db,
