@@ -54,7 +54,7 @@ Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM*
 [Installation](https://beenuar.github.io/AiSOC/docs/installation#requirements) says what each number
 was measured against. The first run downloads a ~2 GB model into a volume only `make clean` clears.
 
-`make up` also creates `.env` and generates the **fourteen** secrets in it — the credential vault, the
+`make up` also creates `.env` and generates the **fifteen** secrets in it — the credential vault, the
 session signing key, five service-to-service credentials and four datastore passwords — then creates
 an administrator and prints its password, generated on your machine, shown once and stored nowhere.
 Copy it, or mint another with `make bootstrap ARGS=--reset-password`.
