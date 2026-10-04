@@ -141,7 +141,7 @@ def _permit_the_loopback_test_server(monkeypatch: pytest.MonkeyPatch) -> None:
     guard's own behaviour is asserted in `test_mcp_client.py`. Neutralising it
     here buys access to the transport and nothing else.
     """
-    import app.mcp.client as client_mod
+    from app.mcp import client as client_mod
 
     monkeypatch.setattr(client_mod, "validate_outbound_url", lambda url, **kw: url)
 
