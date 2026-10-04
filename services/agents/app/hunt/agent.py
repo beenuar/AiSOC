@@ -225,9 +225,7 @@ async def plan_hunt(
     return None, refusals
 
 
-async def execute_plan(
-    plan: HuntPlan, *, ledger: Any | None = None, run_id: str | None = None, tenant_id: str = ""
-) -> HuntAgentResult:
+async def execute_plan(plan: HuntPlan, *, ledger: Any | None = None, run_id: str | None = None, tenant_id: str = "") -> HuntAgentResult:
     """Run a validated plan through the API, which owns the warehouse.
 
     The agents service holds no ClickHouse credential and no tenant session by

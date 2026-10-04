@@ -161,9 +161,7 @@ def _connector_names(payload: dict) -> set[str]:
 
 
 class TestTheServiceCredentialIsAccepted:
-    async def test_a_service_token_with_a_tenant_reaches_the_agent_tool_surface(
-        self, app_client, two_tenants
-    ) -> None:
+    async def test_a_service_token_with_a_tenant_reaches_the_agent_tool_surface(self, app_client, two_tenants) -> None:
         """The credential compose actually delivers is one the API accepts.
 
         Against the pre-fix tree this is 401: the API resolved a bearer token
@@ -188,12 +186,8 @@ class TestTheServiceCredentialIsAccepted:
         tenant_a, connector_a = two_tenants["a"]
         tenant_b, connector_b = two_tenants["b"]
 
-        got_a = _connector_names((await app_client.get(
-            "/api/v1/agent-tools/backends", headers=_service_headers(tenant_a)
-        )).json())
-        got_b = _connector_names((await app_client.get(
-            "/api/v1/agent-tools/backends", headers=_service_headers(tenant_b)
-        )).json())
+        got_a = _connector_names((await app_client.get("/api/v1/agent-tools/backends", headers=_service_headers(tenant_a))).json())
+        got_b = _connector_names((await app_client.get("/api/v1/agent-tools/backends", headers=_service_headers(tenant_b))).json())
 
         assert connector_a in got_a, f"tenant A did not see its own connector: {sorted(got_a)}"
         assert connector_b in got_b, f"tenant B did not see its own connector: {sorted(got_b)}"
@@ -207,9 +201,7 @@ class TestTheNegativeControls:
     async def test_no_credential_is_refused(self, app_client, two_tenants) -> None:
         tenant_b, _ = two_tenants["b"]
         response = await app_client.get("/api/v1/agent-tools/backends", headers={TENANT_HEADER: tenant_b})
-        assert response.status_code in (401, 403), (
-            f"an uncredentialed caller was served: {response.status_code}"
-        )
+        assert response.status_code in (401, 403), f"an uncredentialed caller was served: {response.status_code}"
 
     async def test_a_service_token_without_a_tenant_is_refused_rather_than_widened(self, app_client) -> None:
         """An absent scope is an empty scope, never every scope.
@@ -219,9 +211,7 @@ class TestTheNegativeControls:
         absent as "no filter".
         """
         response = await app_client.get("/api/v1/agent-tools/backends", headers=_service_headers(None))
-        assert response.status_code in (401, 403), (
-            f"a service token with no tenant header was served: {response.status_code}"
-        )
+        assert response.status_code in (401, 403), f"a service token with no tenant header was served: {response.status_code}"
 
     async def test_a_tenant_that_does_not_exist_is_refused(self, app_client) -> None:
         """The header is caller-supplied, so it is checked against the table.
@@ -230,12 +220,8 @@ class TestTheNegativeControls:
         that nothing checked against `tenants`. A service token is trusted;
         the tenant it names is not.
         """
-        response = await app_client.get(
-            "/api/v1/agent-tools/backends", headers=_service_headers(str(uuid.uuid4()))
-        )
-        assert response.status_code in (401, 403, 404), (
-            f"a service token naming an unknown tenant was served: {response.status_code}"
-        )
+        response = await app_client.get("/api/v1/agent-tools/backends", headers=_service_headers(str(uuid.uuid4())))
+        assert response.status_code in (401, 403, 404), f"a service token naming an unknown tenant was served: {response.status_code}"
 
     async def test_a_wrong_service_token_is_refused(self, app_client, two_tenants) -> None:
         tenant_b, _ = two_tenants["b"]
@@ -243,6 +229,4 @@ class TestTheNegativeControls:
             "/api/v1/agent-tools/backends",
             headers={"Authorization": "Bearer not-the-service-token", TENANT_HEADER: tenant_b},
         )
-        assert response.status_code in (401, 403), (
-            f"a forged service token was served: {response.status_code}"
-        )
+        assert response.status_code in (401, 403), f"a forged service token was served: {response.status_code}"

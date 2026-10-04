@@ -220,9 +220,7 @@ INDICATOR_TYPES: tuple[str, ...] = (
 )
 
 
-async def siem_indicator_search(
-    indicator_type: str, value: str, hours: int = 24, *, tenant_id: str = ""
-) -> dict[str, Any]:
+async def siem_indicator_search(indicator_type: str, value: str, hours: int = 24, *, tenant_id: str = "") -> dict[str, Any]:
     """Search the customer's own SIEMs for one indicator."""
     what = f"{indicator_type} {value} in the customer's SIEMs"
     body = await _call(
@@ -415,9 +413,7 @@ def _siem_tool(tenant_id: str = "") -> Tool:
             },
             "required": ["indicator_type", "value"],
         },
-        fn=lambda indicator_type, value, hours=24: siem_indicator_search(
-            indicator_type, value, hours, tenant_id=tenant_id
-        ),
+        fn=lambda indicator_type, value, hours=24: siem_indicator_search(indicator_type, value, hours, tenant_id=tenant_id),
     )
 
 

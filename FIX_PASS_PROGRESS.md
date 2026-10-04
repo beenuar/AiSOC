@@ -65,7 +65,7 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 ## Wave 1: Security and tenancy (P0)
 
 - [x] **1.1** Agents authenticates to the API as a service, for the tenant it is working on
-- [ ] **1.2** Federated search authenticates to the connectors service
+- [x] **1.2** Federated search authenticates to the connectors service
 - [ ] **1.3** Vendor reads match the connector types tenants actually save
 - [ ] **1.4** Earned auto-close grants are honoured, and the closure default is decided
 - [ ] **1.5** The hunting agent returns its findings, for the right tenant, with a ledger
@@ -218,3 +218,41 @@ ingest client adds the credential by subscript).
 
 **It then found two more of the same defect**, one of which the plan names as
 1.2 and one it does not: `federated.py:253` and `case_fanout.py:185`.
+
+### 1.2 Federated search authenticates to the connectors service
+
+**Reproduced.** `tests/test_connectors_calls_are_credentialed.py` starts the
+**real connectors application** (`app.main:app`) as its own process on a
+loopback socket and drives `federated._query_one_backend`, the function the
+route calls. Pre-fix the verdict reads
+`status='error' error='backend 401: missing bearer credential'`.
+
+Three decisions the first draft got wrong, each of which would have produced a
+test that passed over the defect:
+
+* **It mounted the router instead of the application**, which dropped the
+  `/api/v1` prefix, so the first run saw 404 where a deployment sees 401. A
+  harness artefact that reads exactly like a passing test.
+* **It asserted on `_catalog_headers`**, the helper that already worked. What
+  shipped broken is that federated search never called it, so a test of the
+  helper passes on the defective tree. It now drives the production path and
+  pins the helper separately.
+* **It re-implemented the "every caller uses it" walk** and was worse at it
+  than the gate, naming five call sites that reach the agents service and a
+  vendor. That half is deleted with the reason recorded; the gate owns it.
+
+Both services name their package `app`, so the far side runs in a subprocess
+rather than being imported. Skipping around the clash was the alternative and
+a skipping test reports the same word as a passing one.
+
+**Fix:** `services/api/app/core/connectors_auth.py` is now the single
+implementation. `federated.py` and `case_fanout.py` call it with the
+connector's own `tenant_id`; `connectors.py::_catalog_headers` delegates to it
+rather than keeping the second copy that let this happen.
+
+**Negative control:** removing `headers=connectors_headers(...)` from
+`federated.py` returns the suite to `1 failed, 4 passed` with the same 401.
+
+**Also fixed, not in the plan:** `case_fanout.py:185` had the identical
+defect on case push and status polling. The gate found it; the plan named
+only federated search.

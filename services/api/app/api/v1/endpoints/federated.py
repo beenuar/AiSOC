@@ -45,6 +45,7 @@ from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.config import settings
+from app.core.connectors_auth import connectors_headers
 from app.models.audit import AuditLog
 from app.models.connector import Connector
 from app.security.credential_vault import CredentialVaultError, get_vault
@@ -250,7 +251,7 @@ async def _query_one_backend(
 
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, json=payload, headers=connectors_headers(connector.tenant_id))
     except httpx.HTTPError as exc:
         logger.warning(
             "federated.query.unreachable connector=%s url=%s err=%s",

@@ -235,6 +235,11 @@ def test_serialize_case_for_push_handles_row_with_mapping() -> None:
 # ---------------------------------------------------------------------------
 
 
+#: The connectors service refuses a service token that does not name the
+#: tenant it is acting for, so every call site supplies one.
+FANOUT_TENANT = uuid.UUID("22222222-2222-2222-2222-222222222222")
+
+
 @pytest.mark.asyncio
 async def test_post_returns_ok_on_2xx() -> None:
     fake_resp = _build_post_response(
@@ -243,7 +248,7 @@ async def test_post_returns_ok_on_2xx() -> None:
     )
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
-        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0, tenant_id=FANOUT_TENANT)
     assert status == "ok"
     assert body == {"external_id": "AIS-1", "vendor": "jira"}
     assert err is None
@@ -254,7 +259,7 @@ async def test_post_returns_unsupported_on_501() -> None:
     fake_resp = _build_post_response(status_code=501, text_body="capability missing")
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
-        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0, tenant_id=FANOUT_TENANT)
     assert status == "unsupported"
     assert body is None
     assert err == "capability missing"
@@ -268,7 +273,7 @@ async def test_post_returns_error_on_4xx_with_detail() -> None:
     )
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
-        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0, tenant_id=FANOUT_TENANT)
     assert status == "error"
     assert body is None
     assert "missing project_key" in (err or "")
@@ -282,7 +287,7 @@ async def test_post_returns_error_on_transport_failure() -> None:
     create endpoint."""
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(side_effect=httpx.ConnectError("dns failed"))
-        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0, tenant_id=FANOUT_TENANT)
     assert status == "error"
     assert body is None
     assert "connectors service unreachable" in (err or "")
@@ -295,7 +300,7 @@ async def test_post_returns_error_on_non_dict_body() -> None:
     fake_resp = _build_post_response(status_code=200, json_body=[1, 2, 3])  # type: ignore[arg-type]
     with patch("app.services.case_fanout.httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(return_value=fake_resp)
-        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0)
+        status, body, err = await _post_to_connector_service(url="http://x/y", payload={}, timeout_seconds=5.0, tenant_id=FANOUT_TENANT)
     assert status == "error"
     assert "unexpected payload shape" in (err or "")
 

@@ -52,6 +52,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 _API_KEY_PREFIX = "aisoc_"
 
+
 class CurrentUser:
     """Resolved authenticated user context.
 
@@ -249,8 +250,6 @@ async def _resolve_service_principal(
     and ``POST /v1/ingest/batch`` once trusted exactly such a header with
     nothing verifying it existed.
     """
-    import hmac
-
     expected = resolve_service_token()
     if not expected or not hmac.compare_digest(token, expected):
         return None

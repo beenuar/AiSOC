@@ -56,6 +56,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.connectors_auth import connectors_headers
 from app.models.connector import Connector
 from app.security.credential_vault import CredentialVaultError, get_vault
 
@@ -168,6 +169,7 @@ async def _post_to_connector_service(
     url: str,
     payload: dict[str, Any],
     timeout_seconds: float,
+    tenant_id: Any,
 ) -> tuple[str, dict[str, Any] | None, str | None]:
     """POST to the connectors microservice and return (status, body, err).
 
@@ -182,7 +184,7 @@ async def _post_to_connector_service(
     timeout = httpx.Timeout(timeout_seconds, connect=min(5.0, timeout_seconds))
     try:
         async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.post(url, json=payload)
+            resp = await client.post(url, json=payload, headers=connectors_headers(tenant_id))
     except httpx.HTTPError as exc:
         return ("error", None, f"connectors service unreachable: {exc}")
 
@@ -360,6 +362,7 @@ async def _push_one_case(
         url=url,
         payload=payload,
         timeout_seconds=timeout_seconds,
+        tenant_id=connector.tenant_id,
     )
 
     if push_status != "ok" or body is None:
@@ -545,6 +548,7 @@ async def _push_one_status_change(
         url=url,
         payload=payload,
         timeout_seconds=timeout_seconds,
+        tenant_id=connector.tenant_id,
     )
 
     if push_status != "ok" or body is None:

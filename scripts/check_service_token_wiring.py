@@ -205,9 +205,7 @@ def _url_is_internal(node: ast.AST, module: ast.Module) -> bool:
     # argument expression saw a bare name and concluded nothing.
     if isinstance(node, ast.Name):
         for assign in ast.walk(module):
-            if isinstance(assign, ast.Assign) and any(
-                isinstance(t, ast.Name) and t.id == node.id for t in assign.targets
-            ):
+            if isinstance(assign, ast.Assign) and any(isinstance(t, ast.Name) and t.id == node.id for t in assign.targets):
                 if _url_is_internal(assign.value, module):
                     return True
         return False
@@ -238,8 +236,7 @@ def _carries_credential(call: ast.Call, module: ast.Module) -> bool:
         return False
 
     if any(
-        isinstance(sub, ast.Constant) and isinstance(sub.value, str) and sub.value.lower() == "authorization"
-        for sub in ast.walk(headers)
+        isinstance(sub, ast.Constant) and isinstance(sub.value, str) and sub.value.lower() == "authorization" for sub in ast.walk(headers)
     ):
         return True
 
@@ -250,10 +247,19 @@ def _carries_credential(call: ast.Call, module: ast.Module) -> bool:
         if _HEADER_HELPER_RE.search(name):
             for node in ast.walk(module):
                 if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == name:
+                    if any(
+                        isinstance(sub, ast.Constant) and isinstance(sub.value, str) and sub.value.lower() == "authorization"
+                        for sub in ast.walk(node)
+                    ):
+                        return True
+                    # A helper that delegates to the shared builder rather
+                    # than spelling the header itself. One hop further,
+                    # because consolidating three copies into one module is
+                    # the fix, and a gate that then reports the consolidated
+                    # callers would argue against its own remedy.
                     return any(
-                        isinstance(sub, ast.Constant)
-                        and isinstance(sub.value, str)
-                        and sub.value.lower() == "authorization"
+                        isinstance(sub, ast.Call)
+                        and _HEADER_HELPER_RE.search(sub.func.attr if isinstance(sub.func, ast.Attribute) else getattr(sub.func, "id", ""))
                         for sub in ast.walk(node)
                     )
             # A helper this module does not define, named like a header
@@ -270,17 +276,11 @@ def _carries_credential(call: ast.Call, module: ast.Module) -> bool:
             # client as uncredentialed when it is not.
             if isinstance(node, ast.Assign) and any(
                 (isinstance(t, ast.Name) and t.id == headers.id)
-                or (
-                    isinstance(t, ast.Subscript)
-                    and isinstance(t.value, ast.Name)
-                    and t.value.id == headers.id
-                )
+                or (isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name) and t.value.id == headers.id)
                 for t in node.targets
             ):
                 if any(
-                    isinstance(sub, ast.Constant)
-                    and isinstance(sub.value, str)
-                    and sub.value.lower() == "authorization"
+                    isinstance(sub, ast.Constant) and isinstance(sub.value, str) and sub.value.lower() == "authorization"
                     for sub in ast.walk(node)
                 ):
                     return True

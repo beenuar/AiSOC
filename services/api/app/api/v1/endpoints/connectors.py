@@ -35,7 +35,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -73,6 +72,7 @@ from pydantic import BaseModel, Field  # noqa: E402
 from sqlalchemy import select, update  # noqa: E402
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission  # noqa: E402
+from app.core import connectors_auth  # noqa: E402
 from app.core.config import settings  # noqa: E402
 from app.models.connector import Connector  # noqa: E402
 from app.security.credential_vault import CredentialVaultError, get_vault  # noqa: E402
@@ -329,29 +329,19 @@ _TENANT_HEADER = "X-AiSOC-Tenant-ID"
 
 def _service_token() -> str:
     """The shared secret this service presents to the connectors service."""
-    specific = (os.getenv("AISOC_CONNECTORS_SERVICE_TOKEN") or "").strip()
-    return specific or (os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+    return connectors_auth.service_token()
 
 
 def _catalog_headers(tenant_id: uuid.UUID | str | None) -> dict[str, str]:
     """Credential + tenant assertion for a proxied connectors-service call.
 
-    Every route on the connectors service sits behind
-    ``require_console_or_service_auth``: a bearer credential is mandatory, and
-    a *service* token must additionally declare the tenant it acts for,
-    because an absent scope there is an empty scope rather than every scope.
-    This proxy sent neither, so it was answered with 401 on every single call
-    and fell through to the bundled catalog every time — which is how a
-    26-entry list stood in for an 84-connector registry while every check
-    passed. Mirrors ``_upstream_headers`` in the fusion gateway.
+    Delegates to :mod:`app.core.connectors_auth`, which is now the single
+    implementation. This route had the only correct one for a while, and two
+    later callers in ``federated.py`` and ``case_fanout.py`` were written
+    without it and were answered 401 on every deployment. Keeping a second
+    copy here is how that happens again.
     """
-    headers: dict[str, str] = {}
-    token = _service_token()
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    if tenant_id is not None:
-        headers[_TENANT_HEADER] = str(tenant_id)
-    return headers
+    return connectors_auth.connectors_headers(tenant_id)
 
 
 #: Where a catalog came from. The distinction is load-bearing: see
