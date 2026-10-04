@@ -118,6 +118,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of diff across the spec and nothing to do with anyone's change -- so it now
   names the mismatch, prints the `pip install` that fixes it, and shows the
   first differing paths.
+- **The performance gate could not have caught a regression.** It asserted a
+  floor of 5 events/s and a ceiling of 120,000 ms against published figures of
+  **80.1 alerts/s** and a **1,091 ms** p95 -- 16x below and 110x above -- so a
+  regression had to be catastrophic by two orders of magnitude before the job
+  that said it was measuring noticed. The thresholds are now derived from those
+  figures (7.3x and 19.2x), with the arithmetic in the workflow and a test that
+  parses both the workflow and the published page and fails if the ratio drifts
+  in either direction. `check_perf_results.py` accepted a results directory
+  covering one of the two published deployments and had no freshness bound at
+  all; it now requires both and caps the newest result at 400 days.
+  `scripts/perf/load_profiles.py` and `scripts/perf/throughput_claims.py` had
+  no caller anywhere and could not be pointed at a real run, because the
+  harness recorded none of the context they require. The harness now records
+  the load's shape -- batch size, workers, target rate, host count, commit --
+  and `--from-harness` translates a result into claim shape, taking the
+  missing-context findings from eight to zero. The one remaining gap is stated
+  rather than absorbed: the harness does not measure what fraction of pushed
+  events the rule engine evaluated, so that problem is tolerated by an explicit
+  `--allow` naming it and is still printed on every run.
 - **KEV exposure had no data on any deployment, and three further defects sat
   behind it.** `asset_vulnerabilities` had exactly one writer in the tree --
   `POST /api/v1/assets/vulnerabilities`, a route a human calls by hand -- and
