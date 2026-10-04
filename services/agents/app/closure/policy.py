@@ -286,19 +286,32 @@ async def _has_auto_close_grant(pool: Any, *, tenant_id: str, alert_class: str |
     and `apps/docs/docs/operations/shadow-mode.md` described it as letting
     the agent close alerts of that class, which parity 1.1 had to retract
     because nothing consulted it.
+
+    Then the reader was written against the wrong table. It named
+    `autonomy_grants`, which migration 067 spells `aisoc_autonomy_grants`, and
+    filtered on `revoked_at` and `expires_at`, which that table does not have:
+    its lifecycle is the `state` column, one of `shadow`, `granted` or
+    `demoted`. Three names wrong in one statement, and because
+    `require_grant` defaults to true, the effect was that a tenant which
+    enabled a closure policy could never auto-close anything. The feature was
+    off for exactly the tenants who turned it on.
+
+    The `except` below is what made it invisible: it logged at warning and
+    returned `False`, which is indistinguishable from "this tenant has not
+    earned a grant". It stays, because a database blip must not close alerts,
+    but the live suite now asserts the query itself works.
     """
     try:
         async with pool.acquire() as conn:
             row = await conn.fetchrow(
                 """
                 SELECT 1
-                  FROM autonomy_grants
+                  FROM aisoc_autonomy_grants
                  WHERE tenant_id = $1::uuid
                    AND capability = 'auto_close'
                    AND scope_kind = 'alert_class'
                    AND ($2::text IS NULL OR scope_key = $2)
-                   AND revoked_at IS NULL
-                   AND (expires_at IS NULL OR expires_at > NOW())
+                   AND state = 'granted'
                  LIMIT 1
                 """,
                 tenant_id,

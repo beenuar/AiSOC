@@ -188,6 +188,75 @@ UNMIGRATED_TABLES: dict[str, str] = {
     ),
 }
 
+#: Tables that are real, but not in Postgres. A statement against one cannot
+#: be compared with a migration because no migration should declare it.
+#:
+#: This list exists so that **everything not on it fails**. Before it, a
+#: ``SELECT`` against a table no migration creates was silently recorded as
+#: "not compared", on the reasoning that the gate cannot tell which engine a
+#: statement targets. That is true, and the remedy is to say which, once,
+#: rather than to excuse the whole class: the closure policy read a table
+#: called ``autonomy_grants`` that exists in no engine at all, and this gate
+#: passed over it for as long as it shipped.
+FOREIGN_ENGINE_TABLES: dict[str, str] = {
+    # ClickHouse. The lake's own database qualifies its tables, so the parser
+    # sees the database name as the table.
+    "aisoc": "ClickHouse: the event lake qualifies every table as `aisoc.<name>`, so the parser reads the database name here.",
+    "system": "ClickHouse's own `system.*` introspection tables.",
+    # Postgres catalogues. Real, and declared by Postgres rather than by us.
+    "pg_roles": "A Postgres catalogue, not an application table.",
+    "pg_class": "A Postgres catalogue, not an application table.",
+    "information_schema": "The SQL standard catalogue, not an application table.",
+    # osquery, evaluated on an endpoint by the agent rather than by a database.
+    "processes": "osquery virtual table, evaluated on the endpoint.",
+    "process_open_sockets": "osquery virtual table, evaluated on the endpoint.",
+    "logged_in_users": "osquery virtual table, evaluated on the endpoint.",
+    "file": "osquery virtual table, evaluated on the endpoint.",
+    "proctree": "osquery virtual table, evaluated on the endpoint.",
+    "deb_packages": "osquery virtual table, evaluated on the endpoint.",
+    "rpm_packages": "osquery virtual table, evaluated on the endpoint.",
+    "homebrew_packages": "osquery virtual table, evaluated on the endpoint.",
+    # Vendor SQL this product sends to a customer's own warehouse.
+    "SNOWFLAKE": "Snowflake's account usage views, queried in the customer's own warehouse.",
+    "SetupAuditTrail": "A vendor audit view, queried in the customer's own system.",
+}
+
+#: Names the parser reads as a table that are not one.
+#:
+#: Common table expressions are **detected** rather than listed here, because
+#: three were on this list before `_cte_names` existed and the fourth arrived
+#: the same week. What is left is prose: a docstring whose English happens to
+#: put a word after the token SELECT.
+PARSER_ARTEFACTS: dict[tuple[str, str], str] = {
+    (
+        "services/actions/app/services/autonomy_evidence_rules.py",
+        "recent",
+    ): (
+        "`recent` is a common table expression, and `_cte_names` resolves it where the WITH clause and "
+        "the reference share one string literal. This module composes the statement across two, so the "
+        "node holding `FROM recent` does not contain its own declaration."
+    ),
+    (
+        "services/actions/app/live_actions/builtins.py",
+        "the",
+    ): "Prose in the module docstring, not a statement. The word follows `SELECT` in an English sentence.",
+}
+
+#: Tables a statement names that no migration creates and that are not foreign
+#: either: a defect, recorded with the item that removes it.
+#:
+#: An entry here is a debt with an owner, not an exemption. Both of these are
+#: fix-pass item 6.5, which either points the two detection-tuning routes at
+#: the real tables or removes them.
+KNOWN_MISSING_TABLES: dict[str, str] = {
+    "aisoc_alerts": (
+        "No migration creates this. The detection-loop suggestion route and the business-context "
+        "reader query it, so both return nothing on every deployment. Fix-pass item 6.5 removes "
+        "this entry by pointing them at `alerts` or removing the routes."
+    ),
+    "aisoc_detection_rules": ("No migration creates this. Same two routes, same item 6.5."),
+}
+
 #: Statements whose table or column list is assembled at runtime, and so
 #: cannot be compared against anything, with the reason.
 DYNAMIC_SQL: dict[tuple[str, str], str] = {
@@ -379,6 +448,18 @@ def _select_columns(projection: str) -> tuple[list[str], bool]:
     return columns, complete
 
 
+#: Names declared by a ``WITH`` clause. A CTE is a table for the length of one
+#: statement and is declared by that statement, so comparing it against a
+#: migration asks the wrong question. Detected rather than allowlisted: three
+#: were on an exceptions list before this, and the fourth would have been too.
+_CTE_NAME = re.compile(r"(?:\bWITH\s+(?:RECURSIVE\s+)?|,\s*)([a-z_][a-z0-9_]*)\s+AS\s*\(", re.I)
+
+
+def _cte_names(text: str) -> set[str]:
+    """Every name a ``WITH`` clause declares in this statement."""
+    return {m.group(1).lower() for m in _CTE_NAME.finditer(text)}
+
+
 _UPDATE = re.compile(r"\bUPDATE\s+(?:ONLY\s+)?([^\s(;]+)\s+SET\b", re.I)
 _DO_UPDATE = re.compile(r"\bDO\s+UPDATE\s+SET\b", re.I)
 
@@ -515,6 +596,7 @@ def statements_in(source: str, relpath: str) -> list[dict]:
         if not text or not ("INSERT" in upper or "UPDATE" in upper or "SELECT" in upper):
             continue
         line = getattr(node, "lineno", 0)
+        ctes = _cte_names(text)
 
         inserts: list[tuple[int, dict]] = []
         for match in _INSERT.finditer(text):
@@ -524,6 +606,7 @@ def statements_in(source: str, relpath: str) -> list[dict]:
                 "kind": "INSERT",
                 "file": relpath,
                 "line": line,
+                "ctes": ctes,
                 "table": match.group(1).strip('"'),
                 "columns": columns,
                 # A statement with no column list names no column to check,
@@ -541,6 +624,7 @@ def statements_in(source: str, relpath: str) -> list[dict]:
                     "kind": "SELECT",
                     "file": relpath,
                     "line": line,
+                    "ctes": ctes,
                     "table": match.group(2).strip('"'),
                     "columns": columns,
                     "columns_declared": True,
@@ -555,6 +639,7 @@ def statements_in(source: str, relpath: str) -> list[dict]:
                     "kind": "UPDATE",
                     "file": relpath,
                     "line": line,
+                    "ctes": ctes,
                     "table": match.group(1).strip('"'),
                     "columns": columns,
                     "columns_declared": True,
@@ -624,6 +709,8 @@ def scan(root: pathlib.Path | None = None) -> dict:
     credits: list[dict] = []
     foreign_used: set[str] = set()
     dynamic_used: set[tuple[str, str]] = set()
+    artefact_used: set[tuple[str, str]] = set()
+    missing_used: set[str] = set()
 
     for statement in statements:
         table = statement["table"]
@@ -655,7 +742,48 @@ def scan(root: pathlib.Path | None = None) -> dict:
         # `detection_rules`, which is migrated and whose projection reads
         # cleanly, so the overlay loaded nothing on every deployment while
         # every unit test passed against a fake.
-        if statement["kind"] == "SELECT" and (not statement["columns_complete"] or table not in schema):
+        # A table no migration creates, and which is not declared as living
+        # in another engine, is a statement that cannot succeed anywhere.
+        #
+        # This used to fall through to "not compared" along with every SELECT
+        # whose projection the parser could not read, and the two are not the
+        # same result: one means the gate could not judge, the other means the
+        # gate judged and the answer is no. `autonomy_grants` sat in that
+        # bucket for as long as it shipped.
+        if table not in schema and table != DYNAMIC:
+            if table.lower() in statement.get("ctes", ()):
+                # Declared by this very statement's WITH clause.
+                credits.append({**statement, "verdict": "common-table-expression", "detail": "declared by this statement's WITH clause"})
+                continue
+            if table in FOREIGN_ENGINE_TABLES:
+                foreign_used.add(table)
+                credits.append({**statement, "verdict": "foreign-engine", "detail": FOREIGN_ENGINE_TABLES[table]})
+                continue
+            if key in PARSER_ARTEFACTS:
+                artefact_used.add(key)
+                credits.append({**statement, "verdict": "parser-artefact", "detail": PARSER_ARTEFACTS[key]})
+                continue
+            if table in KNOWN_MISSING_TABLES:
+                missing_used.add(table)
+                credits.append({**statement, "verdict": "known-missing", "detail": KNOWN_MISSING_TABLES[table]})
+                continue
+            findings.append(
+                {
+                    **statement,
+                    # The existing vocabulary, not a second word for the same
+                    # thing: the self-test and the renderer both read this.
+                    "kind_of_finding": "unknown-table",
+                    "column": "",
+                    "verdict": "no-such-table",
+                    "detail": (
+                        f"no migration creates {table!r}, and it is not declared as a foreign-engine table. "
+                        "This statement cannot succeed on any deployment."
+                    ),
+                }
+            )
+            continue
+
+        if statement["kind"] == "SELECT" and not statement["columns_complete"]:
             uncompared.append({**statement, "verdict": "select-not-resolved"})
             continue
 
@@ -820,10 +948,20 @@ def _detects_injected_drift() -> list[tuple[str, bool]]:
         (
             # The gate knows which tables are migrated, not which engine a
             # statement targets. osquery's virtual tables and the ClickHouse
-            # lake have no Postgres migration, and failing those would be
-            # the gate asserting something it cannot see.
-            "declines a SELECT against an unmigrated table rather than failing it",
+            # lake have no Postgres migration, so each is **declared** in
+            # FOREIGN_ENGINE_TABLES and credited against that declaration.
+            #
+            # It used to decline the whole class instead, which is how a read
+            # of `autonomy_grants` -- a table in no engine at all -- passed
+            # for as long as it shipped.
+            "credits a SELECT against a table declared as living in another engine",
             kinds("SQL = 'SELECT pid, name FROM processes'\n") == set(),
+        ),
+        (
+            # The other half of that pair, and the one the declaration exists
+            # to make possible.
+            "fails a SELECT against a table that is neither migrated nor declared foreign",
+            kinds("SQL = 'SELECT id, name FROM autonomy_grants'\n") == {"unknown-table"},
         ),
         (
             # A half-read projection that reports OK is the failure this
@@ -936,8 +1074,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"\nFAIL: {len(result['findings'])} raw SQL statement(s) naming something no migration creates:", file=sys.stderr)
         for finding in result["findings"]:
             print(
-                f"  [{finding['kind_of_finding']}] {finding['file']}:{finding['line']} "
-                f"{finding['table']}.{finding['column']}\n      {finding['detail']}",
+                f"  [{finding.get('kind_of_finding') or finding.get('verdict', finding['kind'])}] {finding['file']}:{finding['line']} "
+                f"{finding['table']}{'.' + finding['column'] if finding.get('column') else ''}\n      {finding['detail']}",
                 file=sys.stderr,
             )
         print(

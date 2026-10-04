@@ -67,7 +67,7 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 - [x] **1.1** Agents authenticates to the API as a service, for the tenant it is working on
 - [x] **1.2** Federated search authenticates to the connectors service
 - [x] **1.3** Vendor reads match the connector types tenants actually save
-- [ ] **1.4** Earned auto-close grants are honoured, and the closure default is decided
+- [x] **1.4** Earned auto-close grants are honoured; the closure default is an ADR awaiting the maintainer (M4)
 - [ ] **1.5** The hunting agent returns its findings, for the right tenant, with a ledger
 
 ## Wave 2: The MCP client works over a real connection
@@ -137,7 +137,11 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 - [!] **M3** Provide a real multi-node cluster for the scale run.
   **Needs:** infrastructure the CI runner does not have.
 - [!] **M4** Accept or overrule the closure default proposed in the 1.4 ADR.
-  **Needs:** a maintainer decision on the ADR.
+  **Needs:** a maintainer decision on
+  `docs/decisions/0009-auto-close-without-an-earned-grant.md`, which recommends
+  option B (no auto-close without an earned grant, plus an audited per-tenant
+  opt-in). It is breaking, so the fix pass does not take it: it changes what a
+  running deployment does to alerts without being asked.
 
 ## Pre-existing failures
 
@@ -286,3 +290,53 @@ in `tests/test_vendor_alias_resolution.py` and leaves the 6 that must not move.
 `aws_securityhub`, and the connector declares `aws_security_hub`. An alias to a
 type nobody can save resolves to nothing, exactly like no alias at all, and the
 gate said so before the code shipped.
+
+### 1.4 Earned auto-close grants are honoured
+
+**Reproduced** against Postgres 16 with all 100 migrations applied.
+`tests/isolation/test_closure_grant_live.py` pre-fix: `1 failed, 5 passed`,
+the failure logging
+`closure.grant.unreadable error='relation "autonomy_grants" does not exist'`.
+
+Three names wrong in one statement: the table is `aisoc_autonomy_grants`, and
+the filters named `revoked_at` and `expires_at` where the lifecycle is a
+`state` column of `shadow` / `granted` / `demoted`. Because `require_grant`
+defaults to true, a tenant that enabled a closure policy could never auto-close
+anything: the feature was off for exactly the tenants who turned it on.
+
+**Fix:** the query reads the real table and its real state column. The
+`except` stays, because a database blip must not close alerts, but the live
+suite now asserts the query itself works rather than trusting a fake connection
+that answers any query.
+
+**Negative control:** restoring the old table name returns the suite to
+`1 failed, 5 passed` with the same message.
+
+**Gate.** `check_raw_sql_columns.py` **passed over this for as long as it
+shipped**, and the reason is more interesting than the defect: a `SELECT`
+against a table no migration creates was bucketed as "not compared", on the
+stated reasoning that the gate cannot tell which engine a statement targets.
+That is true, and the remedy is to say which, once, rather than excuse the
+class. `FOREIGN_ENGINE_TABLES` now declares the ClickHouse, Postgres-catalogue,
+osquery and vendor tables, and **everything else fails**.
+
+Closing it required two parser improvements, because the first run reported
+four false positives: common table expressions are now detected from the
+statement's own `WITH` clause rather than allowlisted one at a time, and a
+statement composed across two string literals is recorded as the one artefact
+that detection cannot reach, with that reason written down.
+
+Proven against the pre-fix tree, where it names
+`services/agents/app/closure/policy.py:307 autonomy_grants`. Two new self-test
+cases pin both directions, and one existing case was renamed because it had
+described the old reasoning.
+
+**It also surfaced fix-pass item 6.5 early:** `aisoc_alerts` and
+`aisoc_detection_rules` are named by live routes and created by no migration.
+They are recorded in `KNOWN_MISSING_TABLES` as a debt that names 6.5 as the
+item which removes them, rather than being quietly excused.
+
+**The closure default is not decided here.**
+`docs/decisions/0009-auto-close-without-an-earned-grant.md` records the
+question, three options and a recommendation. Taking it changes what a running
+deployment does to alerts without being asked, so it is `M4`.
