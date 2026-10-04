@@ -255,7 +255,7 @@ async def _resolve_service_principal(
         return None
 
     if not declared_tenant or not declared_tenant.strip():
-        logger.warning("deps.service_token_without_tenant header=%s", SERVICE_TENANT_HEADER)
+        logger.warning("deps.service_caller_named_no_tenant header=%s", SERVICE_TENANT_HEADER)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f"service token must declare the tenant it acts for on {SERVICE_TENANT_HEADER}",
@@ -272,7 +272,7 @@ async def _resolve_service_principal(
     exists = await db.execute(select(Tenant.id).where(Tenant.id == tenant_id))
     if exists.scalar_one_or_none() is None:
         logger.warning(
-            "deps.service_token_unknown_tenant tenant=%s",
+            "deps.service_caller_named_an_unknown_tenant tenant=%s",
             str(tenant_id).replace("\r", "").replace("\n", " ")[:64],
         )
         raise HTTPException(
