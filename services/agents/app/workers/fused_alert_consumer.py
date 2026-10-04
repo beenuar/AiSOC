@@ -618,6 +618,14 @@ class FusedAlertTriageWorker:
                     _METRICS["deterministic"] += 1
                 cost = CostSummary.from_tracker(tracker)
                 tokens = tracker.total_tokens
+                # From the call that answered, not from the pin. The shadow
+                # writer stamps a decision with `state.model_used`, and the
+                # field did not exist, so every shadow decision recorded a
+                # null model and per-model agreement was empty on every
+                # deployment. `resolved_models` is what the tracker observed,
+                # so the deterministic path correctly leaves this `None`.
+                if cost.resolved_models:
+                    state.model_used = ", ".join(sorted({str(m) for m in cost.resolved_models}))
 
             # Parity 5.1. `find_matching()` had no production caller, so no
             # playbook ever ran from an alert. Three switches must agree

@@ -301,13 +301,26 @@ def _classify_pivots(trace: list[dict[str, Any]]) -> tuple[list[str], list[str]]
     A tool that reported ``available: false`` is not a pivot — counting it
     would let an investigation reach its depth floor by calling four tools
     that all answered "not ingested".
+
+    Neither is a tool that **raised**. ``app/tools/registry.py`` returns
+    ``{"error": f"{type(exc).__name__}: {exc}"}`` when a tool throws, and that
+    shape carries no ``available`` key at all, so it used to fall into the
+    ``else`` and count. Four tools that all timed out therefore looked like
+    four pivots, and an investigation could report the depth it was required to
+    reach while having learned nothing.
     """
     pivots: list[str] = []
     unavailable: list[str] = []
     for entry in trace:
         name = entry.get("tool", "")
         preview = str(entry.get("result_preview", ""))
-        if "'available': False" in preview or '"available": false' in preview:
+        unavailable_flag = "'available': False" in preview or '"available": false' in preview
+        # Matched on the key rather than on the word, so a *result* mentioning
+        # an error — a SIEM row whose message contains "error" — is still a
+        # pivot. Only the registry's own failure envelope has the key at the
+        # top of the mapping.
+        errored = "'error':" in preview or '"error":' in preview
+        if unavailable_flag or errored:
             unavailable.append(name)
         else:
             pivots.append(name)

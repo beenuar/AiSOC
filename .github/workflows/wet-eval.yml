@@ -171,19 +171,32 @@ jobs:
       # uses in `ci.yml` so the wet eval runs against a known-good
       # frozen agent surface.
       # ──────────────────────────────────────────────
-      - name: Install agent dependencies
+      - name: Install agents from its own locked dependency set
         run: |
           set -euo pipefail
-          pip install --quiet \
-            "fastapi>=0.117,<0.142" "pydantic[email]" "pydantic-settings" \
-            "sqlalchemy[asyncio]" "asyncpg" "structlog" \
-            "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]" \
-            "tenacity" "pyyaml" "prometheus-client" \
-            "neo4j" "redis" "celery" "httpx" "aiofiles" \
-            "email-validator" "PyJWT>=2.8,<3" "aiosqlite" \
-            "langchain>=0.3" "langchain-openai>=0.2" \
-            "langgraph>=0.2" "openai>=1.40" \
-            "pytest" "pytest-asyncio"
+          # The lockfile, not a hand-written list. The list this replaced named
+          # 18 packages and omitted `mcp` and `opentelemetry`, both of which
+          # the agents app imports at module scope (`app/mcp/client.py`,
+          # `app/core/telemetry.py`, `app/investigator/orchestrator.py`). A set
+          # that differs from the lock means this job grades software nobody
+          # ships.
+          python -m pip install --quiet --upgrade pip
+          python -m pip install --quiet $(python3 scripts/service_requirements.py agents --locked)
+          python -m pip install --quiet pytest pytest-asyncio
+
+      # Setup has to fail loudly, and differently from "no funded key". A
+      # skipped job and a broken job both print nothing, and the scoreboard
+      # cannot tell them apart.
+      - name: The agent imports, or this job says so instead of measuring nothing
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          if ! python -c "import app.mcp.client, app.core.telemetry, app.investigator.orchestrator" 2>/tmp/import-err; then
+            echo "::error title=wet-eval::the agents package does not import, so nothing below could have been measured."
+            cat /tmp/import-err
+            exit 1
+          fi
+          echo "agents imports cleanly, so a figure below is a measurement rather than a default."
 
       # ──────────────────────────────────────────────
       # Step 3 — run the wet eval.

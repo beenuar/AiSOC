@@ -176,7 +176,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **The live agent evaluation could never have measured anything.** It imported
   `InvestigatorAgent`, a class that exists only in the historical prototype, and the hosted-key
   check returned first so the broken import was never reached. Repointed at the real agent, it
-  measures a **9.3% verdict-flip rate** against a local model.
+  measures a **9.3% verdict-flip rate** — one manual run of the 200-incident synthetic corpus against a locally-served `llama3.2:3b`, which is not the model a hosted deployment resolves. A single run on one model, not a distribution: the weekly job that would produce one has no funded key, so it skips.
 - **Three stores had a backup and no restore.** `backup.sh` covered five, `restore.sh` covered two.
   Neo4j, Qdrant and Redis now restore, and `check_backup_restore_parity.py` fails CI on the next
   store that gains a backup without one.

@@ -112,6 +112,19 @@ jobs:
           ISOLATION_CROSS_SERVICE: "1"
         run: python -m pytest ../../tests/isolation/test_api_to_connectors_auth.py -v --tb=short -rs
 
+      # Runs in no workflow at all before this. The claim row "Analyst
+      # dispositions are point-in-time during a replay" cited a workflow that
+      # skips it, and the suite skips itself unless the DSN says postgres --
+      # so it had never executed anywhere. `DISPOSITIONS_CUTOFF_LIVE_REQUIRED`
+      # turns its own skip into a failure, which is what makes this job
+      # evidence rather than a green tick.
+      - name: Analyst dispositions are point-in-time during a replay
+        working-directory: services/api
+        env:
+          DATABASE_URL: ${{ env.LIVE_DSN }}
+          DISPOSITIONS_CUTOFF_LIVE_REQUIRED: "1"
+        run: python -m pytest ../../tests/isolation/test_recent_dispositions_cutoff_live.py -v --tb=short -rs
+
       - name: Install agents from its lockfile
         working-directory: services/agents
         run: |

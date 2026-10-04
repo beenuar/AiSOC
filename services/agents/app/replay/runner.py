@@ -69,6 +69,22 @@ __all__ = [
 DEFAULT_TRAIN_FRACTION = 0.7
 
 
+#: Ledger row kinds that mean a tool was called. The ledger also carries
+#: `llm_response`, `hunt_plan` and others, so counting every row would report
+#: the model's own turns as tool calls.
+_TOOL_CALL_KINDS = frozenset({"tool_call"})
+
+
+def _tool_calls_recorded(rows: list[dict[str, object]]) -> int:
+    """How many tool calls this run actually made.
+
+    Zero for a run whose ledger carries none, which is the honest answer and
+    also today's answer on the shadow path. The difference from a literal is
+    that this one changes when the run does.
+    """
+    return sum(1 for row in rows if str(row.get("kind") or "") in _TOOL_CALL_KINDS)
+
+
 @dataclass(frozen=True)
 class TimeSplit:
     """Where history was cut, and what fell either side."""
@@ -356,9 +372,12 @@ class ReplayRunner:
         decision.estimated_usd = cost.get("estimated_usd")
         decision.unpriced_calls = int(cost.get("unpriced_calls") or 0)
         decision.resolved_models = [str(m) for m in (cost.get("resolved_models") or [])]
-        # Structurally zero rather than unmeasured: shadow mode declines
-        # escalation, and escalation is the only stage of this path that calls
-        # tools. Recorded so a future change that gives triage a tool shows up
-        # here as a number moving off zero.
-        decision.tool_calls = 0
+        # Derived, not asserted. The literal `0` that stood here was the
+        # correct answer -- shadow mode declines escalation, and escalation is
+        # the only stage of this path that calls tools -- under a comment
+        # saying it was "recorded so a future change that gives triage a tool
+        # shows up here as a number moving off zero". A literal can never
+        # move, so the comment and the code contradicted each other, and the
+        # day triage gained a tool the report would have kept saying zero.
+        decision.tool_calls = _tool_calls_recorded(summary.get("ledger") or [])
         return decision

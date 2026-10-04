@@ -116,7 +116,7 @@ jobs:
           # the only thing that proves the whole chain is the end-to-end run.
           # Every tree it crosses is listed, because a change to any one of
           # them can break a link none of the unit suites can see.
-          replay_paths='services/api/app/services/replay_evaluation/ services/api/app/api/v1/endpoints/evaluations.py services/api/app/_vendor/aisoc_benchmark/ services/agents/app/replay/ services/agents/app/api/replay_router.py services/actions/app/api/replay_history_router.py services/actions/app/services/alert_history.py services/connectors/app/api/router.py packages/aisoc-benchmark/ packages/aisoc-cli/ tests/e2e/test_replay_cli_end_to_end.py .github/workflows/integration.yml'
+          replay_paths='services/api/app/services/replay_evaluation/ services/api/app/api/v1/endpoints/evaluations.py services/api/app/_vendor/aisoc_benchmark/ services/agents/app/replay/ services/agents/app/api/replay_router.py services/actions/app/api/replay_history_router.py services/actions/app/services/alert_history.py services/connectors/app/api/router.py packages/aisoc-benchmark/ packages/aisoc-cli/ tests/e2e/test_replay_cli_end_to_end.py .github/workflows/integration.yml services/agents/app/workers/fused_alert_consumer.py services/agents/app/replay/shadow.py services/actions/app/clients/ services/ingest/internal/normalizer/ services/agents/app/closure/'
 
           base_ref=""
           if [ -n "${{ github.base_ref }}" ]; then

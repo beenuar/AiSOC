@@ -60,6 +60,21 @@ class InvestigationState(BaseModel):
     budget_exhausted: bool = False
     budget_exhausted_reason: str | None = None
 
+    #: The model that actually answered this triage, set from the call rather
+    #: than from the pin.
+    #:
+    #: `fused_alert_consumer` stamps a shadow decision with
+    #: `getattr(state, "model_used", None)`. The field did not exist, so that
+    #: default was the only branch that ever ran and **every shadow decision
+    #: recorded a null model** -- which makes per-model agreement, the reason
+    #: the column exists, empty on every deployment.
+    #:
+    #: `None` means "no model answered", which is the honest value on the
+    #: deterministic path. It is deliberately not defaulted to a pin name: a
+    #: non-null column that nobody wrote is worse than an empty one, because
+    #: it reads as a measurement.
+    model_used: str | None = None
+
     # Identifiers
     run_id: UUID = Field(default_factory=uuid4)
     incident_id: UUID
