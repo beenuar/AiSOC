@@ -195,7 +195,7 @@ async def run_forensic(state_dict: dict[str, Any]) -> dict[str, Any]:
             ),
             "summary": (
                 "Automated forensic analysis inconclusive: zero evidence "
-                "retrieved. Manual review with the Wazuh locator on the "
+                "retrieved. Manual review with the source-console locator on the "
                 "case is required."
             ),
         })

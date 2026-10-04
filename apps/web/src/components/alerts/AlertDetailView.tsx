@@ -1047,7 +1047,7 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           {alert.wazuhLocator && Object.keys(alert.wazuhLocator).length > 0 && (
               <div className="mb-3 rounded-md border border-border bg-muted/40 p-3 text-xs">
                 <div className="mb-2 font-semibold text-foreground">
-                  Find this event in Wazuh
+                  Find this event in the source console
                 </div>
                 <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-1 font-mono">
                   {Object.entries(alert.wazuhLocator)

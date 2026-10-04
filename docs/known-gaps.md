@@ -48,7 +48,7 @@ image pull. Priority upstream candidates:
 
 - Backwards case status transitions → 422 (ladder guard).
 - `escalate` verdict leaving alert `status='new'` (human queue stays open).
-- Wazuh SIEM writeback: no disposition-write arm exists for wazuh; the
+- Source-HIDS SIEM writeback: no disposition-write arm exists for the HIDS connector; the
   execute flag changing nothing is correct.
 - Approvals 502 when approver truly lacks `actions:execute:high` — the gate
   working; the fixed bug was only the empty-permission forwarding.

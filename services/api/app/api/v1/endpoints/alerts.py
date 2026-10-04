@@ -130,17 +130,17 @@ class AlertDetailResponse(AlertResponse):
     # but the detail endpoint must carry the original payload or the tab
     # renders "not available" for every alert (they all have one in DB).
     raw_event: dict = {}
-    # Parsed Wazuh location info (rule id, agent, original alert id) so an
-    # analyst can find the SAME event in the Wazuh dashboard/console.
+    # Parsed source-HIDS location info (rule id, agent, original alert id) so an
+    # analyst can find the SAME event in the source console.
     wazuh_locator: dict = {}
 
 
 def _build_wazuh_locator(raw_event: dict) -> dict:
-    """Extract where-in-Wazuh coordinates from a stored alert payload.
+    """Extract where-in-the-source-HIDS coordinates from a stored alert payload.
 
     The ingested shape varies (OCSF-envelope with raw_data string, or a
-    native Wazuh alert). Extract every identifier an analyst can search
-    Wazuh by, whatever the shape, and return the non-empty subset.
+    native HIDS alert). Extract every identifier an analyst can search
+    the source console by, whatever the shape, and return the non-empty subset.
     """
     raw: dict = {}
     rd = raw_event.get("raw_data")

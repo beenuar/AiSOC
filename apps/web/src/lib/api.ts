@@ -856,8 +856,8 @@ export interface Alert {
   mitreAttack?: MitreAttack[];
   iocs?: AlertIOC[];
   rawEvent?: Record<string, unknown>;
-  /** Where-in-Wazuh coordinates (rule id, agent, original alert id) parsed
-   *  server-side from the ingested payload - search Wazuh with these. */
+  /** Where-in-the-source-console coordinates (rule id, agent, original alert id) parsed
+   *  server-side from the ingested payload - search the source console with these. */
   wazuhLocator?: Record<string, unknown>;
   assignee?: string;
   caseId?: string;
