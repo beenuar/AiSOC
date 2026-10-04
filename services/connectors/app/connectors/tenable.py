@@ -18,6 +18,49 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 logger = structlog.get_logger()
 
 
+#: Tenable.io publishes the CVSSv3 severity ladder as 0=Info .. 4=Critical.
+#: Shared by the alert path and the vulnerability path so the two cannot drift,
+#: and mapped straight onto AiSOC's five tiers: collapsing Tenable's Critical
+#: into `high` is the exact defect the connector conventions name.
+_SEVERITY_BY_INT: dict[Any, str] = {0: "info", 1: "low", 2: "medium", 3: "high", 4: "critical"}
+
+
+def _first(value: Any) -> str | None:
+    """Tenable returns these as lists even when there is one of them."""
+    if isinstance(value, list):
+        return str(value[0]) if value else None
+    return str(value) if value else None
+
+
+#: Plugin detail is one HTTP request per plugin against the customer's own
+#: scanner, so the fan-out is capped. An uncapped loop over a workbench with a
+#: few thousand plugins is a denial of service aimed at the customer, which is
+#: worse than not having the feature.
+MAX_PLUGIN_LOOKUPS = 60
+
+
+def _plugin_attribute(detail: dict[str, Any], name: str) -> str | None:
+    """Read one attribute out of Tenable's plugin-detail shape.
+
+    Attributes arrive as a list of `{attribute_name, attribute_value}` rather
+    than a mapping, and a plugin can repeat a name (several CVEs on one
+    plugin), so this returns the first and `_plugin_attributes` returns all.
+    """
+    for attribute in detail.get("attributes") or []:
+        if attribute.get("attribute_name") == name:
+            value = attribute.get("attribute_value")
+            return str(value) if value is not None else None
+    return None
+
+
+def _plugin_attributes(detail: dict[str, Any], name: str) -> list[str]:
+    return [
+        str(a.get("attribute_value"))
+        for a in detail.get("attributes") or []
+        if a.get("attribute_name") == name and a.get("attribute_value") is not None
+    ]
+
+
 class TenableConnector(BaseConnector):
     """Tenable.io VM."""
 
@@ -110,14 +153,129 @@ class TenableConnector(BaseConnector):
             logger.warning("tenable.fetch_exception", error=str(exc))
             return []
 
+    async def fetch_vulnerability_findings(self) -> list[dict[str, Any]]:
+        """Per-asset findings carrying a CVE, which is what a vulnerability row needs.
+
+        `fetch_alerts` above calls `/workbenches/vulnerabilities`, which returns
+        plugin-level *aggregates*: no asset, no CVE. `normalize()` sets
+        `host: None` outright. So the alert path could never have produced a
+        row in `asset_vulnerabilities`, and that table's only writer was a
+        route a human calls by hand -- which is why
+        `_tenant_has_vulnerability_data` answered "nobody has told me what you
+        run" for every Tenable tenant, and KEV exposure reported nothing
+        forever.
+
+        Two calls, because Tenable splits the data:
+
+        * `/workbenches/assets/vulnerabilities` gives the asset and which
+          plugins fired on it.
+        * `/plugins/plugin/{id}` gives that plugin's CVE list.
+
+        The second is per plugin, so it is capped and the distinct plugin set
+        is resolved once rather than once per asset.
+        """
+        assets = await self._fetch_asset_workbench()
+        if not assets:
+            return []
+
+        plugin_ids: list[int] = []
+        for asset in assets:
+            for vuln in asset.get("vulnerabilities") or []:
+                pid = vuln.get("plugin_id")
+                if isinstance(pid, int) and pid not in plugin_ids:
+                    plugin_ids.append(pid)
+
+        if len(plugin_ids) > MAX_PLUGIN_LOOKUPS:
+            logger.info(
+                "tenable.plugin_lookup_capped",
+                distinct_plugins=len(plugin_ids),
+                cap=MAX_PLUGIN_LOOKUPS,
+            )
+            plugin_ids = plugin_ids[:MAX_PLUGIN_LOOKUPS]
+
+        cves_by_plugin: dict[int, list[str]] = {}
+        titles_by_plugin: dict[int, str] = {}
+        for pid in plugin_ids:
+            detail = await self._fetch_plugin_detail(pid)
+            if detail is None:
+                continue
+            raw_cves = _plugin_attributes(detail, "cve")
+            cves_by_plugin[pid] = [c for c in raw_cves if c.upper().startswith("CVE-")]
+            titles_by_plugin[pid] = str(detail.get("name") or f"Tenable plugin {pid}")
+
+        findings: list[dict[str, Any]] = []
+        for asset in assets:
+            hostname = _first(asset.get("fqdn")) or _first(asset.get("netbios_name"))
+            ip = _first(asset.get("ipv4"))
+            for vuln in asset.get("vulnerabilities") or []:
+                pid = vuln.get("plugin_id")
+                if not isinstance(pid, int):
+                    continue
+                for cve in cves_by_plugin.get(pid, []):
+                    findings.append(
+                        {
+                            "cve_id": cve,
+                            # Tenable's ladder is 0..4 and 4 is Critical. The
+                            # five-tier map is shared with `normalize()` so a
+                            # genuine Critical is not collapsed into `high`.
+                            "severity": _SEVERITY_BY_INT.get(vuln.get("severity"), "info"),
+                            "hostname": hostname,
+                            "ip_address": ip,
+                            "asset_ref": str(asset.get("id") or "") or None,
+                            "title": titles_by_plugin.get(pid, f"Tenable plugin {pid}"),
+                            "plugin_id": pid,
+                            "source": "tenable_io",
+                        }
+                    )
+        return findings
+
+    async def _fetch_asset_workbench(self) -> list[dict[str, Any]]:
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.get(
+                    f"{self._base}/workbenches/assets/vulnerabilities",
+                    headers=self._headers(),
+                )
+                if resp.status_code != 200:
+                    logger.warning(
+                        "tenable.asset_workbench_failed",
+                        status=resp.status_code,
+                        body=resp.text[:300],
+                    )
+                    return []
+                return list((resp.json() or {}).get("assets") or [])
+        except Exception as exc:
+            logger.warning("tenable.asset_workbench_exception", error=str(exc))
+            return []
+
+    async def _fetch_plugin_detail(self, plugin_id: int) -> dict[str, Any] | None:
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.get(
+                    f"{self._base}/plugins/plugin/{plugin_id}",
+                    headers=self._headers(),
+                )
+                if resp.status_code != 200:
+                    # One plugin that will not resolve must not lose the whole
+                    # sweep; the findings it would have carried are simply
+                    # absent, and the count is visible in the log.
+                    logger.info(
+                        "tenable.plugin_detail_unavailable",
+                        plugin_id=plugin_id,
+                        status=resp.status_code,
+                    )
+                    return None
+                return dict(resp.json() or {})
+        except Exception as exc:
+            logger.info("tenable.plugin_detail_exception", plugin_id=plugin_id, error=str(exc))
+            return None
+
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         # Tenable.io exposes the CVSSv3 severity ladder (0=Info, 1=Low,
         # 2=Medium, 3=High, 4=Critical). Mirror it directly into AiSOC's
         # five-tier ladder so genuine Critical vulnerabilities are not
         # silently downgraded to High.
-        sev_int = raw.get("severity")
-        sev_map = {0: "info", 1: "low", 2: "medium", 3: "high", 4: "critical"}
-        sev = sev_map.get(sev_int, "info")
+        sev = _SEVERITY_BY_INT.get(raw.get("severity"), "info")
         return {
             "source": "tenable_io",
             "category": "cloud",

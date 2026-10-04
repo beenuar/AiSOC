@@ -309,22 +309,31 @@ async def _open_case_task(
         case_type="vulnerability_exposure",
         priority="high" if any(c in {"critical", "high"} for _n, c in assets) else "medium",
         severity="high",
-        status="open",
+        # `new`, not `open`. The `aisoc_cases_status_check` constraint allows
+        # exactly new/triaged/investigating/contained/resolved/closed, so the
+        # previous value meant this insert raised a CheckViolationError on
+        # every deployment -- which nothing noticed, because reaching it needs
+        # a tenant with real vulnerability data, and until fix-pass item 5.2
+        # the only writer of that table was a route a human calls by hand.
+        status="new",
         tags=["kev", f"cve:{cve}", f"feed:{feed_source}"],
     )
     db.add(case)
     await db.flush()
 
+    # `aisoc_case_tasks` has no `description` column, so the detail lives in
+    # the case description above and the task carries the instruction. The
+    # model used to declare one, against a table name no migration creates, so
+    # this insert had never succeeded.
     task = CaseTask(
         case_id=case.id,
         tenant_id=tenant_id,
-        title=f"Patch or mitigate {cve} on {len(assets)} asset(s)",
-        description=(
-            f"CISA lists {cve} as actively exploited. Your vulnerability data shows "
-            f"{len(assets)} unremediated finding(s). Patch, mitigate, or record why the "
-            f"affected assets are not reachable."
+        title=(
+            f"Patch or mitigate {cve} on {len(assets)} asset(s): CISA lists it as actively "
+            f"exploited and your scan data shows unremediated findings"
         ),
-        status="pending",
+        status="todo",
+        created_by=feed_source,
     )
     db.add(task)
     await db.flush()

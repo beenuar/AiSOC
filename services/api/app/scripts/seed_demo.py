@@ -2025,7 +2025,7 @@ async def _seed_realistic_incidents(session, tenant: Tenant) -> tuple[int, int, 
                     "incident_key": incident["key"],
                     "alerts": [str(a.id) for a in incident_alerts],
                 },
-                is_automated=True,
+                actor_type="system",
                 created_at=case_when,
             )
         )
@@ -2047,7 +2047,7 @@ async def _seed_realistic_incidents(session, tenant: Tenant) -> tuple[int, int, 
                         "actor": "playbook-engine",
                         "playbook_run": playbook_run,
                     },
-                    is_automated=True,
+                    actor_type="system",
                     created_at=case_when + timedelta(minutes=2),
                 )
             )
@@ -2355,7 +2355,7 @@ async def _seed_alerts_and_cases(session, tenant: Tenant, *, alert_count: int = 
                 event_type="created",
                 content="Case opened by AI alert fusion service.",
                 event_metadata={"actor": "system", "alerts": case.alert_ids},
-                is_automated=True,
+                actor_type="system",
                 created_at=case.created_at,
             )
         )
@@ -2363,9 +2363,8 @@ async def _seed_alerts_and_cases(session, tenant: Tenant, *, alert_count: int = 
             CaseTask(
                 case_id=case.id,
                 tenant_id=case.tenant_id,
-                title="Triage and contain",
-                description="Confirm scope, isolate affected hosts, capture artifacts.",
-                status="pending",
+                title="Triage and contain: confirm scope, isolate affected hosts, capture artifacts",
+                status="todo",
                 created_at=case.created_at,
             )
         )
@@ -3148,7 +3147,7 @@ async def _seed_demo_quick(
                     "connector_sources": incident["connector_sources"],
                     "alerts": [str(a.id) for a in incident_alerts],
                 },
-                is_automated=True,
+                actor_type="system",
                 created_at=case_when,
             )
         )

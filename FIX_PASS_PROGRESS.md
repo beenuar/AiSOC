@@ -110,12 +110,16 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 5: Hunting, intel, sandbox and operations wiring
 
-- [ ] **5.1** Retro-hunts can be turned on
-- [ ] **5.2** KEV exposure gets data
+- [x] **5.1** Retro-hunts can be turned on
+  - Both halves built. `RETRO_HUNT_ENABLED` now passes through compose and is documented in `.env.example`, defaulting off; `GET`/`PUT /api/v1/retro-hunts/settings` plus a Settings panel give the tenant somewhere to opt in. Nine live tests against real Postgres; reverting the upsert to a plain UPDATE fails four.
+- [x] **5.2** KEV exposure gets data
+  - Connector now fetches per-asset findings plus plugin CVEs (capped at 60 lookups) and the connectors service writes `asset_vulnerabilities` directly -- not through the API, because the service principal is deliberately read-only. Seven live end-to-end tests. Creating the data first time exposed three more defects that had never run: a case status the CHECK rejects, two ORM models naming tables no migration creates, and a task status the CHECK rejects.
 - [ ] **5.3** Hunts over the lake
 - [ ] **5.4** Sandbox and air-gap settings reach the API
-- [ ] **5.5** Release channel does not cross a major
-- [ ] **5.6** Upgrade fixture does not insert into the renamed `cases` table
+- [x] **5.5** Release channel does not cross a major
+  - The channel now tracks which major it is on, resolved from the registry, so a minor cannot carry it across a major. Test replays release ladders rather than single releases. Helm chart gains the `stable` channel it was scoped with.
+- [x] **5.6** Upgrade fixture does not insert into the renamed `cases` table
+  - Fixture, before-snapshot and archive assertion all resolve the case table at run time. Reproduced against a fully-migrated database first: `relation "cases" does not exist`.
 - [ ] **5.7** Chaos and HA run live in CI
 - [ ] **5.8** Performance honesty
 

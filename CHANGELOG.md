@@ -118,6 +118,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of diff across the spec and nothing to do with anyone's change -- so it now
   names the mismatch, prints the `pip install` that fixes it, and shows the
   first differing paths.
+- **KEV exposure had no data on any deployment, and three further defects sat
+  behind it.** `asset_vulnerabilities` had exactly one writer in the tree --
+  `POST /api/v1/assets/vulnerabilities`, a route a human calls by hand -- and
+  the Tenable connector, the only vulnerability scanner AiSOC integrates,
+  modelled its findings as alerts. `_tenant_has_vulnerability_data` exists to
+  tell "you are not exposed" apart from "nobody has told me what you run", so
+  with an empty table KEV exposure answered the second, forever. The data was
+  not merely unwritten: `fetch_alerts` calls `/workbenches/vulnerabilities`,
+  which returns plugin aggregates carrying neither a CVE nor an asset, and
+  `normalize()` sets `host: None`. The connector now fetches per-asset findings
+  and the plugin details that carry CVEs, capped at 60 plugin lookups so a
+  large workbench cannot turn a 5-minute schedule into a denial of service
+  against the customer's own scanner, and the connectors service writes the
+  rows itself -- not via the API, because the service principal is deliberately
+  read-only and widening it to close this would undo that for every route.
+
+  Creating the data for the first time then exposed three things downstream
+  that had never run: KEV exposure opened its case with `status="open"`, which
+  `aisoc_cases_status_check` rejects; `CaseTask` named `case_tasks` and
+  `CaseTimeline` named `case_timeline`, neither of which any migration creates
+  (the real tables are `aisoc_case_tasks` and `case_timeline_events`, with four
+  declared columns that do not exist); and the task status `"pending"` is not
+  one of the three `aisoc_case_tasks_status_check` allows. All three were
+  reachable only from data the product had no way to produce, which is why
+  nothing had noticed.
 
 - **The MCP client could not complete a single real call, and every tool it
   offered a model was rejected by the provider (fix pass, wave 2).**
