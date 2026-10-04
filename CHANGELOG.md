@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The agents service could not reach the API at all, and three vendors were
+  never offered to an investigation (fix pass, wave 1).**
+
+  An independent audit at v16.0.0 found capabilities recorded as shipped that
+  fail on a real deployment, while every CI run stayed green. The pattern
+  repeats: each defect's test mocks exactly the boundary the defect lives at.
+
+  - The customer tools, the hunting agent and the sandbox tool authenticated
+    with `AISOC_AGENTS_API_KEY`, which no compose file, `.env.example` or Helm
+    value ever set, so all three answered "could not check" on every default
+    install. Setting it would not have helped: one key belongs to one tenant.
+    They now present a service token and name the tenant of the run they are
+    working on, and the API resolves a service principal with an explicit
+    read-only permission set. A service token that names no tenant is refused
+    rather than widened.
+  - The eleven lake pivots sent `X-Tenant-ID` and no credential, a header the
+    API's auth does not read, so every pivot was 401 outside dev mode.
+  - Federated search and case fanout posted to the connectors service with no
+    credential at all, so **every SIEM answered 401** and the console reported
+    no results, which is indistinguishable from a SIEM that held none.
+  - `defender`, `entra` and `aws` are not connector types a tenant can save,
+    so `by_type.get(vendor_id)` returned `None` on every tenant and three of
+    the five vendors added for agent reads had never once been reachable.
+  - `_has_auto_close_grant` queried `autonomy_grants`, which no migration
+    creates, filtering on two columns the real table does not have. Because
+    `require_grant` defaults to true, a tenant that enabled a closure policy
+    could never auto-close: the feature was off for exactly the tenants who
+    turned it on.
+  - The hunt route read `result.matches` and the result carries `findings`, so
+    **every hunt that found rows reported none**. It also passed no ledger, so
+    no hunt had ever written a ledger row.
+  - `hunts:read` was held by no role at all, not even `tenant_admin`.
+
+  Four gates were extended to catch this class rather than these instances. A
+  service-to-service request with no credential now fails CI; a SQL statement
+  naming a table no migration creates now fails rather than being recorded as
+  "not compared"; a read executor's vendor id must resolve to a saveable
+  connector type; and `check_gate_coverage.py` no longer counts a gate named
+  in a **docstring** as a gate that runs, which is how
+  `check_hunt_agent_boundary.py` was reported reachable while no workflow ran
+  it.
+
 ## [16.0.1] - 2026-10-04
 
 ### Security
