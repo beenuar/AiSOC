@@ -505,8 +505,38 @@ class Surface:
 # --------------------------------------------------------------------------
 # Reachability
 # --------------------------------------------------------------------------
+#: A line whose first non-blank character begins a comment. Both of the file
+#: kinds this gate reads use ``#``: YAML workflows, and the Python a workflow
+#: calls.
+_COMMENT_LINE = re.compile(r"^[ \t]*#.*$", re.MULTILINE)
+
+#: A triple-quoted block. Docstrings are where this repository explains which
+#: gate enforces a module's contract, so a gate's own path appears in the prose
+#: of the thing it checks far more often than in anything that runs it.
+_TRIPLE_QUOTED = re.compile(r'"""[\s\S]*?"""|\'\'\'[\s\S]*?\'\'\'')
+
+
+def _without_prose(text: str) -> str:
+    """``text`` with comments and triple-quoted blocks removed.
+
+    A gate's filename appearing in prose is not an invocation of it, and this
+    distinction is the whole value of the gate. `check_hunt_agent_boundary.py`
+    is run by **no workflow at all**, and was counted as reachable because five
+    modules and two test files name it in a docstring saying which gate
+    enforces their contract. Reporting that as coverage is worse than reporting
+    nothing, because it is the answer somebody checks instead of looking.
+
+    Whole-line comments and whole triple-quoted blocks only. A ``#`` inside a
+    quoted string is not a comment, and guessing which is which would make the
+    resolver wrong in the other direction, which is the worse direction: an
+    over-broad resolver manufactures coverage.
+    """
+    return _COMMENT_LINE.sub("", _TRIPLE_QUOTED.sub("", text))
+
+
 def _references(script: str, text: str) -> bool:
     """Whether `text` invokes or imports `script` (a bare filename)."""
+    text = _without_prose(text)
     stem = script[:-3] if script.endswith(".py") else script
     return any(
         re.search(pattern, text)

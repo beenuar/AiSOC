@@ -56,6 +56,13 @@ This matters beyond bookkeeping. Wave 2.1 turns on an assertion inside
 `httpx` 0.28.1 exactly, so a result from any other httpx says nothing about the
 defect. Every agents result in this pass is recorded against the locked set.
 
+**A second interpreter trap, found while running Wave 1.** `services/api`
+pins `httpx` **0.26.0** and `services/actions` pins **0.28.1**, so running the
+actions suite in the api venv fails four URL-encoding assertions in
+`test_alert_history.py` that have nothing to do with any change. Each service's
+suite is run against that service's own locked set, and a cross-service result
+is recorded as the artefact it is.
+
 Two traps when building that venv, both hit here: `service_requirements.py`
 emits environment markers as separate shell tokens, so splitting its output on
 whitespace corrupts them, and stripping the markers instead makes the two
@@ -68,7 +75,7 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 - [x] **1.2** Federated search authenticates to the connectors service
 - [x] **1.3** Vendor reads match the connector types tenants actually save
 - [x] **1.4** Earned auto-close grants are honoured; the closure default is an ADR awaiting the maintainer (M4)
-- [ ] **1.5** The hunting agent returns its findings, for the right tenant, with a ledger
+- [x] **1.5** The hunting agent returns its findings, for the right tenant, with a ledger
 
 ## Wave 2: The MCP client works over a real connection
 
@@ -340,3 +347,47 @@ item which removes them, rather than being quietly excused.
 `docs/decisions/0009-auto-close-without-an-earned-grant.md` records the
 question, three options and a recommendation. Taking it changes what a running
 deployment does to alerts without being asked, so it is `M4`.
+
+### 1.5 The hunting agent returns its findings, for the right tenant, with a ledger
+
+**Reproduced.** `services/agents/tests/test_hunt_route_returns_findings.py`
+pre-fix: `2 failed, 2 passed`.
+
+* `assert [] == [{'host': 'WS-42', ...}]`. The route built
+  `matches=list(getattr(result, "matches", []) or [])` and `HuntAgentResult`
+  has `findings`. The `getattr` default made it silent, so **every hunt that
+  found rows answered `checked: true, matches: []`** -- a dropped answer that
+  reads exactly like a clean result.
+* `_record does not supply ['agent', 'seq', 'summary', 'tenant_id']`, which
+  the real `record_event` requires.
+
+**Worse than the plan states, and found by tracing the caller:** the only
+production caller passed **no ledger at all**, so `_record` returned at its
+first line. **No hunt had ever written a ledger row**, and the signature
+mismatch underneath was never even reached. The agent's own suite asserted on
+ledger writes against a double it supplied itself, which accepts any keyword
+arguments and so cannot tell a call the real ledger rejects from one it
+accepts.
+
+**Fix:** the route returns `result.findings`, passes the tenant it already
+resolved, and hands `run_hunt` the real ledger module. `_record` supplies every
+required field and owns the per-run `seq`, because a caller that forgot would
+write every row at zero and the replay would be unordered.
+
+`hunts:read` was granted to the four hunting roles in item 1.1; no role held it
+at all, not even `tenant_admin`.
+
+**Negative control:** restoring the `getattr(result, "matches", [])` line
+returns the suite to a failure on the dropped findings.
+
+**Gates, and the one that was lying.** `check_hunt_agent_boundary.py` is run by
+no workflow, and `check_gate_coverage.py` reported **all 150 checks reachable**
+anyway: five modules and two test files name it in a **docstring** saying which
+gate enforces their contract, and `_references` counted that as an invocation.
+
+Stripping whole-line comments was not enough; the references are in
+triple-quoted blocks. With prose removed the gate immediately named two
+unreachable checks, one of them `check_vendor_catalog_ids.py` from item 1.3:
+**the ci.yml edit for that gate had silently failed on an anchor mismatch, and
+the coverage gate's own blindness had hidden it.** Both are now wired and the
+pass is real.

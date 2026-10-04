@@ -14,6 +14,7 @@ from pydantic import BaseModel
 
 from app.graph.runner import run_full_investigation
 from app.hunt.agent import run_hunt
+from app.investigator import ledger as ledger_module
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
 from app.models.state import AgentTask, InvestigationState
@@ -172,7 +173,17 @@ async def run_nl_hunt(request: HuntRequest, principal: ScopedPrincipal) -> HuntR
         # exactly as it does on every other call site in this service.
         return await safe_ainvoke(model, messages)
 
-    result = await run_hunt(hypothesis, invoke=_invoke, run_id=run_id, tenant_id=str(tenant_id))
+    # The real ledger module, not `None`. This passed no ledger at all, so
+    # `_record` returned at its first line and **no hunt had ever written a
+    # ledger row** -- while the agent's own suite asserted on ledger writes
+    # against a double it supplied itself.
+    result = await run_hunt(
+        hypothesis,
+        invoke=_invoke,
+        run_id=run_id,
+        tenant_id=str(tenant_id),
+        ledger=ledger_module,
+    )
     logger.info(
         "hunt.completed",
         extra={"tenant_id": str(tenant_id), "run_id": run_id, "checked": result.checked},
@@ -180,7 +191,12 @@ async def run_nl_hunt(request: HuntRequest, principal: ScopedPrincipal) -> HuntR
     return HuntResponse(
         hypothesis=result.hypothesis,
         checked=result.checked,
-        matches=list(getattr(result, "matches", []) or []),
+        # `HuntAgentResult.findings`, not `matches`. This read `getattr(result,
+        # "matches", [])`, and the attribute has never existed, so the default
+        # swallowed it: every hunt that found rows answered `checked: true,
+        # matches: []`, which reads as a clean result rather than as an answer
+        # dropped on the way out.
+        matches=list(result.findings or []),
         refusals=list(result.refusals or []),
         unavailable_reason=result.unavailable_reason,
     )

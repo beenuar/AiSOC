@@ -881,6 +881,21 @@ jobs:
         run: |
           python3 scripts/check_service_token_wiring.py --self-test
           python3 scripts/check_service_token_wiring.py
+      # A read executor is named for the product and a connector for the
+      # integration a tenant configures. Three of the seven executor ids
+      # matched no connector type at all, so the lookup returned None on
+      # every tenant and the tool was never offered to an investigation.
+      - name: Every read executor's vendor id resolves to a saveable connector
+        run: |
+          python3 scripts/check_vendor_catalog_ids.py --self-test
+          python3 scripts/check_vendor_catalog_ids.py
+      # The hunting agent never writes a query: the model proposes a plan
+      # over a recorded field list and the API compiles it. This gate reads
+      # both sides and fails when they drift, and until now no workflow ran
+      # it -- five modules named it in a docstring, which is not the same
+      # thing as calling it.
+      - name: The hunting agent's plan boundary holds on both sides
+        run: python3 scripts/check_hunt_agent_boundary.py
       # The marketplace index has to exist in three build contexts, none of
       # which can see the other two. The API's copy was missing, so its image
       # shipped no catalogue and the marketplace answered 503 on every

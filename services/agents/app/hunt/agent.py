@@ -175,6 +175,7 @@ async def plan_hunt(
     invoke: Any,
     ledger: Any | None = None,
     run_id: str | None = None,
+    tenant_id: str = "",
 ) -> tuple[HuntPlan | None, list[str]]:
     """Ask the model for a plan, validating each attempt.
 
@@ -199,6 +200,8 @@ async def plan_hunt(
             run_id,
             kind="llm_response",
             payload={"role": HUNT_ROLE, "attempt": attempt + 1, "hypothesis": hypothesis[:500]},
+            tenant_id=tenant_id,
+            summary="hunt plan proposed",
         )
 
         parsed = _extract_json(reply if isinstance(reply, str) else getattr(reply, "content", ""))
@@ -219,6 +222,8 @@ async def plan_hunt(
             run_id,
             kind="hunt_plan",
             payload={"plan": plan.as_dict(), "attempts": attempt + 1},
+            tenant_id=tenant_id,
+            summary="hunt plan validated",
         )
         return plan, refusals
 
@@ -246,7 +251,14 @@ async def execute_plan(plan: HuntPlan, *, ledger: Any | None = None, run_id: str
         return result
 
     payload = {"clauses": [c.as_dict() for c in plan.clauses], "lookback_hours": plan.lookback_hours}
-    await _record(ledger, run_id, kind="tool_call", payload={"tool": "hunt_plan_execute", "arguments": payload})
+    await _record(
+        ledger,
+        run_id,
+        kind="tool_call",
+        payload={"tool": "hunt_plan_execute", "arguments": payload},
+        tenant_id=tenant_id,
+        summary="hunt plan execute",
+    )
 
     try:
         async with httpx.AsyncClient(timeout=EXECUTE_TIMEOUT_SECONDS) as client:
@@ -293,6 +305,8 @@ async def execute_plan(plan: HuntPlan, *, ledger: Any | None = None, run_id: str
         run_id,
         kind="hunt_result",
         payload={"findings": len(result.findings), "truncated": result.truncated},
+        tenant_id=tenant_id,
+        summary=f"hunt found {len(result.findings)} row(s)",
     )
     return result
 
@@ -306,7 +320,7 @@ async def run_hunt(
     tenant_id: str = "",
 ) -> HuntAgentResult:
     """Plan and run one hunt. The whole agent, in the order it happens."""
-    plan, refusals = await plan_hunt(hypothesis, invoke=invoke, ledger=ledger, run_id=run_id)
+    plan, refusals = await plan_hunt(hypothesis, invoke=invoke, ledger=ledger, run_id=run_id, tenant_id=tenant_id)
     if plan is None:
         return HuntAgentResult(
             hypothesis=hypothesis,
@@ -319,17 +333,50 @@ async def run_hunt(
     return result
 
 
-async def _record(ledger: Any | None, run_id: str | None, *, kind: str, payload: dict[str, Any]) -> None:
+#: Per-run event counter. Bounded by the number of live runs, and a run
+#: writes four rows at most.
+_SEQ: dict[str, int] = {}
+
+
+async def _record(
+    ledger: Any | None,
+    run_id: str | None,
+    *,
+    kind: str,
+    payload: dict[str, Any],
+    tenant_id: str = "",
+    summary: str = "",
+) -> None:
     """Write one row to the Investigation Ledger, best effort.
 
     Best effort because a ledger failure must not take a completed hunt down,
     and loud at ``warning`` because a hunt nobody can audit is a different
     product from one they can.
+
+    This used to call ``record_event(run_id=, kind=, payload=)``. The real one
+    additionally requires ``tenant_id``, ``seq``, ``agent`` and ``summary``, so
+    any call reaching it would have raised ``TypeError`` into the ``except``
+    below and logged a warning. Nothing noticed, because the only production
+    caller passed no ledger at all and this returned at its first line: **no
+    hunt had ever written a ledger row.** The suite passed a double that
+    accepts any keyword arguments, which cannot tell the two apart.
     """
     if ledger is None or run_id is None:
         return
+    # The ledger orders events by `seq` within a run, so it is counted here
+    # rather than passed in: a caller that forgets would write every row at
+    # zero and the replay would be unordered.
+    seq = _SEQ[run_id] = _SEQ.get(run_id, 0) + 1
     try:
-        await ledger.record_event(run_id=run_id, kind=kind, payload=payload)
+        await ledger.record_event(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            seq=seq,
+            kind=kind,
+            agent="aisoc-hunt",
+            summary=summary or kind,
+            payload=payload,
+        )
     except Exception as exc:  # noqa: BLE001
         logger.warning("hunt.agent.ledger_write_failed kind=%s err=%s", kind, type(exc).__name__)
 
