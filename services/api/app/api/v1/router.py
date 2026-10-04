@@ -75,6 +75,7 @@ from app.api.v1.endpoints import (
     replay,
     report_builder,
     reports,
+    retro_hunts,
     rule_tuning,
     sandbox,
     saved_hunts,
@@ -296,6 +297,7 @@ api_router.include_router(posture.router)
 api_router.include_router(easm.router)
 api_router.include_router(identity_graph.router)
 api_router.include_router(reports.router)
+api_router.include_router(retro_hunts.router)
 
 # Wave 7 — customizable dashboard / report builder
 api_router.include_router(report_builder.router)

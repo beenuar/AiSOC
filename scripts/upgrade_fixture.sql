@@ -50,15 +50,43 @@ VALUES
      'pre-upgrade alert (info)', 'Seeded before the migration chain ran.', 'info', 'closed', true)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO cases (id, tenant_id, case_number, title, description)
-VALUES (
-    '22222222-2222-2222-2222-222222222222',
-    '00000000-0000-0000-0000-0000000000aa',
-    'CASE-UPGRADE-0001',
-    'pre-upgrade case',
-    'Seeded before the migration chain ran, so a case-table migration meets a populated table.'
-)
-ON CONFLICT (id) DO NOTHING;
+-- The case table is named differently on either side of 083, which renames
+-- `cases` to `cases_pre_consolidation` and consolidates into `aisoc_cases`.
+-- This fixture runs against *the previous release's* schema, so which name
+-- exists depends on which release that is: a hard-coded `cases` worked while
+-- the previous release was 15.x and breaks the moment it is 16.x, under
+-- `ON_ERROR_STOP=1`, with `relation "cases" does not exist`.
+--
+-- Resolving the name at run time rather than pinning either one keeps the
+-- fixture working across the rename in both directions, which matters because
+-- this is the one test whose whole job is to meet an older schema.
+DO $$
+DECLARE
+    target text := COALESCE(
+        to_regclass('public.aisoc_cases')::text,
+        to_regclass('public.cases')::text
+    );
+BEGIN
+    IF target IS NULL THEN
+        RAISE EXCEPTION 'neither `aisoc_cases` nor `cases` exists; the previous '
+                        'release applied no case table at all, which is not a '
+                        'shape this fixture can seed';
+    END IF;
+
+    EXECUTE format(
+        'INSERT INTO %I (id, tenant_id, case_number, title, description) '
+        'VALUES ($1, $2, $3, $4, $5) ON CONFLICT (id) DO NOTHING',
+        target
+    )
+    USING '22222222-2222-2222-2222-222222222222'::uuid,
+          '00000000-0000-0000-0000-0000000000aa'::uuid,
+          'CASE-UPGRADE-0001',
+          'pre-upgrade case',
+          'Seeded before the migration chain ran, so a case-table migration meets a populated table.';
+
+    RAISE NOTICE 'upgrade fixture seeded one case into %', target;
+END
+$$;
 
 COMMIT;
 

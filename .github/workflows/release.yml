@@ -646,11 +646,47 @@ jobs:
       # tests/test_release_channel_tags.py runs this exact block under bash
       # with each combination, because a tag-selection rule expressed only in
       # a workflow is a rule nothing checks.
+      # Which major is `stable` on right now? Ask the registry, not the
+      # repository: a tag is a registry fact, and a tree can be any commit.
+      # Resolved per image because a republish or a half-release can leave one
+      # image's channel behind the others, and each must be judged on its own.
+      #
+      # A miss is not a failure. No `stable` tag yet is the ordinary state of a
+      # first release and must leave the value empty so the channel is taken;
+      # a registry hiccup is reported and also leaves it empty, which is the
+      # safe direction -- the worst case is `stable` advancing within the major
+      # it is already on.
+      - id: stable-major
+        env:
+          IMAGE: ${{ matrix.image }}
+          IS_DEMO: ${{ matrix.demo }}
+        run: |
+          set -uo pipefail
+          major=""
+          if [ "${IS_DEMO}" != "true" ]; then
+            current=$(docker buildx imagetools inspect "${IMAGE}:stable" \
+                        --format '{{ index .Image.Config.Labels "org.opencontainers.image.version" }}' \
+                      2>/dev/null || true)
+            case "${current}" in
+              v[0-9]*|[0-9]*)
+                major="${current#v}"
+                major="${major%%.*}"
+                ;;
+              *)
+                echo "::notice::no resolvable \`stable\` tag for ${IMAGE} (got '${current}'); treating as a first release"
+                ;;
+            esac
+          fi
+          echo "major=${major}" >> "$GITHUB_OUTPUT"
+          echo "stable channel for ${IMAGE} is on major '${major:-<none>}'"
+
+
       - id: image-tags
         env:
           VERSION: ${{ inputs.tag || github.ref_name }}
           REPUBLISH: ${{ github.event_name == 'workflow_dispatch' }}
           PROMOTE_STABLE: ${{ inputs.promote_stable }}
+          STABLE_MAJOR: ${{ steps.stable-major.outputs.major }}
           IMAGE: ${{ matrix.image }}
           IS_DEMO: ${{ matrix.demo }}
         run: |
@@ -660,7 +696,23 @@ jobs:
           IS_MAJOR=false
           case "${VERSION#v}" in
             *.0.0) IS_MAJOR=true ;;
-          esac
+            esac
+            # Blocking `vX.0.0` alone is not enough, and this is the bug that
+            # carried `stable` to v12, v13 and v15. `v16.0.0` correctly refuses
+            # the tag; `v16.1.0` is a minor, so it took it the next day and the
+            # channel crossed the major with nobody deciding to. The channel has
+            # to know which major it is *on*, not only whether the incoming
+            # version is itself a major.
+            #
+            # STABLE_MAJOR is resolved from the registry by the step above. An
+            # empty value means no `stable` tag exists yet, which is a first
+            # release and must take the channel rather than read as a mismatch.
+            INCOMING_MAJOR="${VERSION#v}"
+            INCOMING_MAJOR="${INCOMING_MAJOR%%.*}"
+            SAME_MAJOR=true
+            if [ -n "${STABLE_MAJOR:-}" ] && [ "${STABLE_MAJOR}" != "${INCOMING_MAJOR}" ]; then
+              SAME_MAJOR=false
+            fi
           {
             echo 'tags<<EOF'
             if [ "$IS_DEMO" = "true" ]; then
@@ -673,7 +725,7 @@ jobs:
               # dispatch arm is the only way `stable` ever reaches a major,
               # and it is separate from the republish arm above so repairing
               # an old tag cannot drag `stable` backwards with it.
-              if { [ "$REPUBLISH" != "true" ] && [ "$IS_MAJOR" != "true" ]; } || [ "$PROMOTE_STABLE" = "true" ]; then
+              if { [ "$REPUBLISH" != "true" ] && [ "$IS_MAJOR" != "true" ] && [ "$SAME_MAJOR" = "true" ]; } || [ "$PROMOTE_STABLE" = "true" ]; then
                 echo "${IMAGE}:stable"
               fi
             fi
@@ -1112,6 +1164,58 @@ jobs:
         run: |
           set -euo pipefail
           helm show chart "oci://ghcr.io/beenuar/charts/aisoc" --version "${{ steps.package.outputs.version }}"
+
+      # The chart channel the release policy promised alongside the image one.
+      # It was scoped as "a `stable` image tag and chart channel" and only the
+      # image half was built, so `helm install` with no `--version` has always
+      # resolved to whatever the registry hands back.
+      #
+      # The rule is the image rule, keyed on the *chart's* own major rather than
+      # the application's: the break an operator is protected from here is a
+      # values-schema break, and the chart versions independently of
+      # `appVersion`. `helm push` cannot write a non-SemVer tag, so the channel
+      # is a manifest copy with buildx, which is already on the runner.
+      - name: Move the `stable` chart channel
+        id: chart-channel
+        if: github.event_name == 'push'
+        env:
+          CHART_VERSION: ${{ steps.package.outputs.version }}
+          PROMOTE_STABLE: ${{ inputs.promote_stable }}
+        run: |
+          set -uo pipefail
+          CHART=oci://ghcr.io/beenuar/charts/aisoc
+          REF=ghcr.io/beenuar/charts/aisoc
+
+          incoming_major="${CHART_VERSION%%.*}"
+          is_major=false
+          case "$CHART_VERSION" in
+            *.0.0) is_major=true ;;
+          esac
+
+          # Where the channel is now. A chart tagged `stable` reports its own
+          # version, which is the only thing that can answer this.
+          current=$(helm show chart "$CHART" --version stable 2>/dev/null \
+                      | awk '$1 == "version:" { print $2 }')
+          channel_major=""
+          case "$current" in
+            [0-9]*) channel_major="${current%%.*}" ;;
+          esac
+
+          same_major=true
+          if [ -n "$channel_major" ] && [ "$channel_major" != "$incoming_major" ]; then
+            same_major=false
+          fi
+
+          if { [ "$is_major" != "true" ] && [ "$same_major" = "true" ]; } || [ "${PROMOTE_STABLE}" = "true" ]; then
+            docker buildx imagetools create --tag "${REF}:stable" "${REF}:${CHART_VERSION}"
+            helm show chart "$CHART" --version stable >/dev/null
+            echo "::notice title=Helm::stable chart channel now resolves to ${CHART_VERSION}"
+            echo "moved=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Helm::stable chart channel left at ${current:-<none>}; chart ${CHART_VERSION} crosses a major. Dispatch with promote_stable: true to move it."
+            echo "moved=false" >> "$GITHUB_OUTPUT"
+          fi
+
 
       - name: Explain a packaged-but-unpushed chart
         if: github.event_name != 'push'

@@ -79,10 +79,19 @@ two channel tags.
 
 `stable` exists because `latest` cannot be both "newest" and "safe to pull
 unattended". A major stops `stable` where it is until a maintainer dispatches
-the release workflow with `promote_stable: true`. The rule is executed by
-`tests/test_release_channel_tags.py`, which lifts the tag-selection block out
-of `release.yml` and runs it under each combination rather than describing it
-a second time.
+the release workflow with `promote_stable: true`.
+
+**The rule is about a sequence, not a release.** Refusing `vX.0.0` is not
+enough on its own: `v16.0.0` correctly declines the tag and `v16.1.0` is a
+minor, so it took it the next day and the channel crossed the major with nobody
+deciding to. That is how `stable` reached v12, v13 and v15. The workflow now
+resolves which major the channel is *on* -- from the registry, because a tag is
+a registry fact -- and moves it only within that major.
+
+`tests/test_release_channel_tags.py` lifts the tag-selection block out of
+`release.yml` and runs it under bash rather than describing it a second time,
+and it replays whole release ladders, because every question asked one release
+at a time had the right answer while the sequence did not.
 
 Neither channel tag is ever applied by a repair run. Re-publishing the images
 for an older tag moves nothing, because handing a self-hoster older content on
@@ -93,9 +102,18 @@ the tag they pull by default is the defect this arrangement exists to prevent.
 The chart is published to an OCI registry on every release:
 
 ```bash
-helm show chart oci://ghcr.io/beenuar/charts/aisoc
+helm show chart oci://ghcr.io/beenuar/charts/aisoc --version stable
 helm install aisoc oci://ghcr.io/beenuar/charts/aisoc --version <chart-version> -n aisoc --create-namespace
 ```
+
+The chart has the same `stable` channel the images do, and it follows the
+**chart's** major rather than the application's -- the break it protects an
+operator from is a values-schema break, and the chart versions independently of
+`appVersion`. `--version stable` resolves to the newest chart within the major
+the channel is on; a chart major stops it until a maintainer dispatches with
+`promote_stable: true`, exactly as for images. Pin an explicit version in
+production; the channel is for the case where you would otherwise have pinned
+nothing at all.
 
 The chart's `version` and its `appVersion` move independently. `appVersion`
 names the images an unpinned install pulls; `version` is the chart's own. A

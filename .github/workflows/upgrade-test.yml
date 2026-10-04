@@ -131,8 +131,20 @@ jobs:
       - name: Record what is there before the upgrade
         run: |
           set -euo pipefail
-          psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" \
-            -c "\copy (select 'alerts', count(*) from alerts union all select 'cases', count(*) from cases union all select 'tenants', count(*) from tenants union all select 'users', count(*) from users order by 1) to '/tmp/before.tsv'"
+          # Which case table the previous release has depends on which release
+          # it is: 083 renames `cases` and consolidates into `aisoc_cases`, so a
+          # pinned name is right on exactly one side of that boundary. Resolve
+          # it -- the count is what this snapshot is for, not the name.
+          DSN="postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc"
+          CASES=$(psql -v ON_ERROR_STOP=1 -tA "$DSN" -c \
+            "select coalesce(to_regclass('public.aisoc_cases')::text, to_regclass('public.cases')::text, '')")
+          if [ -z "$CASES" ]; then
+            echo "::error::the previous release has neither \`aisoc_cases\` nor \`cases\`" >&2
+            exit 1
+          fi
+          echo "previous release holds its cases in: $CASES"
+          psql -v ON_ERROR_STOP=1 -tA "$DSN" \
+            -c "\copy (select 'alerts', count(*) from alerts union all select 'cases', count(*) from ${CASES} union all select 'tenants', count(*) from tenants union all select 'users', count(*) from users order by 1) to '/tmp/before.tsv'"
           cat /tmp/before.tsv
 
       # Leg two: this tree's chain, applied by the release's own runner.
@@ -199,8 +211,20 @@ jobs:
             "select title from aisoc_cases where id = '22222222-2222-2222-2222-222222222222'" | grep -q 'pre-upgrade case'
           # And the archive still holds what it held, so a consolidation
           # that lost a row is detectable after the fact.
-          psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c \
-            "select count(*) from cases_pre_consolidation" >/dev/null
+            # `cases_pre_consolidation` only exists when 083 ran during *this*
+            # upgrade. Once the previous release is itself 16.x the rename
+            # happened before this test started, so its absence is then the
+            # correct state and not a regression. Assert on it only when it is
+            # there, and say out loud which case was taken, because "the check
+            # silently did nothing" is the failure mode this whole workflow is
+            # about.
+            if [ -n "$(psql -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c "select to_regclass('public.cases_pre_consolidation')")" ]; then
+              psql -v ON_ERROR_STOP=1 -tA "postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc" -c \
+                "select count(*) from cases_pre_consolidation" >/dev/null
+              echo "083 ran during this upgrade; the pre-consolidation archive is intact."
+            else
+              echo "the previous release already carried the consolidation; no archive expected."
+            fi
           echo "OK: the rows that were there before the upgrade are still there, by id."
 
       # The runtime role is what every service connects as, and a migration

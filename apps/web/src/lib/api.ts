@@ -615,6 +615,45 @@ export const brandingApi = {
   },
 };
 
+export interface RetroHuntSettings {
+  enabled: boolean;
+  lookback_days: number;
+  include_federated: boolean;
+  max_sweeps_per_hour: number;
+  max_sweeps_per_day: number;
+  sweeps_this_hour: number;
+  sweeps_today: number;
+  sweeps_skipped_budget: number;
+}
+
+export const retroHuntsApi = {
+  /**
+   * This tenant's answer to "may AiSOC sweep my history".
+   *
+   * A tenant that has never opted in has no settings row, and the API returns
+   * the column defaults rather than a 404 -- "you have not opted in" is a
+   * state with a correct answer.
+   */
+  async getSettings(): Promise<RetroHuntSettings> {
+    return request<RetroHuntSettings>('/api/v1/retro-hunts/settings');
+  },
+
+  /**
+   * Opt in or out. The budget fields are read-only here by design: they are
+   * the operator's ceiling on what one tenant can cost the deployment.
+   */
+  async putSettings(body: {
+    enabled: boolean;
+    lookback_days: number;
+    include_federated: boolean;
+  }): Promise<RetroHuntSettings> {
+    return request<RetroHuntSettings>('/api/v1/retro-hunts/settings', {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    });
+  },
+};
+
 export const tenantsApi = {
   /**
    * Lightweight tenant identity for the SOC console TopBar.

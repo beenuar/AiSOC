@@ -46,6 +46,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { AutonomyPolicyPanel } from '@/components/settings/AutonomyPolicy';
+import { RetroHuntSettingsPanel } from './RetroHuntSettings';
 import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
 import { canUseDemoData } from '@/lib/demoFallback';
 
@@ -402,7 +403,12 @@ export function SettingsView() {
               {tab === 'profile' && <ProfilePanel />}
               {tab === 'workspace' && <WorkspacePanel />}
               {tab === 'integrations' && <IntegrationsPanel />}
-              {tab === 'autonomy' && <AutonomyPolicyPanel />}
+              {tab === 'autonomy' && (
+                <div className="space-y-10">
+                  <AutonomyPolicyPanel />
+                  <RetroHuntSettingsPanel />
+                </div>
+              )}
               {tab === 'api-keys' && <ApiKeysPanel />}
               {tab === 'notifications' && <NotificationsPanel />}
               {tab === 'appearance' && <AppearancePanel />}

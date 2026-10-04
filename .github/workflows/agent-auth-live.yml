@@ -138,6 +138,12 @@ jobs:
           ISOLATION_CLOSURE_DSN: ${{ env.LIVE_DSN }}
         run: python -m pytest ../../tests/isolation/test_closure_grant_live.py -v --tb=short -rs
 
+      - name: A tenant can opt itself into retro-hunts
+        working-directory: services/api
+        env:
+          ISOLATION_RETRO_HUNT_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_retro_hunt_settings_live.py -v --tb=short -rs
+
       - name: No suite may report success having skipped
         run: |
           set -euo pipefail
@@ -146,4 +152,4 @@ jobs:
             exit 1
           fi
           echo "LIVE_DSN was set, and the cross-service step sets ISOLATION_CROSS_SERVICE,"
-          echo "so none of the three suites took its skip path."
+          echo "so none of the four suites took its skip path."

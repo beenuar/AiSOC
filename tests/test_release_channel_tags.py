@@ -37,7 +37,9 @@ def _tag_script() -> str:
     return step["run"]
 
 
-def run_tags(*, version: str, republish: bool = False, promote_stable: bool = False, demo: bool = False) -> list[str]:
+def run_tags(
+    *, version: str, republish: bool = False, promote_stable: bool = False, demo: bool = False, stable_major: str = ""
+) -> list[str]:
     """Execute the workflow's own tag block and return the tags it emitted."""
     script = _tag_script()
     with tempfile.TemporaryDirectory() as tmp:
@@ -50,6 +52,7 @@ def run_tags(*, version: str, republish: bool = False, promote_stable: bool = Fa
             "PROMOTE_STABLE": "true" if promote_stable else "false",
             "IMAGE": IMAGE,
             "IS_DEMO": "true" if demo else "false",
+            "STABLE_MAJOR": stable_major,
             "GITHUB_OUTPUT": str(output),
         }
         done = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
@@ -118,3 +121,80 @@ def test_the_promote_stable_input_is_declared_so_the_dispatch_arm_is_reachable()
         "the block reads PROMOTE_STABLE but the workflow declares no such input, so the only path "
         "by which `stable` can reach a major is unreachable"
     )
+
+
+# ── The channel across a sequence of releases ────────────────────────────────
+#
+# Fix-pass item 5.5. Every test above asks one question of one release, and
+# the channel's whole purpose is a property of a *sequence*: `stable` must not
+# arrive at a major without an operator saying so. Asked one release at a time
+# the answer always looked right -- `v16.0.0` correctly does not move it -- and
+# `v16.1.0` then carried it across the boundary the next day, because a minor
+# is not a major and nothing in the block knew which major `stable` was on.
+#
+# That is how `stable` reached v12, v13 and v15.
+
+
+def run_ladder(versions: list[str], *, stable_major: str = "", promote_at: set[str] | None = None) -> dict[str, str | None]:
+    """Replay a release ladder, carrying the channel's major between releases.
+
+    Returns the version `stable` points at after each release, which is the
+    thing a single-release test cannot observe.
+    """
+    promote_at = promote_at or set()
+    where: str | None = None
+    for version in versions:
+        tags = run_tags(
+            version=version,
+            promote_stable=version in promote_at,
+            stable_major=stable_major,
+        )
+        if f"{IMAGE}:stable" in tags:
+            where = version
+            stable_major = version.lstrip("v").split(".")[0]
+    return {"stable": where, "major": stable_major}
+
+
+class TestStableDoesNotCrossAMajorOnItsOwn:
+    def test_the_first_minor_of_a_new_major_does_not_carry_the_channel(self) -> None:
+        """The defect, stated as a ladder.
+
+        `v15.2.0` is where `stable` sits. `v16.0.0` correctly refuses it. Then
+        `v16.1.0` arrives and -- being a minor -- takes it, so a deployment
+        pulling `stable` crosses the breaking change with nobody deciding to.
+        """
+        end = run_ladder(["v15.1.0", "v15.2.0", "v16.0.0", "v16.1.0"], stable_major="15")
+
+        assert end["stable"] == "v15.2.0", f"stable moved to {end['stable']}, crossing into v16 with no operator action"
+
+    def test_it_stays_put_for_the_whole_of_the_new_major(self) -> None:
+        """Not just the first minor. Nothing in v16 takes it."""
+        end = run_ladder(
+            ["v15.2.0", "v16.0.0", "v16.1.0", "v16.1.1", "v16.2.0", "v16.3.0"],
+            stable_major="15",
+        )
+
+        assert end["stable"] == "v15.2.0"
+
+    def test_a_deliberate_promotion_moves_it_and_the_channel_follows(self) -> None:
+        """The negative control, and the half that matters most.
+
+        A guard that simply froze `stable` forever would pass the two tests
+        above and make the channel useless. After an operator promotes
+        `v16.0.0`, the ladder must resume: v16's own minors carry it again.
+        """
+        end = run_ladder(
+            ["v15.2.0", "v16.0.0", "v16.1.0", "v16.2.0"],
+            stable_major="15",
+            promote_at={"v16.0.0"},
+        )
+
+        assert end["stable"] == "v16.2.0", "the channel did not resume inside the promoted major"
+        assert end["major"] == "16"
+
+    def test_a_first_ever_release_takes_the_channel(self) -> None:
+        """A registry with no `stable` tag yet must not be read as "a different
+        major", or a new deployment would never get one."""
+        end = run_ladder(["v1.0.0", "v1.1.0"], stable_major="")
+
+        assert end["stable"] == "v1.1.0"

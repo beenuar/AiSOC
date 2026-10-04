@@ -22,6 +22,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   governed equivalent is `POST /api/v1/detection-proposals`, which writes to a
   real table and carries separation of duties.
 
+### Added
+
+- **Retro-hunts can be turned on.** `RETRO_HUNT_ENABLED` decides whether the
+  consumer runs, and it appeared in no compose file and no `.env.example` --
+  compose passes only the variables it names, so setting it in a shell did
+  nothing and the consumer could not start on any compose deployment. The
+  tenant's half, `retro_hunt_settings.enabled`, defaults to FALSE under a
+  comment reading "Off until a tenant asks", and there was nowhere to ask: no
+  route and no console surface touched the table, so opting a tenant in meant
+  an UPDATE issued by hand. Both halves now exist --
+  `GET`/`PUT /api/v1/retro-hunts/settings` and a panel in Settings -> Autonomy
+  guardrails -- and both switches must be on before anything is swept. The
+  sweep budget is deliberately read-only through the tenant surface: it is the
+  operator's ceiling on what one tenant can cost the deployment.
+- **The Helm chart has the `stable` channel the release policy promised.** It
+  was scoped as "a `stable` image tag and chart channel" and only the image
+  half was built, so `helm install` with no `--version` resolved to whatever
+  the registry handed back. The chart channel follows the **chart's** major,
+  not the application's, because the break it protects against is a
+  values-schema break.
+
+### Changed
+
+- **Retracted claims for schema that nothing reads.** Migration 084's
+  detection lifecycle (`environment`, `shadow_until`, `detection_rule_versions`,
+  `detection_shadow_matches`) and migration 087's enterprise IAM
+  (`workload_identities`, `privilege_grants`, `permission_conditions`,
+  `narrow_by_conditions`) each have **zero readers** in `services/`. A rule set
+  to `dev` still raises alerts, a future `shadow_until` still pages, and there
+  is no rollback route. Separation of duties on detection proposals is real and
+  the claim for it stands. The docs page, README and changelog now say which
+  half is which.
+- **Three docs-portal overclaims corrected.** Qdrant holds the MITRE technique
+  corpus for lookup, which is a reference index and not agent memory; there is
+  no coverage advisor that recommends rules for uncovered techniques and no
+  one-click generation route; and `GET /taxii/collections` calls `_demo_only()`
+  and returns a fixed list, so TAXII collection management is demo-only and the
+  intel sharing is one-way.
+- **The phishing playbook no longer claims a retraction it cannot perform.**
+  Its "Retract phishing email fleet-wide" step posts to `${EMAIL_GATEWAY_URL}`,
+  which no compose file or `.env.example` sets, under `on_failure: continue`.
+  The step and the playbook description now say the message is not retracted
+  when the gateway is unconfigured.
+
 ### Removed
 
 - **`POST /api/v1/detection-loop/suggest` and its two sibling routes.** They
@@ -54,31 +98,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `/detection-proposals/{id}/decide`, so an approver clicking through would
   have written a rule with no detection logic into the engine. `/decide` now
   refuses such a body, and the auto-tuner no longer seeds the queue by default.
-
-### Changed
-
-- **Retracted claims for schema that nothing reads.** Migration 084's
-  detection lifecycle (`environment`, `shadow_until`, `detection_rule_versions`,
-  `detection_shadow_matches`) and migration 087's enterprise IAM
-  (`workload_identities`, `privilege_grants`, `permission_conditions`,
-  `narrow_by_conditions`) each have **zero readers** in `services/`. A rule set
-  to `dev` still raises alerts, a future `shadow_until` still pages, and there
-  is no rollback route. Separation of duties on detection proposals is real and
-  the claim for it stands. The docs page, README and changelog now say which
-  half is which.
-- **Three docs-portal overclaims corrected.** Qdrant holds the MITRE technique
-  corpus for lookup, which is a reference index and not agent memory; there is
-  no coverage advisor that recommends rules for uncovered techniques and no
-  one-click generation route; and `GET /taxii/collections` calls `_demo_only()`
-  and returns a fixed list, so TAXII collection management is demo-only and the
-  intel sharing is one-way.
-- **The phishing playbook no longer claims a retraction it cannot perform.**
-  Its "Retract phishing email fleet-wide" step posts to `${EMAIL_GATEWAY_URL}`,
-  which no compose file or `.env.example` sets, under `on_failure: continue`.
-  The step and the playbook description now say the message is not retracted
-  when the gateway is unconfigured.
-
-### Fixed
+- **`stable` crossed a major on its own, which is how it reached v12, v13 and
+  v15.** The rule refused `vX.0.0` and nothing else, so `v16.0.0` correctly
+  declined the tag and `v16.1.0` -- a minor -- took it the next day, carrying
+  every deployment that pulls `stable` across the breaking change with no
+  operator action. The release workflow now resolves which major the channel is
+  *on*, from the registry rather than the tree, and moves it only within that
+  major. The test that backed the claim asked one release at a time, which is
+  why it always answered correctly; it now replays whole release ladders.
+- **The upgrade test would have broken the moment the previous release became
+  16.x.** `scripts/upgrade_fixture.sql` inserted into `cases`, which migration
+  083 renames, and the workflow's before-snapshot and archive assertion pinned
+  names that exist on exactly one side of that rename. All three now resolve
+  the table at run time and say which case was taken.
+- **The OpenAPI drift message named no cause.** It said only "out of date, run
+  `export_openapi.py`", which is the command that produced the rejected file.
+  The usual cause is a generator version disagreeing with the lockfile --
+  pydantic 2.13 emits `additionalProperties: true` where 2.8 did not, 252 lines
+  of diff across the spec and nothing to do with anyone's change -- so it now
+  names the mismatch, prints the `pip install` that fixes it, and shows the
+  first differing paths.
 
 - **The MCP client could not complete a single real call, and every tool it
   offered a model was rejected by the provider (fix pass, wave 2).**

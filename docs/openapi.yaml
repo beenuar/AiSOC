@@ -15476,6 +15476,55 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/retro-hunts/settings:
+    get:
+      tags:
+      - retro_hunts
+      summary: This tenant's retro-hunt opt-in and budget
+      operationId: get_retro_hunt_settings_api_v1_retro_hunts_settings_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetroHuntSettingsOut'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - retro_hunts
+      summary: Opt this tenant in or out of retro-hunt sweeps
+      description: 'Write the tenant''s half of the switch.
+
+
+        The budget columns are deliberately not writable here. They are the
+
+        operator''s ceiling on what one tenant can cost the deployment, and a tenant
+
+        that could raise its own ceiling would not have one.'
+      operationId: put_retro_hunt_settings_api_v1_retro_hunts_settings_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetroHuntSettingsIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RetroHuntSettingsOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/report-builder/validate:
     post:
       tags:
@@ -29860,6 +29909,70 @@ components:
           title: Audit Days
       type: object
       title: RetentionUpdate
+    RetroHuntSettingsIn:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Whether AiSOC may sweep this tenant's history at all.
+        lookback_days:
+          type: integer
+          maximum: 365.0
+          minimum: 1.0
+          title: Lookback Days
+          description: How far back a sweep looks. Bounded so no settings row can
+            express 'scan everything'.
+          default: 30
+        include_federated:
+          type: boolean
+          title: Include Federated
+          description: 'Whether to go beyond AiSOC''s own lake into connected SIEMs.
+            Separate from `enabled` because it is a separate cost: a lake sweep is
+            free to you and a SIEM sweep may not be.'
+          default: true
+      type: object
+      required:
+      - enabled
+      title: RetroHuntSettingsIn
+    RetroHuntSettingsOut:
+      properties:
+        enabled:
+          type: boolean
+          title: Enabled
+        lookback_days:
+          type: integer
+          title: Lookback Days
+        include_federated:
+          type: boolean
+          title: Include Federated
+        max_sweeps_per_hour:
+          type: integer
+          title: Max Sweeps Per Hour
+        max_sweeps_per_day:
+          type: integer
+          title: Max Sweeps Per Day
+        sweeps_this_hour:
+          type: integer
+          title: Sweeps This Hour
+        sweeps_today:
+          type: integer
+          title: Sweeps Today
+        sweeps_skipped_budget:
+          type: integer
+          title: Sweeps Skipped Budget
+      type: object
+      required:
+      - enabled
+      - lookback_days
+      - include_federated
+      - max_sweeps_per_hour
+      - max_sweeps_per_day
+      - sweeps_this_hour
+      - sweeps_today
+      - sweeps_skipped_budget
+      title: RetroHuntSettingsOut
+      description: What this tenant has agreed to, and what its budget has been spent
+        on.
     ReviewAction:
       properties:
         action:
