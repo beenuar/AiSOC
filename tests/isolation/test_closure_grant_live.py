@@ -102,8 +102,7 @@ class TestAnEarnedGrantIsHonoured:
         held = await _has_auto_close_grant(pool, tenant_id=tenant_id, alert_class="benign_scanner")
 
         assert held is True, (
-            "an earned auto_close grant was not visible to the closure policy, so a tenant that "
-            "enabled a policy could never auto-close"
+            "an earned auto_close grant was not visible to the closure policy, so a tenant that enabled a policy could never auto-close"
         )
 
     async def test_a_tenant_with_no_grant_does_not_auto_close(self, pool) -> None:

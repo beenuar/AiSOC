@@ -160,9 +160,9 @@ class TestTheLedgerCallWouldBeAccepted:
             if param.default is inspect.Parameter.empty and param.kind is inspect.Parameter.KEYWORD_ONLY
         }
 
-        import app.hunt.agent as hunt_agent
+        from app.hunt.agent import _record
 
-        source = inspect.getsource(hunt_agent._record)
+        source = inspect.getsource(_record)
         missing = sorted(name for name in required if f"{name}=" not in source)
 
         assert not missing, (
