@@ -4,8 +4,8 @@
   "rows": [
     {
       "date": "2026-10-03",
-      "agent_version": "v16.0.0",
-      "commit_sha": "167077e4",
+      "agent_version": "v16.0.1",
+      "commit_sha": "b1c6925a",
       "substrate": true,
       "eval_mode": "substrate-only",
       "mitre_accuracy": 0.97,

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [16.0.1] - 2026-10-04
+
 ### Security
 
 - **A grant was measured against the caller's static role rather than the
