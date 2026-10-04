@@ -145,6 +145,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `check_hunt_agent_boundary.py` was reported reachable while no workflow ran
   it.
 
+### Fixed
+
+- **The dashboard reported numbers that the live tables contradicted.**
+  Three separate defects, one shape: a metric wired to the wrong source.
+  The alert tiles counted every alert ever ingested — a fully-triaged
+  tenant read "992 Active Alerts / 91 Critical" while every row was
+  resolved. `/metrics/dashboard` now publishes `active`, `criticalActive`
+  and `resolved` as first-class fields computed from explicit unresolved
+  statuses, and unknown statuses fail open toward risk visibility rather
+  than silently vanishing from the counts.
+- **Case metrics read a table with no live rows.** The consolidated
+  v16.0.0 merge moved case rows to `aisoc_cases`; the dashboard's
+  opened/closed counters, the MTTR rollup, the insights sparkline and
+  the MSSP portfolio still queried the legacy table, so "Cases
+  opened/closed (7d)" read 0 for a tenant with eighteen open cases and
+  MTTR published a confident 0.0. All four now read the live table,
+  clocked off `created_at`/`closed_at`, and the parity and isolation
+  test fixtures seed the same table production uses — the old fixtures
+  passed while production lied because they seeded the empty one too.
+- **-9375% deltas.** The API returns period-over-period deltas as
+  percent; the console multiplied them by 100 a second time, so a -93.75
+  rendered as -9375%. Zero baselines returned a fake `0.0` rendered as
+  "+0%" for metrics that had no previous period; they now return `null`
+  and the console says "no baseline". The percent-vs-fraction contract
+  is documented on the schema and locked by tests.
+- **The global time-window selector changed nothing.** It set UI state no
+  fetch consumed; the alert volume, trend, severity and case panels were
+  hard-wired to 24h. `/metrics/dashboard` accepts `period`
+  (1h|24h|7d|30d), echoes it back so panels label themselves from the
+  payload, and the console binds the selector to every window-scoped
+  query.
+- **Connected sources read 0 while the HIDS connector was live.** The
+  health vocabulary (`healthy`) did not match the status the UI counts
+  (`active`); statuses are normalised at the API edge.
+- **Case status vocabulary.** The write endpoints accepted the console's
+  legacy vocabulary (open/in_progress/pending/cancelled) and the read
+  surface had its own; both are normalised onto the canonical
+  `case_status` ladder before the transition gate, which stays upstream's
+  single declared edge-set. A `reopen` endpoint restores the backwards
+  move the monotonic gate made unreachable.
+- **Approval dispatch crashed on principals without a `role` attribute**
+  when building the least-privilege principal, failing every approval
+  for token-scoped callers.
+- **Alert detail Raw tab** now carries the original ingested event plus
+  where-in-the-source-console coordinates (rule id, agent, original alert
+  id) parsed server-side, so an analyst can find the same event in the
+  source UI.
+- **Investigations**: the agent receives the real alert payload instead
+  of a summary stub; fabricated evidence is refused and forensic
+  findings survive nested-LLM JSON shapes; the investigation tab
+  survives a page refresh.
+
+### Changed
+
+- Dashboard tiles are relabelled to what they count: "Active Alerts" is
+  unresolved-only with the period total as a sub-line, resolved is a
+  separate KPI, and case tiles carry opened/closed for the selected
+  window. No metric was hidden, suppressed, or restatted to look calmer;
+  the scary number was wrong, and the honest one is smaller.
+
 ## [16.0.1] - 2026-10-04
 
 ### Security
