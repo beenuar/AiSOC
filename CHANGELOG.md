@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The MCP client could not complete a single real call, and every tool it
+  offered a model was rejected by the provider (fix pass, wave 2).**
+
+  `_CappedStream` was not an `httpx.AsyncByteStream`, and `httpx` asserts that
+  before it wraps a response body, so every real `list_tools` and `call_tool`
+  raised `AssertionError` before a byte was read. Every existing test drove the
+  client through its in-process `session_factory`, which is a good harness for
+  the policy questions it asks and bypasses the transport entirely.
+
+  Fixing it surfaced a second defect: the byte cap fired but its reason could
+  not be recovered from the exception, so a tenant's own cap was reported to
+  the model and the ledger as the server being slow.
+
+  Tool names were `mcp.<server>.<tool>`, and a dot is outside the function-name
+  pattern an OpenAI-compatible provider accepts, so the refusal happened at the
+  far end where no local test could see it. Names are now escaped and
+  reversible.
+
+  Air-gap had four sources and four answers. Measured: a loopback MCP server is
+  refused with or without `AISOC_SSRF_ALLOW_PRIVATE`, a private one needs it,
+  and compose delivered none of the three variables, so an operator could not
+  permit an internal server at all.
+
 - **The agents service could not reach the API at all, and three vendors were
   never offered to an investigation (fix pass, wave 1).**
 
