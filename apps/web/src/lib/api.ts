@@ -2193,6 +2193,12 @@ export interface DashboardMetrics {
     low: number;
     info?: number;
     resolvedToday: number;
+    /** Unresolved alerts only (excludes resolved/closed). */
+    active?: number;
+    /** Unresolved critical alerts only. */
+    criticalActive?: number;
+    /** Alerts in resolved state (all time). */
+    resolved?: number;
     /** Mean time to resolve, in **hours**, from closed cases. */
     mttr: number;
     /** Cases the mean was taken over. Zero means unmeasured, not zero hours. */
@@ -2202,6 +2208,10 @@ export interface DashboardMetrics {
     open: number;
     inProgress: number;
     resolvedThisWeek: number;
+    /** Created within the rolling 7d window. */
+    openedThisWeek?: number;
+    /** Closed (closed_at set) within the rolling 7d window. */
+    closedThisWeek?: number;
   };
   sources: Array<{ name: string; count: number; status: string }>;
   topMitre: Array<{ tactic: string; count: number }>;
@@ -2232,14 +2242,15 @@ export interface FunnelMetrics {
   /** Alerts produced per event-of-interest, clamped to [0, 1]. */
   alert_yield: number;
   mitre_coverage: { covered: number; total: number; ratio: number };
-  /** Period-over-period deltas (fraction, e.g. 0.05 = +5%). */
+  /** Period-over-period deltas in PERCENT (e.g. -93.33 = -93.33%).
+   * `null` = no baseline (previous window empty) — render "no baseline". */
   deltas: {
-    events_of_interest: number;
-    correlation_instances: number;
-    alerts_generated: number;
-    signal_to_noise: number;
-    mttd_seconds: number;
-    analyst_queue_depth: number;
+    events_of_interest: number | null;
+    correlation_instances: number | null;
+    alerts_generated: number | null;
+    signal_to_noise: number | null;
+    mttd_seconds: number | null;
+    analyst_queue_depth: number | null;
   };
   /** ISO-8601 server timestamp. */
   generated_at: string;

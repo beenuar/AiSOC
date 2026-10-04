@@ -579,20 +579,20 @@ export function DashboardView() {
                 funnel strip above does publish real deltas. */}
             <MetricCard
               label="Active Alerts"
-              value={metrics.alerts.total}
-              sub={`${metrics.alerts.new} new today`}
+              value={metrics.alerts.active ?? metrics.alerts.total}
+              sub={`${metrics.alerts.total} total in period`}
               color="blue"
             />
             <MetricCard
-              label="Critical"
-              value={metrics.alerts.critical}
-              sub="Require immediate action"
-              color="red"
+              label="Critical Active"
+              value={metrics.alerts.criticalActive ?? metrics.alerts.critical}
+              sub={`${metrics.alerts.resolved ?? 0} resolved`}
+              color={metrics.alerts.criticalActive ? 'red' : 'gray'}
             />
             <MetricCard
               label="Open Cases"
               value={metrics.cases.open}
-              sub={`${metrics.cases.inProgress} in progress`}
+              sub={`${metrics.cases.inProgress} in progress · ${metrics.cases.openedThisWeek ?? 0} opened / ${metrics.cases.closedThisWeek ?? 0} closed (7d)`}
               color="orange"
             />
             {/* `mttr` is hours and this rendered it with an `m` suffix, so a

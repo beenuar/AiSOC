@@ -71,12 +71,12 @@ const SAMPLE_FUNNEL = {
   alert_yield: 0.034,
   mitre_coverage: { covered: 42, total: 201, ratio: 0.209 },
   deltas: {
-    events_of_interest: 0.12,
-    correlation_instances: 0.05,
-    alerts_generated: -0.08,
-    signal_to_noise: 0.02,
-    mttd_seconds: -0.15,
-    analyst_queue_depth: 0.2,
+    events_of_interest: 12,
+    correlation_instances: 5,
+    alerts_generated: -8,
+    signal_to_noise: 2,
+    mttd_seconds: -15,
+    analyst_queue_depth: 20,
   },
   generated_at: '2026-05-13T10:00:00Z',
 };
@@ -109,6 +109,17 @@ describe('FunnelKpiBar', () => {
     swrData.clear();
     swrErrors.clear();
     swrLoading.clear();
+  });
+
+  it('renders "no baseline" when the API reports a null delta', () => {
+    // Previous window empty -> API returns null (not a dressed-up 0.0, and
+    // never the double-scaled -9375% of the old fraction*100 rendering bug).
+    swrData.set(FUNNEL_KEY, {
+      ...SAMPLE_FUNNEL,
+      deltas: { ...SAMPLE_FUNNEL.deltas, events_of_interest: null },
+    });
+    render(<FunnelKpiBar period="24h" />);
+    expect(screen.getByText('no baseline')).toBeInTheDocument();
   });
 
   it('renders six tiles with formatted values and signed deltas', () => {
