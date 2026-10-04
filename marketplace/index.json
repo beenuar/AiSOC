@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-03T15:14:21Z",
+  "generated": "2026-10-04T15:38:08Z",
   "categories": [
     {
       "id": "playbooks",
@@ -236777,7 +236777,7 @@
       "id": "phishing-investigation-v1",
       "type": "playbook",
       "name": "Phishing: Email Investigation & Remediation",
-      "description": "Triggered by a phishing alert from email gateway or user report. Extracts IOCs, retracts the message fleet-wide, blocks sender domain, and resets any credentials that may have been compromised.",
+      "description": "Triggered by a phishing alert from an email gateway or a user report. Extracts IOCs, blocks the sender domain, and resets credentials that may have been compromised. The retraction step requires EMAIL_GATEWAY_URL, which no compose file or .env.example sets, so on a default deployment the message is NOT retracted and the step is skipped.",
       "version": "1.0.0",
       "author": "Beenu - beenu@cyble.com",
       "tags": [
@@ -236799,7 +236799,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/phishing/phishing-investigation.playbook.json",
-      "sha256": "f68e72606a9ce930c2c0bfa33bff93fbce949fe5d0a8a6e5629319f65c0e8dec"
+      "sha256": "73f354344458fe6ed95f28835b5cc40c045c67716f5c56f909b6df3b8406ef7a"
     },
     {
       "id": "phishing-response-v1",

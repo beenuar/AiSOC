@@ -154,13 +154,6 @@ ALLOWED_GLOBALS: dict[tuple[str, str], str] = {
         "services/api/app/api/v1/endpoints/community.py",
         "_community_playbooks",
     ): "Same module, same gap.",
-    (
-        "services/api/app/api/v1/endpoints/detection_loop.py",
-        "_SUGGESTIONS",
-    ): (
-        "Drafted detection suggestions awaiting review. Parity plan 6.2 makes a draft a "
-        "governed DRAFT proposal with a row, which is where this gets a table."
-    ),
 }
 
 

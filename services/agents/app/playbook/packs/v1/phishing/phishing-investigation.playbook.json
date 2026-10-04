@@ -76,7 +76,7 @@
     },
     {
       "id": "retract",
-      "name": "Retract the message (requires EMAIL_GATEWAY_URL; skipped when unset)",
+      "name": "Retract the message via the tenant's email gateway (needs EMAIL_GATEWAY_URL; no-op when unset)",
       "type": "http",
       "params": {
         "url": "${EMAIL_GATEWAY_URL}/v1/messages/retract",
@@ -86,8 +86,7 @@
       },
       "on_failure": "continue",
       "retry_max": 1,
-      "timeout_seconds": 30,
-      "description": "Posts to the tenant's own email gateway. `EMAIL_GATEWAY_URL` is set by nothing in this repository, so unconfigured this call cannot resolve and `on_failure: continue` lets the rest of the playbook proceed. That is the right behaviour -- a failed retraction must not stop a credential reset -- but it means the playbook's outcome must not be read as the message having been retracted."
+      "timeout_seconds": 30
     },
     {
       "id": "approval_block_domain",
