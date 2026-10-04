@@ -50,7 +50,7 @@ and :data:`NEVER_GRANTABLE` from here and the vocabularies are the same object.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import Any, Final
 
 from app.core.security import ROLE_PERMISSIONS
@@ -127,17 +127,40 @@ def holds_wildcard(role: str) -> bool:
     return WILDCARD in ROLE_PERMISSIONS.get(role, [])
 
 
-def _granter_permissions(granter_role: str, granter_scopes: Sequence[str] | None) -> frozenset[str]:
+def _granter_permissions(
+    granter_role: str,
+    granter_scopes: Sequence[str] | None,
+    granter_permissions: Collection[str] | None = None,
+) -> frozenset[str]:
     """What the caller actually holds.
 
-    An API-key principal's authority is its ``scopes`` list, not the role of
-    the user who minted it — ``CurrentUser.require_permission`` takes the
-    scopes branch whenever ``scopes`` is not ``None``. Reading the role here
-    would let a key with two read scopes, owned by a ``tenant_admin``, grant
-    everything ``tenant_admin`` holds.
+    The three branches below are the three tiers ``CurrentUser`` documents,
+    in its order, and they have to stay in its order: whatever admitted a
+    caller through the door is the only honest measure of what that caller
+    may confer. Any disagreement between the two is an escalation in
+    whichever direction the grant path is more generous.
+
+    *scopes* — an API-key principal's authority is its ``scopes`` list, not
+    the role of the user who minted it. Reading the role here would let a key
+    with two read scopes, owned by a ``tenant_admin``, grant everything
+    ``tenant_admin`` holds.
+
+    *resolved permissions* — what the RBAC tables grant, which
+    ``require_permission`` prefers over the static map for any principal with
+    rows. Omitting this tier was GHSA-4gx4-x7gm-4xq8: a ``tenant_admin``
+    deliberately narrowed to ``users:write`` in ``user_roles`` was admitted on
+    that one permission and then measured against the 28 its static role
+    carries, so it could confer the other 27 on itself and resolve them on its
+    next request.
+
+    *static role* — the fallback, and only when nothing resolved a set. A
+    tenant that never adopted database-backed roles has no rows to read, and
+    must keep conferring exactly what its role confers.
     """
     if granter_scopes is not None:
         return frozenset(granter_scopes)
+    if granter_permissions is not None:
+        return frozenset(granter_permissions)
     return permissions_for(granter_role)
 
 
@@ -182,6 +205,7 @@ def authorize_role_grant(
     granter_role: str,
     requested_role: str,
     granter_scopes: Sequence[str] | None = None,
+    granter_permissions: Collection[str] | None = None,
 ) -> str:
     """Return ``requested_role`` if this caller may confer it, else raise.
 
@@ -201,7 +225,7 @@ def authorize_role_grant(
     if blocked is not None:
         raise RoleGrantDenied(f"Role {requested_role!r} cannot be assigned through the API: {blocked}")
 
-    held = _granter_permissions(granter_role, granter_scopes)
+    held = _granter_permissions(granter_role, granter_scopes, granter_permissions)
     missing = missing_permissions(held, permissions_for(requested_role))
     if missing:
         raise RoleGrantDenied(f"Cannot grant {requested_role!r}: it confers permissions you do not hold ({', '.join(missing)})")
@@ -213,6 +237,7 @@ def authorize_permission_grant(
     granter_role: str,
     requested: Sequence[str],
     granter_scopes: Sequence[str] | None = None,
+    granter_permissions: Collection[str] | None = None,
     subject: str = "permissions",
 ) -> list[str]:
     """Return ``requested`` if this caller may confer every one of them, else raise.
@@ -225,7 +250,7 @@ def authorize_permission_grant(
     outside the caller's own tenant. What it stops is the case that shipped —
     ``tenant_admin``, which is scoped on purpose, minting one.
     """
-    held = _granter_permissions(granter_role, granter_scopes)
+    held = _granter_permissions(granter_role, granter_scopes, granter_permissions)
     missing = missing_permissions(held, requested)
     if missing:
         raise RoleGrantDenied(f"Cannot grant {subject} you do not hold: {', '.join(missing)}")
@@ -238,6 +263,7 @@ def authorize_role_change(
     current_role: str,
     requested_role: str,
     granter_scopes: Sequence[str] | None = None,
+    granter_permissions: Collection[str] | None = None,
 ) -> str:
     """Authorize re-roling an existing principal.
 
@@ -256,6 +282,7 @@ def authorize_role_change(
         granter_role=granter_role,
         requested_role=requested_role,
         granter_scopes=granter_scopes,
+        granter_permissions=granter_permissions,
     )
 
 

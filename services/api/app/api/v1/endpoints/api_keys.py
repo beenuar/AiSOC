@@ -96,6 +96,7 @@ def _authorize_scopes(scopes: list[str], current_user: AuthUser) -> None:
         authorize_permission_grant(
             granter_role=current_user.role,
             granter_scopes=current_user.scopes,
+            granter_permissions=current_user.resolved_permissions,
             requested=scopes,
             subject="API key scope(s)",
         )

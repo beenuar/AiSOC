@@ -297,6 +297,7 @@ async def create_delegation(
         granted_role = authorize_role_grant(
             granter_role=current_user.role,
             granter_scopes=current_user.scopes,
+            granter_permissions=current_user.resolved_permissions,
             requested_role=body.granted_role,
         )
     except RoleGrantDenied as exc:

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A grant was measured against the caller's static role rather than the
+  permissions it was admitted on (GHSA-4gx4-x7gm-4xq8).**
+
+  `CurrentUser` resolves authority in three tiers — an API key's `scopes`,
+  then the database-backed RBAC tables, then the static `ROLE_PERMISSIONS`
+  map — and `require_permission` implements all three. `_granter_permissions`,
+  which every grant route consults, implemented the first and the third.
+
+  So a principal admitted through the middle tier had its grant checked
+  against a different authority than the one that opened the door. A
+  `tenant_admin` deliberately narrowed to `users:write` in `user_roles` still
+  carried 28 permissions statically: it could assign itself a role conferring
+  any of the other 27 and resolve them on its next request, defeating the
+  restriction a tenant administrator had applied. Reported by
+  [HaiND](https://github.com/Haind03).
+
+  The report named `POST /api/v1/rbac/users/{user_id}/roles`. The resolver is
+  shared, so the same caller reached it through five more: authoring a role,
+  re-permissioning one, creating a user, delegating to a child tenant, and
+  minting an API key — that last needing no target user and yielding a
+  durable bearer credential. All six now pass the resolved set.
+
+  `scripts/check_role_grant_scope.py` gains a fourth direction: a call to one
+  of the three authorizers that omits `granter_permissions=` fails CI. The
+  existing directions could not catch this, because they asked whether a
+  route *reached* the chokepoint and all six did.
+
+- **Dependency advisories.** `serialize-javascript` to `>=7.1.2`
+  (GHSA-gfhx-hw2g-v5hg) and `http-cache-semantics` to `>=4.3.0`
+  (GHSA-ch52-4w7c-c8xp). The second was reported with no patched version
+  because the advisory carries a null `first_patched_version`; its vulnerable
+  range is `<= 4.2.0` and `4.3.0` is published, so the fix existed and the
+  metadata did not say so.
+
 ## [16.0.0] - 2026-10-03
 
 ### BREAKING

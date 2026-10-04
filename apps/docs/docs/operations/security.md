@@ -138,7 +138,17 @@ Concretely, a grant is refused when the role is not in `ROLE_PERMISSIONS` at all
 
 The same rule covers authority that is not spelled "role": API-key scopes (a key is a bearer credential, so its scopes must be a subset of its minter's — the check this replaced named `("platform_admin", "tenant_admin")` in a tuple and covered only `*`, which let a `tenant_admin` mint a wildcard key and let anyone with `users:write` mint a `plugins:admin` key they were themselves refused), the database-backed RBAC roles below, MSSP delegations, and organisation membership, where an `admin` may neither appoint an `owner` nor demote the sitting one.
 
+#### "Does not itself hold" means the permissions the caller was admitted on
+
+A principal's authority resolves in three tiers, in this order: an API key's `scopes`, then the database-backed RBAC tables, then the static `ROLE_PERMISSIONS` map. `require_permission` — the door on every route — implements all three. The grant check implemented the first and the third, so a caller admitted through the middle tier had its grant measured against a different authority than the one that let it in (GHSA-4gx4-x7gm-4xq8, reported by [HaiND](https://github.com/Haind03)).
+
+That gap is only reachable when a tenant uses database-backed roles, and it is exactly the configuration where it hurts: narrowing an account is what those tables are *for*. A `tenant_admin` restricted to `users:write` in `user_roles` still carried 28 permissions statically, so it could assign itself a role carrying any of the other 27 and resolve them on its next request. Six routes shared the defective resolver, not the one the report named — authoring a role, re-permissioning one, assigning one, creating a user, delegating to a child tenant, and minting an API key. The last needs no target user and yields a durable credential.
+
+The resolver now reads the same three tiers in the same order, so the authority that admits a caller is the authority that bounds what it confers. A tenant with no RBAC rows resolves nothing and keeps conferring exactly what its static role confers.
+
 [`scripts/check_role_grant_scope.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/check_role_grant_scope.py) fails CI if a handler binds a request model declaring `role`, `org_role`, `granted_role`, `scopes`, `role_id` or `permission_ids` without reaching that module. Run against the tree before the fix it names all nine handlers, which is why it exists instead of an allow-list on the route the report happened to name.
+
+It also fails if a call to `authorize_role_grant`, `authorize_role_change` or `authorize_permission_grant` omits `granter_permissions=`. That direction exists because the first one passed on the vulnerable tree: it asked whether each route *reached* the chokepoint, and all six did. Reaching the right function while handing it the wrong authority is indistinguishable from a correct grant unless something checks the argument.
 
 ### Custom roles
 

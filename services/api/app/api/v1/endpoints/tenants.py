@@ -221,6 +221,7 @@ async def create_user(
         granted_role = authorize_role_grant(
             granter_role=current_user.role,
             granter_scopes=current_user.scopes,
+            granter_permissions=current_user.resolved_permissions,
             requested_role=request.role,
         )
     except RoleGrantDenied as exc:
@@ -279,6 +280,7 @@ async def update_user(
             updates["role"] = authorize_role_change(
                 granter_role=current_user.role,
                 granter_scopes=current_user.scopes,
+                granter_permissions=current_user.resolved_permissions,
                 current_role=str(user.role),
                 requested_role=updates["role"],
             )

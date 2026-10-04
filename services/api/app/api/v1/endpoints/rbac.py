@@ -41,6 +41,7 @@ def _authorize_permission_grant(permissions: list[Permission], current_user: Aut
         authorize_permission_grant(
             granter_role=current_user.role,
             granter_scopes=current_user.scopes,
+            granter_permissions=current_user.resolved_permissions,
             requested=[p.name for p in permissions],
             subject=subject,
         )

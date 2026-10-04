@@ -96,6 +96,23 @@ CHOKEPOINT_CALLS: frozenset[str] = frozenset(
     }
 )
 
+#: The functions that decide a grant, as opposed to the helpers that reach
+#: them. Every call to one of these must say which authority to measure the
+#: grant against — see the ``authority`` direction in :func:`audit`.
+GRANT_DECIDERS: frozenset[str] = frozenset(
+    {
+        "authorize_role_grant",
+        "authorize_role_change",
+        "authorize_permission_grant",
+    }
+)
+
+#: The keyword that carries the caller's database-resolved permissions.
+#: ``CurrentUser`` resolves authority in three tiers and prefers this one over
+#: the static role whenever the principal has RBAC rows, so a call that omits
+#: it measures the grant against an authority the caller was not admitted on.
+EFFECTIVE_KEYWORD = "granter_permissions"
+
 #: Handlers that accept one of those field names and deliberately do not
 #: consult the chokepoint, with the reason. ``(module, function)``.
 #:
@@ -214,7 +231,7 @@ def _granted_fields(func: ast.FunctionDef | ast.AsyncFunctionDef, models: dict[s
 def audit(root: Path) -> tuple[list[str], dict[str, int]]:
     """Return ``(problems, counts)``. Counts prove the gate read something."""
     problems: list[str] = []
-    counts = {"modules": 0, "handlers": 0, "writes": 0, "roles": 0}
+    counts = {"modules": 0, "handlers": 0, "writes": 0, "roles": 0, "decisions": 0}
 
     endpoints = root / ENDPOINTS
     security = root / SECURITY
@@ -252,6 +269,31 @@ def audit(root: Path) -> tuple[list[str], dict[str, int]]:
                 problems.append(
                     f"{module.name}::{node.name} accepts {', '.join(sorted(granted))} from the request body and never reaches "
                     "app.core.role_grants, so the caller chooses the authority it confers"
+                )
+
+    # --- authority: the grant is measured against what admitted the caller -
+    #
+    # The forward direction above asks whether a handler *reaches* the
+    # chokepoint. It cannot ask whether it hands over the right authority,
+    # and GHSA-4gx4-x7gm-4xq8 was exactly that gap: six call sites reached
+    # `role_grants`, passed this gate, and compared the requested grant
+    # against the caller's static role while `require_permission` had
+    # admitted the caller on its narrower database permissions.
+    for module in sorted([*endpoints.glob("*.py"), role_grants]):
+        if not module.is_file():
+            continue
+        for node in ast.walk(_parse(module)):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+            if name not in GRANT_DECIDERS:
+                continue
+            counts["decisions"] += 1
+            if not any(kw.arg == EFFECTIVE_KEYWORD for kw in node.keywords):
+                problems.append(
+                    f"{module.name}:{node.lineno} calls {name}() without {EFFECTIVE_KEYWORD}=, so the grant is measured "
+                    "against the caller's static role rather than the permissions it was admitted on"
                 )
 
     # --- reverse: no waiver covers a handler that no longer grants ---------
@@ -359,6 +401,12 @@ def _self_test_cases() -> list[tuple[str, bool]]:
             'ROLE_PRECEDENCE: Final[tuple[str, ...]] = ("viewer", "soc_analyst", "tenant_admin")',
         ),
         (
+            "a grant measured against the static role instead of the resolved set is reported",
+            Path("services/api/app/api/v1/endpoints/rbac.py"),
+            "            granter_permissions=current_user.resolved_permissions,\n",
+            "",
+        ),
+        (
             "a waiver that no longer covers anything is reported",
             Path(__file__).relative_to(REPO_ROOT),
             '    (\n        "scim.py",\n        "_apply_group_rename",\n    ):',
@@ -408,11 +456,12 @@ def main() -> int:
 
     print(
         f"check_role_grant_scope: read {counts['modules']} endpoint module(s), {counts['handlers']} handler(s) "
-        f"conferring authority across {counts['writes']} write(s), and {counts['roles']} enforced role(s)"
+        f"conferring authority across {counts['writes']} write(s), {counts['decisions']} grant decision(s), "
+        f"and {counts['roles']} enforced role(s)"
     )
 
     # "found nothing" and "scanned nothing" must not print the same word.
-    if counts["modules"] == 0 or counts["roles"] == 0 or counts["writes"] == 0:
+    if counts["modules"] == 0 or counts["roles"] == 0 or counts["writes"] == 0 or counts["decisions"] == 0:
         print(
             "\nFAIL: the endpoint surface or the role map read as empty. A clean result over nothing is "
             "indistinguishable from a wrong root or a glob that stopped matching.",
@@ -426,7 +475,10 @@ def main() -> int:
             print(f"  - {problem}", file=sys.stderr)
         return 1
 
-    print("OK: every role-conferring route reaches app.core.role_grants, and the grantable vocabulary excludes the wildcard.")
+    print(
+        "OK: every role-conferring route reaches app.core.role_grants, every grant is measured against the "
+        "authority its caller was admitted on, and the grantable vocabulary excludes the wildcard."
+    )
     return 0
 
 

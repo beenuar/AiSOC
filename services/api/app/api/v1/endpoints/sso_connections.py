@@ -129,6 +129,7 @@ def _assert_roles_grantable(caller: AuthUser, body: SsoConnectionIn) -> None:
             role_grants.authorize_role_grant(
                 granter_role=getattr(caller, "role", "viewer"),
                 granter_scopes=getattr(caller, "scopes", None),
+                granter_permissions=getattr(caller, "resolved_permissions", None),
                 requested_role=role,
             )
         except role_grants.RoleGrantDenied as denied:
