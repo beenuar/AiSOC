@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **`POST /api/v1/detection-loop/suggest`, `GET /api/v1/detection-loop/suggestions`
+  and `GET /api/v1/detection-loop/suggestions/{suggestion_id}` are removed**,
+  along with the `SuggestRequest`, `SuggestionResponse` and
+  `SuggestionListResponse` schemas. Every generated SDK client loses those three
+  operations.
+
+  **Migration: none is needed, because none of them has ever worked.** They
+  queried `aisoc_alerts` and `aisoc_detection_rules`, which no migration
+  creates, and `alerts.evidence`, which does not exist either -- so repointing
+  at the real table was not an option. Any caller was receiving an error. The
+  governed equivalent is `POST /api/v1/detection-proposals`, which writes to a
+  real table and carries separation of duties.
+
 ### Removed
 
 - **`POST /api/v1/detection-loop/suggest` and its two sibling routes.** They
