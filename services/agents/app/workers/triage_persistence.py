@@ -144,6 +144,26 @@ class TriageWriter(Protocol):
         is declined.
         """
 
+    @property
+    def fires_playbooks(self) -> bool:
+        """Whether a matched playbook may actually run from this triage.
+
+        `alert_trigger.run_for_alert` was called unconditionally, so a replay
+        of last month's alerts would have **fired this month's playbooks** --
+        real notifications, real tickets, real containment previews -- against
+        rows a grader was only meant to score.
+        """
+
+    @property
+    def uses_dedup_cache(self) -> bool:
+        """Whether a cached production verdict may answer for this alert.
+
+        The cost governor returns `Decision.DEDUPLICATED` with a verdict from
+        a live cache. Accepting one during a replay grades the cache rather
+        than the agent, and the figure that comes out is a measurement of
+        something that already happened.
+        """
+
     async def persist_auto_triage(self, **fields: Any) -> None:
         """Write the verdict to the ledger and the ``alerts`` row.
 
@@ -280,6 +300,28 @@ class LiveTriageWriter:
 
     @property
     def persists_cost(self) -> bool:
+        return True
+
+    @property
+    def fires_playbooks(self) -> bool:
+        """Whether a matched playbook may actually run from this triage.
+
+        `alert_trigger.run_for_alert` was called unconditionally, so a replay
+        of last month's alerts would have **fired this month's playbooks** --
+        real notifications, real tickets, real containment previews -- against
+        rows a grader was only meant to score.
+        """
+        return True
+
+    @property
+    def uses_dedup_cache(self) -> bool:
+        """Whether a cached production verdict may answer for this alert.
+
+        The cost governor returns `Decision.DEDUPLICATED` with a verdict from
+        a live cache. Accepting one during a replay grades the cache rather
+        than the agent, and the figure that comes out is a measurement of
+        something that already happened.
+        """
         return True
 
     async def persist_auto_triage(self, **fields: Any) -> None:

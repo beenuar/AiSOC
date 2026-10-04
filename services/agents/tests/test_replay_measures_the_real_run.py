@@ -171,3 +171,62 @@ class TestToolCallsAreCountedRatherThanAsserted:
         from app.replay.runner import _tool_calls_recorded
 
         assert _tool_calls_recorded(rows) == expected
+
+
+class TestAReplayHasNoSideEffects:
+    """3.2 -- two of the four leaks the plan names.
+
+    The other two were already closed: `ShadowTriageWriter.persists_cost` is
+    `False` so the cost ledger is not written, and every write method returns
+    the "nothing happened" value its live counterpart returns on a no-op.
+
+    These two were not, because neither reaches the worker through the writer:
+    `alert_trigger.run_for_alert` was called unconditionally, and the cost
+    governor's `DEDUPLICATED` branch answered from a live cache. Both now ask
+    the writer, which is the same mechanism the other two already used.
+    """
+
+    def test_the_replay_writer_declines_both(self) -> None:
+        from app.replay.shadow import ShadowTriageWriter
+
+        writer = ShadowTriageWriter()
+
+        assert writer.fires_playbooks is False, "a replay of last month's alerts would fire this month's playbooks"
+        assert writer.uses_dedup_cache is False, "a replay graded on a cached production verdict measures the cache, not the agent"
+
+    def test_the_live_writer_still_does_both(self) -> None:
+        """The negative control. A fix that declined these everywhere would
+        turn playbooks and deduplication off in production."""
+        from app.workers.triage_persistence import LiveTriageWriter
+
+        writer = LiveTriageWriter()
+
+        assert writer.fires_playbooks is True
+        assert writer.uses_dedup_cache is True
+
+    def test_shadow_mode_withholds_playbooks_but_keeps_deduplication(self) -> None:
+        """Shadow mode is measuring, not replaying, so the two differ.
+
+        A playbook that ran would be the agent acting on a verdict nobody has
+        accepted, which is what the mode exists to withhold. Deduplication is
+        production behaviour, and turning it off would make the scorecard
+        describe a different workload from the one it predicts.
+        """
+        from app.workers.shadow_mode import ShadowModeTriageWriter
+
+        writer = ShadowModeTriageWriter.__new__(ShadowModeTriageWriter)
+
+        assert writer.fires_playbooks is False
+        assert writer.uses_dedup_cache is True
+
+    def test_the_protocol_declares_both(self) -> None:
+        """The protocol, not three separate classes.
+
+        A writer added later that forgets one fails  against the
+        protocol, which is how the three existing writers were found when
+        these two members were added.
+        """
+        from app.workers.triage_persistence import TriageWriter
+
+        for name in ("fires_playbooks", "uses_dedup_cache"):
+            assert hasattr(TriageWriter, name), f"the writer protocol does not declare {name}"

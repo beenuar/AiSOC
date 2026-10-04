@@ -551,7 +551,11 @@ class FusedAlertTriageWorker:
         # and "no call was made" is a different fact from "the call was free".
         cost: CostSummary = CostSummary()
         tokens = 0
-        if decision.decision is Decision.DEDUPLICATED and decision.cached_verdict:
+        # `writer.uses_dedup_cache` because a replay must not be graded on a
+        # verdict production already produced: that measures the cache rather
+        # than the agent, and the figure describes something that already
+        # happened.
+        if decision.decision is Decision.DEDUPLICATED and decision.cached_verdict and writer.uses_dedup_cache:
             _METRICS["deduplicated"] += 1
             verdict = decision.cached_verdict.get("verdict")
             confidence = float(decision.cached_verdict.get("confidence", 0.0))
@@ -637,7 +641,15 @@ class FusedAlertTriageWorker:
             # verdict and the confidence, and before them it would be
             # matching on an alert nobody has assessed.
             try:
-                playbook_outcome = await alert_trigger.run_for_alert(state)
+                # `writer.fires_playbooks` because this was unconditional, so a
+                # replay of last month's alerts would have fired this month's
+                # playbooks -- real notifications, real tickets -- against rows a
+                # grader was only meant to score.
+                playbook_outcome = (
+                    await alert_trigger.run_for_alert(state)
+                    if writer.fires_playbooks
+                    else alert_trigger.TriggerOutcome(skipped_reason="replay: playbooks are not fired")
+                )
                 if playbook_outcome.matched:
                     state.add_finding(
                         f"Playbooks matched: {', '.join(playbook_outcome.matched)}"

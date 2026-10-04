@@ -330,6 +330,21 @@ class ShadowModeTriageWriter:
         # see the spend.
         return True
 
+    @property
+    def fires_playbooks(self) -> bool:
+        # Shadow mode is measuring whether the agent *would* be right, before a
+        # tenant grants it autonomy. A playbook that ran would be the agent
+        # acting on a verdict nobody has accepted yet, which is the one thing
+        # the mode exists to withhold.
+        return False
+
+    @property
+    def uses_dedup_cache(self) -> bool:
+        # Production behaviour. A tenant measuring a real stream should see the
+        # same deduplication a live run would do, or the shadow scorecard
+        # describes a different workload from the one it is predicting.
+        return True
+
     async def persist_auto_triage(self, **fields: Any) -> None:
         """Record the verdict without letting it stand in for the analyst's."""
         fields["auto_closed"] = False
