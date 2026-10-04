@@ -29,6 +29,11 @@ than a sample.
 from __future__ import annotations
 
 import uuid
+
+def _tid(t):
+    """Bind a native UUID for raw SQL on uuid-typed columns (asyncpg)."""
+    return t if isinstance(t, uuid.UUID) else uuid.UUID(str(t))
+
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -131,7 +136,7 @@ class TenantRollup:
 # Statuses that mean "still needs someone". Kept in one place so the
 # portfolio backlog and a single tenant's queue cannot drift apart.
 _OPEN_ALERT_STATUSES = ("new", "open", "investigating", "triaged", "in_progress")
-_OPEN_CASE_STATUSES = ("open", "investigating", "in_progress", "containment", "eradication", "recovery")
+_OPEN_CASE_STATUSES = ("new", "triaged", "investigating", "contained", "open", "in_progress", "containment", "eradication", "recovery")
 
 
 async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[TenantRollup]:
@@ -142,7 +147,7 @@ async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[Tenant
     needs to see, and dropping the row would read as "not onboarded".
     """
     tenant_ids = require_scope(scope)
-    ids = [str(t) for t in tenant_ids]
+    ids = [_tid(t) for t in tenant_ids]
     stale_before = datetime.now(UTC) - STALE_AFTER
 
     rows = (
@@ -198,7 +203,7 @@ async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[Tenant
                     SELECT
                         tenant_id,
                         count(*)                                                           AS open_cases,
-                        count(*) FILTER (WHERE COALESCE(sla_breached, FALSE))              AS sla_breached_cases
+                        count(*) FILTER (WHERE sla_due_at IS NOT NULL AND sla_due_at < now()) AS sla_breached_cases
                     FROM aisoc_cases
                     WHERE tenant_id = ANY(:tenant_ids) AND status = ANY(:open_case_statuses)
                     GROUP BY tenant_id
@@ -345,7 +350,7 @@ async def portfolio_alerts(
     tenant_ids = require_scope(scope)
     clauses = ["a.tenant_id = ANY(:tenant_ids)"]
     params: dict[str, Any] = {
-        "tenant_ids": [str(t) for t in tenant_ids],
+        "tenant_ids": [_tid(t) for t in tenant_ids],
         "limit": max(1, min(int(limit), 500)),
     }
 

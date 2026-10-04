@@ -34,6 +34,7 @@ asserts they report the same number for the same rows.
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
@@ -43,6 +44,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # handful of cases a week still has a number, short enough that it tracks how
 # the account is being run now rather than a year ago.
 MTTR_WINDOW = timedelta(days=30)
+
+def _tid(t):
+    """Bind a native UUID for raw SQL on uuid-typed columns (asyncpg)."""
+    return t if isinstance(t, uuid.UUID) else uuid.UUID(str(t))
+
 
 # What "this case is finished" means. `closed_at` is written by the transition
 # into the terminal state, so its presence is the fact; `status` is a label
@@ -74,7 +80,7 @@ async def tenant_case_mttr_minutes(db: AsyncSession, tenant_id) -> float | None:
                AND closed_at >= :since
             """
         ),
-        {"tenant_id": str(tenant_id), "since": datetime.now(UTC) - MTTR_WINDOW},
+        {"tenant_id": _tid(tenant_id), "since": datetime.now(UTC) - MTTR_WINDOW},
     )
     return float(value) if value is not None else None
 
@@ -95,6 +101,6 @@ async def tenant_cases_closed(db: AsyncSession, tenant_id, since: datetime) -> i
                AND closed_at >= :since
             """
         ),
-        {"tenant_id": str(tenant_id), "since": since},
+        {"tenant_id": _tid(tenant_id), "since": since},
     )
     return int(value or 0)

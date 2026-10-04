@@ -96,16 +96,18 @@ class TestPctDelta:
     """Period-over-period percentage helper.
 
     Tiny and pure — the contract is exactly two lines: zero-base
-    returns 0.0 (never ``inf``), otherwise round to two decimals.
+    returns ``None`` ("no baseline" — a fake 0.0 became a fake +0%
+    pill, and 1-from-16 unrounded scaled twice in the UI became the
+    -9375% tile), otherwise round to two decimals as PERCENT.
     """
 
-    def test_zero_previous_returns_zero(self) -> None:
+    def test_zero_previous_returns_none(self) -> None:
         from app.api.v1.endpoints.metrics import _pct_delta
 
-        # The dashboard cannot render ``inf`` or ``NaN`` — we'd
-        # rather show "no change" than a useless ∞ pill.
-        assert _pct_delta(10.0, 0.0) == 0.0
-        assert _pct_delta(0.0, 0.0) == 0.0
+        # No baseline exists when the previous window was empty;
+        # the UI renders None as "no baseline".
+        assert _pct_delta(10.0, 0.0) is None
+        assert _pct_delta(0.0, 0.0) is None
 
     def test_positive_change(self) -> None:
         from app.api.v1.endpoints.metrics import _pct_delta

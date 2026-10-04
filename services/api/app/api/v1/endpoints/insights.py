@@ -48,6 +48,11 @@ from __future__ import annotations
 
 import logging
 import uuid
+
+def _tid(t):
+    """Bind a native UUID for raw SQL on uuid-typed columns (asyncpg)."""
+    return t if isinstance(t, uuid.UUID) else uuid.UUID(str(t))
+
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
@@ -301,15 +306,16 @@ async def _case_sparkline(
     """24 evenly-spaced buckets of case-open volume across [start, end)."""
     total_seconds = max((end - start).total_seconds(), 1.0)
     bucket_seconds = total_seconds / _SPARKLINE_BUCKETS
+    # Raw SQL on aisoc_cases — the ORM Case model reads the empty legacy
+    # `cases` table, so the sparkline was flat zero for live tenants.
     rows = (
         await db.execute(
-            select(Case.created_at).where(
-                and_(
-                    Case.tenant_id == tenant_id,
-                    Case.created_at >= start,
-                    Case.created_at < end,
-                )
-            )
+            text(
+                "SELECT created_at FROM aisoc_cases "
+                "WHERE tenant_id = :tenant_id "
+                "AND created_at >= :start AND created_at < :end"
+            ),
+            {"tenant_id": _tid(tenant_id), "start": start, "end": end},
         )
     ).all()
     buckets = [0.0] * _SPARKLINE_BUCKETS

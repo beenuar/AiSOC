@@ -37,12 +37,19 @@ from app.models.case import Case
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
 from app.models.remediation import RemediationGateLog
+import uuid
+
 from app.services import case_status
 from app.services.resolution_time import (
     MTTR_WINDOW,
     tenant_case_mttr_minutes,
     tenant_cases_closed,
 )
+
+
+def _tid(t):
+    """Bind a native UUID for raw SQL on uuid-typed columns (asyncpg)."""
+    return t if isinstance(t, uuid.UUID) else uuid.UUID(str(t))
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +64,14 @@ class AlertMetrics(BaseModel):
     medium: int
     low: int
     resolvedToday: int
+    # Active = unresolved. The tiles above these two counted every alert ever
+    # ingested, so a fully-triaged estate read "992 Active Alerts · 91
+    # Critical" while every row in the table was resolved. ``active`` counts
+    # only the explicit open statuses; ``criticalActive`` intersects that with
+    # severity=critical so the red tile cannot include resolved criticals.
+    active: int = 0
+    criticalActive: int = 0
+    resolved: int = 0
     # Mean time to resolve in **hours**, from the same closed cases and the
     # same window as `/metrics/soc`'s `mttr_hours` and the MSSP portfolio's
     # `mttr_minutes`. It used to average `alerts.resolved_at`, so the
@@ -71,6 +86,11 @@ class CaseMetrics(BaseModel):
     open: int
     inProgress: int
     resolvedThisWeek: int
+    # Opened/closed inside the exact rolling 7d window (created_at /
+    # closed_at), so the "Cases opened/closed (7d)" tiles stop reading zero
+    # when the legacy queries they were wired to hit an empty table.
+    openedThisWeek: int = 0
+    closedThisWeek: int = 0
 
 
 class SourceStat(BaseModel):
@@ -136,14 +156,22 @@ class MitreCoverage(BaseModel):
 
 
 class FunnelDeltas(BaseModel):
-    """Period-over-period percentage deltas for the funnel KPI bar."""
+    """Period-over-period percentage deltas for the funnel KPI bar.
 
-    events_of_interest: float
-    correlation_instances: float
-    alerts_generated: float
-    signal_to_noise: float
-    mttd_seconds: float
-    analyst_queue_depth: float
+    ``None`` means "no baseline": the previous window was empty, so a
+    percentage would be meaningless (or absurd — 0→1 is a division by zero
+    waiting to be dressed up as +inf, and 15→1 dressed the other way is how
+    the console showed −9375% after the frontend scaled the percent twice).
+    The console renders ``None`` as "no baseline". Values are PERCENT
+    (e.g. -93.33 = −93.33%), not fractions.
+    """
+
+    events_of_interest: float | None = None
+    correlation_instances: float | None = None
+    alerts_generated: float | None = None
+    signal_to_noise: float | None = None
+    mttd_seconds: float | None = None
+    analyst_queue_depth: float | None = None
 
 
 class FunnelMetrics(BaseModel):
@@ -248,12 +276,38 @@ async def get_dashboard_metrics(
     week_start = now - timedelta(days=7)
 
     # ── Alert counts ──────────────────────────────────────────────────────────
+    # Severity counts stay total-over-window (the pie chart needs them), but
+    # the "Active Alerts"/"Critical" tiles get true unresolved counts.
     total_q = await db.scalar(select(func.count()).where(Alert.tenant_id == tenant_id))
     new_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.status == "new")))
     critical_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "critical")))
     high_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "high")))
     medium_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "medium")))
     low_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "low")))
+    # Active = explicit unresolved statuses. `resolved`/`closed` are excluded
+    # by construction; anything unrecognised counts as active (fail-open on
+    # risk visibility, never fail-hidden).
+    _CLOSED_STATUSES = ("resolved", "closed")
+    active_q = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.status.notin_(_CLOSED_STATUSES),
+            )
+        )
+    )
+    critical_active_q = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Alert.tenant_id == tenant_id,
+                Alert.status.notin_(_CLOSED_STATUSES),
+                Alert.severity == "critical",
+            )
+        )
+    )
+    resolved_q = await db.scalar(
+        select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.status == "resolved"))
+    )
     resolved_today_q = await db.scalar(
         select(func.count()).where(
             and_(
@@ -277,16 +331,17 @@ async def get_dashboard_metrics(
         high=high_q or 0,
         medium=medium_q or 0,
         low=low_q or 0,
+        active=active_q or 0,
+        criticalActive=critical_active_q or 0,
+        resolved=resolved_q or 0,
         resolvedToday=resolved_today_q or 0,
         mttr=round(float(mttr_dashboard_q or 0.0), 2),
         mttr_sample_count=mttr_dashboard_samples,
     )
 
     # ── Case counts ───────────────────────────────────────────────────────────
-    # These filtered `"open"` and `"in_progress"`, neither of which the
-    # console's state machine can produce, so both counters were
-    # structurally zero rather than merely empty. The vocabulary now comes
-    # from one place.
+    # Vocabulary comes from one place (case_status); live rows are read
+    # through the ORM, which upstream consolidated onto `aisoc_cases`.
     open_cases_q = await db.scalar(
         select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.status.in_(case_status.OPEN_STATUSES)))
     )
@@ -307,11 +362,27 @@ async def get_dashboard_metrics(
             )
         )
     )
+    opened_window_q = await db.scalar(
+        select(func.count()).where(
+            and_(Case.tenant_id == tenant_id, Case.created_at >= week_start)
+        )
+    )
+    closed_window_q = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Case.tenant_id == tenant_id,
+                Case.closed_at.isnot(None),
+                Case.closed_at >= week_start,
+            )
+        )
+    )
 
     case_metrics = CaseMetrics(
         open=open_cases_q or 0,
         inProgress=in_progress_q or 0,
         resolvedThisWeek=resolved_week_q or 0,
+        openedThisWeek=opened_window_q or 0,
+        closedThisWeek=closed_window_q or 0,
     )
 
     # ── Sources (connectors) ──────────────────────────────────────────────────
@@ -334,11 +405,23 @@ async def get_dashboard_metrics(
         if key in seen:
             continue
         seen.add(key)
+        # Normalise health_status onto the ladder the UI renders: the tile
+        # counted status === 'active' while the DB column carries 'healthy',
+        # so a fully-connected estate displayed "0 connected sources".
+        raw = (row.health_status or "").lower()
+        status = {
+            "healthy": "active",
+            "active": "active",
+            "degraded": "degraded",
+            "error": "failed",
+            "failed": "failed",
+            "stale": "degraded",
+        }.get(raw, "unknown")
         sources.append(
             SourceStat(
                 name=row.name,
                 count=source_count_map.get(row.connector_type or "", 0),
-                status=row.health_status or "active",
+                status=status,
             )
         )
 
@@ -583,7 +666,17 @@ async def get_soc_metrics(
 
     # ── Volume / case counts ──────────────────────────────────────────────────
     alert_vol = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.created_at >= week_start))) or 0
-    cases_opened = await db.scalar(select(func.count()).where(and_(Case.tenant_id == tenant_id, Case.created_at >= week_start))) or 0
+    # Raw SQL on aisoc_cases — the ORM Case model reads the empty legacy
+    # `cases` table, so this counted zero for a tenant with 18 live cases.
+    cases_opened = (
+        await db.scalar(
+            text(
+                "SELECT count(*) FROM aisoc_cases WHERE tenant_id = :tenant_id AND created_at >= :week_start"
+            ),
+            {"tenant_id": _tid(tenant_id), "week_start": week_start},
+        )
+        or 0
+    )
     # Counted on `closed_at`, not on `status = 'resolved' AND updated_at`.
     # `resolved` is an intermediate state and `closed` is the terminal one, so
     # the old filter reported 0 for a tenant that had closed two cases; and
@@ -769,15 +862,19 @@ _FUNNEL_PERIOD_MAP: dict[str, timedelta] = {
 }
 
 
-def _pct_delta(current: float, previous: float) -> float:
+def _pct_delta(current: float, previous: float) -> float | None:
     """Compute period-over-period percentage change.
 
-    Returns 0.0 when the previous value is zero (avoids `inf`). Otherwise:
+    Returns ``None`` when the previous value is zero — no baseline exists, so
+    no percentage may be quoted. The console renders ``None`` as "no
+    baseline"; it must NOT render 0.0 as "+0%", and it must not scale this
+    value again (a 15→1 window is −93.33 here; scaling by 100 in the UI was
+    the −9375% tile). Otherwise:
 
         ((current - previous) / previous) * 100, rounded to 2 decimals.
     """
     if previous == 0:
-        return 0.0
+        return None
     return round(((current - previous) / previous) * 100.0, 2)
 
 

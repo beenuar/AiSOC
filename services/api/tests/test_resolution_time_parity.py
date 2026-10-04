@@ -98,12 +98,12 @@ async def _teardown(session) -> None:
     await session.rollback()
     await session.execute(
         text("DELETE FROM aisoc_cases WHERE tenant_id = ANY(:ids)"),
-        {"ids": [str(t) for t in _ALL_TENANTS]},
+        {"ids": list(_ALL_TENANTS)},
     )
     await session.execute(text("DELETE FROM organizations WHERE id = :id"), {"id": str(ORG)})
     await session.execute(
         text("DELETE FROM tenants WHERE id = ANY(:ids)"),
-        {"ids": [str(t) for t in _ALL_TENANTS]},
+        {"ids": list(_ALL_TENANTS)},
     )
     await session.commit()
 
@@ -120,8 +120,8 @@ async def _case(session, *, tenant, number, opened_minutes_ago, duration_minutes
             """
         ),
         {
-            "id": str(uuid.uuid4()),
-            "tenant": str(tenant),
+            "id": uuid.uuid4(),
+            "tenant": tenant,
             "number": number,
             "title": f"parity fixture {number}",
             "status": status,
