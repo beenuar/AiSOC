@@ -70,13 +70,18 @@ const SAMPLE_FUNNEL = {
   correlation_efficiency: 0.48,
   alert_yield: 0.034,
   mitre_coverage: { covered: 42, total: 201, ratio: 0.209 },
+  // Percentages, which is what `_pct_delta` returns: it multiplies by 100 and
+  // rounds before the value leaves the API. These used to be `0.12`-shaped
+  // fractions the backend has never emitted, and the component multiplied by
+  // 100 a second time -- so fixture and defect agreed, the pair passed, and
+  // the dashboard rendered `-9375%`.
   deltas: {
-    events_of_interest: 0.12,
-    correlation_instances: 0.05,
-    alerts_generated: -0.08,
-    signal_to_noise: 0.02,
-    mttd_seconds: -0.15,
-    analyst_queue_depth: 0.2,
+    events_of_interest: 12.0,
+    correlation_instances: 5.0,
+    alerts_generated: -8.0,
+    signal_to_noise: 2.0,
+    mttd_seconds: -15.0,
+    analyst_queue_depth: 20.0,
   },
   generated_at: '2026-05-13T10:00:00Z',
 };
@@ -127,6 +132,35 @@ describe('FunnelKpiBar', () => {
     // Positive Δ on EOI / alerts means up; negative on alerts is shown with a minus.
     expect(screen.getByText('+12%')).toBeInTheDocument();
     expect(screen.getByText('−8%')).toBeInTheDocument();
+  });
+
+  it('renders a large real delta at its true magnitude', () => {
+    // The reproduction, with the numbers the defect was found on: a tenant
+    // whose events-of-interest fell from 160 to 10 gets `_pct_delta` =
+    // -93.75, which rendered as `−9375%`. Four significant figures of
+    // nonsense on the first tile of the dashboard.
+    swrData.set(FUNNEL_KEY, {
+      ...SAMPLE_FUNNEL,
+      deltas: { ...SAMPLE_FUNNEL.deltas, events_of_interest: -93.75 },
+    });
+    render(<FunnelKpiBar period="24h" />);
+
+    expect(screen.getByText('−94%')).toBeInTheDocument();
+    expect(screen.queryByText('−9375%')).not.toBeInTheDocument();
+  });
+
+  it('does not rescale a small delta that happens to look like a fraction', () => {
+    // Scale comes from the contract, never the magnitude. A real +1% delta
+    // and a fraction of 1.0 are the same number, so any renderer deciding
+    // "this is small, it must be a fraction" is right until it is not.
+    swrData.set(FUNNEL_KEY, {
+      ...SAMPLE_FUNNEL,
+      deltas: { ...SAMPLE_FUNNEL.deltas, events_of_interest: 1.0 },
+    });
+    render(<FunnelKpiBar period="24h" />);
+
+    expect(screen.getByText('+1%')).toBeInTheDocument();
+    expect(screen.queryByText('+100%')).not.toBeInTheDocument();
   });
 
   it('shows skeleton tiles while loading', () => {

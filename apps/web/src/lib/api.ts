@@ -1549,10 +1549,33 @@ export const entityRiskApi = {
 
 // ─── Cases ───────────────────────────────────────────────────────────────────
 
+/**
+ * The six states a case can hold, matching the `aisoc_cases` CHECK and
+ * `services/api/app/services/case_status.py`.
+ *
+ * This read `open | in_progress | pending | resolved | closed`, which shares
+ * exactly two members with the real vocabulary. Three of its values the
+ * database rejects outright, and the four states a case is actually *in* for
+ * most of its life -- new, triaged, investigating, contained -- were absent.
+ * Every `Record<CaseStatus, …>` keyed off this union was therefore complete
+ * by the type checker and missing an entry for most real rows, so the case
+ * workspace rendered an undefined label and the status dropdown offered three
+ * values the API refuses.
+ */
+export const CASE_STATUSES = [
+  'new',
+  'triaged',
+  'investigating',
+  'contained',
+  'resolved',
+  'closed',
+] as const;
+
 export type CaseStatus =
-  | 'open'
-  | 'in_progress'
-  | 'pending'
+  | 'new'
+  | 'triaged'
+  | 'investigating'
+  | 'contained'
   | 'resolved'
   | 'closed';
 export type CaseSeverity = 'critical' | 'high' | 'medium' | 'low';
@@ -1605,34 +1628,22 @@ export interface Case {
   tasks?: CaseTask[];
 }
 
-// The backend uses a 6-state lifecycle (`new | triaged | investigating |
-// contained | resolved | closed`) while the web console renders a simpler
-// 5-state model. Without translation, `STATUS_CONFIG[c.status]` returns
-// `undefined` and `<CaseCard>` throws a TypeError, which React surfaces as a
-// blank loading state on /cases. Keep these maps colocated with the Case type.
-const BACKEND_TO_UI_STATUS: Record<string, CaseStatus> = {
-  new: 'open',
-  open: 'open',
-  triaged: 'pending',
-  pending: 'pending',
-  investigating: 'in_progress',
-  in_progress: 'in_progress',
-  contained: 'in_progress',
-  resolved: 'resolved',
-  closed: 'closed',
-};
-
-const UI_TO_BACKEND_STATUS: Record<CaseStatus, string> = {
-  open: 'new',
-  pending: 'triaged',
-  in_progress: 'investigating',
-  resolved: 'resolved',
-  closed: 'closed',
-};
-
+// The console speaks the backend vocabulary directly.
+//
+// There were two translation maps here, and the round trip through them was
+// **destructive**: `contained` came in as `in_progress`, and `in_progress`
+// went back out as `investigating`. So opening a contained case and saving
+// any edit -- a title, an assignee -- silently moved it backwards and
+// discarded the containment an analyst had recorded. The lossiness is
+// structural: six states cannot round-trip through five.
+//
+// The UI simplification they existed for is not worth that. Four of the six
+// states now have their own label and colour, which is more information
+// than the collapsed model carried anyway.
 function toUiStatus(raw: unknown): CaseStatus {
-  if (typeof raw !== 'string') return 'open';
-  return BACKEND_TO_UI_STATUS[raw] ?? 'open';
+  if (typeof raw !== 'string') return 'new';
+  const known: readonly string[] = CASE_STATUSES;
+  return known.includes(raw) ? (raw as CaseStatus) : 'new';
 }
 
 export interface CasesResponse {
@@ -1864,17 +1875,12 @@ export function normalizeCasesResponse(raw: unknown, filters: CaseFilters = {}):
 
 export const casesApi = {
   list: async (filters: CaseFilters = {}) => {
-    // Translate UI status filter into the backend lifecycle vocabulary so
-    // querying "In Progress" in the console actually returns rows where the
-    // backend stored "investigating".
+    // The status filter is passed through unchanged. It used to be rewritten
+    // through a five-state UI vocabulary, which could not express `contained`
+    // at all and mapped it onto `investigating` on the way back.
     const params: Record<string, string> = {};
     for (const [key, value] of Object.entries(filters)) {
       if (value === undefined || value === null || value === '') continue;
-      if (key === 'status' && typeof value === 'string' && value !== 'all') {
-        params.status =
-          UI_TO_BACKEND_STATUS[value as CaseStatus] ?? value;
-        continue;
-      }
       params[key] = String(value);
     }
     const raw = await request<unknown>('/api/v1/cases', { params });
@@ -2279,7 +2285,14 @@ export interface FunnelMetrics {
   /** Alerts produced per event-of-interest, clamped to [0, 1]. */
   alert_yield: number;
   mitre_coverage: { covered: number; total: number; ratio: number };
-  /** Period-over-period deltas (fraction, e.g. 0.05 = +5%). */
+  /**
+   * Period-over-period deltas as **percentages**, e.g. `5.0` = +5%.
+   *
+   * This said "fraction, e.g. 0.05 = +5%", which is backwards: the
+   * backend's `_pct_delta` multiplies by 100 before returning, and
+   * `test_funnel_and_pipeline.py` pins `_pct_delta(150.0, 100.0) == 50.0`.
+   * The renderer believed the comment and scaled a second time.
+   */
   deltas: {
     events_of_interest: number;
     correlation_instances: number;
@@ -2405,11 +2418,26 @@ export interface CostAggregate {
   totals: CostAggregateRow | null;
 }
 
-export const metricsApi = {
-  getDashboard: () =>
-    request<DashboardMetrics>('/api/v1/metrics/dashboard'),
+/**
+ * The windows every metrics route accepts, matching `_PERIOD_QUERY`'s pattern
+ * server-side and `TIME_WINDOWS` in `lib/timeWindow.ts`. Named once so the
+ * four call sites below cannot drift apart from each other.
+ */
+export type TimeWindowParam = '1h' | '24h' | '7d' | '30d';
 
-  getAlertTrend: (period: '1h' | '24h' | '7d' | '30d') =>
+export const metricsApi = {
+  /**
+   * Dashboard tiles for a time window.
+   *
+   * `period` was not a parameter: the console shipped a global time-window
+   * selector whose only consumer was itself, so changing it re-rendered a
+   * header and fetched nothing. Defaulted rather than required so no existing
+   * caller changes behaviour by omission.
+   */
+  getDashboard: (period: TimeWindowParam = '24h') =>
+    request<DashboardMetrics>('/api/v1/metrics/dashboard', { params: { period } }),
+
+  getAlertTrend: (period: TimeWindowParam) =>
     request<{ data: Array<{ timestamp: string; count: number }> }>(
       `/api/v1/metrics/alerts/trend`,
       {
@@ -2418,7 +2446,7 @@ export const metricsApi = {
     ),
 
   /** Funnel KPIs (events → correlations → alerts) with deltas. */
-  getFunnel: (period: '1h' | '24h' | '7d' | '30d' = '24h') =>
+  getFunnel: (period: TimeWindowParam = '24h') =>
     request<FunnelMetrics>('/api/v1/metrics/funnel', { params: { period } }),
 
   /** Per-stage pipeline health (ingest → normalize → fuse → correlate → alert). */
@@ -2431,7 +2459,8 @@ export const metricsApi = {
    * Tenant-scoped server-side; the client just needs the bearer token
    * and X-Tenant-Id header that `request()` already attaches.
    */
-  getSOC: () => request<SOCMetrics>('/api/v1/metrics/soc'),
+  getSOC: (period: TimeWindowParam = '24h') =>
+    request<SOCMetrics>('/api/v1/metrics/soc', { params: { period } }),
 };
 
 // ─── Operational health: connector fleet, rejected events, alert posture ─────

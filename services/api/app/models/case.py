@@ -3,7 +3,7 @@
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -25,7 +25,10 @@ class Case(Base):
     case_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(500), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    status: Mapped[str] = mapped_column(String(30), default="open", index=True)
+    # "new", not "open". The ORM default seeds every row that does not set a
+    # status explicitly, and "open" is not in the `aisoc_cases` CHECK -- so
+    # the default value for this column could never be written.
+    status: Mapped[str] = mapped_column(String(30), default="new", index=True)
     priority: Mapped[str] = mapped_column(String(20), default="medium", index=True)
     severity: Mapped[str] = mapped_column(String(20), default="medium")
     case_type: Mapped[str] = mapped_column(String(50), default="security_incident")
@@ -60,6 +63,14 @@ class Case(Base):
     lessons_learned: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Reopening is a deliberate act with its own route, not a backward edge in
+    # the transition table -- see migration 090. NULL means never reopened,
+    # which is the honest value for every row that predates the column.
+    reopened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # `reopened_at` is overwritten on each reopen, so it cannot distinguish a
+    # case reopened once from one reopened four times. This can.
+    reopen_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    reopen_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC), index=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

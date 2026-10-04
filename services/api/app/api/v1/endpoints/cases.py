@@ -51,6 +51,7 @@ from sqlalchemy import text
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
 from app.services import case_orchestration, case_status, evidence_custody
+from app.services.audit import emit_audit
 from app.services.case_fanout import (
     FanoutResult,
     fanout_create_case,
@@ -179,6 +180,15 @@ class CaseResponse(BaseModel):
     triaged_at: datetime | None
     resolved_at: datetime | None
     closed_at: datetime | None
+    #: When this case was last reopened. `None` means never -- which is the
+    #: honest value for every row that predates migration 090, since we
+    #: cannot know whether a historical case was reopened and inventing a
+    #: timestamp would be worse than saying nothing.
+    reopened_at: datetime | None = None
+    #: How many times. `reopened_at` is overwritten on each reopen, so it
+    #: cannot tell one reopen from four.
+    reopen_count: int = 0
+    reopen_reason: str | None = None
     created_at: datetime
     updated_at: datetime
     created_by: str | None
@@ -318,6 +328,11 @@ def _row_to_case(row: Any) -> CaseResponse:
         description=row.description,
         severity=row.severity,
         status=row.status,
+        # `getattr` with a default because this mapper is also handed rows
+        # from queries that select an explicit column list.
+        reopened_at=getattr(row, "reopened_at", None),
+        reopen_count=getattr(row, "reopen_count", 0) or 0,
+        reopen_reason=getattr(row, "reopen_reason", None),
         assignee=row.assignee,
         mitre_techniques=_coerce_mitre(row.mitre_techniques),
         alert_ids=list(row.alert_ids or []),
@@ -519,6 +534,125 @@ async def get_case(case_id: str, db: DBSession, user: AuthUser) -> CaseResponse:
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="Case not found.")
+    return _row_to_case(row)
+
+
+class ReopenCaseRequest(BaseModel):
+    """Why this case is coming back."""
+
+    reason: str = Field(
+        min_length=8,
+        max_length=2000,
+        description="Why the case is being reopened. Recorded on the case and in the audit log.",
+    )
+    #: Where it lands. Restricted to the states a case can genuinely resume
+    #: in -- reopening straight to `contained` would assert a containment
+    #: nobody performed on this pass.
+    status: Literal["new", "triaged", "investigating"] = "investigating"
+
+
+@router.post("/{case_id}/reopen", response_model=CaseResponse, summary="Reopen a closed case")
+async def reopen_case(
+    case_id: str,
+    body: ReopenCaseRequest,
+    db: DBSession,
+    user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+) -> CaseResponse:
+    """Bring a terminal case back, deliberately and on the record.
+
+    Its own route rather than a backward edge in `TRANSITIONS`. The forward-only
+    machine is what makes "this case was closed" mean something, and adding
+    `closed -> investigating` to the table would let an ordinary `PATCH` --
+    a title edit that happens to carry a status -- walk a case backwards
+    silently. `PATCH` stays forward-only.
+
+    Three things separate this from a status change:
+
+    * a reason is required, because an unexplained reopen is exactly what an
+      auditor asks about six months later;
+    * `reopen_count` increments, so a case reopened four times is
+      distinguishable from one reopened once;
+    * `closed_at` and `resolved_at` are cleared, because leaving them set
+      would make the case terminal and active at the same time -- and every
+      closure metric reads those columns.
+    """
+    cid = await _resolve_case_id(case_id, db, user.tenant_id)
+    existing = (
+        await db.execute(
+            text("SELECT status, reopen_count FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=cid, tenant_id=user.tenant_id
+            )
+        )
+    ).fetchone()
+    if not existing:
+        raise HTTPException(status_code=404, detail="Case not found.")
+
+    if existing.status not in case_status.TERMINAL_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"Case is {existing.status!r}, which is not a terminal state, so there is nothing "
+                f"to reopen. Use PATCH to move it to {sorted(case_status.TRANSITIONS.get(existing.status, set()))}."
+            ),
+        )
+
+    now = datetime.now(UTC)
+    await db.execute(
+        text(
+            """
+            UPDATE aisoc_cases
+               SET status = :status,
+                   reopened_at = :now,
+                   reopen_count = COALESCE(reopen_count, 0) + 1,
+                   reopen_reason = :reason,
+                   -- Cleared deliberately: a case that is open again has not
+                   -- been closed, and every closure metric reads these.
+                   closed_at = NULL,
+                   resolved_at = NULL,
+                   updated_at = :now
+             WHERE id = :id AND tenant_id = :tenant_id
+            """
+        ).bindparams(
+            status=body.status,
+            now=now,
+            reason=body.reason,
+            id=cid,
+            tenant_id=user.tenant_id,
+        )
+    )
+    await db.commit()
+
+    try:
+        await emit_audit(
+            db=db,
+            tenant_id=user.tenant_id,
+            actor_id=user.user_id,
+            actor_email=user.email,
+            action="case.reopen",
+            resource="case",
+            resource_id=str(cid),
+            changes={
+                "from_status": existing.status,
+                "to_status": body.status,
+                "reason": body.reason,
+                "reopen_count": (existing.reopen_count or 0) + 1,
+            },
+        )
+    except Exception:  # noqa: BLE001 - an audit failure must not undo the reopen
+        # Roll the *failed audit attempt* back, not the reopen: that already
+        # committed above. Without this the session stays in a failed
+        # transaction and the read below raises, so an audit problem would
+        # surface to the caller as the reopen itself failing -- when in fact
+        # it succeeded and only the log entry did not. A live test caught
+        # exactly that.
+        await db.rollback()
+        logger.exception("cases.reopen.audit_failed case=%s", cid)
+
+    row = (
+        await db.execute(
+            text("SELECT * FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(id=cid, tenant_id=user.tenant_id)
+        )
+    ).fetchone()
     return _row_to_case(row)
 
 

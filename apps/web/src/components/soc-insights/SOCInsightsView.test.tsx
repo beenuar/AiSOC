@@ -19,6 +19,14 @@ vi.mock('@/lib/api', () => ({
   insightsApi: {
     getSOC: vi.fn(),
   },
+  // Needed because the view now binds to the real `TimeWindowProvider`, which
+  // reconciles the window with the signed-in user's stored preference. Stubbed
+  // rather than omitted: an absent export makes the provider throw during
+  // render, which reads as a component failure rather than a missing mock.
+  authApi: {
+    currentUser: vi.fn(() => null),
+    updateUserPreferences: vi.fn(() => Promise.resolve()),
+  },
 }));
 
 vi.mock('@/lib/realtime', () => ({
@@ -32,6 +40,7 @@ vi.mock('@/lib/realtime', () => ({
 }));
 
 import { insightsApi, type SOCInsightsResponse } from '@/lib/api';
+import { TimeWindowProvider } from '@/components/layout/TimeWindowProvider';
 import { SOCInsightsView } from './SOCInsightsView';
 import { pointsToPath } from './Sparkline';
 
@@ -47,7 +56,14 @@ import { pointsToPath } from './Sparkline';
 function renderIsolated(node: ReactElement) {
   return render(
     <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
-      {node}
+      {/*
+        The view binds to the global time window rather than holding a private
+        copy, so it needs the provider the app layout supplies. Wrapping here
+        rather than mocking the hook: a mocked `useTimeWindow` would make the
+        test agree with whatever the component asked for, which is exactly how
+        a selector that drove nothing passed its own suite.
+      */}
+      <TimeWindowProvider>{node}</TimeWindowProvider>
     </SWRConfig>,
   );
 }

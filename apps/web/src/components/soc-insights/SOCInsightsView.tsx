@@ -9,6 +9,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useTimeWindow } from '@/components/layout/TimeWindowProvider';
 import useSWR from 'swr';
 
 import { useRealtimeChannel } from '@/lib/realtime';
@@ -31,7 +32,18 @@ interface RealtimePoke {
 }
 
 export function SOCInsightsView() {
-  const [window, setWindow] = useState<InsightsWindow>('24h');
+  // Bound to the global selector rather than a private `useState`. Two
+  // controls on one page that both say "24h" and move independently is the
+  // kind of thing a user reads as the data itself being wrong.
+  //
+  // This endpoint has no 1h window, so a global `1h` is clamped to `24h` --
+  // and the clamp is *shown*, not silent. Rendering a day of data under a
+  // header reading "1h" would be a quietly wrong number, which is worse than
+  // an explicit note.
+  const { window: globalWindow, setWindow: setGlobalWindow } = useTimeWindow();
+  const clamped = globalWindow === '1h';
+  const window: InsightsWindow = clamped ? '24h' : globalWindow;
+  const setWindow = setGlobalWindow;
 
   const { data, error, isLoading, mutate } = useSWR<SOCInsightsResponse>(
     ['insights:soc', window],
@@ -67,6 +79,7 @@ export function SOCInsightsView() {
     <div className="space-y-6 p-6">
       <Header
         window={window}
+        clamped={clamped}
         onWindowChange={setWindow}
         generatedAt={data?.generated_at}
         manualMinutes={data?.manual_investigation_minutes}
@@ -92,12 +105,13 @@ export function SOCInsightsView() {
 
 interface HeaderProps {
   window: InsightsWindow;
+  clamped: boolean;
   onWindowChange: (w: InsightsWindow) => void;
   generatedAt: string | undefined;
   manualMinutes: number | undefined;
 }
 
-function Header({ window, onWindowChange, generatedAt, manualMinutes }: HeaderProps) {
+function Header({ window, clamped, onWindowChange, generatedAt, manualMinutes }: HeaderProps) {
   const stamp = useMemo(() => {
     if (!generatedAt) return null;
     try {
@@ -117,6 +131,11 @@ function Header({ window, onWindowChange, generatedAt, manualMinutes }: HeaderPr
           window. Hours-saved assumes {manualMinutes ?? 45} minutes of analyst
           time per auto-closed case.
         </p>
+        {clamped ? (
+          <p className="mt-1 text-xs text-amber-500/90">
+            These tiles have no 1-hour window, so they are showing 24 hours.
+          </p>
+        ) : null}
       </div>
       <div className="flex items-center gap-4">
         {stamp ? (

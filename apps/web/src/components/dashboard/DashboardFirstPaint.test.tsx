@@ -18,6 +18,7 @@
  * still read as empty.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { TimeWindowProvider } from '@/components/layout/TimeWindowProvider';
 import { cleanup, render, screen } from '@testing-library/react';
 import { __setDemoModeForTests } from '@/lib/demoMode';
 
@@ -28,7 +29,17 @@ const swrLoading = vi.hoisted(() => new Set<string>());
 vi.mock('swr', () => ({
   __esModule: true,
   default: (key: unknown) => {
-    const k = typeof key === 'string' ? key : JSON.stringify(key);
+    // An SWR key is now `['dashboard-metrics', timeWindow]` rather than a
+    // bare string, because the window has to be part of the cache key or
+    // every window shares one entry. These fixtures name the resource and
+    // not the window, so resolve an array key by its head -- the tests here
+    // are about what the dashboard *renders*, and threading a window through
+    // each one would obscure that without testing anything.
+    //
+    // That the window reaches the request is a separate assertion, in
+    // DashboardTimeWindow.test.tsx, where it is the subject rather than
+    // incidental setup.
+    const k = typeof key === 'string' ? key : String((key as unknown[])[0]);
     return {
       data: swrData.get(k),
       error: swrErrors.get(k),
@@ -40,6 +51,14 @@ vi.mock('swr', () => ({
 
 vi.mock('@/lib/api', () => ({
   __esModule: true,
+  // The dashboard binds to the real `TimeWindowProvider`, which reconciles
+  // the window with the signed-in user's stored preference. An absent export
+  // makes the provider throw during render, which reads as a component
+  // failure rather than a missing mock.
+  authApi: {
+    currentUser: vi.fn(() => null),
+    updateUserPreferences: vi.fn(() => Promise.resolve()),
+  },
   metricsApi: {
     getDashboard: vi.fn(),
     getSOC: vi.fn(),
@@ -99,7 +118,11 @@ describe('the dashboard does not report a result it has not got', () => {
   it('claims nothing on first paint, while the request is still in flight', () => {
     swrLoading.add('dashboard-metrics');
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     for (const claim of MEASURED_CLAIMS) {
       expect(screen.queryByText(claim), `"${claim}" is a measured claim and the request has not landed`).toBeNull();
@@ -112,7 +135,11 @@ describe('the dashboard does not report a result it has not got', () => {
     // unmeasured, and the branch a plain `isLoading` check would miss.
     swrData.set('dashboard-metrics', { cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 } });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     for (const claim of MEASURED_CLAIMS) {
       expect(screen.queryByText(claim)).toBeNull();
@@ -123,7 +150,11 @@ describe('the dashboard does not report a result it has not got', () => {
   it('still shows the failure when the request failed', () => {
     swrErrors.set('dashboard-metrics', new Error('503 Service Unavailable'));
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getAllByText(/503 Service Unavailable/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/No alerts in the last 24 hours/i)).toBeNull();
@@ -141,7 +172,11 @@ describe('the dashboard does not report a result it has not got', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText(/No alerts in the last 24 hours/i)).toBeInTheDocument();
     expect(screen.queryByText(/Not loaded yet/i)).toBeNull();

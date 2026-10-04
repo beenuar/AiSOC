@@ -17,6 +17,7 @@
 import React, { Component, Suspense, type ErrorInfo, type ReactNode, useState, useEffect, useRef, useCallback } from 'react';
 import useSWR from 'swr';
 import { metricsApi, type DashboardMetrics } from '@/lib/api';
+import { useTimeWindow } from '@/components/layout/TimeWindowProvider';
 import { clsx } from 'clsx';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
@@ -455,14 +456,24 @@ function useDashboardLayout() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
+  // The global selector in the header. Every fetch below binds to it, so
+  // changing the window actually changes what is shown -- it used to drive
+  // nothing at all.
+  const { window: timeWindow } = useTimeWindow();
+
   const {
     data: rawMetrics,
     error: metricsError,
     isLoading: metricsLoading,
     mutate: mutateMetrics,
   } = useSWR(
-    'dashboard-metrics',
-    () => metricsApi.getDashboard(),
+    // The window is part of the key, which is the whole fix: it was the
+    // constant string 'dashboard-metrics', so SWR served one cache entry for
+    // every window and the selector could not have refetched even if it had
+    // asked. A key that does not name its inputs is a cache that cannot
+    // distinguish them.
+    ['dashboard-metrics', timeWindow],
+    () => metricsApi.getDashboard(timeWindow),
     {
       fallbackData: demoFallback(MOCK_METRICS),
       refreshInterval: 60000,
@@ -547,13 +558,13 @@ export function DashboardView() {
 
     // PR-3 / W1: Six-tile funnel KPI strip (events → correlations → alerts +
     // signal/noise, MTTD, analyst queue) backed by /api/v1/metrics/funnel.
-    'funnel-kpis': <FunnelKpiBar period="24h" />,
+    'funnel-kpis': <FunnelKpiBar period={timeWindow} />,
 
     // PR-3 / W1+W9: Efficiency ratios (correlation efficiency, alert yield,
     // MITRE coverage) alongside per-stage pipeline health.
     'efficiency-and-pipeline': (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <EfficiencyReport period="24h" />
+        <EfficiencyReport period={timeWindow} />
         <PipelineHealth />
       </div>
     ),

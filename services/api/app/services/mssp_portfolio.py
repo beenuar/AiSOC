@@ -36,6 +36,8 @@ from typing import Any
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.alert_status import UNRESOLVED_STATUSES
+from app.services.case_status import OPEN_STATUSES
 from app.services.entitlements import Headroom, headroom_for_tenant
 from app.services.org_scope import PortfolioScope, require_scope
 from app.services.resolution_time import (
@@ -128,10 +130,17 @@ class TenantRollup:
         }
 
 
-# Statuses that mean "still needs someone". Kept in one place so the
-# portfolio backlog and a single tenant's queue cannot drift apart.
-_OPEN_ALERT_STATUSES = ("new", "open", "investigating", "triaged", "in_progress")
-_OPEN_CASE_STATUSES = ("open", "investigating", "in_progress", "containment", "eradication", "recovery")
+# Statuses that mean "still needs someone".
+#
+# Read from the canonical modules rather than retyped. Both tuples here named
+# states the schema forbids -- the alert one listed "open" and "investigating"
+# against a vocabulary of new/triaging/in_progress/resolved, and the case one
+# listed six values of which only "investigating" exists, inflating the
+# portfolio backlog with members that can never match while omitting the
+# states that can. Keeping a third copy "in one place" is what made it drift:
+# one place per service is still three places.
+_OPEN_ALERT_STATUSES = UNRESOLVED_STATUSES
+_OPEN_CASE_STATUSES = OPEN_STATUSES
 
 
 async def tenant_rollups(db: AsyncSession, scope: PortfolioScope) -> list[TenantRollup]:

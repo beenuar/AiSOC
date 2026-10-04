@@ -311,11 +311,26 @@ async def _dispatch_decision(
     # identifier. Without that, "which action did this approval authorise"
     # requires a join nobody wrote.
     action_id = str(row.id)
+    # `CurrentUser` has `role` (singular), `scopes` and `resolved_permissions`.
+    # This used to read `user.roles` and `user.permissions` through
+    # `getattr(..., [])`, and since neither attribute exists both defaults
+    # fired silently -- so the actions service received an empty permission
+    # list, `has_action_permission` denied unconditionally, and *every*
+    # approval came back 502 with the decision already recorded.
+    #
+    # Resolved by the principal rather than here on purpose: a route deciding
+    # its own permissions is what `check_one_permission_model` refuses, and
+    # `effective_permissions()` uses the same scopes -> resolved -> role order
+    # as `require_permission`, so one principal cannot be allowed to approve
+    # something it would be refused for elsewhere.
+    permissions = user.effective_permissions()
     principal = {
         "user_id": str(user.user_id),
         "email": getattr(user, "email", None),
-        "roles": list(getattr(user, "roles", []) or []),
-        "permissions": list(getattr(user, "permissions", []) or []),
+        # Singular on this class; sent as a list because that is the shape
+        # `services/actions` reads.
+        "roles": [user.role] if user.role else [],
+        "permissions": permissions,
     }
 
     try:
@@ -331,6 +346,11 @@ async def _dispatch_decision(
             # approver here would make them both, and separation of duties
             # would pass by accident.
             requested_by=row.requested_by or "agent",
+            # Identifies the caller to the gate. Omitting it was harmless only
+            # while `AISOC_ACTIONS_REQUIRE_PRINCIPAL` defaults false; turning
+            # that on would have broken the submit leg exactly as the decide
+            # leg was broken.
+            principal=principal,
         )
     except ActionsServiceError as exc:
         logger.warning(

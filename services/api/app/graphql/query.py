@@ -40,6 +40,8 @@ from app.models.alert import Alert
 from app.models.case import Case
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
+from app.services.alert_status import UNRESOLVED_STATUSES
+from app.services.case_status import OPEN_STATUSES
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL", "http://agents:8084")
 
@@ -412,12 +414,30 @@ class Query:
                 mean_time_to_respond_hours=None,
             )
 
-        total_alerts = (await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid))).scalar_one()
+        # Unresolved only, matching `/metrics/dashboard`. Both counts used to
+        # have no status predicate at all, so a GraphQL consumer saw the
+        # tenant's entire historical intake labelled as current state.
+        total_alerts = (
+            await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid, Alert.status.in_(UNRESOLVED_STATUSES)))
+        ).scalar_one()
+        # `["open", "in_progress"]` -- neither of which the case vocabulary
+        # contains, and the `aisoc_cases` CHECK forbids both. This count was
+        # therefore *structurally* zero: not wrong by a little, incapable of
+        # ever returning anything else. Reading `OPEN_STATUSES` rather than
+        # naming states inline is what stops the next copy drifting.
         open_cases = (
-            await db.execute(select(func.count()).select_from(Case).where(Case.tenant_id == tid, Case.status.in_(["open", "in_progress"])))
+            await db.execute(select(func.count()).select_from(Case).where(Case.tenant_id == tid, Case.status.in_(OPEN_STATUSES)))
         ).scalar_one()
         critical_alerts = (
-            await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid, Alert.severity == "critical"))
+            await db.execute(
+                select(func.count())
+                .select_from(Alert)
+                .where(
+                    Alert.tenant_id == tid,
+                    Alert.severity == "critical",
+                    Alert.status.in_(UNRESOLVED_STATUSES),
+                )
+            )
         ).scalar_one()
         cutoff = datetime.now(UTC) - timedelta(hours=24)
         alerts_24h = (

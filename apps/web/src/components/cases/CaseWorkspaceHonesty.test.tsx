@@ -142,7 +142,7 @@ function realCase(overrides: Partial<Case> = {}): Case {
     id: CASE_ID,
     title: 'Unusual sign-in from an unrecognised ASN',
     description: 'One failed conditional-access challenge followed by a success.',
-    status: 'open',
+    status: 'new',
     severity: 'medium',
     alertIds: [],
     alertCount: 0,
@@ -249,7 +249,7 @@ describe('a failed investigation is not reported as a completed one', () => {
 
 describe('a rejected status write does not stick in the UI', () => {
   it('rolls the optimistic mutation back when the API refuses it', async () => {
-    swrData.set(SWR_KEY, realCase({ status: 'open' }));
+    swrData.set(SWR_KEY, realCase({ status: 'new' }));
     casesApi.update.mockRejectedValue(new Error('403 Forbidden'));
 
     render(<CaseWorkspace caseId={CASE_ID} />);
@@ -264,12 +264,12 @@ describe('a rejected status write does not stick in the UI', () => {
     // sat on `resolved` for a case the database still had as `open`.
     await waitFor(() => {
       const restored = swrMutate.mock.calls.at(-1)?.[0] as Case | undefined;
-      expect(restored?.status, 'the rejected write must be rolled back').toBe('open');
+      expect(restored?.status, 'the rejected write must be rolled back').toBe('new');
     });
   });
 
   it('keeps the write when the API accepts it', async () => {
-    swrData.set(SWR_KEY, realCase({ status: 'open' }));
+    swrData.set(SWR_KEY, realCase({ status: 'new' }));
     casesApi.update.mockResolvedValue(realCase({ status: 'resolved' }));
 
     render(<CaseWorkspace caseId={CASE_ID} />);

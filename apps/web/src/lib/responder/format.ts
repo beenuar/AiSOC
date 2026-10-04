@@ -117,10 +117,14 @@ const ALERT_STATUS: Record<string, StatusTone> = {
   snoozed: { bg: 'bg-amber-500/20', fg: 'text-amber-300', label: 'Snoozed' },
 };
 
+// The six the database permits. `open`, `in_progress` and `pending` were
+// entries nothing could ever match, so every real case fell through to the
+// grey "unknown" default and the responder console showed no status colour.
 const CASE_STATUS: Record<string, StatusTone> = {
-  open: { bg: 'bg-blue-500/20', fg: 'text-blue-300', label: 'Open' },
-  in_progress: { bg: 'bg-purple-500/20', fg: 'text-purple-300', label: 'Active' },
-  pending: { bg: 'bg-yellow-500/20', fg: 'text-yellow-300', label: 'Pending' },
+  new: { bg: 'bg-blue-500/20', fg: 'text-blue-300', label: 'New' },
+  triaged: { bg: 'bg-sky-500/20', fg: 'text-sky-300', label: 'Triaged' },
+  investigating: { bg: 'bg-purple-500/20', fg: 'text-purple-300', label: 'Investigating' },
+  contained: { bg: 'bg-yellow-500/20', fg: 'text-yellow-300', label: 'Contained' },
   resolved: { bg: 'bg-green-500/20', fg: 'text-green-300', label: 'Resolved' },
   closed: { bg: 'bg-slate-500/20', fg: 'text-slate-300', label: 'Closed' },
 };
@@ -132,7 +136,7 @@ export function alertStatusTone(status: AlertStatus | string | undefined | null)
 }
 
 export function caseStatusTone(status: CaseStatus | string | undefined | null): StatusTone {
-  if (!status) return CASE_STATUS.open;
+  if (!status) return CASE_STATUS.new;
   const key = status.toLowerCase();
   return CASE_STATUS[key] ?? { bg: 'bg-slate-500/20', fg: 'text-slate-300', label: status };
 }

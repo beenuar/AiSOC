@@ -20,6 +20,7 @@
  */
 
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { TimeWindowProvider } from '@/components/layout/TimeWindowProvider';
 import { cleanup, render, screen } from '@testing-library/react';
 import { __setDemoModeForTests } from '@/lib/demoMode';
 
@@ -29,7 +30,17 @@ const swrErrors = vi.hoisted(() => new Map<string, unknown>());
 vi.mock('swr', () => ({
   __esModule: true,
   default: (key: unknown) => {
-    const k = typeof key === 'string' ? key : JSON.stringify(key);
+    // An SWR key is now `['dashboard-metrics', timeWindow]` rather than a
+    // bare string, because the window has to be part of the cache key or
+    // every window shares one entry. These fixtures name the resource and
+    // not the window, so resolve an array key by its head -- the tests here
+    // are about what the dashboard *renders*, and threading a window through
+    // each one would obscure that without testing anything.
+    //
+    // That the window reaches the request is a separate assertion, in
+    // DashboardTimeWindow.test.tsx, where it is the subject rather than
+    // incidental setup.
+    const k = typeof key === 'string' ? key : String((key as unknown[])[0]);
     return {
       data: swrData.get(k),
       error: swrErrors.get(k),
@@ -41,6 +52,14 @@ vi.mock('swr', () => ({
 
 vi.mock('@/lib/api', () => ({
   __esModule: true,
+  // The dashboard binds to the real `TimeWindowProvider`, which reconciles
+  // the window with the signed-in user's stored preference. An absent export
+  // makes the provider throw during render, which reads as a component
+  // failure rather than a missing mock.
+  authApi: {
+    currentUser: vi.fn(() => null),
+    updateUserPreferences: vi.fn(() => Promise.resolve()),
+  },
   metricsApi: {
     getDashboard: vi.fn(),
     getSOC: vi.fn(),
@@ -122,7 +141,11 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
   it('renders an error state, not a mock connector inventory, when the metrics API fails', () => {
     swrErrors.set('dashboard-metrics', new Error('503 Service Unavailable'));
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expectNoFabrication(FABRICATED_SOURCE_NAMES);
     // The failure itself is surfaced rather than swallowed.
@@ -132,7 +155,11 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
   it('does not invent a 1247-alert baseline when the API fails', () => {
     swrErrors.set('dashboard-metrics', new Error('network down'));
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.queryByText('1247')).toBeNull();
     expect(screen.queryByText('42m')).toBeNull();
@@ -151,7 +178,11 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     // Real numbers still render.
     expect(screen.getByText('4')).toBeTruthy();
@@ -171,7 +202,11 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     // `/metrics/dashboard` returns no period-over-period comparison, so the
     // "+12% vs yesterday" / "-3% vs yesterday" / "-8% vs last week" literals
@@ -358,7 +393,11 @@ describe('a mean over no samples is unmeasured, not zero', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText('1.5h')).toBeTruthy();
     expect(screen.queryByText('1.5m')).toBeNull();
@@ -374,7 +413,11 @@ describe('a mean over no samples is unmeasured, not zero', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText(/not measured · no cases closed/i)).toBeTruthy();
     expect(screen.queryByText('0m')).toBeNull();
@@ -398,7 +441,11 @@ describe('demo mode still populates the dashboards', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText('CrowdStrike EDR')).toBeTruthy();
   });

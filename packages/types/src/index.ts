@@ -10,7 +10,6 @@ export * from "./ocsf";
 
 // Core domain types
 export * from "./alert";
-export * from "./case";
 export * from "./tenant";
 export * from "./connector";
 export * from "./playbook";

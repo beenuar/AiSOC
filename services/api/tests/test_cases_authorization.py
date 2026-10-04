@@ -55,6 +55,9 @@ WRITE_HANDLERS = [
     "create_task",
     "update_task",
     "case_investigate",
+    # Reopening is a write, and a privileged one: it moves a case out of a
+    # terminal state, which the forward-only PATCH deliberately cannot do.
+    "reopen_case",
 ]
 
 

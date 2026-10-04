@@ -40,12 +40,26 @@ def _row(**overrides):
 
 
 def _user():
-    return SimpleNamespace(
+    """A real `CurrentUser`, not a stand-in.
+
+    This was a `SimpleNamespace` carrying `roles=[...]` and
+    `permissions=[...]` -- two attributes `CurrentUser` has never defined. The
+    route read exactly those two through `getattr(..., [])`, so the double was
+    shaped around the defect: in tests the attributes were there and the
+    principal looked populated, while in production both defaults fired and
+    every approval shipped an empty permission list.
+
+    A double more accommodating than the real object cannot fail the way
+    production fails, which is the whole reason this one did not.
+    """
+    from app.api.v1.deps import CurrentUser
+
+    return CurrentUser(
         user_id=USER,
         tenant_id=TENANT,
+        role="soc_lead",
         email="dana@example.com",
-        roles=["soc_lead"],
-        permissions=["cases:write"],
+        resolved_permissions=frozenset({"cases:write", "actions:execute:high"}),
     )
 
 
@@ -186,3 +200,42 @@ class TestFailureIsVisible:
         # Never "executed". Claiming execution on an unreachable executor is
         # the failure mode this whole wave exists to remove.
         assert result["state"] == "failed"
+
+
+class TestThePrincipalReachesTheActionsService:
+    """Nobody asserted on the principal, which is how an empty one shipped.
+
+    The suite above checks the *shape* of the dispatch -- that submit happens
+    before decide, that an unreachable service reports failed. It never looked
+    inside the principal, so a principal carrying no permissions at all passed
+    every test while 502-ing in production on the first real approval.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_decision_carries_a_non_empty_permission_set(self, calls: dict) -> None:
+        await endpoint._dispatch_decision(_row(), _user(), approve=True)
+
+        assert calls["decide"], "no decision reached the actions service"
+        approver = calls["decide"][0]["approver"]
+        assert approver["permissions"], (
+            "the approver's permission list is empty, which `has_action_permission` denies "
+            "unconditionally -- this is the defect that 502'd every approval"
+        )
+        assert "cases:write" in approver["permissions"]
+
+    @pytest.mark.asyncio
+    async def test_the_submit_leg_identifies_the_caller_too(self, calls: dict) -> None:
+        """Harmless only while `AISOC_ACTIONS_REQUIRE_PRINCIPAL` is false.
+        Turning it on would have broken submit exactly as decide was broken."""
+        await endpoint._dispatch_decision(_row(), _user(), approve=True)
+
+        assert calls["submit"], "no submit reached the actions service"
+        assert calls["submit"][0].get("principal"), "submit identifies no caller"
+
+    @pytest.mark.asyncio
+    async def test_the_role_travels_as_a_list(self, calls: dict) -> None:
+        """`CurrentUser.role` is singular and the actions service reads a
+        list. The old code read `user.roles`, which does not exist."""
+        await endpoint._dispatch_decision(_row(), _user(), approve=True)
+
+        assert calls["decide"][0]["approver"]["roles"] == ["soc_lead"]

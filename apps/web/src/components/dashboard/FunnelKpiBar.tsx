@@ -65,11 +65,26 @@ function formatPercent(ratio: number): string {
   return `${(ratio * 100).toFixed(1).replace(/\.0$/, '')}%`;
 }
 
-function formatDelta(delta: number | null): string {
-  if (delta === null || !Number.isFinite(delta)) return '—';
-  const pct = delta * 100;
-  const rounded = Math.abs(pct) >= 10 ? Math.round(pct) : pct.toFixed(1);
-  const sign = pct > 0 ? '+' : pct < 0 ? '−' : '';
+/**
+ * Render a period-over-period delta.
+ *
+ * The value arrives as a **percentage**, not a fraction: the backend's
+ * `_pct_delta` already multiplies by 100 and rounds, so a run that fell from
+ * 160 events to 10 sends `-93.75`. This used to multiply by 100 again and
+ * render `-9375%`, which is not a plausible number on a dashboard and was
+ * nevertheless shipped, because the test beside it fed `0.12`-shaped fractions
+ * the backend has never emitted and asserted `+12%`.
+ *
+ * Scale is decided by the contract, never by the magnitude. A real delta of
+ * 1% and a fraction of 1.0 are indistinguishable by value, so "it looks small,
+ * it must be a fraction" is a guess that is right until it is catastrophically
+ * not.
+ */
+function formatDelta(deltaPercent: number | null): string {
+  if (deltaPercent === null || !Number.isFinite(deltaPercent)) return '—';
+  const rounded =
+    Math.abs(deltaPercent) >= 10 ? Math.round(deltaPercent) : deltaPercent.toFixed(1);
+  const sign = deltaPercent > 0 ? '+' : deltaPercent < 0 ? '−' : '';
   return `${sign}${Math.abs(Number(rounded))}%`;
 }
 

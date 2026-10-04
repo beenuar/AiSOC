@@ -38,6 +38,7 @@ from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
 from app.models.remediation import RemediationGateLog
 from app.services import case_status
+from app.services.alert_status import RESOLVED_STATUSES, UNRESOLVED_STATUSES
 from app.services.resolution_time import (
     MTTR_WINDOW,
     tenant_case_mttr_minutes,
@@ -57,6 +58,10 @@ class AlertMetrics(BaseModel):
     medium: int
     low: int
     resolvedToday: int
+    #: Alerts in a terminal state. `total` above is now **open work only**,
+    #: so without this the closed count would have disappeared from the
+    #: dashboard entirely when the active tile was corrected.
+    resolved: int = 0
     # Mean time to resolve in **hours**, from the same closed cases and the
     # same window as `/metrics/soc`'s `mttr_hours` and the MSSP portfolio's
     # `mttr_minutes`. It used to average `alerts.resolved_at`, so the
@@ -236,24 +241,96 @@ class PipelineHealth(BaseModel):
     generated_at: datetime
 
 
+#: The windows the console's time-window selector offers, and the only ones
+#: any metrics route accepts. One map rather than one per endpoint: the
+#: selector is global, so two endpoints disagreeing about what `7d` means
+#: would show a dashboard whose tiles describe different weeks.
+_FUNNEL_PERIOD_MAP: dict[str, timedelta] = {
+    "1h": timedelta(hours=1),
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+}
+
+#: `Query(...)` declaration shared by every route that takes a window, so the
+#: accepted set cannot drift between them or from `TIME_WINDOWS` in
+#: `apps/web/src/lib/timeWindow.ts`.
+_PERIOD_QUERY = Query("24h", pattern=r"^(1h|24h|7d|30d)$", description="Time window for this view.")
+
+
 @router.get("/dashboard", response_model=DashboardMetrics)
+async def _count_alerts_by_status(db, tenant_id) -> dict[str, int]:
+    """Alert counts for the dashboard tiles, split by whether work remains.
+
+    Every severity count here is scoped to **unresolved** alerts, because the
+    console labels them "Active Alerts" and "Critical — Require immediate
+    action". They were not scoped at all: the tiles counted the tenant's whole
+    historical intake, never went down, and a tenant who had resolved
+    everything still saw a red critical tile demanding immediate action on
+    work finished months ago.
+
+    The predicate is `app.services.alert_status`'s rather than a fifth
+    hand-written copy. Four other sites already had it right -- `alerts.py`'s
+    critical queue, the funnel query below, and `health.py` twice -- and the
+    tile being the odd one out is exactly how one rule written five times
+    drifts: each site looks locally correct.
+
+    `resolved` is returned alongside rather than dropped. Narrowing the active
+    tile must not lose the number, because "how much did we close" is a real
+    question.
+    """
+    unresolved = Alert.status.in_(UNRESOLVED_STATUSES)
+    scope = Alert.tenant_id == tenant_id
+
+    async def _n(*predicates) -> int:
+        return await db.scalar(select(func.count()).where(and_(scope, *predicates))) or 0
+
+    return {
+        "open": await _n(unresolved),
+        "resolved": await _n(Alert.status.in_(RESOLVED_STATUSES)),
+        "new": await _n(Alert.status == "new"),
+        "critical": await _n(unresolved, Alert.severity == "critical"),
+        "high": await _n(unresolved, Alert.severity == "high"),
+        "medium": await _n(unresolved, Alert.severity == "medium"),
+        "low": await _n(unresolved, Alert.severity == "low"),
+    }
+
+
 async def get_dashboard_metrics(
     user: AuthUser,
     db: DBSession,
+    period: str = _PERIOD_QUERY,
 ) -> DashboardMetrics:
-    """Return aggregated KPI metrics for the dashboard overview tiles."""
+    """Return aggregated KPI metrics for the dashboard overview tiles.
+
+    `period` drives every windowed figure below. It did not exist: the console
+    shipped a global time-window selector whose only consumer was itself, so
+    changing it re-rendered a header and fetched nothing. The trend chart and
+    the "closed this week" tile were fixed at 7 days whatever the control
+    said.
+
+    Counts of *current state* -- open alerts by severity -- are deliberately
+    not windowed. "How many criticals are open" is a question about now, and
+    answering it for the last hour would hide the backlog rather than scope
+    it.
+    """
     tenant_id = user.tenant_id
     now = datetime.now(UTC)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start = now - timedelta(days=7)
+    window = _FUNNEL_PERIOD_MAP[period]
+    week_start = now - window
 
     # ── Alert counts ──────────────────────────────────────────────────────────
-    total_q = await db.scalar(select(func.count()).where(Alert.tenant_id == tenant_id))
-    new_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.status == "new")))
-    critical_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "critical")))
-    high_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "high")))
-    medium_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "medium")))
-    low_q = await db.scalar(select(func.count()).where(and_(Alert.tenant_id == tenant_id, Alert.severity == "low")))
+    # Unresolved only. See `_count_alerts_by_status`: these tiles are labelled
+    # "Active" and "Require immediate action", and counting the historical
+    # backlog made both permanently wrong and permanently rising.
+    counts = await _count_alerts_by_status(db, tenant_id)
+    total_q = counts["open"]
+    new_q = counts["new"]
+    critical_q = counts["critical"]
+    high_q = counts["high"]
+    medium_q = counts["medium"]
+    low_q = counts["low"]
     resolved_today_q = await db.scalar(
         select(func.count()).where(
             and_(
@@ -278,6 +355,10 @@ async def get_dashboard_metrics(
         medium=medium_q or 0,
         low=low_q or 0,
         resolvedToday=resolved_today_q or 0,
+        # Reported rather than dropped: narrowing the active tile must not
+        # lose the number, because "how much have we closed" is a real
+        # question and the dashboard is where it is asked.
+        resolved=counts["resolved"],
         mttr=round(float(mttr_dashboard_q or 0.0), 2),
         mttr_sample_count=mttr_dashboard_samples,
     )
@@ -469,6 +550,7 @@ class SOCMetrics(BaseModel):
 async def get_soc_metrics(
     user: AuthUser,
     db: DBSession,
+    period: str = _PERIOD_QUERY,
 ) -> SOCMetrics:
     """Return SOC-level KPIs, ATT&CK heatmap, and confidence calibration curve.
 
@@ -479,7 +561,9 @@ async def get_soc_metrics(
     """
     tenant_id = user.tenant_id
     now = datetime.now(UTC)
-    week_start = now - timedelta(days=7)
+    # Windowed by the caller's selection. Was a hardcoded 7 days, so the SOC
+    # panel described a different period from whatever the selector showed.
+    week_start = now - _FUNNEL_PERIOD_MAP[period]
 
     # ── MTTD ──────────────────────────────────────────────────────────────────
     # Mean time from alert creation to first analyst view (first_seen_at). This
@@ -759,14 +843,6 @@ async def get_alert_trend(
 
 
 # ──────────────────────────── v1.5 funnel endpoint ────────────────────────────
-
-
-_FUNNEL_PERIOD_MAP: dict[str, timedelta] = {
-    "1h": timedelta(hours=1),
-    "24h": timedelta(hours=24),
-    "7d": timedelta(days=7),
-    "30d": timedelta(days=30),
-}
 
 
 def _pct_delta(current: float, previous: float) -> float:
@@ -1116,7 +1192,7 @@ async def _mitre_covered(db, tenant_id, start, end) -> int:
 async def get_funnel_metrics(
     user: AuthUser,
     db: DBSession,
-    period: str = Query("24h", pattern=r"^(1h|24h|7d|30d)$"),
+    period: str = _PERIOD_QUERY,
 ) -> FunnelMetrics:
     """Return the live tenant funnel for the SOC Console (v1.5).
 

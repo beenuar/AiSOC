@@ -64,7 +64,7 @@ function buildDemoCase(id: string): Case {
       "Multiple high-severity alerts indicate an attacker pivoted from " +
       "WIN-FIN-DB01 to BACKUP-SRV-12 using compromised service account credentials. " +
       "Behavior consistent with T1021.002 (SMB/Windows Admin Shares).",
-    status: 'in_progress',
+    status: 'investigating',
     severity: 'critical',
     assignee: 'sasha.lin@example.com',
     alertIds: ['alert-9012', 'alert-9013', 'alert-9019', 'alert-9024'],
@@ -153,18 +153,26 @@ const SEVERITY_BADGE: Record<CaseSeverity, string> = {
   low: 'bg-blue-500/15 text-blue-300 ring-blue-500/30',
 };
 
+// Keyed on the six states the database actually permits. These used to name
+// `open`, `in_progress` and `pending` -- none of which `aisoc_cases` allows --
+// and omit `new`, `triaged`, `investigating` and `contained`, which is where a
+// case spends nearly all of its life. A real case rendered `undefined` as its
+// label and had no dot colour, while `Record<CaseStatus, …>` called the maps
+// exhaustive because the union was wrong in the same direction.
 const STATUS_LABEL: Record<CaseStatus, string> = {
-  open: 'Open',
-  in_progress: 'In progress',
-  pending: 'Pending',
+  new: 'New',
+  triaged: 'Triaged',
+  investigating: 'Investigating',
+  contained: 'Contained',
   resolved: 'Resolved',
   closed: 'Closed',
 };
 
 const STATUS_DOT: Record<CaseStatus, string> = {
-  open: 'bg-slate-400',
-  in_progress: 'bg-blue-400 animate-pulse',
-  pending: 'bg-amber-400',
+  new: 'bg-slate-400',
+  triaged: 'bg-sky-400',
+  investigating: 'bg-blue-400 animate-pulse',
+  contained: 'bg-amber-400',
   resolved: 'bg-emerald-400',
   closed: 'bg-slate-600',
 };
@@ -693,7 +701,21 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               disabled={statusUpdating}
               className="rounded-md border border-slate-700/70 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none"
             >
-              {(['open', 'in_progress', 'pending', 'resolved', 'closed'] as CaseStatus[]).map(
+              {/*
+                  The three it used to offer -- open, in_progress, pending --
+                  are refused by the API, so every status change from this
+                  control failed validation.
+                */}
+                {(
+                  [
+                    'new',
+                    'triaged',
+                    'investigating',
+                    'contained',
+                    'resolved',
+                    'closed',
+                  ] as CaseStatus[]
+                ).map(
                 (s) => (
                   <option key={s} value={s}>
                     {STATUS_LABEL[s]}

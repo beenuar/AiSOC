@@ -61,8 +61,18 @@ def _user(tenant_id: uuid.UUID | None = None) -> CurrentUser:
 
 
 def _case_row(**overrides: Any) -> MagicMock:
-    """A row object shaped like a SQLAlchemy ``aisoc_cases`` result."""
-    row = MagicMock()
+    """A row object shaped like a SQLAlchemy ``aisoc_cases`` result.
+
+    `spec`'d to exactly these columns, which matters more than it looks. A
+    bare `MagicMock()` answers *any* attribute with another mock, so
+    `getattr(row, "some_new_column", None)` returns a mock rather than the
+    `None` a real row would give -- and that mock then flows into a response
+    model and fails Pydantic validation somewhere far from the cause. That is
+    how adding three columns to `aisoc_cases` broke this file.
+
+    With a spec, an unknown attribute raises `AttributeError`, `getattr`'s
+    default fires, and the double behaves the way the real row does.
+    """
     now = datetime.now(UTC)
     defaults = {
         "id": uuid.uuid4(),
@@ -81,6 +91,9 @@ def _case_row(**overrides: Any) -> MagicMock:
         "triaged_at": None,
         "resolved_at": None,
         "closed_at": None,
+        "reopened_at": None,
+        "reopen_count": 0,
+        "reopen_reason": None,
         "created_at": now,
         "updated_at": now,
         "created_by": "analyst@example.com",
@@ -88,6 +101,7 @@ def _case_row(**overrides: Any) -> MagicMock:
         "sla_due_at": None,
     }
     defaults.update(overrides)
+    row = MagicMock(spec=list(defaults))
     for k, v in defaults.items():
         setattr(row, k, v)
     return row

@@ -42,7 +42,13 @@ from app.api.v1.dev_auth import (
     is_dev_mode,
 )
 from app.core.permission_cache import grants, resolve_permissions
-from app.core.security import decode_token, has_permission, hash_api_key, token_is_revoked
+from app.core.security import (
+    ROLE_PERMISSIONS,
+    decode_token,
+    has_permission,
+    hash_api_key,
+    token_is_revoked,
+)
 from app.db.database import get_db
 from app.models.tenant import ApiKey, Tenant, User
 
@@ -133,6 +139,44 @@ class CurrentUser:
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied: {permission}",
             )
+
+    def effective_permissions(self) -> list[str]:
+        """Every permission string this principal holds, in one list.
+
+        `require_permission` above answers "may this principal do X". This
+        answers "what may this principal do", which is what a *downstream*
+        service needs: `services/actions` re-authorises an approval itself,
+        and it cannot ask us one verb at a time.
+
+        Same three-step order as `require_permission`, deliberately. Two
+        answers from two orders would mean a caller allowed to approve
+        something the same principal is refused for elsewhere, and the
+        divergence would show up as an intermittent 403 rather than as a bug.
+
+        This exists because `approvals.py` was reading `user.roles` and
+        `user.permissions` -- neither of which this class defines -- through
+        `getattr(..., [])`. Both defaults fired silently, the actions service
+        received an empty permission list, and since `has_action_permission`
+        denies unconditionally on an empty list, **every** approval 502'd while
+        the approval row recorded the decision.
+
+        Returns a list rather than a set because it crosses a JSON boundary;
+        sorted so two identical principals produce identical request bodies
+        and a diff of two audit entries is readable.
+        """
+        if self.scopes is not None:
+            # An API key's scopes are an explicit, deliberately narrower grant
+            # than its owner's role. Inheriting the owner's full set here would
+            # defeat the point of scoping a key.
+            return sorted(set(self.scopes))
+        if self.resolved_permissions is not None:
+            return sorted(self.resolved_permissions)
+        # Static fallback. `ROLE_PERMISSIONS` is read here, in the one module
+        # that owns principal resolution, rather than in a route -- a route
+        # deciding its own permissions is what `check_one_permission_model`
+        # refuses, and it refuses it because a published advisory came from
+        # exactly that.
+        return sorted(set(ROLE_PERMISSIONS.get(self.role, [])))
 
     async def has_permission_db(self, permission: str, db: AsyncSession) -> bool:
         """Check permission via RBAC tables (granular RBAC).

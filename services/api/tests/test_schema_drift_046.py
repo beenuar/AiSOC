@@ -71,18 +71,26 @@ def _model_columns(model_file: str, class_name: str) -> set[str]:
     return columns
 
 
-def _lineage_columns(table: str) -> set[str]:
+def _lineage_columns(table: str, *also: str) -> set[str]:
     """Every column the SQL migration lineage defines for ``table``.
 
     Scans ``CREATE TABLE`` bodies and ``ALTER TABLE ... ADD COLUMN`` clauses
-    scoped to ``table`` across all migration files (statements split on ``;``).
+    across all migration files (statements split on ``;``).
+
+    ``also`` carries the table's other names. A lineage can cross a rename --
+    migration 083 renamed ``cases`` to ``aisoc_cases`` -- and scanning only
+    one name reads a history that stops at the rename. That is not
+    hypothetical: this gate was looking for ``ALTER TABLE cases`` and had been
+    silently blind to every post-083 migration, which went unnoticed only
+    because none of them added a column until one did.
     """
+    names = "|".join(re.escape(n) for n in (table, *also))
     columns: set[str] = set()
     create_re = re.compile(
-        rf"CREATE TABLE(?:\s+IF NOT EXISTS)?\s+{table}\s*\((?P<body>.*)",
+        rf"CREATE TABLE(?:\s+IF NOT EXISTS)?\s+(?:{names})\s*\((?P<body>.*)",
         re.IGNORECASE | re.DOTALL,
     )
-    alter_re = re.compile(rf"ALTER TABLE\s+(?:ONLY\s+)?{table}\b", re.IGNORECASE)
+    alter_re = re.compile(rf"ALTER TABLE\s+(?:ONLY\s+)?(?:{names})\b", re.IGNORECASE)
     add_col_re = re.compile(r"ADD COLUMN(?:\s+IF NOT EXISTS)?\s+(\w+)", re.IGNORECASE)
     # A column definition line inside CREATE TABLE: leading identifier that is
     # not a table-level constraint keyword.
@@ -159,7 +167,9 @@ def test_detection_rules_lineage_covers_model():
 
 def test_cases_lineage_covers_model():
     model_cols = _model_columns("case.py", "Case")
-    lineage_cols = _lineage_columns("cases")
+    # Both names: migration 083 renamed the table, so the lineage that
+    # defines this model's columns spans `cases` and `aisoc_cases`.
+    lineage_cols = _lineage_columns("cases", "aisoc_cases")
     missing = model_cols - lineage_cols
     assert not missing, (
         f"cases migration lineage is missing model columns {sorted(missing)} — a reconciling migration is required (see #492)"

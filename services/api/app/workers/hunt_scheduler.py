@@ -71,6 +71,7 @@ from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
 from app.models.case import Case
 from app.models.saved_hunt import SavedHunt
+from app.services import case_status
 from app.services.event_warehouse import (
     HuntExecutionError,
     HuntNotConfigured,
@@ -221,7 +222,12 @@ async def _open_case_for_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int)
         case_type="hunt_finding",
         priority="medium",
         severity="medium",
-        status="open",
+        # `NEW`, not the literal "open". `aisoc_cases` has a CHECK listing
+        # new/triaged/investigating/contained/resolved/closed, so this INSERT
+        # was rejected outright -- a scheduled hunt that fired could not
+        # create its case at all, and the worker logged `case_opened` on the
+        # line below either way.
+        status=case_status.NEW,
         tags=["scheduled-hunt", f"hunt:{hunt.id}"],
     )
     db.add(case)

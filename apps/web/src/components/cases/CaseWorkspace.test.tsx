@@ -109,7 +109,7 @@ const fakeCase: Case = {
   id: 'INC-001',
   title: 'Suspected lateral movement from finance subnet',
   description: 'Multiple high-severity alerts indicate a pivot via SMB.',
-  status: 'in_progress',
+  status: 'investigating',
   severity: 'critical',
   assignee: 'sasha.lin@example.com',
   tags: ['lateral-movement'],

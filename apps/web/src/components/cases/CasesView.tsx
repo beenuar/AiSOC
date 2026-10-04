@@ -57,13 +57,19 @@ const SEVERITY_CONFIG = {
   low: { label: 'Low', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
 };
 
+// Keyed on the six states `aisoc_cases` permits. It used to name `open`,
+// `in_progress` and `pending` -- all refused by the table's CHECK -- and omit
+// the four a case actually passes through, so every real row fell through to
+// the `?? STATUS_CONFIG.open` fallback below and the list showed every case
+// as "Open" whatever it was.
 const STATUS_CONFIG: Record<
   Case['status'],
   { label: string; className: string; dot: string }
 > = {
-  open: { label: 'Open', className: 'text-gray-300 bg-gray-700/50 border-gray-600/50', dot: 'bg-gray-400' },
-  in_progress: { label: 'In Progress', className: 'text-blue-300 bg-blue-500/10 border-blue-500/20', dot: 'bg-blue-400 animate-pulse' },
-  pending: { label: 'Pending', className: 'text-amber-300 bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-400' },
+  new: { label: 'New', className: 'text-gray-300 bg-gray-700/50 border-gray-600/50', dot: 'bg-gray-400' },
+  triaged: { label: 'Triaged', className: 'text-sky-300 bg-sky-500/10 border-sky-500/20', dot: 'bg-sky-400' },
+  investigating: { label: 'Investigating', className: 'text-blue-300 bg-blue-500/10 border-blue-500/20', dot: 'bg-blue-400 animate-pulse' },
+  contained: { label: 'Contained', className: 'text-amber-300 bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-400' },
   resolved: { label: 'Resolved', className: 'text-green-300 bg-green-500/10 border-green-500/20', dot: 'bg-green-400' },
   closed: { label: 'Closed', className: 'text-gray-500 bg-gray-800/50 border-gray-700/50', dot: 'bg-gray-600' },
 };
@@ -74,7 +80,7 @@ function CaseCard({ c }: { c: Case }) {
   const sev = SEVERITY_CONFIG[c.severity] ?? SEVERITY_CONFIG.medium;
   // Defensive: if normalization missed an unexpected status string, fall back
   // to "open" styling so the entire list never blanks the page.
-  const sts = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.open;
+  const sts = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.new;
   const displayId = c.caseNumber ?? `${c.id ?? ''}`.slice(-6);
   const detailHref = `/cases/${encodeURIComponent(c.caseNumber ?? c.id)}`;
 
@@ -182,11 +188,11 @@ export function CasesView() {
   // zeros rendered on first paint and stayed there when the read failed.
   const countsUnknown = !casesData;
   const statCounts: Record<string, number | null> = countsUnknown
-    ? { all: null, open: null, in_progress: null, resolved: null, closed: null }
+    ? { all: null, new: null, investigating: null, resolved: null, closed: null }
     : {
         all: allCases.length,
-        open: allCases.filter(c => c.status === 'open').length,
-        in_progress: allCases.filter(c => c.status === 'in_progress').length,
+        new: allCases.filter(c => c.status === 'new').length,
+        investigating: allCases.filter(c => c.status === 'investigating').length,
         resolved: allCases.filter(c => c.status === 'resolved').length,
         closed: allCases.filter(c => c.status === 'closed').length,
       };
@@ -218,7 +224,14 @@ export function CasesView() {
 
       {/* Stats */}
       <div className="grid grid-cols-5 gap-3">
-        {(['all', 'open', 'in_progress', 'resolved', 'closed'] as const).map((s) => {
+        {/*
+          Five tabs for a five-column grid, naming states that exist. These
+          were `open` and `in_progress`, which `aisoc_cases` forbids, so both
+          counters read zero on every deployment and neither filter returned
+          anything. `triaged` and `contained` show on each row rather than as
+          their own tab.
+        */}
+        {(['all', 'new', 'investigating', 'resolved', 'closed'] as const).map((s) => {
           return (
             <button
               key={s}
