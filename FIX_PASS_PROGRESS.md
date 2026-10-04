@@ -121,7 +121,8 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 - [x] **5.6** Upgrade fixture does not insert into the renamed `cases` table
   - Fixture, before-snapshot and archive assertion all resolve the case table at run time. Reproduced against a fully-migrated database first: `relation "cases" does not exist`.
 - [ ] **5.7** Chaos and HA run live in CI
-- [ ] **5.8** Performance honesty
+- [x] **5.8** Performance honesty
+  - Thresholds now derived from the published compose steady-state figures (floor 11 = 7.3x below the published 80.1 alerts/s; ceiling 21,000 ms = 19.2x above the published 1,091 ms p95) instead of a constant 5 / 120,000 sitting 16x and 110x away. `check_perf_results.py` gained `REQUIRED_DEPLOYMENTS` and `MAX_RESULT_AGE_DAYS`. Both uncalled scripts are wired: the harness now records the load shape the claims tool requires, `--from-harness` translates it, and the one remaining gap (the harness does not measure detection coverage) is an explicit `--allow` with the problem still printed, not an absorbed failure.
 
 ## Wave 6: Retract what is not built
 

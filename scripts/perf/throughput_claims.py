@@ -184,6 +184,62 @@ class ClaimSet:
         return "\n".join(lines)
 
 
+#: What `load_harness.py` calls a metric, against what this file calls a claim.
+#:
+#: The two shipped speaking different languages and this file had no caller at
+#: all (fix-pass item 5.8), so the split it exists to publish was never
+#: computed from a real run. Only the claims the harness actually measures are
+#: mapped: `lake_eps` is absent because the harness does not time the
+#: ClickHouse archive separately, and inventing a value for it -- or quietly
+#: reusing the ingest figure -- would be the exact misattribution this file was
+#: written to prevent.
+HARNESS_METRIC_BY_CLAIM: dict[str, str] = {
+    "ingest_eps": "ingest_accepted_eps",
+    "alert_path_aps": "pipeline_eps",
+}
+
+
+def claims_from_harness(payload: dict[str, Any]) -> dict[str, Any]:
+    """Translate a `load_harness.py` result into this file's claim shape.
+
+    A metric the harness reports as unmeasured, or does not report at all, is
+    left out entirely rather than carried through as zero -- the harness emits
+    measured-with-a-value or unmeasured-with-a-reason and never both, and that
+    property has to survive the translation or a reader sees `0.00` where the
+    truth is "not measured".
+    """
+    metrics = payload.get("metrics") or {}
+    measured_at = str(payload.get("measured_at", ""))
+
+    # `run.shape` is what the harness recorded about the load it applied:
+    # batch size, workers, the commit, and the host count where it can know
+    # it. Carried through verbatim, because the whole point of the required
+    # context is that a reader can reproduce the number -- a context key
+    # invented here would defeat that more quietly than omitting it.
+    shape = dict((payload.get("run") or {}).get("shape") or {})
+    hardware = payload.get("hardware") or {}
+    context: dict[str, Any] = {
+        "deployment": str(payload.get("deployment", "")),
+        **shape,
+    }
+    if hardware.get("cpu"):
+        context["hardware"] = f"{hardware.get('cpu')} / {hardware.get('runtime_cpus', '?')} runtime CPUs"
+
+    out: dict[str, Any] = {}
+    for claim, metric_name in HARNESS_METRIC_BY_CLAIM.items():
+        metric = metrics.get(metric_name)
+        if not isinstance(metric, dict) or not metric.get("measured") or "value" not in metric:
+            continue
+        out[claim] = {
+            "value": float(metric["value"]),
+            "measured_at": measured_at,
+            # `0` is a legitimate context value, so filter on None rather
+            # than on falsiness.
+            "context": {k: v for k, v in context.items() if v is not None and v != ""},
+        }
+    return {"measurements": out}
+
+
 def load_claims(payload: dict[str, Any]) -> ClaimSet:
     out = ClaimSet()
     for key, raw in (payload.get("measurements") or {}).items():
@@ -290,24 +346,54 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--claims", help="JSON file of measurements to validate and render")
+    parser.add_argument(
+        "--from-harness",
+        help=(
+            "A scripts/perf/load_harness.py result to translate and grade. The harness and "
+            "this file name the same quantities differently, which is why this file had no "
+            "caller: there was no way to point it at a real run."
+        ),
+    )
     parser.add_argument("--check", action="store_true", help="exit non-zero on any problem")
+    parser.add_argument(
+        "--allow",
+        action="append",
+        default=[],
+        metavar="KIND",
+        help=(
+            "A problem kind to tolerate under --check, e.g. `unqualified-throughput`. "
+            "Every use needs a reason in the caller, and the tolerated problems are still "
+            "printed: the point is that a known gap stays visible rather than being "
+            "silently absorbed, which is how a gate stops meaning anything."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.self_test:
         return _self_test()
-    if not args.claims:
+    if not args.claims and not args.from_harness:
         print(ClaimSet().render())
         return 0
 
-    with open(args.claims, encoding="utf-8") as handle:
-        claims = load_claims(json.load(handle))
+    if args.from_harness:
+        with open(args.from_harness, encoding="utf-8") as handle:
+            claims = load_claims(claims_from_harness(json.load(handle)))
+    else:
+        with open(args.claims, encoding="utf-8") as handle:
+            claims = load_claims(json.load(handle))
     print(claims.render())
     problems = claims.problems()
     if problems:
         print("\nProblems:")
         for problem in problems:
             print(f"  {problem}")
-    return 1 if (problems and args.check) else 0
+
+    allowed = set(args.allow or [])
+    blocking = [p for p in problems if not any(f"[{kind}]" in p for kind in allowed)]
+    if allowed:
+        tolerated = len(problems) - len(blocking)
+        print(f"\nTolerated by --allow {sorted(allowed)}: {tolerated} of {len(problems)}")
+    return 1 if (blocking and args.check) else 0
 
 
 if __name__ == "__main__":

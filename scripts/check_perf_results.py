@@ -41,11 +41,26 @@ import argparse
 import json
 import re
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from gate_toolkit import repo_root, self_test_main  # noqa: E402
+
+#: The deployments `apps/docs/docs/operations/performance.md` publishes a table
+#: for. A results directory covering one of them is not the page being
+#: supported: a reader comparing the two tables is comparing one measurement
+#: against a claim with nothing behind it. Matched against the result
+#: filenames, which are `<date>-<deployment>-<scenario>.json`.
+REQUIRED_DEPLOYMENTS: tuple[str, ...] = ("compose", "kind")
+
+#: How old the newest result may be before the page is presenting a figure
+#: nobody has re-measured. A year is deliberately loose -- this hardware does
+#: not change weekly and a tight bound would red the build for a reason no
+#: contributor can act on -- but it is a bound, and there was none: a figure
+#: taken in 2026 would still have been presented as current in 2030.
+MAX_RESULT_AGE_DAYS = 400
 
 RESULTS_DIR = Path("docs/perf/results")
 PAGE = Path("apps/docs/docs/operations/performance.md")
@@ -163,7 +178,42 @@ def check(root: Path) -> tuple[int, list[str]]:
                     "A page that has drifted from the files presents figures under the wrong date"
                 )
 
+    _check_deployment_coverage(files, findings)
+    _check_freshness(dates, findings)
+
     return len(files), findings
+
+
+def _check_deployment_coverage(files: list[Path], findings: list[str]) -> None:
+    """Every published table needs a measurement behind it."""
+    names = " ".join(p.name for p in files)
+    for deployment in REQUIRED_DEPLOYMENTS:
+        if deployment not in names:
+            findings.append(
+                f"no committed result names `{deployment}`, but {PAGE} publishes a table for it. "
+                "A published figure with no result file behind it is the thing this gate exists to stop"
+            )
+
+
+def _check_freshness(dates: set[str], findings: list[str]) -> None:
+    """A figure with no expiry eventually describes a machine nobody runs."""
+    if not dates:
+        return
+    newest = max(dates)
+    try:
+        measured = datetime.strptime(newest, "%Y-%m-%d").replace(tzinfo=UTC)
+    except ValueError:
+        findings.append(f"the newest `measured_at` is {newest!r}, which is not a date")
+        return
+
+    age = (datetime.now(UTC) - measured).days
+    if age > MAX_RESULT_AGE_DAYS:
+        findings.append(
+            f"the newest committed result is {age} days old (limit {MAX_RESULT_AGE_DAYS}). "
+            f"{PAGE} is presenting it as the current performance of the product. "
+            "Re-run scripts/perf/load_harness.py and commit the result, or move the figures "
+            "to a dated historical section that says they are not current"
+        )
 
 
 def main(argv: list[str] | None = None) -> int:

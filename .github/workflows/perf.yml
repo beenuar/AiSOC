@@ -157,12 +157,26 @@ jobs:
           echo "::add-mask::$token"
           echo "token=$token" >> "$GITHUB_OUTPUT"
 
-      # The floors are two orders of magnitude below what the published run
-      # measured (177 alerts/s and a 1.1 s p95 on a laptop). A shared,
-      # throttled GitHub runner is not that machine, and a gate tuned close to
-      # a measurement gets disabled the first week it flaps. This fires on a
-      # catastrophic regression: an I/O call on the promote hot path, a
-      # consumer that stops committing, a sink that starts failing.
+      # The thresholds are derived from the published compose **steady-state**
+      # figures, not picked. That page measured 80.1 alerts/s and a 1,091 ms
+      # p95, and calls steady state "the row to plan against"; saturation is a
+      # backlog measurement, so a floor set from it would describe the queue
+      # rather than the pipeline.
+      #
+      #   floor   = 11 events/s   -> 7.3x below the published 80.1 alerts/s
+      #   ceiling = 21,000 ms      -> 19.2x above the published 1,091 ms p95
+      #
+      # Deliberately generous: a shared, throttled GitHub runner is not the
+      # machine those figures came off, and a gate tuned close to a measurement
+      # flaps and gets switched off within a week. But bounded, and bounded
+      # *by the claim*: the previous `5` and `120000` sat 16x below and 110x
+      # above the published numbers, which is a constant that relates to
+      # nothing -- when the published figure moves, it does not, and nobody can
+      # say what regression it would have caught.
+      #
+      # tests/test_perf_gate_is_related_to_the_claims.py parses both this file
+      # and the published page and fails if the ratio drifts, in either
+      # direction.
       - name: Measure, with a generous regression floor
         env:
           AISOC_INGEST_TOKEN: ${{ steps.token.outputs.token }}
@@ -171,8 +185,38 @@ jobs:
           python3 scripts/perf/load_harness.py \
             --target compose --events 4000 --workers 4 --batch 25 \
             --target-eps 60 --drain-timeout 420 \
-            --assert-eps-floor 5 --assert-p95-ceiling-ms 120000 --assert-no-loss \
+            --assert-eps-floor 11 --assert-p95-ceiling-ms 21000 --assert-no-loss \
             --out /tmp/perf-e2e.json
+
+      # Two measurement tools shipped with no caller at all (fix-pass item
+      # 5.8), so the three-stage split they exist to publish had never been
+      # computed from a real run. `load_profiles.py` describes the sustained,
+      # diurnal and spike shapes the burst harness cannot produce;
+      # `throughput_claims.py` separates ingest from the alert path, which
+      # differ by two orders of magnitude -- quoting one figure as "the
+      # throughput" understates the product or misrepresents it depending which
+      # stage it came from.
+      #
+      # They could not be pointed at a real run because the harness recorded
+      # none of the context they require; it now records the load's shape
+      # (batch size, workers, host count, commit) and `--from-harness`
+      # translates it.
+      #
+      # `--allow unqualified-throughput` is the one known gap, stated rather
+      # than absorbed: the harness does not measure what fraction of pushed
+      # events the rule engine evaluated, and an ingest rate published without
+      # that beside it reads as "every event was fully analysed". The problem is
+      # still printed every run. Remove the flag when the harness reports
+      # detection coverage.
+      - name: Grade the run against the published claims
+        if: always()
+        run: |
+          set -euo pipefail
+          python3 scripts/perf/load_profiles.py --list
+          python3 scripts/perf/throughput_claims.py \
+            --from-harness /tmp/perf-e2e.json --check \
+            --allow unqualified-throughput
+
 
       - name: Publish the run
         if: always()

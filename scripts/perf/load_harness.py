@@ -439,6 +439,22 @@ def sample_resources(target: Target) -> ResourceSample:
     return sample
 
 
+def _git_sha(root: Path) -> str | None:
+    """The commit under test, when this is a checkout rather than a tarball."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    sha = done.stdout.strip()
+    return sha or None
+
+
 def build_report(
     *,
     target: Target,
@@ -453,6 +469,7 @@ def build_report(
     resources: list[ResourceSample],
     drain_seconds: float,
     settled: bool,
+    shape: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     accepted = summary.accepted
     seen: dict[int, int] = {}
@@ -534,6 +551,15 @@ def build_report(
             "clock_offset_seconds": clock_offset,
             "clock_offset_spread_seconds": clock_spread,
             "producer": summary.raw,
+            # The shape of the load, not just its outcome.
+            #
+            # `scripts/perf/throughput_claims.py` refuses to publish a
+            # throughput figure without the context that makes it
+            # interpretable -- batch size, payload size, how many hosts, which
+            # commit -- and that tool had no caller partly because the harness
+            # recorded none of it. A rate with no batch size beside it is not a
+            # measurement anyone can reproduce or compare.
+            **({"shape": shape} if shape else {}),
         },
         "metrics": {name: m.as_dict() for name, m in sorted(metrics.items())},
         "resources": [{"at": datetime.fromtimestamp(s.at, tz=UTC).isoformat(timespec="seconds"), "containers": s.rows} for s in resources],
@@ -668,6 +694,18 @@ def main(argv: list[str] | None = None) -> int:
     except (RuntimeError, ValueError) as exc:
         dead_letters, dl_reason = None, f"dead-letter table unreadable: {exc}"
 
+    # Everything the harness genuinely knows about the load it just applied.
+    # `hosts` is 1 for compose by construction; for kubernetes it is whatever
+    # the operator passed, and is omitted rather than guessed when unknown.
+    shape: dict[str, Any] = {
+        "batch_size": int(args.batch),
+        "workers": int(args.workers),
+        "target_eps": int(args.target_eps),
+        "commit_sha": os.environ.get("GITHUB_SHA") or _git_sha(root) or "unknown",
+    }
+    if args.target == "compose":
+        shape["hosts"] = 1
+
     report = build_report(
         target=target,
         summary=summary,
@@ -681,6 +719,7 @@ def main(argv: list[str] | None = None) -> int:
         resources=resources,
         drain_seconds=drain_seconds,
         settled=settled,
+        shape=shape,
     )
     report["run"]["total_wall_seconds"] = time.time() - push_started
 
