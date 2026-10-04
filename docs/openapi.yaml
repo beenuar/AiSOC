@@ -15621,15 +15621,16 @@ paths:
       tags:
       - llm
       summary: Current LLM provider configuration
-      description: "Return the env-only LLM provider snapshot for this pod.\n\nIntentionally\
-        \ **unauthenticated** and **env-only**, mirroring\n``GET /api/v1/airgap/status``:\
-        \ the response carries no secrets\n(only ``key_set: bool``) and is safe for\
-        \ operator dashboards,\nauditors, and k8s liveness probes.\n\nTenant-aware\
-        \ callers (the web UI's \"Deployment & AI\" Settings\npanel, the agents service's\
-        \ explain path) layer per-tenant BYOK\noverrides on top of this baseline by\
-        \ either:\n\n* calling :func:`tenant_llm_status` with their own DB session,\
-        \ or\n* pairing this response with ``GET /api/v1/llm/credentials`` to\n  perform\
-        \ the merge client-side."
+      description: "Return the env-only LLM provider snapshot for this pod.\n\n**Authenticated**\
+        \ -- the signature binds ``AuthUser`` and has for as long\nas this route has\
+        \ existed. The docstring used to say \"intentionally\nunauthenticated\", which\
+        \ was prose disagreeing with the code beneath it.\n\n**Env-only**: the response\
+        \ carries no secrets (only ``key_set: bool``).\n\nTenant-aware callers (the\
+        \ web UI's \"Deployment & AI\" Settings\npanel, the agents service's explain\
+        \ path) layer per-tenant BYOK\noverrides on top of this baseline by either:\n\
+        \n* calling :func:`tenant_llm_status` with their own DB session, or\n* pairing\
+        \ this response with ``GET /api/v1/llm/credentials`` to\n  perform the merge\
+        \ client-side."
       operationId: get_llm_status_api_v1_llm_status_get
       responses:
         '200':
@@ -15640,6 +15641,44 @@ paths:
                 additionalProperties: true
                 type: object
                 title: Response Get Llm Status Api V1 Llm Status Get
+      security:
+      - HTTPBearer: []
+  /api/v1/llm/runtime:
+    get:
+      tags:
+      - llm
+      summary: Where the local model is actually running
+      description: 'Ask Ollama whether the model is on a GPU or a CPU, and say so.
+
+
+        Separate from ``/status`` deliberately. That route reports *configuration*
+
+        -- which provider and model this pod is pointed at. This one reports
+
+        *outcome*, which can differ: a GPU reservation is a request, and a model
+
+        can still land on the CPU for want of VRAM or a usable driver. Reading the
+
+        compose file back would report the intent and call it the result.
+
+
+        Carries the commands that would change the answer, because the console
+
+        cannot change it: switching the bundled Ollama onto a GPU means restarting
+
+        that container with different compose arguments, which a web service must
+
+        not be able to do.'
+      operationId: get_llm_runtime_api_v1_llm_runtime_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Get Llm Runtime Api V1 Llm Runtime Get
       security:
       - HTTPBearer: []
   /api/v1/llm/credentials:
@@ -15714,6 +15753,40 @@ paths:
       responses:
         '204':
           description: Successful Response
+      security:
+      - HTTPBearer: []
+  /api/v1/llm/credentials/credentials/test:
+    post:
+      tags:
+      - llm
+      summary: Make one real call with this tenant's credential
+      description: 'Place one minimal completion and report what happened.
+
+
+        There was no way to find out whether a saved key worked. The three routes
+
+        above validate *shape* -- that the URL parses, that the provider/key/base
+
+        combination is internally consistent -- and none of them talks to the
+
+        provider, so an operator who pasted a revoked key learned about it when
+
+        triage silently fell back to the deterministic path. That failure is quiet
+
+        by design, which is exactly what makes it hard to attribute.
+
+
+        `settings:write` rather than `settings:read`: this spends the tenant''s
+
+        money and touches an external service, which is not a read.'
+      operationId: test_llm_credential_api_v1_llm_credentials_credentials_test_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmCredentialTestResult'
       security:
       - HTTPBearer: []
   /api/v1/threatintel/stix/indicators:
@@ -26179,6 +26252,46 @@ components:
       - rules
       - total
       title: ListResponse
+    LlmCredentialTestResult:
+      properties:
+        outcome:
+          type: string
+          enum:
+          - ok
+          - refused
+          - unreachable
+          - unverified
+          title: Outcome
+        detail:
+          type: string
+          title: Detail
+        provider:
+          type: string
+          title: Provider
+        model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Model
+        latency_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Latency Ms
+      type: object
+      required:
+      - outcome
+      - detail
+      - provider
+      title: LlmCredentialTestResult
+      description: 'What a real call to the configured provider did.
+
+
+        Four outcomes, and `unverified` is one of them on purpose: an air-gapped
+
+        deployment refuses the egress rather than attempting it, and reporting that
+
+        as a failure would send an operator to debug a credential that is fine.'
     LlmCredentialUpsert:
       properties:
         provider:

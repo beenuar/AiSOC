@@ -137,6 +137,40 @@ if [ "$PORTS_ONLY" = "0" ] && docker info >/dev/null 2>&1; then
   fi
 fi
 
+  # Where the model can run. Reported, never changed: switching Ollama onto a
+  # GPU means restarting that container with different compose arguments, so
+  # the honest thing here is to say which option fits this host and let the
+  # operator choose. `make up` stays correct on every one of them.
+  gpu_advice=""
+  case "$(uname -s)" in
+    Darwin)
+      if [ "$(uname -m)" = "arm64" ]; then
+        # Docker Desktop cannot pass Metal into a Linux container. No toolkit
+        # changes that, so pointing a Mac at `make up-gpu` would waste an
+        # afternoon.
+        if command -v ollama >/dev/null 2>&1; then
+          gpu_advice="Apple Silicon: a native Ollama is installed and uses Metal — \`make up-host-llm\` to use it"
+        else
+          gpu_advice="Apple Silicon: containers get no GPU here. \`brew install ollama\` then \`make up-host-llm\` for Metal, or stay on CPU"
+        fi
+      fi
+      ;;
+    Linux)
+      if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; then
+        if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q nvidia; then
+          gpu_advice="NVIDIA GPU and container toolkit both present — \`make up-gpu\` will use it"
+        else
+          gpu_advice="NVIDIA GPU present but the container toolkit is not installed — see \`python3 scripts/check_gpu_runtime.py\`"
+        fi
+      fi
+      ;;
+  esac
+  if [ -n "$gpu_advice" ]; then
+    # , not : CPU is a supported configuration and the default, so
+    # a host with no GPU is not a problem to be fixed.
+    pass "$gpu_advice"
+  fi
+
 # ── 2. Ports ────────────────────────────────────────────────────────────────
 head2 "Ports"
 port_busy() {
@@ -236,6 +270,17 @@ for spec in "5432 postgres 5432" "6379 redis 6379" "9092 kafka 9092" \
     # Already remapped. The canonical port being busy is then irrelevant, and
     # failing on it would send the operator to fix something that is working.
     pass "aisoc $owner is published on $ours (not the default $port)"
+  elif [ "$owner" = "ollama" ] && port_busy "$port"; then
+    # An Ollama already on 11434 is an asset, not a conflict, and this used to
+    # tell the operator to stop it. On a Mac that Ollama is the *only* one with
+    # a GPU -- Docker cannot pass Metal into a container -- so the advice was to
+    # switch off the fast model in favour of a slow one.
+    #
+    # `make up` still works either way: resolve_port_conflicts.py republishes
+    # the bundled Ollama somewhere free. It is just rarely what this operator
+    # wants, so this is a warning with a better option rather than a failure.
+    warn "port $port is held by $(port_holder "$port") — you already run Ollama" \
+         "use it instead of starting a second one: 'make up-host-llm'. Or keep both: 'make up' publishes the bundled one on a free port."
   elif port_busy "$port"; then
     fail "port $port is held by $(port_holder "$port") — aisoc $owner needs it" \
          "stop it, or change the host port in docker-compose.yml. A docker-compose.override.yml must use 'ports: !override' — a plain override appends and leaves $port published."

@@ -193,3 +193,44 @@ class TestTheIngestProfileExists:
         assert "Sample data" in block, (
             "the profile does not name the sample vendor, so a reader cannot tell sample alerts from real ones in the source column"
         )
+
+
+class TestTheModelStep:
+    """The wizard tells a first-run operator where AI triage is running.
+
+    Added because nothing did. A tenant could finish setup without ever
+    learning that the bundled model is on CPU, that their GPU could be used,
+    or that their own provider is three fields away -- and the first two are
+    not reachable from the console at all, since switching the bundled Ollama
+    onto a GPU means restarting that container with different compose
+    arguments.
+    """
+
+    def test_the_step_exists(self) -> None:
+        source = ENDPOINT.read_text()
+        assert 'key="model"' in source
+
+    def test_it_is_not_blocking(self) -> None:
+        """`done=True` out of the box, deliberately: a local model ships and
+        runs, so a tenant on CPU is configured, not unfinished. A step that
+        showed red until somebody bought a GPU would be a chore invented by
+        the checklist."""
+        source = ENDPOINT.read_text()
+        block = source[source.index('key="model"') :]
+        block = block[: block.index("SetupStep(", 10)] if "SetupStep(" in block[10:] else block
+        assert "done=True" in block
+
+    def test_it_is_derived_from_the_tenants_own_row(self) -> None:
+        """Same discipline as every other step: no stored flag to drift. A
+        credential that exists but is disabled must not read as configured."""
+        source = ENDPOINT.read_text()
+        assert "tenant_llm_credentials" in source
+        assert "enabled IS TRUE" in source
+
+    def test_it_explains_why_like_the_others(self) -> None:
+        """The existing gate counts `why=` occurrences; this asserts the new
+        step carries one rather than relying on the count rising."""
+        source = ENDPOINT.read_text()
+        block = source[source.index('key="model"') :]
+        block = block[: block.index('key="try"')]
+        assert "why=(" in block or 'why="' in block

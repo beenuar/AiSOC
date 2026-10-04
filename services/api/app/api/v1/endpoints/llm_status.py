@@ -66,6 +66,7 @@ from app.core.airgap import is_host_allowed_for_airgap
 from app.core.config import settings
 from app.models.llm_credential import TenantLlmCredential
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services.llm_runtime import probe as probe_runtime
 from app.services.model_aliases import gateway_url, is_gateway_alias, resolve_api_key
 
 router = APIRouter(prefix="/llm", tags=["llm"])
@@ -394,10 +395,11 @@ async def tenant_llm_status(
 async def get_llm_status(user: AuthUser) -> dict[str, object]:
     """Return the env-only LLM provider snapshot for this pod.
 
-    Intentionally **unauthenticated** and **env-only**, mirroring
-    ``GET /api/v1/airgap/status``: the response carries no secrets
-    (only ``key_set: bool``) and is safe for operator dashboards,
-    auditors, and k8s liveness probes.
+    **Authenticated** -- the signature binds ``AuthUser`` and has for as long
+    as this route has existed. The docstring used to say "intentionally
+    unauthenticated", which was prose disagreeing with the code beneath it.
+
+    **Env-only**: the response carries no secrets (only ``key_set: bool``).
 
     Tenant-aware callers (the web UI's "Deployment & AI" Settings
     panel, the agents service's explain path) layer per-tenant BYOK
@@ -408,3 +410,49 @@ async def get_llm_status(user: AuthUser) -> dict[str, object]:
       perform the merge client-side.
     """
     return llm_status()
+
+
+@router.get("/runtime", summary="Where the local model is actually running")
+async def get_llm_runtime(user: AuthUser) -> dict[str, object]:
+    """Ask Ollama whether the model is on a GPU or a CPU, and say so.
+
+    Separate from ``/status`` deliberately. That route reports *configuration*
+    -- which provider and model this pod is pointed at. This one reports
+    *outcome*, which can differ: a GPU reservation is a request, and a model
+    can still land on the CPU for want of VRAM or a usable driver. Reading the
+    compose file back would report the intent and call it the result.
+
+    Carries the commands that would change the answer, because the console
+    cannot change it: switching the bundled Ollama onto a GPU means restarting
+    that container with different compose arguments, which a web service must
+    not be able to do.
+    """
+    report = await probe_runtime()
+    report.options = _placement_options(report.placement)
+    return report.as_dict()
+
+
+def _placement_options(placement: str) -> list[str]:
+    """What an operator can do about the answer.
+
+    Deliberately not host-specific: this runs inside a container and cannot see
+    whether the *host* has an NVIDIA card. `make doctor` runs on the host and
+    does know, so it gives the targeted recommendation; this lists what exists
+    and lets the reader pick.
+    """
+    hosted = "Use a hosted provider instead: Settings -> Deployment & AI, or the setup wizard."
+    if placement in {"cpu", "partial", "unknown"}:
+        return [
+            "NVIDIA GPU: `make up-gpu` (run `make doctor` to see whether this host has one).",
+            "Apple Silicon: containers get no GPU; run Ollama natively and use `make up-host-llm`.",
+            hosted,
+        ]
+    if placement == "unreachable":
+        return [
+            "If you use a hosted provider, this is expected and nothing is wrong.",
+            "Otherwise check the model container: `docker compose ps ollama`.",
+            hosted,
+        ]
+    if placement == "gpu":
+        return [hosted]
+    return [hosted]

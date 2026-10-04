@@ -870,6 +870,43 @@ run_smoke_test() {
   exit 5
 }
 
+# Where the model runs, reported once at the end.
+#
+# Printed, never prompted: this installer asks the user nothing and should keep
+# it that way. Switching Ollama onto a GPU means restarting that container with
+# different compose arguments, so the only honest thing an installer can do is
+# say which option fits the host it just ran on.
+print_model_placement() {
+  _advice=""
+  case "$(uname -s)" in
+    Darwin)
+      if [ "$(uname -m)" = "arm64" ]; then
+        if have ollama; then
+          _advice="You already run Ollama natively, and on Apple Silicon that is the only one
+    with a GPU — Docker cannot pass Metal into a container. To use it:
+      make up-host-llm"
+        else
+          _advice="AI triage is running on CPU. On Apple Silicon a container gets no GPU at
+    all, so for a faster model install Ollama natively and point the stack at it:
+      brew install ollama && OLLAMA_HOST=0.0.0.0 ollama serve
+      make up-host-llm"
+        fi
+      fi
+      ;;
+    Linux)
+      if have nvidia-smi && nvidia-smi -L >/dev/null 2>&1; then
+        _advice="This host has an NVIDIA GPU. To run the bundled model on it:
+      make up-gpu
+    (\`python3 scripts/check_gpu_runtime.py\` says whether the container toolkit
+    is installed, and what to do if not.)"
+      fi
+      ;;
+  esac
+  [ -z "$_advice" ] && return 0
+  printf '\n%sWhere the model runs:%s\n    %s\n' "$C_BOLD" "$C_RESET" "$_advice"
+  printf '    %sOr use a hosted provider: console → Settings → Deployment & AI.%s\n' "$C_DIM" "$C_RESET"
+}
+
 print_success() {
   cat <<EOF
 
@@ -948,6 +985,7 @@ main() {
   run_pnpm_install
   run_demo
   run_smoke_test
+  print_model_placement
   print_success
 }
 

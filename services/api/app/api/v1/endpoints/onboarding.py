@@ -121,6 +121,18 @@ async def onboarding_status(
         "SELECT COUNT(*) FROM users WHERE tenant_id = CAST(:t AS uuid)",
         t=tenant_id,
     )
+    # Derived from the tenant's own row like everything else here, so this step
+    # cannot drift either. A disabled credential does not count: it is
+    # configuration that is deliberately not in effect.
+    byok = await _count(
+        db,
+        """
+        SELECT COUNT(*) FROM tenant_llm_credentials
+         WHERE tenant_id = CAST(:t AS uuid)
+           AND enabled IS TRUE
+        """,
+        t=tenant_id,
+    )
 
     # A connector that is only *configured* is not a connector that is
     # working, so "data arriving" is a separate step. Conflating them is
@@ -155,6 +167,23 @@ async def onboarding_status(
             ),
             href="/alerts",
             detail=(f"{real_alerts} from your own sources" if real_alerts else "No alerts from a connected source yet"),
+        ),
+        SetupStep(
+            key="model",
+            label="Choose where the AI runs",
+            # A local model ships and runs, so this is never blocking -- which
+            # is why it is `done` out of the box and the step is informational.
+            # It exists because a first-run operator otherwise has no way to
+            # learn that the bundled model is on CPU, that their GPU could be
+            # used, or that their own provider is three fields away.
+            done=True,
+            why=(
+                "A model ships with AiSOC and runs on CPU, so triage works out of the box. "
+                "It is also the slowest option: a GPU or your own provider is usually "
+                "faster, and both take one step."
+            ),
+            href=None,
+            detail=("Using your own provider" if byok else "Using the bundled local model"),
         ),
         SetupStep(
             key="try",

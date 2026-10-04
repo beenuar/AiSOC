@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Three ways to run the model, and a wizard step that says which is in
+  effect.** `make up` is unchanged: the bundled model on CPU, no account and no
+  GPU. Alongside it, `make up-gpu` layers an NVIDIA device reservation onto the
+  bundled Ollama, and `make up-host-llm` uses an Ollama already running on the
+  host -- which is the **only** way to reach a GPU on Apple Silicon, since
+  Docker Desktop cannot pass Metal into a Linux container. Hosted providers
+  were already supported and are now reachable from the first-run wizard rather
+  than only from Settings.
+
+  The reservation is an overlay and not a line in the base file, deliberately.
+  A host without an NVIDIA GPU and the container toolkit cannot start a service
+  that reserves one -- the daemon answers `could not select device driver
+  "nvidia"` -- so putting it in `docker-compose.yml` would take out `make up`
+  for every Mac, every CPU-only Linux box and every CI runner. A test asserts
+  the base file reserves no devices, and reintroducing the reservation fails it.
+
+- **`GET /api/v1/llm/runtime` reports where the model actually is.** A
+  reservation is a *request*: a model can still land on the CPU for want of
+  VRAM or a usable driver, so reading the compose file back would report the
+  intent and call it the outcome. This asks Ollama, which publishes `size_vram`
+  on `/api/ps`. Five states including **not loaded right now** -- Ollama unloads
+  when idle, and answering "CPU" for an idle instance would be a guess about
+  the exact thing an operator is deciding on. Verified against the pinned
+  `ollama/ollama:0.6.7` image, which reports `size_vram: 0` in a container on
+  Apple Silicon, and against a native Ollama on the same host, which reports
+  `size_vram == size` because it reaches Metal.
+
+- **`POST /api/v1/llm/credentials/test` places one real call.** The existing
+  credential routes validate *shape* and never talk to the provider, so a
+  revoked key surfaced as triage quietly falling back to the deterministic path
+  -- a failure that is hard to attribute precisely because it is silent. Four
+  outcomes, and `unverified` is deliberately not an error: an air-gapped
+  deployment refusing the egress is the policy working.
+
+  It does **not** use `destinations.py::_guard_url`, which refuses every
+  private address and would therefore refuse `local-ollama`, `local-vllm` and
+  `local-litellm` -- three of the seven providers migration 038 allows, and the
+  ones this feature most exists to serve. It uses the agents service's
+  `validate_outbound_url(..., allow_private=True)`, vendored and held
+  byte-identical by a new sync gate, which permits a private host while still
+  rejecting loopback and link-local so cloud metadata stays unreachable.
+
+- **`scripts/check_gpu_runtime.py`**, which `make up-gpu` runs first so the
+  failure names a cause. It distinguishes a missing card, driver, toolkit and
+  daemon configuration, and on Apple Silicon says plainly that no amount of
+  installing will help and points at `make up-host-llm` instead.
+
+### Fixed
+
+- **`make doctor` told operators to stop their own Ollama.** `11434` is in the
+  managed port inventory, so a host already running Ollama got a hard failure
+  reading *"aisoc ollama needs it"* with the advice to stop it. On a Mac that
+  Ollama is the only one with a GPU, so the advice was to switch off the fast
+  model in favour of a slow one. It is now a warning that points at
+  `make up-host-llm`.
+
+- **An air-gap check could silently stop applying.** The credential probe read
+  `settings.AISOC_AIRGAPPED` through a module-level reference, which goes stale
+  the moment anything reloads `app.core.config` -- the probe's own test passed
+  alone and failed in the full suite for exactly that reason. It now calls
+  `enforce_airgap_for_url`, the same function every other outbound call uses,
+  which reads the flag at call time.
+
 ### Security
 
 - **A revoked session kept the graph WebSocket open** ([GHSA-25fh-rxp8-67j8]).

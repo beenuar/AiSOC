@@ -1,0 +1,82 @@
+# AiSOC — use an Ollama you already run on the host
+#
+# Usage:
+#   make up-host-llm
+#
+# or by hand:
+#   docker compose -f docker-compose.yml -f infra/compose/docker-compose.host-llm.yml up -d
+#
+# Who this is for
+# ---------------
+# Two audiences, and the second is the larger one.
+#
+# **Apple Silicon.** Docker Desktop cannot pass the Metal GPU into a Linux
+# container, so the bundled Ollama is CPU-only on a Mac whatever is reserved
+# for it. An Ollama installed natively *does* use Metal. This overlay is the
+# only way a Mac gets GPU-accelerated triage.
+#
+# **Anyone already running Ollama.** Today the bundled one is started anyway:
+# 11434 is in `scripts/doctor.sh`'s managed port table, so
+# `scripts/resolve_port_conflicts.py` sees the conflict and republishes the
+# bundled Ollama on a free port. The result is two Ollamas, the stack talking
+# to the new CPU-only one, and the host's — very possibly GPU-accelerated —
+# sitting idle. This points the stack at the one that already exists.
+#
+# What this changes
+# -----------------
+# 1. `ollama` and `ollama-pull` move into a `bundled` profile. A service with a
+#    profile is not started unless that profile is named, so neither runs. They
+#    are not deleted: `docker compose --profile bundled up -d ollama` still
+#    brings the bundled one back without editing anything.
+#
+# 2. `litellm` loses its dependency on `ollama-pull`. In the base file it waits
+#    for `service_completed_successfully` so the gateway cannot answer before
+#    the weights exist; with the bundled pair not running that condition can
+#    never be met and the gateway would wait forever. `!reset` rather than an
+#    empty mapping because a plain override *merges* — it can add a dependency
+#    but not remove one.
+#
+# 3. The gateway's model base URL points at the host.
+#
+# `extra_hosts` is required and not decorative: Docker Desktop resolves
+# `host.docker.internal` for you and Linux does not, so without it this works
+# on a Mac and fails on a server.
+#
+# Your Ollama has to be reachable from a container
+# ------------------------------------------------
+# By default `ollama serve` binds 127.0.0.1, which a container cannot reach
+# through the gateway address. If triage reports no model:
+#
+#   OLLAMA_HOST=0.0.0.0 ollama serve
+#
+# and confirm the model this stack asks for is pulled:
+#
+#   ollama pull llama3.2:3b-instruct-q4_K_M
+#
+# Point at something else entirely by setting AISOC_LLM_API_BASE in `.env` —
+# another machine on the LAN, or an existing vLLM. This overlay only supplies
+# the default.
+
+services:
+  ollama:
+    profiles: ["bundled"]
+
+  ollama-pull:
+    profiles: ["bundled"]
+
+  litellm:
+    depends_on: !reset null
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      AISOC_LLM_API_BASE: "${AISOC_LLM_API_BASE:-http://host.docker.internal:11434}"
+
+  # The API reads Ollama directly for the runtime probe behind
+  # `GET /api/v1/llm/runtime` — "is the model on a GPU or a CPU" is answered by
+  # asking Ollama, not by guessing — so it needs the same address and the same
+  # host mapping.
+  api:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      AISOC_OLLAMA_URL: "${AISOC_OLLAMA_URL:-http://host.docker.internal:11434}"

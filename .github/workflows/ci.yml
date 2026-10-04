@@ -514,6 +514,20 @@ jobs:
       # something leaks. The script existed and passed; nothing ran it.
       - name: Verify vendored redactor is in sync
         run: python scripts/sync_vendored_redactor.py --check
+      # The SSRF guard, vendored so the API can test a tenant's LLM credential
+      # without depending on `services/agents` being in its build context.
+      # Drift here is a security failure in a specific direction: the API's own
+      # `destinations.py::_guard_url` refuses every private address, which
+      # would break the `local-*` providers this endpoint exists to serve, so
+      # the copy that permits private *while still blocking link-local* has to
+      # stay the one that is actually used.
+      - name: Verify vendored SSRF guard is in sync
+        run: python scripts/sync_vendored_ssrf_guard.py --check
+      # The GPU preflight's own self-test. The real verdict depends on the
+      # host, so CI can only assert that the refusals fire and say something
+      # actionable -- which is the part that rots, since the advice is prose.
+      - name: GPU preflight — self-test
+        run: python3 scripts/check_gpu_runtime.py --self-test
       # Gap-closure Phase 2.2. The sixth mirror, and the one where drift is a
       # safety failure rather than an inconsistency. These rules decide what a
       # tenant's track record has to show before the agent may act unattended:

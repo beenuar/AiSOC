@@ -155,9 +155,10 @@ credentials to do either.**
 sized for CPU-only inference, so `make up` produces real triage verdicts with real token counts in
 the Investigation Ledger — not a stub. It is not a frontier model: over 50 alerts it gave triage
 usable output 44 times before the reply was constrained to JSON and 50 after
-([method](scripts/measure_triage_reliability.py)), and the rail labels which path answered. Upgrade
-by setting `OPENAI_API_KEY` and the model pins. **No hosted provider has ever been exercised here**
-— there is no funded key, so per-model rows read *not measured* rather than zero.
+([method](scripts/measure_triage_reliability.py)), and the rail labels which path answered. Run it
+faster with `make up-gpu`, `make up-host-llm`, or your own provider from the console
+([all four](apps/docs/docs/operations/where-the-model-runs.md)). **No hosted provider has ever been
+exercised here** — there is no funded key, so per-model rows read *not measured* rather than zero.
 ([ADR-0006](docs/decisions/0006-llm-gateway-in-core.md))
 
 **One real external feed ships too.** `services/threatintel` polls the CISA Known Exploited

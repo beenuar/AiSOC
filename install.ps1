@@ -1055,6 +1055,43 @@ function Invoke-SmokeTest {
 
 # ─── Final banner ─────────────────────────────────────────────────────────
 
+function Write-ModelPlacement {
+    # Where the model runs, reported once at the end.
+    #
+    # Printed, never prompted: this installer asks the user nothing and should
+    # keep it that way (tests/test_installer_parity_gate.py holds it in step
+    # with the Makefile). Switching Ollama onto a GPU means restarting that
+    # container with different compose arguments, so the only honest thing an
+    # installer can do is say which option fits the host it just ran on.
+    $advice = $null
+
+    if (Get-Command nvidia-smi -ErrorAction SilentlyContinue) {
+        # Windows reaches an NVIDIA GPU through WSL2, which Docker Desktop
+        # already requires, so the toolkit question is the daemon's not the
+        # host's. check_gpu_runtime.py answers it properly.
+        $advice = @(
+            'This host has an NVIDIA GPU. To run the bundled model on it:'
+            '    docker compose -f docker-compose.yml -f infra\compose\docker-compose.gpu.yml up -d'
+            '  Check it will work first:'
+            '    python scripts\check_gpu_runtime.py'
+        )
+    }
+    elseif (Get-Command ollama -ErrorAction SilentlyContinue) {
+        $advice = @(
+            'You already run Ollama natively. To use it instead of the bundled one:'
+            '    docker compose -f docker-compose.yml -f infra\compose\docker-compose.host-llm.yml up -d'
+        )
+    }
+
+    if (-not $advice) { return }
+
+    Write-Host ''
+    Write-Host 'Where the model runs:' -ForegroundColor White
+    foreach ($line in $advice) { Write-Host "  $line" }
+    Write-Host '  Or use a hosted provider: console -> Settings -> Deployment & AI.' -ForegroundColor DarkGray
+    Write-Host ''
+}
+
 function Write-SuccessBanner {
     if ($NoLaunch) {
         Write-Host ''
@@ -1203,6 +1240,7 @@ function Invoke-Main {
     New-AdminAccount
     Invoke-SmokeTest
     Write-SuccessBanner
+    Write-ModelPlacement
 }
 
 Invoke-Main

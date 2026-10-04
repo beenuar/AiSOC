@@ -5752,6 +5752,38 @@ export interface LlmCredentialView {
   last_rotated_at: string | null;
 }
 
+/**
+ * Where the local model is actually running, as Ollama reports it.
+ *
+ * Distinct from `LlmStatus`, which describes *configuration*. A GPU
+ * reservation is a request: a model can still land on the CPU for want of
+ * VRAM or a usable driver, so this is the outcome rather than the intent.
+ */
+export interface LlmRuntime {
+  placement: 'gpu' | 'partial' | 'cpu' | 'unknown' | 'unreachable' | 'not_local';
+  detail: string;
+  base_url: string;
+  /** What an operator can do about the answer. Never empty for a CPU verdict. */
+  options: string[];
+  /** Absent, not zero, when nothing is loaded — "not measured" is not "zero". */
+  model?: string;
+  vram_bytes?: number;
+  total_bytes?: number;
+}
+
+export const llmApi = {
+  /** Ask the model where it is running. Reports, never changes. */
+  runtime: () => request<LlmRuntime>('/api/v1/llm/runtime'),
+};
+
+export interface LlmCredentialTestResult {
+  outcome: 'ok' | 'refused' | 'unreachable' | 'unverified';
+  detail: string;
+  provider: string;
+  model?: string;
+  latency_ms?: number;
+}
+
 export const deploymentApi = {
   /** Live air-gap policy snapshot for this pod. Safe to poll. */
   getAirgapStatus: () => request<AirgapStatus>('/api/v1/airgap/status'),
@@ -5776,6 +5808,19 @@ export const deploymentApi = {
   /** Hard-delete the credential. Returns 204 on success. */
   deleteLlmCredential: () =>
     request<void>('/api/v1/llm/credentials', { method: 'DELETE' }),
+
+  /**
+   * Make one real call with the saved credential and report what happened.
+   *
+   * The routes above validate shape and never talk to the provider, so a
+   * revoked key used to surface as triage quietly falling back. `unverified`
+   * is a success-adjacent outcome: an air-gapped deployment refuses the
+   * egress rather than attempting it, which is the policy working.
+   */
+  testLlmCredential: () =>
+    request<LlmCredentialTestResult>('/api/v1/llm/credentials/test', {
+      method: 'POST',
+    }),
 };
 
 // ─── Reports / Executive digest (WS-G2) ─────────────────────────────────────

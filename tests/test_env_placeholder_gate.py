@@ -68,6 +68,10 @@ DELIBERATE_DEFAULTS: dict[str, str] = {
     "AISOC_AGENTS_URL": "the compose hostname the console proxies agent calls to",
     "AISOC_REALTIME_URL": "the compose hostname the console proxies WS/SSE to",
     "AISOC_DEMO_MODE": "a boolean; false is the correct value for every deployment that is not the public demo",
+    "AISOC_GPU_COUNT": (
+        "a device count, not a secret. 1 is the right value for every host with one "
+        "GPU, and it is only read by `make up-gpu` — the default `make up` ignores it"
+    ),
     "RETRO_HUNT_ENABLED": (
         "a boolean, and off is the correct value for every deployment: a sweep reads back "
         "over a tenant's history, which is a cost and a privacy decision, so it waits for "
