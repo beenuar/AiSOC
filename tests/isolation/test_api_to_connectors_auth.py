@@ -26,6 +26,14 @@ They mock the connectors service with a transport that answers whatever it is
 asked. A fake that never authenticates cannot notice a caller that never
 authenticates.
 
+Why this lives here and not in `services/api/tests/`
+-----------------------------------------------------
+It needs **both** services installed: the API's `_query_one_backend` on one
+side and the connectors application on the other. `ci.yml`'s API job installs
+only the API's lockfile, so the first home for this file errored there with
+`ModuleNotFoundError: apscheduler`. `tests/isolation/` is where a test that
+spans two services belongs, and `agent-auth-live.yml` installs both.
+
 Why this runs the far side in a subprocess
 ------------------------------------------
 Both services name their top-level package `app`. Importing the connectors
@@ -69,7 +77,7 @@ pytestmark = pytest.mark.anyio
 SERVICE_TOKEN = "fixpass-connectors-token-not-a-real-secret"
 TENANT = str(uuid.uuid4())
 
-_REPO = Path(__file__).resolve().parents[3]
+_REPO = Path(__file__).resolve().parents[2]
 _CONNECTORS = _REPO / "services" / "connectors"
 
 

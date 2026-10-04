@@ -18,6 +18,11 @@ on:
       - "services/agents/app/hunt/**"
       - "tests/isolation/test_agent_service_auth_live.py"
       - "tests/isolation/test_closure_grant_live.py"
+      - "tests/isolation/test_api_to_connectors_auth.py"
+      - "services/api/app/api/v1/endpoints/federated.py"
+      - "services/api/app/services/case_fanout.py"
+      - "services/api/app/core/connectors_auth.py"
+      - "services/connectors/app/api/router.py"
       - ".github/workflows/agent-auth-live.yml"
   push:
     branches: [main]
@@ -90,6 +95,20 @@ jobs:
         env:
           ISOLATION_AGENT_AUTH_DSN: ${{ env.LIVE_DSN }}
         run: python -m pytest ../../tests/isolation/test_agent_service_auth_live.py -v --tb=short -rs
+
+      - name: Install connectors from its lockfile
+        working-directory: services/connectors
+        run: |
+          set -euo pipefail
+          poetry install --no-root --no-interaction
+
+      # Needs both services installed: the API's `_query_one_backend` on one
+      # side, and the real connectors application started on a loopback socket
+      # on the other. `ci.yml`'s API job installs only the API's lockfile, so
+      # this cannot live in `services/api/tests/`.
+      - name: Every API-to-connectors call carries a credential and a tenant
+        working-directory: services/api
+        run: python -m pytest ../../tests/isolation/test_api_to_connectors_auth.py -v --tb=short -rs
 
       - name: Install agents from its lockfile
         working-directory: services/agents
