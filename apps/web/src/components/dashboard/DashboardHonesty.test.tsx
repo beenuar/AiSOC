@@ -41,6 +41,12 @@ vi.mock('swr', () => ({
 
 vi.mock('@/lib/api', () => ({
   __esModule: true,
+  // TimeWindowProvider reconciles with the server preference on mount;
+  // these suites mock the api module wholesale, so stub what it reads.
+  authApi: {
+    currentUser: vi.fn(() => null),
+    updateUserPreferences: vi.fn(async () => ({})),
+  },
   metricsApi: {
     getDashboard: vi.fn(),
     getSOC: vi.fn(),
@@ -80,6 +86,7 @@ vi.mock('@/lib/realtime', () => ({
 }));
 
 import { DashboardView } from './DashboardView';
+import { TimeWindowProvider } from '@/components/layout/TimeWindowProvider';
 import { SOCMetricsDashboard } from './SOCMetricsDashboard';
 
 /**
@@ -120,9 +127,13 @@ afterEach(() => {
 
 describe('DashboardView — no fabricated data outside demo mode', () => {
   it('renders an error state, not a mock connector inventory, when the metrics API fails', () => {
-    swrErrors.set('dashboard-metrics', new Error('503 Service Unavailable'));
+    swrErrors.set(`dashboard-metrics:24h`, new Error('503 Service Unavailable'));
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expectNoFabrication(FABRICATED_SOURCE_NAMES);
     // The failure itself is surfaced rather than swallowed.
@@ -130,9 +141,13 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
   });
 
   it('does not invent a 1247-alert baseline when the API fails', () => {
-    swrErrors.set('dashboard-metrics', new Error('network down'));
+    swrErrors.set(`dashboard-metrics:24h`, new Error('network down'));
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.queryByText('1247')).toBeNull();
     expect(screen.queryByText('42m')).toBeNull();
@@ -142,7 +157,7 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
     // A real, reachable API on a tenant that has alerts but no connectors,
     // no technique hits and no trend history yet. Previously each of these
     // empty arrays was swapped for the corresponding mock.
-    swrData.set('dashboard-metrics', {
+    swrData.set(`dashboard-metrics:24h`, {
       alerts: { total: 4, new: 1, critical: 0, high: 2, medium: 1, low: 1, resolvedToday: 0, mttr: 11 },
       cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
       sources: [],
@@ -151,7 +166,11 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     // Real numbers still render.
     expect(screen.getByText('4')).toBeTruthy();
@@ -162,7 +181,7 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
   });
 
   it('publishes no trend delta it cannot source from the API', () => {
-    swrData.set('dashboard-metrics', {
+    swrData.set(`dashboard-metrics:24h`, {
       alerts: { total: 4, new: 1, critical: 0, high: 2, medium: 1, low: 1, resolvedToday: 0, mttr: 11 },
       cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
       sources: [],
@@ -171,7 +190,11 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     // `/metrics/dashboard` returns no period-over-period comparison, so the
     // "+12% vs yesterday" / "-3% vs yesterday" / "-8% vs last week" literals
@@ -349,7 +372,7 @@ describe('a mean over no samples is unmeasured, not zero', () => {
   it('does not label an hours figure as minutes on the operations strip', () => {
     // `alerts.mttr` is hours and the tile rendered it with an `m` suffix, so
     // a 1.5-hour MTTR would have read "1.5m" had it ever been non-zero.
-    swrData.set('dashboard-metrics', {
+    swrData.set(`dashboard-metrics:24h`, {
       alerts: { total: 1, new: 1, critical: 0, high: 0, medium: 1, low: 0, resolvedToday: 0, mttr: 1.5, mttr_sample_count: 2 },
       cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
       sources: [],
@@ -358,14 +381,18 @@ describe('a mean over no samples is unmeasured, not zero', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText('1.5h')).toBeTruthy();
     expect(screen.queryByText('1.5m')).toBeNull();
   });
 
   it('reports the operations strip MTTR as unmeasured when no case has closed', () => {
-    swrData.set('dashboard-metrics', {
+    swrData.set(`dashboard-metrics:24h`, {
       alerts: { total: 1, new: 1, critical: 0, high: 0, medium: 1, low: 0, resolvedToday: 0, mttr: 0, mttr_sample_count: 0 },
       cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
       sources: [],
@@ -374,7 +401,11 @@ describe('a mean over no samples is unmeasured, not zero', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText(/not measured · no cases closed/i)).toBeTruthy();
     expect(screen.queryByText('0m')).toBeNull();
@@ -389,7 +420,7 @@ describe('demo mode still populates the dashboards', () => {
     __setDemoModeForTests(true);
     // In demo mode `demoFallback` supplies the mock as SWR fallbackData, which
     // the mocked SWR above models by seeding the same cache key.
-    swrData.set('dashboard-metrics', {
+    swrData.set(`dashboard-metrics:24h`, {
       alerts: { total: 1247, new: 89, critical: 12, high: 43, medium: 156, low: 289, resolvedToday: 67, mttr: 42 },
       cases: { open: 23, inProgress: 15, resolvedThisWeek: 34 },
       sources: [{ name: 'CrowdStrike EDR', count: 412, status: 'active' }],
@@ -398,7 +429,11 @@ describe('demo mode still populates the dashboards', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText('CrowdStrike EDR')).toBeTruthy();
   });

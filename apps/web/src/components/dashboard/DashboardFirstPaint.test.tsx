@@ -40,6 +40,12 @@ vi.mock('swr', () => ({
 
 vi.mock('@/lib/api', () => ({
   __esModule: true,
+  // TimeWindowProvider reconciles with the server preference on mount;
+  // these suites mock the api module wholesale, so stub what it reads.
+  authApi: {
+    currentUser: vi.fn(() => null),
+    updateUserPreferences: vi.fn(async () => ({})),
+  },
   metricsApi: {
     getDashboard: vi.fn(),
     getSOC: vi.fn(),
@@ -74,6 +80,7 @@ vi.mock('@/lib/realtime', () => ({
 }));
 
 import { DashboardView } from './DashboardView';
+import { TimeWindowProvider } from '@/components/layout/TimeWindowProvider';
 
 /** Every panel claim that is a statement about measured data. */
 const MEASURED_CLAIMS = [
@@ -97,9 +104,13 @@ afterEach(() => {
 
 describe('the dashboard does not report a result it has not got', () => {
   it('claims nothing on first paint, while the request is still in flight', () => {
-    swrLoading.add('dashboard-metrics');
+    swrLoading.add(`dashboard-metrics:24h`);
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     for (const claim of MEASURED_CLAIMS) {
       expect(screen.queryByText(claim), `"${claim}" is a measured claim and the request has not landed`).toBeNull();
@@ -110,9 +121,13 @@ describe('the dashboard does not report a result it has not got', () => {
   it('claims nothing when the response carried no alert totals', () => {
     // Not in flight, no error, and a payload the view cannot read. Equally
     // unmeasured, and the branch a plain `isLoading` check would miss.
-    swrData.set('dashboard-metrics', { cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 } });
+    swrData.set(`dashboard-metrics:24h`, { cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 } });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     for (const claim of MEASURED_CLAIMS) {
       expect(screen.queryByText(claim)).toBeNull();
@@ -121,9 +136,13 @@ describe('the dashboard does not report a result it has not got', () => {
   });
 
   it('still shows the failure when the request failed', () => {
-    swrErrors.set('dashboard-metrics', new Error('503 Service Unavailable'));
+    swrErrors.set(`dashboard-metrics:24h`, new Error('503 Service Unavailable'));
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getAllByText(/503 Service Unavailable/i).length).toBeGreaterThan(0);
     expect(screen.queryByText(/No alerts in the last 24 hours/i)).toBeNull();
@@ -132,7 +151,7 @@ describe('the dashboard does not report a result it has not got', () => {
   it('still reports a genuinely empty window as empty', () => {
     // The other direction. "Not loaded yet" everywhere forever would pass
     // every assertion above and tell an operator nothing.
-    swrData.set('dashboard-metrics', {
+    swrData.set(`dashboard-metrics:24h`, {
       alerts: { total: 0, new: 0, critical: 0, high: 0, medium: 0, low: 0, info: 0, mttr: 0, mttr_sample_count: 0 },
       cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
       sources: [],
@@ -141,7 +160,11 @@ describe('the dashboard does not report a result it has not got', () => {
       threatsBySource: [],
     });
 
-    render(<DashboardView />);
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
 
     expect(screen.getByText(/No alerts in the last 24 hours/i)).toBeInTheDocument();
     expect(screen.queryByText(/Not loaded yet/i)).toBeNull();

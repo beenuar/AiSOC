@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
@@ -199,11 +201,12 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
         {/* Theme toggle (WS-F1) */}
         <ThemeToggle />
 
-        {/* Notifications */}
-        <button
-          type="button"
+        {/* Notifications — the alert inbox is the notification surface;
+            the bell deep-links there instead of opening a dead dropdown. */}
+        <Link
+          href="/alerts"
           aria-label="Open notifications"
-          className="relative p-1.5 text-fg-muted hover:text-fg-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50"
+          className="relative p-1.5 text-fg-muted hover:text-fg-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 rounded"
         >
           <svg
             className="w-5 h-5"
@@ -218,7 +221,7 @@ export function TopBar({ demoOffset = false }: TopBarProps) {
             aria-hidden
             className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full ring-2 ring-surface-raised"
           />
-        </button>
+        </Link>
 
         {/* User avatar */}
         <div className="flex items-center gap-2 cursor-pointer group">

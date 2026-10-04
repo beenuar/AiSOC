@@ -28,6 +28,8 @@ import { FunnelKpiBar } from './FunnelKpiBar';
 import { EfficiencyReport } from './EfficiencyReport';
 import { PipelineHealth } from './PipelineHealth';
 import { demoFallback } from '@/lib/demoFallback';
+import { useTimeWindow } from '@/components/layout/TimeWindowProvider';
+import { TIME_WINDOW_LONG_LABEL, TIME_WINDOW_SHORT_LABEL } from '@/lib/timeWindow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 
@@ -455,14 +457,18 @@ function useDashboardLayout() {
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
+  const { window: period } = useTimeWindow();
   const {
     data: rawMetrics,
     error: metricsError,
     isLoading: metricsLoading,
     mutate: mutateMetrics,
   } = useSWR(
-    'dashboard-metrics',
-    () => metricsApi.getDashboard(),
+    // v1.5 W4: the global time window drives every volume panel on this
+    // page. The key includes the period so a selector change re-fetches
+    // instead of silently re-serving the cached 24h payload.
+    `dashboard-metrics:${period}`,
+    () => metricsApi.getDashboard(period),
     {
       fallbackData: demoFallback(MOCK_METRICS),
       refreshInterval: 60000,
@@ -523,8 +529,13 @@ export function DashboardView() {
   const topMitre = metrics?.topMitre ?? [];
   const activeSourceCount = sources.filter((s) => s.status === 'active').length;
 
+  const periodLabel = TIME_WINDOW_SHORT_LABEL[metrics?.period ?? period];
+  const trendTimeFmt =
+    (metrics?.period ?? period) === '7d' || (metrics?.period ?? period) === '30d'
+      ? 'MMM d'
+      : 'HH:mm';
   const trendData = (metrics?.alertsTrend ?? []).map((d) => ({
-    time: format(new Date(d.timestamp), 'HH:mm'),
+    time: format(new Date(d.timestamp), trendTimeFmt),
     count: d.count,
   }));
 
@@ -547,13 +558,13 @@ export function DashboardView() {
 
     // PR-3 / W1: Six-tile funnel KPI strip (events → correlations → alerts +
     // signal/noise, MTTD, analyst queue) backed by /api/v1/metrics/funnel.
-    'funnel-kpis': <FunnelKpiBar period="24h" />,
+    'funnel-kpis': <FunnelKpiBar period={period} />,
 
     // PR-3 / W1+W9: Efficiency ratios (correlation efficiency, alert yield,
     // MITRE coverage) alongside per-stage pipeline health.
     'efficiency-and-pipeline': (
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <EfficiencyReport period="24h" />
+        <EfficiencyReport period={period} />
         <PipelineHealth />
       </div>
     ),
@@ -580,7 +591,7 @@ export function DashboardView() {
             <MetricCard
               label="Active Alerts"
               value={metrics.alerts.active ?? metrics.alerts.total}
-              sub={`${metrics.alerts.total} total in period`}
+              sub={`${metrics.alerts.total} in last ${periodLabel}`}
               color="blue"
             />
             <MetricCard
@@ -637,8 +648,8 @@ export function DashboardView() {
       <div className="grid grid-cols-3 gap-4">
         <div className="col-span-2 bg-gray-900/60 border border-gray-800/60 rounded-xl p-5">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-300">Alert Volume (24h)</h3>
-            <span className="text-xs text-gray-500">Last 24 hours</span>
+            <h3 className="text-sm font-medium text-gray-300">Alert Volume ({periodLabel})</h3>
+            <span className="text-xs text-gray-500">Last {periodLabel}</span>
           </div>
           {trendData.length > 0 ? (
             <RechartsArea data={trendData} />
@@ -647,8 +658,10 @@ export function DashboardView() {
               error={metricsError}
               pending={metricsPending}
               onRetry={retryMetrics}
-              emptyTitle="No alerts in the last 24 hours"
-              emptyDescription="The volume curve plots hourly alert counts once alerts start arriving."
+              emptyTitle={`No alerts in the last ${TIME_WINDOW_LONG_LABEL[
+                metrics?.period ?? period
+              ].replace(/^Last /, '')}`}
+              emptyDescription="The volume curve plots alert counts once alerts start arriving."
             />
           )}
         </div>

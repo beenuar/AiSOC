@@ -2184,6 +2184,7 @@ export const ledgerApi = {
 // ─── Metrics / Dashboard ─────────────────────────────────────────────────────
 
 export interface DashboardMetrics {
+  period?: '1h' | '24h' | '7d' | '30d';
   alerts: {
     total: number;
     new: number;
@@ -2370,8 +2371,10 @@ export interface CostAggregate {
 }
 
 export const metricsApi = {
-  getDashboard: () =>
-    request<DashboardMetrics>('/api/v1/metrics/dashboard'),
+  getDashboard: (period: '1h' | '24h' | '7d' | '30d' = '24h') =>
+    request<DashboardMetrics>('/api/v1/metrics/dashboard', {
+      params: { period },
+    }),
 
   getAlertTrend: (period: '1h' | '24h' | '7d' | '30d') =>
     request<{ data: Array<{ timestamp: string; count: number }> }>(

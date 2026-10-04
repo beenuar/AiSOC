@@ -22,6 +22,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import clsx from 'clsx';
 import { useRealtimeChannel, type RealtimeStatus } from '@/lib/realtime';
 import { canUseDemoData } from '@/lib/demoFallback';
@@ -312,7 +313,17 @@ export function LiveFeedPanel() {
               {event.severity.toUpperCase().slice(0, 4)}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-xs text-gray-300 leading-tight truncate">{event.text}</p>
+              {event.isDemo ? (
+                <p className="text-xs text-gray-300 leading-tight truncate">{event.text}</p>
+              ) : (
+                <Link
+                  href={`/alerts/${event.id}`}
+                  className="text-xs text-gray-300 leading-tight truncate hover:text-brand-400 hover:underline block focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-500/50 rounded"
+                  title={`Open alert ${event.id}`}
+                >
+                  {event.text}
+                </Link>
+              )}
               <p className="text-[11px] text-gray-600 mt-0.5">
                 {event.source} · {relativeTime(event.receivedAt, now)}
               </p>
