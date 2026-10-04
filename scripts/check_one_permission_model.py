@@ -121,14 +121,33 @@ def inspect(root: pathlib.Path) -> Report:
         report.findings.append("the require_permission factory is gone")
 
     # 2. authentication resolves one
+    #
+    # Followed through one hop of delegation, because the property is "the
+    # authenticated principal carries a resolved set" and not "this particular
+    # function contains this particular call". `get_current_user` used to
+    # inline the whole JWT path; it now hands off to `resolve_jwt_principal`,
+    # which the WebSocket upgrade also uses -- and the reason it does is that
+    # the WebSocket had its *own* copy which resolved no permissions at all
+    # (GHSA-25fh-rxp8-67j8). A gate keyed on the function name would have
+    # reported that refactor as a regression while the thing it guards got
+    # stronger, which is the shape that gets a gate deleted.
     auth = _function(deps, "get_current_user")
     if auth is None:
         report.findings.append("get_current_user is gone")
-    elif "resolve_permissions" not in _calls(auth):
-        report.findings.append(
-            "get_current_user does not call `resolve_permissions`, so no principal ever carries "
-            "a database-backed set and the static map is the only model again"
-        )
+    else:
+        resolvers = [auth]
+        for name in sorted(_calls(auth)):
+            if name == "get_current_user":
+                continue
+            delegate = _function(deps, name)
+            if delegate is not None:
+                resolvers.append(delegate)
+        if not any("resolve_permissions" in _calls(fn) for fn in resolvers):
+            report.findings.append(
+                "no function on the authentication path calls `resolve_permissions`, so no "
+                "principal ever carries a database-backed set and the static map is the only "
+                "model again"
+            )
 
     # 3. every RBAC write invalidates
     rbac = _tree(root, RBAC_ROUTES)
