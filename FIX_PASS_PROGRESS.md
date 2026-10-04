@@ -87,17 +87,17 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 ## Wave 3: Replay, shadow mode and evaluation measure the real thing
 
 - [ ] **3.1** Frozen context, not empty context
-- [ ] **3.2** No side effects from a replay
+- [x] **3.2** No side effects from a replay
 - [ ] **3.3** Input shapes: per-source adapters for Elastic and Defender
-- [ ] **3.4** Model attribution: `model_used` is set from the call that answered
+- [x] **3.4** Model attribution: `model_used` is set from the call that answered
 - [ ] **3.5** Non-degenerate acceptance for the reproducibility test
-- [ ] **3.6** Tool calls recorded from the ledger, not hard-coded to 0
+- [x] **3.6** Tool calls recorded from the ledger, not hard-coded to 0
 - [ ] **3.7** Demotion without a page load
 - [ ] **3.8** Skills: activation evidence, LLM-path-only disclosure, console retraction
-- [ ] **3.9** The weekly live evaluation can actually run
-- [ ] **3.10** The 9.3% flip rate is qualified or removed
-- [ ] **3.11** CI runs the live tests
-- [ ] **3.12** Pivot counting excludes failed calls
+- [~] **3.9** The weekly live evaluation installs from the lockfile and fails loudly; it still cannot *run* without a funded key (M2)
+- [x] **3.10** The 9.3% flip rate is qualified or removed
+- [x] **3.11** CI runs the live tests
+- [x] **3.12** Pivot counting excludes failed calls
 
 ## Wave 4: Enterprise identity, white-label and metering
 
@@ -522,3 +522,56 @@ left implied.
 * Removing the row took the matrix 291 -> 290, which `readme_gates` caught in
   three more documents quoting the old figure. That is the copied-count failure
   working as designed.
+
+## Wave 3 (partial): what is done and what is not
+
+**Done, each with a reproduction and a negative control:** 3.2, 3.4, 3.6,
+3.10, 3.11, 3.12, and the actionable half of 3.9.
+
+**Not started:** 3.1 (frozen context), 3.3 (per-source input adapters),
+3.5 (non-degenerate acceptance), 3.7 (demotion without a page load),
+3.8 (skills activation evidence and the console retraction).
+
+### 3.2 A replay has no side effects
+
+Two of the four the plan names were **already closed** and are recorded as
+such rather than re-fixed: `ShadowTriageWriter.persists_cost` is `False`, and
+every write method returns the nothing-happened value its live counterpart
+returns on a no-op.
+
+The other two did not reach the worker through the writer, so nothing declined
+them. `alert_trigger.run_for_alert` was unconditional, so **a replay of last
+month's alerts would have fired this month's playbooks**. And the cost
+governor's `DEDUPLICATED` branch answered from a live cache, so a replayed
+verdict could be one production already produced, which measures the cache.
+
+Adding the two members to the writer protocol immediately named the three
+classes that implement it, because `ShadowModeTriageWriter` stopped satisfying
+`isinstance`. Shadow mode answers differently from replay on purpose: it
+withholds playbooks and keeps deduplication, and both reasons are written down.
+
+### 3.4, 3.6, 3.12
+
+See the commit; each is a figure that was structurally unable to be right.
+`InvestigationState` had no `model_used`, so the shadow writer's `getattr`
+default was the only branch that ever ran. `tool_calls` was a literal under a
+comment promising it would move. `_classify_pivots` counted a raised call as a
+pivot, so four timeouts looked like four pivots.
+
+### 3.9 is half done, and the half that is left is M2
+
+Installing from the lockfile and failing loudly on an import error are done.
+The job still cannot produce a number, because it is gated on a funded key
+that does not exist. **The claim row "The weekly job cannot go green having
+measured nothing" is therefore still not true**, and is left for wave 7 to
+downgrade rather than quietly marked done here.
+
+### A correction to the plan's reading of 3.6
+
+The plan calls the literal `0` a hardcoded placeholder. It is not: zero is the
+correct answer today, because shadow mode declines escalation and escalation is
+the only stage that calls tools. The defect is narrower and worse -- the
+comment above it says the figure is "recorded so a future change that gives
+triage a tool shows up here as a number moving off zero", and a literal can
+never move. The fix derives the same zero from the ledger so it can change
+when the run does.
