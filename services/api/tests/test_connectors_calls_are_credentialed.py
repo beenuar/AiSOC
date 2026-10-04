@@ -195,7 +195,11 @@ class TestTheProductionCallPath:
         monkeypatch.setattr(federated_mod, "decrypt_dict", lambda value: dict(value or {}), raising=False)
 
         verdict, _rows = await federated_mod._query_one_backend(
-            connector,
+            # A stand-in for the ORM row, carrying only the five attributes
+            # this function reads. Constructing a real `Connector` would need
+            # a session and a tenant, neither of which this test is about: the
+            # question is which headers leave the process.
+            connector,  # type: ignore[arg-type]
             {"query": {}},
             httpx.Timeout(10.0, connect=5.0),
         )

@@ -34,6 +34,14 @@ gets the one that answers the question the capability asks.
 
 from __future__ import annotations
 
+from typing import TypeVar
+
+#: Generic over the mapping's value so a caller keeps its own row type. A
+#: bare ``object`` here made every attribute read on the result an error at
+#: the call site, which is the type system correctly objecting to a helper
+#: that threw away what it was given.
+_T = TypeVar("_T")
+
 #: ``executor vendor id -> catalog connector types, most preferred first``.
 #:
 #: An entry is only needed where the two names differ. The four that already
@@ -56,7 +64,7 @@ def connector_types_for(vendor_id: str) -> tuple[str, ...]:
     return VENDOR_CONNECTOR_TYPES.get(vendor_id, (vendor_id,))
 
 
-def resolve(vendor_id: str, by_type: dict[str, object]) -> object | None:
+def resolve(vendor_id: str, by_type: dict[str, _T]) -> _T | None:
     """The tenant's connector for this executor, or ``None``.
 
     One helper rather than the same two lines at each of the three call sites
