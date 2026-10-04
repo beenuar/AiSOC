@@ -134,3 +134,85 @@ jobs:
       - name: Logs, on failure
         if: failure()
         run: docker compose logs --tail 200
+
+  # `fusion_restart.py` is the grader behind the claim "a fusion replica can be
+  # destroyed mid-stream and every accepted event still becomes exactly one
+  # alert row". Until this job existed the workflow ran only its `--self-test`,
+  # which exercises the grading arithmetic against fixtures and proves nothing
+  # about fusion -- the live run had happened once, by hand, which is a
+  # measurement with no expiry and no witness.
+  #
+  # Scheduled rather than per-PR for the same reason the store outages are:
+  # it boots the spine, pushes thousands of events and kills a container
+  # mid-stream, which is minutes, not seconds.
+  #
+  # `integration.yml`'s kill test is not a substitute: it posts a single event
+  # while fusion is down and checks only for loss. One event cannot show a
+  # duplicate, and duplicates are the half that an at-least-once consumer gets
+  # wrong.
+  fusion-restart:
+    name: Kill fusion mid-stream (live)
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Build the producer
+        run: go build -o /tmp/demo-producer .
+        working-directory: services/demo-producer
+
+      - name: Bring up the spine
+        run: |
+          set -euo pipefail
+          python3 scripts/ensure_env.py
+          docker compose up -d postgres redis zookeeper kafka ingest-worker fusion api
+          for _ in $(seq 1 60); do
+            if docker compose ps --format '{{.Name}} {{.Health}}' | grep -q 'aisoc-api healthy'; then break; fi
+            sleep 10
+          done
+          docker compose ps
+
+      - name: Mint an ingest credential
+        id: token
+        run: |
+          set -euo pipefail
+          token="$(docker compose run --rm -T api python -m app.scripts.mint_ingest_token --quiet | tail -1 | tr -d '\r')"
+          test -n "$token"
+          echo "::add-mask::$token"
+          echo "token=$token" >> "$GITHUB_OUTPUT"
+
+      - name: Destroy fusion mid-stream and grade loss *and* duplicates
+        env:
+          AISOC_INGEST_TOKEN: ${{ steps.token.outputs.token }}
+          AISOC_PRODUCER_BIN: /tmp/demo-producer
+        run: |
+          set -euo pipefail
+          python3 scripts/chaos/fusion_restart.py \
+            --target compose \
+            --events 3000 --target-eps 60 --workers 4 --batch 25 \
+            --kill-at 0.5 \
+            --drain-timeout 420 \
+            --out /tmp/fusion-restart.json
+
+      - name: Publish the verdict
+        if: always()
+        run: |
+          {
+            echo "## Fusion destroyed mid-stream"
+            echo ""
+            echo '```json'
+            cat /tmp/fusion-restart.json 2>/dev/null || echo '{"note": "the grader produced no report"}'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Logs, on failure
+        if: failure()
+        run: docker compose logs --tail 200 fusion ingest-worker kafka || true
+

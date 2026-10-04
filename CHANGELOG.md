@@ -118,6 +118,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of diff across the spec and nothing to do with anyone's change -- so it now
   names the mismatch, prints the `pip install` that fixes it, and shows the
   first differing paths.
+- **The chaos grader behind "a fusion replica can be destroyed mid-stream" had
+  run live once, by hand.** `chaos.yml` ran only its `--self-test`, which
+  exercises the grading arithmetic against fixtures and proves nothing about
+  fusion, and `integration.yml`'s kill test posts a **single** event while
+  fusion is down and checks only for loss -- one event cannot show a duplicate,
+  and duplicates are the half an at-least-once consumer gets wrong. A
+  `fusion-restart` job now runs on the weekly schedule: it boots the spine,
+  pushes 3,000 events, destroys the fusion container at the halfway mark, and
+  asserts against the `alerts` table that every accepted sequence number
+  appears exactly once. The claim row's caveat said this needed a three-node
+  cluster; it does not, because the property under test is the consumer's
+  commit discipline and the sink's idempotency, and one replica killed
+  mid-stream exercises both.
 - **Not one of the 68 shipped hunts could be compiled against the lake.** The
   README publishes the library as **Stable**, "replayed against tenant events".
   Measured against `lake_hunt.py`'s field map the corpus used 114 distinct

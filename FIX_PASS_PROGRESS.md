@@ -122,7 +122,8 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
   - The channel now tracks which major it is on, resolved from the registry, so a minor cannot carry it across a major. Test replays release ladders rather than single releases. Helm chart gains the `stable` channel it was scoped with.
 - [x] **5.6** Upgrade fixture does not insert into the renamed `cases` table
   - Fixture, before-snapshot and archive assertion all resolve the case table at run time. Reproduced against a fully-migrated database first: `relation "cases" does not exist`.
-- [ ] **5.7** Chaos and HA run live in CI
+- [x] **5.7** Chaos and HA run live in CI
+  - A `fusion-restart` job now runs the grader live on the weekly `chaos.yml` schedule -- 3,000 events, fusion destroyed at the halfway mark, graded against the `alerts` table for duplicates as well as loss. The claim row moves off its "not on a CI trigger" caveat: the three-node cluster it cited is not needed, because the property under test is the consumer's commit discipline and the sink's idempotency, and one replica killed mid-stream exercises both.
 - [x] **5.8** Performance honesty
   - Thresholds now derived from the published compose steady-state figures (floor 11 = 7.3x below the published 80.1 alerts/s; ceiling 21,000 ms = 19.2x above the published 1,091 ms p95) instead of a constant 5 / 120,000 sitting 16x and 110x away. `check_perf_results.py` gained `REQUIRED_DEPLOYMENTS` and `MAX_RESULT_AGE_DAYS`. Both uncalled scripts are wired: the harness now records the load shape the claims tool requires, `--from-harness` translates it, and the one remaining gap (the harness does not measure detection coverage) is an explicit `--allow` with the problem still printed, not an absorbed failure.
 
