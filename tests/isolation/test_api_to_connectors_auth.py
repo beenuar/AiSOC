@@ -69,8 +69,6 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
-from app.api.v1.endpoints import federated as federated_mod
-from app.api.v1.endpoints.connectors import _catalog_headers
 
 pytestmark = pytest.mark.anyio
 
@@ -93,7 +91,7 @@ def _free_port() -> int:
 
 
 @pytest.fixture(scope="module")
-def connectors_base_url():
+def connectors_base_url():  # noqa: C901
     """The real connectors service, on a loopback socket, with real auth.
 
     Not a stand-in and not an in-process mount. The question is whether the
@@ -190,6 +188,13 @@ class TestTheProductionCallPath:
     """
 
     async def test_the_federated_backend_query_is_accepted(self, connectors_base_url, monkeypatch: pytest.MonkeyPatch) -> None:
+        # Imported here rather than at module scope: the offline isolation job
+        # collects this directory with no service installed, and a module-level
+        # service import errors collection for the whole directory.
+        federated_mod = pytest.importorskip(
+            "app.api.v1.endpoints.federated",
+            reason="services/api is not installed in this job",
+        )
         monkeypatch.setattr(federated_mod.settings, "CONNECTORS_SERVICE_URL", connectors_base_url, raising=False)
 
         connector = SimpleNamespace(
@@ -220,7 +225,11 @@ class TestTheProductionCallPath:
 
     async def test_the_api_helper_produces_headers_the_connectors_service_accepts(self, connectors_base_url) -> None:
         """The credential itself is good; this pins that separately."""
-        status = await _post(connectors_base_url, _catalog_headers(TENANT))
+        connectors_mod = pytest.importorskip(
+            "app.api.v1.endpoints.connectors",
+            reason="services/api is not installed in this job",
+        )
+        status = await _post(connectors_base_url, connectors_mod._catalog_headers(TENANT))
 
         assert status not in (401, 403), f"the connectors service refused the credential the API sends: HTTP {status}"
 
