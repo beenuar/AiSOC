@@ -68,8 +68,12 @@ def _str_param(name: str, desc: str) -> dict[str, Any]:
     return {"type": "object", "properties": {name: {"type": "string", "description": desc}}, "required": [name]}
 
 
-def default_registry() -> ToolRegistry:
-    """Registry of AiSOC's real analyst tools, wrapped for LLM tool-calling."""
+def default_registry(tenant_id: str = "") -> ToolRegistry:
+    """Registry of AiSOC's real analyst tools, wrapped for LLM tool-calling.
+
+    ``tenant_id`` is the run's own. The sandbox lookup reaches the API, which
+    refuses a service credential that does not name the tenant it acts for.
+    """
     from app.investigator.tools import enrich_ioc, extract_iocs, map_to_mitre
     from app.tools.mitre import lookup_technique
     from app.tools.sandbox import TOOL_DESCRIPTION, TOOL_NAME, TOOL_PARAMETERS, lookup_file_hash
@@ -80,7 +84,7 @@ def default_registry() -> ToolRegistry:
                 name=TOOL_NAME,
                 description=TOOL_DESCRIPTION,
                 parameters=TOOL_PARAMETERS,
-                fn=lookup_file_hash,
+                fn=lambda sha256: lookup_file_hash(sha256, tenant_id=tenant_id),
             ),
             Tool(
                 name="extract_iocs",

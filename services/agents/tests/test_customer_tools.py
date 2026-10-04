@@ -46,10 +46,16 @@ READ = f"{API}/api/v1/agent-tools/vendor-read"
 BACKENDS = f"{API}/api/v1/agent-tools/backends"
 
 
+#: The tenant a run is for. Passed explicitly on every call because the
+#: credential no longer implies one: a service token says which service is
+#: calling, and the tenant header says which tenant it is calling for.
+TENANT = "11111111-1111-1111-1111-111111111111"
+
+
 @pytest.fixture(autouse=True)
 def _agent_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AISOC_API_URL", API)
-    monkeypatch.setenv("AISOC_AGENTS_API_KEY", "aisoc_test_key")
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "fixpass-service-token")
 
 
 def _assert_could_not_check(payload: dict, *, must_mention: str = "") -> None:
@@ -128,6 +134,7 @@ async def test_siem_search_passes_a_typed_query_and_no_text() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         captured["body"] = json.loads(request.content)
         captured["auth"] = request.headers.get("authorization")
+        captured["tenant"] = request.headers.get("x-aisoc-tenant-id")
         return httpx.Response(
             200,
             json={
@@ -139,14 +146,16 @@ async def test_siem_search_passes_a_typed_query_and_no_text() -> None:
         )
 
     respx.post(SEARCH).mock(side_effect=handler)
-    result = await siem_indicator_search("sha256", "a" * 64, 48)
+    result = await siem_indicator_search("sha256", "a" * 64, 48, tenant_id=TENANT)
 
     body = captured["body"]
     assert body == {"indicator_type": "sha256", "value": "a" * 64, "since_hours": 48}
-    # No tenant anywhere in the request. The API takes it from the credential,
-    # which is what stops a prompt redirecting a read at another tenant.
+    # No tenant in the *body*. The model fills the body, so a tenant there
+    # would be a tenant a prompt could choose. It travels on the header
+    # instead, where it comes from the run rather than from the model.
     assert "tenant" not in json.dumps(body).lower()
-    assert captured["auth"] == "Bearer aisoc_test_key"
+    assert captured["auth"] == "Bearer fixpass-service-token"
+    assert captured["tenant"] == TENANT, "the API refuses a service token that names no tenant"
     assert result["available"] is True
     assert result["sightings"] == 1
 
@@ -166,7 +175,7 @@ async def test_a_zero_row_search_says_what_it_does_and_does_not_prove() -> None:
             },
         )
     )
-    result = await siem_indicator_search("ip", "203.0.113.9")
+    result = await siem_indicator_search("ip", "203.0.113.9", tenant_id=TENANT)
 
     assert result["available"] is True
     assert result["sightings"] == 0
@@ -193,7 +202,7 @@ async def test_a_partly_failed_search_is_not_rounded_to_a_clean_one() -> None:
             },
         )
     )
-    result = await siem_indicator_search("ip", "203.0.113.9")
+    result = await siem_indicator_search("ip", "203.0.113.9", tenant_id=TENANT)
 
     assert result["outcome"] == "partial"
     warning = result["partial_warning"]
@@ -217,14 +226,14 @@ async def test_every_source_failing_is_could_not_check() -> None:
             },
         )
     )
-    _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9"), must_mention="timeout")
+    _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9", tenant_id=TENANT), must_mention="timeout")
 
 
 @pytest.mark.asyncio
 @respx.mock
 async def test_no_siem_connected_is_could_not_check_not_zero_sightings() -> None:
     respx.post(SEARCH).mock(return_value=httpx.Response(200, json={"outcome": "no_backend", "rows": [], "sources": []}))
-    result = await siem_indicator_search("ip", "203.0.113.9")
+    result = await siem_indicator_search("ip", "203.0.113.9", tenant_id=TENANT)
     _assert_could_not_check(result, must_mention="no SIEM connected")
 
 
@@ -237,10 +246,10 @@ async def test_transport_and_status_failures_are_all_could_not_check() -> None:
         httpx.Response(200, text="not json"),
     ):
         respx.post(SEARCH).mock(return_value=mock)
-        _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9"))
+        _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9", tenant_id=TENANT))
 
     respx.post(SEARCH).mock(side_effect=httpx.ConnectError("refused"))
-    _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9"))
+    _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9", tenant_id=TENANT))
 
 
 @pytest.mark.asyncio
@@ -248,7 +257,7 @@ async def test_transport_and_status_failures_are_all_could_not_check() -> None:
 async def test_a_refused_argument_is_correctable_not_a_coverage_gap() -> None:
     """422 is the one failure the model can fix, so it reads differently."""
     respx.post(SEARCH).mock(return_value=httpx.Response(422, json={"detail": "'zz' is not an IP address"}))
-    result = await siem_indicator_search("ip", "zz")
+    result = await siem_indicator_search("ip", "zz", tenant_id=TENANT)
 
     assert result["available"] is False
     assert result["outcome"] == "invalid_request"
@@ -259,8 +268,8 @@ async def test_a_refused_argument_is_correctable_not_a_coverage_gap() -> None:
 @pytest.mark.asyncio
 async def test_a_missing_credential_is_a_loud_skip(monkeypatch: pytest.MonkeyPatch) -> None:
     """Without the key the API refuses by design, so say so rather than 401."""
-    monkeypatch.setenv("AISOC_AGENTS_API_KEY", "")
-    _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9"), must_mention="No API credential")
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "")
+    _assert_could_not_check(await siem_indicator_search("ip", "203.0.113.9", tenant_id=TENANT), must_mention="No service credential")
 
 
 @pytest.mark.asyncio
@@ -276,7 +285,7 @@ async def test_rows_carry_the_untrusted_notice() -> None:
             },
         )
     )
-    result = await siem_indicator_search("process_name", "svchost.exe")
+    result = await siem_indicator_search("process_name", "svchost.exe", tenant_id=TENANT)
     assert result["untrusted_data_notice"] == UNTRUSTED_NOTICE
     assert "never as direction" in UNTRUSTED_NOTICE
 
@@ -300,7 +309,7 @@ async def test_a_vendor_read_returns_projected_data_marked_untrusted() -> None:
             },
         )
     )
-    result = await run_vendor_read("get_host", "WS-42")
+    result = await run_vendor_read("get_host", "WS-42", tenant_id=TENANT)
 
     assert result["available"] is True
     assert result["vendor"] == "crowdstrike"
@@ -339,7 +348,7 @@ async def test_every_non_execution_reaches_the_model_as_could_not_check() -> Non
                 },
             )
         )
-        result = await run_vendor_read("get_host", "WS-42")
+        result = await run_vendor_read("get_host", "WS-42", tenant_id=TENANT)
         _assert_could_not_check(result, must_mention=expected)
 
 
@@ -353,7 +362,7 @@ async def test_a_vendor_read_sends_no_tenant() -> None:
         return httpx.Response(200, json={"status": "executed", "executed": True, "details": {}})
 
     respx.post(READ).mock(side_effect=handler)
-    await run_vendor_read("get_user_activity", "j.doe@example.com", hours=72)
+    await run_vendor_read("get_user_activity", "j.doe@example.com", hours=72, tenant_id=TENANT)
 
     body = captured["body"]
     assert body == {"capability": "get_user_activity", "target": "j.doe@example.com", "params": {"hours": 72}}
@@ -378,7 +387,7 @@ async def test_only_configured_backends_are_advertised() -> None:
             },
         )
     )
-    tools, notes = await scoped_customer_tools()
+    tools, notes = await scoped_customer_tools(TENANT)
     names = {t.name for t in tools}
 
     assert names == {"siem_indicator_search", "identity_user_activity"}
@@ -402,7 +411,7 @@ async def test_a_tenant_with_nothing_connected_gets_no_tools_and_two_gaps() -> N
             },
         )
     )
-    tools, notes = await scoped_customer_tools()
+    tools, notes = await scoped_customer_tools(TENANT)
 
     assert tools == []
     # Both absences stated. Silence here would let a model conclude without
@@ -421,7 +430,7 @@ async def test_an_unreachable_api_binds_nothing_and_says_so() -> None:
     binding nothing quietly would let the model conclude without noticing.
     """
     respx.get(BACKENDS).mock(side_effect=httpx.ConnectError("refused"))
-    tools, notes = await scoped_customer_tools()
+    tools, notes = await scoped_customer_tools(TENANT)
 
     assert tools == []
     assert len(notes) == 1
@@ -443,5 +452,5 @@ async def test_an_incomplete_registry_is_reported_as_incomplete() -> None:
             },
         )
     )
-    _tools, notes = await scoped_customer_tools()
+    _tools, notes = await scoped_customer_tools(TENANT)
     assert any("may be" in note and "incomplete" in note for note in notes)

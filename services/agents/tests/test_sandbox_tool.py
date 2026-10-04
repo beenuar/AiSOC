@@ -18,9 +18,12 @@ DIGEST = "275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f"
 pytestmark = pytest.mark.asyncio
 
 
+TENANT = "11111111-1111-1111-1111-111111111111"
+
+
 @pytest.fixture(autouse=True)
 def _credential(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("AISOC_AGENTS_API_KEY", "aisoc_test_key")
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "fixpass-service-token")
     monkeypatch.setenv("AISOC_API_URL", "http://api:8000")
 
 
@@ -44,7 +47,7 @@ class TestFailuresNeverReadAsClean:
             raise httpx.ConnectError("refused")
 
         _patch_client(monkeypatch, httpx.MockTransport(boom))
-        result = await lookup_file_hash(DIGEST)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["available"] is False
         assert result["outcome"] == "could_not_check"
         assert "NOT been assessed" in result["reason"]
@@ -52,24 +55,25 @@ class TestFailuresNeverReadAsClean:
 
     async def test_a_server_error_is_could_not_check(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_client(monkeypatch, _api(503))
-        result = await lookup_file_hash(DIGEST)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["outcome"] == "could_not_check"
 
     async def test_air_gap_refusal_is_could_not_check_not_a_miss(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_client(monkeypatch, _api(403))
-        result = await lookup_file_hash(DIGEST)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["outcome"] == "could_not_check"
         assert "air-gapped" in result["reason"].lower()
 
     async def test_a_missing_credential_is_a_loud_skip(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delenv("AISOC_AGENTS_API_KEY", raising=False)
-        result = await lookup_file_hash(DIGEST)
+        monkeypatch.delenv("AISOC_SERVICE_TOKEN", raising=False)
+        monkeypatch.delenv("AISOC_API_SERVICE_TOKEN", raising=False)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["outcome"] == "could_not_check"
         assert "credential" in result["reason"]
 
     async def test_the_providers_own_failure_is_passed_through_as_a_failure(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_client(monkeypatch, _api(200, {"outcome": "could_not_check", "provider": "capev2", "detail": "timed out"}))
-        result = await lookup_file_hash(DIGEST)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["outcome"] == "could_not_check"
         assert "timed out" in result["reason"]
 
@@ -78,7 +82,7 @@ class TestOrdinaryAnswers:
     async def test_a_known_hash_returns_the_report_whole(self, monkeypatch: pytest.MonkeyPatch) -> None:
         report = {"verdict": "malicious", "score": 100, "attack": "unavailable"}
         _patch_client(monkeypatch, _api(200, {"outcome": "known", "provider": "mock", "report": report, "detail": "ok"}))
-        result = await lookup_file_hash(DIGEST)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["available"] is True
         assert result["outcome"] == "known"
         # Unavailable fields survive the trip rather than being stripped, so
@@ -87,14 +91,14 @@ class TestOrdinaryAnswers:
 
     async def test_an_unknown_hash_is_not_presented_as_a_clean_verdict(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_client(monkeypatch, _api(200, {"outcome": "not_seen", "provider": "mock", "detail": "no analysis"}))
-        result = await lookup_file_hash(DIGEST)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["outcome"] == "not_seen"
         assert "not a verdict" in result["reason"]
         assert "targeted malware" in result["reason"]
 
     async def test_a_pending_analysis_is_not_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _patch_client(monkeypatch, _api(200, {"outcome": "pending", "provider": "capev2"}))
-        result = await lookup_file_hash(DIGEST)
+        result = await lookup_file_hash(DIGEST, tenant_id=TENANT)
         assert result["available"] is False
         assert result["outcome"] == "pending"
         assert "not a clean result" in result["reason"]
@@ -104,7 +108,7 @@ class TestOrdinaryAnswers:
             raise AssertionError("the tool must not call out for a malformed digest")
 
         _patch_client(monkeypatch, httpx.MockTransport(unexpected))
-        result = await lookup_file_hash("not-a-hash")
+        result = await lookup_file_hash("not-a-hash", tenant_id=TENANT)
         assert result["outcome"] == "invalid_input"
 
 

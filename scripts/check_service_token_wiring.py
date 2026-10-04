@@ -131,6 +131,208 @@ def _readers(root: Path) -> dict[str, set[str]]:
     return found
 
 
+#: Hostnames that only resolve inside the deployment's own network. A request
+#: to one of these is a service-to-service call, and every route on the far
+#: side authenticates.
+INTERNAL_HOSTS: frozenset[str] = frozenset(
+    {
+        "api",
+        "agents",
+        "connectors",
+        "actions",
+        "fusion",
+        "ingest",
+        "enrichment",
+        "threatintel",
+        "realtime",
+        "ueba",
+        "purple-team",
+        "honeytokens",
+        "mcp",
+        "slack-bot",
+        "ingest-worker",
+    }
+)
+
+#: Helpers whose name says they build a request's headers. A call to one is
+#: resolved one level, into its own body, rather than assumed to be either
+#: credentialed or not.
+_HEADER_HELPER_RE = re.compile(r"(?:^|_)headers?$")
+
+
+#: A settings attribute whose name ends this way holds the address of a peer
+#: inside the deployment. ``settings.CONNECTORS_SERVICE_URL`` is as much a
+#: statement that the target is internal as the literal ``http://connectors:``
+#: is, and reading only literals missed the federated-search proxy entirely.
+_INTERNAL_SETTING_RE = re.compile(r"^[A-Z0-9_]*(SERVICE_URL|_URL)$")
+
+
+def _names_internal_host(node: ast.AST) -> bool:
+    """Whether anything under ``node`` names a host inside the deployment."""
+    for sub in ast.walk(node):
+        if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+            for host in INTERNAL_HOSTS:
+                if f"//{host}:" in sub.value or f"//{host}/" in sub.value:
+                    return True
+        if isinstance(sub, ast.Attribute) and _INTERNAL_SETTING_RE.match(sub.attr):
+            root_name = sub.value
+            if isinstance(root_name, ast.Name) and root_name.id in {"settings", "config", "cfg"}:
+                service = sub.attr.rsplit("_SERVICE_URL", 1)[0].rsplit("_URL", 1)[0].lower().replace("_", "-")
+                if service in INTERNAL_HOSTS:
+                    return True
+    return False
+
+
+def _url_is_internal(node: ast.AST, module: ast.Module) -> bool:
+    """Whether this URL expression names a service inside the deployment.
+
+    Two shapes reach here: a literal or f-string carrying ``//<host>:`` for one
+    of :data:`INTERNAL_HOSTS`, and an f-string built from a helper call like
+    ``_api_url()``, which is how every service here spells "the peer I am
+    configured to reach".
+
+    The helper is **resolved into its body** rather than matched on its name.
+    Naming alone said that the Trellix connector's ``_alerts_url()`` was an
+    internal peer, when it builds a customer's own vendor URL. A gate that
+    reports a vendor call as an uncredentialed internal one teaches people to
+    ignore it.
+    """
+    if _names_internal_host(node):
+        return True
+
+    # `url = _connectors_query_url(...)` then `client.post(url, ...)`. The
+    # federated-search proxy is spelled exactly this way, and reading only the
+    # argument expression saw a bare name and concluded nothing.
+    if isinstance(node, ast.Name):
+        for assign in ast.walk(module):
+            if isinstance(assign, ast.Assign) and any(
+                isinstance(t, ast.Name) and t.id == node.id for t in assign.targets
+            ):
+                if _url_is_internal(assign.value, module):
+                    return True
+        return False
+
+    for sub in ast.walk(node):
+        if not isinstance(sub, ast.Call):
+            continue
+        func = sub.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if not name:
+            continue
+        for defn in ast.walk(module):
+            if isinstance(defn, ast.FunctionDef | ast.AsyncFunctionDef) and defn.name == name:
+                if _names_internal_host(defn):
+                    return True
+    return False
+
+
+def _carries_credential(call: ast.Call, module: ast.Module) -> bool:
+    """Whether this request passes an Authorization header.
+
+    Resolved one level through a ``_headers()``-shaped helper, because every
+    service that does this correctly factors the credential into one, and a
+    gate that only read the call site would report each of them as a finding.
+    """
+    headers = next((kw.value for kw in call.keywords if kw.arg == "headers"), None)
+    if headers is None:
+        return False
+
+    if any(
+        isinstance(sub, ast.Constant) and isinstance(sub.value, str) and sub.value.lower() == "authorization"
+        for sub in ast.walk(headers)
+    ):
+        return True
+
+    # `headers=_headers(tenant)` or `headers=self._auth_headers()`.
+    if isinstance(headers, ast.Call):
+        func = headers.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if _HEADER_HELPER_RE.search(name):
+            for node in ast.walk(module):
+                if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name == name:
+                    return any(
+                        isinstance(sub, ast.Constant)
+                        and isinstance(sub.value, str)
+                        and sub.value.lower() == "authorization"
+                        for sub in ast.walk(node)
+                    )
+            # A helper this module does not define, named like a header
+            # builder. Imported from somewhere that does build one.
+            return True
+    # `headers=dict(base, **extra)` and similar: a name we cannot resolve is
+    # not evidence of a credential, but flagging every one of them would make
+    # the gate unusable. Resolved names only.
+    if isinstance(headers, ast.Name):
+        for node in ast.walk(module):
+            # `headers = {...}` and `headers["Authorization"] = ...` alike.
+            # The second shape is how a caller adds the credential only when
+            # it has one, and reading only the first reported the ingest
+            # client as uncredentialed when it is not.
+            if isinstance(node, ast.Assign) and any(
+                (isinstance(t, ast.Name) and t.id == headers.id)
+                or (
+                    isinstance(t, ast.Subscript)
+                    and isinstance(t.value, ast.Name)
+                    and t.value.id == headers.id
+                )
+                for t in node.targets
+            ):
+                if any(
+                    isinstance(sub, ast.Constant)
+                    and isinstance(sub.value, str)
+                    and sub.value.lower() == "authorization"
+                    for sub in ast.walk(node)
+                ):
+                    return True
+    return False
+
+
+def _uncredentialed_internal_calls(root: Path) -> tuple[list[str], int]:
+    """Service-to-service requests that carry no credential, and how many were read.
+
+    The direction the older half of this gate could not run in. It asks
+    whether a *variable* reaches a process; this asks whether the request that
+    needed it carries one. Two defects shipped underneath that gap: eleven
+    investigation pivots sent only ``X-Tenant-ID``, a header the API's auth
+    does not read, and the federated-search proxy posted to the connectors
+    service with no Authorization at all. Both were answered 401 on every
+    deployment, and both read to the model and the console as "nothing found".
+    """
+    findings: list[str] = []
+    examined = 0
+    services = root / "services"
+    if not services.is_dir():
+        return findings, 0
+
+    for path in sorted(services.glob("*/app/**/*.py")):
+        if "test" in path.parts:
+            continue
+        try:
+            module = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:
+            continue
+        for node in ast.walk(module):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
+                continue
+            if node.func.attr not in {"get", "post", "put", "patch", "delete", "request", "stream"}:
+                continue
+            if not node.args:
+                continue
+            url = node.args[1] if node.func.attr in {"request", "stream"} and len(node.args) > 1 else node.args[0]
+            if not _url_is_internal(url, module):
+                continue
+            examined += 1
+            if _carries_credential(node, module):
+                continue
+            rel = path.relative_to(root)
+            findings.append(
+                f"{rel}:{node.lineno} calls a service inside the deployment and passes no Authorization header. "
+                "Every route on the far side authenticates, so this is a 401 that reaches the caller as an "
+                "empty result. Pass the service token and the tenant it is acting for."
+            )
+    return findings, examined
+
+
 def _generated(root: Path) -> set[str]:
     """Keys of ``ensure_env.GENERATED``, read by AST.
 
@@ -249,6 +451,14 @@ def check(root: Path | None = None) -> list[str]:
         if not (root / "services" / source_dir).is_dir():
             findings.append(f"services/{source_dir} is exempted ({reason}) and does not exist. Remove the row.")
 
+    uncredentialed, examined = _uncredentialed_internal_calls(root)
+    if examined == 0:
+        findings.append(
+            "scanned services/*/app and found no service-to-service HTTP call at all. "
+            "A clean result over an empty scan is the failure this gate exists to prevent."
+        )
+    findings.extend(uncredentialed)
+
     return findings
 
 
@@ -265,7 +475,11 @@ def main(argv: list[str] | None = None) -> int:
         for finding in findings:
             print(f"  - {finding}", file=sys.stderr)
         return 1
-    print(f"OK: {len(readers)} service credentials read by production code are all produced by first run and delivered by compose.")
+    _, examined = _uncredentialed_internal_calls(root)
+    print(
+        f"OK: {len(readers)} service credentials read by production code are all produced by first run "
+        f"and delivered by compose, and all {examined} service-to-service request(s) carry one."
+    )
     return 0
 
 

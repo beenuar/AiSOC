@@ -67,13 +67,18 @@ def _api_url() -> str:
     return os.getenv("AISOC_API_URL", "http://api:8000").rstrip("/")
 
 
-def _api_key() -> str:
-    """The agents service's own credential. Deliberately not a tenant id.
+TENANT_HEADER = "X-AiSOC-Tenant-ID"
 
-    The API resolves the tenant from this key, so an injected instruction in a
-    hypothesis cannot redirect a hunt at another tenant's history.
+
+def _service_token() -> str:
+    """The shared secret this service presents to the API.
+
+    The tenant travels beside it on :data:`TENANT_HEADER` and comes from the
+    run, never from the hypothesis, so an injected instruction cannot redirect
+    a hunt at another tenant's history.
     """
-    return (os.getenv("AISOC_AGENTS_API_KEY") or "").strip()
+    specific = (os.getenv("AISOC_API_SERVICE_TOKEN") or "").strip()
+    return specific or (os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
 
 
 @dataclass
@@ -220,20 +225,26 @@ async def plan_hunt(
     return None, refusals
 
 
-async def execute_plan(plan: HuntPlan, *, ledger: Any | None = None, run_id: str | None = None) -> HuntAgentResult:
+async def execute_plan(
+    plan: HuntPlan, *, ledger: Any | None = None, run_id: str | None = None, tenant_id: str = ""
+) -> HuntAgentResult:
     """Run a validated plan through the API, which owns the warehouse.
 
     The agents service holds no ClickHouse credential and no tenant session by
     design, so execution is a request rather than a query. Same arrangement as
     the Phase 4 customer tools, and for the same reason: the tenant comes from
-    the credential the API resolves, not from anything this side supplies.
+    the run this hunt belongs to, never from the hypothesis text.
     """
     result = HuntAgentResult(hypothesis=plan.hypothesis, plan=plan)
 
-    key = _api_key()
+    key = _service_token()
     if not key:
-        logger.warning("hunt.agent.no_api_key")
-        result.unavailable_reason = "No API credential is configured for the agent service, so the hunt was NOT run."
+        logger.warning("hunt.agent.no_service_token")
+        result.unavailable_reason = "No service credential is configured for the agent service, so the hunt was NOT run."
+        return result
+    if not str(tenant_id or "").strip():
+        logger.warning("hunt.agent.no_tenant")
+        result.unavailable_reason = "No tenant was named for this hunt, so nothing was searched."
         return result
 
     payload = {"clauses": [c.as_dict() for c in plan.clauses], "lookback_hours": plan.lookback_hours}
@@ -244,7 +255,7 @@ async def execute_plan(plan: HuntPlan, *, ledger: Any | None = None, run_id: str
             response = await client.post(
                 f"{_api_url()}/api/v1/agent-tools/hunt-plan/execute",
                 json=payload,
-                headers={"Authorization": f"Bearer {key}"},
+                headers={"Authorization": f"Bearer {key}", TENANT_HEADER: tenant_id},
             )
     except Exception as exc:  # noqa: BLE001 - unreachable is a gap, not a crash
         logger.warning("hunt.agent.unreachable err=%s", type(exc).__name__)
@@ -294,6 +305,7 @@ async def run_hunt(
     invoke: Any,
     ledger: Any | None = None,
     run_id: str | None = None,
+    tenant_id: str = "",
 ) -> HuntAgentResult:
     """Plan and run one hunt. The whole agent, in the order it happens."""
     plan, refusals = await plan_hunt(hypothesis, invoke=invoke, ledger=ledger, run_id=run_id)
@@ -304,7 +316,7 @@ async def run_hunt(
             refusals=refusals,
             unavailable_reason=("No valid plan was produced, so nothing was searched. This is not a result: " + "; ".join(refusals[-2:])),
         )
-    result = await execute_plan(plan, ledger=ledger, run_id=run_id)
+    result = await execute_plan(plan, ledger=ledger, run_id=run_id, tenant_id=tenant_id)
     result.refusals = refusals + result.refusals
     return result
 

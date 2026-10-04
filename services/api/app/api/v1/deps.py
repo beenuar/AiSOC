@@ -21,12 +21,14 @@ activates the RLS policies defined in ``migrations/002_rls.sql``.
         ...
 """
 
+import hmac
 import logging
+import os
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, Security, status
+from fastapi import Depends, Header, HTTPException, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jwt import PyJWTError
 from sqlalchemy import select, update
@@ -42,14 +44,13 @@ from app.api.v1.dev_auth import (
 from app.core.permission_cache import grants, resolve_permissions
 from app.core.security import decode_token, has_permission, hash_api_key, token_is_revoked
 from app.db.database import get_db
-from app.models.tenant import ApiKey, User
+from app.models.tenant import ApiKey, Tenant, User
 
 logger = logging.getLogger("aisoc.deps")
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 _API_KEY_PREFIX = "aisoc_"
-
 
 class CurrentUser:
     """Resolved authenticated user context.
@@ -169,6 +170,129 @@ class CurrentUser:
             )
 
 
+#: Header a trusted service uses to declare which tenant it is acting for.
+#: Spelled identically to ``TENANT_HEADER`` in the vendored
+#: ``app/security/tenant_scope.py`` that the other services already use, so
+#: one service does not have to know which of two names a peer expects.
+SERVICE_TENANT_HEADER = "X-AiSOC-Tenant-ID"
+
+#: What a service principal may do, and nothing else.
+#:
+#: Deliberately an explicit read-only list rather than the wildcard. The
+#: credential reaches every route in the API, so granting it ``*`` would make
+#: one shared secret equivalent to ``platform_admin`` on every tenant at once.
+#: These are the permissions the agents service's own tools need:
+#: ``connectors:read`` for the backend catalogue and the SIEM fan-out,
+#: ``actions:read`` for a read-only vendor verb, ``lake:query`` for a hunt
+#: plan, ``hunts:read`` for the hunting agent, and ``alerts:read`` for the
+#: alert an investigation is about.
+#:
+#: Anything that changes state at a vendor or in the database is absent on
+#: purpose: those go through the live-action contract with its approval
+#: matrix, not through a service token.
+SERVICE_PRINCIPAL_PERMISSIONS: frozenset[str] = frozenset(
+    {
+        "alerts:read",
+        "cases:read",
+        "connectors:read",
+        "actions:read",
+        "lake:query",
+        "hunts:read",
+        "threat_intel:read",
+    }
+)
+
+#: Mirrors ``INSECURE_SECRET_KEY_DEFAULTS`` so a placeholder token is treated
+#: as unset here too. Accepting a well-known literal would authenticate
+#: anybody who read the repository.
+_INSECURE_SERVICE_TOKENS = frozenset({"", "changeme", "change-me", "secret", "aisoc_dev_secret"})
+
+
+def resolve_service_token() -> str:
+    """The shared secret a peer service presents, or "" when unusable.
+
+    Per-service override first, then the shared platform token, matching
+    ``resolve_service_token`` in the vendored ``app/security/tenant_scope.py``
+    that every other service resolves its own token with.
+    """
+    specific = (os.getenv("AISOC_API_SERVICE_TOKEN") or "").strip()
+    token = specific or (os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+    if token.lower() in _INSECURE_SERVICE_TOKENS:
+        return ""
+    return token
+
+
+async def _resolve_service_principal(
+    token: str,
+    declared_tenant: str | None,
+    db: AsyncSession,
+) -> CurrentUser | None:
+    """A trusted peer service acting for one named tenant, or ``None``.
+
+    ``None`` means "this is not a service token", so the caller falls through
+    to the JWT path. Every other refusal raises, because once the token has
+    matched, a malformed or unknown tenant is a request to refuse rather than
+    a different kind of credential to try.
+
+    Why the tenant is a header and not a claim
+    ------------------------------------------
+    A service token identifies *a trusted service*, not a tenant. The agents
+    container triages alerts for every tenant on the deployment, so the tenant
+    has to come from the work it is doing. Making that explicit and mandatory
+    is the whole design: a service token with no tenant resolves to an
+    **empty** scope, and an empty scope refuses rather than widening. Every
+    cross-tenant leak this codebase has had took the other shape, a scope that
+    was absent rather than narrow and a read that treated absent as "no
+    filter".
+
+    The tenant is checked against the table. The header is caller-supplied,
+    and ``POST /v1/ingest/batch`` once trusted exactly such a header with
+    nothing verifying it existed.
+    """
+    import hmac
+
+    expected = resolve_service_token()
+    if not expected or not hmac.compare_digest(token, expected):
+        return None
+
+    if not declared_tenant or not declared_tenant.strip():
+        logger.warning("deps.service_token_without_tenant header=%s", SERVICE_TENANT_HEADER)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"service token must declare the tenant it acts for on {SERVICE_TENANT_HEADER}",
+        )
+
+    try:
+        tenant_id = uuid.UUID(declared_tenant.strip())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{SERVICE_TENANT_HEADER} must be a UUID",
+        ) from None
+
+    exists = await db.execute(select(Tenant.id).where(Tenant.id == tenant_id))
+    if exists.scalar_one_or_none() is None:
+        logger.warning(
+            "deps.service_token_unknown_tenant tenant=%s",
+            str(tenant_id).replace("\r", "").replace("\n", " ")[:64],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="service token named a tenant that does not exist",
+        )
+
+    return CurrentUser(
+        # A service is not a person. The id is deterministic from the tenant
+        # so an audit row says which tenant a service acted for, and the
+        # email names the mechanism rather than impersonating an operator.
+        user_id=uuid.uuid5(uuid.NAMESPACE_URL, f"aisoc:service:{tenant_id}"),
+        tenant_id=tenant_id,
+        role="api_service",
+        email=f"service@{tenant_id}.internal",
+        resolved_permissions=SERVICE_PRINCIPAL_PERMISSIONS,
+    )
+
+
 async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
     """Look up and validate an aisoc_ API key; return its CurrentUser."""
     hashed = hash_api_key(raw_key)
@@ -236,10 +360,21 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
 async def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_scheme)],
     db: AsyncSession = Depends(get_db),
+    x_aisoc_tenant_id: Annotated[str | None, Header(alias=SERVICE_TENANT_HEADER)] = None,
 ) -> CurrentUser:
     """Resolve Bearer token to CurrentUser.
 
-    Accepts both JWT tokens and aisoc_ API keys.
+    Accepts JWT tokens, aisoc_ API keys, and the shared service token used for
+    service-to-service calls.
+
+    The service path exists because the agents service had no usable way to
+    reach this API at all. Its tools authenticated with ``AISOC_AGENTS_API_KEY``,
+    which no compose file, ``.env.example`` or Helm value ever delivered, so on
+    a default deployment every customer tool, the hunting agent and the sandbox
+    tool answered "could not check" — a gap in visibility a model reports and an
+    operator never sees. Setting that key would not have fixed it either: one
+    key belongs to one tenant, so every tenant's investigation would have read
+    that tenant's estate.
 
     In development mode an unauthenticated request resolves to a deterministic
     demo user (see ``app.api.v1.dev_auth``). Production requires a bearer token.
@@ -263,6 +398,15 @@ async def get_current_user(
     # --- API key path ---
     if token.startswith(_API_KEY_PREFIX):
         return await _resolve_api_key(token, db)
+
+    # --- trusted peer service acting for one declared tenant ---
+    #
+    # Ahead of the JWT path because a service token is not a JWT and would
+    # otherwise be decoded, fail, and answer "Could not validate credentials",
+    # which is what it did.
+    service_principal = await _resolve_service_principal(token, x_aisoc_tenant_id, db)
+    if service_principal is not None:
+        return service_principal
 
     # --- JWT path ---
     try:

@@ -78,14 +78,34 @@ def _api_url() -> str:
     return os.getenv("AISOC_API_URL", "http://api:8000").rstrip("/")
 
 
-def _api_key() -> str:
-    """The agents service's own API key. Empty means these tools cannot run.
+#: Header the API reads to learn which tenant this service is acting for.
+#: Matches ``SERVICE_TENANT_HEADER`` in ``services/api/app/api/v1/deps.py``
+#: and ``TENANT_HEADER`` in the vendored ``app/security/tenant_scope.py``.
+TENANT_HEADER = "X-AiSOC-Tenant-ID"
 
-    Deliberately not a tenant id. The API resolves the tenant from this
-    credential, so a compromised prompt cannot redirect a read at another
-    tenant's estate.
+
+def _service_token() -> str:
+    """The shared secret this service presents to the API.
+
+    This used to read ``AISOC_AGENTS_API_KEY``, and **no compose file,
+    ``.env.example`` or Helm value ever set it**, so on a default deployment
+    every tool below answered "could not check". Setting it would not have
+    helped: one API key belongs to one tenant, so every tenant's investigation
+    would have read that one tenant's estate, and the routes these tools call
+    require ``actions:read``, ``lake:query`` and ``hunts:read``, none of which
+    was a mintable scope.
+
+    The service token is the credential compose already delivers. It says
+    *which service* is calling; :func:`_headers` says which tenant it is
+    calling for, and the API refuses it without one.
     """
-    return (os.getenv("AISOC_AGENTS_API_KEY") or "").strip()
+    specific = (os.getenv("AISOC_API_SERVICE_TOKEN") or "").strip()
+    return specific or (os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+
+
+def _headers(tenant_id: str) -> dict[str, str]:
+    """Credential plus the tenant assertion the API requires beside it."""
+    return {"Authorization": f"Bearer {_service_token()}", TENANT_HEADER: tenant_id}
 
 
 def _could_not_check(what: str, reason: str) -> dict[str, Any]:
@@ -108,30 +128,36 @@ def _could_not_check(what: str, reason: str) -> dict[str, Any]:
     }
 
 
-async def _call(path: str, payload: dict[str, Any] | None, what: str) -> dict[str, Any]:
+async def _call(path: str, payload: dict[str, Any] | None, what: str, tenant_id: str) -> dict[str, Any]:
     """One request to the API's agent-tool surface, with every failure as data.
 
     Errors are returned rather than raised because the tool loop feeds results
     back to the model: a model handed ``available: false`` can adapt and record
     a gap, whereas an exception ends the investigation.
     """
-    key = _api_key()
-    if not key:
+    token = _service_token()
+    if not token:
         # A loud skip. Without the credential the API refuses by design, so
         # this would be a guaranteed 401 on every call, and an operator needs
         # to see why rather than watch investigations quietly get shallower.
-        logger.warning("customer_tools.no_api_key", reason="AISOC_AGENTS_API_KEY is unset")
-        return _could_not_check(what, "No API credential is configured for the agent service.")
+        logger.warning("customer_tools.no_service_token", reason="AISOC_SERVICE_TOKEN is unset")
+        return _could_not_check(what, "No service credential is configured for the agent service.")
+    if not str(tenant_id or "").strip():
+        # An absent tenant is an empty scope, never every scope. The API
+        # refuses a service token with no tenant for the same reason, so
+        # refusing here only makes the failure legible one hop earlier.
+        logger.warning("customer_tools.no_tenant", path=path)
+        return _could_not_check(what, "No tenant was named for this investigation, so nothing could be read.")
 
     try:
         async with httpx.AsyncClient(timeout=TOOL_TIMEOUT_SECONDS) as client:
             if payload is None:
-                response = await client.get(f"{_api_url()}{path}", headers={"Authorization": f"Bearer {key}"})
+                response = await client.get(f"{_api_url()}{path}", headers=_headers(tenant_id))
             else:
                 response = await client.post(
                     f"{_api_url()}{path}",
                     json=payload,
-                    headers={"Authorization": f"Bearer {key}"},
+                    headers=_headers(tenant_id),
                 )
     except Exception as exc:  # noqa: BLE001 - every failure becomes data for the model
         logger.warning("customer_tools.unreachable", path=path, error=type(exc).__name__)
@@ -194,13 +220,16 @@ INDICATOR_TYPES: tuple[str, ...] = (
 )
 
 
-async def siem_indicator_search(indicator_type: str, value: str, hours: int = 24) -> dict[str, Any]:
+async def siem_indicator_search(
+    indicator_type: str, value: str, hours: int = 24, *, tenant_id: str = ""
+) -> dict[str, Any]:
     """Search the customer's own SIEMs for one indicator."""
     what = f"{indicator_type} {value} in the customer's SIEMs"
     body = await _call(
         "/api/v1/agent-tools/siem-search",
         {"indicator_type": indicator_type, "value": value, "since_hours": int(hours)},
         what,
+        tenant_id,
     )
     if body.get("available") is False:
         return body
@@ -318,13 +347,14 @@ VENDOR_READ_TOOLS: dict[str, dict[str, Any]] = {
 }
 
 
-async def run_vendor_read(capability: str, target: str, **params: Any) -> dict[str, Any]:
+async def run_vendor_read(capability: str, target: str, *, tenant_id: str = "", **params: Any) -> dict[str, Any]:
     """Run one read-only vendor verb and render the outcome for a model."""
     what = f"{capability} for {target}"
     body = await _call(
         "/api/v1/agent-tools/vendor-read",
         {"capability": capability, "target": target, "params": params},
         what,
+        tenant_id,
     )
     if body.get("available") is False:
         return body
@@ -359,7 +389,7 @@ async def run_vendor_read(capability: str, target: str, **params: Any) -> dict[s
 # ------------------------------------------------------- tool construction
 
 
-def _siem_tool() -> Tool:
+def _siem_tool(tenant_id: str = "") -> Tool:
     return Tool(
         name=SIEM_SEARCH_TOOL,
         description=(
@@ -385,11 +415,13 @@ def _siem_tool() -> Tool:
             },
             "required": ["indicator_type", "value"],
         },
-        fn=lambda indicator_type, value, hours=24: siem_indicator_search(indicator_type, value, hours),
+        fn=lambda indicator_type, value, hours=24: siem_indicator_search(
+            indicator_type, value, hours, tenant_id=tenant_id
+        ),
     )
 
 
-def _vendor_tool(name: str, spec: dict[str, Any]) -> Tool:
+def _vendor_tool(name: str, spec: dict[str, Any], tenant_id: str = "") -> Tool:
     capability = spec["capability"]
     entity_arg = spec["arg"]
 
@@ -417,7 +449,7 @@ def _vendor_tool(name: str, spec: dict[str, Any]) -> Tool:
 
     async def _call_tool(**kwargs: Any) -> dict[str, Any]:
         target = str(kwargs.pop(entity_arg, "") or "")
-        return await run_vendor_read(capability, target, **kwargs)
+        return await run_vendor_read(capability, target, tenant_id=tenant_id, **kwargs)
 
     return Tool(
         name=name,
@@ -439,7 +471,7 @@ def customer_tool_catalog() -> list[Tool]:
     return [_siem_tool(), *(_vendor_tool(name, spec) for name, spec in sorted(VENDOR_READ_TOOLS.items()))]
 
 
-async def scoped_customer_tools() -> tuple[list[Tool], list[str]]:
+async def scoped_customer_tools(tenant_id: str) -> tuple[list[Tool], list[str]]:
     """The customer tools this tenant actually has a backend for.
 
     Returns the tools and a list of notes for the prompt. The notes are the
@@ -447,11 +479,17 @@ async def scoped_customer_tools() -> tuple[list[Tool], list[str]]:
     produces no tools *and* a sentence saying why, so the model records a gap
     in coverage rather than investigating confidently with less.
 
-    The tenant is not a parameter. It comes from the API key this service
-    authenticates with, which is what stops a prompt redirecting a read.
+    The tenant **is** a parameter, and it is the alert's own. It used to be
+    implicit in a single shared API key, which meant one tenant's estate was
+    read for every tenant's investigation. It is passed to the API on
+    :data:`TENANT_HEADER` beside the service token, and the API refuses a
+    service credential that does not name one.
+
+    It is not model-supplied. It is threaded from the run the investigation is
+    for, so a prompt cannot redirect a read at another tenant's estate.
     """
     notes: list[str] = []
-    body = await _call("/api/v1/agent-tools/backends", None, "the customer's connected tools")
+    body = await _call("/api/v1/agent-tools/backends", None, "the customer's connected tools", tenant_id)
     if body.get("available") is False:
         # Fails closed on the toolset and loud in the prompt. Binding the
         # whole catalog here would offer the model tools that answer
@@ -469,7 +507,7 @@ async def scoped_customer_tools() -> tuple[list[Tool], list[str]]:
     siem = body.get("siem_search") or {}
     siem_backends = siem.get("backends") or []
     if siem.get("enabled") and siem_backends:
-        tools.append(_siem_tool())
+        tools.append(_siem_tool(tenant_id))
         names = ", ".join(str(b.get("source")) for b in siem_backends)
         notes.append(f"The customer has these SIEM platforms connected and searchable: {names}.")
     else:
@@ -482,7 +520,7 @@ async def scoped_customer_tools() -> tuple[list[Tool], list[str]]:
     available_caps = {str(entry.get("capability")) for entry in reads if isinstance(entry, dict)}
     for name, spec in sorted(VENDOR_READ_TOOLS.items()):
         if spec["capability"] in available_caps:
-            tools.append(_vendor_tool(name, spec))
+            tools.append(_vendor_tool(name, spec, tenant_id))
 
     if reads:
         pairs = ", ".join(f"{entry.get('vendor')} ({entry.get('capability')})" for entry in reads if isinstance(entry, dict))

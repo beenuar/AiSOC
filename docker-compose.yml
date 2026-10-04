@@ -422,6 +422,7 @@ services:
       # back to the bundled copy; the fix that made the proxy read the right
       # variable shipped against a variable nothing ever set.
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_API_SERVICE_TOKEN: ${AISOC_API_SERVICE_TOKEN:-}
       AISOC_CONNECTORS_SERVICE_TOKEN: ${AISOC_CONNECTORS_SERVICE_TOKEN:-}
       # The agents service's credential, on the verifying side. `alert_writeback
       # .service_token_valid` reads this and only this — it does NOT fall back
@@ -730,6 +731,7 @@ services:
       AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
       SECRET_KEY: ${SECRET_KEY:-}
       AISOC_SERVICE_TOKEN: ${AISOC_SERVICE_TOKEN:-}
+      AISOC_API_SERVICE_TOKEN: ${AISOC_API_SERVICE_TOKEN:-}
       # The agents service's own service credential, used in both directions:
       # presented as `X-AiSOC-Service-Token` on the API's internal context
       # routes, and verified by `app.security.tenant_scope` when the API calls

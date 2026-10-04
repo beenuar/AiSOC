@@ -61,6 +61,12 @@ BACKENDS = f"{API}/api/v1/agent-tools/backends"
 SEARCH = f"{API}/api/v1/agent-tools/siem-search"
 READ = f"{API}/api/v1/agent-tools/vendor-read"
 LAKE = f"{API}/api/v1/graph/investigate/query"
+#: Two context lookups the driver makes on any deployment that has a service
+#: credential. They were unreachable while the agents service had none, which
+#: is the defect fix-pass item 1.1 closed, so they are mocked here rather than
+#: left to fail the run with "not mocked".
+MCP_SERVERS = f"{API}/api/v1/mcp-servers/resolved"
+TENANT_SKILLS = f"{API}/api/v1/tenant-skills/resolved/active"
 
 
 # --------------------------------------------------------------- the alert
@@ -255,8 +261,20 @@ def _mock_api(*, siem_rows: list[dict[str, Any]], edr_detections: list[dict[str,
 @pytest.fixture(autouse=True)
 def _agent_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AISOC_API_URL", API)
-    monkeypatch.setenv("AISOC_AGENTS_API_KEY", "aisoc_test_key")
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "fixpass-service-token")
     monkeypatch.setenv("AISOC_DEEP_INVESTIGATION", "true")
+
+
+@pytest.fixture(autouse=True)
+def _context_lookups() -> None:
+    """The per-tenant context the driver resolves on a credentialed deployment.
+
+    Both are empty answers, not absent ones: this file is about customer
+    tools, and an empty skill set and an empty MCP registry are what a tenant
+    that has configured neither actually returns.
+    """
+    respx.get(MCP_SERVERS).mock(return_value=httpx.Response(200, json={"servers": []}))
+    respx.get(TENANT_SKILLS).mock(return_value=httpx.Response(200, json={"skills": []}))
 
 
 @pytest.fixture

@@ -40,6 +40,18 @@ def _api_url() -> str:
     return os.getenv("AISOC_API_URL", "http://api:8000").rstrip("/")
 
 
+#: Header the API reads to learn which tenant this service is acting for.
+#: ``X-Tenant-ID`` is a different header that the API's auth does not read,
+#: which is why these pivots were answered 401 outside dev mode.
+TENANT_HEADER = "X-AiSOC-Tenant-ID"
+
+
+def _service_token() -> str:
+    """The shared secret this service presents to the API."""
+    specific = (os.getenv("AISOC_API_SERVICE_TOKEN") or "").strip()
+    return specific or (os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
+
+
 async def call_investigation_tool(tool: str, tenant_id: str, **args: Any) -> dict[str, Any]:
     """Run one pivot through the API.
 
@@ -47,13 +59,20 @@ async def call_investigation_tool(tool: str, tenant_id: str, **args: Any) -> dic
     results back to the model, and a model that receives
     ``{"available": false, "reason": ...}`` can adapt, whereas an exception
     ends the investigation.
+
+    These eleven pivots used to send ``X-Tenant-ID`` and no credential. The
+    API reads neither, so outside dev mode every pivot was 401 and the model
+    was told the lake had nothing rather than that it had not been asked.
     """
     try:
         async with httpx.AsyncClient(timeout=TOOL_TIMEOUT_SECONDS) as client:
             response = await client.post(
                 f"{_api_url()}/api/v1/graph/investigate/query",
                 json={"tool": tool, "args": args},
-                headers={"X-Tenant-ID": tenant_id},
+                headers={
+                    "Authorization": f"Bearer {_service_token()}",
+                    TENANT_HEADER: tenant_id,
+                },
             )
             response.raise_for_status()
             return response.json()

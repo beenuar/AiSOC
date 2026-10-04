@@ -73,6 +73,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # rewriter still enforces tenant_id predicates and the
         # ClickHouse client still enforces row caps and timeouts; the
         # permission only controls who *can* query at all.
+        "hunts:read",
         "lake:query",
         "lake:read_schema",
         # The live-action registry: which vendors can perform which response
@@ -108,6 +109,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # hunter or tenant-admin role.
         "threat_intel:write",
         # SOC leads run investigations across the lake routinely.
+        "hunts:read",
         "lake:query",
         "lake:read_schema",
         "actions:read",
@@ -132,6 +134,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # Analysts need lake access to drill into raw events when
         # alerts don't tell the whole story. Schema is read-only and
         # the rate limiter caps abuse.
+        "hunts:read",
         "lake:query",
         "lake:read_schema",
         # Analysts already hold playbooks:execute, and a dry run touches no
@@ -157,6 +160,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # Threat hunters live in the lake — this is their primary
         # workspace for hypothesis-driven investigation across raw
         # events, alert metrics, and IOC enrichments.
+        "hunts:read",
         "lake:query",
         "lake:read_schema",
         # Read the registry to know what response is available for a finding;

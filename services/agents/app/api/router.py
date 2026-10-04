@@ -172,7 +172,7 @@ async def run_nl_hunt(request: HuntRequest, principal: ScopedPrincipal) -> HuntR
         # exactly as it does on every other call site in this service.
         return await safe_ainvoke(model, messages)
 
-    result = await run_hunt(hypothesis, invoke=_invoke, run_id=run_id)
+    result = await run_hunt(hypothesis, invoke=_invoke, run_id=run_id, tenant_id=str(tenant_id))
     logger.info(
         "hunt.completed",
         extra={"tenant_id": str(tenant_id), "run_id": run_id, "checked": result.checked},

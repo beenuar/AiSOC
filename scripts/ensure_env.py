@@ -119,6 +119,10 @@ GENERATED: dict[str, tuple[Callable[[], str], str]] = {
         lambda: secrets.token_urlsafe(32),
         "Shared bearer between the API and the agents service. Gates triage context, MCP tools and SIEM writeback.",
     ),
+    "AISOC_API_SERVICE_TOKEN": (
+        lambda: secrets.token_urlsafe(32),
+        "Shared bearer a peer service presents to the API. Gates the agent's customer tools, lake pivots and hunts.",
+    ),
     # The HS256 key the API signs realtime tickets with and the realtime edge
     # verifies them against. Both sides previously fell back to a constant
     # committed to this repository whenever this was unset — which no manifest

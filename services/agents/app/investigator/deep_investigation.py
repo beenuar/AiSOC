@@ -444,7 +444,7 @@ async def run_deep_investigation(
     try:
         model = llm if llm is not None else make_chat_model("investigation", max_tokens=max_completion_tokens())
 
-        registry = default_registry()
+        registry = default_registry(tenant_id)
         for tool in investigation_tools(tenant_id):
             registry.register(tool)
 
@@ -460,7 +460,7 @@ async def run_deep_investigation(
         # the honest half: what is *not* connected goes into the prompt as a
         # gap in visibility rather than being left for the model to discover
         # by the absence of a tool.
-        customer_tools, coverage_notes = await scoped_customer_tools()
+        customer_tools, coverage_notes = await scoped_customer_tools(tenant_id)
         for tool in customer_tools:
             registry.register(tool)
         result.customer_tools = [tool.name for tool in customer_tools]

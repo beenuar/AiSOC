@@ -47,14 +47,19 @@ def _api_url() -> str:
     return os.getenv("AISOC_API_URL", "http://api:8000").rstrip("/")
 
 
-def _api_key() -> str:
+TENANT_HEADER = "X-AiSOC-Tenant-ID"
+
+
+def _service_token() -> str:
     """The agents service's own API key. Empty means the tool cannot run.
 
-    Deliberately not a tenant id. The API resolves the tenant from this
+    The tenant is named beside it rather than implied by it. One shared key
+    meant one tenant, so every tenant's lookup would have read that tenant's
     credential, so a compromised prompt cannot redirect the lookup, and cannot
     read another tenant's analysis history.
     """
-    return (os.getenv("AISOC_AGENTS_API_KEY") or "").strip()
+    specific = (os.getenv("AISOC_API_SERVICE_TOKEN") or "").strip()
+    return specific or (os.getenv("AISOC_SERVICE_TOKEN") or "").strip()
 
 
 def _could_not_check(reason: str, sha256: str = "") -> dict[str, Any]:
@@ -75,7 +80,7 @@ def _could_not_check(reason: str, sha256: str = "") -> dict[str, Any]:
     }
 
 
-async def lookup_file_hash(sha256: str) -> dict[str, Any]:
+async def lookup_file_hash(sha256: str, *, tenant_id: str = "") -> dict[str, Any]:
     """Ask the configured analysis provider whether it has seen this file."""
     digest = (sha256 or "").strip().lower()
     if not _SHA256.match(digest):
@@ -84,12 +89,12 @@ async def lookup_file_hash(sha256: str) -> dict[str, Any]:
             "outcome": "invalid_input",
             "reason": "Not a SHA-256 digest. Provide 64 hexadecimal characters.",
         }
-    key = _api_key()
+    key = _service_token()
     if not key:
         # A loud skip. Without the credential the API refuses by design, so
         # this would be a guaranteed 401 on every lookup; an operator needs to
         # see why rather than find an empty result.
-        logger.warning("sandbox_tool.no_api_key", reason="AISOC_AGENTS_API_KEY is unset")
+        logger.warning("sandbox_tool.no_service_token", reason="AISOC_SERVICE_TOKEN is unset")
         return _could_not_check("No file-analysis credential is configured for the agent service.", digest)
 
     try:
@@ -97,7 +102,7 @@ async def lookup_file_hash(sha256: str) -> dict[str, Any]:
             response = await client.post(
                 f"{_api_url()}/api/v1/sandbox/lookup",
                 json={"sha256": digest},
-                headers={"Authorization": f"Bearer {key}"},
+                headers={"Authorization": f"Bearer {key}", TENANT_HEADER: tenant_id},
             )
     except Exception as exc:  # noqa: BLE001 - every failure becomes data for the model
         logger.warning("sandbox_tool.unreachable", error=type(exc).__name__)

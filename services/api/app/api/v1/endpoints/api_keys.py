@@ -60,6 +60,13 @@ VALID_SCOPES: frozenset[str] = frozenset(
         "plugins:admin",
         "rules:read",
         "rules:write",
+        # The agent-tool surface. These three are permissions four roles
+        # already hold, but none was mintable into a key, so a tenant
+        # automating a read-only vendor verb, a lake query or a hunt had no
+        # option but a wildcard key.
+        "actions:read",
+        "lake:query",
+        "hunts:read",
         "users:read",
         "threat_intel:read",
         "threat_intel:write",
