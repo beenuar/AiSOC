@@ -55,6 +55,7 @@ WRITE_HANDLERS = [
     "create_task",
     "update_task",
     "case_investigate",
+    "reopen_case",
 ]
 
 

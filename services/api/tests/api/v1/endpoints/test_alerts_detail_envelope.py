@@ -229,6 +229,8 @@ class TestAlertDetailResponseContract:
             "related_entities",
             "mini_timeline",
             "recommended_actions",
+            "raw_event",
+            "wazuh_locator",
         }
 
     def test_defaults_are_safe_when_rail_fields_missing(self) -> None:

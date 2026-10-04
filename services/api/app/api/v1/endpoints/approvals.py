@@ -323,12 +323,14 @@ async def _dispatch_decision(
     elif getattr(user, "resolved_permissions", None) is not None:
         permissions = sorted(user.resolved_permissions)
     else:
-        permissions = list(ROLE_PERMISSIONS.get(user.role, []))
+        role = getattr(user, "role", None)
+        permissions = list(ROLE_PERMISSIONS.get(role, [])) if role else []
+    role = getattr(user, "role", None)
     principal = {
         "user_id": str(user.user_id),
         "tenant_id": str(user.tenant_id),
         "email": getattr(user, "email", None),
-        "roles": [user.role] if getattr(user, "role", None) else [],
+        "roles": [role] if role else (list(getattr(user, "roles", []) or []) if not role else []),
         "permissions": permissions,
     }
 
