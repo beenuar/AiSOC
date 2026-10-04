@@ -68,6 +68,11 @@ DELIBERATE_DEFAULTS: dict[str, str] = {
     "AISOC_AGENTS_URL": "the compose hostname the console proxies agent calls to",
     "AISOC_REALTIME_URL": "the compose hostname the console proxies WS/SSE to",
     "AISOC_DEMO_MODE": "a boolean; false is the correct value for every deployment that is not the public demo",
+    "RETRO_HUNT_ENABLED": (
+        "a boolean, and off is the correct value for every deployment: a sweep reads back "
+        "over a tenant's history, which is a cost and a privacy decision, so it waits for "
+        "both this switch and the tenant's own opt-in"
+    ),
     "AISOC_REALTIME_TICKET_TTL_SECONDS": "a duration",
     "CONNECTORS_SERVICE_URL": "the compose hostname of the connectors service",
     "CONNECTORS_SERVICE_TIMEOUT_SECONDS": "a duration",
