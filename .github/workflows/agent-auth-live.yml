@@ -1,0 +1,114 @@
+name: Agent service auth and closure grants (live)
+
+# Two suites that need real Postgres with every migration applied, because
+# both defects they cover are invisible to a fake connection: one is a service
+# credential the API must accept and scope to one tenant, and the other is a
+# query against a table that does not exist, which a double answers happily.
+#
+# Fix-pass items 1.1 and 1.4.
+
+on:
+  pull_request:
+    paths:
+      - "services/api/app/api/v1/deps.py"
+      - "services/api/app/api/v1/endpoints/agent_tools.py"
+      - "services/api/migrations/**"
+      - "services/agents/app/closure/**"
+      - "services/agents/app/tools/**"
+      - "services/agents/app/hunt/**"
+      - "tests/isolation/test_agent_service_auth_live.py"
+      - "tests/isolation/test_closure_grant_live.py"
+      - ".github/workflows/agent-auth-live.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  agent-auth-live:
+    name: A service credential reaches the API and is scoped to one tenant
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, which would let the tenant
+      # assertions pass for the wrong reason.
+      LIVE_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # Each service's own lockfile, not a hand-curated pip list. A set that
+      # differs from the lock means the job tests software nobody ships.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The suites skip themselves when their DSN is unset, so this asserts the
+      # DSN is set rather than trusting the run. A skipped live suite reports
+      # the same word as a passing one.
+      - name: The agents service reaches the API as a service, for one tenant
+        working-directory: services/api
+        env:
+          ISOLATION_AGENT_AUTH_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_agent_service_auth_live.py -v --tb=short -rs
+
+      - name: Install agents from its lockfile
+        working-directory: services/agents
+        run: |
+          set -euo pipefail
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: An earned auto-close grant is readable by the closure policy
+        working-directory: services/agents
+        env:
+          ISOLATION_CLOSURE_DSN: ${{ env.LIVE_DSN }}
+        run: python -m pytest ../../tests/isolation/test_closure_grant_live.py -v --tb=short -rs
+
+      - name: Neither suite may report success having skipped
+        run: |
+          set -euo pipefail
+          if [ -z "${LIVE_DSN}" ]; then
+            echo "::error::LIVE_DSN is empty, so both suites skipped and this job proved nothing."
+            exit 1
+          fi
+          echo "LIVE_DSN was set, so neither suite took its skip path."
