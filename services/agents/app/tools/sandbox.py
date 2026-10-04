@@ -111,7 +111,17 @@ async def lookup_file_hash(sha256: str, *, tenant_id: str = "") -> dict[str, Any
     if response.status_code == 404:
         return _could_not_check("No file-analysis provider is configured for this deployment.", digest)
     if response.status_code == 403:
-        return _could_not_check("Air-gapped mode permits local analysis providers only, and none is configured.", digest)
+        # Deliberately does not name air-gap mode. A 403 is equally an expired
+        # service token, a revoked scope, or a tenant policy that forbids file
+        # analysis, and naming the deployment's networking posture sends an
+        # analyst to debug a network while the fix is a credential. Say what is
+        # known -- the request was refused -- and name the candidates.
+        return _could_not_check(
+            "The file-analysis service refused the request (HTTP 403). That is an authorisation "
+            "problem: an expired or unscoped service token, a tenant policy forbidding file "
+            "analysis, or an air-gapped deployment with no local provider configured.",
+            digest,
+        )
     if response.status_code >= 400:
         logger.warning("sandbox_tool.refused", status_code=response.status_code)
         return _could_not_check(f"The file-analysis service returned HTTP {response.status_code}.", digest)

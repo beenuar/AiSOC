@@ -118,6 +118,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of diff across the spec and nothing to do with anyone's change -- so it now
   names the mismatch, prints the `pip install` that fixes it, and shows the
   first differing paths.
+- **File analysis could not be configured, and when it was unconfigured the
+  product did not say so.** Compose passed neither `AISOC_AIRGAPPED` nor any
+  sandbox provider setting to the `api` service, and compose passes only the
+  variables it names -- so an operator with a CAPEv2 appliance had no way to
+  point the product at it. The air-gap overlay set the flag on `agents` alone,
+  while `AISOC_AIRGAPPED` is read by seventeen modules across four services
+  including the API's STIX publisher, both query runners and the sandbox
+  registry: a deployment that believed it was air-gapped had one service that
+  knew. And with only the mock provider answering, `_attachment_indicators` did
+  `if not block: continue`, so a phishing verdict carried **no attachment
+  indicator at all** -- which a reader takes for "checked and clean" rather
+  than "not checked". It now records that no provider is configured and says
+  plainly that this is not a clean verdict. Separately, the agent's sandbox
+  tool reported every 403 as *"Air-gapped mode permits local analysis providers
+  only"*, when a 403 is equally an expired token, a revoked scope or a tenant
+  policy -- so it named the deployment's networking posture while the fix was a
+  credential.
 - **The performance gate could not have caught a regression.** It asserted a
   floor of 5 events/s and a ceiling of 120,000 ms against published figures of
   **80.1 alerts/s** and a **1,091 ms** p95 -- 16x below and 110x above -- so a

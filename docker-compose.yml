@@ -489,6 +489,21 @@ services:
       # history, which is a cost and a privacy decision, so it waits for both
       # the operator here and the tenant in `retro_hunt_settings`.
       RETRO_HUNT_ENABLED: "${RETRO_HUNT_ENABLED:-false}"
+      # File analysis and the air-gap posture. Compose passes only the
+      # variables it names, so while these were absent an operator with a
+      # CAPEv2 appliance had no way to point the product at it, and an
+      # air-gapped deployment had no way to tell the API -- which reads
+      # AISOC_AIRGAPPED in nine modules including the sandbox registry, the
+      # STIX publisher and three query runners.
+      #
+      # Unset means the registry serves the mock provider, which knows
+      # nothing and now says so rather than returning an empty result a
+      # reader takes for a clean verdict.
+      AISOC_AIRGAPPED: "${AISOC_AIRGAPPED:-false}"
+      AISOC_CAPEV2_BASE_URL: "${AISOC_CAPEV2_BASE_URL:-}"
+      AISOC_CAPEV2_API_TOKEN: "${AISOC_CAPEV2_API_TOKEN:-}"
+      MALWAREANALYZER_BASE_URL: "${MALWAREANALYZER_BASE_URL:-}"
+      MALWAREANALYZER_API_KEY: "${MALWAREANALYZER_API_KEY:-}"
     # Phase 2.6 — use /readyz, not /health, so the orchestrator
     # only routes traffic once the lifespan has finished wiring
     # Postgres, Redis, Kafka, Qdrant, and Neo4j. (Not OpenSearch: this

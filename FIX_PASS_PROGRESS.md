@@ -115,7 +115,8 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 - [x] **5.2** KEV exposure gets data
   - Connector now fetches per-asset findings plus plugin CVEs (capped at 60 lookups) and the connectors service writes `asset_vulnerabilities` directly -- not through the API, because the service principal is deliberately read-only. Seven live end-to-end tests. Creating the data first time exposed three more defects that had never run: a case status the CHECK rejects, two ORM models naming tables no migration creates, and a task status the CHECK rejects.
 - [ ] **5.3** Hunts over the lake
-- [ ] **5.4** Sandbox and air-gap settings reach the API
+- [x] **5.4** Sandbox and air-gap settings reach the API
+  - All four defects fixed: compose now passes `AISOC_AIRGAPPED` plus the CAPEv2 and MalwareAnalyzer settings to `api`; the air-gap overlay sets the flag on `api`, `threatintel` and `connectors` as well as `agents`; phishing records "no provider configured, this is not a clean verdict" instead of skipping an empty block; and the agent tool names a 403 as an authorisation problem with its three candidates rather than asserting air-gap mode. Both compose paths validate.
 - [x] **5.5** Release channel does not cross a major
   - The channel now tracks which major it is on, resolved from the registry, so a minor cannot carry it across a major. Test replays release ladders rather than single releases. Helm chart gains the `stable` channel it was scoped with.
 - [x] **5.6** Upgrade fixture does not insert into the renamed `cases` table

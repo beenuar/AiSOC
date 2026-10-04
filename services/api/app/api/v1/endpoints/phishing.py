@@ -210,6 +210,21 @@ async def _attachment_indicators(hashes: list[str]) -> list[dict[str, Any]]:
             indicators.append({"kind": "hash", "value": digest, "note": "attachment could not be checked: analysis provider unavailable"})
             continue
         if not block:
+            # An empty analysis block means no provider answered -- which on a
+            # deployment with nothing configured is every attachment. Skipping
+            # produced a phishing verdict carrying no attachment indicator at
+            # all, and a reader takes the absence of a finding for a clean one.
+            # "Not checked" is not a verdict, and has to be said.
+            indicators.append(
+                {
+                    "kind": "hash",
+                    "value": digest,
+                    "note": (
+                        "attachment was not analysed: no file-analysis provider is configured "
+                        "for this deployment. This is not a clean verdict."
+                    ),
+                }
+            )
             continue
         for unchecked in block.get("could_not_check") or []:
             indicators.append(

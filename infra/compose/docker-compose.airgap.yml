@@ -85,3 +85,28 @@ services:
       # Clear external keys so no stray outbound calls can be made
       OPENAI_API_KEY: ""
       ANTHROPIC_API_KEY: ""
+
+  # `AISOC_AIRGAPPED` is read by seventeen modules across four services, and
+  # this overlay used to set it on `agents` alone -- so a deployment that
+  # believed it was air-gapped had exactly one service that knew.
+  #
+  # The API reads it in `core/airgap.py`, `llm_status.py`, `stix_taxii.py`,
+  # `translation.py`, `alert_explain.py`, the sandbox registry and the ES|QL
+  # and SPL runners; threatintel reads it to decide whether to fetch feeds at
+  # all. Each of those is a path that can otherwise make an outbound call on a
+  # host that is not supposed to have one, which is the whole point of the
+  # posture.
+  api:
+    environment:
+      AISOC_AIRGAPPED: "true"
+      OPENAI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+
+  threatintel:
+    environment:
+      AISOC_AIRGAPPED: "true"
+
+  connectors:
+    environment:
+      AISOC_AIRGAPPED: "true"
+
