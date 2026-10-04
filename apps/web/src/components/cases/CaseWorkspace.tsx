@@ -25,6 +25,7 @@ import { clsx } from 'clsx';
 import { format, formatDistanceToNow } from 'date-fns';
 import toast from 'react-hot-toast';
 import { apiFetch, type AttackChainTimeline, type AttackChainWindow, type Case, type CaseAttackPath, casesApi, type CaseSeverity, type CaseStatus, type CaseTask, type CaseTimelineEvent, graphApi, realtimeApi } from '@/lib/api';
+import { CASE_STATUS_ORDER, statusMeta } from '@/lib/caseStatus';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -64,7 +65,7 @@ function buildDemoCase(id: string): Case {
       "Multiple high-severity alerts indicate an attacker pivoted from " +
       "WIN-FIN-DB01 to BACKUP-SRV-12 using compromised service account credentials. " +
       "Behavior consistent with T1021.002 (SMB/Windows Admin Shares).",
-    status: 'in_progress',
+    status: 'investigating',
     severity: 'critical',
     assignee: 'sasha.lin@example.com',
     alertIds: ['alert-9012', 'alert-9013', 'alert-9019', 'alert-9024'],
@@ -115,7 +116,7 @@ function buildDemoCase(id: string): Case {
         id: 'tl-5',
         type: 'status',
         timestamp: new Date(now - 12 * 60 * 1000).toISOString(),
-        title: 'Status changed to In progress',
+        title: 'Status changed to Investigating',
         actor: 'sasha.lin',
       },
     ],
@@ -153,34 +154,6 @@ const SEVERITY_BADGE: Record<CaseSeverity, string> = {
   low: 'bg-blue-500/15 text-blue-300 ring-blue-500/30',
 };
 
-const STATUS_LABEL: Record<CaseStatus, string> = {
-  // canonical ladder (backend) + legacy console vocabulary
-  new: 'New',
-  triaged: 'Triaged',
-  investigating: 'Investigating',
-  contained: 'Contained',
-  resolved: 'Resolved',
-  closed: 'Closed',
-  open: 'Open',
-  in_progress: 'In progress',
-  pending: 'Pending',
-  pending_closure: 'Pending closure',
-  cancelled: 'Cancelled',
-};
-
-const STATUS_DOT: Record<CaseStatus, string> = {
-  open: 'bg-slate-400',
-  in_progress: 'bg-blue-400 animate-pulse',
-  pending: 'bg-amber-400',
-  resolved: 'bg-emerald-400',
-  closed: 'bg-slate-600',
-  new: 'bg-slate-400',
-  triaged: 'bg-amber-400',
-  investigating: 'bg-blue-400 animate-pulse',
-  contained: 'bg-teal-400',
-  pending_closure: 'bg-violet-400',
-  cancelled: 'bg-slate-500'};
-
 const TASK_STATUS_BADGE: Record<CaseTask['status'], string> = {
   todo: 'bg-slate-500/15 text-slate-300 ring-slate-500/30',
   in_progress: 'bg-blue-500/15 text-blue-300 ring-blue-500/30',
@@ -198,15 +171,6 @@ const TIMELINE_ICON: Record<string, string> = {
 };
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
-
-function StatusPill({ status }: { status: CaseStatus }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-700/70 bg-slate-800/40 px-2 py-0.5 text-xs font-medium text-slate-200">
-      <span className={clsx('h-1.5 w-1.5 rounded-full', STATUS_DOT[status])} />
-      {STATUS_LABEL[status]}
-    </span>
-  );
-}
 
 function MitreChip({ id }: { id: string }) {
   return (
@@ -573,7 +537,7 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
     void mutate({ ...caseRecord, status }, { revalidate: false });
     try {
       await casesApi.update(caseRecord.id, { status });
-      toast.success(`Status set to ${STATUS_LABEL[status]}`);
+      toast.success(`Status set to ${statusMeta(status).label}`);
     } catch (e: unknown) {
       // The optimistic mutation has to come back off. Leaving it applied
       // showed a status the database does not have, on the one screen an
@@ -723,7 +687,6 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
               >
                 {caseRecord.severity}
               </span>
-              <StatusPill status={caseRecord.status} />
               {caseRecord.tags?.map((t) => (
                 <span
                   key={t}
@@ -753,20 +716,43 @@ export function CaseWorkspace({ caseId }: { caseId: string }) {
 
           {/* Action bar */}
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={caseRecord.status}
-              onChange={(e) => void updateStatus(e.target.value as CaseStatus)}
-              disabled={statusUpdating}
-              className="rounded-md border border-slate-700/70 bg-slate-900/60 px-2 py-1.5 text-xs text-slate-200 focus:border-emerald-500/40 focus:outline-none"
-            >
-              {(['new', 'triaged', 'investigating', 'contained', 'resolved', 'closed'] as unknown as CaseStatus[]).map(
-                (s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s]}
-                  </option>
-                ),
-              )}
-            </select>
+            {/*
+              Single canonical status control: the select IS the pill.
+              Options come from CASE_STATUS_ORDER and every label/text comes
+              from the shared map — no local status literals, no second
+              indicator that can disagree with the persisted value.
+              `value={caseRecord.status}` is a canonical value and every
+              option's value is canonical, so selection round-trips.
+            */}
+            {(() => {
+              const meta = statusMeta(caseRecord.status);
+              return (
+                <span
+                  className={clsx(
+                    'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium',
+                    meta.pill,
+                  )}
+                >
+                  <span className={clsx('h-1.5 w-1.5 shrink-0 rounded-full', meta.dot)} />
+                  <select
+                    aria-label="Case status"
+                    value={caseRecord.status}
+                    onChange={(e) => void updateStatus(e.target.value as CaseStatus)}
+                    disabled={statusUpdating}
+                    className="cursor-pointer appearance-none bg-transparent text-inherit focus:outline-none [&>option]:bg-slate-900 [&>option]:text-slate-200"
+                  >
+                    {CASE_STATUS_ORDER.map((s) => (
+                      <option key={s} value={s}>
+                        {statusMeta(s).label}
+                      </option>
+                    ))}
+                  </select>
+                  <svg className="h-3 w-3 shrink-0 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </span>
+              );
+            })()}
             <button
               onClick={() => void startInvestigation()}
               disabled={investigating}

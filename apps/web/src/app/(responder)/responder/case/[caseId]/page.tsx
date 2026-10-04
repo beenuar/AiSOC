@@ -91,9 +91,9 @@ export default function ResponderCaseDetailPage() {
       try {
         const profile = getProfile();
         const updates: Partial<Case> = { status };
-        // Claim the case if we're moving it to "active" and nobody owns it.
+        // Claim the case if we're moving it to "investigating" and nobody owns it.
         if (
-          status === 'in_progress' &&
+          status === 'investigating' &&
           !caseRecord?.assignee &&
           profile?.email
         ) {
@@ -273,8 +273,8 @@ export default function ResponderCaseDetailPage() {
             <ActionButton
               label="Active"
               busy={busyAction === 'Active'}
-              disabled={caseRecord.status === 'in_progress'}
-              onClick={() => void updateStatus('in_progress', 'Active')}
+              disabled={caseRecord.status === 'investigating'}
+              onClick={() => void updateStatus('investigating', 'Active')}
               icon={
                 <svg
                   className="w-5 h-5"

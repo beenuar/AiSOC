@@ -1516,12 +1516,9 @@ export const entityRiskApi = {
 
 // ─── Cases ───────────────────────────────────────────────────────────────────
 
-export type CaseStatus =
-  | 'open'
-  | 'in_progress'
-  | 'pending'
-  | 'resolved'
-  | 'closed';
+import { canonicalStatus, type CaseStatus } from './caseStatus';
+
+export type { CaseStatus };
 export type CaseSeverity = 'critical' | 'high' | 'medium' | 'low';
 
 export interface CaseTimelineEvent {
@@ -1572,35 +1569,9 @@ export interface Case {
   tasks?: CaseTask[];
 }
 
-// The backend uses a 6-state lifecycle (`new | triaged | investigating |
-// contained | resolved | closed`) while the web console renders a simpler
-// 5-state model. Without translation, `STATUS_CONFIG[c.status]` returns
-// `undefined` and `<CaseCard>` throws a TypeError, which React surfaces as a
-// blank loading state on /cases. Keep these maps colocated with the Case type.
-const BACKEND_TO_UI_STATUS: Record<string, CaseStatus> = {
-  new: 'open',
-  open: 'open',
-  triaged: 'pending',
-  pending: 'pending',
-  investigating: 'in_progress',
-  in_progress: 'in_progress',
-  contained: 'in_progress',
-  resolved: 'resolved',
-  closed: 'closed',
-};
-
-const UI_TO_BACKEND_STATUS: Record<CaseStatus, string> = {
-  open: 'new',
-  pending: 'triaged',
-  in_progress: 'investigating',
-  resolved: 'resolved',
-  closed: 'closed',
-};
-
-function toUiStatus(raw: unknown): CaseStatus {
-  if (typeof raw !== 'string') return 'open';
-  return BACKEND_TO_UI_STATUS[raw] ?? 'open';
-}
+// Status vocabulary lives in `./caseStatus` (single canonical source, the
+// backend's 6-state lifecycle). The wire format and the UI render the same
+// canonical values — no translation layer.
 
 export interface CasesResponse {
   cases: Case[];
@@ -1768,7 +1739,7 @@ function normalizeCase(raw: unknown): Case {
     caseNumber,
     title: String(r.title ?? ''),
     description: (r.description as string | undefined) ?? undefined,
-    status: toUiStatus(r.status),
+    status: canonicalStatus(r.status),
     severity: (r.severity as Case['severity']) ?? 'medium',
     priority: (r.priority as Case['severity'] | undefined) ?? (r.severity as Case['severity'] | undefined),
     assignee: (r.assignee as string | null | undefined) ?? undefined,
@@ -1831,15 +1802,15 @@ export function normalizeCasesResponse(raw: unknown, filters: CaseFilters = {}):
 
 export const casesApi = {
   list: async (filters: CaseFilters = {}) => {
-    // Translate UI status filter into the backend lifecycle vocabulary so
-    // querying "In Progress" in the console actually returns rows where the
-    // backend stored "investigating".
+    // Statuses travel in the canonical vocabulary end-to-end; display
+    // groupings (Open = new+triaged etc.) are a presentation concern in
+    // `caseStatus.ts` and resolved client-side — the API filter takes a
+    // single canonical value and is only passed through when it is one.
     const params: Record<string, string> = {};
     for (const [key, value] of Object.entries(filters)) {
       if (value === undefined || value === null || value === '') continue;
       if (key === 'status' && typeof value === 'string' && value !== 'all') {
-        params.status =
-          UI_TO_BACKEND_STATUS[value as CaseStatus] ?? value;
+        params.status = canonicalStatus(value);
         continue;
       }
       params[key] = String(value);
@@ -1874,9 +1845,11 @@ export const casesApi = {
   },
 
   update: async (id: string, data: Partial<Case>) => {
+    const body: Record<string, unknown> = { ...data };
+    if (typeof body.status === 'string') body.status = canonicalStatus(body.status);
     const raw = await request<unknown>(`/api/v1/cases/${id}`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
     return normalizeCase(raw);
   },

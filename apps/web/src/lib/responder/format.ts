@@ -7,6 +7,7 @@
  */
 
 import type { AlertSeverity, AlertStatus, CaseSeverity, CaseStatus } from '@/lib/api';
+import { statusMeta } from '@/lib/caseStatus';
 
 /** Compact, human-friendly relative time ("3m ago", "2d ago"). */
 export function formatRelative(timestamp: string | null | undefined): string {
@@ -117,12 +118,16 @@ const ALERT_STATUS: Record<string, StatusTone> = {
   snoozed: { bg: 'bg-amber-500/20', fg: 'text-amber-300', label: 'Snoozed' },
 };
 
-const CASE_STATUS: Record<string, StatusTone> = {
-  open: { bg: 'bg-blue-500/20', fg: 'text-blue-300', label: 'Open' },
-  in_progress: { bg: 'bg-purple-500/20', fg: 'text-purple-300', label: 'Active' },
-  pending: { bg: 'bg-yellow-500/20', fg: 'text-yellow-300', label: 'Pending' },
-  resolved: { bg: 'bg-green-500/20', fg: 'text-green-300', label: 'Resolved' },
-  closed: { bg: 'bg-slate-500/20', fg: 'text-slate-300', label: 'Closed' },
+// Case status tones are keyed by the canonical 6-state lifecycle from
+// `@/lib/caseStatus` (single source of truth). Tones stay local; labels do
+// not — they come from the shared map verbatim.
+const CASE_STATUS_TONES: Record<string, { bg: string; fg: string }> = {
+  new: { bg: 'bg-blue-500/20', fg: 'text-blue-300' },
+  triaged: { bg: 'bg-yellow-500/20', fg: 'text-yellow-300' },
+  investigating: { bg: 'bg-purple-500/20', fg: 'text-purple-300' },
+  contained: { bg: 'bg-teal-500/20', fg: 'text-teal-300' },
+  resolved: { bg: 'bg-green-500/20', fg: 'text-green-300' },
+  closed: { bg: 'bg-slate-500/20', fg: 'text-slate-300' },
 };
 
 export function alertStatusTone(status: AlertStatus | string | undefined | null): StatusTone {
@@ -132,7 +137,7 @@ export function alertStatusTone(status: AlertStatus | string | undefined | null)
 }
 
 export function caseStatusTone(status: CaseStatus | string | undefined | null): StatusTone {
-  if (!status) return CASE_STATUS.open;
-  const key = status.toLowerCase();
-  return CASE_STATUS[key] ?? { bg: 'bg-slate-500/20', fg: 'text-slate-300', label: status };
+  const meta = statusMeta(status);
+  const tone = CASE_STATUS_TONES[meta.value];
+  return { bg: tone?.bg ?? 'bg-slate-500/20', fg: tone?.fg ?? 'text-slate-300', label: meta.label };
 }

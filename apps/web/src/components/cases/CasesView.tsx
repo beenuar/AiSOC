@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { casesApi, type Case, type CasesResponse } from '@/lib/api';
+import { CASE_STATUS_GROUPS, statusInGroup, statusMeta, type CaseStatusGroup } from '@/lib/caseStatus';
 import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
@@ -16,7 +17,7 @@ import { demoFallback } from '@/lib/demoFallback';
 // bar can snapshot and replay. Nothing else in the view consumes this — it's
 // purely the wire format between the bar and the local state setters.
 type CaseFilterSnapshot = {
-  status: Case['status'] | 'all';
+  status: FilterStatus;
   severity: Case['severity'] | 'all';
   search: string;
 };
@@ -39,7 +40,7 @@ const MOCK_CASES: Case[] = Array.from({ length: 18 }, (_, i) => ({
     'Brute-force attack on VPN endpoints',
     'Unauthorized cloud resource provisioning',
   ][i % 10],
-  status: (['open', 'in_progress', 'resolved', 'closed'] as Case['status'][])[i % 4],
+  status: (['new', 'investigating', 'resolved', 'closed'] as Case['status'][])[i % 4],
   severity: (['critical', 'high', 'medium', 'low'] as Case['severity'][])[i % 4],
   assignee: ['alice@company.com', 'bob@company.com', 'carol@company.com', undefined][i % 4],
   alertCount: ((i * 13 + 7) % 30) + 1,
@@ -57,24 +58,16 @@ const SEVERITY_CONFIG = {
   low: { label: 'Low', className: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
 };
 
-const STATUS_CONFIG: Record<
-  Case['status'],
-  { label: string; className: string; dot: string }
-> = {
-  open: { label: 'Open', className: 'text-gray-300 bg-gray-700/50 border-gray-600/50', dot: 'bg-gray-400' },
-  in_progress: { label: 'In Progress', className: 'text-blue-300 bg-blue-500/10 border-blue-500/20', dot: 'bg-blue-400 animate-pulse' },
-  pending: { label: 'Pending', className: 'text-amber-300 bg-amber-500/10 border-amber-500/20', dot: 'bg-amber-400' },
-  resolved: { label: 'Resolved', className: 'text-green-300 bg-green-500/10 border-green-500/20', dot: 'bg-green-400' },
-  closed: { label: 'Closed', className: 'text-gray-500 bg-gray-800/50 border-gray-700/50', dot: 'bg-gray-600' },
-};
+// Status labels/colors come exclusively from `@/lib/caseStatus` — do not
+// re-declare them here.
 
 // ─── Case Card ────────────────────────────────────────────────────────────────
 
 function CaseCard({ c }: { c: Case }) {
   const sev = SEVERITY_CONFIG[c.severity] ?? SEVERITY_CONFIG.medium;
-  // Defensive: if normalization missed an unexpected status string, fall back
-  // to "open" styling so the entire list never blanks the page.
-  const sts = STATUS_CONFIG[c.status] ?? STATUS_CONFIG.open;
+  // Canonical lookup — `statusMeta` never returns undefined, so a stray
+  // legacy spelling can never blank the list.
+  const sts = statusMeta(c.status);
   const displayId = c.caseNumber ?? `${c.id ?? ''}`.slice(-6);
   const detailHref = `/cases/${encodeURIComponent(c.caseNumber ?? c.id)}`;
 
@@ -87,7 +80,7 @@ function CaseCard({ c }: { c: Case }) {
               <span className={clsx('text-xs font-medium px-2 py-0.5 rounded border', sev.className)}>
                 {sev.label}
               </span>
-              <span className={clsx('flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border', sts.className)}>
+              <span className={clsx('flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded border', sts.pill)}>
                 <span className={clsx('w-1.5 h-1.5 rounded-full', sts.dot)} />
                 {sts.label}
               </span>
@@ -137,7 +130,7 @@ function CaseCard({ c }: { c: Case }) {
 
 // ─── Main View ────────────────────────────────────────────────────────────────
 
-type FilterStatus = Case['status'] | 'all';
+type FilterStatus = CaseStatusGroup['key'];
 
 export function CasesView() {
   const [statusFilter, setStatusFilter] = useState<FilterStatus>('all');
@@ -160,36 +153,39 @@ export function CasesView() {
   });
 
   const { data: casesData, error, isLoading } = useSWR(
-    ['cases', statusFilter, severityFilter],
-    () => casesApi.list({ status: statusFilter !== 'all' ? statusFilter : undefined }),
+    ['cases', 'all'],
+    () => casesApi.list(),
     {
       fallbackData: sampleCases,
       revalidateOnMount: true,
     }
   );
 
+  // Status filtering is client-side over the canonical vocabulary: the stat
+  // cards/chips are display groups (Open = new+triaged, In Progress =
+  // investigating+contained), and the API `status` filter takes a single
+  // value — filtering here keeps groups and counts always reconciling.
+  const activeGroup = CASE_STATUS_GROUPS.find((g) => g.key === statusFilter) ?? CASE_STATUS_GROUPS[0];
   const cases = (casesData?.cases || []).filter((c) => {
+    if (!statusInGroup(c.status, activeGroup)) return false;
     if (search && !c.title.toLowerCase().includes(search.toLowerCase())) return false;
     if (severityFilter !== 'all' && c.severity !== severityFilter) return false;
     return true;
   });
 
-  // The list above already falls back to `[]`; this counted MOCK_CASES, so a
-  // failed request rendered an empty table under stat cards claiming 18 cases.
   const allCases = casesData?.cases ?? [];
   // Substituting `[]` for MOCK_CASES stopped the fabrication but moved the
   // defect: the grid sits above the `isLoading` branch, so five confident
   // zeros rendered on first paint and stayed there when the read failed.
   const countsUnknown = !casesData;
-  const statCounts: Record<string, number | null> = countsUnknown
+  const statCounts: Record<FilterStatus, number | null> = countsUnknown
     ? { all: null, open: null, in_progress: null, resolved: null, closed: null }
-    : {
-        all: allCases.length,
-        open: allCases.filter(c => c.status === 'open').length,
-        in_progress: allCases.filter(c => c.status === 'in_progress').length,
-        resolved: allCases.filter(c => c.status === 'resolved').length,
-        closed: allCases.filter(c => c.status === 'closed').length,
-      };
+    : Object.fromEntries(
+        CASE_STATUS_GROUPS.map((g) => [
+          g.key,
+          allCases.filter((c) => statusInGroup(c.status, g)).length,
+        ]),
+      ) as Record<FilterStatus, number>;
 
   return (
     <div className="space-y-5">
@@ -218,22 +214,21 @@ export function CasesView() {
 
       {/* Stats */}
       <div className="grid grid-cols-5 gap-3">
-        {(['all', 'open', 'in_progress', 'resolved', 'closed'] as const).map((s) => {
+        {CASE_STATUS_GROUPS.map((g) => {
           return (
             <button
-              key={s}
-              onClick={() => setStatusFilter(s)}
+              key={g.key}
+              onClick={() => setStatusFilter(g.key)}
               className={clsx(
                 'bg-gray-900/60 border rounded-xl p-4 text-left transition-all',
-                statusFilter === s ? 'border-blue-500/50 bg-blue-500/5' : 'border-gray-800/60 hover:border-gray-700'
+                statusFilter === g.key ? 'border-blue-500/50 bg-blue-500/5' : 'border-gray-800/60 hover:border-gray-700'
               )}
             >
-              <p className={clsx('text-2xl font-bold', statCounts[s] === null ? 'text-gray-600' : 'text-gray-100')}>
-                {statCounts[s] === null ? '—' : statCounts[s]}
+              <p className={clsx('text-2xl font-bold', statCounts[g.key] === null ? 'text-gray-600' : 'text-gray-100')}>
+                {statCounts[g.key] === null ? '—' : statCounts[g.key]}
               </p>
-              <p className="text-xs text-gray-500 mt-0.5 capitalize">
-                {s === 'all' ? 'All Cases' : s.replace('_', ' ')}
-              </p>
+              {/* Label verbatim from the canonical map — never CSS-cased. */}
+              <p className="text-xs text-gray-500 mt-0.5">{g.label}</p>
             </button>
           );
         })}
