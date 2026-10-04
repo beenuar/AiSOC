@@ -157,13 +157,13 @@ function FiltersBar({
             key={s}
             onClick={() => onChange({ ...filters, severity: s === 'all' ? undefined : s, page: 1 })}
             className={clsx(
-              'text-xs px-2.5 py-1 rounded-lg transition-colors capitalize',
+              'text-xs px-2.5 py-1 rounded-lg transition-colors',
               (s === 'all' && !filters.severity) || filters.severity === s
                 ? 'bg-blue-600 text-white'
                 : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             )}
           >
-            {s}
+            {s === 'all' ? 'All severities' : SEVERITY_CONFIG[s].label}
           </button>
         ))}
       </div>
@@ -180,7 +180,7 @@ function FiltersBar({
                 : 'text-gray-500 hover:text-gray-300 hover:bg-gray-800/60'
             )}
           >
-            {s === 'all' ? 'All status' : s.replace('_', ' ')}
+            {s === 'all' ? 'All statuses' : STATUS_CONFIG[s].label}
           </button>
         ))}
       </div>
