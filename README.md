@@ -200,7 +200,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | AI triage + Investigation Ledger | Stable | Live Postgres ledger + a PR-gated local-model agent run. No hosted provider has been exercised | Yes, copilot mode |
 | Event lake + hunting (ClickHouse) | Stable | Live ClickHouse on the shipped DDL, with a negative control | Yes, `full` profile |
 | Retro-hunts when new intel arrives | Stable | Live ClickHouse + Kafka with the flag on, with a negative control | Opt-in, `full` profile |
-| 68-hunt YAML library, replayed against tenant events | Stable | Live ClickHouse: scheduled hunts read tenant data and refuse to fall back to the fixture | Yes, `full` profile |
+| 68-hunt YAML library, compiled against tenant events in the lake | Stable | Live ClickHouse: scheduled hunts read tenant data and refuse to fall back to the fixture; all 114 field names the corpus filters on compile, via a lake column or the stored payload | Yes, `full` profile |
 | SCIM 2.0, white-label, usage metering | Stable | Live Postgres through the real app, with a negative control | Yes |
 | Entity graph (Neo4j) | Stable | Live Neo4j against the production reader, with a negative control | Yes, `full` profile |
 | Governed response actions | Stable | Live socket: permits, refuses, never leaks a refusal, with a negative control | Human-approved only |

@@ -98,6 +98,13 @@ cryptography = ">=46,<51"
 # 4.x line that ships Draft 2020-12 support.
 jsonschema = ">=4.21,<5.0"
 
+# The hunting agent reads the ClickHouse lake. The image shipped without a
+# driver, so `lake-live.yml` installed one by hand before its tests -- which
+# means the workflow proved something about a package set the published
+# image does not have. Same range as services/api, kept equal by
+# scripts/check_dependency_pins.py.
+clickhouse-driver = "^0.2.8"
+
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
 # pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two

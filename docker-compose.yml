@@ -778,6 +778,16 @@ services:
       # each logging its own `no_service_token` warning and returning empty.
       # `make env` generates it; it must match the value on `api` below.
       AISOC_AGENTS_SERVICE_TOKEN: ${AISOC_AGENTS_SERVICE_TOKEN:-}
+      # The hunting agent reads the ClickHouse lake, and this block named
+      # none of it -- so in the `full` profile the agent had a driver-less
+      # image and no address to point it at. Mirrors the api service above,
+      # because both read the same lake and a second set of defaults is a
+      # second thing to drift.
+      CLICKHOUSE_HOST: "${CLICKHOUSE_HOST:-clickhouse}"
+      CLICKHOUSE_PORT: "${CLICKHOUSE_PORT:-9000}"
+      CLICKHOUSE_DATABASE: "${CLICKHOUSE_DATABASE:-aisoc}"
+      CLICKHOUSE_USER: "${CLICKHOUSE_USER:-aisoc}"
+      CLICKHOUSE_PASSWORD: "${CLICKHOUSE_PASSWORD:-aisoc_dev_secret}"
     networks:
       - aisoc
     restart: unless-stopped

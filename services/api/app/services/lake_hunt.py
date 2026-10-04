@@ -30,6 +30,7 @@ to use it.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -61,6 +62,10 @@ _FIELD_TO_COLUMN: dict[str, str] = {
     "file.path": "file_path",
     "file.hash.sha256": "hash_sha256",
     "event.severity": "severity_id",
+    # Every one of the 68 shipped hunts filters on a bare `source`, and the
+    # lake stores it as `connector_type`. Without this line the corpus had
+    # zero resolvable fields against the lake.
+    "source": "connector_type",
     "event.category": "connector_type",
     "event.provider": "connector_type",
     "network.protocol": "protocol",
@@ -107,6 +112,17 @@ class HuntCompileError(ValueError):
     """The IR could not be compiled into a safe lake query."""
 
 
+#: A vendor field name the lake has no column for, but which the stored
+#: payload may carry. Deliberately narrow: an identifier, nothing else.
+#:
+#: The name is bound as a query parameter, never interpolated, so a hunt
+#: cannot inject SQL through a field name -- but it is *also* validated here,
+#: because "the value is escaped" is not a reason to accept a field name that
+#: cannot be a field name, and refusing is cheaper than reasoning about every
+#: downstream use.
+_PAYLOAD_FIELD = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
+
+
 def _column_for(field: str) -> str | None:
     if field in _FIELD_TO_COLUMN:
         return _FIELD_TO_COLUMN[field]
@@ -114,6 +130,35 @@ def _column_for(field: str) -> str | None:
     if field in set(_FIELD_TO_COLUMN.values()) | _ARRAY_COLUMNS:
         return field
     return None
+
+
+def _payload_expression(field: str, key: str) -> str | None:
+    """Reach a vendor field inside the stored payload, or give up honestly.
+
+    The lake keeps the whole original event in `raw_payload`, so a field with
+    no dedicated column is not necessarily out of reach: of the 114 distinct
+    fields the shipped hunt corpus filters on, exactly **zero** resolved to a
+    lake column, and most of the remainder are vendor names like `EventID`,
+    `CommandLine` or `eventName` that the payload does carry.
+
+    Three paths are tried because Windows nests its payload one level below
+    anything flat: `EventData` and `System`. That nesting is the same thing
+    that once made 2,173 Sigma rules unable to fire, and it is worth reaching
+    for rather than declaring the field unsupported.
+
+    Returns `None` for anything that is not a plain identifier, so the caller
+    reports it as unsupported rather than guessing.
+    """
+    if not _PAYLOAD_FIELD.match(field):
+        return None
+    name = f"%({key}_field)s"
+    return (
+        "coalesce("
+        f"nullIf(JSONExtractString(raw_payload, {name}), ''), "
+        f"nullIf(JSONExtractString(raw_payload, 'EventData', {name}), ''), "
+        f"nullIf(JSONExtractString(raw_payload, 'System', {name}), '')"
+        ")"
+    )
 
 
 def _predicate(column: str, op: str, value: str, key: str) -> tuple[str, Any]:
@@ -134,7 +179,12 @@ def _predicate(column: str, op: str, value: str, key: str) -> tuple[str, Any]:
         pattern = value if "%" in value else f"%{value}%"
         return f"{column} ILIKE %({key})s", pattern
     if op in _SCALAR_OPS:
-        return f"{column} {_SCALAR_OPS[op]} {placeholder}", _coerce(column, value)
+        # A payload expression always yields a string, so the numeric coercion
+        # that `_coerce` applies by column name must not fire on it -- a bound
+        # integer against `JSONExtractString` matches nothing and would read as
+        # "no results" rather than as a type mismatch.
+        bound = value if column.startswith("coalesce(") else _coerce(column, value)
+        return f"{column} {_SCALAR_OPS[op]} {placeholder}", bound
 
     raise HuntCompileError(f"unsupported operator {op!r}")
 
@@ -180,11 +230,17 @@ def compile_hunt(
     unsupported: list[str] = []
 
     for index, (field, op, value) in enumerate(getattr(intents, "filters", []) or []):
+        key = f"f{index}"
         column = _column_for(str(field))
         if column is None:
-            unsupported.append(str(field))
-            continue
-        key = f"f{index}"
+            # No dedicated column, but the lake keeps the whole original event
+            # in `raw_payload`, so a vendor field name is often still reachable.
+            expression = _payload_expression(str(field), key)
+            if expression is None:
+                unsupported.append(str(field))
+                continue
+            column = expression
+            params[f"{key}_field"] = str(field)
         clause, bound = _predicate(column, str(op), str(value), key)
         where.append(clause)
         params[key] = bound

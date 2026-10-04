@@ -118,6 +118,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   of diff across the spec and nothing to do with anyone's change -- so it now
   names the mismatch, prints the `pip install` that fixes it, and shows the
   first differing paths.
+- **Not one of the 68 shipped hunts could be compiled against the lake.** The
+  README publishes the library as **Stable**, "replayed against tenant events".
+  Measured against `lake_hunt.py`'s field map the corpus used 114 distinct
+  field names and **zero** resolved to a lake column -- all 243 field uses were
+  reported unsupported, so every hunt returned either an unfiltered table or
+  nothing. Two causes: every one of the 68 filters on a bare `source`, which
+  the lake stores as `connector_type` and the map did not mention; and the
+  other 113 are vendor names like `EventID` and `CommandLine` that have no
+  column but which the stored payload carries, and nothing reached into
+  `raw_payload`. Both are fixed and all 114 now compile, through a column or a
+  payload extraction that also tries the `EventData` and `System` nestings
+  Windows uses -- the same nesting that once made 2,173 Sigma rules unable to
+  fire. The field name is bound as a query parameter and additionally refused
+  unless it is a plain identifier. Separately, the agents image shipped with no
+  ClickHouse driver (so `lake-live.yml` installed one by hand, proving
+  something about a package set the published image does not have) and the
+  `full` profile gave the agents container no ClickHouse address at all. The
+  README row now says "compiled against", because a payload extraction finds a
+  field if the event carries it, which is a property of the connector's output
+  rather than of this compiler.
 - **File analysis could not be configured, and when it was unconfigured the
   product did not say so.** Compose passed neither `AISOC_AIRGAPPED` nor any
   sandbox provider setting to the `api` service, and compose passes only the
