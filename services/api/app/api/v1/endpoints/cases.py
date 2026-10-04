@@ -1351,6 +1351,101 @@ async def _agents_proxy(method: str, path: str, **kwargs: Any) -> httpx.Response
         ) from exc
 
 
+async def _investigation_evidence(db: Any, cid: Any, tenant_id: Any) -> tuple[str, dict[str, Any]]:
+    """Assemble what the forensic agent should reason over, from the case's alerts.
+
+    The console used to send the literal string `"Investigate alert: <title>"`
+    and nothing else, so the agent reasoned over a one-line title while
+    auto-triage -- the same agent, the other entry point -- correctly passed
+    the whole `raw_event`. Two paths into one investigator, one of them
+    starved.
+
+    The evidence was never missing. `aisoc_cases.alert_ids` is written at case
+    creation and read by nothing, and `InvestigationRequest` on the agents
+    side has always declared `raw_alert`. This reads the first and fills the
+    second.
+
+    Returns `(summary, raw_alert)`. `raw_alert` stays `{}` when the case has
+    no alerts, which is honest: a case opened by hand has no telemetry, and
+    inventing a shape would hand the groundedness gate something to certify.
+    """
+    case_row = (
+        await db.execute(
+            text("SELECT title, description, severity, alert_ids FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=cid, tenant_id=tenant_id
+            )
+        )
+    ).fetchone()
+    if case_row is None:
+        return "", {}
+
+    alert_ids = [str(a) for a in (case_row.alert_ids or [])]
+    if not alert_ids:
+        summary = f"{case_row.title}"
+        if case_row.description:
+            summary = f"{summary}\n\n{case_row.description}"
+        return summary, {}
+
+    # Bounded. A correlated case can carry hundreds of alerts and the prompt
+    # has a budget; the newest are the ones an analyst is looking at.
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT id, title, description, severity, confidence, status,
+                       connector_type, external_id, mitre_techniques, entities,
+                       raw_event, created_at
+                  FROM alerts
+                 WHERE tenant_id = :tenant_id AND id = ANY(CAST(:ids AS uuid[]))
+                 ORDER BY created_at DESC
+                 LIMIT 25
+                """
+            ).bindparams(tenant_id=tenant_id, ids=alert_ids)
+        )
+    ).fetchall()
+
+    alerts = [
+        {
+            "id": str(r.id),
+            "title": r.title,
+            "description": r.description,
+            "severity": r.severity,
+            "confidence": r.confidence,
+            "status": r.status,
+            "source": r.connector_type,
+            "vendor_id": r.external_id,
+            "mitre_techniques": list(r.mitre_techniques or []),
+            "entities": r.entities or {},
+            # The payload the connector actually delivered. This is the whole
+            # point: everything above is our summary of it.
+            "raw_event": r.raw_event or {},
+            "observed_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in rows
+    ]
+
+    lines = [case_row.title]
+    if case_row.description:
+        lines.append(case_row.description)
+    lines.append(f"{len(alerts)} correlated alert(s) on this case:")
+    lines += [f"  - [{a['severity']}] {a['title']} (source: {a['source'] or 'unknown'})" for a in alerts]
+
+    raw_alert: dict[str, Any] = {
+        "case": {
+            "id": str(cid),
+            "title": case_row.title,
+            "severity": case_row.severity,
+        },
+        "alerts": alerts,
+        # Stated rather than implied: the agent and the groundedness gate both
+        # need to know whether they are seeing everything.
+        "alert_count": len(alert_ids),
+        "alerts_included": len(alerts),
+        "truncated": len(alert_ids) > len(alerts),
+    }
+    return "\n".join(lines), raw_alert
+
+
 @router.post("/{case_id}/investigate", summary="Launch investigation for case")
 async def case_investigate(
     case_id: str,
@@ -1367,6 +1462,23 @@ async def case_investigate(
     if not exists:
         raise HTTPException(status_code=404, detail="Case not found.")
 
+    # The evidence, assembled server-side from the case's own alerts rather
+    # than taken from the caller. The console was sending the literal string
+    # "Investigate alert: <title>", so the forensic agent reasoned over a
+    # headline while auto-triage passed the whole raw event to the same code.
+    #
+    # Server-side because the browser does not hold the raw events and should
+    # not be trusted with what the agent reasons over even if it did: an
+    # attacker-influenced payload reaching a prompt is the injection surface
+    # `PromptInjectionGuard` exists for, and narrowing it to data we loaded
+    # ourselves is cheaper than guarding it.
+    derived_summary, raw_alert = await _investigation_evidence(db, cid, user.tenant_id)
+    # A caller-supplied summary is kept as a note rather than used in place of
+    # the evidence, so an analyst can say why they are looking.
+    summary = derived_summary
+    if body.alert_summary:
+        summary = f"{body.alert_summary}\n\n{derived_summary}" if derived_summary else body.alert_summary
+
     # Forward the authenticated tenant so the agents service attributes the run
     # to the real tenant instead of falling back to the "default" placeholder,
     # which the demo seed no longer maps to any tenant (issue #601). The ledger
@@ -1374,7 +1486,13 @@ async def case_investigate(
     resp = await _agents_proxy(
         "POST",
         f"/api/v1/cases/{cid}/investigate",
-        json={"alert_summary": body.alert_summary or "", "tenant_id": str(user.tenant_id)},
+        json={
+            "alert_summary": summary,
+            "tenant_id": str(user.tenant_id),
+            # Declared by `InvestigationRequest` on the agents side since it
+            # was written, and never sent by anything until now.
+            "raw_alert": raw_alert,
+        },
     )
     if resp.status_code >= 400:
         raise HTTPException(status_code=resp.status_code, detail=resp.text)

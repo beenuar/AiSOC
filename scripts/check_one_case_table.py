@@ -353,8 +353,15 @@ def _impossible_in(line: str) -> list[str]:
                 if quoted.group(1) in impossible:
                     found.append(quoted.group(1))
 
+    # Written out rather than the `f in seen or seen.add(f)` idiom, which uses
+    # a `None` return as a value and reads as a trick either way.
     seen: set[str] = set()
-    return [f for f in found if not (f in seen or seen.add(f))]
+    unique: list[str] = []
+    for value in found:
+        if value not in seen:
+            seen.add(value)
+            unique.append(value)
+    return unique
 
 
 def find_impossible_statuses(paths: list[Path]) -> list[str]:

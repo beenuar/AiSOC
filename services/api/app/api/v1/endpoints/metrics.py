@@ -258,7 +258,6 @@ _FUNNEL_PERIOD_MAP: dict[str, timedelta] = {
 _PERIOD_QUERY = Query("24h", pattern=r"^(1h|24h|7d|30d)$", description="Time window for this view.")
 
 
-@router.get("/dashboard", response_model=DashboardMetrics)
 async def _count_alerts_by_status(db, tenant_id) -> dict[str, int]:
     """Alert counts for the dashboard tiles, split by whether work remains.
 
@@ -296,6 +295,7 @@ async def _count_alerts_by_status(db, tenant_id) -> dict[str, int]:
     }
 
 
+@router.get("/dashboard", response_model=DashboardMetrics)
 async def get_dashboard_metrics(
     user: AuthUser,
     db: DBSession,

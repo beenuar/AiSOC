@@ -201,3 +201,48 @@ class TestTheDefinitionIsSharedRatherThanCopied:
         assert is_resolved("resolved") is True
         assert is_resolved("closed") is True
         assert is_resolved("triaging") is False
+
+
+class TestTheRouteItselfIsIntact:
+    """Call the route table, not just the helper.
+
+    Every test above exercises `_count_alerts_by_status` directly, and all of
+    them passed while `@router.get("/dashboard")` was accidentally attached to
+    that helper instead of to `get_dashboard_metrics` -- so the endpoint
+    returned a bare counts dict rather than `DashboardMetrics`. A gate caught
+    it; the tests could not, because they never asked the app what was mounted.
+
+    Read off `app.openapi()` rather than `app.routes`: on FastAPI 0.141.x
+    `include_router` leaves an opaque object in `app.routes` and the
+    `APIRoute` count is zero, so an enumeration there silently compares
+    nothing.
+    """
+
+    def test_the_dashboard_route_is_mounted_and_returns_the_right_model(self) -> None:
+        from app.main import app
+
+        spec = app.openapi()
+        operation = spec["paths"]["/api/v1/metrics/dashboard"]["get"]
+
+        schema = operation["responses"]["200"]["content"]["application/json"]["schema"]
+        assert "DashboardMetrics" in str(schema), f"/metrics/dashboard does not return DashboardMetrics; it returns {schema}"
+
+    def test_the_private_helper_is_not_a_route(self) -> None:
+        from app.main import app
+
+        spec = app.openapi()
+        names = {op.get("operationId", "") for path in spec["paths"].values() for op in path.values() if isinstance(op, dict)}
+
+        assert not any("count_alerts_by_status" in n for n in names), (
+            "the counting helper is mounted as an endpoint — a decorator is attached to the wrong function"
+        )
+
+    def test_both_windowed_routes_accept_a_period(self) -> None:
+        """The time-window selector drives these. A route that does not
+        declare the parameter 422s on every tile once the console sends it."""
+        from app.main import app
+
+        spec = app.openapi()
+        for path in ("/api/v1/metrics/dashboard", "/api/v1/metrics/soc"):
+            params = {p["name"] for p in spec["paths"][path]["get"].get("parameters", [])}
+            assert "period" in params, f"{path} does not accept a period"

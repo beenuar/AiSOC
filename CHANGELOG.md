@@ -7,6 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Every approval 502'd.** `approvals.py` built its principal from
+  `user.roles` and `user.permissions`; `CurrentUser` defines neither, so both
+  `getattr` defaults fired silently, the actions service received an empty
+  permission list, and `has_action_permission` denies unconditionally on one.
+  The approval row recorded the decision and the action never ran.
+
+  Resolution now lives on `CurrentUser.effective_permissions()`, using the
+  same `scopes -> resolved_permissions -> role` order as `require_permission`
+  so one principal cannot be allowed to approve something it would be refused
+  for elsewhere. The test double was shaped around the bug -- a
+  `SimpleNamespace` carrying exactly the two attributes the real class lacks
+  -- and is now a real `CurrentUser`.
+
+- **Alert tiles counted the historical backlog as active work.** No status
+  predicate at all, under labels reading "Active Alerts" and "Critical —
+  Require immediate action", so a tenant who had resolved everything saw
+  their whole intake as outstanding and the number only ever rose. Four other
+  sites already had the right filter; all of them now read
+  `app.services.alert_status`. The same omission appears again in GraphQL,
+  beside a case count on `["open", "in_progress"]` -- neither of which the
+  vocabulary contains, making that figure structurally zero.
+
+- **Period deltas were double-scaled.** `_pct_delta` returns a percentage and
+  the renderer multiplied by 100 again, so a drop from 160 to 10 events
+  rendered as **-9375%**. The test beside it fed fraction-shaped data the
+  backend has never emitted, so fixture and defect agreed and passed
+  together.
+
+- **The global time-window selector drove nothing.** `useTimeWindow()` had
+  zero data-fetching consumers: the dashboard's SWR key was a constant string
+  and `period="24h"` was hardcoded into two tiles. `/metrics/dashboard` and
+  `/metrics/soc` now take a period, the keys name the window, and the SOC
+  Insights page's private copy of the state is folded in -- clamping `1h` to
+  `24h` **visibly**, because that endpoint has no 1h window and a silent
+  clamp is a wrong number under a confident label.
+
+- **Four sites used a case vocabulary the database forbids**, and
+  `hunt_scheduler.py` was the one that mattered: an `INSERT` with
+  `status="open"` against a CHECK that rejects it, so a scheduled hunt that
+  fired could not create its case at all. Also the ORM default, the MSSP
+  portfolio tuples and the GraphQL count.
+
+  Fixing those surfaced a **live** wrong vocabulary in the console whose
+  round-trip was destructive: `contained` arrived as `in_progress` and went
+  back as `investigating`, so saving any edit to a contained case silently
+  undid the containment. Six states cannot round-trip through five; the
+  translation maps are gone and the console speaks the backend's vocabulary.
+  `packages/types/src/case.ts` -- a third, entirely dead vocabulary -- is
+  retired.
+
+- **`check_one_case_table` passed while missing all four leaks**, because its
+  regex knew two spellings out of five. Rebuilt on an AST for Python, which
+  is what lets it tell `Case(status="open")` from
+  `PostureFinding(status="open")` -- a regex cannot, and flagging the CSPM
+  model is how a gate gets suppressed. Against the pre-fix tree it names all
+  four sites; the old one reported OK.
+
+- **`/dashboard` returned the wrong shape**, found by `check_route_auth`
+  after the tests missed it: a decorator had attached to a private helper
+  instead of its handler. The suite could not see it because every test
+  called the helper directly, so there are now assertions that read the
+  mounted route out of `app.openapi()`.
+
+### Added
+
+- **Reopening a closed case**, as its own route rather than a backward edge
+  in the transition table. The forward-only machine is what makes "this case
+  was closed" mean something, and `closed -> investigating` in `TRANSITIONS`
+  would let an ordinary `PATCH` walk a case backwards silently. A reason is
+  required, `reopen_count` increments, and `closed_at`/`resolved_at` are
+  cleared so the case is not terminal and active at once.
+
+  Migration `090` adds the columns **first**: the handed-over version wrote
+  `reopened_at` without creating it, so every call raised
+  `UndefinedColumnError` -- reproduced here by dropping the columns and
+  watching the suite fail the same way.
+
+- **Investigations now reason over the real alerts.** The console sent the
+  literal string `"Investigate alert: <title>"`, `InvestigateRequest` carried
+  only a summary, and the case's `alert_ids` were written and read by
+  nothing -- while auto-triage, the same agent through the other entry point,
+  correctly passed the whole `raw_event`. The receiver was always ready:
+  `InvestigationRequest` has declared `raw_alert` since it was written.
+
+  The API assembles the evidence server-side, so the Slack path gets it too
+  without Slack knowing anything about alerts.
+
+- **The groundedness gate now covers the investigator**, not just background
+  auto-triage. It could not simply be copied: it scores against `raw_alert`,
+  and with that empty every cited indicator reads as unsupported, so the gate
+  would have demoted everything while looking like it was catching
+  hallucination. It now **refuses to score an empty evidence set** and
+  reports `groundedness: null` -- distinct from `0.0`, which means it ran.
+  On the investigator path the intervention is a lowered confidence plus a
+  caveat naming the unsupported indicators, since nothing auto-closes there.
+
 ### Security
 
 - **A revoked session kept the graph WebSocket open** ([GHSA-25fh-rxp8-67j8]).

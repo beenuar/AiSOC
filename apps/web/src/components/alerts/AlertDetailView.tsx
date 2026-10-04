@@ -384,13 +384,19 @@ function AIInvestigation({ alertId, alertTitle }: { alertId: string; alertTitle?
     setIsRunning(true);
     setError(null);
     try {
-      const summary = alertTitle ? `Investigate alert: ${alertTitle}` : 'Investigate alert';
+      // `alertIds` is the part that matters. The API reads it to load the
+      // alerts' real `raw_event` payloads and sends those to the agent as
+      // `raw_alert`; it used to forward only the string below, so the
+      // forensic agent reasoned over a restated headline while auto-triage --
+      // the same agent, the other entry point -- got the whole event.
       const createdCase = await casesApi.create({
         title: alertTitle ? `Investigation — ${alertTitle}` : `Investigation — alert ${alertId}`,
-        description: summary,
+        description: alertTitle ? `Opened from alert: ${alertTitle}` : `Opened from alert ${alertId}`,
         alertIds: [alertId],
       });
-      await casesApi.investigate(createdCase.id, summary);
+      // A note about *why*, not a substitute for the evidence. The API
+      // prepends this to what it assembled rather than using it instead.
+      await casesApi.investigate(createdCase.id, 'Opened from the alert detail view by an analyst.');
       router.push(`/cases/${createdCase.id}?tab=ledger`);
     } catch (err) {
       setError(

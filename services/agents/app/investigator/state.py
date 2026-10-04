@@ -81,6 +81,16 @@ class ForensicFindings(BaseModel):
     blast_radius: str = ""
     confidence: float = 0.0  # 0–1
     summary: str = ""
+    #: What fraction of the concrete indicators this analysis asserts -- IPs,
+    #: hashes, CVEs, techniques, domains -- actually appear in the evidence
+    #: the agent was given.
+    #:
+    #: `None` means **not scored**, which is a real and common state: a case
+    #: opened by hand carries no alert payload, and scoring prose against an
+    #: empty evidence set would mark every indicator unsupported and report
+    #: that as a finding about the model. Distinct from `0.0`, which means it
+    #: was scored and nothing was supported.
+    groundedness: float | None = None
 
 
 class ResponderPlan(BaseModel):

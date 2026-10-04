@@ -987,6 +987,52 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/cases/{case_id}/reopen:
+    post:
+      tags:
+      - cases
+      summary: Reopen a closed case
+      description: "Bring a terminal case back, deliberately and on the record.\n\n\
+        Its own route rather than a backward edge in `TRANSITIONS`. The forward-only\n\
+        machine is what makes \"this case was closed\" mean something, and adding\n\
+        `closed -> investigating` to the table would let an ordinary `PATCH` --\n\
+        a title edit that happens to carry a status -- walk a case backwards\nsilently.\
+        \ `PATCH` stays forward-only.\n\nThree things separate this from a status\
+        \ change:\n\n* a reason is required, because an unexplained reopen is exactly\
+        \ what an\n  auditor asks about six months later;\n* `reopen_count` increments,\
+        \ so a case reopened four times is\n  distinguishable from one reopened once;\n\
+        * `closed_at` and `resolved_at` are cleared, because leaving them set\n  would\
+        \ make the case terminal and active at the same time -- and every\n  closure\
+        \ metric reads those columns."
+      operationId: reopen_case_api_v1_cases__case_id__reopen_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: case_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Case Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReopenCaseRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/cases/{case_id}/alerts:
     post:
       tags:
@@ -7570,8 +7616,41 @@ paths:
       tags:
       - metrics
       summary: Get Dashboard Metrics
-      description: Return aggregated KPI metrics for the dashboard overview tiles.
+      description: 'Return aggregated KPI metrics for the dashboard overview tiles.
+
+
+        `period` drives every windowed figure below. It did not exist: the console
+
+        shipped a global time-window selector whose only consumer was itself, so
+
+        changing it re-rendered a header and fetched nothing. The trend chart and
+
+        the "closed this week" tile were fixed at 7 days whatever the control
+
+        said.
+
+
+        Counts of *current state* -- open alerts by severity -- are deliberately
+
+        not windowed. "How many criticals are open" is a question about now, and
+
+        answering it for the last hour would hide the backlog rather than scope
+
+        it.'
       operationId: get_dashboard_metrics_api_v1_metrics_dashboard_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(1h|24h|7d|30d)$
+          description: Time window for this view.
+          default: 24h
+          title: Period
+        description: Time window for this view.
       responses:
         '200':
           description: Successful Response
@@ -7579,8 +7658,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DashboardMetrics'
-      security:
-      - HTTPBearer: []
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/metrics/soc:
     get:
       tags:
@@ -7591,6 +7674,19 @@ paths:
         \ analyst overrides\n  - ATT&CK technique × tactic heatmap\n  - Confidence\
         \ calibration over time (reliability curve)"
       operationId: get_soc_metrics_api_v1_metrics_soc_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          pattern: ^(1h|24h|7d|30d)$
+          description: Time window for this view.
+          default: 24h
+          title: Period
+        description: Time window for this view.
       responses:
         '200':
           description: Successful Response
@@ -7598,8 +7694,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SOCMetrics'
-      security:
-      - HTTPBearer: []
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/metrics/alerts/trend:
     get:
       tags:
@@ -7662,8 +7762,10 @@ paths:
         schema:
           type: string
           pattern: ^(1h|24h|7d|30d)$
+          description: Time window for this view.
           default: 24h
           title: Period
+        description: Time window for this view.
       responses:
         '200':
           description: Successful Response
@@ -18323,6 +18425,10 @@ components:
         resolvedToday:
           type: integer
           title: Resolvedtoday
+        resolved:
+          type: integer
+          title: Resolved
+          default: 0
         mttr:
           type: number
           title: Mttr
@@ -20275,6 +20381,21 @@ components:
             format: date-time
           - type: 'null'
           title: Closed At
+        reopened_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Reopened At
+        reopen_count:
+          type: integer
+          title: Reopen Count
+          default: 0
+        reopen_reason:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Reopen Reason
         created_at:
           type: string
           format: date-time
@@ -29823,6 +29944,28 @@ components:
       required:
       - reason
       title: ReleaseRequest
+    ReopenCaseRequest:
+      properties:
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 8
+          title: Reason
+          description: Why the case is being reopened. Recorded on the case and in
+            the audit log.
+        status:
+          type: string
+          enum:
+          - new
+          - triaged
+          - investigating
+          title: Status
+          default: investigating
+      type: object
+      required:
+      - reason
+      title: ReopenCaseRequest
+      description: Why this case is coming back.
     ReplaceRulesRequest:
       properties:
         yaml:

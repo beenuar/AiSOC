@@ -232,6 +232,12 @@ class AisocApiClient(_BaseClient):
         services/api proxies to the agents service; the response carries the
         ``run_id`` we link back into Slack so the analyst can follow it in the
         web console.
+
+        ``alert_summary`` is a *note* about why the run was requested, not the
+        evidence. The API loads the case's alerts and their raw events itself
+        and sends those to the agent, so this path gets the same material the
+        console does without Slack having to know anything about alerts --
+        which it could not, since it holds no telemetry.
         """
         safe_id = quote(case_id, safe="")
         response = await self._request(

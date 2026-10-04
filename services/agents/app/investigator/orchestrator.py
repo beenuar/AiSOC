@@ -20,6 +20,7 @@ import structlog
 from langgraph.graph import END, START, StateGraph
 from opentelemetry import trace
 
+from app.confidence import verdict_gate
 from app.core.cost_telemetry import CostTracker
 
 from . import ledger
@@ -144,6 +145,72 @@ def _build_graph():
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
+
+def _apply_groundedness(state: InvestigatorState) -> None:
+    """Score the forensic analysis against the evidence, and say so if it is thin.
+
+    The gate was real, default-on and demoting, and lived only in
+    `workers/fused_alert_consumer.py` -- the background auto-triage path. This
+    path, the one an analyst launches deliberately and is most likely to act
+    on, had no check at all.
+
+    It could not simply have been copied here, because it scores against
+    `raw_alert` and on this path `raw_alert` was `{}`: the console sent a
+    restated title and nothing else. With no evidence every indicator reads as
+    unsupported, so the gate would have demoted everything, and tuning around
+    that would have made it certify anything. The payload flows now --
+    `services/api` loads the case's alerts and their raw events -- so the
+    measurement means something.
+
+    The intervention differs from auto-triage's on purpose. Nothing
+    auto-closes here; a human reads this. So rather than demoting a verdict
+    it lowers the reported confidence to the measured groundedness and writes
+    the caveat into the summary the analyst actually reads. A number quietly
+    reduced with no explanation would be worse than leaving it alone.
+    """
+    forensic = state.forensic
+    reasoning = " ".join(
+        str(part)
+        for part in [
+            forensic.root_cause_hypothesis,
+            forensic.summary,
+            forensic.blast_radius,
+            *(forensic.artefacts or []),
+        ]
+        if part
+    )
+
+    outcome = verdict_gate.evaluate(
+        # This path has no auto-closing disposition, so the gate is asked
+        # about the analysis itself. `benign` is the auto-closeable member
+        # that makes `evaluate` score rather than skip; the verdict it returns
+        # is discarded and only the measurement is used.
+        verdict="benign",
+        confidence=float(forensic.confidence or 0.0),
+        reasoning=reasoning,
+        raw_alert=state.raw_alert,
+        alert_summary=state.alert_summary,
+    )
+
+    forensic.groundedness = outcome.score
+    if not outcome.demoted:
+        return
+
+    logger.warning(
+        "investigation.ungrounded_analysis",
+        run_id=str(state.run_id),
+        case_id=state.case_id,
+        groundedness=outcome.score,
+        hallucinated=list(outcome.hallucinated[:10]),
+    )
+    forensic.confidence = outcome.confidence
+    caveat = (
+        f"Groundedness {outcome.score:.0%}: some indicators cited above do not appear in the "
+        f"evidence provided to the agent ({', '.join(outcome.hallucinated[:5])}). "
+        "Treat them as unverified."
+    )
+    forensic.summary = f"{forensic.summary}\n\n{caveat}" if forensic.summary else caveat
 
 
 class InvestigatorOrchestrator:
@@ -368,6 +435,10 @@ class InvestigatorOrchestrator:
             cost_summary = tracker.summary()
             if last_state is not None:
                 last_state.cost_summary = cost_summary
+                # After the run and before anything is persisted or emitted,
+                # so the ledger, the report and the `done` event all carry the
+                # same caveated numbers.
+                _apply_groundedness(last_state)
 
             # Emit the final "done" event with the complete state payload
             if last_state is not None:
