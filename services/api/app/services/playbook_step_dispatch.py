@@ -48,6 +48,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.connector import Connector
 from app.security.credential_vault import CredentialVaultError, get_vault
 from app.services import actions_client
+from app.services.agent_tools import vendor_aliases
 
 logger = structlog.get_logger(__name__)
 
@@ -244,7 +245,19 @@ async def _pick_connector(
     happened to return. A non-deterministic containment target is not a
     feature.
     """
-    wanted = [pinned] if pinned else implementers
+    # Expanded through the alias map, because `implementers` holds executor
+    # vendor ids and `connector_type` holds catalog ids. `defender`, `entra`
+    # and `aws` match no connector by string, so an IN clause built from the
+    # raw ids silently selected nothing for three of the seven vendors.
+    wanted = sorted(
+        {
+            connector_type
+            for vendor_id in ([pinned] if pinned else implementers)
+            for connector_type in vendor_aliases.connector_types_for(vendor_id)
+        }
+    )
+    allowed_types = {connector_type for vendor_id in implementers for connector_type in vendor_aliases.connector_types_for(vendor_id)}
+    pinned_types = set(vendor_aliases.connector_types_for(pinned)) if pinned else set()
     rows = (
         (
             await db.execute(
@@ -259,9 +272,9 @@ async def _pick_connector(
         .all()
     )
     for connector in rows:
-        if pinned and connector.connector_type != pinned:
+        if pinned and connector.connector_type not in pinned_types:
             continue
-        if connector.connector_type not in implementers:
+        if connector.connector_type not in allowed_types:
             # The pin named a connector the tenant has and no executor can
             # drive. Not a match, and not something to substitute around.
             continue

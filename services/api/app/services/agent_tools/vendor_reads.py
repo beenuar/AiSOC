@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.connector import Connector
 from app.services import actions_client
+from app.services.agent_tools import vendor_aliases
 from app.services.playbook_step_dispatch import StepDispatchReport, dispatch_step
 
 logger = logging.getLogger(__name__)
@@ -169,7 +170,10 @@ async def available_reads(db: AsyncSession, *, tenant_id: uuid.UUID) -> list[Ava
             logger.warning("agent_tools.registry_unreachable capability=%s error=%s", capability, str(exc)[:200])
             raise
         for vendor_id in sorted(implementers):
-            connector = by_type.get(vendor_id)
+            # Through the alias map: a read executor is named for the
+            # product and a connector for the integration, and three of
+            # the seven never matched by string alone.
+            connector = vendor_aliases.resolve(vendor_id, by_type)
             if connector is None:
                 continue
             allowed = connector.allowed_capabilities

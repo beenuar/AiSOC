@@ -66,7 +66,7 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 - [x] **1.1** Agents authenticates to the API as a service, for the tenant it is working on
 - [x] **1.2** Federated search authenticates to the connectors service
-- [ ] **1.3** Vendor reads match the connector types tenants actually save
+- [x] **1.3** Vendor reads match the connector types tenants actually save
 - [ ] **1.4** Earned auto-close grants are honoured, and the closure default is decided
 - [ ] **1.5** The hunting agent returns its findings, for the right tenant, with a ledger
 
@@ -256,3 +256,33 @@ rather than keeping the second copy that let this happen.
 **Also fixed, not in the plan:** `case_fanout.py:185` had the identical
 defect on case push and status polling. The gate found it; the plan named
 only federated search.
+
+### 1.3 Vendor reads match the connector types tenants actually save
+
+**Reproduced** by the new gate, which is the clearest statement of the defect:
+`scripts/check_vendor_catalog_ids.py` on the pre-fix tree names `aws`,
+`defender` and `entra` as vendor ids that resolve to no connector a tenant can
+save, out of 7 executors against 85 saveable types.
+
+A read executor is named for the product; a connector for the integration a
+tenant configures. For four of the seven the strings coincide. For the other
+three `by_type.get(vendor_id)` returned `None` on every tenant, so three of the
+five vendors added in gap-closure 4.2 had never once been offered to an
+investigation. The lookup that misses is the same expression as the one that
+hits, which is why nothing failed.
+
+**Fix:** `services/api/app/services/agent_tools/vendor_aliases.py` holds the
+map and one `resolve()` used by both matchers, `vendor_reads.available_reads`
+and `playbook_step_dispatch._pick_connector`. The map holds exceptions only, so
+it does not become a second copy of the catalog that drifts from it.
+
+`_pick_connector` needed more than a lookup swap: it built an `IN` clause from
+raw executor ids, so the query itself selected nothing for those three.
+
+**Negative control:** emptying `VENDOR_CONNECTOR_TYPES` fails 4 of the 10 tests
+in `tests/test_vendor_alias_resolution.py` and leaves the 6 that must not move.
+
+**The gate caught an error in its own fix**: the first alias named
+`aws_securityhub`, and the connector declares `aws_security_hub`. An alias to a
+type nobody can save resolves to nothing, exactly like no alias at all, and the
+gate said so before the code shipped.
