@@ -70,7 +70,20 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-pytestmark = pytest.mark.anyio
+# Gated the way every sibling in this directory is gated, and for the same
+# reason: the offline isolation job collects this directory with neither
+# service installed, so it has no `uvicorn` to start the far side with.
+#
+# Skipping there is honest -- the job cannot run this -- but a skip must never
+# be mistaken for a pass, so `agent-auth-live.yml` sets the flag and asserts at
+# the end that it was set.
+pytestmark = [
+    pytest.mark.anyio,
+    pytest.mark.skipif(
+        not os.environ.get("ISOLATION_CROSS_SERVICE", "").strip(),
+        reason="ISOLATION_CROSS_SERVICE is not set; this suite needs both services installed",
+    ),
+]
 
 SERVICE_TOKEN = "fixpass-connectors-token-not-a-real-secret"
 TENANT = str(uuid.uuid4())

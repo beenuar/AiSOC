@@ -108,6 +108,8 @@ jobs:
       # this cannot live in `services/api/tests/`.
       - name: Every API-to-connectors call carries a credential and a tenant
         working-directory: services/api
+        env:
+          ISOLATION_CROSS_SERVICE: "1"
         run: python -m pytest ../../tests/isolation/test_api_to_connectors_auth.py -v --tb=short -rs
 
       - name: Install agents from its lockfile
@@ -123,11 +125,12 @@ jobs:
           ISOLATION_CLOSURE_DSN: ${{ env.LIVE_DSN }}
         run: python -m pytest ../../tests/isolation/test_closure_grant_live.py -v --tb=short -rs
 
-      - name: Neither suite may report success having skipped
+      - name: No suite may report success having skipped
         run: |
           set -euo pipefail
           if [ -z "${LIVE_DSN}" ]; then
-            echo "::error::LIVE_DSN is empty, so both suites skipped and this job proved nothing."
+            echo "::error::LIVE_DSN is empty, so the live suites skipped and this job proved nothing."
             exit 1
           fi
-          echo "LIVE_DSN was set, so neither suite took its skip path."
+          echo "LIVE_DSN was set, and the cross-service step sets ISOLATION_CROSS_SERVICE,"
+          echo "so none of the three suites took its skip path."
