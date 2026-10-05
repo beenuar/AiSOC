@@ -226,9 +226,9 @@ async def _tenant_has_rbac(db: AsyncSession, tenant_id: Any) -> bool:
     seeds `infosec` into `roles` for every tenant with one
     ``INSERT ... SELECT FROM tenants``, so counting roles answered True for
     every tenant in the world the moment it ran, including tenants that had
-    never provisioned RBAC at all. That took the bootstrap fallback away
-    from them: an `admin` resolved to zero permissions and every authorized
-    route answered 403. Grants cannot be seeded that way, because a grant
+    never provisioned RBAC at all, and the bootstrap fallback was then
+    unreachable for every one of those tenants: an `admin` resolved to zero
+    permissions and every authorized route answered 403. Grants cannot be seeded that way, because a grant
     names a user.
     """
     from app.models.rbac import Role, UserRole  # noqa: PLC0415
