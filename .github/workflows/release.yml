@@ -1192,10 +1192,23 @@ jobs:
             *.0.0) is_major=true ;;
           esac
 
-          # Where the channel is now. A chart tagged `stable` reports its own
-          # version, which is the only thing that can answer this.
-          current=$(helm show chart "$CHART" --version stable 2>/dev/null \
-                      | awk '$1 == "version:" { print $2 }')
+          # Where the channel is now, read from the tag's OCI manifest.
+          #
+          # NOT `helm show chart --version stable`. `--version` takes a semver
+          # *constraint*, so helm rejects a channel name client-side with
+          # `improper constraint: stable` in under half a second -- and with
+          # `pipefail` set and the shell invoked `bash -e`, that failed
+          # assignment killed the whole step before it printed anything. This
+          # step was added after v16.0.1, so v17.0.0 was the first release to
+          # run it, and it failed on its first execution while the chart it
+          # was supposed to be channelling published perfectly.
+          #
+          # The manifest carries `org.opencontainers.image.version`, which is
+          # the chart version helm packaged. `|| true` because a missing tag
+          # is the ordinary state before the first promotion, not an error.
+          current=$(docker buildx imagetools inspect "${REF}:stable" --raw 2>/dev/null \
+                      | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
+                      2>/dev/null || true)
           channel_major=""
           case "$current" in
             [0-9]*) channel_major="${current%%.*}" ;;
@@ -1208,7 +1221,17 @@ jobs:
 
           if { [ "$is_major" != "true" ] && [ "$same_major" = "true" ]; } || [ "${PROMOTE_STABLE}" = "true" ]; then
             docker buildx imagetools create --tag "${REF}:stable" "${REF}:${CHART_VERSION}"
-            helm show chart "$CHART" --version stable >/dev/null
+            # Read the tag back and require it to name the version we just
+            # pushed. `helm show chart --version stable` cannot do this for
+            # the reason above, and a promotion nobody verified is how a
+            # channel silently points at the wrong chart.
+            moved_to=$(docker buildx imagetools inspect "${REF}:stable" --raw 2>/dev/null \
+                         | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
+                         2>/dev/null || true)
+            if [ "$moved_to" != "$CHART_VERSION" ]; then
+              echo "::error title=Helm::stable was pushed but resolves to '${moved_to:-<nothing>}', not ${CHART_VERSION}"
+              exit 1
+            fi
             echo "::notice title=Helm::stable chart channel now resolves to ${CHART_VERSION}"
             echo "moved=true" >> "$GITHUB_OUTPUT"
           else
