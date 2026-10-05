@@ -1,6 +1,6 @@
 module github.com/beenuar/aisoc/osquery-extensions
 
-go 1.26
+go 1.26.0
 
 require github.com/osquery/osquery-go v0.0.0-20260508130258-3e773449a5d4
 
