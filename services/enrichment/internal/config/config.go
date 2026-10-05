@@ -21,6 +21,7 @@ type Config struct {
 	VirusTotalAPIKey string
 	ShodanAPIKey     string
 	GreyNoiseAPIKey  string
+	OTILabsAPIKey    string
 	URLScanAPIKey    string
 	IPInfoAPIKey     string
 
@@ -68,6 +69,7 @@ func Load() *Config {
 		VirusTotalAPIKey:       getEnv("VIRUSTOTAL_API_KEY", ""),
 		ShodanAPIKey:           getEnv("SHODAN_API_KEY", ""),
 		GreyNoiseAPIKey:        getEnv("GREYNOISE_API_KEY", ""),
+		OTILabsAPIKey:          getEnv("OTILABS_API_KEY", ""),
 		URLScanAPIKey:          getEnv("URLSCAN_API_KEY", ""),
 		IPInfoAPIKey:           getEnv("IPINFO_API_KEY", ""),
 		CybleAPIKey:            getEnv("CYBLE_API_KEY", ""),

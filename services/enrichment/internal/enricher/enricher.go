@@ -16,6 +16,7 @@ import (
 //
 //   - open-source: VirusTotal community, AbuseIPDB, GreyNoise community
 //   - free / freemium: Shodan, IPinfo, URLscan (placeholders unless keys present)
+//     and OTI Labs Domain Intelligence (domains)
 //   - commercial: Cyble Vision, Recorded Future, Mandiant, Anomali, IBM X-Force,
 //     Flashpoint, Intel 471, DomainTools Iris, RiskIQ / Defender XATP,
 //     Crowdstrike Falcon Intelligence
@@ -26,9 +27,10 @@ type Enricher struct {
 	cache *cache.Client
 
 	// Open-source / freemium clients
-	vtClient    *VirusTotalClient
-	abuseClient *AbuseIPDBClient
-	gnClient    *GreyNoiseClient
+	vtClient      *VirusTotalClient
+	abuseClient   *AbuseIPDBClient
+	gnClient      *GreyNoiseClient
+	otiLabsClient *OTILabsClient
 
 	// Commercial clients
 	cybleClient       *CybleClient
@@ -51,6 +53,7 @@ type Config struct {
 	VirusTotalAPIKey string
 	AbuseIPDBAPIKey  string
 	GreyNoiseAPIKey  string
+	OTILabsAPIKey    string
 
 	// Commercial
 	CybleAPIKey            string
@@ -77,10 +80,11 @@ type Config struct {
 // New creates a new Enricher with all configured data sources.
 func New(cfg Config) *Enricher {
 	return &Enricher{
-		cache:       cfg.Cache,
-		vtClient:    NewVirusTotalClient(cfg.VirusTotalAPIKey),
-		abuseClient: NewAbuseIPDBClient(cfg.AbuseIPDBAPIKey),
-		gnClient:    NewGreyNoiseClient(cfg.GreyNoiseAPIKey),
+		cache:         cfg.Cache,
+		vtClient:      NewVirusTotalClient(cfg.VirusTotalAPIKey),
+		abuseClient:   NewAbuseIPDBClient(cfg.AbuseIPDBAPIKey),
+		gnClient:      NewGreyNoiseClient(cfg.GreyNoiseAPIKey),
+		otiLabsClient: NewOTILabsClient(cfg.OTILabsAPIKey),
 
 		cybleClient: NewCybleClient(CybleConfig{
 			APIKey:  cfg.CybleAPIKey,
@@ -222,6 +226,7 @@ func (e *Enricher) enrichDomain(ctx context.Context, domain string) (*Enrichment
 		{"flashpoint", func() (*EnrichmentResult, error) { return e.flashpointClient.EnrichDomain(ctx, domain) }},
 		{"intel471", func() (*EnrichmentResult, error) { return e.intel471Client.EnrichDomain(ctx, domain) }},
 		{"domaintools", func() (*EnrichmentResult, error) { return e.domainToolsClient.EnrichDomain(ctx, domain) }},
+		{"otilabs", func() (*EnrichmentResult, error) { return e.otiLabsClient.EnrichDomain(ctx, domain) }},
 		{"riskiq", func() (*EnrichmentResult, error) { return e.riskIQClient.EnrichDomain(ctx, domain) }},
 		{"crowdstrike-intel", func() (*EnrichmentResult, error) { return e.csIntelClient.EnrichDomain(ctx, domain) }},
 	}
@@ -257,6 +262,8 @@ func (e *Enricher) enrichURL(ctx context.Context, rawURL string) (*EnrichmentRes
 //   - RiskScore = max of all sources (worst-case wins)
 //   - Confidence scales with number of corroborating sources
 //   - Geo/Whois/community fields take the highest-risk source's data
+//   - Whois falls back to the first source that has one when the highest-risk
+//     source has none; DNS records are union-merged
 //   - Tags / classifications / sources / vulns / dark-web are union-merged
 //   - Brand-risk takes the highest-scoring brand signal
 func mergeResults(iocType IOCType, value string, results []*EnrichmentResult) *EnrichmentResult {
@@ -285,6 +292,7 @@ func mergeResults(iocType IOCType, value string, results []*EnrichmentResult) *E
 	malwareSet := map[string]bool{}
 	campaignSet := map[string]bool{}
 	cveSet := map[string]bool{}
+	dnsSet := map[string]bool{}
 
 	for _, r := range results {
 		if r.RiskScore > maxRisk {
@@ -294,6 +302,15 @@ func mergeResults(iocType IOCType, value string, results []*EnrichmentResult) *E
 			}
 			if len(r.Whois) > 0 {
 				merged.Whois = r.Whois
+			}
+		}
+		if len(merged.Whois) == 0 && len(r.Whois) > 0 {
+			merged.Whois = r.Whois
+		}
+		for _, record := range r.DNSRecords {
+			if !dnsSet[record] {
+				dnsSet[record] = true
+				merged.DNSRecords = append(merged.DNSRecords, record)
 			}
 		}
 		if r.MaliciousVotes > merged.MaliciousVotes {

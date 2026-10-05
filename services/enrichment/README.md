@@ -36,6 +36,7 @@ pipeline, the AI Copilot, the case workspace, and the hunt UI.
 | VirusTotal   | IP, domain, URL, hash   | API key   | `VIRUSTOTAL_API_KEY`                    |
 | AbuseIPDB    | IP                      | API key   | `ABUSEIPDB_API_KEY`                     |
 | GreyNoise    | IP                      | API key   | `GREYNOISE_API_KEY`                     |
+| OTI Labs     | Domain                  | API key   | `OTILABS_API_KEY`                       |
 
 Shodan (`SHODAN_API_KEY`), URLScan (`URLSCAN_API_KEY`) and IPinfo
 (`IPINFO_API_KEY`) are read from the environment but have **no client

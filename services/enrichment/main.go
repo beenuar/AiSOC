@@ -50,6 +50,7 @@ func main() {
 		VirusTotalAPIKey:       cfg.VirusTotalAPIKey,
 		AbuseIPDBAPIKey:        cfg.AbuseIPDBAPIKey,
 		GreyNoiseAPIKey:        cfg.GreyNoiseAPIKey,
+		OTILabsAPIKey:          cfg.OTILabsAPIKey,
 		CybleAPIKey:            cfg.CybleAPIKey,
 		CybleBaseURL:           cfg.CybleBaseURL,
 		RecordedFutureAPIKey:   cfg.RecordedFutureAPIKey,
@@ -75,6 +76,7 @@ func main() {
 		Bool("virustotal", cfg.VirusTotalAPIKey != "").
 		Bool("abuseipdb", cfg.AbuseIPDBAPIKey != "").
 		Bool("greynoise", cfg.GreyNoiseAPIKey != "").
+		Bool("otilabs", cfg.OTILabsAPIKey != "").
 		Bool("cyble", cfg.CybleAPIKey != "").
 		Bool("recorded_future", cfg.RecordedFutureAPIKey != "").
 		Bool("mandiant", cfg.MandiantAPIKey != "" && cfg.MandiantAPISecret != "").
