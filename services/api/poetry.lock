@@ -1464,14 +1464,14 @@ woff = ["brotli (>=1.0.1) ; platform_python_implementation == \"CPython\"", "bro
 
 [[package]]
 name = "graphql-core"
-version = "3.2.12"
-description = "GraphQL implementation for Python, a port of GraphQL.js, the JavaScript reference implementation for GraphQL."
+version = "3.3.0"
+description = "GraphQL-core is a Python port of GraphQL.js, the JavaScript reference implementation for GraphQL."
 optional = false
-python-versions = "<4,>=3.7"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "graphql_core-3.2.12-py3-none-any.whl", hash = "sha256:3d8f104532070485e13caa4092c1e71cda2ba6cffd96e98f285111ee10ed1e51"},
-    {file = "graphql_core-3.2.12.tar.gz", hash = "sha256:4579094d5fc8a1a59555a9b18e51b320779d9bbc63e2302c519af0c4919d9543"},
+    {file = "graphql_core-3.3.0-py3-none-any.whl", hash = "sha256:d37fac6ef4dfc3eaa5daa59dcb498d7cbb118439d240993c68fddc4cb1bade44"},
+    {file = "graphql_core-3.3.0.tar.gz", hash = "sha256:fd3424e88af3f3211931c6ff96350f1cd9069cf0f1a31b9972899e35d39136b5"},
 ]
 
 [[package]]
@@ -3605,20 +3605,20 @@ full = ["httpx (>=0.27.0,<0.29.0)", "httpx2 (>=2.0.0)", "itsdangerous", "jinja2"
 
 [[package]]
 name = "strawberry-graphql"
-version = "0.327.7"
+version = "0.328.0"
 description = "A library for creating GraphQL APIs"
 optional = false
 python-versions = "<4.0,>=3.10"
 groups = ["main"]
 files = [
-    {file = "strawberry_graphql-0.327.7-py3-none-any.whl", hash = "sha256:0c653f16fe2a35b5a672fb5492cee5243a2f44f209247a946eddc1a6399b2284"},
-    {file = "strawberry_graphql-0.327.7.tar.gz", hash = "sha256:b84f968f8753037508c8f370b8c64da408e3bf759553d6e814a5a4dc88152fb2"},
+    {file = "strawberry_graphql-0.328.0-py3-none-any.whl", hash = "sha256:ec9f7cf9f9987f092e3e4a86ac2f8dc6ff7aacbc8f8dd7bb8ccbe8ba7d977899"},
+    {file = "strawberry_graphql-0.328.0.tar.gz", hash = "sha256:d99e5160c2a86c5d38a7a996a6a3fa23ab050f9c4aaf4969bcc15f17d5b194a5"},
 ]
 
 [package.dependencies]
 cross-web = ">=0.6.0"
 fastapi = {version = ">=0.65.2", optional = true, markers = "extra == \"fastapi\""}
-graphql-core = ">=3.2.0,<3.4.0"
+graphql-core = ">=3.3.0,<3.4.0"
 packaging = ">=23"
 python-dateutil = ">=2.7"
 python-multipart = {version = ">=0.0.7", optional = true, markers = "extra == \"fastapi\""}
@@ -4399,4 +4399,4 @@ test = ["pytest"]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "359f6b1f2a069fe462ad3b7c1e5e25573ffbe04ab54e76d85b98f7a4964ff909"
+content-hash = "c531723c4b67f4ea44a3ca2b8c742a522778a61d97b343af1684623485167c7d"
