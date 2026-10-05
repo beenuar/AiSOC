@@ -11,6 +11,20 @@ contextual copilot, summaries, reports, and natural-language generation. The
 workloads make. AiSOC asks for a **logical task alias**; the gateway decides
 which real provider and model that alias resolves to.
 
+:::tip Choosing where the model runs
+
+This page is about the **gateway** — which provider and model requests are
+routed to. Where that model physically executes (CPU, an NVIDIA GPU, a host
+Ollama using Apple's Metal, or someone else's datacentre) is a separate
+decision with its own page: [Where the model runs](./where-the-model-runs).
+
+`GET /api/v1/llm/status` answers the first question and
+`GET /api/v1/llm/runtime` answers the second. They disagree more often than
+you would expect, because a GPU reservation is a request rather than a
+guarantee.
+
+:::
+
 ```
 AiSOC task ──▶ alias (e.g. "aisoc-triage") ──▶ LiteLLM ──▶ real model
 ```

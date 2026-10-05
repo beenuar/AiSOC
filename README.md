@@ -46,8 +46,8 @@ make up
 ```
 
 The [Technical Guide](apps/web/public/papers/aisoc-technical-guide.pdf) covers this in depth —
-server sizing, every failure mode with its cause and fix, the REST API, MCP, and a screenshot of
-each console surface.
+server sizing, where the model runs, every failure mode with its cause and fix, the REST API, MCP,
+and a screenshot of each console surface.
 
 Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM**, plus `python3`
 (3.9+) and `bash`; `make doctor` checks all of it and

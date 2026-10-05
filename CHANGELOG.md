@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+
+- **Documented the model-placement and metrics work**, and corrected three
+  pages that were teaching something false while doing it.
+
+  New or expanded: the four ways to run the model in the Technical Guide and
+  the quickstart; `GET /llm/runtime` and `POST /llm/credentials/test` with
+  their full outcome tables in the REST reference; the case lifecycle and the
+  reopen route; the `period` parameter and what `alerts.total` now counts.
+
+  Corrected: `concepts/cases.md` documented `open` as a case state, which the
+  `aisoc_cases` CHECK rejects — a reader following it would write a filter
+  that silently matches nothing. `console/funnel-kpis.md` stated the delta
+  contract **backwards** ("signed fractions, not percent"), which is the error
+  the console believed when it rendered `-93.75` as `-9375%`. The ITSM
+  architecture page named a status chain with two states that do not exist.
+
+- **A route in the Technical Guide did not exist.** `POST /api/v1/hunt/search`
+  appears in no schema; the lake is queried at `POST /api/v1/lake/sql`. Found
+  by checking every `/api/v1/` path the guide names against `app.openapi()`
+  rather than reading it. The API totals were stale too (516/416 operations
+  and paths against a real 518/417, `cases` 24 against 25, `detection_rules`
+  33 against 30).
+
+- **Technical Guide PDF regenerated** at the versions CI pins, and verified by
+  extracting the text back out of the rendered file rather than trusting the
+  byte count: 26 pages, every new section present, the dead route gone, the
+  Cyble credit intact in the footer.
+
 ### Added
 
 - **Three ways to run the model, and a wizard step that says which is in

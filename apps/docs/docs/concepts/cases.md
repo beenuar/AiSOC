@@ -9,7 +9,53 @@ or investigation is tracked as a Case.
 
 ## Case States
 
-`open` → `investigating` → `resolved` | `closed`
+Six states, and the machine is **forward-only**:
+
+```
+new → triaged → investigating → contained → resolved → closed
+                      │
+                      └──────────────────► resolved
+```
+
+`investigating` can go straight to `resolved` when there was nothing to
+contain. Every other move is one step along the chain, and `PATCH /cases/{id}`
+refuses anything else with a `422` naming the transitions that *are* allowed.
+
+Two states are easy to misread:
+
+- **`resolved` is not terminal.** It means the case has an outcome, not that
+  it has been closed out. It is still on somebody's queue, and treating it as
+  finished is what made "cases closed this week" count the wrong rows. Only
+  `closed` writes `closed_at`, which every duration metric reads.
+- **`open` and `in_progress` are not states.** They belonged to a
+  pre-consolidation vocabulary and the `aisoc_cases` CHECK constraint rejects
+  both. A query filtering on either returns nothing — not an error, just a
+  structurally empty result, which is why these lingered.
+
+### Reopening
+
+Forward-only is what makes "this case was closed" mean something, so there is
+no backward edge in the state machine — a title edit that happened to carry a
+status must not be able to walk a case backwards silently.
+
+"Closed in error" and "it came back" are still real, so reopening is its own
+deliberate act:
+
+```
+POST /api/v1/cases/{id}/reopen
+{ "reason": "The indicator reappeared on two more hosts overnight.",
+  "status": "investigating" }
+```
+
+It needs `cases:write`, requires a reason of at least 8 characters, increments
+`reopen_count`, records `reopened_at`, and clears `closed_at` / `resolved_at`
+so the case is not counted as terminal and active at once. Only `closed` can
+be reopened; `resolved` still has a forward edge, so the route answers `409`
+and tells you to use `PATCH`.
+
+`reopen_count` exists because `reopened_at` is overwritten each time: a case
+reopened four times is a different conversation from one reopened once, and a
+single timestamp cannot tell them apart.
 
 ## Case Fields
 
@@ -18,7 +64,10 @@ or investigation is tracked as a Case.
 | `id` | UUID | Unique identifier |
 | `title` | string | Short description |
 | `severity` | enum | `critical`, `high`, `medium`, `low` |
-| `status` | enum | `open`, `investigating`, `resolved`, `closed` |
+| `status` | enum | `new`, `triaged`, `investigating`, `contained`, `resolved`, `closed` |
+| `reopened_at` | timestamp? | When last reopened. `null` means never — not zero |
+| `reopen_count` | int | How many times. `0` is a real measurement here, unlike the timestamp |
+| `reopen_reason` | string? | Why it was last reopened |
 | `mitre_tactics` | string[] | Associated ATT&CK tactics |
 | `indicators` | Indicator[] | IOCs linked to the case |
 | `playbook_runs` | PlaybookRun[] | Automation runs |

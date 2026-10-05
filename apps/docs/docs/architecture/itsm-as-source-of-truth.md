@@ -97,7 +97,7 @@ If a single connector fails, fan-out continues for the rest. The case itself is 
 
 ## Outbound: status change
 
-When a case status moves inside AiSOC (`open → triage → contained → resolved → closed`), `case_fanout.fanout_status_change` runs:
+When a case status moves inside AiSOC (`new → triaged → investigating → contained → resolved → closed`, or a [reopen](../concepts/cases#reopening)), `case_fanout.fanout_status_change` runs:
 
 1. Loads every `case_external_refs` row for the case.
 2. For each row, instantiates the connector and calls `push_status_change(external_id, new_status)`.

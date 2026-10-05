@@ -271,6 +271,27 @@ left the default install routing a key nobody had
 - **If no model is reachable at all**: every alert takes the deterministic
   path and the console labels it as such. Nothing pretends the AI ran.
 
+**Where that model runs is a separate choice**, and `make up` takes the one
+that works everywhere: CPU. Three alternatives:
+
+| | Command | Works on |
+|---|---|---|
+| NVIDIA GPU | `make up-gpu` | Linux, Windows + WSL2 |
+| An Ollama you already run | `make up-host-llm` | everything, and the **only** GPU route on a Mac |
+| A hosted provider | configured in the console | everything |
+
+`make doctor` says which fits the host you are on, and
+`GET /api/v1/llm/runtime` says which is in effect right now — asking Ollama
+rather than reading the compose file back, because a GPU reservation is a
+request and a model can still land on the CPU.
+
+On Apple Silicon `make up-gpu` cannot help: Docker Desktop does not pass the
+Metal GPU into a Linux container, so a container there is CPU-only whatever is
+reserved. A natively-installed Ollama does use Metal, which is what
+`make up-host-llm` points at. The preflight says this rather than letting you
+find out slowly. Full detail: [Where the model
+runs](./operations/where-the-model-runs).
+
 ### Database migrations — nothing to run
 
 Every schema is applied by the stack itself; there is no manual migration

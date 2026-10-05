@@ -124,6 +124,18 @@ Before this existed, the routes validated only *shape*, so a revoked key
 surfaced as triage quietly falling back to the deterministic path — a failure
 that is hard to attribute to a credential precisely because it is silent.
 
+The same check from the API:
+
+```bash
+curl -sX POST localhost:8000/api/v1/llm/credentials/test \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+It places one token against a fixed prompt, so it costs essentially nothing
+and is safe to run from a health check. See the
+[REST reference](../api/rest#testing-a-credential) for the full response
+shape.
+
 ## Checking what is actually running
 
 A GPU reservation is a *request*. A model can still land on the CPU for want of
@@ -135,8 +147,9 @@ curl -s localhost:8000/api/v1/llm/runtime -H "Authorization: Bearer $TOKEN"
 docker compose exec ollama ollama ps     # SIZE and the GPU/CPU split
 ```
 
-The wizard shows the same thing. Five answers, and **not loaded right now** is
-one of them: Ollama unloads after a few minutes idle, so an empty answer means
+The wizard shows the same thing, and so does the
+[REST reference](../api/rest#ai-model--credentials). Five answers, and **not
+loaded right now** is one of them: Ollama unloads after a few minutes idle, so an empty answer means
 nobody has asked it anything yet — which is not the same as CPU, and reporting
 CPU there would be a guess about the exact thing you are deciding on.
 

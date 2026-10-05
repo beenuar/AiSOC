@@ -61,6 +61,24 @@ Three bars, all clamped to `[0, 1]` so the visualization never overflows:
 
 The `EfficiencyReport` and `FunnelKpiBar` deliberately share an SWR cache key (`funnel-metrics:<period>`) so both widgets de-dupe on a single call to `GET /api/v1/metrics/funnel`.
 
+### The period comes from the global selector
+
+The window selector in the console header drives these tiles, and
+`/metrics/dashboard` and `/metrics/soc` alongside them. It used to drive
+nothing: `useTimeWindow()` had no data-fetching consumers at all, the
+dashboard's SWR key was a constant string, and `period="24h"` was hardcoded
+into both widgets — so changing the window re-rendered a header and refetched
+nothing.
+
+The window is part of the cache key, which is the half that is easy to miss:
+passing the period to the fetcher alone is not enough, because SWR serves one
+entry per key and a constant key means every window shares one cached answer.
+
+The SOC Insights page has no 1-hour window, so a global `1h` is clamped to
+`24h` **and the clamp is shown**. Rendering a day of data under a header
+reading "1h" would be a quietly wrong number, which is worse than a note
+saying what happened.
+
 ## `PipelineHealth` — five stages, four statuses
 
 The rail mirrors the data path end-to-end:
@@ -148,7 +166,8 @@ Key implementation notes (`services/api/app/api/v1/endpoints/metrics.py`):
 - `events_of_interest` reads from ClickHouse `aisoc.raw_events` when the lake is enabled, with a Postgres-only fallback (alerts table count) for air-gapped deployments where `AISOC_DISABLE_CLICKHOUSE=1`.
 - `mttd_seconds` reuses the exact same `AVG(EXTRACT EPOCH FROM (created_at - first_seen_at))` expression as the existing SOC metrics endpoint so the two never disagree.
 - `signal_to_noise` is `1 − (FP count / total dispositioned)` — alerts with `disposition` in `false_positive` divided by alerts with any disposition. Returns `0.0` when there is no dispositioned alert (no work done yet).
-- Deltas are signed fractions, not percent: `0.05` means +5%. The previous-period window is the same duration immediately before the current one.
+- **Deltas are signed percentages, not fractions: `5.0` means +5%.** `_pct_delta` multiplies by 100 and rounds to two decimals before returning, so a run that fell from 160 events to 10 sends `-93.75`. This page said the opposite for several releases and the console believed it, multiplying by 100 a second time and rendering `-9375%` on the first tile of the dashboard. Scale comes from the contract, never the magnitude — a real +1% delta and a fraction of `1.0` are the same number, so "it looks small, it must be a fraction" is a guess that is right until it is catastrophically not.
+- A delta of exactly `0.0` means **no meaningful baseline** (the previous window was empty), not "no change". The previous-period window is the same duration immediately before the current one.
 - `deltas` covers the six tiles only. The suppression and triage-quality fields have no delta, because a period-over-period change in, say, `mean_groundedness` reads as a trend when it is usually a change in which alerts happened to arrive.
 - The field list on this page is gated: `scripts/check_funnel_contract.py` compares it against the keys the endpoint actually returns, so a field cannot ship undocumented again.
 

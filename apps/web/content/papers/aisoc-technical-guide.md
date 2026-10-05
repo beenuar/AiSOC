@@ -76,6 +76,77 @@ connector / ingest API
 CORE is not a demo. It runs the real pipeline and a real local model; what it
 leaves out is the stores that only matter once you have volume.
 
+### Where the model runs
+
+A model ships with AiSOC and runs on CPU, which is why `make up` needs no
+account, no key and no GPU. It is also the slowest of four options.
+
+| Option | Command | Works on |
+|---|---|---|
+| Bundled model, CPU | `make up` | everything |
+| Bundled model, NVIDIA GPU | `make up-gpu` | Linux, Windows + WSL2 |
+| An Ollama you already run | `make up-host-llm` | everything, and the **only** GPU route on a Mac |
+| A hosted provider | configured in the console | everything |
+
+`make doctor` tells you which fits the host you are on. The first-run wizard's
+**Choose where the AI runs** step tells you which is in effect right now.
+
+**The GPU reservation is an overlay, not a line in the base compose file**, and
+that is deliberate rather than tidy. A host without an NVIDIA GPU *and* the
+container toolkit cannot start a service that reserves one — the daemon
+answers `could not select device driver "nvidia"` and refuses — so putting it
+in `docker-compose.yml` would take out first run for every Mac, every CPU-only
+Linux box and every CI runner.
+
+`make up-gpu` runs `scripts/check_gpu_runtime.py` first, which exists because
+the daemon's own error names neither a cause nor a next command. The preflight
+distinguishes a missing card, driver, toolkit and daemon configuration, and
+names the install step for whichever is absent.
+
+**On Apple Silicon, `make up-gpu` cannot help and the preflight says so.**
+Docker Desktop does not pass the Metal GPU into a Linux container — no toolkit,
+driver or setting changes that, so a container on a Mac is CPU-only whatever is
+reserved. A natively-installed Ollama *does* use Metal:
+
+```bash
+brew install ollama
+OLLAMA_HOST=0.0.0.0 ollama serve          # in its own terminal
+ollama pull llama3.2:3b-instruct-q4_K_M
+make up-host-llm
+```
+
+`OLLAMA_HOST=0.0.0.0` matters: Ollama binds loopback by default, which a
+container cannot reach.
+
+`make up-host-llm` is worth running even without a GPU. `11434` is in the
+managed port inventory, so on a host already running Ollama, `make up` sees the
+conflict and republishes the *bundled* one on a free port — leaving you with
+two Ollamas, the stack talking to the new one, and yours idle.
+
+#### Checking what is actually running
+
+A GPU reservation is a **request**. A model can still land on the CPU for want
+of VRAM or a usable driver, so reading the compose file back would report the
+intent and call it the outcome. Ask instead:
+
+```bash
+curl -s localhost:8000/api/v1/llm/runtime -H "Authorization: Bearer $TOKEN"
+docker compose exec ollama ollama ps     # SIZE and the GPU/CPU split
+```
+
+Five answers, and **not loaded right now** is one of them: Ollama unloads after
+a few minutes idle, so an empty answer means nobody has asked it anything yet.
+That is not the same as CPU, and reporting CPU there would be a guess about the
+exact thing you are deciding on.
+
+| `placement` | Means |
+|---|---|
+| `gpu` | the whole model is in VRAM |
+| `partial` | split; `detail` says what fraction, which explains the latency |
+| `cpu` | entirely on the CPU |
+| `unknown` | nothing loaded, so it cannot say |
+| `unreachable` | nothing answered — expected on a hosted-provider deployment |
+
 ---
 
 ## 2. Workstation install
@@ -155,6 +226,10 @@ is not zero, and publishing it as zero would claim instant resolution.*
 | Services restart-loop | Not enough memory for `full` | Use `make up` (CORE) and raise Docker's allocation before retrying |
 | `credential vault unavailable` saving a connector | `AISOC_CREDENTIAL_KEY` is set to something that is not a valid Fernet key | `make env` generates a real one, then `docker compose up -d api` |
 | `make doctor` shows 22 red checks | You have not run `make up` yet | Run it. `doctor` says this explicitly rather than listing failures |
+| `make doctor` warns that Ollama holds 11434 | You already run Ollama | Not a problem. `make up-host-llm` uses yours instead of starting a second one; `make up` republishes the bundled one on a free port |
+| `make up-gpu` refuses before compose starts | The NVIDIA container toolkit is missing, or this is a Mac | The preflight names which of the four pieces is absent. On Apple Silicon no install helps — use `make up-host-llm` |
+| Triage is slow | The model is on CPU, which is the default | `GET /api/v1/llm/runtime` confirms it. `make up-gpu`, `make up-host-llm`, or a hosted provider |
+| AI verdicts stopped after adding a provider key | The key is wrong, revoked, or names a model the account cannot use | **Settings → Deployment & AI → Test.** It distinguishes a bad key from a wrong model name, which are different fixes |
 
 ### Windows
 
@@ -373,10 +448,50 @@ What the agent does and does not do:
   lookups. The model picks the tool and passes arguments; it never writes SQL.
 - **Everything is logged** to the Investigation Ledger: prompts, tool calls,
   citations, verdict, token cost. It exports as a signed bundle.
-- **Grounding is checked.** A verdict citing an indicator the evidence never
-  contained is demoted to human review rather than auto-closed.
+- **Grounding is checked on both paths.** A verdict citing an indicator the
+  evidence never contained is demoted to human review rather than auto-closed.
+  On the investigation path — the one you launch deliberately — nothing
+  auto-closes, so the intervention is different: the reported confidence drops
+  to the measured groundedness and a caveat naming the unsupported indicators
+  is written into the summary you read.
 - **No vendor is touched without a human**, unless a tenant has explicitly
   granted autonomy for that verb.
+
+The gate **refuses to score an empty evidence set**, and reports
+`groundedness: null` rather than `0.0`. The distinction is the whole point: a
+case opened by hand carries no telemetry, every indicator the model mentions
+would read as unsupported, and a gate that scored anyway would demote
+everything while appearing to catch hallucination. `null` means not measured;
+`0.0` means measured and nothing was supported.
+
+### Using your own provider
+
+Seven providers are supported — `openai`, `anthropic`, `azure-openai`,
+`local-ollama`, `local-vllm`, `local-litellm`, `custom`. Configure one per
+tenant in **Settings → Deployment & AI**, or from the first-run wizard. The key
+is encrypted at rest with the credential vault and never returned by the API;
+reads report only `has_api_key`.
+
+**Test it before you rely on it.** The *Test* button places one real one-token
+completion and reports what happened:
+
+```bash
+curl -sX POST localhost:8000/api/v1/llm/credentials/test \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+| Outcome | Means |
+|---|---|
+| `ok` | the provider answered. A `429` counts — being rate-limited means you reached it and were authenticated |
+| `refused` | reached it and it said no. `detail` distinguishes a bad key from a wrong model name, which are different fixes |
+| `unreachable` | nothing answered at that address |
+| `unverified` | air-gapped, so the call was **not attempted** — the policy working, not a bad key |
+
+Before this existed, the credential routes validated only *shape* — that the
+URL parses, that the provider/key/base-URL combination is consistent — and none
+of them talked to the provider. A revoked key surfaced as triage quietly
+falling back to the deterministic path, which is a failure that is hard to
+attribute to a credential precisely because it is silent.
 
 ### Threat intelligence
 
@@ -417,6 +532,39 @@ much of the product as the populated view.*
 where the engine has no durable pause — a step that cannot suspend should not
 be offered.*
 
+### The case lifecycle
+
+Six states, and the machine is forward-only:
+
+```
+new → triaged → investigating → contained → resolved → closed
+                      │
+                      └──────────────────► resolved
+```
+
+Two readings catch people out. **`resolved` is not terminal** — it means the
+case has an outcome, not that it has been closed out; only `closed` writes
+`closed_at`, which every duration metric reads. And **`open` is not a state**:
+it belonged to a pre-consolidation vocabulary and the database rejects it, so
+a filter naming it returns nothing rather than erroring, which is why it took
+a while to notice.
+
+Forward-only is deliberate. It is what makes "this case was closed" mean
+something, and without it a title edit that happens to carry a status could
+walk a case backwards silently. So reopening is its own act, with its own
+record:
+
+```bash
+curl -sX POST "localhost:8000/api/v1/cases/$CASE_ID/reopen" \
+  -H "Authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"reason": "The indicator reappeared on two more hosts overnight."}'
+```
+
+It requires a reason, increments `reopen_count`, and clears `closed_at` and
+`resolved_at` so a case cannot be counted as terminal and active at once.
+`reopen_count` exists because `reopened_at` is overwritten each time — a case
+reopened four times is a different conversation from one reopened once.
+
 ### Honest empty states
 
 ![No cases](apps/web/public/screenshots/cases-empty.png)
@@ -432,7 +580,7 @@ investigation.*
 
 ## 6. The REST API
 
-**516 operations across 416 paths.** The specification is
+**518 operations across 417 paths.** The specification is
 `docs/openapi.yaml` in the repository, regenerated on every change and gated
 against breaking changes in CI.
 
@@ -454,23 +602,36 @@ TOKEN=$(curl -s -X POST http://localhost:8000/api/v1/auth/login \
 | Create a case | `POST /api/v1/cases` |
 | Launch an investigation | `POST /api/v1/cases/{id}/investigate` |
 | Poll an investigation | `GET /api/v1/cases/{id}/investigations/{run_id}` |
-| Query the lake | `POST /api/v1/hunt/search` |
+| Query the lake | `POST /api/v1/lake/sql` |
 | Propose a detection | `POST /api/v1/detection-proposals` |
 | Configure SSO | `POST /api/v1/sso-connections` |
+| Reopen a closed case | `POST /api/v1/cases/{id}/reopen` |
+| Where the local model is running | `GET /api/v1/llm/runtime` |
+| Test the tenant's provider credential | `POST /api/v1/llm/credentials/test` |
+| Dashboard tiles for a window | `GET /api/v1/metrics/dashboard?period=7d` |
 
-One contract detail that costs people time: `GET /api/v1/alerts` returns the
-array under **`items`**, not `alerts`.
+Two contract details that cost people time:
+
+- `GET /api/v1/alerts` returns the array under **`items`**, not `alerts`.
+- On `/metrics/dashboard`, **`alerts.total` is open work, not everything ever
+  received.** It counts `new`, `triaging` and `in_progress`, and the severity
+  counts beside it are scoped the same way, because the console labels them
+  *Active Alerts* and *Critical — Require immediate action*. Closed work is
+  reported separately as `alerts.resolved`. Period-over-period `deltas` on
+  `/metrics/funnel` are **percentages** — `5.0` means +5%, and a client that
+  multiplies by 100 again renders `-93.75` as `-9375%`.
 
 ### Groups worth knowing about
 
 | Tag | Operations | What it covers |
 |---|---|---|
-| `detection_rules` | 33 | The rule catalogue, tuning, proposals, backtesting |
 | `mssp` | 33 | Child tenants, portfolio views, cross-tenant overrides |
-| `cases` | 24 | Cases, tasks, comments, evidence, investigations |
+| `detection_rules` | 30 | The rule catalogue, tuning, proposals, backtesting |
+| `cases` | 25 | Cases, tasks, comments, evidence, investigations, reopen |
 | `scim` | 21 | SCIM 2.0 user and group provisioning |
 | `graph` | 14 | Entity graph traversal, blast radius, context import |
 | `connectors` | 13 | Catalogue, instances, test-connection, scheduling |
+| `llm` | 6 | Provider configuration, where the model runs, credential testing |
 
 ### Rate limits and errors
 

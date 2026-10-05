@@ -181,12 +181,33 @@ Re-keying on `(tenant_id, natural_key)` is the proper fix and needs a migration.
 |--------|------|-------------|
 | `GET/POST` | `/cases` | Case list / create |
 | `GET/PATCH/DELETE` | `/cases/{id}` | Case detail / update / close |
+| `POST` | `/cases/{id}/reopen` | Reopen a closed case, with a reason |
 | `POST` | `/cases/{id}/comments` | Add comment |
 | `POST` | `/cases/{id}/timeline` | Add timeline event |
 | `GET/POST` | `/playbooks` | Playbook catalog |
 | `POST` | `/playbooks/{id}/execute` | Execute a playbook |
 | `GET` | `/playbooks/{id}/runs` | Execution history |
 | `POST` | `/actions/dry-run` | Simulate an action |
+
+`PATCH` is **forward-only**. The case state machine
+(`new → triaged → investigating → contained → resolved → closed`) has no
+backward edge, which is what makes "this case was closed" mean something —
+otherwise a title edit that happened to carry a status could walk a case
+backwards silently.
+
+Reopening is therefore its own verb. It requires `cases:write`, takes a
+`reason` of at least 8 characters, increments `reopen_count`, and clears
+`closed_at` / `resolved_at` so the case is not counted as both terminal and
+active. Only `closed` is terminal: `resolved` still has a forward edge to
+`closed`, so it is not reopenable and the route answers `409` saying so.
+
+```bash
+curl -sX POST "$AISOC_API/api/v1/cases/$CASE_ID/reopen" \
+  -H "Authorization: Bearer $AISOC_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"reason": "The indicator reappeared on two more hosts overnight.",
+       "status": "investigating"}'
+```
 
 ### Investigations & Ledger
 
@@ -208,6 +229,112 @@ the data model and rationale.
 |--------|------|-------------|
 | `GET` | `/copilot/context/{resource_type}/{resource_id}` | Context-aware suggestions for an alert / case / rule / playbook |
 | `POST` | `/copilot/actions/{action_id}:run` | Run a suggested action with the right agent tool |
+
+### AI model & credentials
+
+Where the model runs, and whether the credential pointed at it works.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/llm/status` | Which provider and model this pod is configured for |
+| `GET` | `/llm/runtime` | Where the local model is **actually** running |
+| `GET/PUT/DELETE` | `/llm/credentials` | The tenant's own provider credential (BYOK) |
+| `POST` | `/llm/credentials/test` | Place one real call with it and report what happened |
+
+`/llm/status` reports *configuration*; `/llm/runtime` reports *outcome*. The
+two differ more often than you would expect: a GPU reservation is a request,
+and a model can still land on the CPU for want of VRAM or a usable driver.
+`/llm/runtime` asks Ollama rather than reading the compose file back.
+
+```json
+{
+  "placement": "gpu",
+  "detail": "llama3.2:3b-instruct-q4_K_M is running on the GPU (2.9 GB in VRAM).",
+  "base_url": "http://ollama:11434",
+  "model": "llama3.2:3b-instruct-q4_K_M",
+  "vram_bytes": 3113851904,
+  "total_bytes": 3113851904,
+  "options": ["Use a hosted provider instead: Settings -> Deployment & AI, or the setup wizard."]
+}
+```
+
+`placement` has five values and **`unknown` is one of them**: Ollama unloads a
+model after a few minutes idle, so an empty answer means nobody has asked it
+anything yet — which is not the same as CPU, and answering CPU there would be
+a guess about the exact thing you are deciding on.
+
+| `placement` | Means |
+|---|---|
+| `gpu` | the whole model is in VRAM |
+| `partial` | split between VRAM and CPU; `detail` says what fraction |
+| `cpu` | entirely on the CPU |
+| `unknown` | no model loaded right now, so it cannot say |
+| `unreachable` | nothing answered — expected on a deployment using a hosted provider |
+
+`vram_bytes` and `total_bytes` are **absent**, not zero, when nothing was
+measured.
+
+#### Testing a credential
+
+The `GET`/`PUT`/`DELETE` routes validate *shape* — that the URL parses, that
+the provider/key/base-URL combination is internally consistent. None of them
+talks to the provider, so a revoked key used to surface as triage quietly
+falling back to the deterministic path.
+
+```bash
+curl -sX POST "$AISOC_API/api/v1/llm/credentials/test" \
+  -H "Authorization: Bearer $AISOC_TOKEN"
+```
+
+```json
+{
+  "outcome": "ok",
+  "detail": "Completed a one-token request against 'gpt-4o-mini' in 412 ms.",
+  "provider": "openai",
+  "model": "gpt-4o-mini",
+  "latency_ms": 412
+}
+```
+
+| `outcome` | Means |
+|---|---|
+| `ok` | the provider answered. A `429` counts: being rate-limited means you reached it and were authenticated |
+| `refused` | reached it and it said no — usually the key, sometimes the model name, which `detail` distinguishes |
+| `unreachable` | nothing answered at that address |
+| `unverified` | air-gapped, so the call was **not attempted** — the policy working, not a bad key |
+
+Requires `settings:write` rather than `settings:read`: it spends the tenant's
+money and touches an external service, which is not a read. The request is one
+token against a fixed prompt.
+
+See [Where the model runs](../operations/where-the-model-runs) for the four
+deployment options these routes report on.
+
+### Metrics
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/metrics/dashboard` | Alert, case and MTTR tiles |
+| `GET` | `/metrics/soc` | SOC KPIs, ATT&CK heatmap, calibration curve |
+| `GET` | `/metrics/funnel` | events → correlations → alerts, with deltas |
+| `GET` | `/metrics/alerts/trend` | Alert volume over time |
+
+All four take `period` — `1h`, `24h`, `7d` or `30d`, defaulting to `24h` —
+and it is the same window the console's global selector sets.
+
+**`alerts.total` is open work, not everything ever received.** It counts
+`new`, `triaging` and `in_progress`; the severity counts beside it are scoped
+the same way, because the console labels them *Active Alerts* and *Critical —
+Require immediate action*. Closed work is reported separately as
+`alerts.resolved`, so narrowing the active tile did not lose the number.
+
+Counts of current state are deliberately **not** windowed. "How many criticals
+are open" is a question about now, and scoping it to the last hour would hide
+the backlog rather than scope it. `period` drives the trend, the funnel and
+the closure figures.
+
+`deltas` on `/metrics/funnel` are **percentages** — `5.0` means +5%, not
++500%. A client that multiplies by 100 again renders `-93.75` as `-9375%`.
 
 ### Marketplace
 
