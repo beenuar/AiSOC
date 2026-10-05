@@ -63,8 +63,7 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
         max_lines=80,
         max_depth=3,
     )
-    evidence_available = bool((state.raw_alert or {}).get("alerts")
-                               or (state.enrichment_cache or {}))
+    evidence_available = bool((state.raw_alert or {}).get("alerts") or (state.enrichment_cache or {}))
 
     prompt = (
         f"Alert summary:\n{safe_summary}\n\n"
@@ -72,9 +71,11 @@ async def _llm_forensic(state: InvestigatorState) -> dict[str, Any]:
         f"Recon findings:\n{safe_recon}\n"
         f"MITRE techniques: {safe_mitre}\n\n"
         f"Enrichment data (sample):\n{enrichment_blob}"
-        + ("" if evidence_available else
-           "\n\nWARNING: no alert payload, no enrichment, no lake results "
-           "were retrieved. Produce only an inconclusive analysis.")
+        + (
+            ""
+            if evidence_available
+            else "\n\nWARNING: no alert payload, no enrichment, no lake results were retrieved. Produce only an inconclusive analysis."
+        )
     )
     bundle_append = format_bundle_prompt_append(state.context_bundle)
     if bundle_append:
@@ -180,27 +181,31 @@ async def run_forensic(state_dict: dict[str, Any]) -> dict[str, Any]:
     # cap confidence, and mark the run inconclusive so the report and the
     # UI cannot present fiction as fact (2026-10 live incident: a run over
     # an empty raw_alert "found" C:\\Windows\\Temp\\malware.exe).
-    has_primary = bool((state.raw_alert or {}).get("alerts")
-                       or (state.raw_alert or {}).get("title")
-                       or (state.raw_alert or {}).get("full_log"))
+    has_primary = bool(
+        (state.raw_alert or {}).get("alerts") or (state.raw_alert or {}).get("title") or (state.raw_alert or {}).get("full_log")
+    )
     has_enriched = bool(state.enrichment_cache)
     if not has_primary and not has_enriched:
-        findings = findings.model_copy(update={
-            "artefacts": [],
-            "confidence": min(findings.confidence, 0.1),
-            "root_cause_hypothesis": (
-                "INCONCLUSIVE - no alert payload or retrieved evidence was "
-                "available to this investigation; any finding would be "
-                "speculation."
-            ),
-            "summary": (
-                "Automated forensic analysis inconclusive: zero evidence "
-                "retrieved. Manual review with the source-console locator on the "
-                "case is required."
-            ),
-        })
+        findings = findings.model_copy(
+            update={
+                "artefacts": [],
+                "confidence": min(findings.confidence, 0.1),
+                "root_cause_hypothesis": (
+                    "INCONCLUSIVE - no alert payload or retrieved evidence was "
+                    "available to this investigation; any finding would be "
+                    "speculation."
+                ),
+                "summary": (
+                    "Automated forensic analysis inconclusive: zero evidence "
+                    "retrieved. Manual review with the source-console locator on the "
+                    "case is required."
+                ),
+            }
+        )
         state.log(
-            StepKind.WARNING if hasattr(StepKind, "WARNING") else StepKind.DECISION_REASON,
+            # StepKind has no WARNING member, so the guarded form this replaced
+            # always took the fallback while still failing the type check.
+            StepKind.DECISION_REASON,
             "ForensicAgent",
             "inconclusive: zero evidence retrieved; artefacts suppressed",
         )

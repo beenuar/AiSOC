@@ -272,8 +272,13 @@ async def create_sso_connection(
         action="sso.connection_created",
         resource="sso_connection",
         resource_id=str(row["id"]),
-        changes={"provider": body.provider, "issuer": body.issuer, "enabled": body.enabled,
-                 "default_role": body.default_role, "group_role_mode": body.group_role_mode},
+        changes={
+            "provider": body.provider,
+            "issuer": body.issuer,
+            "enabled": body.enabled,
+            "default_role": body.default_role,
+            "group_role_mode": body.group_role_mode,
+        },
     )
     await db.commit()
     return _row_to_out(row)
@@ -340,8 +345,12 @@ async def update_sso_connection(
         action="sso.connection_updated",
         resource="sso_connection",
         resource_id=str(connection_id),
-        changes={"enabled": body.enabled, "default_role": body.default_role,
-                 "group_role_mapping": body.group_role_mapping, "group_role_mode": body.group_role_mode},
+        changes={
+            "enabled": body.enabled,
+            "default_role": body.default_role,
+            "group_role_mapping": body.group_role_mapping,
+            "group_role_mode": body.group_role_mode,
+        },
     )
     await db.commit()
     return _row_to_out(row)

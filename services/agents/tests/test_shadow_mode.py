@@ -17,6 +17,7 @@ reads. Both are the evaluation answering itself.
 
 from __future__ import annotations
 
+import inspect
 import uuid
 from typing import Any
 
@@ -215,12 +216,24 @@ class TestTheLedgerLeavesTheAnalystsColumnsAlone:
     def test_the_disposition_write_is_guarded_by_the_shadow_parameter(self):
         source = ledger_module.persist_auto_triage.__doc__ or ""
         assert "shadow" in source
-        import inspect
 
-        body = inspect.getsource(ledger_module.persist_auto_triage)
+        body = " ".join(inspect.getsource(ledger_module.persist_auto_triage).split())
         assert "SET disposition = CASE WHEN $10 THEN disposition ELSE $3 END" in body
-        assert "status = CASE WHEN $7 AND NOT $10 THEN 'resolved' ELSE status END" in body
         assert "resolved_at = CASE WHEN $7 AND NOT $10 THEN now() ELSE resolved_at END" in body
+
+        # Check the property rather than one known line. The previous form
+        # asserted the exact text of the single status branch that existed when
+        # it was written, so adding a branch broke it on layout alone -- it
+        # would not have failed had the new branch simply omitted the guard,
+        # which is the thing that actually matters.
+        status_case = body[body.index("status = CASE") : body.index("END, resolved_at")]
+        branches = [b.strip() for b in status_case.split("WHEN")[1:] if "THEN" in b]
+        assert branches, f"no status branches found to check in: {status_case!r}"
+        for branch in branches:
+            assert "NOT $10" in branch, (
+                f"status branch {branch!r} writes a status without the shadow guard. "
+                "A shadow run must never move an alert's status."
+            )
 
     def test_the_guard_does_not_depend_on_the_caller_forcing_auto_closed_off(self):
         """``NOT $10`` is what makes this survive a forgetful future caller.

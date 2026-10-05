@@ -368,8 +368,7 @@ async def provision_user(
         # silently viewed-later, so "your account does not exist yet" is
         # actionable rather than mysterious.
         raise SsoProvisioningError(
-            "just-in-time provisioning is disabled on this SSO connection; "
-            "an administrator must create the account first"
+            "just-in-time provisioning is disabled on this SSO connection; an administrator must create the account first"
         )
 
     user_id = uuid.uuid4()

@@ -4,6 +4,7 @@ These tests lock the security properties of the SSO wave, not its shape:
 least-privilege defaults, fail-closed gates, auditable role changes, and the
 feature flag that keeps the whole surface shut until verified.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -16,13 +17,31 @@ def test_infosec_role_exists_and_is_least_privilege_analyst() -> None:
 
     infosec = set(ROLE_PERMISSIONS["infosec"])
     # The spec floor: analyst work is fully available.
-    assert {"alerts:read", "alerts:write", "cases:read", "cases:write",
-            "threat_intel:read", "threat_intel:write", "rules:write",
-            "playbooks:execute", "lake:query", "reports:read"} <= infosec
+    assert {
+        "alerts:read",
+        "alerts:write",
+        "cases:read",
+        "cases:write",
+        "threat_intel:read",
+        "threat_intel:write",
+        "rules:write",
+        "playbooks:execute",
+        "lake:query",
+        "reports:read",
+    } <= infosec
     # The ceiling: no user, role, settings, credential, audit or admin door.
-    forbidden = {"users:write", "users:delete", "roles:write", "roles:delete",
-                 "settings:write", "api_keys:manage", "platform_admin",
-                 "alert_source_raw:read", "audit:delete", "connectors:write"}
+    forbidden = {
+        "users:write",
+        "users:delete",
+        "roles:write",
+        "roles:delete",
+        "settings:write",
+        "api_keys:manage",
+        "platform_admin",
+        "alert_source_raw:read",
+        "audit:delete",
+        "connectors:write",
+    }
     assert not (infosec & forbidden)
 
 
@@ -107,15 +126,15 @@ def test_status_endpoint_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("SSO_LOCAL_ADMIN_ONLY", raising=False)
     monkeypatch.delenv("SSO_LOGIN_LABEL", raising=False)
     out = asyncio.run(auth_ep.sso_status())
-    assert out["sso_enabled"] is False          # hidden by default
-    assert out["local_login_enabled"] is True   # break-glass stays open
+    assert out["sso_enabled"] is False  # hidden by default
+    assert out["local_login_enabled"] is True  # break-glass stays open
 
     monkeypatch.setenv("SSO_ENABLED", "true")
     monkeypatch.setenv("SSO_LOGIN_LABEL", "Sign in with Acme")
     out = asyncio.run(auth_ep.sso_status())
     assert out["sso_enabled"] is True
     assert out["login_label"] == "Sign in with Acme"
-    assert out["local_login_enabled"] is True   # until the operator closes it
+    assert out["local_login_enabled"] is True  # until the operator closes it
 
     monkeypatch.setenv("SSO_LOCAL_ADMIN_ONLY", "true")
     out = asyncio.run(auth_ep.sso_status())

@@ -110,8 +110,6 @@ class DashboardMetrics(BaseModel):
     topMitre: list[MitreTactic]
     alertsTrend: list[TrendPoint]
     threatsBySource: list[SourceThreat]
-    #: Echo of the selected window so the console can confirm what it fetched.
-    period: str = "24h"
 
 
 # ───────────────────────────── v1.5 Funnel models ─────────────────────────────
@@ -453,9 +451,7 @@ async def get_dashboard_metrics(
     # jsonb_array_elements_text + GROUP BY in the same SELECT 500s on some
     # Postgres builds.
     tactic_rows = (
-        await db.execute(
-            select(Alert.mitre_tactics).where(and_(Alert.tenant_id == tenant_id, Alert.mitre_tactics.isnot(None), _in_window))
-        )
+        await db.execute(select(Alert.mitre_tactics).where(and_(Alert.tenant_id == tenant_id, Alert.mitre_tactics.isnot(None), _in_window)))
     ).all()
 
     tactic_counts: dict[str, int] = {}

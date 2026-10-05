@@ -39,7 +39,7 @@ import os
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from urllib.parse import quote
 
 import httpx
@@ -104,9 +104,20 @@ def _validate_agents_path(path: str) -> str:
 # Pydantic schemas
 # ────────────────────────────────────────────────────────────────────────────
 
-CaseStatus = Literal["new", "triaged", "investigating", "contained", "resolved", "closed",
-                  # legacy/console aliases, normalized to the ladder above in update_case
-                  "open", "in_progress", "pending", "pending_closure", "cancelled"]
+CaseStatus = Literal[
+    "new",
+    "triaged",
+    "investigating",
+    "contained",
+    "resolved",
+    "closed",
+    # legacy/console aliases, normalized to the ladder above in update_case
+    "open",
+    "in_progress",
+    "pending",
+    "pending_closure",
+    "cancelled",
+]
 CaseSeverity = Literal["info", "low", "medium", "high", "critical"]
 
 # Valid forward-only state transitions
@@ -129,8 +140,14 @@ _STATUS_ALIASES: dict[str, str] = {
 }
 
 
-def _normalize_status(status: str) -> str:
-    return _STATUS_ALIASES.get(status, status)
+def _normalize_status(status: str) -> CaseStatus:
+    """Map a legacy write vocabulary onto the canonical ladder.
+
+    Returns `CaseStatus` rather than `str` because the result is assigned back
+    onto a `CaseStatus`-typed field: every alias resolves to a member of the
+    ladder, and annotating it as `str` only moved the mismatch to the caller.
+    """
+    return cast("CaseStatus", _STATUS_ALIASES.get(status, status))
 
 
 def _status_transition_ok(current: str, target: str) -> bool:
@@ -138,6 +155,7 @@ def _status_transition_ok(current: str, target: str) -> bool:
     `case_status.TRANSITIONS`. Backwards moves and undeclared skips are
     rejected; reopening goes through the explicit reopen action."""
     return target in _TRANSITIONS.get(current, set())
+
 
 #: The canonical ladder, in order, for the forward-walk used by the
 #: agent-launch advance.
@@ -923,6 +941,7 @@ def case_queue_for(case_row: Any, queues: list[Any]) -> Any:
         queues,
     )
 
+
 @router.post("/{case_id}/alerts", response_model=CaseResponse, summary="Link alerts to a case")
 async def add_alerts(
     case_id: str, body: AddAlertsRequest, db: DBSession, user: Annotated[AuthUser, Depends(require_permission("cases:write"))]
@@ -1562,15 +1581,19 @@ async def case_investigate(
     try:
         if case_alert_ids:
             rows = (
-                await db.execute(
-                    text(
-                        "SELECT id, title, description, severity, connector_type, "
-                        "affected_ips, affected_hosts, affected_users, event_time, raw_event "
-                        "FROM alerts WHERE id::text = ANY(:ids) AND tenant_id = :tenant_id "
-                        "ORDER BY event_time DESC LIMIT 3"
-                    ).bindparams(ids=case_alert_ids, tenant_id=user.tenant_id)
+                (
+                    await db.execute(
+                        text(
+                            "SELECT id, title, description, severity, connector_type, "
+                            "affected_ips, affected_hosts, affected_users, event_time, raw_event "
+                            "FROM alerts WHERE id::text = ANY(:ids) AND tenant_id = :tenant_id "
+                            "ORDER BY event_time DESC LIMIT 3"
+                        ).bindparams(ids=case_alert_ids, tenant_id=user.tenant_id)
+                    )
                 )
-            ).mappings().all()
+                .mappings()
+                .all()
+            )
             alerts_out = []
             for r in rows:
                 raw = r["raw_event"] if isinstance(r["raw_event"], dict) else {}
@@ -1592,7 +1615,7 @@ async def case_investigate(
             if alerts_out:
                 raw_alert_payload = {"alerts": alerts_out}
     except Exception:  # noqa: BLE001 - never block launch on enrichment
-        logger.warning("investigate.launch.raw_alert_enrichment_failed", case_id=str(cid), exc_info=True)
+        logger.warning("investigate.launch.raw_alert_enrichment_failed case_id=%s", cid, exc_info=True)
 
     # Launching an agent investigation IS an analyst action: advance
     # new/triaged cases to 'investigating' in the same request so the
@@ -1602,22 +1625,21 @@ async def case_investigate(
     try:
         st_row = (
             await db.execute(
-                text(
-                    "SELECT status FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id"
-                ).bindparams(id=cid, tenant_id=user.tenant_id)
+                text("SELECT status FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                    id=cid, tenant_id=user.tenant_id
+                )
             )
         ).fetchone()
         if st_row and _forward_to_investigating_ok(st_row.status):
             await db.execute(
                 text(
-                    "UPDATE aisoc_cases SET status = 'investigating', updated_at = :now "
-                    "WHERE id = :id AND tenant_id = :tenant_id"
+                    "UPDATE aisoc_cases SET status = 'investigating', updated_at = :now WHERE id = :id AND tenant_id = :tenant_id"
                 ).bindparams(id=cid, tenant_id=user.tenant_id, now=datetime.now(UTC))
             )
             await db.commit()
     except Exception:  # noqa: BLE001 — never block the launch on the status bump
         await db.rollback()
-        logger.warning("investigate.launch.status_advance_failed", case_id=str(cid), exc_info=True)
+        logger.warning("investigate.launch.status_advance_failed case_id=%s", cid, exc_info=True)
 
     resp = await _agents_proxy(
         "POST",
@@ -1655,15 +1677,20 @@ async def list_case_investigations(
     # Agents service has no list route (or is unreachable) — fall back to the
     # local ledger, which every run persists to anyway.
     from app.models.investigation import InvestigationRun
+
     rows = (
-        await db.execute(
-            select(InvestigationRun)
-            .where(InvestigationRun.tenant_id == user.tenant_id)
-            .where(InvestigationRun.case_id.in_([str(cid), str(case_id)]))
-            .order_by(InvestigationRun.created_at.desc())
-            .limit(20)
+        (
+            await db.execute(
+                select(InvestigationRun)
+                .where(InvestigationRun.tenant_id == user.tenant_id)
+                .where(InvestigationRun.case_id.in_([str(cid), str(case_id)]))
+                .order_by(InvestigationRun.created_at.desc())
+                .limit(20)
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     return {
         "runs": [
             {

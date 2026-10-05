@@ -454,10 +454,9 @@ async def oidc_callback(
     # and the console moves it into the storage its API client reads.
     separator = "&" if "#" in redirect_url else "#"
     response = RedirectResponse(
-            url=f"{redirect_url}{separator}access_token={session['access_token']}"
-            f"&refresh_token={session['refresh_token']}",
-            status_code=302,
-        )
+        url=f"{redirect_url}{separator}access_token={session['access_token']}&refresh_token={session['refresh_token']}",
+        status_code=302,
+    )
     response.delete_cookie("oidc_state")
     return response
 

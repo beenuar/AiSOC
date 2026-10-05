@@ -5,7 +5,7 @@ import logging
 import re
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
@@ -135,6 +135,20 @@ class AlertDetailResponse(AlertResponse):
     wazuh_locator: dict = {}
 
 
+def _mapping_section(source: dict[str, Any], key: str) -> dict[str, Any]:
+    """One nested object from a raw event, or an empty dict.
+
+    Written out rather than inlined as
+    `source.get(k) if isinstance(source.get(k), dict) else {}`. That form reads
+    the key twice and, more to the point, mypy cannot narrow it: the true
+    branch keeps `.get()`'s `Any | None`, so every `.get()` on the result was a
+    `union-attr` error even though the isinstance guard makes it safe. Seven of
+    them, on code that works.
+    """
+    value = source.get(key)
+    return value if isinstance(value, dict) else {}
+
+
 def _build_wazuh_locator(raw_event: dict) -> dict:
     """Extract where-in-the-source-HIDS coordinates from a stored alert payload.
 
@@ -153,11 +167,11 @@ def _build_wazuh_locator(raw_event: dict) -> dict:
         raw = rd
     merged = {**raw, **{k: v for k, v in raw_event.items() if k != "raw_data"}}
 
-    rule = raw_event.get("rule") if isinstance(raw_event.get("rule"), dict) else {}
-    agent = raw_event.get("agent") if isinstance(raw_event.get("agent"), dict) else {}
-    data = raw_event.get("data") if isinstance(raw_event.get("data"), dict) else {}
-    finding = raw_event.get("finding") if isinstance(raw_event.get("finding"), dict) else {}
-    device = raw_event.get("device") if isinstance(raw_event.get("device"), dict) else {}
+    rule = _mapping_section(raw_event, "rule")
+    agent = _mapping_section(raw_event, "agent")
+    data = _mapping_section(raw_event, "data")
+    finding = _mapping_section(raw_event, "finding")
+    device = _mapping_section(raw_event, "device")
 
     candidates = {
         "wazuh_alert_id": merged.get("alert_id") or rule.get("alert_id") or finding.get("uid") or raw_event.get("id"),

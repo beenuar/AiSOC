@@ -45,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 # the account is being run now rather than a year ago.
 MTTR_WINDOW = timedelta(days=30)
 
+
 def _tid(t):
     """Bind a native UUID for raw SQL on uuid-typed columns (asyncpg)."""
     return t if isinstance(t, uuid.UUID) else uuid.UUID(str(t))

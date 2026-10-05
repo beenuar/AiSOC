@@ -72,10 +72,9 @@ async def get_attack_chain(
     # legacy ``cases`` table — ``select(Case)`` 404'd every real case.
     case_row = (
         await db.execute(
-            text(
-                "SELECT id, tenant_id, alert_ids FROM aisoc_cases "
-                "WHERE id = :id AND tenant_id = :tenant_id"
-            ).bindparams(id=case_id, tenant_id=user.tenant_id)
+            text("SELECT id, tenant_id, alert_ids FROM aisoc_cases WHERE id = :id AND tenant_id = :tenant_id").bindparams(
+                id=case_id, tenant_id=user.tenant_id
+            )
         )
     ).fetchone()
     if case_row is None:

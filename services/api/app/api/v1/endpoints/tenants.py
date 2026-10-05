@@ -289,8 +289,7 @@ async def update_user(
             remaining = (
                 await db.execute(
                     text(
-                        "SELECT count(*) FROM users "
-                        "WHERE tenant_id = :t AND is_active = TRUE AND role = ANY(:wild) AND id <> :keep"
+                        "SELECT count(*) FROM users WHERE tenant_id = :t AND is_active = TRUE AND role = ANY(:wild) AND id <> :keep"
                     ).bindparams(
                         t=str(current_user.tenant_id),
                         wild=sorted(role_grants.wildcard_roles()),
@@ -330,7 +329,7 @@ async def update_user(
                 tenant_id=current_user.tenant_id,
                 actor_id=current_user.user_id,
                 actor_email=current_user.email,
-        api_key_prefix=getattr(current_user, "api_key_prefix", None),
+                api_key_prefix=getattr(current_user, "api_key_prefix", None),
                 action="users:role_changed",
                 resource="user",
                 resource_id=str(user_id),

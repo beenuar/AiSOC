@@ -111,6 +111,16 @@ names = ["Torq", "Tines", "Wazuh"]
 reason = "Connector modules, the connector registry, event fixtures and connector tests. These vendors ship as first-party integrations."
 
 [[allow]]
+# The published spec is generated from the code above, so a connector field
+# that legitimately names a first-party integration reappears here on every
+# regeneration. `wazuh_locator` on the alert envelope is the deep link back to
+# the system the alert came from; excusing the generator's input but not its
+# output would make `make openapi` red the build.
+paths = ["docs/openapi.yaml"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "Generated from services/connectors/** and the connector-derived API models, which are already excused above. The spec is an artefact of that code, not an independent mention."
+
+[[allow]]
 paths = ["plugins/*/plugin.yaml"]
 names = ["Torq", "Tines", "Wazuh"]
 reason = "Marketplace plugin manifests, one per connector, mirroring the connector's schema()."

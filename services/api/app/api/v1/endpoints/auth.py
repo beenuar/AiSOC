@@ -111,7 +111,7 @@ async def login(request: LoginRequest, http_request: Request, db: DBSession) -> 
     # other attempt here.
     sso_enabled = (settings_dict().get("SSO_ENABLED") or "false").strip().lower() in {"1", "true", "yes", "on"}
     local_admin_only = (settings_dict().get("SSO_LOCAL_ADMIN_ONLY") or "false").strip().lower() in {"1", "true", "yes", "on"}
-    if sso_enabled and local_admin_only and user.role not in WILDCARD_ROLES:
+    if sso_enabled and local_admin_only and user.role not in WILDCARD_ROLES():
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Password sign-in is disabled for this account. Use single sign-on.",

@@ -68,6 +68,7 @@ def _tid(t):
     """Bind a native UUID for raw SQL on uuid-typed columns (asyncpg)."""
     return t if isinstance(t, uuid.UUID) else uuid.UUID(str(t))
 
+
 router = APIRouter(prefix="/insights", tags=["insights"])
 
 
@@ -310,11 +311,7 @@ async def _case_sparkline(
     # `cases` table, so the sparkline was flat zero for live tenants.
     rows = (
         await db.execute(
-            text(
-                "SELECT created_at FROM aisoc_cases "
-                "WHERE tenant_id = :tenant_id "
-                "AND created_at >= :start AND created_at < :end"
-            ),
+            text("SELECT created_at FROM aisoc_cases WHERE tenant_id = :tenant_id AND created_at >= :start AND created_at < :end"),
             {"tenant_id": _tid(tenant_id), "start": start, "end": end},
         )
     ).all()
