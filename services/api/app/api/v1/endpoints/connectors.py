@@ -321,12 +321,6 @@ def _connectors_service_url(path: str) -> str:
     return f"{base}/api/v1{suffix}"
 
 
-# Header the connectors service reads to learn which tenant a trusted service
-# is acting for. Must match ``TENANT_HEADER`` in
-# services/connectors/app/security/tenant_scope.py.
-_TENANT_HEADER = "X-AiSOC-Tenant-ID"
-
-
 def _service_token() -> str:
     """The shared secret this service presents to the connectors service."""
     return connectors_auth.service_token()

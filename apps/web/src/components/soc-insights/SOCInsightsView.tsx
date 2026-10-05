@@ -8,7 +8,7 @@
  */
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTimeWindow } from '@/components/layout/TimeWindowProvider';
 import useSWR from 'swr';
 
