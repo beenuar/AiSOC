@@ -102,18 +102,38 @@ the tag they pull by default is the defect this arrangement exists to prevent.
 The chart is published to an OCI registry on every release:
 
 ```bash
-helm show chart oci://ghcr.io/beenuar/charts/aisoc --version stable
+helm show chart oci://ghcr.io/beenuar/charts/aisoc --version '7.x'
 helm install aisoc oci://ghcr.io/beenuar/charts/aisoc --version <chart-version> -n aisoc --create-namespace
 ```
 
-The chart has the same `stable` channel the images do, and it follows the
-**chart's** major rather than the application's -- the break it protects an
-operator from is a values-schema break, and the chart versions independently of
-`appVersion`. `--version stable` resolves to the newest chart within the major
-the channel is on; a chart major stops it until a maintainer dispatches with
-`promote_stable: true`, exactly as for images. Pin an explicit version in
-production; the channel is for the case where you would otherwise have pinned
-nothing at all.
+:::caution `--version stable` does not work, and never did
+
+This page used to say `--version stable`. Helm's `--version` takes a semver
+**constraint**, not a tag, so it rejects a channel name client-side:
+
+```
+Error: improper constraint: stable
+```
+
+That is a helm limitation rather than a missing tag — `latest` is refused the
+same way, while `7.x` and `^7.4.0` both resolve. The images' `stable` tag
+works because Docker addresses any tag; helm does not.
+
+Use a constraint instead. **`--version '7.x'` gives you exactly what the
+channel was meant to give you**: the newest chart within major 7, and nothing
+from major 8 until you choose it. Quote it, or your shell will glob.
+
+:::
+
+The chart follows the **chart's** major rather than the application's — the
+break it protects an operator from is a values-schema break, and the chart
+versions independently of `appVersion`. A chart `stable` tag is published for
+OCI tooling that can address tags directly (`docker buildx imagetools
+inspect`, `oras`), and a chart major stops its promotion until a maintainer
+dispatches with `promote_stable: true`, exactly as for images.
+
+Pin an explicit version in production; a constraint is for the case where you
+would otherwise have pinned nothing at all.
 
 The chart's `version` and its `appVersion` move independently. `appVersion`
 names the images an unpinned install pulls; `version` is the chart's own. A
