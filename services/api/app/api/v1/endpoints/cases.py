@@ -1673,6 +1673,10 @@ async def list_case_investigations(
         if resp.status_code < 400:
             return resp.json()
     except HTTPException:
+        # Deliberate: the fallback below is the handling. The comment lives
+        # inside the clause because an explanation sitting after the block
+        # reads as commentary on the next statement, and `py/empty-except`
+        # cannot see it there either.
         pass
     # Agents service has no list route (or is unreachable) — fall back to the
     # local ledger, which every run persists to anyway.

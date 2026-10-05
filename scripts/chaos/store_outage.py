@@ -227,10 +227,58 @@ def grade_outage(
     return result
 
 
+def _resolve_container(service: str) -> str | None:
+    """The container id for a compose service, or ``None`` if it is not up.
+
+    Asked of compose rather than assembled from a convention. Every service in
+    `docker-compose.yml` pins `container_name: aisoc-<service>`, so the bare
+    service name this module records never matched a running container and
+    every outage reported `could not stop container 'postgres' -- docker
+    unavailable?`. All six store-outage jobs failed that way, naming Docker
+    for a defect that was ours.
+
+    `docker compose ps -q` is authoritative: it accounts for the pinned name,
+    the project prefix when there is no pinned name, and a service that is
+    simply not running. The literal fallbacks exist so the script still works
+    when invoked outside a compose project.
+    """
+    try:
+        done = subprocess.run(
+            ["docker", "compose", "ps", "-q", service],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        cid = (done.stdout or "").strip().splitlines()
+        if done.returncode == 0 and cid:
+            return cid[0]
+    except Exception:  # noqa: BLE001 - fall through to the literal names
+        pass
+
+    for candidate in (f"aisoc-{service}", service):
+        try:
+            done = subprocess.run(
+                ["docker", "inspect", "-f", "{{.Id}}", candidate],
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            if done.returncode == 0 and (done.stdout or "").strip():
+                return candidate
+        except Exception:  # noqa: BLE001
+            continue
+    return None
+
+
 def _container_action(container: str, action: str) -> bool:
+    target = _resolve_container(container)
+    if target is None:
+        return False
     try:
         subprocess.run(
-            ["docker", action, container],
+            ["docker", action, target],
             check=True,
             capture_output=True,
             timeout=60,

@@ -68,6 +68,30 @@ DELIBERATE_DEFAULTS: dict[str, str] = {
     "AISOC_AGENTS_URL": "the compose hostname the console proxies agent calls to",
     "AISOC_REALTIME_URL": "the compose hostname the console proxies WS/SSE to",
     "AISOC_DEMO_MODE": "a boolean; false is the correct value for every deployment that is not the public demo",
+    "SSO_ENABLED": (
+        "off is the correct default for a feature that cannot work until an "
+        "operator has configured a provider and verified the connection. "
+        "Shipping it on would render an SSO button that 503s"
+    ),
+    "SSO_PROVIDER": (
+        "which flow the login button points at, not a secret. `oidc` is the "
+        "default because it needs no certificate exchange; it is inert while "
+        "SSO_ENABLED is false"
+    ),
+    "SSO_LOGIN_LABEL": (
+        "the words on the login button. A default is required because an empty "
+        "label renders a button with no text; it is inert while SSO is off"
+    ),
+    "SSO_LOCAL_ADMIN_ONLY": (
+        "off is the safe default: on, it restricts password sign-in to wildcard "
+        "roles, which locks every other local account out of a deployment that "
+        "has not finished configuring SSO"
+    ),
+    "OIDC_SCOPES": (
+        "the OIDC scopes requested at authorisation. These four are what the "
+        "provisioning path reads — `groups` drives role mapping — so an empty "
+        "default would ask for nothing and bind no role"
+    ),
     "AISOC_GPU_COUNT": (
         "a device count, not a secret. 1 is the right value for every host with one "
         "GPU, and it is only read by `make up-gpu` — the default `make up` ignores it"

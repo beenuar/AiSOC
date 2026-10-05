@@ -153,6 +153,63 @@ def _module_literal(tree: ast.Module, name: str) -> object | None:
     return None
 
 
+#: The permission string that means "every permission", as
+#: `app/core/role_grants.py` declares it.
+WILDCARD = "*"
+
+
+def _subscript_assigned_keys(tree: ast.Module, name: str) -> dict[str, ast.expr]:
+    """Roles bound by ``NAME["role"] = <expr>`` after the dict literal.
+
+    `_module_literal` only matches an `ast.Name` target, so a role defined
+    this way is invisible to it -- and `infosec` is defined exactly this way,
+    as a set expression derived from two other roles so the two cannot drift.
+    The gate therefore reported it as "grantable but grants nothing" while the
+    role resolves to 18 permissions at runtime, which is a false positive on
+    working code and is how a gate gets suppressed.
+    """
+    found: dict[str, ast.expr] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Assign):
+            continue
+        for target in node.targets:
+            if (
+                isinstance(target, ast.Subscript)
+                and isinstance(target.value, ast.Name)
+                and target.value.id == name
+                and isinstance(target.slice, ast.Constant)
+                and isinstance(target.slice.value, str)
+            ):
+                found[target.slice.value] = node.value
+    return found
+
+
+def _mentions_wildcard(expr: ast.expr) -> bool:
+    """Whether an expression could produce the wildcard permission.
+
+    Conservative: a literal ``"*"`` anywhere in the subtree counts. A role
+    built by *subtracting* from other roles cannot gain a permission none of
+    them had, and the callers below resolve the roles it reads, so this only
+    has to catch the wildcard being introduced here.
+    """
+    return any(isinstance(n, ast.Constant) and n.value == WILDCARD for n in ast.walk(expr))
+
+
+def _referenced_roles(expr: ast.expr, name: str) -> set[str]:
+    """Roles an expression reads out of ``NAME[...]``."""
+    out: set[str] = set()
+    for n in ast.walk(expr):
+        if (
+            isinstance(n, ast.Subscript)
+            and isinstance(n.value, ast.Name)
+            and n.value.id == name
+            and isinstance(n.slice, ast.Constant)
+            and isinstance(n.slice.value, str)
+        ):
+            out.add(n.slice.value)
+    return out
+
+
 def _binding(tree: ast.Module, name: str) -> ast.expr | None:
     """The expression a module-level name is bound to, literal or not."""
     for node in ast.walk(tree):
@@ -308,8 +365,20 @@ def audit(root: Path) -> tuple[list[str], dict[str, int]]:
         problems.append(f"{SECURITY} is absent, so the enforced role map could not be read")
         return problems, counts
 
-    enforced = _module_literal(_parse(security), "ROLE_PERMISSIONS")
+    security_tree = _parse(security)
+    enforced = _module_literal(security_tree, "ROLE_PERMISSIONS")
+    # Roles added after the literal, which `_module_literal` cannot see.
+    derived = _subscript_assigned_keys(security_tree, "ROLE_PERMISSIONS")
     if isinstance(enforced, dict):
+        for role, expr in derived.items():
+            if role in enforced:
+                continue
+            # A derived role holds the wildcard only if it introduces one or
+            # reads a role that already has it. Recorded as the permission
+            # list so the wildcard scan below reads it the same way as a
+            # literal row.
+            inherits_wildcard = any(WILDCARD in (enforced.get(r) or []) for r in _referenced_roles(expr, "ROLE_PERMISSIONS"))
+            enforced[role] = [WILDCARD] if (_mentions_wildcard(expr) or inherits_wildcard) else ["<derived>"]
         counts["roles"] = len(enforced)
     if not role_grants.is_file():
         return problems, counts
@@ -323,7 +392,7 @@ def audit(root: Path) -> tuple[list[str], dict[str, int]]:
         return problems, counts
 
     # counted above, before the early return
-    wildcard = {role for role, perms in enforced.items() if "*" in (perms or [])}
+    wildcard = {role for role, perms in enforced.items() if WILDCARD in (perms or [])}
     refused = wildcard | set(explicit)
 
     for role in sorted(set(grantable) & wildcard):
