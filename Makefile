@@ -77,7 +77,7 @@ CONSOLE_URL = $(shell sed -n 's/^AISOC_CONSOLE_URL=//p' .env 2>/dev/null | tail 
 CONSOLE_PORT = $(shell grep -m1 'web: 3000 was in use, published on' docker-compose.ports.yml 2>/dev/null | tr -cd '0-9 ' | tr ' ' '\n' | grep -v '^$$' | tail -n1)
 console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:$(if $(strip $(CONSOLE_PORT)),$(strip $(CONSOLE_PORT)),3000))
 
-.PHONY: help install env up up-dev up-full pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
+.PHONY: help install env up up-dev up-full up-gpu up-host-llm _gpu_preflight pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
         bootstrap ingest-token api-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script
 
@@ -206,6 +206,55 @@ up-full: env _ports _refresh
 	@echo "            docs are off in this production-class stack)"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
+	@$(MAKE) --no-print-directory bootstrap
+
+# ── Where the model runs ─────────────────────────────────────────────────────
+#
+# Three options, and the default is unchanged: `make up` runs the bundled
+# Ollama on CPU, which works everywhere and needs nothing.
+#
+#   make up-gpu       bundled Ollama, on an NVIDIA GPU   (Linux, Windows+WSL2)
+#   make up-host-llm  an Ollama you already run yourself (the only option that
+#                     uses Apple Silicon's GPU, since Docker Desktop cannot
+#                     pass Metal into a Linux container)
+#
+# A hosted provider is the fourth option and needs no target at all: configure
+# it per tenant from the console, Settings -> Deployment & AI, or from the
+# first-run wizard.
+
+# `_gpu_preflight` first, deliberately. Without it the failure on a host with
+# no NVIDIA container toolkit is the daemon's own
+# `could not select device driver "nvidia"`, which names neither a cause nor a
+# next command.
+up-gpu: env _gpu_preflight _ports _refresh
+	$(COMPOSE) -f docker-compose.yml -f infra/compose/docker-compose.gpu.yml up -d
+	@$(MAKE) --no-print-directory _wait
+	@echo ""
+	@echo "  Console:  $(console_url)"
+	@echo "  API:      http://localhost:8000"
+	@echo ""
+	@echo "  Ollama is running with an NVIDIA device reserved. Confirm the model"
+	@echo "  actually loaded onto it:  docker compose exec ollama ollama ps"
+	@echo "  (a SIZE with 100% GPU is what you want; 100% CPU means it did not)"
+	@echo ""
+	@$(MAKE) --no-print-directory bootstrap
+
+_gpu_preflight:
+	@python3 scripts/check_gpu_runtime.py
+
+# Uses an Ollama already listening on the host. The bundled one is not started
+# at all, so there is no second copy and no port conflict to resolve.
+up-host-llm: env _ports _refresh
+	$(COMPOSE) -f docker-compose.yml -f infra/compose/docker-compose.host-llm.yml up -d
+	@$(MAKE) --no-print-directory _wait
+	@echo ""
+	@echo "  Console:  $(console_url)"
+	@echo "  API:      http://localhost:8000"
+	@echo ""
+	@echo "  Using your host's Ollama. The bundled one was not started."
+	@echo "  If triage reports no model, check it is listening on all interfaces:"
+	@echo "    OLLAMA_HOST=0.0.0.0 ollama serve"
+	@echo ""
 	@$(MAKE) --no-print-directory bootstrap
 
 # Refreshes the images when the tag they name can move.

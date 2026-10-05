@@ -6,6 +6,7 @@ import useSWR from 'swr';
 import toast from 'react-hot-toast';
 
 import { onboardingApi, type OnboardingStatus, type SampleDataResult } from '@/lib/api';
+import { ModelPlacement } from './ModelPlacement';
 import { clsx } from 'clsx';
 
 /**
@@ -86,7 +87,13 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
     return <div className="h-32 animate-pulse rounded-lg bg-slate-800/40" />;
   }
 
-  const remaining = data.steps.filter((s) => !s.done && s.key !== 'try').length;
+  // `try` and `model` are both optional: sample data is an alternative to a real
+  // connector, and the model step is informational because a local model ships
+  // and works. Counting either would show a tenant that is genuinely finished as
+  // having work left.
+  const remaining = data.steps.filter(
+    (s) => !s.done && s.key !== 'try' && s.key !== 'model',
+  ).length;
 
   return (
     <section
@@ -135,6 +142,8 @@ export function SetupChecklist({ compact = false }: { compact?: boolean }) {
                 )}
               </div>
               {!compact && <p className="mt-1 text-sm text-slate-400">{step.why}</p>}
+
+              {step.key === 'model' && <ModelPlacement />}
 
               {step.key === 'try' && !step.done && (
                 <button

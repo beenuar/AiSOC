@@ -1,0 +1,57 @@
+# AiSOC — NVIDIA GPU overlay for the bundled Ollama
+#
+# Usage:
+#   make up-gpu
+#
+# or by hand:
+#   docker compose -f docker-compose.yml -f infra/compose/docker-compose.gpu.yml up -d
+#
+# What this changes
+# -----------------
+# One thing: it reserves an NVIDIA device for the `ollama` service. Nothing
+# else moves. The model, the gateway, the aliases and every other service are
+# whatever the base file says.
+#
+# Why it is an overlay and not a line in the base file
+# ----------------------------------------------------
+# A `deploy.resources.reservations.devices` block naming the nvidia driver is
+# not advisory. On a host without an NVIDIA GPU *and* the container toolkit,
+# the daemon refuses to start the service at all:
+#
+#   Error response from daemon: could not select device driver "nvidia" with
+#   capabilities: [[gpu]]
+#
+# `make up` is the documented first-run path and CORE ships
+# `llama3.2:3b-instruct-q4_K_M` to run CPU-only in 8 GB, so putting this in the
+# base file takes out first run for every Mac, every CPU-only Linux box and
+# every CI runner. It has to be opt-in, and `make up-gpu` runs
+# `scripts/check_gpu_runtime.py` first so the failure names a cause and a next
+# command rather than handing over the daemon's error.
+#
+# Apple Silicon
+# -------------
+# This overlay does nothing for you. Docker Desktop cannot pass the Metal GPU
+# into a Linux container, so a bundled Ollama is CPU-only on a Mac no matter
+# what is reserved here. Run Ollama natively instead -- it uses Metal -- and
+# point the stack at it with `make up-host-llm`.
+#
+# Sizing
+# ------
+# The pinned model needs roughly 3 GB of VRAM. `count: 1` takes the first
+# visible device; set `AISOC_GPU_COUNT=all` to expose every device, or pin
+# specific ones with `device_ids` instead of `count` if you share the host.
+
+services:
+  ollama:
+    environment:
+      # Ollama decides layer placement itself and logs what it did. Left
+      # unset rather than forced, because a hardcoded layer count is wrong
+      # on every card except the one it was measured on.
+      OLLAMA_NUM_PARALLEL: "${OLLAMA_NUM_PARALLEL:-1}"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${AISOC_GPU_COUNT:-1}
+              capabilities: [gpu]

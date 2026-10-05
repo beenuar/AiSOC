@@ -322,6 +322,10 @@
     }
   },
   "services/api": {
+    "app/_vendor/ssrf_guard.py": {
+      "attr-defined": 6,
+      "union-attr": 1
+    },
     "app/api/v1/endpoints/identity_timeline.py": {
       "assignment": 1
     },

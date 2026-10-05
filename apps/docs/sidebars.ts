@@ -191,6 +191,7 @@ const sidebars: SidebarsConfig = {
         "compliance/evidence-pack",
         "compliance/fips-posture",
         "operations/credentials",
+        "operations/where-the-model-runs",
         "operations/secrets",
         "operations/scim",
         "operations/case-orchestration",

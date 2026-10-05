@@ -61,6 +61,7 @@ from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.llm_credential import TenantLlmCredential
 from app.security.credential_vault import CredentialVaultError, get_vault
 from app.services.audit import emit_audit
+from app.services.llm_credential_probe import ProbeResult, probe_credential
 
 logger = logging.getLogger(__name__)
 
@@ -432,4 +433,91 @@ async def delete_llm_credential(
             "tenant": str(current_user.tenant_id),
             "provider": existing.provider,
         },
+    )
+
+
+# --------------------------------------------------------- test connection
+
+
+class LlmCredentialTestResult(BaseModel):
+    """What a real call to the configured provider did.
+
+    Four outcomes, and `unverified` is one of them on purpose: an air-gapped
+    deployment refuses the egress rather than attempting it, and reporting that
+    as a failure would send an operator to debug a credential that is fine.
+    """
+
+    outcome: Literal["ok", "refused", "unreachable", "unverified"]
+    detail: str
+    provider: str
+    model: str | None = None
+    latency_ms: int | None = None
+
+
+@router.post(
+    # The router already carries `prefix="/llm/credentials"`, so this is the
+    # bare suffix. It read "/credentials/test" and published
+    # `/api/v1/llm/credentials/credentials/test` -- an endpoint reachable at
+    # no URL anything calls. Thirteen tests passed throughout, because every
+    # one of them called the probe function rather than the route.
+    "/test",
+    response_model=LlmCredentialTestResult,
+    summary="Make one real call with this tenant's credential",
+)
+async def test_llm_credential(
+    current_user: Annotated[AuthUser, Depends(require_permission("settings:write"))],
+    db: DBSession,
+) -> LlmCredentialTestResult:
+    """Place one minimal completion and report what happened.
+
+    There was no way to find out whether a saved key worked. The three routes
+    above validate *shape* -- that the URL parses, that the provider/key/base
+    combination is internally consistent -- and none of them talks to the
+    provider, so an operator who pasted a revoked key learned about it when
+    triage silently fell back to the deterministic path. That failure is quiet
+    by design, which is exactly what makes it hard to attribute.
+
+    `settings:write` rather than `settings:read`: this spends the tenant's
+    money and touches an external service, which is not a read.
+    """
+    res = await db.execute(select(TenantLlmCredential).where(TenantLlmCredential.tenant_id == current_user.tenant_id))
+    existing: TenantLlmCredential | None = res.scalar_one_or_none()
+
+    if existing is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                "No credential is configured for this tenant, so there is nothing to test. The platform is using its environment defaults."
+            ),
+        )
+
+    api_key: str | None = None
+    if existing.api_key_vault:
+        try:
+            api_key = get_vault().decrypt(existing.api_key_vault)
+        except CredentialVaultError:
+            # A key that cannot be decrypted is a real finding and not an
+            # outage: it means the vault key rotated without this row being
+            # re-encrypted, and triage is already falling back.
+            return LlmCredentialTestResult(
+                outcome="refused",
+                detail=(
+                    "The stored key could not be decrypted. It was encrypted with a vault key "
+                    "this deployment no longer has; re-enter it to fix."
+                ),
+                provider=existing.provider,
+            )
+
+    result: ProbeResult = await probe_credential(
+        provider=existing.provider,
+        base_url=existing.base_url,
+        model=existing.model,
+        api_key=api_key,
+    )
+    return LlmCredentialTestResult(
+        outcome=result.outcome,
+        detail=result.detail,
+        provider=existing.provider,
+        model=result.model,
+        latency_ms=result.latency_ms,
     )
