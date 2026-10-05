@@ -149,7 +149,9 @@ class TestItNamesWhatWentWrong:
         from app.services import llm_credential_probe as probe_mod
 
         class _Client:
-            def __init__(self, *_: object, **__: object) -> None: ...
+            def __init__(self, *_: object, **__: object) -> None:
+                """No setup; the stub exists to intercept the POST below."""
+
             async def __aenter__(self) -> _Client:
                 return self
 
@@ -178,7 +180,9 @@ class TestItNamesWhatWentWrong:
         from app.services import llm_credential_probe as probe_mod
 
         class _Client:
-            def __init__(self, *_: object, **__: object) -> None: ...
+            def __init__(self, *_: object, **__: object) -> None:
+                """No setup; the stub exists to intercept the POST below."""
+
             async def __aenter__(self) -> _Client:
                 return self
 

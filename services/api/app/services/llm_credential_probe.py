@@ -191,7 +191,7 @@ async def probe_credential(
         # contract has nothing to reject -- but the rule is that *every* call
         # to a completions endpoint goes through it, and a call site that
         # argues its way out is how the next one, with a real prompt, gets
-        # written the same way. `tests/test_llm_contract_no_bypass.py`
+        # written the same way. `services/agents/tests/test_llm_contract_no_bypass.py`
         # enforces this and caught the first version of this function.
         #
         # One token: a reachability and authorisation check, not a capability
