@@ -148,15 +148,6 @@ _STATUS_COLLECTION_RE = re.compile(
     re.M,
 )
 
-#: An ORM column default on a status column:
-#: `status: Mapped[str] = mapped_column(String(30), default="open", ...)`.
-#:
-#: The fifth shape, and the quietest: it seeds every row that does not set a
-#: status explicitly, so the value the application falls back to was one the
-#: CHECK rejects. The keyword is `default`, not `status`, which is why the
-#: keyword pattern above does not reach it.
-_COLUMN_DEFAULT_RE = re.compile(r"""\bstatus\b\s*:[^=]*=.*?\bdefault\s*=\s*["'](\w+)["']""")
-
 #: Any quoted word, used to rescan a captured collection body.
 _QUOTED_RE = re.compile(r"""["'](\w+)["']""")
 
@@ -213,11 +204,6 @@ def find_retired_table_reads(paths: list[Path]) -> list[str]:
                     "blind to the cases analysts actually create"
                 )
     return findings
-
-
-#: Names that mean "this expression is about a case". A model class, the
-#: table, the canonical module.
-_CASE_NAMES = frozenset({"Case", "aisoc_cases", "case_status"})
 
 
 def _is_case_attr(node: ast.AST, attr: str) -> bool:

@@ -637,6 +637,12 @@ async def reopen_case(
                 "reason": body.reason,
                 "reopen_count": (existing.reopen_count or 0) + 1,
             },
+            # Which credential, not just which person. A key owned by an
+            # analyst resolves to that analyst's email, so without this an
+            # auditor cannot tell "Dana reopened this at her console" from "a
+            # key Dana minted a year ago reopened it from a script" -- and
+            # those call for different responses.
+            api_key_prefix=getattr(user, "api_key_prefix", None),
         )
     except Exception:  # noqa: BLE001 - an audit failure must not undo the reopen
         # Roll the *failed audit attempt* back, not the reopen: that already
