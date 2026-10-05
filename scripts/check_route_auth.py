@@ -112,6 +112,12 @@ PUBLIC_ROUTES: dict[str, str] = {
     "services/fusion/app/api/router.py::metrics": "Prometheus scrape of worker counters; no tenant data, numeric series only",
     # -- sign-in: the request that establishes a credential cannot carry one --
     "services/api/app/api/v1/endpoints/auth.py::login": "the sign-in request itself; it is what mints the credential",
+    "services/api/app/api/v1/endpoints/auth.py::sso_status": (
+        "the login screen asks this before anyone has a credential, to decide whether to "
+        "offer the SSO button and whether to keep the password form. Read-only, and the "
+        "payload is four fields -- enabled, provider, button label, local-login-enabled -- "
+        "with no issuer, client id, endpoint or secret."
+    ),
     "services/api/app/api/v1/endpoints/auth.py::refresh_token": "presents a signed refresh token in the body and is verified there",
     "services/api/app/api/v1/endpoints/waitlist.py::signup": "public sign-up form; rate-limited and writes only to the waitlist table",
     "services/api/app/api/v1/endpoints/passkeys.py::passkey_authenticate_begin": (

@@ -231,8 +231,7 @@ class TestTheLedgerLeavesTheAnalystsColumnsAlone:
         assert branches, f"no status branches found to check in: {status_case!r}"
         for branch in branches:
             assert "NOT $10" in branch, (
-                f"status branch {branch!r} writes a status without the shadow guard. "
-                "A shadow run must never move an alert's status."
+                f"status branch {branch!r} writes a status without the shadow guard. A shadow run must never move an alert's status."
             )
 
     def test_the_guard_does_not_depend_on_the_caller_forcing_auto_closed_off(self):
