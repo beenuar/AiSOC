@@ -257,6 +257,8 @@ func (e *Enricher) enrichURL(ctx context.Context, rawURL string) (*EnrichmentRes
 //   - RiskScore = max of all sources (worst-case wins)
 //   - Confidence scales with number of corroborating sources
 //   - Geo/Whois/community fields take the highest-risk source's data
+//   - Whois falls back to the first source that has one when the highest-risk
+//     source has none; DNS records are union-merged
 //   - Tags / classifications / sources / vulns / dark-web are union-merged
 //   - Brand-risk takes the highest-scoring brand signal
 func mergeResults(iocType IOCType, value string, results []*EnrichmentResult) *EnrichmentResult {
@@ -285,6 +287,7 @@ func mergeResults(iocType IOCType, value string, results []*EnrichmentResult) *E
 	malwareSet := map[string]bool{}
 	campaignSet := map[string]bool{}
 	cveSet := map[string]bool{}
+	dnsSet := map[string]bool{}
 
 	for _, r := range results {
 		if r.RiskScore > maxRisk {
@@ -294,6 +297,15 @@ func mergeResults(iocType IOCType, value string, results []*EnrichmentResult) *E
 			}
 			if len(r.Whois) > 0 {
 				merged.Whois = r.Whois
+			}
+		}
+		if len(merged.Whois) == 0 && len(r.Whois) > 0 {
+			merged.Whois = r.Whois
+		}
+		for _, record := range r.DNSRecords {
+			if !dnsSet[record] {
+				dnsSet[record] = true
+				merged.DNSRecords = append(merged.DNSRecords, record)
 			}
 		}
 		if r.MaliciousVotes > merged.MaliciousVotes {
