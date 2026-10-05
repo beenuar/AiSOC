@@ -42,6 +42,7 @@ import structlog
 
 from app._vendor.ssrf_guard import SSRFError, validate_outbound_url
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
+from app.services.llm_safety import safe_chat_completions_request
 
 logger = structlog.get_logger(__name__)
 
@@ -85,6 +86,45 @@ class ProbeResult:
 
 def _base_url_for(provider: str, base_url: str | None) -> str | None:
     return (base_url or _DEFAULT_BASE.get(provider) or "").rstrip("/") or None
+
+
+def _from_status(response: httpx.Response, model: str, latency_ms: int) -> ProbeResult:
+    """Turn the provider's refusal into something an operator can act on."""
+    code = response.status_code
+
+    if code in (401, 403):
+        return ProbeResult(
+            outcome="refused",
+            detail=f"The provider rejected the credential (HTTP {code}). Check the key.",
+            model=model,
+            latency_ms=latency_ms,
+        )
+    if code == 404:
+        return ProbeResult(
+            outcome="refused",
+            detail=(
+                f"The provider answered 404 for model '{model}'. The key may be fine and the "
+                "model name wrong, or not available to this account."
+            ),
+            model=model,
+            latency_ms=latency_ms,
+        )
+    if code == 429:
+        # Reached it, and authenticated enough to be counted against a quota,
+        # which answers the question being asked.
+        return ProbeResult(
+            outcome="ok",
+            detail="Reached the provider and was rate-limited, so the credential works.",
+            model=model,
+            latency_ms=latency_ms,
+        )
+    body = (response.text or "")[:200].replace("\n", " ")
+    return ProbeResult(
+        outcome="refused",
+        detail=f"The provider answered HTTP {code}: {body}",
+        model=model,
+        latency_ms=latency_ms,
+    )
 
 
 async def probe_credential(
@@ -134,36 +174,43 @@ async def probe_credential(
             model=resolved_model,
         )
 
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        if provider == "anthropic":
-            headers["x-api-key"] = api_key
-            headers["anthropic-version"] = "2023-06-01"
-        else:
-            headers["Authorization"] = f"Bearer {api_key}"
-
-    # One token. This is a reachability and authorisation check, not a
-    # capability evaluation, and a longer generation would bill the tenant for
-    # output nobody reads.
+    # Anthropic authenticates with `x-api-key` rather than a bearer token and
+    # wants its API version pinned. The helper always sets `Authorization`,
+    # which Anthropic ignores.
+    extra_headers: dict[str, str] = {}
     if provider == "anthropic":
-        url = f"{resolved_base}/messages"
-        payload = {
-            "model": resolved_model,
-            "max_tokens": 1,
-            "messages": [{"role": "user", "content": "ping"}],
-        }
-    else:
-        url = f"{resolved_base}/chat/completions"
-        payload = {
-            "model": resolved_model,
-            "max_tokens": 1,
-            "messages": [{"role": "user", "content": "ping"}],
-        }
+        extra_headers = {"x-api-key": api_key or "", "anthropic-version": "2023-06-01"}
+
+    url = f"{resolved_base}/messages" if provider == "anthropic" else f"{resolved_base}/chat/completions"
 
     started = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=PROBE_TIMEOUT_SECONDS) as client:
-            resp = await client.post(url, json=payload, headers=headers)
+        # Through `safe_chat_completions_request`, not a raw `client.post`.
+        #
+        # The prompt here is a constant carrying no untrusted input, so the
+        # contract has nothing to reject -- but the rule is that *every* call
+        # to a completions endpoint goes through it, and a call site that
+        # argues its way out is how the next one, with a real prompt, gets
+        # written the same way. `tests/test_llm_contract_no_bypass.py`
+        # enforces this and caught the first version of this function.
+        #
+        # One token: a reachability and authorisation check, not a capability
+        # evaluation, and a longer generation bills the tenant for output
+        # nobody reads.
+        await safe_chat_completions_request(
+            api_key=api_key or "",
+            model=resolved_model,
+            messages=[{"role": "user", "content": "ping"}],
+            url=url,
+            timeout=PROBE_TIMEOUT_SECONDS,
+            extra_headers=extra_headers or None,
+            max_tokens=1,
+        )
+    except httpx.HTTPStatusError as exc:
+        # The helper calls `raise_for_status`, and the status code is exactly
+        # what separates "the key is wrong" from "the model name is wrong"
+        # from "you were rate-limited, so it works".
+        return _from_status(exc.response, resolved_model, int((time.monotonic() - started) * 1000))
     except httpx.TimeoutException:
         return ProbeResult(
             outcome="unreachable",
@@ -179,42 +226,6 @@ async def probe_credential(
         )
 
     latency_ms = int((time.monotonic() - started) * 1000)
-
-    if resp.status_code in (401, 403):
-        return ProbeResult(
-            outcome="refused",
-            detail=f"The provider rejected the credential (HTTP {resp.status_code}). Check the key.",
-            model=resolved_model,
-            latency_ms=latency_ms,
-        )
-    if resp.status_code == 404:
-        return ProbeResult(
-            outcome="refused",
-            detail=(
-                f"The provider answered 404 for model '{resolved_model}'. The key may be fine "
-                "and the model name wrong, or not available to this account."
-            ),
-            model=resolved_model,
-            latency_ms=latency_ms,
-        )
-    if resp.status_code == 429:
-        # Reached it and were authenticated enough to be rate-limited, which
-        # answers the question being asked.
-        return ProbeResult(
-            outcome="ok",
-            detail="Reached the provider and was rate-limited, so the credential works.",
-            model=resolved_model,
-            latency_ms=latency_ms,
-        )
-    if resp.status_code >= 400:
-        body = (resp.text or "")[:200].replace("\n", " ")
-        return ProbeResult(
-            outcome="refused",
-            detail=f"The provider answered HTTP {resp.status_code}: {body}",
-            model=resolved_model,
-            latency_ms=latency_ms,
-        )
-
     return ProbeResult(
         outcome="ok",
         detail=f"Completed a one-token request against '{resolved_model}' in {latency_ms} ms.",

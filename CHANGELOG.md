@@ -43,6 +43,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outcomes, and `unverified` is deliberately not an error: an air-gapped
   deployment refusing the egress is the policy working.
 
+  The call goes through `safe_chat_completions_request`, not a raw POST. The
+  prompt is a constant with no untrusted input, so the contract has nothing
+  to reject -- but the rule is that *every* call to a completions endpoint
+  goes through it, and a call site that argues its way out is how the next
+  one, with a real prompt, gets written the same way.
+  `test_llm_contract_no_bypass.py` caught the first version.
+
   It does **not** use `destinations.py::_guard_url`, which refuses every
   private address and would therefore refuse `local-ollama`, `local-vllm` and
   `local-litellm` -- three of the seven providers migration 038 allows, and the
