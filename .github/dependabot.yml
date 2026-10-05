@@ -288,6 +288,23 @@ updates:
       # moving all six declarations at once.
       - dependency-name: "mypy"
         update-types: ["version-update:semver-major"]
+      # Deliberately *not* held either: `fastapi` -- but note that Dependabot
+      # cannot finish the job on its own, which is why its PRs recur and sit.
+      # The range is declared in ten places: three monitored pyproject.toml
+      # files (api, actions, agents), three that no ecosystem entry watches
+      # (honeytokens, purple-team, ueba) and four `pip install` lines in
+      # .github/workflows (check-openapi, cross-tenant-rbac, integration,
+      # isolation). `scripts/check_dependency_pins.py` requires all ten to
+      # agree, Dependabot opens one PR per *directory*, and `groups` only
+      # combines updates inside a directory -- so every single-service fastapi
+      # PR fails `No two install paths disagree` by construction, and no
+      # combination of them would pass either, because nothing in any
+      # ecosystem edits a workflow file. Completing a fastapi bump is a manual
+      # cross-site change: move all ten declarations, relock the three
+      # services, then run the suites. Left unignored on purpose, for the same
+      # reason as sqlglot below -- an `ignore` rule mutes security advisories
+      # too, and this is the HTTP surface.
+
       # Deliberately *not* held: `sqlglot`. It is the parser enforcing
       # ClickHouse tenant isolation, an `ignore` rule suppresses security
       # updates as well as version updates, and a single-path bump already
