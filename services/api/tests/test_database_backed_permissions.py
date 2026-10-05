@@ -59,14 +59,22 @@ class _FakeResult:
 class _FakeSession:
     """A session that answers the two queries the resolver makes.
 
-    `granted` is what `user_roles` joins to; `tenant_role_count` is how many
-    roles the tenant has configured, which is the fact that separates a
+    `granted` is what `user_roles` joins to; `tenant_grant_count` is how many
+    grants exist anywhere in the tenant, which is the fact that separates a
     fresh tenant from a deprovisioned user.
+
+    Note what this double cannot see. `scalar()` answers the same number for
+    any query, so these tests read identically whether the resolver counts
+    role rows or grants -- and the distinction turned out to matter: a
+    migration that seeds a role into every tenant took the bootstrap path
+    away from all of them while every test here still passed.
+    `test_bootstrap_fallback_survives_a_seeded_role.py` covers that against a
+    real database, because this fake structurally cannot.
     """
 
-    def __init__(self, *, granted: list[str], tenant_role_count: int) -> None:
+    def __init__(self, *, granted: list[str], tenant_grant_count: int) -> None:
         self._granted = granted
-        self._tenant_role_count = tenant_role_count
+        self._tenant_grant_count = tenant_grant_count
         self.executed = 0
 
     async def execute(self, *_args, **_kwargs):
@@ -74,7 +82,7 @@ class _FakeSession:
         return _FakeResult([(name,) for name in self._granted])
 
     async def scalar(self, *_args, **_kwargs) -> int:
-        return self._tenant_role_count
+        return self._tenant_grant_count
 
 
 TENANT = uuid.uuid4()
@@ -86,7 +94,7 @@ class TestTheDatabaseIsAuthoritative:
         """Otherwise the console's RBAC screen is decorative."""
         assert "lake:admin" not in ROLE_PERMISSIONS["viewer"]
         resolved = await resolve_permissions(
-            _FakeSession(granted=["lake:admin"], tenant_role_count=3),
+            _FakeSession(granted=["lake:admin"], tenant_grant_count=3),
             tenant_id=TENANT,
             user_id=USER,
             static_role="viewer",
@@ -102,7 +110,7 @@ class TestTheDatabaseIsAuthoritative:
         """
         assert "alerts:write" in ROLE_PERMISSIONS["tenant_admin"]
         resolved = await resolve_permissions(
-            _FakeSession(granted=[], tenant_role_count=4),
+            _FakeSession(granted=[], tenant_grant_count=4),
             tenant_id=TENANT,
             user_id=USER,
             static_role="tenant_admin",
@@ -117,7 +125,7 @@ class TestTheDatabaseIsAuthoritative:
         the defect was that it also covered the case above.
         """
         resolved = await resolve_permissions(
-            _FakeSession(granted=[], tenant_role_count=0),
+            _FakeSession(granted=[], tenant_grant_count=0),
             tenant_id=TENANT,
             user_id=USER,
             static_role="tenant_admin",
@@ -131,13 +139,13 @@ class TestTheDatabaseIsAuthoritative:
         tenant and must work; the other was deprovisioned and must not.
         """
         fresh = await resolve_permissions(
-            _FakeSession(granted=[], tenant_role_count=0),
+            _FakeSession(granted=[], tenant_grant_count=0),
             tenant_id=TENANT,
             user_id=USER,
             static_role="soc_analyst",
         )
         deprovisioned = await resolve_permissions(
-            _FakeSession(granted=[], tenant_role_count=7),
+            _FakeSession(granted=[], tenant_grant_count=7),
             tenant_id=uuid.uuid4(),
             user_id=uuid.uuid4(),
             static_role="soc_analyst",
@@ -226,7 +234,7 @@ class TestTheCacheInvalidates:
 
     async def test_a_second_resolution_does_not_requery(self) -> None:
         """A four-table join per request is what the cache exists to avoid."""
-        session = _FakeSession(granted=["alerts:read"], tenant_role_count=2)
+        session = _FakeSession(granted=["alerts:read"], tenant_grant_count=2)
         for _ in range(3):
             await resolve_permissions(session, tenant_id=TENANT, user_id=USER, static_role="viewer")
         assert session.executed == 1, f"queried {session.executed} times; the cache is not holding"

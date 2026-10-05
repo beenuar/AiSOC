@@ -214,14 +214,28 @@ async def bump_version(tenant_id: str) -> None:
 
 
 async def _tenant_has_rbac(db: AsyncSession, tenant_id: Any) -> bool:
-    """Whether this tenant has configured any roles at all.
+    """Whether this tenant has actually granted anybody a role.
 
     The fact that separates bootstrap from deprovisioning, and the reason
-    the old fallback was unsafe.
-    """
-    from app.models.rbac import Role  # noqa: PLC0415
+    the old fallback was unsafe: once a tenant is administering access, a
+    user with no grant has been *left* without one, and quietly handing them
+    their static role back would undo the deprovisioning.
 
-    total = await db.scalar(select(func.count()).select_from(Role).where(Role.tenant_id == tenant_id))
+    Measured on grants rather than on the existence of role rows. A role row
+    is not evidence that anyone configured anything -- migration 091 bulk
+    seeds `infosec` into `roles` for every tenant with one
+    ``INSERT ... SELECT FROM tenants``, so counting roles answered True for
+    every tenant in the world the moment it ran, including tenants that had
+    never provisioned RBAC at all. That took the bootstrap fallback away
+    from them: an `admin` resolved to zero permissions and every authorized
+    route answered 403. Grants cannot be seeded that way, because a grant
+    names a user.
+    """
+    from app.models.rbac import Role, UserRole  # noqa: PLC0415
+
+    total = await db.scalar(
+        select(func.count()).select_from(UserRole).join(Role, Role.id == UserRole.role_id).where(Role.tenant_id == tenant_id)
+    )
     return bool(total)
 
 
