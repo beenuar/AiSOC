@@ -455,7 +455,12 @@ class LlmCredentialTestResult(BaseModel):
 
 
 @router.post(
-    "/credentials/test",
+    # The router already carries `prefix="/llm/credentials"`, so this is the
+    # bare suffix. It read "/credentials/test" and published
+    # `/api/v1/llm/credentials/credentials/test` -- an endpoint reachable at
+    # no URL anything calls. Thirteen tests passed throughout, because every
+    # one of them called the probe function rather than the route.
+    "/test",
     response_model=LlmCredentialTestResult,
     summary="Make one real call with this tenant's credential",
 )

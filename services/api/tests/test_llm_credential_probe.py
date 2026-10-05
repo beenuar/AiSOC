@@ -199,3 +199,44 @@ class TestItNamesWhatWentWrong:
 
         assert "typo-model" in result.detail
         assert "model name" in result.detail.lower()
+
+
+class TestTheRouteIsReachableAtTheUrlTheConsoleCalls:
+    """Ask the app what it published, not what the decorator says.
+
+    Every test above calls `probe_credential` directly, and all thirteen
+    passed while the route was mounted at
+    `/api/v1/llm/credentials/credentials/test` -- a doubled segment, because
+    the decorator repeated a prefix the router already carried. The endpoint
+    was reachable at no URL anything calls, and only
+    `check_console_route_contract` noticed, by comparing the console's fetches
+    against the real OpenAPI document.
+
+    Read from `app.openapi()` rather than `app.routes`: on FastAPI 0.141.x
+    `include_router` leaves an opaque object there and the `APIRoute` count is
+    zero, so an enumeration silently compares nothing.
+    """
+
+    def test_it_is_published_where_the_client_asks_for_it(self) -> None:
+        from app.main import app
+
+        assert "/api/v1/llm/credentials/test" in app.openapi()["paths"]
+
+    def test_no_segment_is_doubled(self) -> None:
+        from app.main import app
+
+        doubled = [p for p in app.openapi()["paths"] if "credentials/credentials" in p]
+
+        assert not doubled, f"a router prefix is repeated in the decorator: {doubled}"
+
+    def test_the_console_and_the_api_agree_on_the_url(self) -> None:
+        """The two halves of the contract, compared directly. A client string
+        and a server path that drift apart produce a 404 nobody owns."""
+        from pathlib import Path
+
+        from app.main import app
+
+        client = (Path(__file__).resolve().parents[3] / "apps" / "web" / "src" / "lib" / "api.ts").read_text(encoding="utf-8")
+
+        assert "/api/v1/llm/credentials/test" in client
+        assert "/api/v1/llm/credentials/test" in app.openapi()["paths"]

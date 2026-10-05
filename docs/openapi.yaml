@@ -15755,7 +15755,7 @@ paths:
           description: Successful Response
       security:
       - HTTPBearer: []
-  /api/v1/llm/credentials/credentials/test:
+  /api/v1/llm/credentials/test:
     post:
       tags:
       - llm
@@ -15779,7 +15779,7 @@ paths:
         `settings:write` rather than `settings:read`: this spends the tenant''s
 
         money and touches an external service, which is not a read.'
-      operationId: test_llm_credential_api_v1_llm_credentials_credentials_test_post
+      operationId: test_llm_credential_api_v1_llm_credentials_test_post
       responses:
         '200':
           description: Successful Response
