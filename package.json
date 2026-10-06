@@ -65,7 +65,7 @@
   "pnpm": {
     "overrides": {
       "axios": ">=1.20.0 <2",
-      "shell-quote": ">=1.8.4",
+      "shell-quote": ">=1.11.0",
       "form-data": ">=4.0.6",
       "ws": ">=8.21.0",
       "hono": ">=4.13.5",
@@ -97,7 +97,11 @@
       "websocket-driver": ">=0.7.5",
       "tsup>esbuild": "^0.28.1",
       "vite>esbuild": "^0.28.1",
-      "bundle-require>esbuild": "^0.28.1"
+      "bundle-require>esbuild": "^0.28.1",
+      "source-map-js": ">=1.2.2",
+      "compression": ">=1.8.2",
+      "tinypool": ">=2.1.1",
+      "proxy-addr": ">=2.0.8"
     }
   }
 }

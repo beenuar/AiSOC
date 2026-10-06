@@ -41,12 +41,12 @@
     "commands": [
       {
         "command": "aisoc.runTriage",
-        "title": "AiSOC: Run Triage on Case…",
+        "title": "AiSOC: Run Triage on Case\u2026",
         "category": "AiSOC"
       },
       {
         "command": "aisoc.replayDecision",
-        "title": "AiSOC: Replay Investigation Step…",
+        "title": "AiSOC: Replay Investigation Step\u2026",
         "category": "AiSOC"
       },
       {
@@ -61,7 +61,7 @@
       },
       {
         "command": "aisoc.setApiKey",
-        "title": "AiSOC: Set API Key…",
+        "title": "AiSOC: Set API Key\u2026",
         "category": "AiSOC"
       },
       {
@@ -82,7 +82,7 @@
         "aisoc.apiKey": {
           "type": "string",
           "default": "",
-          "markdownDescription": "**Do not paste your API key here.** This setting exists for transparency only — the active key is stored in your IDE's secret storage and managed via the `AiSOC: Set API Key…` command. Leave this empty.",
+          "markdownDescription": "**Do not paste your API key here.** This setting exists for transparency only \u2014 the active key is stored in your IDE's secret storage and managed via the `AiSOC: Set API Key\u2026` command. Leave this empty.",
           "scope": "machine"
         },
         "aisoc.requestTimeoutMs": {
@@ -106,5 +106,8 @@
     "@types/vscode": "^1.80.0",
     "typescript": "^5.4.0",
     "vitest": "^4.1.11"
+  },
+  "overrides": {
+    "source-map-js": ">=1.2.2"
   }
 }

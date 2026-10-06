@@ -41,6 +41,7 @@
     "@opentelemetry/exporter-trace-otlp-grpc": "^0.222.0"
   },
   "overrides": {
-    "qs": "^6.16.0"
+    "qs": "^6.16.0",
+    "proxy-addr": ">=2.0.8"
   }
 }
