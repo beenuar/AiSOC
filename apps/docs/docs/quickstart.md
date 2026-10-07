@@ -248,7 +248,7 @@ federated search defaults on, so the capability was enabled and aimed at a
 hostname that does not resolve; the measured cost of moving them is 124.8 MiB
 ([ADR-0007](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0007-connectors-and-actions-in-core.md)).
 They are now in no profile, which means every profile run includes them, so
-`chatops` still gets `actions` for `slack-bot` and `teams-bot`. Named profiles compose, so
+`chatops` still gets `actions` for both chat bots. Named profiles compose, so
 `docker compose --profile full --profile extras up -d` is valid; it just does
 not wait for health the way `make up-full` does.
 
