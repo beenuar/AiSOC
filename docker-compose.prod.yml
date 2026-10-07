@@ -449,6 +449,12 @@ services:
         condition: service_completed_successfully
     ports: !reset []
 
+  teams-bot:
+    depends_on:
+      preflight-secrets:
+        condition: service_completed_successfully
+    ports: !reset []
+
   tempo:
     depends_on:
       preflight-secrets:
