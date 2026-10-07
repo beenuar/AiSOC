@@ -209,7 +209,7 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 | Per-tenant detection tuning in the live engine | Stable | Live Postgres: tuning written changes what the engine fires, with a negative control | Yes |
 | Scheduled connectors | Stable | Live scheduler polls a stub vendor into ingest, with a negative control | Yes |
 | UEBA | Stable | Live Postgres: migrations, scoring, persistence, isolation, with a negative control | Yes, `full` profile |
-| Package distribution (npm/PyPI) | Ready, unpublished | `release.yml` builds and packs all eight on every tag | Install from source — the upload is blocked on registry credentials, which is an account action |
+| Package distribution (npm/PyPI) | PyPI live, npm unpublished | All five PyPI packages resolve at the tree's versions, gated against the live registry on every PR; `release.yml` builds and packs all eight on every tag | `pip install aisoc-sandbox` (and the other four) works today; the three npm packages still need the first-upload `NPM_TOKEN`, an account action |
 
 ## What AiSOC is not
 

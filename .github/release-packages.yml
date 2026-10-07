@@ -78,48 +78,27 @@ packages:
     registry: pypi
     directory: packages/aisoc-sandbox
     install: pip install aisoc-sandbox
-    published: false
-    reason: >-
-      No pending trusted publisher is registered on PyPI and the
-      `AISOC_PYPI_TRUSTED_PUBLISHING` repository variable is unset, so the
-      upload step does not run. See
-      docs/operations/publishing.md#one-time-setup-pypi.
+    published: true
 
   - name: aisoc-cli
     registry: pypi
     directory: packages/aisoc-cli
     install: pip install aisoc-cli
-    published: false
-    reason: >-
-      No pending trusted publisher is registered on PyPI and
-      `AISOC_PYPI_TRUSTED_PUBLISHING` is unset. See
-      docs/operations/publishing.md#one-time-setup-pypi.
+    published: true
 
   - name: aisoc-sdk
     registry: pypi
     directory: packages/sdk-py
     install: pip install aisoc-sdk
-    published: false
-    reason: >-
-      No pending trusted publisher is registered on PyPI and
-      `AISOC_PYPI_TRUSTED_PUBLISHING` is unset. See
-      docs/operations/publishing.md#one-time-setup-pypi.
+    published: true
 
   - name: aisoc-plugin-sdk
     registry: pypi
     directory: packages/plugin-sdk-py
     install: pip install aisoc-plugin-sdk
-    published: false
-    reason: >-
-      No pending trusted publisher is registered on PyPI and
-      `AISOC_PYPI_TRUSTED_PUBLISHING` is unset. See
-      docs/operations/publishing.md#one-time-setup-pypi.
+    published: true
 
   - name: aisoc-detections
     registry: pypi
     directory: packages/aisoc-detections
-    published: false
-    reason: >-
-      No pending trusted publisher is registered on PyPI and
-      `AISOC_PYPI_TRUSTED_PUBLISHING` is unset. See
-      docs/operations/publishing.md#one-time-setup-pypi.
+    published: true

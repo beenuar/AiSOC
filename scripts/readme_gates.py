@@ -57,7 +57,13 @@ README = REPO_ROOT / "README.md"
 # carries a "Coming … in v8.0" guard.
 KNOWN_UNPUBLISHED = {
     "npm": {"@aisoc/mcp", "@aisoc/sdk", "aisoc-cli"},
-    "pypi": {"aisoc-cli", "aisoc-plugin-sdk", "aisoc-sdk", "aisoc-sandbox"},
+    # The five PyPI packages left this set on 2026-10-07: pending trusted
+    # publishers were registered, AISOC_PYPI_TRUSTED_PUBLISHING was set, and
+    # the v17.0.0 tag performed the first uploads — all five now resolve at
+    # the tree's versions, enforced both ways by
+    # scripts/check_published_packages.py. The npm three still need the
+    # first-upload NPM_TOKEN (an account action), so they stay.
+    "pypi": set(),
 }
 
 # Maximum number of lines we promise to keep the README at.
