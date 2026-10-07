@@ -76,6 +76,22 @@ class _ContextSession:
         self._priors = priors
         self._rule_set = rule_set
         self.queries: list[str] = []
+        self.savepoints = 0
+        self.savepoint_rollbacks = 0
+
+    async def begin_nested(self) -> Any:
+        """A SAVEPOINT, recorded so a test can assert one was actually taken."""
+        self.savepoints += 1
+        session = self
+
+        class _Savepoint:
+            async def rollback(self) -> None:
+                session.savepoint_rollbacks += 1
+
+            async def commit(self) -> None:
+                return None
+
+        return _Savepoint()
 
     async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> Any:
         sql = str(statement)
@@ -292,3 +308,36 @@ class TestTheReplayCarriesProductionContext:
         assert recording_store.result is not None
         unread = (recording_store.result.get("method") or {}).get("frozen_context_unread") or []
         assert "statements" in unread
+
+    async def test_a_failed_read_is_confined_to_a_savepoint(
+        self, monkeypatch: pytest.MonkeyPatch, recording_store: _RecordingStore, no_vault: None
+    ) -> None:
+        """Catching the exception is not enough on PostgreSQL.
+
+        A failed statement aborts the **whole** transaction and the engine
+        refuses everything after it with `current transaction is aborted,
+        commands ignored until end of transaction block` -- so a plain
+        try/except around a context read does not isolate the failure, it
+        poisons the write that stores the report. The replay then scores
+        correctly and dies on its own `UPDATE`, which reads as a storage
+        bug rather than as a missing table.
+
+        That is not hypothetical: it is what the live four-service replay
+        job reported before this was confined, while every offline test
+        passed, because a stub session has no transaction to poison.
+        """
+        sent: dict[str, Any] = {}
+        _capture_replay_payload(monkeypatch, sent)
+
+        class _Broken(_ContextSession):
+            async def execute(self, statement: Any, *args: Any, **kwargs: Any) -> Any:
+                if "aisoc_institutional_memory" in str(statement):
+                    raise RuntimeError("relation does not exist")
+                return await super().execute(statement, *args, **kwargs)
+
+        session = _Broken(statements=[], priors=[], rule_set=None)
+        await job_module.run_evaluation(session, _request())
+
+        assert session.savepoints >= 3, "each optional read must take its own savepoint"
+        assert session.savepoint_rollbacks == 1, "only the failed read should have rolled back"
+        assert recording_store.failure is None, recording_store.failure

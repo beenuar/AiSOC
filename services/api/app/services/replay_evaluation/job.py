@@ -46,6 +46,8 @@ from __future__ import annotations
 import json
 import os
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
@@ -262,6 +264,34 @@ class FrozenContextCapture:
         }
 
 
+@asynccontextmanager
+async def _optional_read(db: AsyncSession, part: str, unread: list[str]) -> AsyncIterator[None]:
+    """Run one context read so a failure costs only that read.
+
+    The savepoint is the whole point. PostgreSQL aborts the **entire**
+    transaction on a failed statement and refuses everything after it with
+    `current transaction is aborted, commands ignored until end of
+    transaction block` -- so catching the exception and carrying on does not
+    isolate the failure, it poisons the write that stores the report. A
+    plain try/except here did exactly that: the replay scored correctly and
+    then died on its own `UPDATE`, which reads as a storage bug rather than
+    as a missing table.
+
+    `begin_nested` issues a SAVEPOINT and rolls back to it, which is the
+    only construct that confines a failed statement on this engine. Same
+    finding as `tests/test_audit_chain_survives_a_failed_write.py`.
+    """
+    savepoint = await db.begin_nested()
+    try:
+        yield
+    except Exception as exc:  # noqa: BLE001 - fail soft, and say which part
+        await savepoint.rollback()
+        log.warning(f"replay.context.{part}_unread", error=str(exc))
+        unread.append(part)
+    else:
+        await savepoint.commit()
+
+
 def _jsonable(row: Any) -> dict[str, Any]:
     """A row as JSON the agents service can parse.
 
@@ -290,7 +320,7 @@ async def _capture_frozen_context(db: AsyncSession, request: ReplayRequest) -> F
     business_context: dict[str, Any] | None = None
     unread: list[str] = []
 
-    try:
+    async with _optional_read(db, "statements", unread):
         rows = await db.execute(
             text(
                 "SELECT statement, reason_code, scope, scope_value, observations, updated_at "
@@ -302,11 +332,8 @@ async def _capture_frozen_context(db: AsyncSession, request: ReplayRequest) -> F
             ).bindparams(t=str(request.tenant_id), split=request.window_end, lim=_STATEMENT_LIMIT)
         )
         statements = [_jsonable(row) for row in rows.mappings()]
-    except Exception as exc:  # noqa: BLE001 - fail soft, and say which part
-        log.warning("replay.context.statements_unread", evaluation_id=str(request.evaluation_id), error=str(exc))
-        unread.append("statements")
 
-    try:
+    async with _optional_read(db, "priors", unread):
         rows = await db.execute(
             text(
                 "SELECT key, value FROM aisoc_institutional_memory WHERE tenant_id = CAST(:t AS uuid) AND key LIKE :prefix LIMIT :lim"
@@ -322,11 +349,8 @@ async def _capture_frozen_context(db: AsyncSession, request: ReplayRequest) -> F
                     continue
             if isinstance(value, dict):
                 priors[key[len(_OUTCOME_KEY_PREFIX) :]] = _jsonable(value)
-    except Exception as exc:  # noqa: BLE001 - fail soft, and say which part
-        log.warning("replay.context.priors_unread", evaluation_id=str(request.evaluation_id), error=str(exc))
-        unread.append("priors")
 
-    try:
+    async with _optional_read(db, "business_context", unread):
         rows = await db.execute(
             text(
                 "SELECT yaml_text, enabled, updated_at FROM aisoc_business_context_rule_sets WHERE tenant_id = CAST(:t AS uuid)"
@@ -340,9 +364,6 @@ async def _capture_frozen_context(db: AsyncSession, request: ReplayRequest) -> F
                 "enabled": bool(row["enabled"]),
                 "updated_at": updated_at.isoformat() if hasattr(updated_at, "isoformat") else updated_at,
             }
-    except Exception as exc:  # noqa: BLE001 - fail soft, and say which part
-        log.warning("replay.context.business_rules_unread", evaluation_id=str(request.evaluation_id), error=str(exc))
-        unread.append("business_context")
 
     return FrozenContextCapture(
         statements=statements,
