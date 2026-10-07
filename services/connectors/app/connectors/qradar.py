@@ -28,6 +28,15 @@ logger = structlog.get_logger()
 
 _MAX_OFFENSES = 200
 
+#: An offense indexes exactly one entity, in ``offense_source``, and
+#: ``offense_type`` is what says which kind it is. Matched against the type's
+#: ``property_name`` (or its display name), normalised to lowercase, because a
+#: site can rename the display string and can add its own types from a custom
+#: property. An unrecognised type yields neither a host nor a user, which is
+#: the honest reading of "this offense is indexed on something else".
+_HOSTNAME_TYPES = {"hostname", "host name"}
+_USERNAME_TYPES = {"username", "user name"}
+
 
 class QRadarConnector(BaseConnector):
     """IBM QRadar SIEM offenses."""
@@ -175,8 +184,28 @@ class QRadarConnector(BaseConnector):
                 f"status={raw.get('status')}"
             ),
             "external_id": str(raw.get("id") or ""),
+            "hostname": _typed_offense_source(raw, _HOSTNAME_TYPES),
+            "username": _typed_offense_source(raw, _USERNAME_TYPES),
             "src_ip": (raw.get("offense_source") if raw.get("offense_source_summary") == "IP" else None),
             "event_type": f"qradar.offense.{raw.get('offense_type', 'unknown')}",
             "created_at": raw.get("start_time"),
             "raw_event": raw,
         }
+
+
+def _typed_offense_source(raw: dict[str, Any], kinds: set[str]) -> Any:
+    """``offense_source`` when the offense's type says it holds this kind.
+
+    Returning it unconditionally would put whatever the offense is indexed on
+    — an address, an event name, a log source — into both the hostname and the
+    username column, and a username in the hostname column of a forensic
+    record is a fabricated entity, not an approximation.
+
+    ``offense_type_name`` is resolved from the appliance by whoever read the
+    offense, because the offense itself carries only a number and QRadar lets
+    a site define its own types. An unresolved offense is left untyped rather
+    than guessed at against the stock id table.
+    """
+    if str(raw.get("offense_type_name") or "").strip().lower() not in kinds:
+        return None
+    return raw.get("offense_source") or None

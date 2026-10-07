@@ -88,8 +88,23 @@ class QRadarClient:
         ``closing_reason_name`` for the parser. An id the appliance does not
         resolve is left without a name, which the parser reads as ``unlabeled``
         rather than inventing a reason for it.
+
+        ``fields`` excludes everything it does not name, so it also names what
+        the connector's ``normalize()`` reads downstream: ``magnitude`` is the
+        severity signal (``severity`` alone is a different 1-10 grade the
+        connector does not read), ``offense_source`` is the one entity an
+        offense indexes, and ``start_time`` is when it began. Omitting them
+        left every replayed offense at a default severity with no host and no
+        user.
+
+        ``offense_type_name`` is resolved the same way and for the same reason
+        as the closing reason: the offense carries only a number, and whether
+        ``offense_source`` holds a username, a hostname or an address is
+        exactly what that number says. Offense types are site-configurable, so
+        the table is read from the appliance.
         """
         reasons = await self._closing_reasons()
+        types = await self._offense_types()
         async with httpx.AsyncClient(timeout=self._timeout, verify=self._verify_ssl) as client:
             response = await client.get(
                 f"{self._base}/api/siem/offenses",
@@ -99,7 +114,10 @@ class QRadarClient:
                         f"status = CLOSED and close_time >= {int(since.timestamp() * 1000)} "
                         f"and close_time <= {int(until.timestamp() * 1000)}"
                     ),
-                    "fields": ("id,description,status,severity,offense_type,close_time,last_updated_time,closing_reason_id,closing_user"),
+                    "fields": (
+                        "id,description,status,severity,magnitude,offense_type,offense_source,event_count,"
+                        "start_time,close_time,last_updated_time,closing_reason_id,closing_user"
+                    ),
                 },
             )
             response.raise_for_status()
@@ -109,8 +127,38 @@ class QRadarClient:
             name = reasons.get(offense.get("closing_reason_id"))
             if name is not None:
                 offense["closing_reason_name"] = name
+            type_name = types.get(offense.get("offense_type"))
+            if type_name is not None:
+                offense["offense_type_name"] = type_name
         logger.info("qradar.closed_offenses", count=len(offenses))
         return list(offenses)
+
+    async def _offense_types(self) -> dict[Any, str]:
+        """Read the appliance's offense-type id to name table.
+
+        Never raises, for the same reason the closing-reason lookup does not:
+        an appliance that refuses this endpoint should yield offenses whose
+        indexed entity is untyped, which downstream reads as "no host and no
+        user recorded". Failing the whole history read over the lookup would
+        turn a partial answer into no answer.
+
+        ``property_name`` is preferred over ``name`` because it is the
+        machine-readable half — ``hostName`` against the display string
+        "Hostname" — and a site can rename the display string.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=self._timeout, verify=self._verify_ssl) as client:
+                response = await client.get(
+                    f"{self._base}/api/siem/offense_types",
+                    headers=self._headers(),
+                    params={"fields": "id,name,property_name"},
+                )
+                response.raise_for_status()
+                rows = response.json() if response.content else []
+        except Exception as exc:  # noqa: BLE001, a missing lookup degrades to an untyped entity
+            logger.warning("qradar.offense_types_unavailable", error=str(exc))
+            return {}
+        return {row["id"]: str(row.get("property_name") or row.get("name") or "") for row in rows if "id" in row}
 
     async def _closing_reasons(self) -> dict[Any, str]:
         """Read the appliance's closing-reason id to text table.

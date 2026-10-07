@@ -67,7 +67,16 @@ test('rejects an empty / malformed token', () => {
 
 test('rejects a tampered signature', () => {
   const token = mintTicket(validClaims());
-  const tampered = `${token.slice(0, -2)}xx`;
+  // Flip the last character to a *different* one, rather than overwriting
+  // the last two with a fixed 'xx'. The fixed form is a no-op whenever the
+  // signature already ends in 'xx', which base64url does about once in
+  // 4,096 runs: the test then verifies an untampered token, and the
+  // assertion fails for a reason that has nothing to do with the verifier.
+  // Seen in CI. A tamper that is guaranteed to change the bytes cannot
+  // pass vacuously or fail flakily.
+  const last = token.slice(-1);
+  const tampered = `${token.slice(0, -1)}${last === 'A' ? 'B' : 'A'}`;
+  assert.notEqual(tampered, token);
   assert.equal(verifyRealtimeTicket(tampered, SECRET), null);
 });
 
