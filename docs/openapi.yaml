@@ -10324,6 +10324,279 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/outbound-webhooks:
+    get:
+      tags:
+      - integrations
+      summary: List Webhooks
+      operationId: list_webhooks_api_v1_outbound_webhooks_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/WebhookOut'
+                type: array
+                title: Response List Webhooks Api V1 Outbound Webhooks Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - integrations
+      summary: Create Webhook
+      description: 'Create a destination and mint its signing secret.
+
+
+        The secret is returned **once**, here, and never again — it is stored
+
+        vault-encrypted and the read projection carries only ``has_secret``.
+
+        Returning it on every read would put a live credential in every console
+
+        response and every browser cache that held one.'
+      operationId: create_webhook_api_v1_outbound_webhooks_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookCreate'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Create Webhook Api V1 Outbound Webhooks Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/outbound-webhooks/{webhook_id}:
+    patch:
+      tags:
+      - integrations
+      summary: Update Webhook
+      operationId: update_webhook_api_v1_outbound_webhooks__webhook_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Webhook Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WebhookUpdate'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WebhookOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - integrations
+      summary: Delete Webhook
+      operationId: delete_webhook_api_v1_outbound_webhooks__webhook_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Webhook Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/outbound-webhooks/{webhook_id}/rotate-secret:
+    post:
+      tags:
+      - integrations
+      summary: Rotate Secret
+      operationId: rotate_secret_api_v1_outbound_webhooks__webhook_id__rotate_secret_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Webhook Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Rotate Secret Api V1 Outbound Webhooks  Webhook Id  Rotate
+                  Secret Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/outbound-webhooks/deliveries:
+    get:
+      tags:
+      - integrations
+      summary: List Deliveries
+      operationId: list_deliveries_api_v1_outbound_webhooks_deliveries_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(pending|delivered|failed|dead)$
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryOut'
+                title: Response List Deliveries Api V1 Outbound Webhooks Deliveries
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/outbound-webhooks/dead-letters:
+    get:
+      tags:
+      - integrations
+      summary: List Dead Letters
+      description: 'Deliveries that exhausted their retries or were refused outright.
+
+
+        A named route rather than ``?status=dead`` on the list above, because
+
+        this is the one an operator is told to check and a filter nobody
+
+        applies is a filter nobody sees.'
+      operationId: list_dead_letters_api_v1_outbound_webhooks_dead_letters_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryOut'
+                title: Response List Dead Letters Api V1 Outbound Webhooks Dead Letters
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/outbound-webhooks/deliveries/{delivery_id}/replay:
+    post:
+      tags:
+      - integrations
+      summary: Replay Delivery
+      description: 'Send a dead letter again, with the body the first attempt sent.
+
+
+        Synchronous and single-attempt: an operator replaying by hand has just
+
+        fixed something and wants to know now whether it worked, not in thirty
+
+        seconds. The attempt counter keeps climbing, so a replay cannot be used
+
+        to loop past the ladder.'
+      operationId: replay_delivery_api_v1_outbound_webhooks_deliveries__delivery_id__replay_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: delivery_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Delivery Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/passkeys/register/begin:
     post:
       tags:
@@ -23343,6 +23616,55 @@ components:
       - revoked_at
       - created_at
       title: DelegationOut
+    DeliveryOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        webhook_id:
+          type: string
+          format: uuid
+          title: Webhook Id
+        event_type:
+          type: string
+          title: Event Type
+        status:
+          type: string
+          title: Status
+        attempts:
+          type: integer
+          title: Attempts
+        last_status_code:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Last Status Code
+        last_error:
+          type: string
+          title: Last Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        delivered_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Delivered At
+      type: object
+      required:
+      - id
+      - webhook_id
+      - event_type
+      - status
+      - attempts
+      - last_status_code
+      - last_error
+      - created_at
+      - delivered_at
+      title: DeliveryOut
     DeploymentConfig:
       properties:
         mode:
@@ -36352,6 +36674,103 @@ components:
       required:
       - is_watchlisted
       title: WatchlistUpdate
+    WebhookCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          title: Name
+        url:
+          type: string
+          maxLength: 2048
+          title: Url
+        event_types:
+          items:
+            type: string
+          type: array
+          maxItems: 64
+          title: Event Types
+      type: object
+      required:
+      - name
+      - url
+      title: WebhookCreate
+    WebhookOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        url:
+          type: string
+          title: Url
+        event_types:
+          items:
+            type: string
+          type: array
+          title: Event Types
+        enabled:
+          type: boolean
+          title: Enabled
+        has_secret:
+          type: boolean
+          title: Has Secret
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - url
+      - event_types
+      - enabled
+      - has_secret
+      - created_at
+      title: WebhookOut
+      description: 'The public projection. ``secret`` is never in it.
+
+
+        Not even decrypted, and not even to the operator who set it: rotation
+
+        issues a new secret rather than showing the old one, the same rule the
+
+        connector wizard follows. ``has_secret`` answers the only question a
+
+        console needs.'
+    WebhookUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Name
+        url:
+          anyOf:
+          - type: string
+            maxLength: 2048
+          - type: 'null'
+          title: Url
+        event_types:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 64
+          - type: 'null'
+          title: Event Types
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: WebhookUpdate
     WhitelistCreate:
       properties:
         action_type:
