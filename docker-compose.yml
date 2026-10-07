@@ -421,6 +421,23 @@ services:
       SSO_GROUPS_CLAIM: ${SSO_GROUPS_CLAIM:-}
       SSO_LOGIN_LABEL: ${SSO_LOGIN_LABEL:-Continue with SSO}
       REALTIME_INTERNAL_TOKEN: ${REALTIME_INTERNAL_TOKEN:-}
+      # Depth 5.2. Where a pending approval is offered besides the console.
+      # Both are empty by default: an unset URL means that channel reports
+      # `skipped` with the setting that would turn it on, which is the
+      # difference between "we chose not to" and "it broke".
+      AISOC_SLACK_BOT_URL: ${AISOC_SLACK_BOT_URL:-}
+      AISOC_TEAMS_BOT_URL: ${AISOC_TEAMS_BOT_URL:-}
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
+      # The one-click approval email. No relay means the email channel
+      # reports `skipped`; the approval is still durable and still in the
+      # console and the responder app.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_SENDER: ${SMTP_SENDER:-}
+      AISOC_APPROVAL_TOKEN_SECRET: ${AISOC_APPROVAL_TOKEN_SECRET:-}
       # The credential this service presents when it proxies the connector
       # catalog and "Test connection" to the connectors service.
       # `_service_token()` in app/api/v1/endpoints/connectors.py reads
@@ -1436,6 +1453,49 @@ services:
       # anonymous auth shim on an address someone else can reach. It
       # binds 0.0.0.0 inside the container and cannot tell otherwise.
       AISOC_PUBLISHED_BIND_ADDRS: ${AISOC_CONSOLE_BIND_ADDR:-${AISOC_BIND_ADDR:-127.0.0.1}},${AISOC_BIND_ADDR:-127.0.0.1}
+    networks:
+      - aisoc
+    restart: unless-stopped
+
+  # Depth 5.2. The Teams bot held the Adaptive Card builder and the signed
+  # callback handler and was in no compose file, so nothing could post a
+  # card and nothing could receive a decision. Same `chatops` profile as
+  # slack-bot: a default `docker compose up` must not fail because an
+  # operator has not provisioned a Teams channel.
+  teams-bot:
+    build:
+      context: ./services/teams-bot
+      dockerfile: Dockerfile
+    # Built locally and deliberately not given an `image:` tag yet. The
+    # publish matrix now carries teams-bot, so the package exists from the
+    # next release — and until that release has actually run, naming a
+    # `ghcr.io/beenuar/aisoc-teams-bot` tag here would tell an operator to
+    # pull something that has never been published.
+    # `scripts/check_published_images.py` is what catches that, and it
+    # caught exactly this.
+    container_name: aisoc-teams-bot
+    depends_on:
+      - api
+      - actions
+    ports:
+      - "${AISOC_BIND_ADDR:-127.0.0.1}:8010:8090"
+    profiles:
+      - chatops
+    environment:
+      AISOC_API_BASE_URL: http://api:8000
+      AISOC_ACTIONS_BASE_URL: http://actions:8085
+      AISOC_API_SERVICE_TOKEN: ${AISOC_TEAMS_API_TOKEN:-}
+      AISOC_ACTIONS_SERVICE_TOKEN: ${AISOC_TEAMS_ACTIONS_TOKEN:-}
+      AISOC_WEB_BASE_URL: ${AISOC_WEB_BASE_URL:-http://localhost:3000}
+      # Signs the card's Approve / Deny buttons and is re-verified by the
+      # callback handler. Unset means the bot refuses to post rather than
+      # posting a card whose buttons the handler will reject.
+      AISOC_TEAMS_CALLBACK_SECRET: ${AISOC_TEAMS_CALLBACK_SECRET:-}
+      # Empty disables posting, which is the right default: a bot that
+      # posts into a channel nobody chose is worse than one posting nowhere.
+      TEAMS_APPROVALS_WEBHOOK_URL: ${TEAMS_APPROVALS_WEBHOOK_URL:-}
+      # Shared with the API, which calls /internal/approval-card.
+      AISOC_INTERNAL_TOKEN: ${AISOC_INTERNAL_TOKEN:-}
     networks:
       - aisoc
     restart: unless-stopped
