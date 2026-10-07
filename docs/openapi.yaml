@@ -7435,7 +7435,35 @@ paths:
 
         tenant''s work — the same shape as the MSSP override that let any
 
-        authenticated user delete a critical detection from any other tenant.'
+        authenticated user delete a critical detection from any other tenant.
+
+
+        `role` is the same argument one level down, and it was unguarded.
+
+        Scoping a condition to a role is legislating over that role''s
+
+        exercise of a permission, so the rule is the one the rest of this
+
+        tree already applies to conferral, turned around: you may not
+
+        constrain authority you do not yourself hold. Without it a
+
+        `soc_analyst` holding `access_conditions:write` could store a
+
+        condition denying `admin` a permission outright, and the only
+
+        symptom an administrator would see is their own access failing for
+
+        a reason the console attributes to a rule they cannot edit.
+
+
+        Measured against `resolved_permissions`, never the static role map:
+
+        `require_permission` admitted this caller on the database-backed set,
+
+        and judging the grant against the broader static one is how six call
+
+        sites passed this gate while still escalating.'
       operationId: create_condition_api_v1_access_conditions_post
       requestBody:
         content:
