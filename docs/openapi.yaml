@@ -25,20 +25,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenResponse'
-        '202':
-          description: The password was accepted and a second factor is outstanding.
-            The body carries `mfa_token` plus either `mfa_required` (complete it at
-            `POST /auth/mfa/verify`) or `mfa_enrollment_required` (the tenant requires
-            a factor this account has not enrolled; enrol at `POST /auth/mfa/enroll/begin`).
-            No session is issued.
-          content:
-            application/json:
-              example:
-                mfa_required: true
-                mfa_token: eyJ…
-                methods:
-                - totp
-                - recovery_code
         '422':
           description: Validation Error
           content:
@@ -10277,75 +10263,54 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/auth/mfa/status:
+  /api/v1/outbound-webhooks:
     get:
       tags:
-      - auth
-      - mfa
-      summary: Mfa Status
-      description: Whether this user holds a second factor, and whether they must.
-      operationId: mfa_status_api_v1_auth_mfa_status_get
+      - integrations
+      summary: List Webhooks
+      operationId: list_webhooks_api_v1_outbound_webhooks_get
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MfaStatus'
+                items:
+                  $ref: '#/components/schemas/WebhookOut'
+                type: array
+                title: Response List Webhooks Api V1 Outbound Webhooks Get
       security:
       - HTTPBearer: []
-  /api/v1/auth/mfa/enroll/begin:
     post:
       tags:
-      - auth
-      - mfa
-      summary: Enroll Begin
-      description: 'Mint a secret and return it once, with the URI an app scans.
+      - integrations
+      summary: Create Webhook
+      description: 'Create a destination and mint its signing secret.
 
 
-        Re-enrolling replaces an *unconfirmed* row and refuses a confirmed one:
+        The secret is returned **once**, here, and never again — it is stored
 
-        silently rotating a working factor would turn a mis-click into a
+        vault-encrypted and the read projection carries only ``has_secret``.
 
-        lockout, and `DELETE /auth/mfa` is the deliberate way to remove one.'
-      operationId: enroll_begin_api_v1_auth_mfa_enroll_begin_post
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/EnrollBegin'
-      security:
-      - HTTPBearer: []
-  /api/v1/auth/mfa/enroll/confirm:
-    post:
-      tags:
-      - auth
-      - mfa
-      summary: Enroll Confirm
-      description: 'Prove the secret arrived, then hand over the recovery codes.
+        Returning it on every read would put a live credential in every console
 
-
-        Confirmation is what makes the row a credential. Without it, an
-
-        enrolment begun on a device that never received the QR code would lock
-
-        the user out at their next sign-in.'
-      operationId: enroll_confirm_api_v1_auth_mfa_enroll_confirm_post
+        response and every browser cache that held one.'
+      operationId: create_webhook_api_v1_outbound_webhooks_post
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ConfirmRequest'
+              $ref: '#/components/schemas/WebhookCreate'
         required: true
       responses:
-        '200':
+        '201':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EnrollConfirmed'
+                additionalProperties: true
+                type: object
+                title: Response Create Webhook Api V1 Outbound Webhooks Post
         '422':
           description: Validation Error
           content:
@@ -10354,54 +10319,56 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
-  /api/v1/auth/mfa/verify:
-    post:
+  /api/v1/outbound-webhooks/{webhook_id}:
+    patch:
       tags:
-      - auth
-      - mfa
-      summary: Verify
-      description: Complete a sign-in that `POST /auth/login` answered with 202.
-      operationId: verify_api_v1_auth_mfa_verify_post
+      - integrations
+      summary: Update Webhook
+      operationId: update_webhook_api_v1_outbound_webhooks__webhook_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Webhook Id
       requestBody:
+        required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/VerifyRequest'
-        required: true
+              $ref: '#/components/schemas/WebhookUpdate'
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SessionTokens'
+                $ref: '#/components/schemas/WebhookOut'
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/auth/mfa:
     delete:
       tags:
-      - auth
-      - mfa
-      summary: Disable
-      description: 'Remove your own second factor, proving you still hold it.
-
-
-        A current code is required. Without it, a stolen session could strip
-
-        the factor it was supposed to be protected by, which makes the factor
-
-        worth exactly as much as the session.'
-      operationId: disable_api_v1_auth_mfa_delete
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DisableRequest'
+      - integrations
+      summary: Delete Webhook
+      operationId: delete_webhook_api_v1_outbound_webhooks__webhook_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: webhook_id
+        in: path
         required: true
+        schema:
+          type: string
+          format: uuid
+          title: Webhook Id
       responses:
         '204':
           description: Successful Response
@@ -10411,40 +10378,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
-  /api/v1/auth/mfa/reset/{user_id}:
+  /api/v1/outbound-webhooks/{webhook_id}/rotate-secret:
     post:
       tags:
-      - auth
-      - mfa
-      summary: Reset
-      description: "Remove somebody else's second factor. The lost-phone path.\n\n\
-        Three constraints, each of which is the reason an administrative reset\nis\
-        \ normally the weakest link in an MFA deployment:\n\n* the target must be\
-        \ in the caller's own tenant, resolved from the\n  authenticated principal\
-        \ and never from the request;\n* a `reason` is required and lands in the audit\
-        \ row, because \"an admin\n  reset it\" without one is not an answer to \"\
-        who removed this and why\";\n* an administrator may not reset **their own**\
-        \ factor here. That would\n  be a self-disable with no code, bypassing `DELETE\
-        \ /auth/mfa`."
-      operationId: reset_api_v1_auth_mfa_reset__user_id__post
+      - integrations
+      summary: Rotate Secret
+      operationId: rotate_secret_api_v1_outbound_webhooks__webhook_id__rotate_secret_post
       security:
       - HTTPBearer: []
       parameters:
-      - name: user_id
+      - name: webhook_id
         in: path
         required: true
         schema:
           type: string
           format: uuid
-          title: User Id
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResetRequest'
+          title: Webhook Id
       responses:
         '200':
           description: Successful Response
@@ -10452,70 +10401,141 @@ paths:
             application/json:
               schema:
                 type: object
-                additionalProperties:
-                  type: string
-                title: Response Reset Api V1 Auth Mfa Reset  User Id  Post
+                additionalProperties: true
+                title: Response Rotate Secret Api V1 Outbound Webhooks  Webhook Id  Rotate
+                  Secret Post
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-  /api/v1/auth/mfa/policy:
+  /api/v1/outbound-webhooks/deliveries:
     get:
       tags:
-      - auth
-      - mfa
-      summary: Get Policy
-      description: 'Readable by any member: a user is entitled to know what their
-        own
-
-        tenant requires of them.'
-      operationId: get_policy_api_v1_auth_mfa_policy_get
-      responses:
-        '200':
-          description: Successful Response
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MfaPolicy'
+      - integrations
+      summary: List Deliveries
+      operationId: list_deliveries_api_v1_outbound_webhooks_deliveries_get
       security:
       - HTTPBearer: []
-    put:
-      tags:
-      - auth
-      - mfa
-      summary: Put Policy
-      description: 'Require, or stop requiring, a second factor across this tenant.
-
-
-        The tenant is the caller''s, never a parameter. A row is written only
-
-        when an administrator asks for one, so a tenant that has never visited
-
-        this endpoint has no row and is not enforced.'
-      operationId: put_policy_api_v1_auth_mfa_policy_put
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/MfaPolicy'
-        required: true
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(pending|delivered|failed|dead)$
+          - type: 'null'
+          title: Status
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MfaPolicy'
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryOut'
+                title: Response List Deliveries Api V1 Outbound Webhooks Deliveries
+                  Get
         '422':
           description: Validation Error
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/outbound-webhooks/dead-letters:
+    get:
+      tags:
+      - integrations
+      summary: List Dead Letters
+      description: 'Deliveries that exhausted their retries or were refused outright.
+
+
+        A named route rather than ``?status=dead`` on the list above, because
+
+        this is the one an operator is told to check and a filter nobody
+
+        applies is a filter nobody sees.'
+      operationId: list_dead_letters_api_v1_outbound_webhooks_dead_letters_get
       security:
       - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeliveryOut'
+                title: Response List Dead Letters Api V1 Outbound Webhooks Dead Letters
+                  Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/outbound-webhooks/deliveries/{delivery_id}/replay:
+    post:
+      tags:
+      - integrations
+      summary: Replay Delivery
+      description: 'Send a dead letter again, with the body the first attempt sent.
+
+
+        Synchronous and single-attempt: an operator replaying by hand has just
+
+        fixed something and wants to know now whether it worked, not in thirty
+
+        seconds. The attempt counter keeps climbing, so a replay cannot be used
+
+        to loop past the ladder.'
+      operationId: replay_delivery_api_v1_outbound_webhooks_deliveries__delivery_id__replay_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: delivery_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Delivery Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/passkeys/register/begin:
     post:
       tags:
@@ -22002,22 +22022,6 @@ components:
       - medianConfidence
       - lowConfidence
       title: ConfidenceSummary
-    ConfirmRequest:
-      properties:
-        mfa_token:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Mfa Token
-        code:
-          type: string
-          maxLength: 64
-          minLength: 1
-          title: Code
-      type: object
-      required:
-      - code
-      title: ConfirmRequest
     ConnectorHealthOut:
       properties:
         total:
@@ -23551,6 +23555,55 @@ components:
       - revoked_at
       - created_at
       title: DelegationOut
+    DeliveryOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        webhook_id:
+          type: string
+          format: uuid
+          title: Webhook Id
+        event_type:
+          type: string
+          title: Event Type
+        status:
+          type: string
+          title: Status
+        attempts:
+          type: integer
+          title: Attempts
+        last_status_code:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Last Status Code
+        last_error:
+          type: string
+          title: Last Error
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        delivered_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Delivered At
+      type: object
+      required:
+      - id
+      - webhook_id
+      - event_type
+      - status
+      - attempts
+      - last_status_code
+      - last_error
+      - created_at
+      - delivered_at
+      title: DeliveryOut
     DeploymentConfig:
       properties:
         mode:
@@ -23729,17 +23782,6 @@ components:
       - created_at
       - updated_at
       title: DetectionRuleResponse
-    DisableRequest:
-      properties:
-        code:
-          type: string
-          maxLength: 64
-          minLength: 1
-          title: Code
-      type: object
-      required:
-      - code
-      title: DisableRequest
     DiscoverResponse:
       properties:
         discovered:
@@ -24126,40 +24168,6 @@ components:
       required:
       - reason
       title: EngageRequest
-    EnrollBegin:
-      properties:
-        secret:
-          type: string
-          title: Secret
-        otpauth_uri:
-          type: string
-          title: Otpauth Uri
-      type: object
-      required:
-      - secret
-      - otpauth_uri
-      title: EnrollBegin
-    EnrollConfirmed:
-      properties:
-        recovery_codes:
-          items:
-            type: string
-          type: array
-          title: Recovery Codes
-        access_token:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Access Token
-        refresh_token:
-          anyOf:
-          - type: string
-          - type: 'null'
-          title: Refresh Token
-      type: object
-      required:
-      - recovery_codes
-      title: EnrollConfirmed
     EntityNeighborsResponse:
       properties:
         entity_id:
@@ -28072,32 +28080,6 @@ components:
       - connector_count
       - health_score
       title: MetricsOut
-    MfaPolicy:
-      properties:
-        require_totp:
-          type: boolean
-          title: Require Totp
-      type: object
-      required:
-      - require_totp
-      title: MfaPolicy
-    MfaStatus:
-      properties:
-        enrolled:
-          type: boolean
-          title: Enrolled
-        tenant_requires_totp:
-          type: boolean
-          title: Tenant Requires Totp
-        recovery_codes_remaining:
-          type: integer
-          title: Recovery Codes Remaining
-      type: object
-      required:
-      - enrolled
-      - tenant_requires_totp
-      - recovery_codes_remaining
-      title: MfaStatus
     MiniTimelineEvent:
       properties:
         id:
@@ -31284,17 +31266,6 @@ components:
       required:
       - name
       title: ReportDefinitionBody
-    ResetRequest:
-      properties:
-        reason:
-          type: string
-          maxLength: 500
-          minLength: 3
-          title: Reason
-      type: object
-      required:
-      - reason
-      title: ResetRequest
     RetentionOut:
       properties:
         raw_events_days:
@@ -33183,27 +33154,6 @@ components:
       - rotated_from_id
       - active
       title: ScimTokenOut
-    SessionTokens:
-      properties:
-        access_token:
-          type: string
-          title: Access Token
-        refresh_token:
-          type: string
-          title: Refresh Token
-        token_type:
-          type: string
-          title: Token Type
-          default: bearer
-        expires_in:
-          type: integer
-          title: Expires In
-          default: 1800
-      type: object
-      required:
-      - access_token
-      - refresh_token
-      title: SessionTokens
     SetupStep:
       properties:
         key:
@@ -36342,21 +36292,6 @@ components:
         pass-through would let a caller supply their own vendor credential and
 
         have the read run somewhere else entirely.'
-    VerifyRequest:
-      properties:
-        mfa_token:
-          type: string
-          title: Mfa Token
-        code:
-          type: string
-          maxLength: 64
-          minLength: 1
-          title: Code
-      type: object
-      required:
-      - mfa_token
-      - code
-      title: VerifyRequest
     VulnerabilityCreate:
       properties:
         asset_id:
@@ -36661,6 +36596,103 @@ components:
       required:
       - is_watchlisted
       title: WatchlistUpdate
+    WebhookCreate:
+      properties:
+        name:
+          type: string
+          maxLength: 255
+          title: Name
+        url:
+          type: string
+          maxLength: 2048
+          title: Url
+        event_types:
+          items:
+            type: string
+          type: array
+          maxItems: 64
+          title: Event Types
+      type: object
+      required:
+      - name
+      - url
+      title: WebhookCreate
+    WebhookOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        name:
+          type: string
+          title: Name
+        url:
+          type: string
+          title: Url
+        event_types:
+          items:
+            type: string
+          type: array
+          title: Event Types
+        enabled:
+          type: boolean
+          title: Enabled
+        has_secret:
+          type: boolean
+          title: Has Secret
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - name
+      - url
+      - event_types
+      - enabled
+      - has_secret
+      - created_at
+      title: WebhookOut
+      description: 'The public projection. ``secret`` is never in it.
+
+
+        Not even decrypted, and not even to the operator who set it: rotation
+
+        issues a new secret rather than showing the old one, the same rule the
+
+        connector wizard follows. ``has_secret`` answers the only question a
+
+        console needs.'
+    WebhookUpdate:
+      properties:
+        name:
+          anyOf:
+          - type: string
+            maxLength: 255
+          - type: 'null'
+          title: Name
+        url:
+          anyOf:
+          - type: string
+            maxLength: 2048
+          - type: 'null'
+          title: Url
+        event_types:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 64
+          - type: 'null'
+          title: Event Types
+        enabled:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      type: object
+      title: WebhookUpdate
     WhitelistCreate:
       properties:
         action_type:

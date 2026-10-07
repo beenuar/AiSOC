@@ -362,6 +362,7 @@ jobs:
           - threatintel
           - ueba
           - slack-bot
+          - teams-bot
           - honeytokens
           - purple-team
           - osquery-tls
@@ -566,6 +567,7 @@ jobs:
           - threatintel
           - ueba
           - slack-bot
+          - teams-bot
           - honeytokens
           - purple-team
           - osquery-tls

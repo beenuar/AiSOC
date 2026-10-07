@@ -284,3 +284,78 @@ The fastest end-to-end smoke test, in order of how much you have to set up:
 - [Live Actions](../concepts/live-actions) — how the action substrate that powers `notify_slack`, `create_ticket`, and `chatops.verify` works under the hood.
 - [Playbooks](../concepts/playbooks) — the YAML grammar that wires these notification actions into a response flow.
 - [Credential vault & secrets](./credentials) — where Slack / Teams / Jira credentials are stored at rest.
+
+## Delivery (depth 5.2)
+
+Everything below is **off until it is configured**, and an unconfigured
+channel reports `skipped` with the setting that would turn it on. That is
+the difference between "we chose not to" and "it broke", and it is the only
+way a console can honestly say a report was generated and not delivered.
+
+### Approval delivery
+
+`POST /api/v1/approvals` offers the approval on every configured channel
+after the row is durable. The approval is the record; a channel is a
+delivery route, so a channel that is down leaves a note on the row and does
+not take the approval with it.
+
+| Channel | Configured by | Notes |
+|---|---|---|
+| Email | `SMTP_HOST`, `SMTP_SENDER`, `AISOC_APPROVAL_TOKEN_SECRET` | One-click approve/deny links, HMAC-signed and single-use. With no signing secret the email is **refused**, because a link anybody could forge is worse than no link. |
+| Slack | `AISOC_SLACK_BOT_URL`, `AISOC_INTERNAL_TOKEN`, `SLACK_APPROVALS_CHANNEL` | `POST /internal/approval-card` on `services/slack-bot`. |
+| Teams | `AISOC_TEAMS_BOT_URL`, `AISOC_INTERNAL_TOKEN`, `TEAMS_APPROVALS_WEBHOOK_URL`, `AISOC_TEAMS_CALLBACK_SECRET` | `services/teams-bot` under the `chatops` compose profile. The card's buttons are HMAC-signed and re-verified on callback; with no signing secret the bot refuses to post rather than posting a card whose buttons the handler will reject. |
+
+The per-channel outcome is recorded on the approval's `action.delivery`, so
+"was anybody told?" is answerable from the record rather than from three
+services' logs.
+
+### Scheduled reports
+
+`report_templates.cron_schedule` is now read. The worker asks whether a cron
+occurrence fell **between the last run and now**, not whether the current
+minute matches — the poll is five minutes and cron granularity is one, so
+`0 9 * * 1` would otherwise be checked at 08:57 and 09:02 and never fire. A
+worker returning from an outage collapses at most 24 hours of backlog into
+one report.
+
+An expression the matcher cannot parse is skipped and logged with the
+expression. It is never treated as "every minute": one unreadable field
+should not become 168 emails.
+
+`report_artefacts.delivery_status` is `not_attempted | sent | skipped |
+failed`, with the reason in `delivery_detail`.
+
+### Outbound event webhooks
+
+| Route | Purpose |
+|---|---|
+| `POST /api/v1/outbound-webhooks` | Create a destination. The signing secret is returned **once** and never again. |
+| `POST /api/v1/outbound-webhooks/{id}/rotate-secret` | New secret, shown once. |
+| `GET /api/v1/outbound-webhooks/dead-letters` | Deliveries that exhausted their retries or were refused outright. |
+| `POST /api/v1/outbound-webhooks/deliveries/{id}/replay` | Send a dead letter again with the body the first attempt sent. |
+
+A destination is `enabled = false` on creation.
+
+**Verifying a signature.** The header is
+`X-AiSOC-Signature: t=<unix>,v1=<hex>`, where the hex is
+`HMAC-SHA256(secret, "<t>." + raw_body)`. The timestamp is inside the signed
+material, so a captured body cannot be replayed with a fresh one. Reject
+anything older than your tolerance — 5 minutes is the default on our side.
+
+```python
+import hashlib, hmac, time
+
+
+def verify(raw_body: bytes, header: str, secret: str, tolerance: int = 300) -> bool:
+    parts = dict(p.split("=", 1) for p in header.split(",") if "=" in p)
+    ts = int(parts["t"])
+    if abs(time.time() - ts) > tolerance:
+        return False
+    expected = hmac.new(secret.encode(), f"{ts}.".encode() + raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, parts["v1"])
+```
+
+**Retries.** 30s, 2m, 5m, 15m, 30m, to a maximum of six attempts. A 5xx or a
+connection failure is retried; a 4xx other than 408, 425 and 429 is dead
+immediately, because the receiver understood and refused and a sixth
+identical refusal tells an operator less than the first.
