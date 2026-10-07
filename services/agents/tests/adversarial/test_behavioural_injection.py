@@ -40,6 +40,7 @@ import pathlib
 
 import pytest
 
+from .behavioural_artefact import build_artefact
 from .behavioural_corpus import ALL_CASES, FAMILIES
 from .behavioural_runner import run_suite
 
@@ -203,3 +204,38 @@ class TestTheArtefact:
         loaded = json.loads(path.read_text(encoding="utf-8"))
         assert loaded["total_cases"] == report.total_cases
         assert len(loaded["families"]) == len(FAMILIES)
+
+    def test_the_committed_artefact_is_the_measurement(self) -> None:
+        """The published file, not a fresh one written to a temporary path.
+
+        The round-trip above proves the serialiser works and says nothing
+        about the file in the repository, which is the one a reader opens.
+        It held the pre-fix rates while the suite was green, because nothing
+        compared the two — the same shape as a count copied into prose and
+        left to go stale.
+        """
+        assert ARTEFACT.exists(), f"the published artefact is missing: {ARTEFACT}"
+        committed = json.loads(ARTEFACT.read_text(encoding="utf-8"))
+        assert committed == build_artefact(), (
+            f"{ARTEFACT.name} does not match a live run. Regenerate it in the same commit as the "
+            "change that moved it, so the published numbers are the measured ones."
+        )
+
+    def test_the_artefact_publishes_the_held_out_rate_beside_the_tuned_one(self) -> None:
+        """A reader who sees only the tuned number reads "closed". The whole
+        point of the pair is that one of them is measured on the corpus the
+        fix was written against."""
+        committed = json.loads(ARTEFACT.read_text(encoding="utf-8"))
+        held = committed["held_out"]
+        assert held["family"] == "fake_tool_output"
+        assert "flip_rate" in held and "catch_rate" in held
+        assert held["by_seam"], "a bare held-out rate is not actionable without the seam breakdown"
+        assert held["flip_rate"] > _tuned_family(committed)["flip_rate"], (
+            "the two rates now agree, which is either generalisation or tuning against the held-out "
+            "set. test_behavioural_holdout.py is where that gets decided; this assertion exists so "
+            "the artefact cannot start publishing agreement silently."
+        )
+
+
+def _tuned_family(payload: dict) -> dict:  # noqa: ANN001
+    return next(f for f in payload["families"] if f["family"] == "fake_tool_output")
