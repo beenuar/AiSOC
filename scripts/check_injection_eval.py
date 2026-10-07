@@ -183,13 +183,30 @@ def _guard_scanner(root: Path) -> Any:
     sanitizer = root / "services" / "agents" / "app" / "investigator" / "prompt_sanitizer.py"
     if not sanitizer.exists():
         raise FileNotFoundError(f"the guard's sanitizer dependency is not in this tree: {sanitizer}")
-    names = ("app", "app.investigator", "app.investigator.prompt_sanitizer", "app.prompting", "app.prompting.envelope")
+    # The guard's `fabricated_tool_result` rule is declared beside the
+    # tool-result channel invariant it enforces rather than inline, because the
+    # two have to change together. Required rather than optional: a tree
+    # missing it would load a guard with one fewer rule and report a rate for a
+    # matcher the product does not run, which is the exact defect this
+    # by-path loader exists to prevent.
+    tool_results = root / "services" / "agents" / "app" / "prompting" / "tool_results.py"
+    if not tool_results.exists():
+        raise FileNotFoundError(f"the guard's tool-result dependency is not in this tree: {tool_results}")
+    names = (
+        "app",
+        "app.investigator",
+        "app.investigator.prompt_sanitizer",
+        "app.prompting",
+        "app.prompting.tool_results",
+        "app.prompting.envelope",
+    )
     with _borrowed_module_names(*names):
         for package_name in ("app", "app.investigator", "app.prompting"):
             package = ModuleType(package_name)
             package.__path__ = []  # type: ignore[attr-defined]
             sys.modules[package_name] = package
         _load("app.investigator.prompt_sanitizer", sanitizer)
+        _load("app.prompting.tool_results", tool_results)
         module = _load("app.prompting.envelope", envelope)
     return module.PromptInjectionGuard().scan
 

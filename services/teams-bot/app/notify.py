@@ -54,10 +54,19 @@ class ApprovalCardRequest(BaseModel):
 
     action: dict[str, Any] = Field(..., description="The action record: id, action_type, target, risk_level, rationale.")
     case: dict[str, Any] = Field(default_factory=dict, description="Case context rendered into the card.")
-    webhook_url: str | None = Field(
-        default=None,
-        description="Override the configured channel webhook. Useful for per-tenant routing.",
-    )
+    # No `webhook_url`. It used to be accepted here as a per-tenant routing
+    # override and posted to directly, which is a full server-side request
+    # forgery: anything that can reach this pod chose where an internal
+    # service sent an authenticated-looking POST. CodeQL flagged it
+    # `py/full-ssrf` at critical.
+    #
+    # Removed rather than validated. The only production caller
+    # (`services/agents/app/investigator/chatops_notify.py`) never set it --
+    # only the tests did -- so the field was attack surface with no user,
+    # and the destination belongs to the deployment's configuration the way
+    # the tenant belongs to the credential. Per-tenant routing, if it is
+    # wanted later, is a stored per-tenant setting this service reads, not
+    # a string in a request body.
     requested_by: str = Field(
         default="",
         description=(
@@ -79,6 +88,9 @@ def _authorized(supplied: str | None) -> bool:
     expected = os.environ.get("AISOC_INTERNAL_TOKEN", "").strip()
     if not expected:
         return False
+    # Narrowed with a statement rather than `bool(supplied) and ...`: the
+    # call form is identical at runtime, and the type checker cannot carry
+    # the truthiness of a `str | None` across `and` into `.strip()`.
     if not supplied:
         return False
     return hmac.compare_digest(supplied.strip(), expected)
@@ -101,7 +113,7 @@ async def post_approval_card(
     if not _authorized(x_internal_token):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="internal token required")
 
-    webhook_url = (body.webhook_url or os.environ.get("TEAMS_APPROVALS_WEBHOOK_URL", "")).strip()
+    webhook_url = os.environ.get("TEAMS_APPROVALS_WEBHOOK_URL", "").strip()
     if not webhook_url:
         logger.info("teams_bot.approval_card_skipped", reason="TEAMS_APPROVALS_WEBHOOK_URL is unset", action_id=body.action.get("id"))
         return {"posted": False, "reason": "no approvals webhook configured"}

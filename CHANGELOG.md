@@ -9,6 +9,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A labelled verdict corpus a constant answer cannot win on**
+  (`services/agents/tests/eval_data/verdict/`). Every labelled set this tree
+  had was malicious by construction — `synthetic_incidents.json` and
+  `adversary_incidents.json` are 200 attacks each and carry no
+  `expected_disposition` at all, so `scripts/score_replay_set.py` refuses
+  both, correctly, and nothing could measure whether the agent got the
+  *verdict* right. The new corpus is 72 items in 36 twin pairs that the
+  scorer accepts: largest class 50.0%, so the best constant answer scores
+  **0.500** — measured through `score_replay`, not asserted — against the
+  plan's 60% ceiling, and 36 malicious items clears the 30 the report
+  requires before it will print a headline accuracy. 52 of 72 items (72.2%)
+  come from cloud, identity and SaaS, covering all ten named sources
+  (CloudTrail, GuardDuty, GCP audit, Azure activity, Entra, Okta, Workspace,
+  M365, GitHub, Slack, Kubernetes audit) where the repository's labelled
+  coverage was thinnest. Each non-malicious item has a malicious twin that
+  fired the same rule at the same severity with the same title, so the
+  evidence is the only thing that can separate them — and because twins share
+  their severity, the two halves carry an identical severity distribution and
+  severity alone separates nothing. The benign half is what real queues hold:
+  admin bulk changes, scanners, CI service accounts, travel sign-ins,
+  break-glass use with a ticket, backup jobs.
+  **All 72 items are hand-authored and every one carries `is_synthetic: true`.**
+  Nothing is drawn from a recorded dataset and nothing implies otherwise; the
+  README records five public corpora considered and the reason each was
+  refused, two of which pass on licence and fail on fit, because no public
+  attack-telemetry set carries analyst dispositions, cloud control-plane
+  events and a paired benign case at once.
+  `scripts/check_verdict_corpus.py` keeps all of that true — balance, source
+  mix, pairing, provenance-with-a-licence, documentation-only addresses and
+  header counts that match the body — and its `--self-test` injects one
+  violation of each rule into a copy of the shipped corpus and requires every
+  one to be caught. The two all-malicious corpora must keep being refused,
+  pinned in the same file that requires the new one to pass, so loosening the
+  guard to admit a corpus breaks the test that says the old ones stay out.
+  (Depth plan 1.1)
+
 - **A buyer security pack a reviewer can actually use.** `docs/security/` held
   three threat models and an advisory draft — good documents, and not the set
   a procurement review asks for. It now also carries architecture and
