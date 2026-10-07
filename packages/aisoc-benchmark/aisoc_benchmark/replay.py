@@ -65,6 +65,7 @@ __all__ = [
     "GRADED_DISPOSITIONS",
     "LATENCY_FIELDS",
     "LATENCY_LINE_PREFIX",
+    "LATENCY_LINE_PREFIXES",
     "MALICIOUS",
     "MIN_MALICIOUS_FOR_HEADLINE",
     "UNLABELED",
@@ -83,8 +84,20 @@ __all__ = [
 #: cannot drift into disagreeing about which line that is.
 LATENCY_LINE_PREFIX = "- Mean latency:"
 
+#: Every other rendered line that measures the host. The "time to verdict"
+#: section reports the same measurements under the name an operator uses,
+#: so it is wall clock too and must be strippable for the same reason: the
+#: reproducibility claim is "byte for byte apart from the host figures", and
+#: a figure the stripper does not know about silently falsifies it.
+LATENCY_LINE_PREFIXES: tuple[str, ...] = (LATENCY_LINE_PREFIX, "- p50:", "- p95:")
+
 #: The matching fields in :meth:`ReplayScore.as_dict`, for the JSON export.
-LATENCY_FIELDS: tuple[str, ...] = ("mean_latency_ms", "p95_latency_ms")
+LATENCY_FIELDS: tuple[str, ...] = (
+    "mean_latency_ms",
+    "p95_latency_ms",
+    "time_to_verdict_p50_ms",
+    "time_to_verdict_p95_ms",
+)
 
 #: The canonical disposition that means "this was a real threat". Written once
 #: because "malicious recall" has to mean the same thing in the metric, the
@@ -104,6 +117,17 @@ GRADED_DISPOSITIONS: tuple[str, ...] = (
 
 #: An analyst who declined to classify. Excluded from accuracy, never guessed.
 UNLABELED = "unlabeled"
+
+#: The confidence at which auto-close precision is reported when a caller
+#: names no tenant policy. Not a recommendation and not a default the
+#: product applies -- closure is governed per tenant by the autonomy policy.
+#: It exists so the figure is comparable across runs that did not state one.
+DEFAULT_AUTO_CLOSE_THRESHOLD = 0.9
+
+#: Verdicts a closure policy can act on without a human. `true_positive` is
+#: absent deliberately: a confirmed attack escalates, it is never closed,
+#: which is the rule `siem_writeback` already follows.
+_AUTO_CLOSABLE_VERDICTS: frozenset[str] = frozenset({"false_positive", "benign", "benign_true_positive"})
 
 #: Agent outputs that are a refusal to decide rather than a decision. These are
 #: abstentions: scored as neither right nor wrong, and counted separately so
@@ -194,6 +218,61 @@ class ReplayScore:
     headline_accuracy_ci: tuple[float, float] | None = None
     headline_withheld_reason: str | None = None
 
+    # ---- the figures that survive an imbalanced corpus -------------------
+    #
+    # Plain accuracy on a queue that is 90% false positive is 0.90 for an
+    # agent that reads nothing. These three are published together, always,
+    # because the first two are only interpretable against the third: a
+    # reader given 0.74 alone cannot tell whether the agent is good or the
+    # queue is.
+    #
+    # Balanced accuracy is the unweighted mean recall over the classes the
+    # corpus actually holds. Averaging over all four canonical dispositions
+    # would cap a perfect agent at 0.5 on a two-class corpus, which is a
+    # scoring bug that reads as a model failure.
+    balanced_accuracy: float | None = None
+    #: Matthews correlation. The one headline figure the base rate cannot
+    #: buy: 0.0 for any predictor with no relationship to the label, +1 for
+    #: perfect agreement, -1 for perfect disagreement. Computed over the
+    #: multi-class confusion matrix, so it covers all four dispositions
+    #: rather than collapsing them to malicious/not.
+    matthews_corrcoef: float | None = None
+    majority_class_accuracy: float | None = None
+    majority_class_label: str | None = None
+
+    #: Wilson score interval on malicious recall, beside the bootstrap one.
+    #:
+    #: Closed-form rather than resampled, for two reasons. It is
+    #: deterministic for a given (successes, trials), so two runs over one
+    #: corpus cannot disagree; and it keeps width at the boundary, where a
+    #: percentile bootstrap over an all-ones vector returns [1.0, 1.0] and
+    #: claims a certainty the sample size does not support.
+    malicious_recall_wilson: tuple[float, float] | None = None
+
+    #: "If the tenant let the agent close at confidence >= threshold, what
+    #: share of what it closed was really closable?" A malicious case above
+    #: the threshold is an attack the platform would have closed by itself,
+    #: which is the outcome this number exists to price. `None` rather than
+    #: 0.0 when nothing crossed the threshold: 0.0 reads as "it closed
+    #: things and got them all wrong".
+    auto_close_threshold: float | None = None
+    auto_close_considered: int = 0
+    auto_close_correct: int = 0
+    auto_close_precision: float | None = None
+    #: Share of labelled decisions the agent routed to a human instead of
+    #: deciding. The same population as `abstention_rate`, named the way an
+    #: operator sizing a queue thinks about it.
+    escalation_rate: float | None = None
+
+    # ---- time to verdict: reported, never graded -------------------------
+    #
+    # Latency is a property of the hardware the run happened on, so it must
+    # not move a score -- a scoreboard that graded it would rank a faster
+    # laptop as a better agent. Published beside the figures and labelled
+    # with the hardware by the caller, never inside them.
+    time_to_verdict_p50_ms: float | None = None
+    time_to_verdict_p95_ms: float | None = None
+
     # ---- the rest --------------------------------------------------------
     abstention_rate: float | None = None
     per_class: list[ClassScore] = field(default_factory=list)
@@ -234,6 +313,61 @@ def _f1(precision: float | None, recall: float | None) -> float | None:
     if precision is None or recall is None or (precision + recall) == 0:
         return None
     return 2 * precision * recall / (precision + recall)
+
+
+def _wilson_interval(successes: int, trials: int, *, z: float = 1.959963984540054) -> tuple[float, float] | None:
+    """Wilson score interval at 95%, clamped to [0, 1].
+
+    `z` is the two-sided 97.5th percentile of the standard normal, written
+    out rather than imported so this package keeps no numeric dependency.
+
+    The interval is centred on a shrunk estimate rather than on the raw
+    proportion, which is exactly why it keeps width at 0 and 1 where the
+    normal approximation and a percentile bootstrap both collapse.
+    """
+    if trials <= 0:
+        return None
+    phat = successes / trials
+    denom = 1.0 + z * z / trials
+    centre = (phat + z * z / (2 * trials)) / denom
+    margin = (z / denom) * ((phat * (1.0 - phat) / trials + z * z / (4 * trials * trials)) ** 0.5)
+    return (max(0.0, centre - margin), min(1.0, centre + margin))
+
+
+def _matthews(matrix: dict[str, dict[str, int]], labels: list[str]) -> float | None:
+    """Multi-class Matthews correlation over the confusion matrix.
+
+    The K-class generalisation (Gorodkin), which reduces to the familiar
+    2x2 formula when K is 2. Abstentions are excluded by the caller: an
+    alert routed to a human is not a wrong prediction, and counting it as
+    one would make an appropriately humble agent look like a bad one.
+
+    Two different zeros, kept apart:
+
+    * **no rows at all** -> `None`. Nothing was measured, and 0.0 would
+      read as "measured, and no relationship".
+    * **rows, but the predictor or the labels are constant** -> `0.0`.
+      The denominator is zero here too, but the answer is not unknown: a
+      predictor that says one thing to everything has exactly zero
+      correlation with the label, which is the finding this coefficient
+      exists to surface. Returning `None` would hide the constant-answer
+      agent behind "not measurable", and that agent is the whole reason
+      plain accuracy was not enough.
+    """
+    total = sum(matrix[t].get(p, 0) for t in labels for p in labels)
+    if total == 0:
+        return None
+    correct = sum(matrix[label].get(label, 0) for label in labels)
+    actual = {label: sum(matrix[label].get(p, 0) for p in labels) for label in labels}
+    predicted = {label: sum(matrix[t].get(label, 0) for t in labels) for label in labels}
+
+    cov_xy = correct * total - sum(actual[label] * predicted[label] for label in labels)
+    cov_xx = total * total - sum(predicted[label] ** 2 for label in labels)
+    cov_yy = total * total - sum(actual[label] ** 2 for label in labels)
+    denom = (cov_xx * cov_yy) ** 0.5
+    if denom == 0:
+        return 0.0
+    return cov_xy / denom
 
 
 def _percentile(values: list[float], fraction: float) -> float | None:
@@ -327,6 +461,7 @@ def score_replay(
     *,
     bootstrap_resamples: int = BOOTSTRAP_RESAMPLES,
     bootstrap_seed: int = BOOTSTRAP_SEED,
+    auto_close_threshold: float = DEFAULT_AUTO_CLOSE_THRESHOLD,
 ) -> ReplayScore:
     """Grade a replay run's decisions against the analysts' own labels.
 
@@ -385,6 +520,11 @@ def score_replay(
     latencies = [float(d.get("latency_ms") or 0.0) for d in decisions]
     score.mean_latency_ms = (sum(latencies) / len(latencies)) if latencies else None
     score.p95_latency_ms = _percentile(latencies, 0.95)
+    # Named for what an operator calls it. Same measurements as the two
+    # fields above; published under the plan's own term so the scorecard
+    # and the page agree about which number is "time to verdict".
+    score.time_to_verdict_p50_ms = _percentile(latencies, 0.50)
+    score.time_to_verdict_p95_ms = score.p95_latency_ms
     score.models = sorted({str(m) for d in decisions for m in (d.get("resolved_models") or [])})
 
     if not labelled:
@@ -459,6 +599,45 @@ def score_replay(
         verdicts[key] = verdicts.get(key, 0) + 1
     score.false_negative_verdicts = dict(sorted(verdicts.items()))
 
+    score.malicious_recall_wilson = _wilson_interval(
+        sum(1 for d in malicious_rows if d.get("verdict") == MALICIOUS),
+        len(malicious_rows),
+    )
+
+    # ---- figures that survive an imbalanced corpus ------------------------
+    #
+    # Over `answered` only, matching per-class precision above: an
+    # abstention is a decision to involve a human, not a wrong prediction.
+    # It is still visible, as `escalation_rate` directly below.
+    present = [label for label in GRADED_DISPOSITIONS if support.get(label, 0) > 0]
+    recalls = [c.recall for c in score.per_class if c.label in present and c.recall is not None]
+    score.balanced_accuracy = (sum(recalls) / len(recalls)) if recalls else None
+
+    answered_matrix: dict[str, dict[str, int]] = {expected: dict.fromkeys(GRADED_DISPOSITIONS, 0) for expected in GRADED_DISPOSITIONS}
+    for decision in answered:
+        expected = str(decision.get("expected_disposition"))
+        predicted = str(decision.get("verdict") or "")
+        if expected in answered_matrix and predicted in answered_matrix[expected]:
+            answered_matrix[expected][predicted] += 1
+    score.matthews_corrcoef = _matthews(answered_matrix, list(GRADED_DISPOSITIONS))
+
+    # The number every other number has to be read against.
+    if support:
+        majority = max(support, key=lambda label: support[label])
+        score.majority_class_label = majority
+        score.majority_class_accuracy = _ratio(support[majority], len(labelled))
+
+    # ---- auto-close precision at the closure threshold --------------------
+    score.auto_close_threshold = auto_close_threshold
+    closable = [
+        d for d in answered if d.get("verdict") in _AUTO_CLOSABLE_VERDICTS and float(d.get("confidence") or 0.0) >= auto_close_threshold
+    ]
+    score.auto_close_considered = len(closable)
+    score.auto_close_correct = sum(1 for d in closable if _is_correct(d))
+    score.auto_close_precision = _ratio(score.auto_close_correct, len(closable))
+
+    score.escalation_rate = score.abstention_rate
+
     # ---- calibration ------------------------------------------------------
     score.calibration, score.expected_calibration_error = _calibration(answered)
 
@@ -500,6 +679,20 @@ def _interval(bounds: tuple[float, float] | None) -> str:
     return "not measured" if bounds is None else f"{bounds[0] * 100:.1f}% to {bounds[1] * 100:.1f}%"
 
 
+def _number(value: float | None) -> str:
+    """A bare coefficient, for the figures that are not rates.
+
+    Matthews correlation runs -1 to +1 and the closure threshold is a
+    confidence, so neither is a percentage. Same "not measured" rule as
+    `_pct`.
+    """
+    return "not measured" if value is None else f"{value:.2f}"
+
+
+def _ms(value: float | None) -> str:
+    return "not measured" if value is None else f"{value:,.0f} ms"
+
+
 def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = None) -> str:
     """Render the report as Markdown, malicious recall first.
 
@@ -523,6 +716,7 @@ def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = 
         "",
         f"- Malicious cases in the test window: {score.malicious_support}",
         f"- Recall: {_pct(score.malicious_recall)} (95% CI {_interval(score.malicious_recall_ci)})",
+        f"- Recall, Wilson 95% interval: {_interval(score.malicious_recall_wilson)}",
         f"- Precision: {_pct(score.malicious_precision)}",
         "",
         "## Headline accuracy",
@@ -535,6 +729,45 @@ def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = 
             f"{_pct(score.headline_accuracy)} over {score.graded} answered decisions (95% CI {_interval(score.headline_accuracy_ci)}).",
             "",
         ]
+
+    # Printed immediately under the headline, and never without the
+    # baseline. Plain accuracy on a queue that is 90% false positive is
+    # 0.90 for an agent that reads nothing; a reader who sees the headline
+    # without what a constant would have scored cannot tell the two apart.
+    lines += [
+        "## Against a constant answer",
+        "",
+        f"- Majority-class baseline: {_pct(score.majority_class_accuracy)} (always answering `{score.majority_class_label}`)",
+        f"- Balanced accuracy: {_pct(score.balanced_accuracy)}",
+        f"- Matthews correlation: {_number(score.matthews_corrcoef)}",
+        "",
+        "Balanced accuracy is the unweighted mean recall over the classes this",
+        "corpus holds, so a constant answer scores 0.50 however skewed the queue",
+        "is. Matthews correlation is 0.00 for any predictor with no relationship",
+        "to the label, which is the one headline figure the base rate cannot buy.",
+        "",
+        "## Auto-close and escalation",
+        "",
+        f"- Auto-close precision at confidence >= {_number(score.auto_close_threshold)}:"
+        f" {_pct(score.auto_close_precision)}"
+        f" over {score.auto_close_considered} decision(s) the policy would have closed",
+        f"- Escalation rate: {_pct(score.escalation_rate)}",
+        "",
+        "A malicious case above the threshold is an attack the platform would",
+        "have closed by itself. Nothing above the threshold reports no figure",
+        "rather than a zero, which would read as closing things and getting",
+        "them all wrong.",
+        "",
+        "## Time to verdict",
+        "",
+        f"- p50: {_ms(score.time_to_verdict_p50_ms)}",
+        f"- p95: {_ms(score.time_to_verdict_p95_ms)}",
+        "",
+        "Reported, never graded: latency is a property of the hardware the run",
+        "happened on, and a scoreboard that graded it would rank a faster",
+        "machine as a better agent.",
+        "",
+    ]
 
     lines += ["## Per class", "", "| Disposition | Support | Predicted | Precision | Recall | F1 |", "|---|---|---|---|---|---|"]
     for row in score.per_class:
@@ -626,10 +859,14 @@ def strip_latency(report: str) -> str:
     the line count are unchanged and a diff of two reports points at content
     rather than at an offset.
     """
-    return "\n".join(
-        f"{LATENCY_LINE_PREFIX} excluded from this export (wall clock, not reproducible)" if line.startswith(LATENCY_LINE_PREFIX) else line
-        for line in report.split("\n")
-    )
+
+    def _strip(line: str) -> str:
+        for prefix in LATENCY_LINE_PREFIXES:
+            if line.startswith(prefix):
+                return f"{prefix} excluded from this export (wall clock, not reproducible)"
+        return line
+
+    return "\n".join(_strip(line) for line in report.split("\n"))
 
 
 def _calibration(answered: list[dict[str, Any]]) -> tuple[list[CalibrationBin], float | None]:
