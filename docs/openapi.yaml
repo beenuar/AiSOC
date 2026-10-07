@@ -17517,7 +17517,14 @@ paths:
       tags:
       - auth-saml
       summary: Saml Login
-      description: Initiate SAML SSO — redirect to IdP.
+      description: 'Initiate SAML SSO — redirect to the IdP this connection names.
+
+
+        `issuer` is optional and the console does not send one: a deployment
+
+        with a single enabled SAML connection has an unambiguous answer. It
+
+        exists so a deployment with several can link one button per provider.'
       operationId: saml_login_auth_saml_login_get
       parameters:
       - name: redirect
@@ -17527,6 +17534,14 @@ paths:
           type: string
           default: /
           title: Redirect
+      - name: issuer
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Issuer
       responses:
         '200':
           description: Successful Response
@@ -17570,14 +17585,38 @@ paths:
       tags:
       - auth-saml
       summary: Saml Logout
-      description: Initiate SAML SLO.
+      description: 'Initiate SAML SLO, at the SingleLogoutService the connection names.
+
+
+        Resolved the same way `/login` is. A deployment whose IdP comes from a
+
+        connection has no `SAML_IDP_SLO_URL`, so this used to build a logout
+
+        request against an empty endpoint and 500 on the way out of a session.
+
+        An SLO that cannot be initiated is a local logout, not an error.'
       operationId: saml_logout_auth_saml_logout_get
+      parameters:
+      - name: issuer
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Issuer
       responses:
         '200':
           description: Successful Response
           content:
             application/json:
               schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /auth/oidc/login:
     get:
       tags:

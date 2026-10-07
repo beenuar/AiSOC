@@ -101,7 +101,8 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 4: Enterprise identity, white-label and metering
 
-- [ ] **4.1** SSO completes in the console
+- [~] **4.1** SSO completes in the console
+  - Two of the three defects did **not** reproduce: the console fragment consumer (`authApi.completeSsoHandoff`) and the login-screen SSO entry both landed in v17.1.0. Neither was covered by a test, so six now pin them. The third reproduced exactly as written — `_saml_settings()` read its IdP trust anchor from `SAML_IDP_*` while the connection's own `metadata_url` / `metadata_xml` were read by nothing, so a SAML login redirected to the environment's IdP and a correctly signed assertion came back `invalid_response`. Fixed in `app/auth/saml_metadata.py`; the ACS also now lands on `/login?next=` with both tokens, because the old RelayState redirect lost the fragment to the console's own auth guard. Driven end to end against real Postgres and a real signed assertion in `sso-live.yml`. **Still `[~]`**: the containerised-IdP leg (`sso-live.yml :: keycloak-oidc`) has never been observed to pass — no container runtime would start where it was written — so the claim row is PARTIAL, not GATED.
 - [ ] **4.2** Console MFA
 - [ ] **4.3** White-label reaches every surface it claims
 - [ ] **4.4** Metering counts what happened
