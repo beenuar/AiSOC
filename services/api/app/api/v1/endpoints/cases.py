@@ -52,6 +52,7 @@ from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
 from app.services import case_orchestration, case_status, evidence_custody
 from app.services.audit import emit_audit
+from app.services.branding.resolver import resolve_branding
 from app.services.case_fanout import (
     FanoutResult,
     fanout_create_case,
@@ -1913,7 +1914,11 @@ async def case_auto_summary(
         raise HTTPException(status_code=404, detail="Case not found.")
 
     if format == "html":
-        rendered = render_case_summary_html(summary)
+        # The logo is inlined because this document is saved as a PDF and
+        # archived. A referenced asset makes the archived copy depend on the
+        # deployment still serving that URL years later.
+        branding = await resolve_branding(db, user.tenant_id, inline_logo=True)
+        rendered = render_case_summary_html(summary, branding)
         case_label = summary.case.case_number or str(summary.case.case_id)[:8]
         filename = _safe_filename_segment(f"case-{case_label}-summary") + ".html"
         return HTMLResponse(

@@ -661,6 +661,28 @@ export const brandingApi = {
   async get(): Promise<Branding> {
     return request<Branding>('/api/v1/branding');
   },
+
+  /**
+   * The logo bytes, fetched with the caller's credential.
+   *
+   * `logo_url` cannot be handed to an `<img src>`. The route authenticates a
+   * bearer token, and the only credential a browser attaches to an image
+   * request is a cookie — so the sidebar logo answered 401 on every
+   * deployment not running the development auth shim, which is every
+   * deployment a customer has. Fetched here and handed to the DOM as an
+   * object URL instead.
+   */
+  async logo(path: string): Promise<Blob> {
+    const headers = apiHeaders();
+    // A GET for image bytes; the JSON content type `apiHeaders` sets by
+    // default describes a body this request does not have.
+    delete headers['Content-Type'];
+    const response = await fetch(`${API_BASE}${path}`, { headers });
+    if (!response.ok) {
+      throw new ApiError(`branding logo request failed`, response.status, '');
+    }
+    return response.blob();
+  },
 };
 
 export interface RetroHuntSettings {
