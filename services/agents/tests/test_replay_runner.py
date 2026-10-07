@@ -22,6 +22,16 @@ from app.replay.findings import HistoricalFinding
 from app.replay.normalize import NormalizerUnavailable, to_fused_envelope
 from app.replay.runner import DEFAULT_TRAIN_FRACTION, ReplayRunner, split_by_time
 
+from tests.replay_recording import (
+    SplunkNotableNormalizer,
+    assert_non_degenerate,
+    comparable,
+    historical_findings,
+    load_recording,
+    recorded_gateway,
+    verdict_classes,
+)
+
 _BASE = datetime(2026, 3, 1, tzinfo=UTC)
 
 #: The real Splunk ES notable shape, as ``list_closed_notables`` returns it.
@@ -189,29 +199,67 @@ def test_the_envelope_does_not_invent_a_fusion_confidence() -> None:
 # --------------------------------------------------------------------------
 
 
+#: Fixed rather than generated, so the two runs below differ in nothing at all.
+_REPLAY_TENANT = "6f1b2a84-0c3e-4f5a-9d27-8c1a0b3e4f55"
+
+
 @pytest.mark.asyncio
 async def test_two_runs_over_one_history_produce_identical_decisions(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The deterministic tier must be reproducible, which is the phase's acceptance bar.
+    """Reproducible, and over verdicts that are not all the same verdict.
+
+    Fix pass 3.5. This asserted reproducibility with ``AISOC_DETERMINISTIC=1``
+    set, which pins triage to the heuristic tier — and that tier answers
+    ``likely_benign`` at 0.10 for every alert it is given. So the acceptance
+    bar for Phase 1 was one constant list compared against itself: a runner
+    that had stopped reading its input entirely would have passed it.
+
+    What drives it now is a recording of a real model answering the real
+    triage prompt (``tests/eval_data/replay_triage_recording.json``), served
+    over a loopback socket to the gateway client the worker actually builds.
+    Recordings give both halves at once — a live model varies its verdicts and
+    cannot repeat them, a constant repeats and does not vary.
 
     Latency is excluded from the comparison and nothing else is. It is a wall
     clock measurement and will never repeat; every other field is a property
-    of the input and the code.
+    of the input and the code. Driving a real reply through the path found a
+    second place it leaks — ``run_auto_triage`` writes the elapsed time into a
+    finding string — which a constant-output run could never have shown.
     """
-    monkeypatch.setenv("AISOC_DETERMINISTIC", "1")
-    findings = [_finding(i, disposition="true_positive" if i % 4 == 0 else "false_positive") for i in range(20)]
-    tenant = str(uuid.uuid4())
+    recording = load_recording()
+    findings = historical_findings(recording)
 
     async def _run() -> list[dict[str, Any]]:
-        runner = ReplayRunner(normalizer=_SplunkLikeNormalizer(), tenant_id=tenant)
-        run = await runner.run(findings)
-        rows = []
-        for decision in run.decisions:
-            payload = decision.as_dict()
-            payload.pop("latency_ms")
-            rows.append(payload)
-        return rows
+        with recorded_gateway(recording["responses"], monkeypatch) as gateway:
+            runner = ReplayRunner(normalizer=SplunkNotableNormalizer(), tenant_id=_REPLAY_TENANT)
+            run = await runner.run(findings)
+            # A replay that quietly took the deterministic path would be
+            # reproducible for the old reason, so the gateway is asked whether
+            # it was called rather than the tier being trusted to say so.
+            assert not gateway.refused, f"the run asked for alerts the recording does not cover: {gateway.refused}"
+            assert len(gateway.served) == len(run.decisions), f"served {len(gateway.served)} replies for {len(run.decisions)} decisions"
+        return [comparable(decision.as_dict()) for decision in run.decisions]
 
-    assert await _run() == await _run()
+    first = await _run()
+    second = await _run()
+
+    assert first == second
+    assert_non_degenerate(first)
+
+
+def test_the_acceptance_bar_rejects_a_constant_verdict_stream() -> None:
+    """The guard above, proven against the output it exists to refuse.
+
+    Without this, ``assert_non_degenerate`` is itself unfalsified: the only
+    evidence it works would be that it passes on a recording chosen because it
+    passes. The rows here are what the deterministic tier really produced on
+    the pre-fix test — six alerts, one verdict, one confidence.
+    """
+    constant = [{"verdict": "benign", "confidence": 0.1, "error": None} for _ in range(6)]
+
+    with pytest.raises(AssertionError, match="one class"):
+        assert_non_degenerate(constant)
+
+    assert verdict_classes(constant) == {"benign"}
 
 
 @pytest.mark.asyncio

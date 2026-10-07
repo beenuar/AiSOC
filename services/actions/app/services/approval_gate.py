@@ -82,17 +82,44 @@ async def _resolve_tier(tenant_id: object) -> str:
     return _tier_label(getattr(policy, "tier", None))
 
 
+def effective_tier(status: ActionStatus, requirement: ApprovalRequirement | None) -> str:
+    """The approval tier this submission actually landed at.
+
+    Composed from both gates rather than read off the matrix, because they
+    disagree in one direction that matters: the matrix can say AUTOMATIC
+    while blast radius still routes the action to a human. Recording the
+    matrix's answer there would count a queued action as unattended, which
+    is the single number an operator reads this meter for.
+
+    A verb with no capability contract has no graded requirement, so the
+    status is all there is to go on — and the status is enough to answer
+    "did a human have to act", which is what the tier is metered for.
+    """
+    if status == ActionStatus.REJECTED and requirement == ApprovalRequirement.PROHIBITED:
+        return ApprovalRequirement.PROHIBITED.value
+    if status == ActionStatus.AWAITING_APPROVAL:
+        if requirement in (ApprovalRequirement.ANALYST, ApprovalRequirement.MANDATORY_HUMAN):
+            return requirement.value
+        return ApprovalRequirement.ANALYST.value
+    return ApprovalRequirement.AUTOMATIC.value
+
+
 async def apply_matrix(
     request: ActionRequest,
     status: ActionStatus,
     blast_radius: BlastRadius,
     reason: str,
-) -> tuple[ActionStatus, str]:
+) -> tuple[ActionStatus, str, str]:
     """Raise the blast-radius verdict to whatever the matrix demands.
 
-    Returns the (possibly unchanged) status and the reason that decided it.
-    Never lowers: a blast-radius gate that already demands approval keeps
-    demanding it whatever the confidence says.
+    Returns the (possibly unchanged) status, the reason that decided it,
+    and the approval tier the submission landed at. Never lowers: a
+    blast-radius gate that already demands approval keeps demanding it
+    whatever the confidence says.
+
+    The tier is returned rather than logged and dropped. It was computed on
+    every submission and discarded, so `aisoc_action_records` could say how
+    many actions a tenant ran and not how many of them ran unattended.
     """
     contract = contract_for_action_type(request.action_type.value)
     if contract is None:
@@ -101,7 +128,7 @@ async def apply_matrix(
             action_type=request.action_type.value,
             note="blast radius decides alone; impact is unknown for this verb",
         )
-        return status, reason
+        return status, reason, effective_tier(status, None)
 
     # The same shared grading the registry door runs. This used to unpack the
     # contract into `evaluate`'s arguments here, and the dispatcher unpacked
@@ -123,17 +150,17 @@ async def apply_matrix(
             impact=decision.impact.value,
             reason=decision.reason,
         )
-        return ActionStatus.REJECTED, decision.reason
+        return ActionStatus.REJECTED, decision.reason, effective_tier(ActionStatus.REJECTED, decision.requirement)
 
     if decision.requirement == ApprovalRequirement.AUTOMATIC:
         # The matrix is content. Blast radius may still have gated it, and
         # that verdict stands.
-        return status, reason
+        return status, reason, effective_tier(status, decision.requirement)
 
     if status == ActionStatus.AWAITING_APPROVAL:
         # Already gated. Keep the matrix's reason, which names confidence and
         # impact — more use to the approver than "blast radius exceeded".
-        return status, decision.reason
+        return status, decision.reason, effective_tier(status, decision.requirement)
 
     logger.info(
         "Action requires approval (confidence x impact)",
@@ -144,4 +171,8 @@ async def apply_matrix(
         tier=decision.tier,
         reason=decision.reason,
     )
-    return ActionStatus.AWAITING_APPROVAL, decision.reason
+    return (
+        ActionStatus.AWAITING_APPROVAL,
+        decision.reason,
+        effective_tier(ActionStatus.AWAITING_APPROVAL, decision.requirement),
+    )
