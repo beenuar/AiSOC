@@ -1,0 +1,38 @@
+# Okta System Log. Event types are the dotted `eventType` strings, which
+# Okta namespaces by subject — `user.session.*`, `system.api_token.*`,
+# `security.*`.
+source: okta
+event_type_path: eventType
+fixture_files:
+  - services/connectors/tests/fixtures/okta/sample_event.json
+events:
+  user.session.start:
+    # Both a success and a failure arrive under this one type; the outcome
+    # is on the record, which is why the class sits at low rather than
+    # being split into two entries the vendor does not have.
+    action: user.session.start
+    sensitivity: low
+    attack: [T1078]
+  user.account.lock:
+    action: user.account.lock
+    sensitivity: high
+    attack: [T1110]
+  user.account.privilege.grant:
+    action: user.account.privilege.grant
+    sensitivity: critical
+    attack: [T1098]
+  system.api_token.create:
+    # A token outlives the session that minted it and carries the
+    # creator's authority with no second factor behind it.
+    action: system.api.token.create
+    sensitivity: high
+    attack: [T1098.001]
+  user.mfa.factor.deactivate:
+    action: user.mfa.factor.deactivate
+    sensitivity: high
+    attack: [T1556.006]
+  security.request.blocked:
+    action: security.request.blocked
+    sensitivity: high
+    attack: [T1078]
+unclassified: {}

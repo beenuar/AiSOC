@@ -1,0 +1,16 @@
+# Azure Activity Log. Event types are the ARM operation names in
+# `operationName.value`, which are `Provider/resourceType/action`.
+source: azure_activity
+event_type_path: operationName.value
+fixture_files:
+  - services/connectors/tests/test_azure_connectors.py
+events:
+  Microsoft.Authorization/roleAssignments/write:
+    action: authorization.role.assignment.write
+    sensitivity: high
+    attack: [T1098.003]
+  Microsoft.Storage/storageAccounts/read:
+    action: storage.account.read
+    sensitivity: info
+    attack: [T1580]
+unclassified: {}
