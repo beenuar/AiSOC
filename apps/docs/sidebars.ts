@@ -61,6 +61,7 @@ const sidebars: SidebarsConfig = {
         "console/public-replay",
         "console/tenant-skills",
         "console/triage-context",
+        "console/users-administration",
       ],
     },
     {

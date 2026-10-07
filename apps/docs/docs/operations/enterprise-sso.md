@@ -9,6 +9,20 @@ sidebar_label: Enterprise SSO
 SAML and OIDC sign-in, and the connection record that makes either
 work.
 
+## Off by default
+
+The whole surface sits behind `SSO_ENABLED` (default `false`). The login
+screen asks `GET /api/v1/auth/sso/status` and renders the SSO button only
+when the flag is on and an enabled connection exists, so a deployment that
+has configured nothing shows nothing. After a successful callback the
+browser lands on `/login?next=…` with the tokens in the **fragment** —
+destination guards used to drop the fragment, which is v17.1.0's reason the
+callback lands there and nowhere else.
+
+For a lockout drill there is `SSO_LOCAL_ADMIN_ONLY`: password sign-in stays
+open for wildcard roles only, so a broken IdP cannot strand the break-glass
+administrator, and everyone else keeps going through the IdP.
+
 :::warning If you tried this before and it 403'd
 You were not doing it wrong. `aisoc_sso_connections` was created by a
 migration and **written by nothing** — no API, no console, no script.
@@ -41,9 +55,11 @@ POST /api/v1/sso-connections
   "display_name": "Example Corp",
   "enabled": false,
   "default_role": "viewer",
+  "allowed_email_domains": ["example.com"],
+  "jit_provisioning": true,
+  "group_role_mode": "first_login_only",
   "group_role_mapping": {
-    "soc-analysts": "soc_analyst",
-    "soc-leads": "soc_lead"
+    "soc-analysts": "infosec"
   }
 }
 ```
@@ -51,6 +67,33 @@ POST /api/v1/sso-connections
 Create it **disabled**, check the mapping, then enable it. A disabled
 connection does not resolve, so sign-ins keep failing the same way
 until you are ready.
+
+### The provisioning policy (v17.1.0)
+
+Three per-connection fields decide who gets created and what they hold:
+
+- **`allowed_email_domains`** is enforced at the provisioning chokepoint —
+  an assertion whose verified email is outside the list authenticates
+  nobody, however valid the token.
+- **`jit_provisioning`** controls whether an unknown identity becomes a
+  user at all. When it does, the account lands as **`viewer`**; nothing an
+  IdP says can mint anything stronger than the mapping below allows.
+- **`group_role_mode`** defaults to **`first_login_only`**: IdP groups set
+  the role once, at creation, and administrators own every change after
+  it. The alternative keeps re-asserting the mapping on each login — pick
+  it only if the IdP is the system of record for roles, because an admin's
+  manual correction will not survive the next sign-in.
+
+SSO logins, provisioning events and admin role changes are all audited;
+role changes additionally require a `reason` and refuse to demote the last
+active administrator.
+
+The example maps to `infosec` — the analyst/hunter role with no
+user/role/settings/credential doors — because it is the strongest role a
+mapping should normally confer. Legacy names like `soc_analyst` or
+`soc_lead` name no catalog row (migration `093` moves users holding one to
+`viewer` and reports the count), so a mapping to them provisions the
+default role, not the role you meant.
 
 ### What is refused
 

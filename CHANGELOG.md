@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [17.1.0] - 2026-10-07
+
+### Security
+
+- **GHSA-w4r8-969c-67p2 (High, CWE-347): the audit trail could be forged by
+  an unauthenticated caller.** `AuditMiddleware` decoded the request's Bearer
+  token with signature verification disabled and wrote its claims into the
+  per-tenant tamper-evident audit chain on every mutating request — before
+  authentication ran, and regardless of whether it failed. A self-crafted JWT
+  got 401 from the route and still planted `actor_email` / `tenant_id` of the
+  attacker's choosing into any known tenant's chain, reproduced against a
+  production-mode stack with every migration applied: the forged entry landed
+  at `chain_index` 0 while a no-credential control wrote nothing. The
+  middleware now audits only the verified principal authentication records on
+  `request.state`; a request that fails authentication writes no audit row. A
+  sibling sweep confirmed this was the only live instance of trusting an
+  unverified token. Reported by [@cqliuke](https://github.com/cqliuke) through
+  private vulnerability reporting; affects every release up to and including
+  17.0.0. See the published advisory:
+  [GHSA-w4r8-969c-67p2](https://github.com/beenuar/AiSOC/security/advisories/GHSA-w4r8-969c-67p2).
+  (#1182)
+- **Dependency floors for a fresh batch of npm advisories, plus multidict.**
+  `compression` ≥ 1.8.2, `shell-quote` ≥ 1.11, `source-map-js` ≥ 1.2.2,
+  `tinypool` ≥ 2.1.2 and `proxy-addr` ≥ 2.0.8 across all four npm install
+  roots (root workspace, `apps/mobile`, `services/mcp/cursor-extension`,
+  `services/realtime`), and `multidict` 6.9.1 in the three Python lockfiles
+  that pin it. These advisories published after v17.0.0 and were failing
+  Trivy and security-audit on every open pull request. (#1180)
+
 ### Added
 - Admin Users administration: a console-only **Settings → Users** screen
   (admin nav, hidden entirely for viewer/infosec) with server-side
@@ -33,6 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`tests/test_sso_enterprise_policy.py`) locking the least-privilege
   vocabulary, the fail-closed gates, and the off-by-default flag.
 
+Both blocks land the reviewed scope of #1179 by
+[@alexmateescu](https://github.com/alexmateescu), merged via #1183 with the
+author's commits preserved.
 
 ### Fixed
 
@@ -55,6 +87,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and a case-workspace mock missing the `getTimeline`/`reopen` stubs
   upstream components now call. Type-check is clean and the full console
   suite (838 tests) passes on the branch.
+- **Fresh installs no longer risk a zero-permission administrator.**
+  Migration `091` stops bulk-seeding an `infosec` row into every tenant's
+  `roles` table: a tenant's first `roles` row flips permission resolution
+  from the static map to the database, and a seeded row with no grants
+  resolved every user of that tenant — including break-glass admin — to zero
+  permissions. `093` repairs already-seeded deployments and backfills role
+  labels; the canonical `infosec` definition lives in `ROLE_PERMISSIONS` /
+  `GRANTABLE_ROLES`, which assignment validates against, so nothing in
+  `roles` is needed for it to be assignable. (#1183)
+- **`optional_user` forwarded the wrong argument slot**, turning every
+  anonymous dashboard poll into a 500. (#1183)
+- **Enrichment merges kept only the top-scoring source's WHOIS and dropped
+  DNS records entirely.** `mergeResults` copied `Whois` only inside the
+  max-risk branch, so a source that answered with WHOIS but not the highest
+  risk score lost it whenever two or more sources returned; `DNSRecords`
+  were never merged at all. WHOIS now falls back to the first source that
+  has one (the highest-risk source still wins when it does), and DNS records
+  are union-merged and deduplicated in order. Community contribution. (#1178)
+- **The grading-integrity gate locked itself out after a merge burst.** Its
+  staleness check queried *successful* push runs only and read "none of the
+  newest five is for a recent commit" as a stale API snapshot — but a
+  workflow genuinely failing on 30+ consecutive commits produces the same
+  signature, and for `grading-integrity.yml` itself the condition was
+  self-locking: each push run failing the check was the reason no recent
+  successful run existed. `main` was red on it for two days with no commit
+  able to fix it. Freshness is now proven by push runs of any conclusion
+  (a failed run for a recent commit proves the read is fresh; on a push
+  event the run executing the gate is itself the proof) while only
+  successes are graded; the genuine stale-snapshot refusal is preserved,
+  and four of the five new tests fail on the previous code. (#1181)
+- **Six repairs to what the v17 follow-on landed with**, two of them runtime
+  bugs: the `SSO_LOCAL_ADMIN_ONLY` gate tested membership against a
+  *function object* (`user.role not in wildcard_roles`), so password
+  sign-in answered 500 instead of applying the policy; two `logger.warning`
+  calls in `cases.py` passed a keyword stdlib logging rejects, raising
+  inside their own `except` blocks; plus a dead `StepKind.WARNING` branch,
+  a shadowed duplicate `period` field, a `str` assigned into a `CaseStatus`
+  field, and seven mypy `union-attr` findings. (#1160)
+- **The release step that moves the `stable` Helm chart channel had never
+  once worked.** It read the channel with `helm show chart --version stable`,
+  but `--version` takes a semver *constraint*, so helm rejected the channel
+  name client-side before any network call — in 457 ms, with `2>/dev/null`
+  hiding the message and `pipefail` carrying the failure out. (#1129, #1130)
+
+### Changed
+
+- The four OpenTelemetry modules move to 1.47.0 together. (#1175)
+- Storybook group to 10.6.1 (test-runner 0.26.0); the bump pulls esbuild
+  0.28.2 alongside the override-pinned 0.28.1, now recorded in the toolchain
+  gate's expected set with the gate's own self-test fixtures updated to
+  match. (#1146)
+- GitHub Actions pins move to their v7 majors, including the last floating
+  tags. (#1149, #1176)
+- Two consolidated Dependabot waves — 19 bumps with the recorded reason
+  fastapi cannot move, then seven more — plus `@types/node` 26.6.4.
+  (#1161, #1174, #1148)
+- The SCIM contract gate now sees derived-role declarations
+  (`ROLE_PERMISSIONS["infosec"] = …` assigned by subscript), so it no longer
+  reports a role that resolves to 18 permissions as granting nothing; the
+  committed OpenAPI spec was regenerated alongside. (6fc5719a)
 
 ## [17.0.0] - 2026-10-05
 
