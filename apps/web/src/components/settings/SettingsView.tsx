@@ -48,6 +48,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { AutonomyPolicyPanel } from '@/components/settings/AutonomyPolicy';
 import { AssignRoleModal } from '@/components/settings/AssignRoleModal';
 import { RetroHuntSettingsPanel } from './RetroHuntSettings';
+import { ScimTokensPanel } from './ScimTokensPanel';
 import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
 import { canUseDemoData } from '@/lib/demoFallback';
 import { rbacApi, authApi } from '@/lib/api';
@@ -60,6 +61,7 @@ type TabId =
   | 'integrations'
   | 'autonomy'
   | 'api-keys'
+  | 'scim'
   | 'notifications'
   | 'appearance'
   | 'deployment'
@@ -316,6 +318,12 @@ const TABS: { id: TabId; label: string; description: string }[] = [
     description: 'Programmatic access for pipelines and integrations.',
   },
   {
+    id: 'scim',
+    label: 'SCIM provisioning',
+    description:
+      'Bearer credentials your identity provider uses to create and deprovision principals.',
+  },
+  {
     id: 'notifications',
     label: 'Notifications',
     description: 'How and when AiSOC should ping you.',
@@ -412,6 +420,7 @@ export function SettingsView() {
                 </div>
               )}
               {tab === 'api-keys' && <ApiKeysPanel />}
+              {tab === 'scim' && <ScimTokensPanel />}
               {tab === 'notifications' && <NotificationsPanel />}
               {tab === 'appearance' && <AppearancePanel />}
               {tab === 'deployment' && <DeploymentAIPanel />}

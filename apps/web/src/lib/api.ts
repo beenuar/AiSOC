@@ -6818,6 +6818,59 @@ export const apiKeysApi = {
     request<void>(`/api/v1/api-keys/${id}`, { method: 'DELETE' }),
 };
 
+// ─── SCIM credentials ────────────────────────────────────────────────────────
+//
+// `apps/docs/docs/operations/scim.md` told administrators to "mint one from
+// the console". The CRUD backend at `/api/v1/scim-tokens` had existed since
+// the SCIM surface shipped and the console had no binding to it at all — not
+// a panel, not a client function, not a string containing "scim" anywhere
+// under `apps/web/src` — so the only way to obtain a credential was the curl
+// command two paragraphs further down.
+
+export interface ScimTokenRecord {
+  id: string;
+  name: string;
+  /** Display prefix. The secret itself is stored as a digest and never returned. */
+  prefix: string;
+  org_id: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  rotated_from_id: string | null;
+  active: boolean;
+}
+
+/** Create and rotate both return the raw secret, exactly once. */
+export interface CreatedScimToken extends ScimTokenRecord {
+  token: string;
+}
+
+export const scimTokensApi = {
+  list: () => request<ScimTokenRecord[]>('/api/v1/scim-tokens'),
+
+  create: (data: { name: string; expires_in_days?: number | null }) =>
+    request<CreatedScimToken>('/api/v1/scim-tokens', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Both secrets work for `grace_hours`, so the replacement can be pasted
+   * into the identity provider without a failed sync in between. Zero
+   * revokes the old one at once, which is the right trade after a
+   * disclosure and the wrong one otherwise.
+   */
+  rotate: (id: string, grace_hours: number) =>
+    request<CreatedScimToken>(`/api/v1/scim-tokens/${id}/rotate`, {
+      method: 'POST',
+      body: JSON.stringify({ grace_hours }),
+    }),
+
+  revoke: (id: string) =>
+    request<void>(`/api/v1/scim-tokens/${id}`, { method: 'DELETE' }),
+};
+
 // ─── Replay evaluation (gap-closure Phase 1.4) ───────────────────────────────
 //
 // Wraps `services/api/app/api/v1/endpoints/evaluations.py`: measure triage
