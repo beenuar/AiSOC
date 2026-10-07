@@ -37,6 +37,20 @@ _SEVERITY_BY_URGENCY = {
 }
 
 
+def _first(raw: dict[str, Any], *keys: str) -> Any:
+    """The first key carrying a value, treating an empty string as absent.
+
+    A search result carries only the columns its search named, and Splunk
+    renders a column it has no value for as ``""`` rather than omitting it, so
+    a plain ``or`` chain over ``.get()`` would stop at the empty one.
+    """
+    for key in keys:
+        value = raw.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
 class SplunkConnector(BaseConnector):
     connector_id = "splunk"
     connector_name = "Splunk SIEM"
@@ -289,7 +303,12 @@ class SplunkConnector(BaseConnector):
             "description": raw.get("description", ""),
             "severity": _SEVERITY_BY_URGENCY.get(str(raw.get("urgency", "medium")).lower(), "medium"),
             "src_ip": raw.get("src", raw.get("src_ip")),
-            "hostname": raw.get("host"),
+            # `host` is Splunk's own indexed-source metadata — on a notable it
+            # names the search head, not the machine the detection is about.
+            # Enterprise Security correlates assets on src/dest/dvc and
+            # identities on user/src_user, which is why those are read too.
+            "hostname": _first(raw, "host", "dest", "dvc", "orig_host"),
+            "username": _first(raw, "user", "src_user"),
             "raw_event": raw,
             "created_at": raw.get("_time"),
         }

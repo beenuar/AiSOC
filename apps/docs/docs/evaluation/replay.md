@@ -80,6 +80,12 @@ review state in its own lookup. It must return these fields: `event_id`,
 `rule_id`, `rule_name`, `urgency`, `disposition`, `review_time`, `reviewer`,
 `comment`.
 
+It should also return the notable's asset and identity fields — `src`, `dest`,
+`dvc`, `orig_host`, `user` and `src_user` — which is what the default search
+does. `| fields` keeps only what it names, so a search that omits them
+produces findings with no host and no user, and triage is then graded on an
+alert that says who raised it and nothing about who it happened to.
+
 ### Microsoft Sentinel
 
 Reads incidents with `properties/status eq 'Closed'`, following `nextLink` so a
@@ -90,6 +96,12 @@ sorted first.
 `benign_true_positive`, `FalsePositive` to `false_positive`, and
 `Undetermined` to `unlabeled`. `classificationReason` and
 `classificationComment` are carried as the analyst's reason.
+
+An incident's `properties` carry no account and no host, so the reader also
+calls each incident's `entities` endpoint and attaches the result. The app
+registration therefore needs to be able to read entities on the workspace; if
+it cannot, the incident still contributes its analyst's classification and
+reaches triage without a host or a user rather than failing the window.
 
 ### Elastic Security
 

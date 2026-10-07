@@ -462,7 +462,16 @@ async def backtest_tenant_skill(
             "tenant's other active skills; the candidate carries those plus this one. Read them "
             "side by side at GET /evaluations/replay/{id}. This skill was authored after the window "
             "closed and is applied to it on purpose, so the result measures the skill against this "
-            "window and is not a forecast of its accuracy on new alerts."
+            "window and is not a forecast of its accuracy on new alerts. "
+            "Compare the two reports over the alerts this skill matches, not over their headline "
+            "figures: a skill selecting a handful of a few hundred findings cannot move a headline "
+            "in either direction, so a headline that barely moved says nothing about the skill. "
+            "Activation applies the same rule and refuses a backtest whose window holds no alert "
+            "this skill matches. "
+            "A skill reaches triage only when the alert takes the LLM path, so a run with no model "
+            "configured for this tenant, or one started with AISOC_DETERMINISTIC=1, produces two "
+            "identical reports because the skill was never applied -- which is a different fact "
+            "from a skill that was applied and changed nothing."
         ),
     )
 
