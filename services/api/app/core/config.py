@@ -495,6 +495,20 @@ class Settings(BaseSettings):
     SHADOW_RECONCILE_MAX_WINDOW_HOURS: int = 24
     SHADOW_RECONCILE_LIMIT: int = 1000
 
+    # Fix pass 3.7. Re-checks every standing autonomy grant against the
+    # demotion floors on a timer. Default **on**, unlike the sweep above, and
+    # the difference is what each one reaches: that one polls a customer's
+    # SIEM, this one aggregates rows this deployment already wrote and makes
+    # no outbound call. The thing it catches is a grant that has stopped being
+    # earned, which nobody is watching for by definition, so shipping it off
+    # would leave it off wherever it matters.
+    AUTONOMY_DRIFT_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("AUTONOMY_DRIFT_ENABLED", "AISOC_AUTONOMY_DRIFT_ENABLED"),
+    )
+    AUTONOMY_DRIFT_INTERVAL_SECONDS: int = 600  # 10m
+    AUTONOMY_DRIFT_MAX_TENANTS_PER_TICK: int = 100
+
     # Database
     # The default points at the bundled compose Postgres with its dev password.
     # In docker-compose.yml and .env.example the password is parameterised via

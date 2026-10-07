@@ -310,11 +310,23 @@ frustration rather than on the merits.
 
 ### Demotion is automatic
 
-Standing grants are re-checked whenever they are read and whenever the
-dispatch path refreshes. A grant is demoted when agreement falls below 90%,
-malicious recall below 80%, the abstention rate rises above the cap, or the
-trailing slice of recent decisions has slipped below those floors even though
-the window average has not.
+A grant is demoted when agreement falls below 90%, malicious recall below 80%,
+the abstention rate rises above the cap, or the trailing slice of recent
+decisions has slipped below those floors even though the window average has
+not.
+
+Three things apply the floors, and none of them is a person:
+
+| | Cadence | What it does |
+|---|---|---|
+| The drift sweep | Every `AUTONOMY_DRIFT_INTERVAL_SECONDS`, 10 minutes by default | Re-checks every tenant holding a standing grant and writes the demotion with its audit row. On by default; it reads only this deployment's own database. |
+| The dispatch path | Whenever `services/actions` refreshes its 30-second policy cache | Re-runs the same evaluator before handing back a verb, and **withholds** one whose evidence no longer holds. It does not write the transition — issuing and revoking belong to the API, which owns the audit chain — so the withholding closes the window between sweeps rather than replacing them. |
+| Reading the autonomy page | On request | Reconciles and demotes on the way out, so the page you are looking at is not describing a state the product has already left. |
+
+Until v17.1 only the third of those existed, which meant a grant whose
+evidence had collapsed kept auto-executing until somebody opened the page.
+Setting `AUTONOMY_DRIFT_ENABLED=false` returns a deployment to that behaviour
+for the durable half; the dispatch-time re-check cannot be switched off.
 
 The demotion floors sit below the promotion thresholds on purpose. Equal values
 would flip a grant on every decision that moved the rate across the line, and

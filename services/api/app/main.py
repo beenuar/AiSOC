@@ -37,6 +37,7 @@ from app.services.plugin_manager import get_plugin_manager
 from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
 from app.workers.approval_expiry import run_forever as run_approval_expiry
+from app.workers.autonomy_drift import run_forever as run_autonomy_drift
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
 from app.workers.retention_purge import run_forever as run_retention_purge
@@ -72,6 +73,12 @@ _APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
 # a second replica start one on top of it, which would double a customer's
 # search load for no extra evidence.
 _SHADOW_RECONCILE_LOCK_TTL_SECONDS = 1800
+# A drift pass runs two bounded aggregates per tenant holding a grant, against
+# this deployment's own database and nothing else. Same shape and same TTL as
+# the approval sweep: short, because a lock still held after a replica crashed
+# would leave grants un-demoted for far longer than the work takes, and a
+# capability nobody has earned staying live is the condition this closes.
+_AUTONOMY_DRIFT_LOCK_TTL_SECONDS = 300
 
 
 async def _run_guarded_scheduler_worker(
@@ -510,6 +517,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Set APPROVAL_EXPIRY_ENABLED=true to sweep them"
         )
 
+    # Fix pass 3.7. `reconcile_grants` shipped with one caller, the handler
+    # behind `GET /autonomy-policy/grants`, so a grant whose agreement had
+    # collapsed stayed `granted` -- and kept auto-executing -- until somebody
+    # opened the autonomy page. This is the caller that needs no human.
+    autonomy_drift_task: asyncio.Task | None = None
+    if settings.AUTONOMY_DRIFT_ENABLED:
+        try:
+            autonomy_drift_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="autonomy_drift",
+                    ttl_seconds=_AUTONOMY_DRIFT_LOCK_TTL_SECONDS,
+                    worker=run_autonomy_drift,
+                ),
+                name="autonomy_drift_worker",
+            )
+            logger.info("autonomy_drift worker started")
+        except Exception as exc:
+            logger.warning("autonomy_drift worker failed to start", error=str(exc))
+    else:
+        # Said out loud. With this off a grant is only re-checked when the
+        # autonomy page is read or when the dispatch path refreshes its
+        # policy cache, and the first of those is a human nobody scheduled.
+        logger.info(
+            "autonomy_drift worker disabled; a standing grant whose evidence has slipped will keep its "
+            "'granted' state until somebody opens the autonomy page. Set AUTONOMY_DRIFT_ENABLED=true to sweep them"
+        )
+
     # Gap-closure Phase 8.1. The consumer for the `NEW_IOC` events
     # `services/threatintel` has always emitted and nothing has ever read.
     #
@@ -577,6 +611,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("approval_expiry worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("approval_expiry worker shutdown error", error=type(exc).__name__)
+
+    if autonomy_drift_task is not None and not autonomy_drift_task.done():
+        autonomy_drift_task.cancel()
+        try:
+            await autonomy_drift_task
+        except asyncio.CancelledError:
+            logger.debug("autonomy_drift worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("autonomy_drift worker shutdown error", error=type(exc).__name__)
 
     if retention_purge_task is not None and not retention_purge_task.done():
         retention_purge_task.cancel()
