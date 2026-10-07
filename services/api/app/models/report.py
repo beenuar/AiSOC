@@ -54,5 +54,11 @@ class ReportArtefact(Base):
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     generated_by: Mapped[str] = mapped_column(String(100), default="system")
     status: Mapped[str] = mapped_column(String(20), default="pending")
+    #: Whether the generated report reached anybody, and why not when it
+    #: did not. `delivered_at` alone cannot tell "no relay configured" from
+    #: "the relay refused the address" from "delivery has not run yet" —
+    #: all three leave it NULL. See migration 098.
+    delivery_status: Mapped[str] = mapped_column(String(20), nullable=False, default="not_attempted")
+    delivery_detail: Mapped[str] = mapped_column(Text, nullable=False, default="")
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))

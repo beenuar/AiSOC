@@ -238,6 +238,17 @@ RATCHET: dict[str, str] = {
         "iterate, and a tenant missing from that list would have approvals that never "
         "expire, which is the silent hang the sweep exists to prevent"
     ),
+    "services/api/app/services/outbound_webhooks.py::due_deliveries::OutboundDelivery": (
+        "the outbound-webhook retry sweep, the same shape as the approval and wait sweeps above: a "
+        "per-tenant pass needs a list of tenants, and a tenant missing from it has events that are "
+        "never sent while the dead-letter view reads empty. The row carries the tenant it belongs to "
+        "and every read surface filters on it"
+    ),
+    "services/api/app/workers/report_scheduler.py::run_once::ReportTemplate": (
+        "the report scheduler asks 'whose schedule is due', which cannot presuppose a tenant — the same "
+        "reasoning recorded for hunt_scheduler.run_once and oauth_refresh._select_due_connectors, both of "
+        "which discover a working set and then act per tenant"
+    ),
     "services/api/app/api/v1/endpoints/tenants.py::create_user::User": (
         "platform-admin provisioning: creates users across tenants by design"
     ),
@@ -385,7 +396,11 @@ RATCHET: dict[str, str] = {
 # a user id the caller resolved through a tenant-scoped read above; see the
 # entries' reasons. Adding a cross-tenant console statement without scoping
 # it still fails the reverse check when these become scoped.
-MAX_RATCHET = 40
+# 40 -> 42 (depth 5.2): two sweepers. `due_deliveries` is the retry queue's
+# "what is due" and `report_scheduler.run_once` is "whose schedule fired" —
+# both are the discover-a-working-set shape already recorded three times
+# above, and both act per tenant once they have the set.
+MAX_RATCHET = 42
 
 
 # ---------------------------------------------------------------------------
