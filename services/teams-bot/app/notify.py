@@ -79,7 +79,9 @@ def _authorized(supplied: str | None) -> bool:
     expected = os.environ.get("AISOC_INTERNAL_TOKEN", "").strip()
     if not expected:
         return False
-    return bool(supplied) and hmac.compare_digest(supplied.strip(), expected)
+    if not supplied:
+        return False
+    return hmac.compare_digest(supplied.strip(), expected)
 
 
 @router.post("/approval-card", status_code=status.HTTP_202_ACCEPTED)
