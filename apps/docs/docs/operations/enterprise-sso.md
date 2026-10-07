@@ -147,6 +147,57 @@ unredeemed.
 routes are live; configure the connection with either `metadata_url`
 or `metadata_xml`.
 
+### The trust anchor is the connection, not the environment
+
+Until v17.2.0 it was neither: `SAML_IDP_ENTITY_ID`, `SAML_IDP_SSO_URL`
+and `SAML_IDP_CERT` decided which identity provider the deployment
+trusted, and the `metadata_url` / `metadata_xml` you set on a connection
+were stored, returned by `GET /sso-connections`, and read by nothing. A
+stock install sets none of those variables, so the trust anchor was
+empty and every assertion was refused — with the console showing a
+connection that looked configured.
+
+Now the connection decides. `metadata_xml` wins over `metadata_url`,
+because a document you pasted is your explicit statement of the trust
+material and should not be silently replaced by whatever a URL serves
+today. A `metadata_url` is fetched by the API through the same SSRF
+guard outbound playbook steps use, and cached for ten minutes per
+replica so an IdP outage does not sit in front of every sign-in.
+
+The `SAML_IDP_*` variables still work as a fallback, so a deployment
+configured before this change keeps working. A connection wins whenever
+one resolves.
+
+:::note More than one identity provider
+`/auth/saml/login` with no `?issuer=` resolves the single enabled SAML
+connection. With several configured it refuses rather than picking one,
+so link each provider's button to
+`/auth/saml/login?issuer=<entity id>`.
+:::
+
+### Why reading the assertion's `Issuer` is not a hole
+
+`/auth/saml/acs` reads `<saml:Issuer>` out of the POSTed response before
+anything has been verified, and uses it to choose which connection's
+certificate to verify against.
+
+That looks like the thing this feature refuses to do everywhere else,
+and it is not. The asserted issuer selects a **trust anchor**; it does
+not confer trust. An assertion naming an issuer whose private key the
+sender does not hold fails signature verification and authenticates
+nobody. The tenant still comes from the connection row — and the entity
+id handed to provisioning is the one the *connection* declares, not the
+one the assertion claimed.
+
+### Where the callback lands
+
+On `/login?next=…`, with the access and refresh tokens in the fragment —
+the same place the OIDC callback lands, and for the same reason. It used
+to redirect straight to the RelayState destination, whose auth guard
+rebuilds its bounce target from `pathname + search` and therefore
+**drops the fragment**, taking the only copy of the token with it. The
+fragment consumer lives on `/login`.
+
 ## Checking it works
 
 ```bash
