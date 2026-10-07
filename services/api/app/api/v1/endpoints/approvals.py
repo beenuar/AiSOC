@@ -43,6 +43,7 @@ from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.models.responder import AgentApproval
 from app.services.actions_client import ActionsServiceError, decide_action, submit_action
+from app.services.approval_delivery import deliver_approval
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,17 @@ async def create_approval(
 
     # Best-effort push notification — failure must not block the agent run.
     await _notify_realtime(row, event="approval_request")
+
+    # Depth 5.2. Push was the only channel that ever fired. The email
+    # sender, the Slack card route and the Teams card builder all existed
+    # and were reached by nothing, so an approval raised by an agent waited
+    # for somebody to open the console and notice it. The fan-out never
+    # raises: the row is already durable, and a channel that is down must
+    # leave a record saying so rather than take the approval with it.
+    delivery = await deliver_approval(row)
+    row.action = {**(row.action or {}), "delivery": delivery.as_dict()}
+    await db.commit()
+    await db.refresh(row)
 
     return ApprovalResponse.model_validate(row)
 
