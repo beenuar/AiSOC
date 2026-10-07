@@ -29,6 +29,7 @@ from fastapi import FastAPI, Request
 
 from app._health import install_health_routes
 from app.callbacks import callback_max_age_seconds, handle_card_action
+from app.notify import router as notify_router
 
 app = FastAPI(
     title="AiSOC Teams Bot",
@@ -37,6 +38,8 @@ app = FastAPI(
 )
 
 # Phase 2.6 — k8s liveness + readiness probes (see app/_health.py).
+app.include_router(notify_router)
+
 _mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-teams-bot")
 app.state.mark_ready = _mark_ready
 app.state.mark_not_ready = _mark_not_ready

@@ -293,8 +293,16 @@ class _OidcProvider:
                     # splitting even in a fixture, and a provider that lets a
                     # crafted `redirect_uri` inject a header is not modelling
                     # a real one.
-                    target = _header_safe((query.get("redirect_uri") or [""])[0])
-                    state = _header_safe((query.get("state") or [""])[0])
+                    # Sanitised **inline**, not through `_header_safe`. The
+                    # helper does exactly this, but CodeQL's taint tracker
+                    # does not follow a sanitiser across a function
+                    # boundary and read the echo as
+                    # `py/http-response-splitting`; it does recognise the
+                    # inline substitution. The same blindness is why this
+                    # repository sanitises log values at the call site
+                    # rather than in a `_log_safe()` helper.
+                    target = _HEADER_UNSAFE.sub("", (query.get("redirect_uri") or [""])[0])
+                    state = _HEADER_UNSAFE.sub("", (query.get("state") or [""])[0])
                     self.send_response(302)
                     self.send_header("Location", f"{target}?code={code}&state={state}")
                     self.send_header("Content-Length", "0")
