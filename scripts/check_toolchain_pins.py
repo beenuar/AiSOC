@@ -188,6 +188,7 @@ UNLOCKED_INSTALL_EXEMPT: dict[str, str] = {
 # still enforced by `check_esbuild_overrides`; only the attribution was wrong.
 EXPECTED_ESBUILD: dict[str, str] = {
     "0.28.1": "the version the scoped tsup/vite/bundle-require overrides ask for",
+    "0.28.2": "declared outright by storybook@10.6.1 (the provenance 0.25.12 had under 9.1.20); Web — Build is green with both in the tree",
 }
 
 # `apps/mobile` and `services/realtime` resolve esbuild too, and neither is
