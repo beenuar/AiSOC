@@ -31,10 +31,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 
-from sqlalchemy import text
+from sqlalchemy import DateTime, String, Uuid, bindparam, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.services.usage_metering import AUTO_TRIAGE_PREFIX, DETERMINISTIC_RUN
 
 logger = logging.getLogger("aisoc.entitlements")
 
@@ -79,17 +80,24 @@ LIMIT_KEYS: Final[tuple[LimitKey, ...]] = (
         "SELECT count(*) FROM alerts WHERE tenant_id = :tenant_id AND created_at >= :since",
     ),
     LimitKey(
-        # Counted as alerts that carry AI output, because that is the row a
-        # triage actually writes. There is no usage-metering table in this
-        # build, and inventing a number for one would be worse than counting
-        # the evidence that a triage happened.
+        # Counted from the run, not from the alert, and kept byte-identical
+        # in intent to `usage_metering.triages_model` — a usage screen and a
+        # quota screen that define "a triage" separately are two surfaces
+        # that will eventually disagree in front of a customer.
+        #
+        # It used to read `alerts.ai_summary IS NOT NULL OR ai_score IS NOT
+        # NULL`, and the deterministic triage path writes both of those, so
+        # a tenant on a deployment with no model configured burned their
+        # whole AI-triage quota on triages no model performed. That is the
+        # expensive direction: the cap does not fail loudly, it just stops
+        # triaging, and the customer reports it as "the AI doesn't work".
         "triages_per_month",
         "AI triages / month",
-        "Alerts with AI triage output this calendar month.",
+        "Auto-triage runs that reached a model this calendar month.",
         (
-            "SELECT count(*) FROM alerts "
+            "SELECT count(*) FROM investigation_runs "
             "WHERE tenant_id = :tenant_id AND created_at >= :month_start "
-            "AND (ai_summary IS NOT NULL OR ai_score IS NOT NULL)"
+            "AND model_used LIKE :auto_triage_prefix || '%' AND model_used <> :deterministic_run"
         ),
     ),
 )
@@ -194,18 +202,42 @@ def classify(used: int, limit: int | None) -> str:
     return "ok"
 
 
+#: Bind types for the parameters the limit queries use.
+#:
+#: Declared rather than inferred, for the same reason
+#: `usage_metering._statement` declares them: these are raw statements, so
+#: without a type the driver is handed a value and has to guess. The tenant
+#: was being bound as `str(uuid)` against a `UUID` column, which Postgres
+#: resolves by inferring the parameter's type from the comparison and no
+#: other driver does — so every one of these counts returned zero in any
+#: harness that was not Postgres, and a quota that reads zero is the one
+#: direction nobody investigates.
+_BIND_TYPES: Final[dict[str, Any]] = {
+    "tenant_id": Uuid(as_uuid=True),
+    "since": DateTime(timezone=True),
+    "month_start": DateTime(timezone=True),
+    "auto_triage_prefix": String(),
+    "deterministic_run": String(),
+}
+
+
 async def measure_usage(db: AsyncSession, tenant_id: uuid.UUID) -> dict[str, int]:
     """Count current usage of every limit key for one tenant."""
     now = datetime.now(UTC)
     params = {
-        "tenant_id": str(tenant_id),
+        "tenant_id": tenant_id,
         "since": now - timedelta(hours=24),
         "month_start": now.replace(day=1, hour=0, minute=0, second=0, microsecond=0),
+        # Imported rather than repeated, so "which runs are AI triages" has
+        # one definition shared with the usage meters.
+        "auto_triage_prefix": AUTO_TRIAGE_PREFIX,
+        "deterministic_run": DETERMINISTIC_RUN,
     }
     usage: dict[str, int] = {}
     for key in LIMIT_KEYS:
-        bound = {name: value for name, value in params.items() if f":{name}" in key.usage_sql}
-        result = await db.execute(text(key.usage_sql), bound)
+        present = [name for name in _BIND_TYPES if f":{name}" in key.usage_sql]
+        statement = text(key.usage_sql).bindparams(*[bindparam(name, type_=_BIND_TYPES[name]) for name in present])
+        result = await db.execute(statement, {name: params[name] for name in present})
         usage[key.name] = int(result.scalar_one() or 0)
     return usage
 

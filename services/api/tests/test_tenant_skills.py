@@ -12,7 +12,9 @@ Five properties, each asserted by name below:
 * an edit bumps the version and drops the skill back to draft, detaching the
   backtest, so a report can never describe text nobody is running
 * activation refuses every way of reaching it without a current backtest, and
-  the message names which one
+  the message names which one, including the two refusals that need the
+  replay rows themselves: a run that did not complete, and a window holding
+  no alert this skill's match block selects
 * the internal route is service-token only, and a valid console session is not
   enough
 
@@ -28,6 +30,8 @@ loses it, which is what keeps one from becoming the only guard.
 
 from __future__ import annotations
 
+import json
+import sqlite3
 import uuid
 from datetime import UTC, datetime, timedelta
 
@@ -42,15 +46,23 @@ from app.models.connector import Connector
 from app.models.mcp_server import McpServer
 from app.models.tenant_skill import ACTIVE, BACKTESTED, DRAFT, RETIRED, TenantSkill, TenantSkillVersion
 from app.services.agent_tools import vendor_reads
+from app.services.tenant_skills import backtest as skill_backtest
 from app.services.tenant_skills import store
 from app.services.tenant_skills.models import SkillParseError, parse_skill_yaml
 from app.services.tenant_skills.tools import BUILTIN_PIVOTS, ToolInventory, tool_inventory_for_tenant, validate_expected_pivots
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy import text as sa_text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
+
+# The replay tables have no ORM model -- they are read and written through
+# ``text()`` -- so their UUID parameters arrive at the driver as ``uuid.UUID``.
+# asyncpg encodes those natively; sqlite3 refuses an unknown type outright, and
+# the symptom is an InterfaceError rather than a wrong answer.
+sqlite3.register_adapter(uuid.UUID, str)
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000000a")
 OTHER_TENANT = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000000b")
@@ -123,18 +135,143 @@ def _quiet_action_registry(monkeypatch):
     yield
 
 
+#: The two replay tables activation now reads, reduced to the columns it
+#: reads. Written out rather than created from metadata because migration 065
+#: declares them in SQL and no ORM model exists to render; the column names and
+#: types here are the ones the production statements bind against.
+_REPLAY_DDL = (
+    """
+    CREATE TABLE aisoc_replay_evaluations (
+        id        CHAR(36) PRIMARY KEY,
+        tenant_id CHAR(36) NOT NULL,
+        status    TEXT     NOT NULL,
+        error     TEXT
+    )
+    """,
+    """
+    CREATE TABLE aisoc_replay_decisions (
+        id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+        evaluation_id        CHAR(36) NOT NULL,
+        tenant_id            CHAR(36) NOT NULL,
+        finding_id           TEXT     NOT NULL,
+        vendor               TEXT     NOT NULL DEFAULT '',
+        rule_id              TEXT,
+        expected_disposition TEXT     NOT NULL DEFAULT '',
+        labelled             BOOLEAN  NOT NULL DEFAULT 0,
+        verdict              TEXT,
+        tier                 TEXT     NOT NULL DEFAULT '',
+        decision             TEXT     NOT NULL DEFAULT '{}'
+    )
+    """,
+)
+
+
 @pytest_asyncio.fixture
 async def session_factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
-        # Only these three. A whole-metadata create_all drags in models using
+        # Only these four. A whole-metadata create_all drags in models using
         # Postgres ARRAY, which SQLite cannot render.
         await conn.run_sync(
             Base.metadata.create_all,
             tables=[TenantSkill.__table__, TenantSkillVersion.__table__, McpServer.__table__, Connector.__table__],
         )
+        for statement in _REPLAY_DDL:
+            await conn.execute(sa_text(statement))
     yield async_sessionmaker(engine, expire_on_commit=False)
     await engine.dispose()
+
+
+def _decision(
+    *,
+    finding_id: str,
+    verdict: str,
+    expected: str = "malicious",
+    rule_id: str = "rule-unrelated",
+    techniques: tuple[str, ...] = (),
+    title: str = "Something happened",
+    labelled: bool = True,
+) -> dict:
+    """One replayed decision, in the shape ``ReplayDecision.as_dict`` writes.
+
+    ``evidence`` is the fused alert the agent was handed, which is where the
+    source, the techniques and the title the match block reads come from.
+    """
+    return {
+        "finding_id": finding_id,
+        "vendor": "splunk",
+        "rule_id": rule_id,
+        "expected_disposition": expected,
+        "labelled": labelled,
+        "verdict": verdict,
+        "tier": "llm",
+        "evidence": {
+            "title": title,
+            "rule_id": rule_id,
+            "connector_type": "splunk",
+            "mitre_techniques": list(techniques),
+        },
+    }
+
+
+async def _seed_evaluation(db, *, status: str, decisions: tuple[dict, ...] = (), error: str | None = None) -> uuid.UUID:
+    """Insert one replay run and the decisions behind it. Returns its id."""
+    evaluation_id = uuid.uuid4()
+    await db.execute(
+        sa_text("INSERT INTO aisoc_replay_evaluations (id, tenant_id, status, error) VALUES (:id, :tenant, :status, :error)").bindparams(
+            id=evaluation_id, tenant=TENANT, status=status, error=error
+        )
+    )
+    for decision in decisions:
+        await db.execute(
+            sa_text(
+                "INSERT INTO aisoc_replay_decisions "
+                "(evaluation_id, tenant_id, finding_id, vendor, rule_id, expected_disposition, labelled, verdict, tier, decision) "
+                "VALUES (:evaluation_id, :tenant, :finding_id, :vendor, :rule_id, :expected, :labelled, :verdict, :tier, :decision)"
+            ).bindparams(
+                evaluation_id=evaluation_id,
+                tenant=TENANT,
+                finding_id=decision["finding_id"],
+                vendor=decision["vendor"],
+                rule_id=decision["rule_id"],
+                expected=decision["expected_disposition"],
+                labelled=decision["labelled"],
+                verdict=decision["verdict"],
+                tier=decision["tier"],
+                decision=json.dumps(decision, sort_keys=True),
+            )
+        )
+    return evaluation_id
+
+
+#: One matched alert (the skill names this rule id) and one the skill does not
+#: select, so a default backtest is enough to activate and the matched subset
+#: is still a strict subset of the window.
+def _default_window(*, matched_verdict: str) -> tuple[dict, ...]:
+    return (
+        _decision(finding_id="f-matched", verdict=matched_verdict, rule_id="rule-encoded-powershell"),
+        _decision(finding_id="f-other", verdict="malicious", rule_id="rule-unrelated"),
+    )
+
+
+async def _attach_completed_backtest(
+    db,
+    *,
+    skill_id: str = "finance-batch-powershell",
+    baseline: tuple[dict, ...] | None = None,
+    candidate: tuple[dict, ...] | None = None,
+) -> tuple[uuid.UUID, uuid.UUID]:
+    """Two completed runs over a window this skill matches, attached to it."""
+    baseline_id = await _seed_evaluation(db, status="completed", decisions=baseline or _default_window(matched_verdict="benign"))
+    candidate_id = await _seed_evaluation(db, status="completed", decisions=candidate or _default_window(matched_verdict="malicious"))
+    await store.attach_backtest(
+        db,
+        tenant_id=TENANT,
+        skill_id=skill_id,
+        baseline_evaluation_id=baseline_id,
+        candidate_evaluation_id=candidate_id,
+    )
+    return baseline_id, candidate_id
 
 
 # ---------------------------------------------------------------------------
@@ -493,16 +630,9 @@ class TestLifecycle:
     @pytest.mark.asyncio
     async def test_activation_stamps_the_version_row_with_the_backtest(self, session_factory) -> None:
         """ "Its backtest report is attached to its activation" is this assertion."""
-        baseline, candidate = uuid.uuid4(), uuid.uuid4()
         async with session_factory() as db:
             await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
-            await store.attach_backtest(
-                db,
-                tenant_id=TENANT,
-                skill_id="finance-batch-powershell",
-                baseline_evaluation_id=baseline,
-                candidate_evaluation_id=candidate,
-            )
+            baseline, candidate = await _attach_completed_backtest(db)
             row = await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
             await db.commit()
 
@@ -520,13 +650,7 @@ class TestLifecycle:
         """Expiry is applied in the query, so a skill stops steering the moment it lapses."""
         async with session_factory() as db:
             await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
-            await store.attach_backtest(
-                db,
-                tenant_id=TENANT,
-                skill_id="finance-batch-powershell",
-                baseline_evaluation_id=uuid.uuid4(),
-                candidate_evaluation_id=uuid.uuid4(),
-            )
+            await _attach_completed_backtest(db)
             await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
             await db.commit()
 
@@ -539,13 +663,7 @@ class TestLifecycle:
     async def test_a_retired_skill_keeps_its_history_and_stops_being_served(self, session_factory) -> None:
         async with session_factory() as db:
             await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
-            await store.attach_backtest(
-                db,
-                tenant_id=TENANT,
-                skill_id="finance-batch-powershell",
-                baseline_evaluation_id=uuid.uuid4(),
-                candidate_evaluation_id=uuid.uuid4(),
-            )
+            await _attach_completed_backtest(db)
             await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
             row = await store.retire_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell")
             await db.commit()
@@ -558,6 +676,299 @@ class TestLifecycle:
         assert history[0].retired_at is not None
         # Still resolvable, which is the reason retire exists beside delete.
         assert history[0].body["guidance"]
+
+
+class TestActivationReadsTheBacktest:
+    """Activation reads the two runs it names, rather than only their ids.
+
+    Fix-pass 3.8. The version check above answers "does this report describe
+    this text". These answer the two questions after it: did the runs that
+    produced the report finish, and did the report grade anything this skill
+    applies to. A pair of ids that point at two crashed runs, or at a window
+    holding no alert the skill selects, satisfies every earlier refusal.
+    """
+
+    @pytest.mark.asyncio
+    async def test_activation_is_refused_when_an_attached_run_does_not_exist(self, session_factory) -> None:
+        """Two ids pointing at nothing are not a backtest.
+
+        Nothing in the schema makes the attached ids foreign keys, so a
+        fix-up, a purge or a bug leaves a skill naming runs that are gone.
+        """
+        async with session_factory() as db:
+            await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
+            await store.attach_backtest(
+                db,
+                tenant_id=TENANT,
+                skill_id="finance-batch-powershell",
+                baseline_evaluation_id=uuid.uuid4(),
+                candidate_evaluation_id=uuid.uuid4(),
+            )
+            await db.commit()
+            with pytest.raises(store.SkillLifecycleError) as exc:
+                await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
+        assert "no such replay run" in str(exc.value)
+
+    @pytest.mark.asyncio
+    async def test_activation_is_refused_when_both_runs_failed(self, session_factory) -> None:
+        """A failed backtest measured nothing, and measured nothing loudly.
+
+        This is the defect fix-pass 3.8 names: the two ids are attached, the
+        version matches, and both runs died without grading a single finding.
+        """
+        async with session_factory() as db:
+            await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
+            baseline = await _seed_evaluation(db, status="failed", error="the actions service is unreachable")
+            candidate = await _seed_evaluation(db, status="failed", error="the actions service is unreachable")
+            await store.attach_backtest(
+                db,
+                tenant_id=TENANT,
+                skill_id="finance-batch-powershell",
+                baseline_evaluation_id=baseline,
+                candidate_evaluation_id=candidate,
+            )
+            await db.commit()
+            with pytest.raises(store.SkillLifecycleError) as exc:
+                await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
+        message = str(exc.value)
+        assert "failed" in message
+        # The reason the run gave, so the operator fixes the run rather than
+        # the skill. A refusal naming only the status sends them to re-read
+        # their YAML for a fault that is not in it.
+        assert "actions service is unreachable" in message
+
+    @pytest.mark.asyncio
+    async def test_activation_is_refused_while_a_run_is_still_going(self, session_factory) -> None:
+        """Queued and running are not failures, and the message must not read as one."""
+        async with session_factory() as db:
+            await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
+            baseline = await _seed_evaluation(db, status="completed", decisions=_default_window(matched_verdict="benign"))
+            candidate = await _seed_evaluation(db, status="running")
+            await store.attach_backtest(
+                db,
+                tenant_id=TENANT,
+                skill_id="finance-batch-powershell",
+                baseline_evaluation_id=baseline,
+                candidate_evaluation_id=candidate,
+            )
+            await db.commit()
+            with pytest.raises(store.SkillLifecycleError) as exc:
+                await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
+        message = str(exc.value)
+        assert "running" in message
+        assert "has not finished" in message
+
+    @pytest.mark.asyncio
+    async def test_activation_is_refused_when_the_window_holds_no_alert_this_skill_matches(self, session_factory) -> None:
+        """Two completed runs over a window the skill does not apply to.
+
+        Both runs graded the same two hundred alerts and the skill selects
+        none of them, so every difference between the two reports comes from
+        alerts this skill never touches. The headline delta is a statement
+        about the window, not about the skill.
+        """
+        unrelated = tuple(
+            _decision(finding_id=f"f-{index}", verdict="malicious", rule_id="rule-unrelated", title="Impossible travel")
+            for index in range(8)
+        )
+        async with session_factory() as db:
+            await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
+            baseline = await _seed_evaluation(db, status="completed", decisions=unrelated)
+            candidate = await _seed_evaluation(db, status="completed", decisions=unrelated)
+            await store.attach_backtest(
+                db,
+                tenant_id=TENANT,
+                skill_id="finance-batch-powershell",
+                baseline_evaluation_id=baseline,
+                candidate_evaluation_id=candidate,
+            )
+            await db.commit()
+            with pytest.raises(store.SkillLifecycleError) as exc:
+                await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
+        message = str(exc.value)
+        assert "match block selects none of them" in message
+        # The window size, so the operator can tell "nothing was graded" from
+        # "plenty was graded and none of it was yours".
+        assert "8" in message
+
+    @pytest.mark.asyncio
+    async def test_the_delta_is_computed_over_the_matched_alerts_and_not_the_window(self, session_factory) -> None:
+        """The number activation records is the one about this skill.
+
+        The window is twenty alerts; the skill matches four. The candidate run
+        fixes all four and changes nothing else, so the matched delta is 1.00
+        and the whole-window delta is 0.20. A gate reading the second would
+        call a skill that fixed every alert it touches a 20% improvement, and
+        would call a skill that broke every one of them a rounding error.
+        """
+        matched = tuple(_decision(finding_id=f"m-{index}", verdict="benign", rule_id="rule-encoded-powershell") for index in range(4))
+        others = tuple(_decision(finding_id=f"o-{index}", verdict="malicious", rule_id="rule-unrelated") for index in range(16))
+        fixed = tuple(_decision(finding_id=f"m-{index}", verdict="malicious", rule_id="rule-encoded-powershell") for index in range(4))
+
+        async with session_factory() as db:
+            await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
+            await _attach_completed_backtest(db, baseline=matched + others, candidate=fixed + others)
+            row = await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
+            await db.commit()
+            assert row.status == ACTIVE
+
+            delta = await skill_backtest.matched_delta(
+                db,
+                tenant_id=TENANT,
+                match=skill_backtest.match_from_body(row.body),
+                baseline_evaluation_id=row.backtest_baseline_id,
+                candidate_evaluation_id=row.backtest_evaluation_id,
+            )
+
+        assert delta.blocked_reason is None
+        assert (delta.window_compared, delta.matched, delta.matched_graded) == (20, 4, 4)
+        assert (delta.baseline_accuracy, delta.candidate_accuracy) == (0.0, 1.0)
+        assert delta.accuracy_delta == 1.0
+        # The figure the old activation would have rested on, kept beside it
+        # rather than dropped, because the gap between the two is the point.
+        assert delta.window_accuracy_delta == pytest.approx(0.2)
+        assert delta.verdicts_changed == 4
+
+    @pytest.mark.asyncio
+    async def test_a_skill_that_changed_nothing_still_activates(self, session_factory) -> None:
+        """The gate is that a delta exists, never that it is favourable.
+
+        A threshold on the value would be a target to tune a skill against,
+        and an organisational fact that happens not to move last quarter's
+        verdicts is still true about the estate.
+        """
+        window = _default_window(matched_verdict="malicious")
+        async with session_factory() as db:
+            await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
+            await _attach_completed_backtest(db, baseline=window, candidate=window)
+            row = await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
+            await db.commit()
+
+            delta = await skill_backtest.matched_delta(
+                db,
+                tenant_id=TENANT,
+                match=skill_backtest.match_from_body(row.body),
+                baseline_evaluation_id=row.backtest_baseline_id,
+                candidate_evaluation_id=row.backtest_evaluation_id,
+            )
+
+        assert row.status == ACTIVE
+        assert (delta.verdicts_changed, delta.accuracy_delta) == (0, 0.0)
+
+    @pytest.mark.asyncio
+    async def test_a_matched_alert_nobody_labelled_leaves_the_accuracy_unmeasured(self, session_factory) -> None:
+        """An unlabelled window can still show what changed, and must not show an accuracy.
+
+        Zero in an accuracy column reads as "the agent got every one of these
+        wrong", which is a different fact from "no analyst said".
+        """
+        unlabelled = (
+            _decision(finding_id="m-0", verdict="benign", rule_id="rule-encoded-powershell", labelled=False, expected="unlabeled"),
+        )
+        changed = (
+            _decision(finding_id="m-0", verdict="malicious", rule_id="rule-encoded-powershell", labelled=False, expected="unlabeled"),
+        )
+        async with session_factory() as db:
+            await store.save_skill(db, tenant_id=TENANT, author_id=USER, source_yaml=_yaml())
+            await _attach_completed_backtest(db, baseline=unlabelled, candidate=changed)
+            row = await store.activate_skill(db, tenant_id=TENANT, skill_id="finance-batch-powershell", actor_id=USER)
+            await db.commit()
+
+            delta = await skill_backtest.matched_delta(
+                db,
+                tenant_id=TENANT,
+                match=skill_backtest.match_from_body(row.body),
+                baseline_evaluation_id=row.backtest_baseline_id,
+                candidate_evaluation_id=row.backtest_evaluation_id,
+            )
+
+        assert delta.matched == 1
+        assert delta.matched_graded == 0
+        assert delta.accuracy_delta is None
+        assert delta.verdicts_changed == 1
+
+
+class TestMatchBlockSelection:
+    """Which alerts a skill's own ``match`` block selects.
+
+    The four conditions are the ones ``select_skill`` scores on in the agents
+    service, and each is asserted here against the evidence a replay records.
+    """
+
+    @pytest.mark.parametrize(
+        ("decision_kwargs", "selected"),
+        [
+            ({"rule_id": "rule-encoded-powershell"}, True),
+            ({"rule_id": "rule-something-else"}, False),
+            # A sub-technique alert matches a skill written against the
+            # parent, the reading both selectors use.
+            ({"techniques": ("T1059.001",)}, True),
+            ({"techniques": ("T1059",)}, False),
+            ({"techniques": ("T1078.004",)}, False),
+        ],
+    )
+    def test_each_condition(self, decision_kwargs, selected) -> None:
+        skill = parse_skill_yaml(_yaml())
+        decision = _decision(finding_id="f", verdict="benign", **{"rule_id": "rule-unrelated", **decision_kwargs})
+        assert skill_backtest.selects(skill.match, decision) is selected
+
+    def test_a_parent_technique_in_the_skill_selects_a_sub_technique_alert(self) -> None:
+        source = _drop_block(_yaml(), "match") + "\nmatch:\n  techniques: [T1059]"
+        skill = parse_skill_yaml(source)
+        assert skill_backtest.selects(skill.match, _decision(finding_id="f", verdict="benign", techniques=("T1059.001",)))
+
+    def test_a_keyword_is_read_from_the_title_the_agent_was_given(self) -> None:
+        source = _drop_block(_yaml(), "match") + "\nmatch:\n  keywords: [svc_batch]"
+        skill = parse_skill_yaml(source)
+        assert skill_backtest.selects(skill.match, _decision(finding_id="f", verdict="benign", title="Encoded PowerShell by SVC_BATCH"))
+        assert not skill_backtest.selects(skill.match, _decision(finding_id="f", verdict="benign", title="Impossible travel"))
+
+    def test_the_source_condition_reads_the_connector_the_alert_came_from(self) -> None:
+        source = _drop_block(_yaml(), "match") + "\nmatch:\n  sources: [splunk]"
+        skill = parse_skill_yaml(source)
+        assert skill_backtest.selects(skill.match, _decision(finding_id="f", verdict="benign"))
+
+    def test_a_body_whose_casing_was_never_normalised_still_selects(self) -> None:
+        """Activation reads the stored JSONB, not the document, so the read normalises too.
+
+        A body the parser wrote is already canonical, so comparing
+        ``match_from_body(skill.as_dict())`` against ``skill.match`` compares
+        the parser with a copy of itself: it passes with the normalisation
+        deleted. This body is the shape a direct fix-up or an older parser
+        leaves behind, and it is the one that tells the two apart.
+        """
+        stored = {
+            "match": {
+                "techniques": ["t1059.001"],
+                "rule_ids": ["rule-encoded-powershell"],
+                "sources": ["CrowdStrike"],
+                "keywords": ["SVC_Batch"],
+            }
+        }
+        match = skill_backtest.match_from_body(stored)
+        assert match.techniques == ("T1059.001",)
+        assert match.sources == ("crowdstrike",)
+        assert match.keywords == ("svc_batch",)
+        assert skill_backtest.selects(match, _decision(finding_id="f", verdict="benign", techniques=("T1059.001",)))
+        assert skill_backtest.selects(match, _decision(finding_id="f", verdict="benign", title="Encoded PowerShell by svc_batch"))
+
+    def test_the_parser_and_the_stored_read_agree_on_a_document(self) -> None:
+        """The round trip, which the casing test above cannot cover on its own."""
+        skill = parse_skill_yaml(_yaml())
+        assert skill_backtest.match_from_body(skill.as_dict()) == skill.match
+
+    def test_a_body_with_no_match_block_selects_nothing(self) -> None:
+        """A body whose block was emptied must refuse every alert, never accept every one.
+
+        The parser already refuses an empty match block at authoring time, so
+        this is the read path's own floor: the wrong direction here would let a
+        skill with no conditions claim the whole window as its matched set,
+        which is the comparison this module exists to stop activation resting
+        on.
+        """
+        match = skill_backtest.match_from_body({})
+        assert match.is_empty()
+        assert not skill_backtest.selects(match, _decision(finding_id="f", verdict="benign", rule_id="rule-encoded-powershell"))
 
 
 # ---------------------------------------------------------------------------
@@ -700,13 +1111,7 @@ def _activate(session_factory, skill_id: str) -> None:
 
     async def _run() -> None:
         async with session_factory() as db:
-            await store.attach_backtest(
-                db,
-                tenant_id=TENANT,
-                skill_id=skill_id,
-                baseline_evaluation_id=uuid.uuid4(),
-                candidate_evaluation_id=uuid.uuid4(),
-            )
+            await _attach_completed_backtest(db, skill_id=skill_id)
             await store.activate_skill(db, tenant_id=TENANT, skill_id=skill_id, actor_id=USER)
             await db.commit()
 
