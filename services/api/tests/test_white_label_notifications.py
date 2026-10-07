@@ -263,8 +263,11 @@ class TestTheMailCarriesTheOperatorsBrand:
         _request_approval(client)
 
         message = mailer.messages[0]
-        assert "https://support.acme.example" in message["html"]
-        assert "https://support.acme.example" in message["text"]
+        # Counted rather than `in`: exactly one support link per body is the
+        # claim, and a containment check against a URL literal is the shape
+        # CodeQL reads as an incomplete host check.
+        assert message["html"].count("https://support.acme.example") == 1
+        assert message["text"].count("https://support.acme.example") == 1
         assert "Acme Shield, operated by Acme MSSP." in message["html"]
 
     @pytest.mark.asyncio
