@@ -1,0 +1,152 @@
+# Audit-chain forgery is refused — through the real app and real Postgres.
+#
+# GHSA-w4r8-969c-67p2 (CWE-347). AuditMiddleware used to decode the
+# Authorization Bearer token with verify_signature=False and write the claims
+# into the tenant's tamper-evident audit hash chain, for every mutating
+# request, before and regardless of authentication. An unauthenticated caller
+# who sent a structurally valid JWT signed with any key forged audit entries
+# attributed to any user into any known tenant.
+#
+# The offline test (services/api/tests/test_audit_middleware_no_forgery.py)
+# runs in the general Python job and intercepts the DB write, so it proves the
+# decision. This job proves the end-to-end property: a forged request leaves
+# the real audit_log / audit_chain_head tables untouched while a legitimately
+# authenticated request still lands a chained row.
+#
+# No `paths:` filter — a security regression guard must grade every pull
+# request, not only ones that touch a named path.
+name: Audit forgery (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: audit-forgery-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  audit-forgery-live:
+    name: A forged token cannot enter the audit chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The runtime role, not the owner. POSTGRES_USER (aisoc) is a superuser
+      # and ignores every RLS policy even under FORCE ROW LEVEL SECURITY, so
+      # the app connects as the NOSUPERUSER runtime role aisoc_app and the
+      # owner is used only to run migrations.
+      AUDIT_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # Not a bypass environment — an uncredentialed request must resolve to no
+      # principal, or the "no identity, no audit row" claim passes for the
+      # wrong reason.
+      ENVIRONMENT: production
+      SECRET_KEY: ci-audit-forgery-signing-secret-at-least-32-chars
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real service pulls in the real service's whole import chain.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: A forged token cannot enter the chain; a verified one is audited
+        working-directory: services/api
+        env:
+          ISOLATION_AUDIT_DSN: ${{ env.AUDIT_DSN }}
+          DATABASE_URL: ${{ env.AUDIT_DSN }}
+        run: python -m pytest ../../tests/isolation/test_audit_forgery_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # Reintroduce the vulnerability — trust the unverified Authorization
+      # header again — and the forgery assertion must go red. Without this, a
+      # middleware that simply stopped writing would pass the suite above while
+      # silently also stopping all legitimate auditing.
+      - name: The gate fails when the middleware trusts an unverified token
+        working-directory: services/api
+        env:
+          ISOLATION_AUDIT_DSN: ${{ env.AUDIT_DSN }}
+          DATABASE_URL: ${{ env.AUDIT_DSN }}
+        run: |
+          cp app/middleware/audit_middleware.py /tmp/audit_mw.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/middleware/audit_middleware.py")
+          s = p.read_text()
+          needle = '    principal = getattr(request.state, "aisoc_authenticated_principal", None)\n'
+          if needle not in s:
+              print("negative control could not find the request.state read to subvert; "
+                    "the middleware has been reshaped and this control no longer proves anything")
+              sys.exit(1)
+          vuln = (
+              "    import jwt as _jwt  # NEGATIVE CONTROL: trust the unverified header again\n"
+              "    import types as _types\n"
+              '    _auth = request.headers.get("authorization", "")\n'
+              "    principal = None\n"
+              '    if _auth.startswith("Bearer "):\n'
+              "        try:\n"
+              '            _c = _jwt.decode(_auth.split(" ", 1)[1], options={"verify_signature": False})\n'
+              "            principal = _types.SimpleNamespace(\n"
+              "                user_id=None,\n"
+              '                tenant_id=uuid.UUID(_c["tenant_id"]) if _c.get("tenant_id") else None,\n'
+              "                email=_c.get(\"email\"),\n"
+              "            )\n"
+              "        except Exception:\n"
+              "            principal = None\n"
+          )
+          p.write_text(s.replace(needle, vuln, 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_audit_forgery_live.py::TestForgeryIsRefused::test_a_forged_bearer_jwt_writes_no_audit_row -q >/dev/null 2>&1; then
+            cp /tmp/audit_mw.bak app/middleware/audit_middleware.py
+            echo "FAIL: the suite passed with the middleware trusting a forged token."
+            exit 1
+          fi
+          cp /tmp/audit_mw.bak app/middleware/audit_middleware.py
+          echo "OK: reintroducing the unverified-token path makes the suite fail, as it must."
