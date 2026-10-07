@@ -317,12 +317,17 @@ class BusinessContextApplier:
         self._rules: list[BusinessContextRule] = []
         self._mtime: float | None = None
         self._tenant_rules: dict[str, tuple[float, list[BusinessContextRule]]] = {}
+        #: Set by `seed_tenant_rules` for the replay path. When present, these
+        #: replace the Postgres read entirely -- see that method.
+        self._seeded_rules: list[BusinessContextRule] | None = None
         self._load()
 
     # ── tenant rules (Postgres) ───────────────────────────────────────────
 
     async def _load_tenant_rules(self, tenant_id: str) -> list[BusinessContextRule]:
         """Read and cache the tenant's authored rules. Never raises."""
+        if self._seeded_rules is not None:
+            return self._seeded_rules
         cached = self._tenant_rules.get(tenant_id)
         now = time.monotonic()
         if cached is not None and now - cached[0] < _TENANT_CACHE_TTL_SECONDS:
@@ -389,6 +394,20 @@ class BusinessContextApplier:
     def clear_tenant_cache(self) -> None:
         """Drop cached tenant rules. Used by tests."""
         self._tenant_rules.clear()
+
+    def seed_tenant_rules(self, rules: list[BusinessContextRule]) -> None:
+        """Apply these rules to every tenant, instead of reading Postgres.
+
+        For the replay path (fix pass 3.1), which holds a rule set frozen at
+        the split point and must not re-read the live one: a read would
+        reintroduce an edit made after the window being graded, which is the
+        leakage the frozen context exists to prevent.
+
+        Seeded under a sentinel rather than per tenant id because a replay
+        runs one tenant at a time and the applier is constructed per run, so
+        there is no second tenant whose rules this could reach.
+        """
+        self._seeded_rules = list(rules)
 
     def _load(self) -> None:
         if not self._path:
