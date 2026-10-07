@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A buyer security pack a reviewer can actually use.** `docs/security/` held
+  three threat models and an advisory draft — good documents, and not the set
+  a procurement review asks for. It now also carries architecture and
+  data-flow diagrams, data handling per deployment mode, a completed security
+  questionnaire, and a sub-processor page, indexed at
+  `docs/security/README.md` and linked from `SECURITY.md`.
+
+  The pack's rule is that every statement names the file or the CI job that
+  makes it true, and that where a control is narrower than its heading sounds,
+  the limit is in the same paragraph. So it states plainly that
+  service-to-service traffic is plaintext inside the container network on the
+  default stack, that `/metrics` covers 5 of 19 services, and that the
+  prompt-injection guard scores 7.1% on held-out payloads against 98.1% on the
+  corpus it was hardened against — the unflattering number is the one that
+  matters. Ten gaps are collected in one table rather than left for a reviewer
+  to assemble from the prose.
+
+  `scripts/check_security_pack_links.py` keeps it from rotting: every relative
+  link, every anchor, and every gate the pack names *in prose rather than in a
+  link* must resolve, with a bidirectional exemption table so a gate recorded
+  as absent that later appears also fails. Eight self-test cases, four of them
+  injected regressions. Wired in `security-pack.yml` with no path filter,
+  because a pack statement is most often falsified by a change nowhere near
+  `docs/security/`. (#PR)
+
+### Fixed
+
+- **`docs/trust/data-flows.md` told a reader the opposite of the truth, twice
+  in one paragraph.** It said hosted egress is "**not** pseudonymized before
+  egress today ... a planned control rather than a shipped one" and then, in
+  the same paragraph, "Restored by parity 2.4" — a correction appended without
+  removing what it corrected. Parity 2.4 did wire the pseudonymizer at the
+  contract layer (`services/agents/app/llm/contract.py` calls
+  `egress_privacy.open_session`), so the page understated a shipped control on
+  the single question a buyer cares most about. Two further statements were
+  stale in the same direction: the Helm default-deny `NetworkPolicy` is
+  described as pending when `infra/helm/aisoc/templates/networkpolicy.yaml`
+  ships it, and the air-gapped CI proof is described as planned when
+  `container-egress.yml` runs it with a canary and a red run. All three
+  corrected, each now naming its gate, and each carrying the limit that goes
+  with it — the NetworkPolicy is opt-in because a CNI that does not enforce it
+  ignores it silently, and the sinkhole cannot observe a dial straight to an IP
+  literal. The matching "still outstanding" note in
+  `docs/audit/REALITY_REPORT.md` is closed with the same evidence. (#PR)
+
+- **ADR-0002 asserts a CI gate that has never existed**, and the security pack
+  repeated it before the new link gate caught it on its first run.
+  `scripts/audit_compliance_claims.py` is cited twice in
+  `docs/decisions/0002-compliance-claims.md` as already shipped and guarding
+  the "controls aligned to" framing; no such script is in the tree and no
+  workflow references it, a finding `docs/audit/REALITY_REPORT.md` already
+  recorded. The pack now states that the framing is a convention rather than a
+  gate, lists it as a gap, and the script is recorded in the link gate's
+  `KNOWN_ABSENT` table so that building it will fail the gate until the prose
+  is corrected. (#PR)
+
 ## [17.1.0] - 2026-10-07
 
 ### Security
