@@ -65,6 +65,7 @@ from app.api.v1.endpoints import (
     oauth,
     onboarding,
     oncall,
+    outbound_webhooks,
     passkeys,
     phishing,
     playbook_steps,
@@ -223,6 +224,7 @@ api_router.include_router(costs.router)
 api_router.include_router(push.router)
 api_router.include_router(oncall.router)
 api_router.include_router(approvals.router)
+api_router.include_router(outbound_webhooks.router)
 api_router.include_router(passkeys.router)
 
 # The live-action registry, proxied for the browser. Upstream it sits behind
