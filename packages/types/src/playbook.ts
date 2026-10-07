@@ -39,6 +39,9 @@ export type StepType =
   | "close_case"
   | "http"
   | "condition"
+  | "wait"
+  | "parallel"
+  | "loop"
   | "osquery_live_query"
   | "approval"
   | "disable_user"
@@ -93,6 +96,13 @@ export interface PlaybookStep {
   /** Step id to jump to. The engine branches; it does not build a DAG. */
   next_true?: string;
   next_false?: string;
+  /**
+   * Child steps, for `parallel` (run concurrently, then joined) and `loop`
+   * (run in order, once per item). Empty for every other type: the engine
+   * fails a `parallel` or `loop` that declares none rather than reporting a
+   * success for work it did not do.
+   */
+  steps?: PlaybookStep[];
 }
 
 export interface Playbook {

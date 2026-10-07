@@ -61,6 +61,9 @@ const VALID_PARAMS: Record<StepType, Record<string, unknown>> = {
   run_script: { host: 'web-prod-04', script_name: 'collect-persistence' },
   search_siem: { query: 'index=proxy dest_ip=203.0.113.10' },
   create_notable_event: { title: 'Credential access on web-prod-04' },
+  wait: { until: 'timer', seconds: 300 },
+  parallel: { join: 'all' },
+  loop: { over: 'sessions' },
 };
 
 /**
@@ -95,6 +98,11 @@ const TARGET_KEY: Record<StepType, string | null> = {
   force_mfa: 'user',
   search_siem: 'query',
   create_notable_event: 'title',
+  // Control flow acts on child steps, not on a host or a principal, so
+  // there is no scalar target for `_resolve_target` to look for.
+  wait: null,
+  parallel: null,
+  loop: null,
 };
 
 /**

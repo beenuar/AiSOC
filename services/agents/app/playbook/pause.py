@@ -53,6 +53,13 @@ logger = logging.getLogger("aisoc.playbook.pause")
 DEFAULT_TTL_HOURS = float(os.getenv("AISOC_PLAYBOOK_APPROVAL_TTL_HOURS", "72"))
 
 
+#: How long a `wait` pause may sit before it expires with a recorded
+#: outcome. Longer than an approval's because a wait is often deliberate
+#: ("re-check in six hours"), and short enough that a callback nobody ever
+#: fires does not leave a run open forever.
+DEFAULT_WAIT_TTL_HOURS = float(os.getenv("AISOC_PLAYBOOK_WAIT_TTL_HOURS", "168"))
+
+
 @dataclass(frozen=True)
 class Pause:
     """A suspended run, as stored."""
@@ -67,6 +74,19 @@ class Pause:
     step_results: list[dict[str, Any]]
     approval_id: str | None
     expires_at: datetime
+    #: ``approval`` (waiting on a person) or ``wait`` (a clock or a
+    #: callback). Defaults to ``approval`` for the same reason the column
+    #: does: every row that predates migration 096 is one, and the other
+    #: default would have the sweeper resume live approvals with no
+    #: decision.
+    kind: str = "approval"
+    #: When a timer wait becomes due. ``None`` for an approval and for a
+    #: callback wait, which means "not on a clock", not "due now".
+    resume_at: datetime | None = None
+    #: The handle a callback presents. Never the row id: the id appears in
+    #: run records an analyst can read, and a callback is unauthenticated
+    #: by construction.
+    resume_token: str | None = None
 
     @property
     def resume_index(self) -> int:
@@ -92,6 +112,9 @@ async def _pool() -> Any | None:
 
 async def suspend(
     *,
+    kind: str = "approval",
+    resume_at: datetime | None = None,
+    resume_token: str | None = None,
     tenant_id: str,
     run_id: str,
     playbook_id: str,
@@ -123,9 +146,10 @@ async def suspend(
                 """
                 INSERT INTO aisoc_playbook_pauses
                     (id, tenant_id, run_id, playbook_id, playbook_name, step_index,
-                     step_id, run_context, step_results, approval_id, expires_at)
+                     step_id, run_context, step_results, approval_id, expires_at,
+                     kind, resume_at, resume_token)
                 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
-                        $10::uuid, $11)
+                        $10::uuid, $11, $12, $13, $14)
                 """,
                 pause_id,
                 tenant_id,
@@ -138,6 +162,9 @@ async def suspend(
                 json.dumps(step_results, default=str),
                 approval_id,
                 expires_at,
+                kind,
+                resume_at,
+                resume_token,
             )
     except Exception as exc:  # noqa: BLE001
         logger.warning("playbook_pause: write failed for run %s: %s", run_id, exc)
@@ -161,6 +188,9 @@ async def suspend(
         step_results=step_results,
         approval_id=approval_id,
         expires_at=expires_at,
+        kind=kind,
+        resume_at=resume_at,
+        resume_token=resume_token,
     )
 
 
@@ -210,6 +240,15 @@ def _row_to_pause(row: Any) -> Pause:
                 return default
         return value
 
+    # `.get` rather than subscripting: `find_waiting` predates migration
+    # 096 and does not select the three new columns, and a KeyError there
+    # would turn an approval resume into a crash.
+    def _column(name: str) -> Any:
+        try:
+            return row[name]
+        except (KeyError, IndexError):
+            return None
+
     return Pause(
         id=str(row["id"]),
         tenant_id=str(row["tenant_id"]),
@@ -221,7 +260,87 @@ def _row_to_pause(row: Any) -> Pause:
         step_results=_json(row["step_results"], []),
         approval_id=str(row["approval_id"]) if row["approval_id"] else None,
         expires_at=row["expires_at"],
+        kind=str(_column("kind") or "approval"),
+        resume_at=_column("resume_at"),
+        resume_token=_column("resume_token"),
     )
+
+
+#: The columns a wait lookup needs. Named rather than ``SELECT *`` so an
+#: added column cannot change what a row means to ``_row_to_pause``.
+_PAUSE_COLUMNS = (
+    "id, tenant_id, run_id, playbook_id, step_index, step_id, run_context, "
+    "step_results, approval_id, expires_at, kind, resume_at, resume_token"
+)
+
+
+async def find_wait_by_token(*, resume_token: str) -> Pause | None:
+    """The run waiting on this callback token, if any.
+
+    Not scoped on the tenant, and that is deliberate rather than an
+    oversight: a callback is unauthenticated by construction, so the caller
+    has no tenant to present. The token is the whole credential, which is
+    why it is minted separately from the row id (the id appears in run
+    records an analyst can read) and is never returned to anything outside
+    this service. ``kind = 'wait'`` is in the predicate so an approval can
+    never be resumed this way even if a token were somehow written onto one.
+    """
+    pool = await _pool()
+    if pool is None:
+        return None
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                f"""
+                SELECT {_PAUSE_COLUMNS}
+                  FROM aisoc_playbook_pauses
+                 WHERE resume_token = $1
+                   AND kind = 'wait'
+                   AND status = 'waiting'
+                 LIMIT 1
+                """,
+                resume_token,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("playbook_pause: token lookup failed: %s", exc)
+        return None
+    return _row_to_pause(row) if row is not None else None
+
+
+async def due_waits(*, now: datetime | None = None, limit: int = 50) -> list[Pause]:
+    """Timer waits whose deadline has passed.
+
+    Cross-tenant for the same reason ``expire_due`` is, and recorded in
+    ``scripts/check_tenant_query_predicates.py`` alongside it: a per-tenant
+    sweep needs a list of tenants, and a tenant missing from that list has
+    waits that never wake — which is the silent hang this exists to stop.
+
+    Read-only. Claiming a row is ``resolve``'s job and happens one at a
+    time, so two replicas sweeping at once resume each wait once.
+    """
+    pool = await _pool()
+    if pool is None:
+        return []
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                f"""
+                SELECT {_PAUSE_COLUMNS}
+                  FROM aisoc_playbook_pauses
+                 WHERE status = 'waiting'
+                   AND kind = 'wait'
+                   AND resume_at IS NOT NULL
+                   AND resume_at <= $1
+                 ORDER BY resume_at
+                 LIMIT $2
+                """,
+                now or datetime.now(UTC),
+                limit,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("playbook_pause: due-wait sweep failed: %s", exc)
+        return []
+    return [_row_to_pause(row) for row in rows]
 
 
 async def resolve(*, pause_id: str, status: str, resolution: str, tenant_id: str) -> bool:

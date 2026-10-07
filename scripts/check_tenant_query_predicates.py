@@ -238,6 +238,15 @@ RATCHET: dict[str, str] = {
         "iterate, and a tenant missing from that list would have approvals that never "
         "expire, which is the silent hang the sweep exists to prevent"
     ),
+    "services/agents/app/playbook/pause.py::due_waits::aisoc_playbook_pauses": (
+        "the wait-resume sweep, for the same reason as expire_due above: a per-tenant sweep needs a list of "
+        "tenants, and a tenant missing from it would have waits that never wake, which is a run that stops "
+        "and never continues"
+    ),
+    "services/agents/app/playbook/pause.py::find_wait_by_token::aisoc_playbook_pauses": (
+        "matched on the 32-byte single-use resume token, which is itself the credential: a callback comes "
+        "from a vendor that holds no AiSOC session and therefore has no tenant to present"
+    ),
     "services/api/app/api/v1/endpoints/tenants.py::create_user::User": (
         "platform-admin provisioning: creates users across tenants by design"
     ),
@@ -385,7 +394,21 @@ RATCHET: dict[str, str] = {
 # a user id the caller resolved through a tenant-scoped read above; see the
 # entries' reasons. Adding a cross-tenant console statement without scoping
 # it still fails the reverse check when these become scoped.
-MAX_RATCHET = 40
+# 40 -> 42 (depth 5.3, the `wait` step). Neither is a new shape — each is one
+# of two already accepted here, and the reason they could not simply be
+# scoped is the same reason as their precedents:
+#   * `due_waits` is `expire_due` with a different predicate. A per-tenant
+#     sweep needs a list of tenants, and a tenant missing from it has waits
+#     that never wake. That is a run which stops and never continues, which
+#     is the hang the sweeper exists to prevent.
+#   * `find_wait_by_token` is `oauth_callback::OAuthState`. The caller is a
+#     vendor webhook holding no AiSOC session, so it has no tenant to
+#     present; the single-use token is the credential, and adding a tenant
+#     predicate would mean asking the unauthenticated caller which tenant to
+#     check against, which is not a control.
+# The three tenant-taking lookups beside them (`find_waiting`, `resolve`,
+# `suspend`) all filter on it, so the surface as a whole did not get looser.
+MAX_RATCHET = 42
 
 
 # ---------------------------------------------------------------------------

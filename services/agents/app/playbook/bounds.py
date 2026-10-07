@@ -70,6 +70,50 @@ ABSOLUTE_MAX_RETRIES: Final[int] = 25
 DEFAULT_MAX_TIMEOUT_SECONDS: Final[int] = 300  # 5 minutes
 DEFAULT_MAX_RETRIES: Final[int] = 10
 
+# ── Control-flow bounds (`parallel`, `loop`, `wait`) ───────────────────────
+# A playbook is author-supplied and the three control-flow steps are the
+# first ones that can multiply work rather than do a fixed amount of it, so
+# each needs a ceiling that does not depend on the author being reasonable.
+#
+# - Nesting is capped because a `parallel` of `loop`s of `parallel`s is
+#   exponential in the depth, and three levels covers every shape the
+#   packs and the drafter produce.
+# - The iteration cap bounds a `loop` whose `over` list came out of an
+#   enrichment response — i.e. out of attacker-influenced data.
+# - The fan-out cap bounds how many outbound calls one step can start at
+#   once; the branches run concurrently, so this is a concurrency limit on
+#   somebody else's API as much as on ours.
+# - A `wait` longer than the inline ceiling becomes a durable pause instead
+#   of holding a worker, so the ceiling is about worker occupancy, not
+#   about how long an author may wait.
+MAX_CONTROL_FLOW_DEPTH: Final[int] = 3
+ABSOLUTE_MAX_LOOP_ITERATIONS: Final[int] = 100
+DEFAULT_MAX_LOOP_ITERATIONS: Final[int] = 25
+ABSOLUTE_MAX_PARALLEL_BRANCHES: Final[int] = 20
+MAX_INLINE_WAIT_SECONDS: Final[int] = 60
+# The longest a `wait` may ask for. Not `clamp_timeout`'s ceiling: that one
+# bounds how long a worker may be held on one outbound call, and a durable
+# wait holds nothing. Capping a six-hour wait at five minutes would be the
+# silent truncation the loop ceiling is explicitly written to avoid.
+ABSOLUTE_MAX_WAIT_SECONDS: Final[int] = 7 * 24 * 60 * 60  # 7 days
+
+
+def clamp_wait_seconds(value: Any) -> int:
+    """Parse and bound a wait duration. 0 means "no timer was asked for".
+
+    `bool` is rejected explicitly rather than coerced: `seconds: true` would
+    otherwise become a one-second wait, which is a wait that did not happen
+    reported as one that did.
+    """
+    if value is None or isinstance(value, bool):
+        return 0
+    try:
+        candidate = int(value)
+    except (TypeError, ValueError):
+        logger.warning("Invalid wait seconds=%r, treating as no timer", value)
+        return 0
+    return _clamp_int(candidate, 0, ABSOLUTE_MAX_WAIT_SECONDS)
+
 
 def _clamp_int(value: int, lo: int, hi: int) -> int:
     if value < lo:
@@ -167,13 +211,20 @@ def clamp_retries(value: Any, *, default: int = 0) -> int:
 
 
 __all__ = [
+    "ABSOLUTE_MAX_LOOP_ITERATIONS",
+    "ABSOLUTE_MAX_PARALLEL_BRANCHES",
+    "ABSOLUTE_MAX_WAIT_SECONDS",
     "ABSOLUTE_MAX_PARAM_TIMEOUT_SECONDS",
     "ABSOLUTE_MAX_RETRIES",
     "ABSOLUTE_MAX_TIMEOUT_SECONDS",
+    "DEFAULT_MAX_LOOP_ITERATIONS",
     "DEFAULT_MAX_RETRIES",
     "DEFAULT_MAX_TIMEOUT_SECONDS",
+    "MAX_CONTROL_FLOW_DEPTH",
+    "MAX_INLINE_WAIT_SECONDS",
     "MIN_TIMEOUT_SECONDS",
     "clamp_retries",
+    "clamp_wait_seconds",
     "clamp_timeout",
     "max_retries",
     "max_timeout_seconds",

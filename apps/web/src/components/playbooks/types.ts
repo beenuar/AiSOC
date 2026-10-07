@@ -39,6 +39,8 @@ export interface PlaybookStep {
   timeout_seconds: number;
   next_true?: string;
   next_false?: string;
+  /** Child steps for `parallel` and `loop`. See `@aisoc/types`. */
+  steps?: PlaybookStep[];
 }
 
 export interface PlaybookTrigger {

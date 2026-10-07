@@ -101,6 +101,9 @@ being true.
 | `http` | Generic outbound HTTP request — `method`, `url`, `body`, `headers`. SSRF-guarded. |
 | `close_case` | Marks the AiSOC case as closed via the API service. |
 | `condition` | Pure branching node. Evaluates `condition` and routes to `next_true` / `next_false`. |
+| `wait` | Hold for a timer or a callback — see [Control flow](#control-flow). |
+| `parallel` | Run the child steps concurrently, then join. |
+| `loop` | Run the child steps once per item in a list from the run context, bounded. |
 | `osquery_live_query` | Distributed osquery via osctrl / FleetDM / aisoc-direct, against an allow-listed template. |
 
 **Governed** — the step is dispatched to the action registry in the actions
@@ -117,6 +120,34 @@ not authorise whatever its steps happen to contain: the contract is applied
 per verb, per step, at the moment that step runs. See
 [Live actions](./live-actions.md) for what each verb declares about its impact,
 reversibility, approval requirement and verification probe.
+
+### Control flow
+
+A playbook could branch and it could not wait, fan out or repeat, so
+"contain, then re-check in five minutes" had to be hand-unrolled into a fixed
+chain of steps. `wait`, `parallel` and `loop` close that, and each carries a
+ceiling rather than trusting the author:
+
+| Step | Shape | Bound |
+|------|-------|-------|
+| `wait` | `{"until": "timer", "seconds": 300}` or `{"until": "callback"}` | Up to 60s runs in place; longer suspends the run to Postgres and a sweeper resumes it. A callback resumes through `POST /api/v1/playbook-waits/{token}/resume`. Maximum 7 days. |
+| `parallel` | `steps: [...]`, `{"join": "all"}` or `{"join": "any"}` | At most 20 branches. Each branch gets its own copy of the run context, so two branches cannot overwrite each other and leave whichever finished last to win. |
+| `loop` | `{"over": "sessions"}` with `steps: [...]` | At most 100 iterations, 25 by default. Each iteration binds `item` and `index`. |
+
+Three refusals worth knowing, because a control-flow step that quietly does
+less than it says is worse than one that is absent:
+
+- an empty `parallel` or `loop` **fails**, rather than reporting a success
+  for work it did not do;
+- a `loop` that hits its ceiling **says so**, rather than truncating —
+  stopping at 25 of 300 sessions leaves 275 live and a clean-looking record;
+- a `wait` whose pause cannot be written **fails**, because continuing past
+  it would run the steps the wait exists to delay.
+
+Every step execution carries an **idempotency key** derived from the run, the
+step and the position it was reached at, so the third loop iteration is
+distinguishable from the fourth and a resumed run reproduces the keys its
+first attempt used. It is a name, not a distributed deduplication store.
 
 What comes back is a report whose `executed` field is the single thing that
 means a vendor was actually touched:

@@ -451,7 +451,14 @@ class TestUnimplementedStepTypesFailClosed:
     @pytest.mark.asyncio
     async def test_no_step_type_reports_success_without_a_handler(self) -> None:
         """Every StepType with no handler, not just the one that hurt most."""
-        unimplemented = [st for st in StepType if st not in engine_mod._HANDLERS and st != StepType.CONDITION]
+        # Not in the handler table is not the same as not runnable. Three
+        # step types are answered in the run loop because they need the run
+        # itself (`_CONTROL_FLOW`), and `condition` branches in the loop
+        # body. Deriving from `_HANDLERS` alone made this test pick `wait`
+        # and assert that a working step reports `unimplemented`.
+        unimplemented = [
+            st for st in StepType if st not in engine_mod._HANDLERS and st not in engine_mod._CONTROL_FLOW and st != StepType.CONDITION
+        ]
         assert unimplemented, "fixture assumption broken: expected some StepType to lack a handler"
 
         for step_type in unimplemented:
@@ -486,7 +493,14 @@ class TestUnimplementedStepTypesFailClosed:
         So: take the step type from the registry rather than naming one, and
         assert the property directly by recording the backoff sleeps.
         """
-        unimplemented = [st for st in StepType if st not in engine_mod._HANDLERS and st != StepType.CONDITION]
+        # Not in the handler table is not the same as not runnable. Three
+        # step types are answered in the run loop because they need the run
+        # itself (`_CONTROL_FLOW`), and `condition` branches in the loop
+        # body. Deriving from `_HANDLERS` alone made this test pick `wait`
+        # and assert that a working step reports `unimplemented`.
+        unimplemented = [
+            st for st in StepType if st not in engine_mod._HANDLERS and st not in engine_mod._CONTROL_FLOW and st != StepType.CONDITION
+        ]
         assert unimplemented, "fixture assumption broken: expected some StepType to lack a handler"
         step_type = unimplemented[0]
 

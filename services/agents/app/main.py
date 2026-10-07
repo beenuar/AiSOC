@@ -16,6 +16,7 @@ from app.api.hunts import router as hunts_router
 from app.api.investigate import router as investigate_router
 from app.api.metrics import router as metrics_router
 from app.api.playbooks import router as playbook_router
+from app.api.playbooks import waits_router as playbook_waits_router
 from app.api.replay_router import router as replay_router
 from app.api.router import router
 from app.api.triage import router as triage_router
@@ -35,6 +36,7 @@ from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
 from app.llm.factory import preflight_llm
 from app.playbook import PlaybookStore
+from app.playbook import sweeper as playbook_sweeper
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
 from app.workers.business_context import BusinessContextApplier
 from app.workers.business_context import is_enabled as business_context_enabled
@@ -136,6 +138,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:  # noqa: BLE001 — never block API startup
             logger.warning("auto_triage_worker.start_failed", error=str(exc))
 
+    # Depth 5.3 — wake timer waits and expire pauses nobody decided.
+    # `pause.expire_due` had been written and never called from production,
+    # so an undecided approval sat `waiting` forever; a `wait` step inherits
+    # that and turns it into a run that stops and never continues.
+    app.state.playbook_sweeper_task = None
+    try:
+        playbook_sweeper.start(app)
+    except Exception as exc:  # noqa: BLE001 — never block API startup
+        logger.warning("playbook_sweeper.start_failed", error=str(exc))
+
     # Phase 2.6 — flip /readyz to 200 once startup work is done.
     app.state.mark_ready()
 
@@ -152,6 +164,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 app.state.triage_worker_task.cancel()
         except Exception as exc:  # noqa: BLE001
             logger.warning("auto_triage_worker.stop_failed", error=str(exc))
+
+    if getattr(app.state, "playbook_sweeper_task", None) is not None:
+        app.state.playbook_sweeper_task.cancel()
 
     # Stop the hunt scheduler before draining DB pools so in-flight runs
     # can flush their writes.
@@ -209,7 +224,8 @@ app.include_router(metrics_router)
 app.include_router(router, prefix="/api/v1")
 app.include_router(investigate_router)  # prefix already set in investigate.py
 app.include_router(triage_router)  # prefix: /api/v1  (POST /cases/{id}/triage — router topology, T2.2)
-app.include_router(playbook_router)  # prefix: /api/v1/playbooks
+app.include_router(playbook_router)
+app.include_router(playbook_waits_router)  # prefix: /api/v1/playbook-waits
 app.include_router(contextual_router)  # prefix: /api/v1/contextual
 app.include_router(hunts_router)  # prefix: /api/v1/hunts
 app.include_router(hunt_search_router)  # prefix: /api/v1/hunt  (search + saved)

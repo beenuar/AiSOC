@@ -29,6 +29,14 @@ class StepType(str, Enum):
     HTTP = "http"  # Generic outbound HTTP call
     CONDITION = "condition"  # Branching / gate
     OSQUERY_LIVE_QUERY = "osquery_live_query"  # Distributed osquery via osctrl/FleetDM/aisoc-direct
+    # Control flow. A playbook could branch and it could not wait, fan out
+    # or repeat, so anything shaped "contain, then check again in five
+    # minutes" or "revoke every session this user has" had to be written as
+    # a hand-unrolled chain of steps — which is why none of the 62 shipped
+    # packs attempts either.
+    WAIT = "wait"  # Hold for a timer or a callback
+    PARALLEL = "parallel"  # Run child steps concurrently, then join
+    LOOP = "loop"  # Run child steps once per item, bounded
     # Human-in-the-loop
     APPROVAL = "approval"  # Require analyst approval before proceeding
     # Identity response
@@ -95,6 +103,16 @@ class PlaybookStep(BaseModel):
     # For branching: step IDs to jump to on true / false
     next_true: str | None = None
     next_false: str | None = None
+    #: Child steps, for ``parallel`` (run concurrently, then joined) and
+    #: ``loop`` (run in order, once per item). Empty for every other type,
+    #: and the engine fails a ``parallel`` or ``loop`` that declares none
+    #: rather than treating it as a no-op that reports success.
+    #:
+    #: One field for both rather than ``branches`` and ``body``: they are
+    #: the same thing — an ordered list of steps the engine owns — and two
+    #: fields would be two shapes for the editor, the schema and the
+    #: validator to agree about.
+    steps: list[PlaybookStep] = Field(default_factory=list)
 
 
 class Playbook(BaseModel):

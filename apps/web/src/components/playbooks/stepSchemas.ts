@@ -164,6 +164,16 @@ const SEVERITIES: readonly FieldOption[] = [
   { value: 'critical', label: 'Critical' },
 ];
 
+const WAIT_UNTIL: readonly FieldOption[] = [
+  { value: 'timer', label: 'A timer' },
+  { value: 'callback', label: 'A callback' },
+];
+
+const PARALLEL_JOINS: readonly FieldOption[] = [
+  { value: 'all', label: 'All branches must succeed' },
+  { value: 'any', label: 'Any one branch is enough' },
+];
+
 const OSQUERY_BACKENDS: readonly FieldOption[] = [
   { value: 'osctrl', label: 'osctrl' },
   { value: 'fleetdm', label: 'FleetDM' },
@@ -489,6 +499,83 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
     shortCode: 'if',
     // condition has no params — its predicate lives on `step.condition`.
     fields: [],
+  },
+  wait: {
+    type: 'wait',
+    execution: 'executed',
+    label: 'Wait',
+    description:
+      'Hold the run for a timer or until something calls back. A short timer sleeps in place; anything longer becomes a durable pause that survives a restart, on the same mechanism the approval step uses.',
+    accent: '#a78bfa',
+    bgColor: '#241a40',
+    icon: '\u23F3',
+    shortCode: 'wait',
+    fields: [
+      {
+        key: 'until',
+        label: 'Wait for',
+        kind: 'select',
+        required: true,
+        options: WAIT_UNTIL,
+        defaultValue: 'timer',
+      },
+      {
+        key: 'seconds',
+        label: 'Seconds',
+        kind: 'number',
+        placeholder: '300',
+        help: 'Required for a timer. Up to 60 seconds runs in place; longer suspends the run and resumes it on a sweep.',
+      },
+    ],
+  },
+  parallel: {
+    type: 'parallel',
+    execution: 'executed',
+    label: 'Parallel',
+    description:
+      'Run the child steps at the same time and join. Each branch gets its own copy of the run context, so two branches cannot overwrite each other and leave whichever finished last to win.',
+    accent: '#38bdf8',
+    bgColor: '#102a3a',
+    icon: '\u21C9',
+    shortCode: 'par',
+    fields: [
+      {
+        key: 'join',
+        label: 'Join',
+        kind: 'select',
+        required: true,
+        options: PARALLEL_JOINS,
+        defaultValue: 'all',
+      },
+    ],
+  },
+  loop: {
+    type: 'loop',
+    execution: 'executed',
+    label: 'Loop',
+    description:
+      'Run the child steps once per item in a list from the run context. Bounded: the iteration ceiling is reported in the result rather than silently truncating, because a loop that quietly stopped at 25 of 300 sessions leaves 275 live.',
+    accent: '#34d399',
+    bgColor: '#10332a',
+    icon: '\u21BB',
+    shortCode: 'loop',
+    fields: [
+      {
+        key: 'over',
+        label: 'Over',
+        kind: 'string',
+        required: true,
+        placeholder: 'sessions',
+        help: 'A dot-path into the run context that resolves to a list. Each iteration binds `item` and `index`.',
+      },
+      {
+        key: 'max_iterations',
+        label: 'Max iterations',
+        kind: 'number',
+        placeholder: '25',
+        help: 'Capped at 100 whatever is set here.',
+      },
+    ],
   },
   osquery_live_query: {
     type: 'osquery_live_query',

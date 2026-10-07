@@ -255,6 +255,12 @@ const STEP_TYPE_TO_INTEGRATION: Record<StepType, IntegrationType | null> = {
   // showing a vendor badge for them would overstate what a pack integrates.
   close_case:          null,
   condition:           null,
+  // Control flow. They orchestrate other steps and reach nothing of their
+  // own, so a vendor badge on them would attribute a pack's integrations
+  // to the step that scheduled the work rather than the one that did it.
+  wait:                null,
+  parallel:            null,
+  loop:                null,
   // Not runnable at all — see `STEP_SCHEMAS.approval`.
   approval:            null,
 };

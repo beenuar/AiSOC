@@ -284,16 +284,36 @@ def _import_engine(root: Path):
 def _inline_step_types(engine_mod, models_mod) -> frozenset[str]:
     """Step types handled inside the run loop rather than via ``_HANDLERS``.
 
-    ``condition`` never reaches the handler table — it branches in the loop
-    body. Reading the source keeps that visible to the gate; if someone
-    deletes the branch, the type stops counting as runnable here too.
+    Two sources, because the engine has two ways of not using the handler
+    table and crediting only one would under-report what the product runs:
+
+    * ``condition`` and ``approval`` branch in the body of
+      ``PlaybookEngine.run``. Read from the source, so deleting the branch
+      stops the type counting as runnable here too.
+    * ``wait``, ``parallel`` and ``loop`` are in ``_CONTROL_FLOW``, a real
+      dict read directly. They take the run, the HTTP client and the
+      dry-run flag, none of which a ``_HANDLERS`` entry receives — widening
+      that signature would hand a mutable run object to fifteen response
+      verbs that have no business touching it.
+
+    ``_CONTROL_FLOW`` is required rather than optional. Treating a missing
+    table as "no control flow" is how a gate comes to report agreement
+    about a registry that was renamed out from under it.
     """
     try:
         source = inspect.getsource(engine_mod.PlaybookEngine.run)
     except (OSError, TypeError, AttributeError) as exc:
         raise GateError(f"could not read PlaybookEngine.run source to find inline step handling: {exc}") from exc
     found = {st.value for st in models_mod.StepType if f"StepType.{st.name}" in source}
-    return frozenset(found)
+
+    control_flow = getattr(engine_mod, "_CONTROL_FLOW", None)
+    if not isinstance(control_flow, dict) or not control_flow:
+        raise GateError(
+            "engine._CONTROL_FLOW is missing or empty. The control-flow step types are runnable and are not in "
+            "_HANDLERS, so without this table the gate would report them as unimplemented — or, if the schema "
+            "also lost them, report agreement about a vocabulary three verbs short."
+        )
+    return frozenset(found | {st.value for st in control_flow})
 
 
 def _model_playbook_keys(models_mod) -> frozenset[str]:

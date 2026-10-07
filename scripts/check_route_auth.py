@@ -194,6 +194,13 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "vendor webhook authenticated by a per-tenant inbox token in the path plus an HMAC secret, with the connector's tenant cross- "
         "checked against the token's",
     ),
+    "services/agents/app/api/playbooks.py::resume_wait": (
+        "find_wait_by_token",
+        "a playbook `wait` callback; the caller is whatever the playbook was waiting for — a vendor webhook, a scanner, a ticket "
+        "closing — and holds no AiSOC credential. The 32-byte token in the path is the whole credential: unique-indexed so a guess "
+        "has one target, minted separately from the pause id (which appears in run records an analyst can read), scoped to "
+        "`kind = 'wait'` so it can never resume an approval, and single-use because resuming resolves the pause",
+    ),
     "services/agents/app/api/metrics.py::metrics": (
         "_authorise",
         "Prometheus scrape; _authorise compares METRICS_TOKEN in constant time and refuses outside a development environment when it is "
