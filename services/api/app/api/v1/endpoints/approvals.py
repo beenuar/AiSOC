@@ -18,12 +18,6 @@ Both halves are closed in v9.0. ``services/agents`` posts here when triage
 proposes an action that needs sign-off, and ``decide`` carries the decision
 through to the actions service and records on the row whether it executed.
 
-A third half had the same shape and is closed here. The signed email fallback
-in ``app/services/email_approval.py`` -- the one the documentation names for
-"Slack and Teams are unreachable" -- had no caller anywhere in the tree, so
-the only notification an approval ever produced was the Web Push the
-responder PWA listens for. ``_notify_email`` below is its producer.
-
 Endpoints
 ---------
 * ``GET    /approvals``           List pending/decided approvals.
@@ -35,7 +29,6 @@ Endpoints
 from __future__ import annotations
 
 import logging
-import os
 import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
@@ -46,17 +39,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import and_, func, select
 
 from app.api.v1.deps import AuthUser, require_permission
-from app.core.config import console_base_url, settings
+from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.models.responder import AgentApproval
 from app.services.actions_client import ActionsServiceError, decide_action, submit_action
-from app.services.branding.resolver import resolve_branding
-from app.services.email_approval import (
-    EmailApprovalError,
-    MailDeliveryClient,
-    MailgunClient,
-    send_approval_email,
-)
+from app.services.approval_delivery import deliver_approval
 
 logger = logging.getLogger(__name__)
 
@@ -220,7 +207,17 @@ async def create_approval(
 
     # Best-effort push notification — failure must not block the agent run.
     await _notify_realtime(row, event="approval_request")
-    await _notify_email(row, db)
+
+    # Depth 5.2. Push was the only channel that ever fired. The email
+    # sender, the Slack card route and the Teams card builder all existed
+    # and were reached by nothing, so an approval raised by an agent waited
+    # for somebody to open the console and notice it. The fan-out never
+    # raises: the row is already durable, and a channel that is down must
+    # leave a record saying so rather than take the approval with it.
+    delivery = await deliver_approval(row)
+    row.action = {**(row.action or {}), "delivery": delivery.as_dict()}
+    await db.commit()
+    await db.refresh(row)
 
     return ApprovalResponse.model_validate(row)
 
@@ -438,85 +435,3 @@ async def _notify_realtime(row: AgentApproval, *, event: str) -> None:
             exc,
             extra={"approval_id": str(row.id), "event": event},
         )
-
-
-def _email_recipients() -> list[str]:
-    """Who the signed approval link goes to, or nobody.
-
-    Read at call time rather than off ``settings`` so a deployment can turn
-    the fallback on without a rebuild, matching ``_signing_secret`` in
-    ``endpoints/email_approval.py``. Every address here must also be mapped
-    in ``AISOC_CHATOPS_APPROVERS`` under ``email``: the recipient is signed
-    into the token and forwarded as the approver, and an unmapped one is
-    refused at the click rather than at send time.
-    """
-    raw = os.environ.get("AISOC_APPROVAL_EMAIL_RECIPIENTS", "")
-    return [address.strip() for address in raw.split(",") if address.strip()]
-
-
-def _build_mailer() -> MailDeliveryClient:
-    """The transport approval mail leaves by.
-
-    A seam, so a test can drive ``POST /approvals`` end to end and read what
-    was sent without a network. Production has one implementation.
-    """
-    return MailgunClient()
-
-
-async def _notify_email(row: AgentApproval, db: Any) -> None:
-    """Send the signed email-approval fallback for a new approval.
-
-    Best effort in the same sense as ``_notify_realtime``: the approval is
-    already persisted, and an unreachable mail provider must not fail the
-    agent's request.
-
-    The links point at the console origin rather than at the API's internal
-    address. A recipient clicks in a mail client, from wherever they are,
-    and the console is the host their browser can reach -- it proxies
-    ``/api/v1/*`` through to this service.
-    """
-    recipients = _email_recipients()
-    if not recipients:
-        return
-
-    secret = os.environ.get("AISOC_EMAIL_APPROVAL_SECRET", "").strip()
-    if not secret:
-        # Loud, because the operator configured recipients and is expecting
-        # mail. Silently sending nothing here is how the fallback would look
-        # wired while doing nothing, which is the defect this closes.
-        logger.warning(
-            "Approval email not sent: AISOC_APPROVAL_EMAIL_RECIPIENTS is set but AISOC_EMAIL_APPROVAL_SECRET is empty",
-            extra={"approval_id": str(row.id)},
-        )
-        return
-
-    action = dict(row.action or {})
-    action.setdefault("id", str(row.id))
-    action.setdefault("rationale", row.summary or row.title)
-
-    base_url = console_base_url()
-    mailer = _build_mailer()
-    try:
-        await send_approval_email(
-            recipients=recipients,
-            case={"id": row.case_id or str(row.id), "case_number": row.case_id},
-            action=action,
-            api_base_url=base_url,
-            web_base_url=base_url,
-            secret=secret,
-            mailer=mailer,
-            # The organisation this tenant belongs to, so a managed
-            # customer's on-call reads their provider's product name rather
-            # than the platform's.
-            branding=await resolve_branding(db, row.tenant_id),
-        )
-    except (EmailApprovalError, httpx.HTTPError) as exc:
-        logger.warning(
-            "Failed to send approval email: %s",
-            exc,
-            extra={"approval_id": str(row.id), "recipients": len(recipients)},
-        )
-    finally:
-        aclose = getattr(mailer, "aclose", None)
-        if aclose is not None:
-            await aclose()
