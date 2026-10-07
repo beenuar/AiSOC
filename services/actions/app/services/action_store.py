@@ -62,6 +62,25 @@ async def _connect(dsn: str):
     return await asyncpg.connect(dsn, timeout=5.0)
 
 
+def _column_text(value: Any) -> str:
+    """The value a column should hold, for an enum or a plain string.
+
+    `ActionStatus` and `ApprovalRequirement` are `(str, Enum)` classes, and
+    `Enum` keeps its own `__str__` for a mixin like that — so `str(member)`
+    is `'ActionStatus.COMPLETED'`, not `'completed'`. The `status` column
+    was written that way since the table was added, which meant the index
+    on `(tenant_id, status)` indexed a string no query ever asked for and
+    the usage meter counting executed actions could only return zero.
+
+    `json.dumps` does not go through `__str__` for a `str` subclass, so the
+    JSONB copy of the same record was always right. One of the two had to
+    be wrong, and it was never going to be noticed from the record.
+    """
+    if value is None:
+        return ""
+    return str(getattr(value, "value", value))
+
+
 async def save(record: dict[str, Any]) -> None:
     """Persist or update an action record."""
     action_id = str(record["id"])
@@ -78,16 +97,18 @@ async def save(record: dict[str, Any]) -> None:
     try:
         await conn.execute(
             """
-            INSERT INTO aisoc_action_records (id, tenant_id, status, record, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, now(), now())
+            INSERT INTO aisoc_action_records (id, tenant_id, status, approval_tier, record, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, now(), now())
             ON CONFLICT (id) DO UPDATE
                 SET status = EXCLUDED.status,
+                    approval_tier = EXCLUDED.approval_tier,
                     record = EXCLUDED.record,
                     updated_at = now()
             """,
             action_id,
-            str(record.get("tenant_id") or ""),
-            str(record.get("status") or ""),
+            _column_text(record.get("tenant_id")),
+            _column_text(record.get("status")),
+            _column_text(record.get("approval_tier")) or None,
             json.dumps(record, default=str),
         )
         global _DB_CONFIRMED
