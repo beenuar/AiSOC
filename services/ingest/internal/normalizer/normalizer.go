@@ -108,9 +108,17 @@ var connectorProfiles = map[string]connectorProfile{
 			"Critical": 5, "High": 4, "Medium": 3, "Low": 2, "Informational": 1,
 		},
 	},
+	// 2001 and not 2002: the profile declared uid 2002 beside the caption
+	// "Security Finding", and 2002 is Vulnerability Finding in every OCSF
+	// version this service targets. A Sentinel incident is a detection, not
+	// a vulnerability. Nothing downstream read the uid closely enough to
+	// notice — both are category 2, so promotion was unaffected — but the
+	// class_uid and class_name on every Sentinel event in the lake
+	// contradicted each other, and a lake query filtering on 2002 would have
+	// returned Sentinel incidents alongside Qualys and Tenable findings.
 	"microsoft_sentinel": {
 		product:   OcsfProduct{Name: "Sentinel", VendorName: "Microsoft"},
-		classUID:  2002,
+		classUID:  2001,
 		className: "Security Finding",
 		fieldMap: map[string]string{
 			"TimeGenerated":     "time",
@@ -541,7 +549,7 @@ var connectorTypeAliases = map[string]string{
 // them safe: the connector's own connector_name is the long form (`qradar` is
 // "IBM QRadar", `chronicle` is "Google Chronicle", `syslog_cef` is
 // "Syslog / CEF"). Resolution happens once, at the top of Normalize, so the
-// profile lookup, the alias map, canonicalClassByConnector and the product
+// profile lookup, the alias map, connectorOCSFClass and the product
 // identity on the canonical path all agree on one name.
 //
 // `palo_alto_cortex` was the one entry that named a vendor rather than a
@@ -576,20 +584,6 @@ func canonicalConnectorType(connectorType string) string {
 		return canonical
 	}
 	return connectorType
-}
-
-// canonicalClassByConnector overrides the default Security Finding class for
-// connector types whose canonical alerts are better modeled as another OCSF
-// class (identity providers -> Authentication 3002).
-var canonicalClassByConnector = map[string]struct {
-	classUID  int
-	className string
-}{
-	"okta":         {3002, "Authentication"},
-	"azure_entra":  {3002, "Authentication"},
-	"auth0":        {3002, "Authentication"},
-	"duo_security": {3002, "Authentication"},
-	"onepassword":  {3002, "Authentication"},
 }
 
 func isCanonicalEnvelope(p map[string]interface{}) bool {
@@ -676,10 +670,20 @@ func unpromotableWarning(classUID int, severityID interface{}) string {
 	)
 }
 
+// canonicalProfile builds the profile for a connector-normalized envelope.
+//
+// The class comes from `connectorOCSFClass` in ocsf_classes.go, which carries
+// a decision for every connector the registry declares — either the OCSF
+// class its telemetry is, or a recorded reason it stays on the Security
+// Finding default. That default is category 2, which fusion promotes
+// unconditionally, so a source left on it silently turns every routine record
+// it emits into an alert. The table replaced a five-entry override map; see
+// the file header for the promotion mechanism and
+// `scripts/check_ocsf_class_coverage.py` for the gate that keeps it complete.
 func canonicalProfile(connectorType string) connectorProfile {
-	classUID, className := 2001, "Security Finding"
-	if override, ok := canonicalClassByConnector[connectorType]; ok {
-		classUID, className = override.classUID, override.className
+	classUID, className := classSecurityFinding, "Security Finding"
+	if class, ok := ocsfClassForConnector(connectorType); ok {
+		classUID, className = class.uid, class.caption
 	}
 	name := connectorType
 	if name == "" {

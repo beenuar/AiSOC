@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Routine telemetry was promoted to an alert as though a vendor had judged
+  it.** Ingest mapped 78 of the 84 declared connector types onto OCSF class
+  2001 Security Finding, because `canonicalProfile()` used it as the default
+  and only five connectors had an override. 2001 is category 2, and
+  `should_promote()` promotes category 2 unconditionally — so every permitted
+  DNS lookup from Cisco Umbrella, every `Allow` from Zscaler, every accepted
+  VPC flow record, every routine Windows event and every Workspace or M365
+  audit entry became an alert carrying severity `info`. Measured on the tree
+  before the fix: **14 of 14** telemetry sources promoted an info-severity
+  event.
+
+  `services/ingest/internal/normalizer/ocsf_classes.go` now carries a decision
+  for every connector type the registry declares: the OCSF class its stream
+  actually is, or the reason it stays on the Security Finding default. Which
+  one each source gets was read from the endpoint its connector calls rather
+  than from the vendor's product category, and the two disagree often enough
+  that guessing would have silenced four sources — Netskope reads
+  `/api/v2/events/data/alert`, Proofpoint reads `/v2/siem/messages/blocked`,
+  Abnormal reads `/v1/threats`, and Falco drops anything below its configured
+  priority, so all four return judgements and keep category 2.
+
+  Ten classes are added, each uid, caption and category read from
+  `schema.ocsf.io` for both the 1.9.0 the tree targets and the 1.1.0 the
+  normalizer's `metadata.version` declares, because emitting a newer class
+  under the older version string would be a false claim about a public
+  standard: Process Activity, File System Activity, DNS Activity, HTTP
+  Activity, Email Activity, Account Change, User Access Management, Group
+  Management, Web Resources Activity and Datastore Activity, plus Email URL
+  Activity and File Hosting Activity where the schema's own description named
+  the product. Connector types on the generic mapping: **78 → 42**, all 42
+  with a recorded reason and none without a decision. (depth plan 2.1)
+
+- **A Sentinel incident was labelled a vulnerability finding.** The
+  `microsoft_sentinel` profile declared `class_uid: 2002` beside
+  `class_name: "Security Finding"`; 2002 is Vulnerability Finding in every
+  OCSF version this service targets. Both are category 2, so promotion hid it,
+  but every Sentinel event in the lake disagreed with itself and a query
+  filtering on 2002 returned incidents alongside Qualys and Tenable findings.
+  Found by the new gate, which fails on a profile whose class name contradicts
+  its own uid.
+
+### Added
+
+- `scripts/check_ocsf_class_coverage.py`, wired into `ci.yml` with its
+  self-test ahead of it. A declared connector with neither a class nor a
+  recorded reason fails, as does an entry carrying both, a class uid whose
+  declared category disagrees with `uid/1000`, a non-finding class whose
+  severity map cannot reach the promote floor of 4, and a profile whose class
+  name contradicts its uid. It reports the number of connector types on the
+  generic mapping and holds it at a ceiling that may shrink but not grow. The
+  self-test injects each of those eleven defects and requires the gate to
+  catch each one, and requires an empty tree to be refused rather than
+  reported clean.
+
 ## [17.1.0] - 2026-10-07
 
 ### Security

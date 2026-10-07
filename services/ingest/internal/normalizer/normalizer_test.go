@@ -757,10 +757,15 @@ func TestConsoleVocabularyNormalizesAsTheDeclaredConnector(t *testing.T) {
 			if gotAlt.OcsfEvent["severity_id"] != 5 {
 				t.Errorf("severity_id = %v via %q, want 5 for critical", gotAlt.OcsfEvent["severity_id"], alternate)
 			}
-			// Category 2 is what should_promote() requires without a severity
-			// floor; a connector whose events cannot promote is the defect.
-			if gotAlt.OcsfEvent["category_uid"] != 2 {
-				t.Errorf("category_uid = %v via %q, want 2", gotAlt.OcsfEvent["category_uid"], alternate)
+			// The property this stands for is that the event can reach an
+			// analyst. It was written as `category_uid == 2` when every
+			// canonical envelope defaulted to 2001; once connectorOCSFClass
+			// gave telemetry sources their own class, that spelling stopped
+			// describing the requirement and started describing one way of
+			// meeting it. should_promote() takes either branch.
+			if !promotable(gotAlt.OcsfEvent) {
+				t.Errorf("a critical event via %q cannot promote: category_uid=%v severity_id=%v",
+					alternate, gotAlt.OcsfEvent["category_uid"], gotAlt.OcsfEvent["severity_id"])
 			}
 		})
 	}
@@ -789,8 +794,11 @@ func TestConsoleVocabularyIsAcceptedInStrictModeOnlyWhenItResolves(t *testing.T)
 			t.Errorf("strict mode rejected %q, which folds onto a declared connector: %v", alternate, err)
 			continue
 		}
-		if ev.OcsfEvent["category_uid"] != 2 {
-			t.Errorf("%q: category_uid = %v, want 2", alternate, ev.OcsfEvent["category_uid"])
+		// As above: the requirement is that a high-severity event resolves to
+		// something promotable, not that it resolves to category 2.
+		if !promotable(ev.OcsfEvent) {
+			t.Errorf("%q: a high event cannot promote: category_uid=%v severity_id=%v",
+				alternate, ev.OcsfEvent["category_uid"], ev.OcsfEvent["severity_id"])
 		}
 	}
 	if _, err := strict.Normalize(&RawEvent{
