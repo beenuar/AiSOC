@@ -2841,6 +2841,56 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/usage/organization/export.csv:
+    get:
+      tags:
+      - usage
+      summary: Export Organization Month
+      description: 'A month of usage for every tenant the caller''s organisation manages.
+
+
+        The per-tenant export names an organisation in its header and covers
+
+        one tenant, which left a provider with forty customers making forty
+
+        requests and adding up the columns by hand.
+
+
+        The tenant list is whatever `resolve_portfolio_scope` returns for this
+
+        principal, and nothing here widens it. A member scoped to three of a
+
+        forty-tenant portfolio exports three, and a principal who belongs to no
+
+        organisation is refused rather than silently handed their own tenant —
+
+        an export that quietly changes scope is worse than one that fails.'
+      operationId: export_organization_month_api_v1_usage_organization_export_csv_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: month
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: YYYY-MM; defaults to the current month
+          title: Month
+        description: YYYY-MM; defaults to the current month
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema: {}
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/rules:
     get:
       tags:
