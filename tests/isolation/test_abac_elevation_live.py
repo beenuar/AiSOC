@@ -489,3 +489,88 @@ class TestWorkloadIdentitiesAuthenticateAService:
         assert resp.status_code == 403, (
             f"a workload credential scoped to alerts:read created a case ({resp.status_code}); scopes are not enforced"
         )
+
+
+async def _role_holding(pool, tenant_id: str, user_id: str, *, permissions: list[str]) -> None:  # noqa: ANN001
+    """Give ``user_id`` a database-backed role holding exactly ``permissions``.
+
+    Without this the only principals able to reach the access-conditions
+    route are the wildcard roles, which hold everything and therefore
+    satisfy any granter-scope check trivially -- a test written against one
+    would pass whether the check existed or not.
+    """
+    role_id = str(uuid.uuid4())
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "INSERT INTO roles (id, tenant_id, name, is_system) VALUES ($1::uuid, $2::uuid, $3, FALSE)",
+            role_id,
+            tenant_id,
+            f"conditions-author-{role_id[:8]}",
+        )
+        await conn.execute(
+            """
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT $1::uuid, p.id FROM permissions p WHERE p.name = ANY($2::text[])
+            """,
+            role_id,
+            permissions,
+        )
+        await conn.execute(
+            "INSERT INTO user_roles (user_id, role_id) VALUES ($1::uuid, $2::uuid)",
+            user_id,
+            role_id,
+        )
+
+
+class TestAConditionCannotConstrainAuthorityTheCallerLacks:
+    """A condition is a denial, and `role` chooses whose denial it is.
+
+    `access_conditions:write` is a permission a tenant can delegate. Before
+    this check, delegating it also delegated the ability to store a
+    condition against `admin` -- so the holder could switch off an
+    administrator's permission outright, and the administrator's only
+    symptom would be their own access failing against a rule they have no
+    route to edit. The same granter-scope rule the rest of this tree
+    applies to conferral applies here turned around: you may not constrain
+    authority you do not hold.
+    """
+
+    @staticmethod
+    def _body(role: str | None) -> dict:
+        return {
+            "permission": "cases:write",
+            "operator": "ip_in_cidr",
+            "value": MATCHING_CIDR,
+            "role": role,
+        }
+
+    async def test_scoping_a_condition_to_admin_is_refused(self, app_client, pool) -> None:  # noqa: ANN001
+        tenant_id, user_id = await _tenant_with_user(pool, role="viewer")
+        await _role_holding(pool, tenant_id, user_id, permissions=["access_conditions:write"])
+
+        resp = await app_client.post(
+            "/api/v1/access-conditions",
+            headers=_auth(user_id, tenant_id),
+            json=self._body("admin"),
+        )
+
+        assert resp.status_code == 403, (
+            f"a principal holding only access_conditions:write stored a condition against the admin role "
+            f"({resp.status_code}); it can switch off an administrator's permission"
+        )
+
+    async def test_the_same_caller_may_still_write_an_unscoped_condition(self, app_client, pool) -> None:  # noqa: ANN001
+        """The negative control. A route that refused every write would
+        satisfy the assertion above while removing the feature."""
+        tenant_id, user_id = await _tenant_with_user(pool, role="viewer")
+        await _role_holding(pool, tenant_id, user_id, permissions=["access_conditions:write"])
+
+        resp = await app_client.post(
+            "/api/v1/access-conditions",
+            headers=_auth(user_id, tenant_id),
+            json=self._body(None),
+        )
+
+        assert resp.status_code == 201, (
+            f"a principal holding access_conditions:write could not write an unscoped condition ({resp.status_code}: {resp.text})"
+        )

@@ -41,7 +41,7 @@ from sqlalchemy import select
 from app.api.v1.deps import AuthUser, require_permission
 from app.core.permission_cache import bump_version
 from app.core.rbac_catalog import PERMISSIONS
-from app.core.role_grants import GRANTABLE_ROLES
+from app.core.role_grants import GRANTABLE_ROLES, RoleGrantDenied, authorize_permission_grant, permissions_for
 from app.db.rls import TenantDBSession
 from app.models.enterprise_iam import PermissionCondition
 from app.security.abac import OPERATORS
@@ -124,28 +124,34 @@ def _out(row: PermissionCondition) -> ConditionOut:
     )
 
 
-def _validate(body: ConditionIn) -> None:
+def _validate(permission: str, operator: str, value: Any, role: str | None) -> None:
     """Refuse a row that could not narrow anything, or could narrow everything.
 
     Each refusal is a condition that would otherwise be stored, read as
     configured in the console, and behave differently from what it says.
+
+    Takes the fields rather than the request model because it decides
+    nothing about authority -- that decision belongs beside
+    ``require_permission`` in the handler, and binding the model here
+    would say otherwise both to a reader and to
+    `scripts/check_role_grant_scope.py`.
     """
-    if body.permission != "*" and body.permission not in _KNOWN_PERMISSIONS:
-        resource = body.permission.split(":")[0]
-        if not (body.permission.endswith(":*") and any(p.startswith(f"{resource}:") for p in _KNOWN_PERMISSIONS)):
+    if permission != "*" and permission not in _KNOWN_PERMISSIONS:
+        resource = permission.split(":")[0]
+        if not (permission.endswith(":*") and any(p.startswith(f"{resource}:") for p in _KNOWN_PERMISSIONS)):
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Unknown permission {body.permission!r}. Use a seeded permission name or a 'resource:*' form.",
+                detail=f"Unknown permission {permission!r}. Use a seeded permission name or a 'resource:*' form.",
             )
 
-    if body.role is not None and body.role not in GRANTABLE_ROLES:
+    if role is not None and role not in GRANTABLE_ROLES:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"Unknown role {body.role!r}. Assignable roles: {', '.join(GRANTABLE_ROLES)}",
+            detail=f"Unknown role {role!r}. Assignable roles: {', '.join(GRANTABLE_ROLES)}",
         )
 
-    if body.operator in {"attribute_equals", "attribute_in"}:
-        named = body.value.get("attribute") if isinstance(body.value, dict) else None
+    if operator in {"attribute_equals", "attribute_in"}:
+        named = value.get("attribute") if isinstance(value, dict) else None
         if named not in ADDRESSABLE_ATTRIBUTES:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -200,8 +206,35 @@ async def create_condition(
     denial, so a caller able to name the tenant could refuse another
     tenant's work — the same shape as the MSSP override that let any
     authenticated user delete a critical detection from any other tenant.
+
+    `role` is the same argument one level down, and it was unguarded.
+    Scoping a condition to a role is legislating over that role's
+    exercise of a permission, so the rule is the one the rest of this
+    tree already applies to conferral, turned around: you may not
+    constrain authority you do not yourself hold. Without it a
+    `soc_analyst` holding `access_conditions:write` could store a
+    condition denying `admin` a permission outright, and the only
+    symptom an administrator would see is their own access failing for
+    a reason the console attributes to a rule they cannot edit.
+
+    Measured against `resolved_permissions`, never the static role map:
+    `require_permission` admitted this caller on the database-backed set,
+    and judging the grant against the broader static one is how six call
+    sites passed this gate while still escalating.
     """
-    _validate(body)
+    if body.role is not None:
+        try:
+            authorize_permission_grant(
+                granter_role=current_user.role,
+                granter_scopes=current_user.scopes,
+                granter_permissions=current_user.resolved_permissions,
+                requested=sorted(permissions_for(body.role)),
+                subject=f"a condition scoped to role {body.role!r}",
+            )
+        except RoleGrantDenied as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.reason) from exc
+
+    _validate(body.permission, body.operator, body.value, body.role)
 
     row = PermissionCondition(
         tenant_id=current_user.tenant_id,

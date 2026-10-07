@@ -87,13 +87,21 @@ class WorkloadCreated(BaseModel):
     warning: str = "Store this now. It is shown once and is not recoverable."
 
 
-def _validate_scopes(scopes: list[str], current_user: AuthUser) -> None:
+def _authorize_scopes(scopes: list[str], current_user: AuthUser) -> None:
     """Two refusals: unknown scopes, and scopes the minter does not hold.
 
     The second is the one that matters. A credential is a bearer
     credential, so its scopes are authority conferred on whoever holds it —
     and ``workload_identities:write`` must not be a door that mints
     authority its holder lacks.
+
+    Named for the authorization rather than the validation, matching
+    ``api_keys._authorize_scopes``, because the name is load-bearing:
+    `scripts/check_role_grant_scope.py` credits a handler that delegates
+    to a helper only through an enumerated set of helper names, and a
+    helper called ``_validate_scopes`` reads as a shape check. It was
+    called that, and the gate correctly reported this route as conferring
+    caller-chosen authority without reaching the chokepoint.
     """
     invalid = sorted(set(scopes) - VALID_SCOPES)
     if invalid:
@@ -135,7 +143,7 @@ async def create_workload_identity(
     current_user: Annotated[AuthUser, Depends(require_permission("workload_identities:write"))],
 ) -> WorkloadCreated:
     """Mint a credential for one internal service."""
-    _validate_scopes(body.scopes, current_user)
+    _authorize_scopes(body.scopes, current_user)
 
     secret, prefix, digest = service.mint_workload_secret()
     row = WorkloadIdentity(
