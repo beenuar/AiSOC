@@ -24,6 +24,7 @@ from app.models.tenant import Tenant
 from app.services import usage_metering
 from app.services.branding.resolver import owning_org_id
 from app.services.entitlements import headroom_for_tenant
+from app.services.org_scope import resolve_portfolio_scope
 
 router = APIRouter(prefix="/usage", tags=["usage"])
 
@@ -63,6 +64,7 @@ async def get_usage(
         )
 
     days = await usage_metering.measure_range(db, current_user.tenant_id, start_day, end_day)
+    await _attach_lake_events(days, current_user.tenant_id, start_day, end_day)
     point_in_time = await usage_metering.measure_point_in_time(db, current_user.tenant_id)
 
     # The per-tenant override, not the plan default. `limit_for` reads this
@@ -76,14 +78,15 @@ async def get_usage(
         "end": end_day.isoformat(),
         "meters": [
             {"key": m.key, "label": m.label, "description": m.description, "source": m.source}
-            for m in (*usage_metering.METERS, *usage_metering.POINT_IN_TIME_METERS)
+            for m in (*usage_metering.METERS, usage_metering.EVENTS_INGESTED, *usage_metering.POINT_IN_TIME_METERS)
         ],
         "daily": [day.as_dict() for day in days],
         "totals": usage_metering.totals(days),
         "point_in_time": point_in_time,
         # Named with the reason rather than omitted. A missing key reads as
-        # zero to anyone charting it, and zero is a measurement.
-        "not_measured": usage_metering.UNMEASURED,
+        # zero to anyone charting it, and zero is a measurement. Empty on a
+        # deployment that can take every meter.
+        "not_measured": usage_metering.unmeasured(),
         # The limits these counts run against, so a usage screen and a quota
         # screen cannot disagree about the same rows.
         "entitlements": [h.as_dict() for h in await headroom_for_tenant(db, current_user.tenant_id, tenant_limits)],
@@ -121,21 +124,11 @@ async def export_month(
     month: Annotated[str | None, Query(description="YYYY-MM; defaults to the current month")] = None,
 ) -> Response:
     """A month of usage as CSV, labelled with the organisation it belongs to."""
-    today = datetime.now(UTC).date()
-    if month is None:
-        year, month_number = today.year, today.month
-    else:
-        try:
-            year, month_number = (int(part) for part in month.split("-", 1))
-        except (ValueError, TypeError) as exc:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="month must be YYYY-MM") from exc
-
-    try:
-        first, last = usage_metering.month_bounds(year, month_number)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    year, month_number = _month_or_422(month)
+    first, last = _bounds_or_422(year, month_number)
 
     days = await usage_metering.measure_range(db, current_user.tenant_id, first, last)
+    await _attach_lake_events(days, current_user.tenant_id, first, last)
     point_in_time = await usage_metering.measure_point_in_time(db, current_user.tenant_id)
     body = usage_metering.to_csv(
         tenant_id=current_user.tenant_id,
@@ -149,6 +142,84 @@ async def export_month(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="aisoc-usage-{year:04d}-{month_number:02d}.csv"'},
     )
+
+
+@router.get("/organization/export.csv")
+async def export_organization_month(
+    db: DBSession,
+    current_user: Annotated[AuthUser, Depends(require_permission("reports:read"))],
+    month: Annotated[str | None, Query(description="YYYY-MM; defaults to the current month")] = None,
+) -> Response:
+    """A month of usage for every tenant the caller's organisation manages.
+
+    The per-tenant export names an organisation in its header and covers
+    one tenant, which left a provider with forty customers making forty
+    requests and adding up the columns by hand.
+
+    The tenant list is whatever `resolve_portfolio_scope` returns for this
+    principal, and nothing here widens it. A member scoped to three of a
+    forty-tenant portfolio exports three, and a principal who belongs to no
+    organisation is refused rather than silently handed their own tenant —
+    an export that quietly changes scope is worse than one that fails.
+    """
+    year, month_number = _month_or_422(month)
+    first, last = _bounds_or_422(year, month_number)
+
+    scope = await resolve_portfolio_scope(db, current_user.user_id)
+    if not scope.is_member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="this principal does not belong to an operator organisation; use /usage/export.csv",
+        )
+    if scope.is_empty:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="no tenants are in scope for this principal",
+        )
+
+    tenant_ids = scope.ordered_ids()
+    rows = await db.execute(select(Tenant.id, Tenant.name).where(Tenant.id.in_(tenant_ids)))
+    names = {uuid.UUID(str(row.id)): str(row.name) for row in rows}
+    sections = await usage_metering.measure_organization(db, tenant_ids=tenant_ids, start=first, end=last, names=names)
+    body = usage_metering.organization_to_csv(org_name=scope.org_name, sections=sections)
+
+    slug = scope.org_slug or "organisation"
+    return Response(
+        content=body,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="aisoc-usage-{slug}-{year:04d}-{month_number:02d}.csv"'},
+    )
+
+
+def _month_or_422(month: str | None) -> tuple[int, int]:
+    if month is None:
+        today = datetime.now(UTC).date()
+        return today.year, today.month
+    try:
+        year, month_number = (int(part) for part in month.split("-", 1))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="month must be YYYY-MM") from exc
+    return year, month_number
+
+
+def _bounds_or_422(year: int, month_number: int) -> tuple[date, date]:
+    try:
+        return usage_metering.month_bounds(year, month_number)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+
+async def _attach_lake_events(days: list[Any], tenant_id: uuid.UUID, start: date, end: date) -> None:
+    """Fold the lake's per-day counts onto the Postgres series.
+
+    Left absent rather than zeroed when the lake is not deployed, so
+    `unmeasured()` and the daily series agree about what was not taken.
+    """
+    series = await usage_metering.measure_events_ingested(tenant_id, start, end)
+    if series is None:
+        return
+    for day in days:
+        day.values[usage_metering.EVENTS_INGESTED.key] = series.get(day.day, 0)
 
 
 async def _org_name(db: Any, tenant_id: uuid.UUID) -> str | None:
