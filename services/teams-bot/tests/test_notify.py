@@ -22,6 +22,9 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     monkeypatch.setenv("AISOC_INTERNAL_TOKEN", "tok")
     monkeypatch.setenv("AISOC_TEAMS_CALLBACK_SECRET", "signing-secret")
     monkeypatch.setenv("AISOC_WEB_BASE_URL", "https://console.example.com")
+    # The destination is deployment configuration, not a request field. It
+    # used to arrive in the body, which made this route a full SSRF.
+    monkeypatch.setenv("TEAMS_APPROVALS_WEBHOOK_URL", "https://teams.example/hook")
     return TestClient(app)
 
 
@@ -64,7 +67,7 @@ def test_an_unsigned_card_is_refused(client: TestClient, monkeypatch: pytest.Mon
     monkeypatch.setenv("AISOC_TEAMS_CALLBACK_SECRET", "")
     response = client.post(
         "/internal/approval-card",
-        json={"action": _ACTION, "webhook_url": "https://teams.example/hook"},
+        json={"action": _ACTION},
         headers={"X-AiSOC-Internal-Token": "tok"},
     )
     assert response.json()["posted"] is False
@@ -86,7 +89,7 @@ def test_a_posted_card_is_an_adaptive_card_envelope(client: TestClient, monkeypa
     )
     response = client.post(
         "/internal/approval-card",
-        json={"action": _ACTION, "case": {"id": "c-1", "severity": "high"}, "webhook_url": "https://teams.example/hook"},
+        json={"action": _ACTION, "case": {"id": "c-1", "severity": "high"}},
         headers={"X-AiSOC-Internal-Token": "tok"},
     )
     assert response.json() == {"posted": True}
@@ -104,8 +107,49 @@ def test_a_rejected_post_is_not_reported_as_delivered(client: TestClient, monkey
     )
     response = client.post(
         "/internal/approval-card",
-        json={"action": _ACTION, "webhook_url": "https://teams.example/hook"},
+        json={"action": _ACTION},
         headers={"X-AiSOC-Internal-Token": "tok"},
     )
     assert response.json()["posted"] is False
     assert "400" in response.json()["reason"]
+
+
+def test_a_caller_cannot_choose_the_destination(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The request body must not be able to redirect the post.
+
+    `webhook_url` was accepted here as a per-tenant routing override and
+    posted to directly, so anything that could reach this pod chose where an
+    internal service sent an authenticated-looking request — CodeQL's
+    `py/full-ssrf`, at critical. The field is gone rather than validated,
+    because the only production caller never set it.
+
+    Pydantic ignores an unknown field by default, so the attacker-supplied
+    URL is simply never read; this asserts the post still goes to the
+    configured host, which is the property that matters.
+    """
+    seen: dict[str, str] = {}
+
+    class _Response:
+        status_code = 200
+
+    class _Client:
+        async def __aenter__(self) -> _Client:
+            return self
+
+        async def __aexit__(self, *_: object) -> None:
+            return None
+
+        async def post(self, url: str, **_: object) -> _Response:
+            seen["url"] = url
+            return _Response()
+
+    monkeypatch.setattr(notify.httpx, "AsyncClient", lambda *a, **k: _Client())
+
+    response = client.post(
+        "/internal/approval-card",
+        json={"action": _ACTION, "webhook_url": "http://169.254.169.254/latest/meta-data/"},
+        headers={"X-AiSOC-Internal-Token": "tok"},
+    )
+
+    assert response.json()["posted"] is True
+    assert seen["url"] == "https://teams.example/hook"
