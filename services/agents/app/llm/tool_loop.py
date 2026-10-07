@@ -19,13 +19,13 @@ the model as structured results (via ToolRegistry.execute) rather than aborting.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import structlog
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from app.llm.contract import safe_ainvoke
+from app.prompting.tool_results import render_tool_message
 from app.tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
@@ -72,7 +72,15 @@ async def run_with_tools(
             call_id = call.get("id", "") or ""
             result = await registry.execute(name, args)
             trace.append({"tool": name, "args": args, "result_preview": str(result)[:200]})
-            messages.append(ToolMessage(content=json.dumps(result, default=str)[:4000], tool_call_id=call_id))
+            # The only place in this service where a tool result becomes text
+            # a model reads. Depth plan 1.3 turned that from an accident of
+            # layout into an invariant: `render_tool_message` is the single
+            # renderer and this is its single call site, both enforced by
+            # `test_tool_result_channel.py` walking the syntax tree. The guard
+            # rule `fabricated_tool_result` is sound only while that holds —
+            # it reports a tool result inside the evidence fence as fabricated
+            # by construction, which is a claim about this loop.
+            messages.append(ToolMessage(content=render_tool_message(result), tool_call_id=call_id))
 
     logger.info("tool_loop.truncated", iterations=max_iters, tools_called=len(trace))
     return {"content": _content(messages[-1]), "tool_trace": trace, "iterations": max_iters, "truncated": True}
