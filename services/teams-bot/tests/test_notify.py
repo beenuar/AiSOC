@@ -47,6 +47,26 @@ def test_an_unset_internal_token_refuses_everything(monkeypatch: pytest.MonkeyPa
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize("supplied", ["", "   ", "wrong", "tok-with-suffix"])
+def test_a_token_that_is_not_the_configured_one_is_refused(client: TestClient, supplied: str) -> None:
+    """Pins each branch of the comparison, including the empty header.
+
+    `_authorized` reached these cases through `bool(supplied) and ...`,
+    which does not narrow `str | None` for a type checker. Rewriting it as
+    an early return does, and these are the inputs that would show a
+    behaviour change if the rewrite had introduced one -- an empty or
+    whitespace header in particular, which the truthiness test rejected
+    before reaching the compare and the early return rejects at the same
+    point.
+    """
+    response = client.post(
+        "/internal/approval-card",
+        json={"action": _ACTION},
+        headers={"X-AiSOC-Internal-Token": supplied},
+    )
+    assert response.status_code == 401, f"{supplied!r} was accepted as the internal token"
+
+
 def test_no_configured_webhook_is_reported_not_failed(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
     """202 with ``posted: false``.
 
