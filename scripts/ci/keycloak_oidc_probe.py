@@ -53,12 +53,20 @@ def _admin_token() -> str:
     return str(response.json()["access_token"])
 
 
-def bootstrap() -> None:
-    """A realm, a confidential client and a user with a verified email."""
+def bootstrap() -> str:
+    """A realm, a confidential client and a user. Returns the client secret.
+
+    The secret is **read back** rather than assumed. Keycloak generates one
+    when a confidential client is created and does not necessarily honour a
+    `secret` supplied in the creation payload, so sending one and then using
+    it is a coin flip that answers `400 unauthorized_client` — a message
+    about the grant, for a problem in the registration.
+    """
     headers = {"Authorization": f"Bearer {_admin_token()}"}
     base = f"{KEYCLOAK}/admin/realms"
 
-    # 409 is success on a re-run: the workflow may retry a step.
+    # 409 is success: the workflow may retry a step, and a realm that
+    # already exists is the state this wants.
     for url, payload in (
         (base, {"realm": REALM, "enabled": True}),
         (
@@ -67,6 +75,7 @@ def bootstrap() -> None:
                 "clientId": CLIENT_ID,
                 "secret": CLIENT_SECRET,
                 "publicClient": False,
+                "clientAuthenticatorType": "client-secret",
                 "standardFlowEnabled": True,
                 # The resource-owner grant is how this script obtains a
                 # token without a browser. It is enabled on the CI realm
@@ -90,21 +99,37 @@ def bootstrap() -> None:
         if response.status_code not in (201, 204, 409):
             raise SystemExit(f"Keycloak bootstrap failed at {url}: {response.status_code} {response.text[:400]}")
 
+    listed = httpx.get(f"{base}/{REALM}/clients", params={"clientId": CLIENT_ID}, headers=headers, timeout=30)
+    listed.raise_for_status()
+    entries = listed.json()
+    if not entries:
+        raise SystemExit(f"Keycloak has no client {CLIENT_ID!r} after bootstrap")
+    internal_id = entries[0]["id"]
+    secret = httpx.get(f"{base}/{REALM}/clients/{internal_id}/client-secret", headers=headers, timeout=30)
+    secret.raise_for_status()
+    return str(secret.json().get("value") or CLIENT_SECRET)
 
-def issue_id_token() -> str:
+
+def issue_id_token(client_secret: str) -> str:
     response = httpx.post(
         f"{KEYCLOAK}/realms/{REALM}/protocol/openid-connect/token",
         data={
             "grant_type": "password",
             "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
+            "client_secret": client_secret,
             "username": USERNAME,
             "password": PASSWORD,
             "scope": "openid email profile",
         },
         timeout=30,
     )
-    response.raise_for_status()
+    if not response.is_success:
+        # Keycloak's own `error_description` names the cause — a disabled
+        # grant, a bad secret, a user who cannot log in. Raising
+        # `HTTPStatusError` instead would print the URL and the status and
+        # leave an operator guessing, which is the diagnostic failure this
+        # repository keeps rediscovering.
+        raise SystemExit(f"Keycloak refused the token request: {response.status_code} {response.text[:500]}")
     token = response.json().get("id_token")
     if not token:
         raise SystemExit("Keycloak returned no id_token; the client is not configured for the openid scope")
@@ -112,8 +137,8 @@ def issue_id_token() -> str:
 
 
 async def main() -> int:
-    bootstrap()
-    id_token = issue_id_token()
+    client_secret = bootstrap()
+    id_token = issue_id_token(client_secret)
     issuer = f"{KEYCLOAK}/realms/{REALM}"
 
     os.environ["OIDC_CLIENT_ID"] = CLIENT_ID

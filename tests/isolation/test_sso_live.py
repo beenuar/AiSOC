@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -216,6 +217,18 @@ class _Idp:
 # ─── A real OpenID Connect provider, on a real socket ────────────────────────
 
 
+_HEADER_UNSAFE = re.compile(r"[^A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]")
+
+
+def _header_safe(value: str) -> str:
+    """A URL fragment safe to place in a response header.
+
+    Reconstructed from allowed characters rather than checked, so neither a
+    reader nor a taint tracker has to reason about what survived.
+    """
+    return _HEADER_UNSAFE.sub("", value)
+
+
 class _OidcProvider:
     """Discovery, JWKS, authorization, token and userinfo over real HTTP.
 
@@ -275,8 +288,13 @@ class _OidcProvider:
                 elif path == "/authorize":
                     code = uuid.uuid4().hex
                     provider._codes[code] = {"nonce": (query.get("nonce") or [""])[0]}
-                    target = (query.get("redirect_uri") or [""])[0]
-                    state = (query.get("state") or [""])[0]
+                    # Rebuilt from an allow-list rather than interpolated. A
+                    # `Location` assembled from the query string is response
+                    # splitting even in a fixture, and a provider that lets a
+                    # crafted `redirect_uri` inject a header is not modelling
+                    # a real one.
+                    target = _header_safe((query.get("redirect_uri") or [""])[0])
+                    state = _header_safe((query.get("state") or [""])[0])
                     self.send_response(302)
                     self.send_header("Location", f"{target}?code={code}&state={state}")
                     self.send_header("Content-Length", "0")

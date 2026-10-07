@@ -150,9 +150,7 @@ class TestTheSettingsBuilder:
         assert environment_idp_is_configured() is True
         assert saml._saml_settings()["idp"]["entityId"] == "https://legacy.example/idp"
 
-    def test_an_environment_with_no_certificate_does_not_count_as_configured(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_an_environment_with_no_certificate_does_not_count_as_configured(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """The stock install. Counting it as configured is what would let
         `_resolve_idp` answer with an empty trust anchor instead of saying
         no connection exists."""
