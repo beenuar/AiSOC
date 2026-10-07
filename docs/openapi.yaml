@@ -7140,6 +7140,468 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/elevation/requests:
+    post:
+      tags:
+      - elevation
+      summary: Request Elevation
+      description: 'Ask for a permission for a while. Confers nothing until approved.
+
+
+        The row is written with ``approved_by_id`` NULL, and
+
+        ``resolve_elevation`` requires that column to be set, so a request is
+
+        inert by construction rather than by a flag somebody could forget to
+
+        check.
+
+
+        The tenant and the requesting user come from the authenticated
+
+        principal. Neither is a body field: a caller that can name the subject
+
+        of an elevation can elevate somebody else, and a caller that can name
+
+        the tenant can elevate inside another one.'
+      operationId: request_elevation_api_v1_elevation_requests_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ElevationRequest'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElevationOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - elevation
+      summary: List Elevations
+      description: 'Every elevation in this tenant, newest first.
+
+
+        Scoped on the authenticated tenant in the ``WHERE`` clause as well as
+
+        by row-level security, because query-layer scoping is the control that
+
+        holds when a session is opened without the RLS context.'
+      operationId: list_elevations_api_v1_elevation_requests_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: state
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: State
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ElevationOut'
+                title: Response List Elevations Api V1 Elevation Requests Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/elevation/requests/{grant_id}/approve:
+    post:
+      tags:
+      - elevation
+      summary: Approve Elevation
+      description: "Approve a pending request, if you hold what it confers.\n\nTwo\
+        \ refusals, and they are different questions:\n\n* **separation of duties**\
+        \ — an approver who is the requester is a\n  requester, and the control would\
+        \ be a log line;\n* **no escalation through the approval door** — the approver\
+        \ must\n  already hold every permission the grant confers, checked by the\
+        \ same\n  function that guards role assignment and key scopes. Without it,\n\
+        \  ``elevation:approve`` would be a permission that confers every other\n\
+        \  permission, which is the wildcard by another name."
+      operationId: approve_elevation_api_v1_elevation_requests__grant_id__approve_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: grant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Grant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElevationOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/elevation/requests/{grant_id}/revoke:
+    post:
+      tags:
+      - elevation
+      summary: Revoke Elevation
+      description: 'End an elevation now, rather than at its expiry.
+
+
+        Gated on ``elevation:approve`` rather than a permission of its own:
+
+        whoever may confer this authority may take it back, and a separate
+
+        ``elevation:revoke`` that somebody forgot to grant would mean an
+
+        elevation nobody present can end.'
+      operationId: revoke_elevation_api_v1_elevation_requests__grant_id__revoke_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: grant_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Grant Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ElevationOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/elevation/mine:
+    get:
+      tags:
+      - elevation
+      summary: My Elevations
+      description: 'This principal''s own elevations.
+
+
+        Gated on ``elevation:request`` rather than left identity-only: a
+
+        principal who may not request one has nothing to read here, and an
+
+        identity-only route is how "is this a valid session?" quietly becomes
+
+        the whole authorization decision.'
+      operationId: my_elevations_api_v1_elevation_mine_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ElevationOut'
+                type: array
+                title: Response My Elevations Api V1 Elevation Mine Get
+      security:
+      - HTTPBearer: []
+  /api/v1/access-conditions/operators:
+    get:
+      tags:
+      - access-conditions
+      summary: Supported Operators
+      description: 'What this deployment can enforce, and why the rest is refused.
+
+
+        A console that offered every operator the evaluator implements would
+
+        let an operator configure a permanent, unexplained denial.'
+      operationId: supported_operators_api_v1_access_conditions_operators_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Supported Operators Api V1 Access Conditions Operators
+                  Get
+      security:
+      - HTTPBearer: []
+  /api/v1/access-conditions:
+    get:
+      tags:
+      - access-conditions
+      summary: List Conditions
+      operationId: list_conditions_api_v1_access_conditions_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ConditionOut'
+                type: array
+                title: Response List Conditions Api V1 Access Conditions Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - access-conditions
+      summary: Create Condition
+      description: 'Add a condition to this tenant.
+
+
+        The tenant comes from the authenticated principal. A condition is a
+
+        denial, so a caller able to name the tenant could refuse another
+
+        tenant''s work — the same shape as the MSSP override that let any
+
+        authenticated user delete a critical detection from any other tenant.'
+      operationId: create_condition_api_v1_access_conditions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConditionIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConditionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/access-conditions/{condition_id}:
+    patch:
+      tags:
+      - access-conditions
+      summary: Set Condition Enabled
+      description: 'Turn a condition on or off without deleting it.
+
+
+        Only ``enabled`` is mutable. Editing a stored condition''s operator or
+
+        value in place would change what an audit entry referring to it meant;
+
+        a replaced rule is a new row.'
+      operationId: set_condition_enabled_api_v1_access_conditions__condition_id__patch
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: condition_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Condition Id
+      - name: enabled
+        in: query
+        required: true
+        schema:
+          type: boolean
+          title: Enabled
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConditionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - access-conditions
+      summary: Delete Condition
+      operationId: delete_condition_api_v1_access_conditions__condition_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: condition_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Condition Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workload-identities:
+    get:
+      tags:
+      - workload-identities
+      summary: List Workload Identities
+      description: 'Every workload credential, with no secret material.
+
+
+        ``last_used_at`` is the column that matters operationally: it is what
+
+        tells an operator a credential they are about to revoke is dead.'
+      operationId: list_workload_identities_api_v1_workload_identities_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  additionalProperties: true
+                  type: object
+                type: array
+                title: Response List Workload Identities Api V1 Workload Identities
+                  Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - workload-identities
+      summary: Create Workload Identity
+      description: Mint a credential for one internal service.
+      operationId: create_workload_identity_api_v1_workload_identities_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkloadIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkloadCreated'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/workload-identities/{identity_id}/rotate:
+    post:
+      tags:
+      - workload-identities
+      summary: Rotate Workload Identity
+      description: 'Issue a new secret and keep the old one alive for a grace window.
+
+
+        Rotation in place is the whole reason the ``previous_*`` columns exist.
+
+        The only path before was create, update every caller, delete — which is
+
+        downtime, so most deployments never rotated at all, which is how one
+
+        leaked log line became permanent internal access.'
+      operationId: rotate_workload_identity_api_v1_workload_identities__identity_id__rotate_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: identity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Identity Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkloadCreated'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/workload-identities/{identity_id}:
+    delete:
+      tags:
+      - workload-identities
+      summary: Revoke Workload Identity
+      description: 'Revoke immediately, including the superseded secret.
+
+
+        Clearing ``previous_hash`` is the half that is easy to miss: a
+
+        revocation that left a rotation''s grace window intact would leave the
+
+        credential working for up to a day after an operator believed they had
+
+        killed it.'
+      operationId: revoke_workload_identity_api_v1_workload_identities__identity_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: identity_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Identity Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/admin/users:
     get:
       tags:
@@ -21525,6 +21987,81 @@ components:
       - controls_missing
       - generated_at
       title: CompliancePosture
+    ConditionIn:
+      properties:
+        permission:
+          type: string
+          maxLength: 200
+          minLength: 3
+          title: Permission
+        operator:
+          type: string
+          title: Operator
+        value:
+          title: Value
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        description:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Description
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - permission
+      - operator
+      - value
+      title: ConditionIn
+    ConditionOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        permission:
+          type: string
+          title: Permission
+        role:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Role
+        operator:
+          type: string
+          title: Operator
+        value:
+          title: Value
+        description:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Description
+        enabled:
+          type: boolean
+          title: Enabled
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+      type: object
+      required:
+      - id
+      - permission
+      - role
+      - operator
+      - value
+      - description
+      - enabled
+      - created_at
+      title: ConditionOut
     ConfidenceBucket:
       properties:
         label:
@@ -23744,6 +24281,115 @@ components:
       - override_note
       - parameter_overrides
       title: EffectiveRuleOut
+    ElevationOut:
+      properties:
+        id:
+          type: string
+          format: uuid
+          title: Id
+        user_id:
+          type: string
+          format: uuid
+          title: User Id
+        user_email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: User Email
+        permissions:
+          items:
+            type: string
+          type: array
+          title: Permissions
+        justification:
+          type: string
+          title: Justification
+        approved_by_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Approved By Id
+        granted_at:
+          type: string
+          format: date-time
+          title: Granted At
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        revoked_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Revoked At
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+        alert_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Alert Id
+        state:
+          type: string
+          title: State
+      type: object
+      required:
+      - id
+      - user_id
+      - permissions
+      - justification
+      - approved_by_id
+      - granted_at
+      - expires_at
+      - revoked_at
+      - case_id
+      - alert_id
+      - state
+      title: ElevationOut
+    ElevationRequest:
+      properties:
+        permissions:
+          items:
+            type: string
+          type: array
+          maxItems: 20
+          minItems: 1
+          title: Permissions
+        justification:
+          type: string
+          maxLength: 2000
+          minLength: 10
+          title: Justification
+        duration_minutes:
+          type: integer
+          maximum: 480.0
+          minimum: 5.0
+          title: Duration Minutes
+          default: 60
+        case_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Case Id
+        alert_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Alert Id
+      type: object
+      required:
+      - permissions
+      - justification
+      title: ElevationRequest
     EngageRequest:
       properties:
         reason:
@@ -36252,6 +36898,53 @@ components:
       - approved_by
       - created_at
       title: WhitelistOut
+    WorkloadCreated:
+      properties:
+        identity:
+          additionalProperties: true
+          type: object
+          title: Identity
+        secret:
+          type: string
+          title: Secret
+        warning:
+          type: string
+          title: Warning
+          default: Store this now. It is shown once and is not recoverable.
+      type: object
+      required:
+      - identity
+      - secret
+      title: WorkloadCreated
+      description: The one response that carries secret material, and only on create.
+    WorkloadIn:
+      properties:
+        service:
+          type: string
+          title: Service
+        description:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Description
+        scopes:
+          items:
+            type: string
+          type: array
+          maxItems: 40
+          title: Scopes
+        expires_in_days:
+          anyOf:
+          - type: integer
+            maximum: 3650.0
+            minimum: 1.0
+          - type: 'null'
+          title: Expires In Days
+      type: object
+      required:
+      - service
+      title: WorkloadIn
     app__api__v1__endpoints__business_context__UpdateRuleRequest:
       properties:
         yaml:

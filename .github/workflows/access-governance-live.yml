@@ -1,0 +1,186 @@
+# ABAC conditions, time-boxed elevation and workload identities — live.
+#
+# Depth plan item 8.2. Migration 087 created `permission_conditions`,
+# `privilege_grants` and `workload_identities` and shipped no reader for any
+# of them; `app/security/abac.py` was a complete, tested evaluator with no
+# production caller. The repository said so itself in CHANGELOG.md and
+# retracted the claim in FIX_PASS_PROGRESS.md.
+#
+# A table with no reader cannot be told apart from a working control by any
+# offline suite, because the offline suite mocks the database the reader
+# would have queried. So this job drives the real application against real
+# Postgres with every migration applied and asks at the only layer that
+# answers: what status code does the route return?
+#
+# No `paths:` filter. An authorization regression guard must grade every pull
+# request, not only ones that touch a named path — the live jobs that carried
+# path filters excluded the very code they covered.
+name: Access governance (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Keyed per commit on push and per pull request on PRs. Keying on
+  # `github.ref` alone let a push to main cancel the run before it, which
+  # across the last audit left 0 of 22 required checks graded on all 30
+  # commits.
+  group: access-governance-live-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  access-governance-live:
+    name: Conditions narrow, elevation expires, workloads authenticate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      IAM_DSN: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # Not a bypass environment. `development` is in
+      # AUTH_BYPASS_ENVIRONMENTS, so an uncredentialed request there resolves
+      # to a demo *admin* — inside the one suite whose purpose is proving
+      # that authorization narrows, that would make every assertion pass for
+      # the wrong reason.
+      ENVIRONMENT: production
+      SECRET_KEY: isolation-iam-signing-secret-at-least-32-characters
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real service pulls in the real service's whole import
+      # chain, and a curated list resolves a different version set from the
+      # one the image ships.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Conditions narrow, elevation expires, workload credentials authenticate
+        working-directory: services/api
+        env:
+          ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          DATABASE_URL: ${{ env.IAM_DSN }}
+        run: python -m pytest ../../tests/isolation/test_abac_elevation_live.py -v --tb=short
+
+      # A skip here is a failure. `pytest.importorskip`-style gating turns a
+      # missing dependency into a green run, and this job exists precisely to
+      # answer a question an offline run cannot.
+      - name: The suite actually ran
+        working-directory: services/api
+        env:
+          ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          DATABASE_URL: ${{ env.IAM_DSN }}
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_abac_elevation_live.py -q --tb=no -p no:cacheprovider > /tmp/iam-live.txt 2>&1 || true
+          cat /tmp/iam-live.txt
+          if grep -qE '[0-9]+ skipped' /tmp/iam-live.txt; then
+            echo "FAIL: a live authorization suite skipped. A skip in this job is a failure."
+            exit 1
+          fi
+          grep -qE '[0-9]+ passed' /tmp/iam-live.txt || { echo "FAIL: nothing ran."; exit 1; }
+
+      # The negative controls.
+      #
+      # Each removes one half of the wiring this item added and requires the
+      # suite to go red. Without them a suite that stopped asserting, or an
+      # application that refused everything, would both look like a pass.
+      - name: The gate fails when conditions stop being applied
+        working-directory: services/api
+        env:
+          ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          DATABASE_URL: ${{ env.IAM_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/api/v1/deps.py /tmp/deps.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/deps.py")
+          s = p.read_text()
+          needle = "        self._narrow_by_conditions(permission)\n"
+          if needle not in s:
+              print("negative control could not find the condition call to remove; "
+                    "require_permission has been reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_abac_elevation_live.py::TestAnAttributeConditionNarrowsThePermission -q >/dev/null 2>&1; then
+            cp /tmp/deps.bak app/api/v1/deps.py
+            echo "FAIL: the suite passed with attribute conditions removed from the permission path."
+            exit 1
+          fi
+          cp /tmp/deps.bak app/api/v1/deps.py
+          echo "OK: removing the condition call makes the suite fail, as it must."
+
+      - name: The gate fails when elevation stops being resolved
+        working-directory: services/api
+        env:
+          ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          DATABASE_URL: ${{ env.IAM_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/api/v1/deps.py /tmp/deps.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/deps.py")
+          s = p.read_text()
+          needle = "        elevation = await resolve_elevation(db, tenant_id=user.tenant_id, user_id=user.id)\n"
+          if needle not in s:
+              print("negative control could not find the elevation resolution to remove")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_abac_elevation_live.py::TestElevationIsTimeBoxed::test_a_live_grant_confers_a_permission_the_role_lacks -q >/dev/null 2>&1; then
+            cp /tmp/deps.bak app/api/v1/deps.py
+            echo "FAIL: the suite passed with elevation never resolved."
+            exit 1
+          fi
+          cp /tmp/deps.bak app/api/v1/deps.py
+          echo "OK: removing elevation resolution makes the suite fail, as it must."
+
+      # The one permission path stays single, and the two new properties are
+      # checked inside it. Run here as well as in the general gate job so the
+      # structural check and the behavioural one fail together.
+      - name: One permission model, with conditions and elevation inside it
+        run: |
+          set -euo pipefail
+          python scripts/check_one_permission_model.py --check
+          python scripts/check_one_permission_model.py --self-test

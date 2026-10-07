@@ -85,6 +85,15 @@ PERMISSIONS: Final[tuple[tuple[str, str, str], ...]] = (
     ("apikeys:manage", "Manage API keys (alias)", "api_keys"),
     ("audit_log:read", "Read the audit log", "audit"),
     ("audit:read", "Read the audit log (alias)", "audit"),
+    # Depth 8.2 — time-boxed elevation, attribute conditions, and the
+    # per-service credentials that replace the one shared service token.
+    ("elevation:read", "View the tenant's privilege elevations", "access"),
+    ("elevation:request", "Request a time-boxed privilege elevation", "access"),
+    ("elevation:approve", "Approve or revoke a privilege elevation", "access"),
+    ("access_conditions:read", "View attribute conditions on permissions", "access"),
+    ("access_conditions:write", "Add, disable or remove attribute conditions", "access"),
+    ("workload_identities:read", "View per-service internal credentials", "access"),
+    ("workload_identities:write", "Mint, rotate or revoke per-service credentials", "access"),
     ("sla:read", "View SLA metrics", "sla"),
     ("sla:write", "Change SLA policy", "sla"),
     ("plugins:read", "View plugins", "plugins"),
@@ -148,6 +157,11 @@ _INFOSEC: Final[frozenset[str]] = _VIEWER | frozenset(
         "investigation:run",
         "reports:write",
         "reports:export",
+        # An analyst may *ask* for a permission for a while, and see their
+        # own requests. Approving is deliberately absent: an approver who
+        # can also request is both parties to the decision, and the whole
+        # control reduces to a log line.
+        "elevation:request",
     }
 )
 

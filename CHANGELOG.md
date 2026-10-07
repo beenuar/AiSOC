@@ -7,6 +7,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **Three tables that had no reader now change authorization outcomes.**
+  Migration `087_enterprise_iam.sql` created `permission_conditions`,
+  `privilege_grants` and `workload_identities`, and shipped no reader for any
+  of them — this repository's own CHANGELOG said "nothing reads any of them"
+  and `FIX_PASS_PROGRESS.md` retracted the claim. Depth plan 8.2 gives them
+  readers, and that is an authorization change in both directions:
+  - **A row in `permission_conditions` now denies.** It was inert. Against the
+    pre-fix tree a condition restricting `cases:write` to a CIDR the caller is
+    not in returned **201 Created**; it now returns 403. Any deployment that
+    wrote rows directly into that table will see those denials begin.
+  - **An approved row in `privilege_grants` now confers.** It was inert.
+    Against the pre-fix tree a live grant of `roles:read` to a `viewer`
+    returned **403**; it now returns 200 until `expires_at` passes. A row with
+    `approved_by_id` NULL still confers nothing, by construction rather than
+    by a flag — approval is a gate, not a record.
+  - **`CurrentUser.effective_permissions()` now includes live elevation.**
+    `services/actions` re-authorises approvals against that list, so an
+    elevated analyst is no longer refused there while allowed here.
+  - **A new credential type authenticates.** Secrets prefixed `aisoc_wl_`
+    resolve against `workload_identities`. The shared `AISOC_SERVICE_TOKEN`
+    path is unchanged and still works; this sits beside it. The tenant is a
+    mandatory header verified against the table on both paths, because a
+    credential that works for every tenant is a cross-tenant read whichever
+    way it was minted.
+
+  Reproduced before building, against the shipped code with a real app, real
+  Postgres, real JWTs and `ENVIRONMENT=production` (not `development`, which
+  is in `AUTH_BYPASS_ENVIRONMENTS` and would have resolved an uncredentialed
+  request to a demo admin). The reproduction is now the regression guard:
+  `tests/isolation/test_abac_elevation_live.py`, wired in
+  `access-governance-live.yml` with two negative controls that delete each
+  half of the wiring and require the suite to go red. (#PR)
+
+### Added
+
+- **Attribute conditions, time-boxed elevation and workload identities, all
+  inside the one permission path.** The placement is the item, not a detail:
+  conditions are applied by `CurrentUser.require_permission` after whichever
+  branch allowed, never beside it. Two authorities that can disagree is the
+  shape that produced GHSA-pm3f-h6gc-rvgp, and
+  `scripts/check_one_permission_model.py` now fails if the call moves inside a
+  branch — where it would bind console sessions and silently not API keys —
+  or if elevation stops being consulted at use. Its self-test runs ten probes,
+  four of them new, each removing one half of this wiring.
+  - Conditions narrow and can never grant. The operator set the write surface
+    accepts is narrower than `app/security/abac.py` implements: `mfa_satisfied` is
+    refused at write time with its reason, because the principal does not yet
+    carry that fact and a stored condition naming it could only ever be
+    indeterminate — which denies, leaving an operator with a permanent 403 and
+    nothing explaining it.
+  - Elevation expiry is evaluated at **use**, not by a sweep. A background job
+    is a job that can be down, and a grant outliving its window because a
+    worker crashed is the failure mode JIT elevation exists to remove. An
+    approver must already hold every permission the grant confers
+    (`authorize_permission_grant`, the same function that guards role
+    assignment and key scopes) and cannot approve their own request.
+  - Workload identities replace the three things one shared token cannot do:
+    attribute an action to a named service, scope the ingest pipeline
+    differently from the agents worker, and rotate without restarting
+    everything at once. A superseded secret works inside its grace window and
+    is refused outside it — and a row with no window is treated as expired,
+    because "not set" must not be the most permissive state of a credential.
+  - Routes: `/elevation/*`, `/access-conditions/*`, `/workload-identities/*`,
+    nine of them state-changing and all nine authorizing
+    (`check_route_authz.py` 243 → 252 authorizing, identity-only unchanged at
+    21). Seven permissions seeded by migration `096`; operator documentation
+    at `docs/security/access-governance.md`. (#PR)
+
+### Fixed
+
+- **A permission the module declared but no migration seeded could not be
+  granted from the console.** `test_rbac_catalog_seed.py` pinned the
+  vocabulary against `092_rbac_catalog_seed.sql` alone, which has already run
+  on every deployment — so the only correct way to add a permission, a new
+  migration, failed the test, and the tempting fix (editing an applied
+  migration) seeds the row on fresh installs and on nobody else. The pin now
+  reads every migration that seeds the catalog, derived from the tree. Doing
+  so immediately surfaced `playbooks:delete`, seeded by `003_rbac.sql` before
+  `rbac_catalog.py` existed and enforced by no route in the tree: recorded in
+  the test with its reason rather than adopted, because absorbing it would
+  make the catalog claim a permission the product does not enforce. (#PR)
+
 ## [17.1.0] - 2026-10-07
 
 ### Security
