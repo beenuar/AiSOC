@@ -67,17 +67,32 @@ test('rejects an empty / malformed token', () => {
 
 test('rejects a tampered signature', () => {
   const token = mintTicket(validClaims());
-  // Flip the last character to a *different* one, rather than overwriting
-  // the last two with a fixed 'xx'. The fixed form is a no-op whenever the
-  // signature already ends in 'xx', which base64url does about once in
-  // 4,096 runs: the test then verifies an untampered token, and the
-  // assertion fails for a reason that has nothing to do with the verifier.
-  // Seen in CI. A tamper that is guaranteed to change the bytes cannot
-  // pass vacuously or fail flakily.
-  const last = token.slice(-1);
-  const tampered = `${token.slice(0, -1)}${last === 'A' ? 'B' : 'A'}`;
-  assert.notEqual(tampered, token);
-  assert.equal(verifyRealtimeTicket(tampered, SECRET), null);
+  // Tamper the FIRST character of the signature, not the last.
+  //
+  // Two earlier forms were both no-ops, for the same underlying reason:
+  // the end of a base64url signature does not carry the bits you would
+  // assume. HMAC-SHA256 is 32 bytes, which encodes to 43 characters
+  // carrying 258 bits, so the final character's low four bits are padding
+  // and decode to nothing.
+  //
+  //   - overwriting the last two characters with a fixed 'xx' left the
+  //     token unchanged whenever the signature already ended in 'xx',
+  //     about 1 run in 4,096;
+  //   - flipping the last character to a different one changed only those
+  //     padding bits, so the decoded signature was *identical* every time
+  //     and the test failed deterministically.
+  //
+  // The first character's six bits are all significant, so this changes
+  // the signature bytes for certain. The decode assertion below is what
+  // makes that a checked property rather than a claim.
+  const [header, payload, signature] = token.split('.');
+  const flipped = (signature[0] === 'A' ? 'B' : 'A') + signature.slice(1);
+  assert.notEqual(
+    Buffer.from(flipped, 'base64url').toString('hex'),
+    Buffer.from(signature, 'base64url').toString('hex'),
+    'the tamper must change the decoded signature, not just the text',
+  );
+  assert.equal(verifyRealtimeTicket(`${header}.${payload}.${flipped}`, SECRET), null);
 });
 
 test('rejects a token signed with a different secret', () => {
