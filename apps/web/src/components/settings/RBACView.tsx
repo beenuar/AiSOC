@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import useSWR, { mutate } from 'swr';
+import useSWR from 'swr';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { demoFallback } from '@/lib/demoFallback';
 import { FailureBanner } from '@/components/ui/FailureBanner';

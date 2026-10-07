@@ -171,6 +171,12 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "_authorized",
         "internal call authenticated by a shared X-AiSOC-Internal-Token compared in constant time, failing closed when unset",
     ),
+    "services/teams-bot/app/notify.py::post_approval_card": (
+        "_authorized",
+        "internal call authenticated by a shared X-AiSOC-Internal-Token compared in constant time, failing closed when unset — the "
+        "same arrangement as the Slack bot's notify route beside it, and for the same reason: the caller is an AiSOC service, not "
+        "Teams, so there is no Bot Framework signature to verify",
+    ),
     "services/teams-bot/app/main.py::teams_webhook": (
         "handle_card_action",
         "the Bot Framework JWT is terminated by the fronting proxy and the card payload carries our own HMAC, verified with a replay "
