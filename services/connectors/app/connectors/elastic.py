@@ -202,6 +202,28 @@ class ElasticConnector(BaseConnector):
             "title": raw.get("kibana.alert.rule.name") or raw.get("rule.name") or "Elastic Alert",
             "description": raw.get("kibana.alert.reason") or raw.get("message", ""),
             "severity": severity_map.get(severity, "medium"),
+            "hostname": _ecs(raw, "host.name"),
+            "username": _ecs(raw, "user.name"),
             "raw_event": raw,
             "created_at": raw.get("@timestamp"),
         }
+
+
+def _ecs(raw: dict[str, Any], path: str) -> Any:
+    """Read an ECS field that may be a dotted key or a nested object.
+
+    A detection alert stores its ``kibana.alert.*`` fields as literal dotted
+    keys while the ECS fields copied from the source document keep the nested
+    shape they had there; an ES|QL response names every column with the dotted
+    path. Both forms reach this method depending on which read produced the
+    row, so both are accepted rather than picking one and silently returning
+    nothing for the other.
+    """
+    if raw.get(path) not in (None, ""):
+        return raw[path]
+    node: Any = raw
+    for part in path.split("."):
+        if not isinstance(node, dict):
+            return None
+        node = node.get(part)
+    return node if node not in (None, "") else None

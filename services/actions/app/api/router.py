@@ -66,7 +66,7 @@ async def submit_action(request: ActionRequest, _auth: None = Depends(require_se
     # tenant's autonomy tier. The matrix that implements this was written,
     # tested, and called by nothing — so the gate the docs described was not
     # the gate that ran. It can only raise a requirement, never lower one.
-    status, reason = await apply_matrix(request, status, blast_radius, reason)
+    status, reason, approval_tier = await apply_matrix(request, status, blast_radius, reason)
 
     record = {
         "id": str(request.id),
@@ -75,6 +75,11 @@ async def submit_action(request: ActionRequest, _auth: None = Depends(require_se
         "status": status,
         "blast_radius": blast_radius,
         "gate_reason": reason,
+        # The tier both gates composed to. Persisted because it is the only
+        # record of whether this ran unattended: `status` moves on as the
+        # action executes, so a completed row cannot say afterwards whether
+        # a human had to approve it.
+        "approval_tier": approval_tier,
         "incident_id": str(request.incident_id),
         "tenant_id": str(request.tenant_id),
         "rationale": request.rationale,

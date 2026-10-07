@@ -90,7 +90,7 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 - [x] **3.2** No side effects from a replay
 - [ ] **3.3** Input shapes: per-source adapters for Elastic and Defender
 - [x] **3.4** Model attribution: `model_used` is set from the call that answered
-- [ ] **3.5** Non-degenerate acceptance for the reproducibility test
+- [x] **3.5** Non-degenerate acceptance for the reproducibility test
 - [x] **3.6** Tool calls recorded from the ledger, not hard-coded to 0
 - [ ] **3.7** Demotion without a page load
 - [ ] **3.8** Skills: activation evidence, LLM-path-only disclosure, console retraction
@@ -101,7 +101,8 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 4: Enterprise identity, white-label and metering
 
-- [ ] **4.1** SSO completes in the console
+- [~] **4.1** SSO completes in the console
+  - Two of the three defects did **not** reproduce: the console fragment consumer (`authApi.completeSsoHandoff`) and the login-screen SSO entry both landed in v17.1.0. Neither was covered by a test, so six now pin them. The third reproduced exactly as written — `_saml_settings()` read its IdP trust anchor from `SAML_IDP_*` while the connection's own `metadata_url` / `metadata_xml` were read by nothing, so a SAML login redirected to the environment's IdP and a correctly signed assertion came back `invalid_response`. Fixed in `app/auth/saml_metadata.py`; the ACS also now lands on `/login?next=` with both tokens, because the old RelayState redirect lost the fragment to the console's own auth guard. Driven end to end against real Postgres and a real signed assertion in `sso-live.yml`. **Still `[~]`**: the containerised-IdP leg (`sso-live.yml :: keycloak-oidc`) has never been observed to pass — no container runtime would start where it was written — so the claim row is PARTIAL, not GATED.
 - [ ] **4.2** Console MFA
 - [ ] **4.3** White-label reaches every surface it claims
 - [ ] **4.4** Metering counts what happened
@@ -538,11 +539,11 @@ left implied.
 
 ## Wave 3 (partial): what is done and what is not
 
-**Done, each with a reproduction and a negative control:** 3.2, 3.4, 3.6,
+**Done, each with a reproduction and a negative control:** 3.2, 3.4, 3.5, 3.6,
 3.10, 3.11, 3.12, and the actionable half of 3.9.
 
 **Not started:** 3.1 (frozen context), 3.3 (per-source input adapters),
-3.5 (non-degenerate acceptance), 3.7 (demotion without a page load),
+3.7 (demotion without a page load),
 3.8 (skills activation evidence and the console retraction).
 
 ### 3.2 A replay has no side effects
@@ -570,6 +571,34 @@ See the commit; each is a figure that was structurally unable to be right.
 default was the only branch that ever ran. `tool_calls` was a literal under a
 comment promising it would move. `_classify_pivots` counted a raised call as a
 pivot, so four timeouts looked like four pivots.
+
+### 3.5 Non-degenerate acceptance
+
+Measured before touching anything: all six decisions in the test window came
+back `benign` at `0.10` on tier `deterministic`, so Phase 1's acceptance bar
+was one constant list compared against itself.
+
+The replacement drives the same runner with a recording of
+`llama3.2:3b-instruct-q4_K_M` -- the model the air-gap compose file bundles --
+answering the production triage prompt, served to the real gateway client over
+a loopback socket rather than through a patched transport. Recorded replies
+give the two properties a live model and a constant each give only one of:
+they vary, and they repeat.
+
+Proven non-vacuous rather than asserted to be. Flattening the recording to a
+single verdict leaves the old bar passing (`first == second`) and makes the
+new one fail, and `test_the_acceptance_bar_rejects_a_constant_verdict_stream`
+keeps that proof in the suite.
+
+Two things the recording exposed that a constant could not. The LLM path
+writes the call's elapsed time into a finding string, so `latency_ms` was not
+the only wall clock in a decision and the run was not reproducible until that
+was excluded too. And one of the six real replies is malformed -- the model
+truncated mid-rationale -- which the committed fixture keeps as it arrived,
+because a recording edited until it parses is no longer a recording.
+
+The alerts are synthetic and the fixture's own `provenance` block says so;
+only the replies are real.
 
 ### 3.9 is half done, and the half that is left is M2
 
