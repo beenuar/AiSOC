@@ -214,19 +214,22 @@ def audit(root: Path) -> tuple[list[str], dict[str, int]]:
             if word in haystack:
                 problems.append(f"meter {key!r} mentions {word!r}; 13.3 is metering, and pricing belongs elsewhere")
 
-    unmeasured = _module_constant(metering_tree, "UNMEASURED")
+    # The meters a deployment may be unable to take. `events_ingested` is a
+    # ClickHouse count, so it is a meter on the `full` profile and a named
+    # gap without it — never a zero either way.
+    unmeasured = _module_constant(metering_tree, "UNMEASURABLE_WITHOUT")
     if isinstance(unmeasured, dict):
         declared = {m.get("key") for m in meters}
         for key, reason in unmeasured.items():
             if key in declared:
                 problems.append(
-                    f"{key!r} is declared both as a meter and as unmeasured. One of the two will report a number, "
-                    "and a reader cannot tell which."
+                    f"{key!r} is declared both as a Postgres meter and as possibly unmeasured. One of the two will "
+                    "report a number from the wrong store, and a reader cannot tell which."
                 )
             if not reason:
                 problems.append(f"{key!r} is unmeasured with no reason, so a reader cannot tell a gap from a zero")
     else:
-        problems.append("UNMEASURED is no longer a literal this gate can read")
+        problems.append("UNMEASURABLE_WITHOUT is no longer a literal this gate can read")
 
     return problems, counts
 

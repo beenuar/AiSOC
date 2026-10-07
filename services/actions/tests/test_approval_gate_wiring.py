@@ -36,7 +36,8 @@ def _request(action_type: ActionType, confidence: float | None = None) -> Action
 
 async def _gated(request: ActionRequest) -> tuple[ActionStatus, str]:
     status, blast_radius, reason = BlastRadiusGate().evaluate(request)
-    return await apply_matrix(request, status, blast_radius, reason)
+    gated_status, gated_reason, _tier = await apply_matrix(request, status, blast_radius, reason)
+    return gated_status, gated_reason
 
 
 class TestTheMatrixActuallyRuns:
@@ -191,8 +192,9 @@ class TestTheAliasedVerbIsGatedToo:
         """
         request = _request(ActionType.NOTIFY_SLACK, confidence=0.1)
         before, br, before_reason = BlastRadiusGate().evaluate(request)
-        after, reason = await apply_matrix(request, before, br, before_reason)
+        after, reason, tier = await apply_matrix(request, before, br, before_reason)
 
+        assert tier == "analyst", "an action routed to the queue must not be recorded as automatic"
         assert before == ActionStatus.APPROVED
         assert after == ActionStatus.AWAITING_APPROVAL
         assert reason != before_reason
@@ -204,7 +206,12 @@ class TestTheAliasedVerbIsGatedToo:
         it. A LOW-impact contract must not talk a blocked action into running.
         """
         request = _request(ActionType.NOTIFY_SLACK, confidence=1.0)
-        after, _ = await apply_matrix(request, ActionStatus.AWAITING_APPROVAL, BlastRadius.MINIMAL, "held by policy")
+        after, _, tier = await apply_matrix(request, ActionStatus.AWAITING_APPROVAL, BlastRadius.MINIMAL, "held by policy")
+
+        # The matrix is content at full confidence; blast radius is not. The
+        # recorded tier has to follow the stricter of the two or the meter
+        # reports a queued action as unattended.
+        assert tier == "analyst"
 
         assert after == ActionStatus.AWAITING_APPROVAL
 
@@ -224,10 +231,13 @@ class TestVerbsWithNoContract:
 
         request = _request(ActionType.NOTIFY_SLACK, confidence=0.1)
         before, br, before_reason = BlastRadiusGate().evaluate(request)
-        after, reason = await apply_matrix(request, before, br, before_reason)
+        after, reason, tier = await apply_matrix(request, before, br, before_reason)
 
         assert after == before
         assert reason == before_reason
+        # No contract means no graded requirement, so the status is all the
+        # tier can be derived from.
+        assert tier == ("analyst" if after == ActionStatus.AWAITING_APPROVAL else "automatic")
 
     def test_no_action_type_is_left_unmapped(self):
         """The property the contract gate enforces, asserted here too so it

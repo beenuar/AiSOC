@@ -110,6 +110,12 @@ class SentinelClient:
         The OData filter bounds the window server-side. ``Status eq 'Closed'``
         is the only status that carries a classification, so an open incident
         cannot enter the corpus.
+
+        Each incident is then given its ``entities``. An incident's
+        ``properties`` carry a title, a severity and a classification and
+        **no account and no host** — those live behind the incident's own
+        entities endpoint — so without this second call every replayed
+        Sentinel incident reached triage describing nobody.
         """
         results: list[dict[str, Any]] = []
         url: str | None = self._incidents_url()
@@ -134,7 +140,45 @@ class SentinelClient:
                 # would duplicate $filter and ARM rejects the request.
                 url = body.get("nextLink")
                 params = None
-        return results[:limit]
+            incidents = results[:limit]
+            for incident in incidents:
+                entities = await self._incident_entities(client, token, str(incident.get("name") or ""))
+                if entities:
+                    incident["entities"] = entities
+            return incidents
+
+    async def _incident_entities(
+        self,
+        client: httpx.AsyncClient,
+        token: str,
+        incident_id: str,
+    ) -> list[dict[str, Any]]:
+        """The accounts, hosts and addresses ARM associates with one incident.
+
+        One request per incident, which is what the API offers: entities are a
+        sub-resource and there is no expansion on the list call. A history read
+        is a once-per-evaluation-window job rather than a hot path, so the cost
+        is paid there instead of leaving the corpus without entities.
+
+        Never raises. An incident whose entities cannot be read still carries
+        its analyst's classification, which is the label the evaluation is
+        graded against; dropping the whole window over a missing host would
+        trade the measurement for one of its columns.
+        """
+        if not incident_id:
+            return []
+        try:
+            response = await client.post(
+                f"{self._incident_url(incident_id)}/entities",
+                headers={"Authorization": f"Bearer {token}"},
+                params={"api-version": API_VERSION},
+            )
+            response.raise_for_status()
+            body = response.json() if response.content else {}
+        except Exception as exc:  # noqa: BLE001, a missing entity list degrades to no host and no user
+            logger.warning("sentinel.incident_entities_unavailable", incident_id=incident_id, error=str(exc))
+            return []
+        return [entity for entity in body.get("entities") or [] if isinstance(entity, dict)]
 
     async def get_incident(self, incident_id: str) -> dict[str, Any]:
         """Read one incident. Used as the writeback verification probe."""

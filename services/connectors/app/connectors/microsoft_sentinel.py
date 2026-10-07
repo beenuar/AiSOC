@@ -162,8 +162,35 @@ class MicrosoftSentinelConnector(BaseConnector):
             "description": props.get("description", ""),
             "severity": severity_map.get(props.get("severity", "Medium"), "medium"),
             "status": props.get("status"),
+            "hostname": _entity(raw, "Host", "hostName"),
+            "username": _entity(raw, "Account", "accountName"),
             "tactics": props.get("additionalData", {}).get("tactics", []),
             "alert_count": props.get("additionalData", {}).get("alertsCount", 0),
             "raw_event": props,
             "created_at": props.get("createdTimeUtc"),
         }
+
+
+def _entity(raw: dict[str, Any], kind: str, field: str) -> Any:
+    """The first entity of one kind, read off a row that may not carry any.
+
+    ``entities`` is **not** a property of the ARM incident resource: an
+    incident carries a title, a severity and a classification, and its
+    accounts and hosts live behind the incident's own entities endpoint. So
+    this is conditional by construction — a plain incident read has none, and
+    a reader that resolved them attaches them here.
+
+    ``friendlyName`` is the fallback because it is the only name some entity
+    kinds record, and an incident with one unnamed host is more useful to an
+    analyst than an incident with no host at all. The first entity of a kind
+    is taken because an incident can span several and the rest stay in
+    ``raw_event``.
+    """
+    for entity in raw.get("entities") or []:
+        if not isinstance(entity, dict) or entity.get("kind") != kind:
+            continue
+        props = entity.get("properties") or {}
+        value = props.get(field) or props.get("friendlyName")
+        if value:
+            return value
+    return None
