@@ -424,6 +424,24 @@ export interface LoginResult extends TokenResponse {
   user: AuthUser;
 }
 
+/**
+ * What `POST /auth/login` answers when the password was right and a second
+ * factor is outstanding (HTTP 202). Two distinct cases, and conflating them
+ * sends the user to the wrong screen: `mfa_required` means "type a code",
+ * `mfa_enrollment_required` means "your tenant now requires a factor you
+ * have never set up".
+ */
+export interface MfaChallenge {
+  mfa_token: string;
+  mfa_required?: boolean;
+  mfa_enrollment_required?: boolean;
+  methods?: string[];
+}
+
+export function isMfaChallenge(result: LoginResult | MfaChallenge): result is MfaChallenge {
+  return 'mfa_token' in result && !('user' in result);
+}
+
 function persistAuth(tokens: TokenResponse, user: AuthUser): void {
   if (typeof window === 'undefined') return;
   try {
@@ -462,11 +480,22 @@ export const authApi = {
    * helper attaches the JWT automatically and a single login covers desktop
    * + mobile.
    */
-  async login(email: string, password: string): Promise<LoginResult> {
-    const tokens = await request<TokenResponse>('/api/v1/auth/login', {
+  async login(email: string, password: string): Promise<LoginResult | MfaChallenge> {
+    const tokens = await request<TokenResponse & Partial<MfaChallenge>>('/api/v1/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
+    // HTTP 202: the password was accepted and no session was issued. The
+    // caller has to run the second factor; storing anything here would
+    // persist a token that does not exist.
+    if (!tokens.access_token && tokens.mfa_token) {
+      return {
+        mfa_token: tokens.mfa_token,
+        mfa_required: tokens.mfa_required,
+        mfa_enrollment_required: tokens.mfa_enrollment_required,
+        methods: tokens.methods,
+      };
+    }
     // Stash the access token now so the `me` request flows through the
     // standard `Authorization: Bearer …` path in `request()`.
     if (typeof window !== 'undefined') {
@@ -560,6 +589,53 @@ export const authApi = {
     }
   },
 
+  /**
+   * Finish a sign-in that `POST /auth/login` answered with 202.
+   *
+   * Takes a TOTP code or a recovery code — the API decides which by trying
+   * the authenticator first, so the user types whichever they have without
+   * telling the console which it is.
+   */
+  async completeMfa(mfaToken: string, code: string): Promise<LoginResult> {
+    const tokens = await request<TokenResponse>('/api/v1/auth/mfa/verify', {
+      method: 'POST',
+      body: JSON.stringify({ mfa_token: mfaToken, code }),
+    });
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(AUTH_TOKEN_KEY, tokens.access_token);
+      } catch {
+        /* ignore */
+      }
+    }
+    const user = await request<AuthUser>('/api/v1/auth/me');
+    persistAuth(tokens, user);
+    return { ...tokens, user };
+  },
+
+  /**
+   * Adopt a session handed back by a non-login endpoint.
+   *
+   * `POST /auth/mfa/enroll/confirm` returns a token pair when the
+   * enrolment completed from a sign-in challenge, so the user is not made
+   * to authenticate a second time with a code they just proved.
+   */
+  async adoptSession(accessToken: string, refreshToken: string): Promise<AuthUser> {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(AUTH_TOKEN_KEY, accessToken);
+      } catch {
+        /* ignore */
+      }
+    }
+    const user = await request<AuthUser>('/api/v1/auth/me');
+    persistAuth(
+      { access_token: accessToken, refresh_token: refreshToken, token_type: 'bearer', expires_in: 0 },
+      user,
+    );
+    return user;
+  },
+
   /** Merge user preferences on the server (theme, layout, etc.). */
   async updateUserPreferences(preferences: Record<string, unknown>): Promise<AuthUser> {
     const response = await fetch(`${API_BASE}/api/v1/auth/me/preferences`, {
@@ -575,6 +651,67 @@ export const authApi = {
     } catch { /* ignore */ }
     return user;
   },
+};
+
+// ─── Multi-factor authentication ─────────────────────────────────────────────
+//
+// Every call takes an optional `mfaToken`. It is how a user whose tenant
+// has just started requiring a second factor enrols: they hold a correct
+// password and no session, so there is no bearer credential to send and
+// the challenge stands in for one. With a session, omit it.
+
+export interface MfaStatus {
+  enrolled: boolean;
+  tenant_requires_totp: boolean;
+  recovery_codes_remaining: number;
+}
+
+export interface MfaEnrollment {
+  secret: string;
+  otpauth_uri: string;
+}
+
+export interface MfaConfirmed {
+  recovery_codes: string[];
+  access_token?: string | null;
+  refresh_token?: string | null;
+}
+
+export const mfaApi = {
+  status: (): Promise<MfaStatus> => request('/api/v1/auth/mfa/status'),
+
+  enrollBegin: (mfaToken?: string): Promise<MfaEnrollment> =>
+    request('/api/v1/auth/mfa/enroll/begin', {
+      method: 'POST',
+      body: JSON.stringify(mfaToken ? { mfa_token: mfaToken } : {}),
+    }),
+
+  enrollConfirm: (code: string, mfaToken?: string): Promise<MfaConfirmed> =>
+    request('/api/v1/auth/mfa/enroll/confirm', {
+      method: 'POST',
+      body: JSON.stringify(mfaToken ? { code, mfa_token: mfaToken } : { code }),
+    }),
+
+  /** Remove your own factor. The API requires a current code, so a stolen
+   *  session cannot strip the thing protecting it. */
+  disable: (code: string): Promise<void> =>
+    request('/api/v1/auth/mfa', { method: 'DELETE', body: JSON.stringify({ code }) }),
+
+  /** Administrative reset for a colleague who lost their phone. Audited
+   *  with the reason, which is why the reason is required here too. */
+  reset: (userId: string, reason: string): Promise<{ status: string }> =>
+    request(`/api/v1/auth/mfa/reset/${encodeURIComponent(userId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+
+  policy: (): Promise<{ require_totp: boolean }> => request('/api/v1/auth/mfa/policy'),
+
+  setPolicy: (requireTotp: boolean): Promise<{ require_totp: boolean }> =>
+    request('/api/v1/auth/mfa/policy', {
+      method: 'PUT',
+      body: JSON.stringify({ require_totp: requireTotp }),
+    }),
 };
 
 // ─── Tenants & MSSP ─────────────────────────────────────────────────────────

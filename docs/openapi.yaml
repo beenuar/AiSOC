@@ -25,6 +25,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenResponse'
+        '202':
+          description: The password was accepted and a second factor is outstanding.
+            The body carries `mfa_token` plus either `mfa_required` (complete it at
+            `POST /auth/mfa/verify`) or `mfa_enrollment_required` (the tenant requires
+            a factor this account has not enrolled; enrol at `POST /auth/mfa/enroll/begin`).
+            No session is issued.
+          content:
+            application/json:
+              example:
+                mfa_required: true
+                mfa_token: eyJ…
+                methods:
+                - totp
+                - recovery_code
         '422':
           description: Validation Error
           content:
@@ -10213,6 +10227,245 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/mfa/status:
+    get:
+      tags:
+      - auth
+      - mfa
+      summary: Mfa Status
+      description: Whether this user holds a second factor, and whether they must.
+      operationId: mfa_status_api_v1_auth_mfa_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaStatus'
+      security:
+      - HTTPBearer: []
+  /api/v1/auth/mfa/enroll/begin:
+    post:
+      tags:
+      - auth
+      - mfa
+      summary: Enroll Begin
+      description: 'Mint a secret and return it once, with the URI an app scans.
+
+
+        Re-enrolling replaces an *unconfirmed* row and refuses a confirmed one:
+
+        silently rotating a working factor would turn a mis-click into a
+
+        lockout, and `DELETE /auth/mfa` is the deliberate way to remove one.'
+      operationId: enroll_begin_api_v1_auth_mfa_enroll_begin_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollBegin'
+      security:
+      - HTTPBearer: []
+  /api/v1/auth/mfa/enroll/confirm:
+    post:
+      tags:
+      - auth
+      - mfa
+      summary: Enroll Confirm
+      description: 'Prove the secret arrived, then hand over the recovery codes.
+
+
+        Confirmation is what makes the row a credential. Without it, an
+
+        enrolment begun on a device that never received the QR code would lock
+
+        the user out at their next sign-in.'
+      operationId: enroll_confirm_api_v1_auth_mfa_enroll_confirm_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EnrollConfirmed'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/auth/mfa/verify:
+    post:
+      tags:
+      - auth
+      - mfa
+      summary: Verify
+      description: Complete a sign-in that `POST /auth/login` answered with 202.
+      operationId: verify_api_v1_auth_mfa_verify_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionTokens'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/mfa:
+    delete:
+      tags:
+      - auth
+      - mfa
+      summary: Disable
+      description: 'Remove your own second factor, proving you still hold it.
+
+
+        A current code is required. Without it, a stolen session could strip
+
+        the factor it was supposed to be protected by, which makes the factor
+
+        worth exactly as much as the session.'
+      operationId: disable_api_v1_auth_mfa_delete
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DisableRequest'
+        required: true
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/auth/mfa/reset/{user_id}:
+    post:
+      tags:
+      - auth
+      - mfa
+      summary: Reset
+      description: "Remove somebody else's second factor. The lost-phone path.\n\n\
+        Three constraints, each of which is the reason an administrative reset\nis\
+        \ normally the weakest link in an MFA deployment:\n\n* the target must be\
+        \ in the caller's own tenant, resolved from the\n  authenticated principal\
+        \ and never from the request;\n* a `reason` is required and lands in the audit\
+        \ row, because \"an admin\n  reset it\" without one is not an answer to \"\
+        who removed this and why\";\n* an administrator may not reset **their own**\
+        \ factor here. That would\n  be a self-disable with no code, bypassing `DELETE\
+        \ /auth/mfa`."
+      operationId: reset_api_v1_auth_mfa_reset__user_id__post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: User Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+                title: Response Reset Api V1 Auth Mfa Reset  User Id  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/auth/mfa/policy:
+    get:
+      tags:
+      - auth
+      - mfa
+      summary: Get Policy
+      description: 'Readable by any member: a user is entitled to know what their
+        own
+
+        tenant requires of them.'
+      operationId: get_policy_api_v1_auth_mfa_policy_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaPolicy'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - auth
+      - mfa
+      summary: Put Policy
+      description: 'Require, or stop requiring, a second factor across this tenant.
+
+
+        The tenant is the caller''s, never a parameter. A row is written only
+
+        when an administrator asks for one, so a tenant that has never visited
+
+        this endpoint has no row and is not enforced.'
+      operationId: put_policy_api_v1_auth_mfa_policy_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaPolicy'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaPolicy'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/passkeys/register/begin:
     post:
       tags:
@@ -21660,6 +21913,22 @@ components:
       - medianConfidence
       - lowConfidence
       title: ConfidenceSummary
+    ConfirmRequest:
+      properties:
+        mfa_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Mfa Token
+        code:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Code
+      type: object
+      required:
+      - code
+      title: ConfirmRequest
     ConnectorHealthOut:
       properties:
         total:
@@ -23371,6 +23640,17 @@ components:
       - created_at
       - updated_at
       title: DetectionRuleResponse
+    DisableRequest:
+      properties:
+        code:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Code
+      type: object
+      required:
+      - code
+      title: DisableRequest
     DiscoverResponse:
       properties:
         discovered:
@@ -23757,6 +24037,40 @@ components:
       required:
       - reason
       title: EngageRequest
+    EnrollBegin:
+      properties:
+        secret:
+          type: string
+          title: Secret
+        otpauth_uri:
+          type: string
+          title: Otpauth Uri
+      type: object
+      required:
+      - secret
+      - otpauth_uri
+      title: EnrollBegin
+    EnrollConfirmed:
+      properties:
+        recovery_codes:
+          items:
+            type: string
+          type: array
+          title: Recovery Codes
+        access_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Access Token
+        refresh_token:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Refresh Token
+      type: object
+      required:
+      - recovery_codes
+      title: EnrollConfirmed
     EntityNeighborsResponse:
       properties:
         entity_id:
@@ -27669,6 +27983,32 @@ components:
       - connector_count
       - health_score
       title: MetricsOut
+    MfaPolicy:
+      properties:
+        require_totp:
+          type: boolean
+          title: Require Totp
+      type: object
+      required:
+      - require_totp
+      title: MfaPolicy
+    MfaStatus:
+      properties:
+        enrolled:
+          type: boolean
+          title: Enrolled
+        tenant_requires_totp:
+          type: boolean
+          title: Tenant Requires Totp
+        recovery_codes_remaining:
+          type: integer
+          title: Recovery Codes Remaining
+      type: object
+      required:
+      - enrolled
+      - tenant_requires_totp
+      - recovery_codes_remaining
+      title: MfaStatus
     MiniTimelineEvent:
       properties:
         id:
@@ -30855,6 +31195,17 @@ components:
       required:
       - name
       title: ReportDefinitionBody
+    ResetRequest:
+      properties:
+        reason:
+          type: string
+          maxLength: 500
+          minLength: 3
+          title: Reason
+      type: object
+      required:
+      - reason
+      title: ResetRequest
     RetentionOut:
       properties:
         raw_events_days:
@@ -32743,6 +33094,27 @@ components:
       - rotated_from_id
       - active
       title: ScimTokenOut
+    SessionTokens:
+      properties:
+        access_token:
+          type: string
+          title: Access Token
+        refresh_token:
+          type: string
+          title: Refresh Token
+        token_type:
+          type: string
+          title: Token Type
+          default: bearer
+        expires_in:
+          type: integer
+          title: Expires In
+          default: 1800
+      type: object
+      required:
+      - access_token
+      - refresh_token
+      title: SessionTokens
     SetupStep:
       properties:
         key:
@@ -35881,6 +36253,21 @@ components:
         pass-through would let a caller supply their own vendor credential and
 
         have the read run somewhere else entirely.'
+    VerifyRequest:
+      properties:
+        mfa_token:
+          type: string
+          title: Mfa Token
+        code:
+          type: string
+          maxLength: 64
+          minLength: 1
+          title: Code
+      type: object
+      required:
+      - mfa_token
+      - code
+      title: VerifyRequest
     VulnerabilityCreate:
       properties:
         asset_id:

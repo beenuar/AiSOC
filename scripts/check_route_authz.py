@@ -105,6 +105,18 @@ AUTHZ_CALLS = frozenset(
         # to satisfy a gate, which is how gates start being gamed.
         "_admin_scope",
         "_owner_scope",
+        # A possession proof. `require_current_factor` refuses unless the
+        # caller can still produce the account's second factor, which is an
+        # authorization decision by any definition and a stronger one than a
+        # role permission — it asks what the principal holds, not what their
+        # role says.
+        #
+        # Added for the same reason as the two above rather than worked
+        # around. The only route it guards is "remove my own second factor",
+        # and no permission can be held by exactly its owner: bolting an
+        # administrative one on would mean an analyst could not manage their
+        # own factor, which is a worse design adopted to satisfy a gate.
+        "require_current_factor",
     }
 )
 

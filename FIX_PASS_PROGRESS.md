@@ -102,7 +102,8 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 ## Wave 4: Enterprise identity, white-label and metering
 
 - [ ] **4.1** SSO completes in the console
-- [ ] **4.2** Console MFA
+- [x] **4.2** Console MFA
+  - Reproduced first: ten of eleven assertions against the real login route and real Postgres failed with `{"detail":"Not Found"}` — the surface did not exist. TOTP (RFC 6238, in-tree, pinned to the spec's own vectors rather than to a round trip), ten single-use recovery codes, a vault-encrypted secret, a `last_used_step` high-water mark so a code cannot be replayed inside its own 30-second window, per-tenant enforcement with **no backfill row** (absence means not required), and audited enrolment, disable, recovery-code use, policy change and administrative reset. A correct password for an enrolled account now answers **202** with a challenge instead of a session — 202 rather than a widened 200 body, because `access_token` is a required field and making it optional breaks every generated client. An unenrolled member of a newly-enforcing tenant enrols from that challenge rather than being locked out; the trade-off is stated in the module and the docs. Migration `096`. 28 offline tests, 13 live, and a CI negative control that deletes the challenge branch and requires the suite to go red.
 - [ ] **4.3** White-label reaches every surface it claims
 - [ ] **4.4** Metering counts what happened
 - [ ] **4.5** SCIM live coverage and the console token claim

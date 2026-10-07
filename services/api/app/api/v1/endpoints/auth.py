@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select, update
 
@@ -72,8 +73,22 @@ class PreferencesPatch(BaseModel):
 # docstring is published as the operation's `description` in
 # `docs/openapi.yaml`, and an API description should say what the endpoint
 # does, not what it used to do wrong.
-@router.post("/login", response_model=TokenResponse)
-async def login(request: LoginRequest, http_request: Request, db: DBSession) -> TokenResponse:
+@router.post(
+    "/login",
+    response_model=TokenResponse,
+    responses={
+        202: {
+            "description": (
+                "The password was accepted and a second factor is outstanding. The body carries "
+                "`mfa_token` plus either `mfa_required` (complete it at `POST /auth/mfa/verify`) or "
+                "`mfa_enrollment_required` (the tenant requires a factor this account has not enrolled; "
+                "enrol at `POST /auth/mfa/enroll/begin`). No session is issued."
+            ),
+            "content": {"application/json": {"example": {"mfa_required": True, "mfa_token": "eyJ…", "methods": ["totp", "recovery_code"]}}},
+        }
+    },
+)
+async def login(request: LoginRequest, http_request: Request, db: DBSession) -> TokenResponse | JSONResponse:
     """Authenticate with email/password, return JWT tokens."""
     throttle = get_login_throttle()
     source = client_ip(http_request)
@@ -119,6 +134,15 @@ async def login(request: LoginRequest, http_request: Request, db: DBSession) -> 
 
     await throttle.record_success(email=request.email, source_ip=source)
 
+    # Fix pass 4.2. The password is one factor, and for an enrolled user or
+    # an enforcing tenant it is no longer the whole answer. Answered as 202
+    # rather than by widening the 200 body: `access_token` and
+    # `refresh_token` are required fields of `TokenResponse`, and making
+    # either optional is a break for every generated client.
+    challenge = await mfa_challenge_for(db, user_id=user.id, tenant_id=user.tenant_id)
+    if challenge is not None:
+        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=challenge)
+
     # Update last login
     await db.execute(update(User).where(User.id == user.id).values(last_login=datetime.now(UTC)))
 
@@ -135,6 +159,34 @@ async def login(request: LoginRequest, http_request: Request, db: DBSession) -> 
         access_token=access_token,
         refresh_token=refresh_token,
     )
+
+
+async def mfa_challenge_for(db: Any, *, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[str, Any] | None:
+    """What this account still owes before a session is issued, or `None`.
+
+    Two cases and they are not the same thing. An enrolled user owes a
+    code. A user in an enforcing tenant who has never enrolled owes an
+    enrolment — refusing them instead would lock out every unenrolled user
+    the moment an administrator turns the policy on, which is the whole
+    tenant at once.
+
+    A failure to read either table is **not** treated as "no MFA". That
+    would fail open at the one place in the product where open is worst.
+    """
+    from app.api.v1.endpoints.mfa import has_confirmed_factor, mint_challenge, tenant_requires_totp
+
+    if await has_confirmed_factor(db, user_id):
+        return {
+            "mfa_required": True,
+            "mfa_token": mint_challenge(user_id=user_id, tenant_id=tenant_id, purpose="verify"),
+            "methods": ["totp", "recovery_code"],
+        }
+    if await tenant_requires_totp(db, tenant_id):
+        return {
+            "mfa_enrollment_required": True,
+            "mfa_token": mint_challenge(user_id=user_id, tenant_id=tenant_id, purpose="enroll"),
+        }
+    return None
 
 
 def settings_dict() -> dict[str, str]:

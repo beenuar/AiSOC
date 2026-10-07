@@ -188,6 +188,7 @@ const sidebars: SidebarsConfig = {
       items: [
         "operations/security",
         "operations/enterprise-sso",
+        "operations/console-mfa",
         "operations/data-governance",
         "compliance/evidence-pack",
         "compliance/fips-posture",

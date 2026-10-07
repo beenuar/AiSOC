@@ -28,7 +28,7 @@
 
 import { useEffect } from 'react';
 import { useSWRConfig } from 'swr';
-import { authApi } from '@/lib/api';
+import { authApi, isMfaChallenge } from '@/lib/api';
 import { isDemoMode } from '@/lib/demoMode';
 
 // No fallback literals. These are inlined by Next at build time wherever they
@@ -55,8 +55,12 @@ export function DemoAutoLogin() {
     let cancelled = false;
     (async () => {
       try {
-        await authApi.login(DEMO_EMAIL, DEMO_PASSWORD);
+        const result = await authApi.login(DEMO_EMAIL, DEMO_PASSWORD);
         if (cancelled) return;
+        // A demo tenant that requires a second factor cannot be
+        // auto-signed-in, and pretending otherwise would refetch every SWR
+        // key with no credential and render the page as if it were empty.
+        if (isMfaChallenge(result)) return;
         // Force every SWR key on the page to refetch with the new bearer
         // token. Passing `() => true` matches all keys; `undefined` data
         // tells SWR to drop its cache entry and rerun the fetcher.

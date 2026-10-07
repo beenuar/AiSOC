@@ -325,6 +325,11 @@ const navSections: NavSection[] = [
         icon: <ShieldIcon />,
       },
       {
+        label: 'Two-factor auth',
+        href: '/settings/mfa',
+        icon: <ShieldIcon />,
+      },
+      {
         label: 'Compliance',
         href: '/compliance',
         icon: <ShieldIcon />,

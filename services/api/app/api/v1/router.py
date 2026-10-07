@@ -57,6 +57,7 @@ from app.api.v1.endpoints import (
     marketplace,
     mcp_servers,
     metrics,
+    mfa,
     mssp,
     nl_detection,
     nl_query,
@@ -213,6 +214,7 @@ api_router.include_router(costs.router)
 api_router.include_router(push.router)
 api_router.include_router(oncall.router)
 api_router.include_router(approvals.router)
+api_router.include_router(mfa.router)
 api_router.include_router(passkeys.router)
 
 # The live-action registry, proxied for the browser. Upstream it sits behind

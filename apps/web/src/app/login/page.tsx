@@ -15,7 +15,15 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
-import { API_BASE, authApi, onboardingApi } from '@/lib/api';
+import {
+  API_BASE,
+  authApi,
+  isMfaChallenge,
+  mfaApi,
+  onboardingApi,
+  type MfaChallenge,
+  type MfaEnrollment,
+} from '@/lib/api';
 import { isDemoMode } from '@/lib/demoMode';
 
 type Phase = 'idle' | 'pending' | 'success' | 'error';
@@ -65,6 +73,10 @@ function LoginInner() {
   const [phase, setPhase] = useState<Phase>('idle');
   const [error, setError] = useState<string | null>(null);
   const [sso, setSso] = useState<{ sso_enabled: boolean; provider: string; login_label: string; local_login_enabled: boolean } | null>(null);
+  const [challenge, setChallenge] = useState<MfaChallenge | null>(null);
+  const [code, setCode] = useState('');
+  const [enrolment, setEnrolment] = useState<MfaEnrollment | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
 
   // An SSO round-trip lands here with the session in the fragment; consume
   // it before the stored-token redirect below can read a still-empty store.
@@ -126,7 +138,14 @@ async function landingRoute(requested: string): Promise<string> {
     setError(null);
 
     try {
-      await authApi.login(email.trim(), password);
+      const result = await authApi.login(email.trim(), password);
+      // The password was right and no session was issued: this account, or
+      // this tenant, requires a second factor.
+      if (isMfaChallenge(result)) {
+        setChallenge(result);
+        setPhase('idle');
+        return;
+      }
       setPhase('success');
       router.replace(await landingRoute(next));
     } catch (err) {
@@ -139,6 +158,53 @@ async function landingRoute(requested: string): Promise<string> {
       } else {
         setError(message);
       }
+    }
+  };
+
+  const beginEnrolment = async () => {
+    if (!challenge || phase === 'pending') return;
+    setPhase('pending');
+    setError(null);
+    try {
+      setEnrolment(await mfaApi.enrollBegin(challenge.mfa_token));
+      setPhase('idle');
+    } catch (err) {
+      setPhase('error');
+      setError(err instanceof Error ? err.message : 'Could not start enrolment.');
+    }
+  };
+
+  const submitCode = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!challenge || phase === 'pending') return;
+    setPhase('pending');
+    setError(null);
+    try {
+      // Enrolling and verifying are different endpoints. The first
+      // confirms a secret the user has just scanned and signs them in; the
+      // second completes a sign-in against a factor they already hold.
+      if (enrolment) {
+        const confirmed = await mfaApi.enrollConfirm(code.trim(), challenge.mfa_token);
+        setRecoveryCodes(confirmed.recovery_codes);
+        if (confirmed.access_token) {
+          await authApi.adoptSession(confirmed.access_token, confirmed.refresh_token ?? '');
+        }
+        setPhase('success');
+        return;
+      }
+      await authApi.completeMfa(challenge.mfa_token, code.trim());
+      setPhase('success');
+      router.replace(await landingRoute(next));
+    } catch (err) {
+      setPhase('error');
+      const message = err instanceof Error ? err.message : 'Verification failed.';
+      // A challenge is short-lived, and "that code is not valid" is the
+      // wrong thing to tell someone whose five minutes ran out.
+      setError(
+        /expired/i.test(message)
+          ? 'That sign-in attempt expired. Enter your password again.'
+          : 'That code is not valid. Check your authenticator, or use a recovery code.',
+      );
     }
   };
 
@@ -207,6 +273,134 @@ async function landingRoute(requested: string): Promise<string> {
           </div>
           )}
 
+          {/* Second factor. Replaces the password form rather than sitting
+              beside it: the password has already been accepted, and leaving
+              it on screen invites someone to retype it instead of reading
+              their authenticator. */}
+          {challenge ? (
+            <form onSubmit={submitCode} className="space-y-4" noValidate data-testid="mfa-challenge">
+              <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm text-zinc-300">
+                {challenge.mfa_enrollment_required
+                  ? 'Your organisation requires a second factor and this account has not set one up yet. Finish setting it up to sign in.'
+                  : 'Enter the 6-digit code from your authenticator app, or one of your recovery codes.'}
+              </div>
+
+              {/* Enrolment happens here rather than behind a link to
+                  /settings/mfa: this user has a correct password and no
+                  session, so every authenticated route would bounce them
+                  straight back to this page. */}
+              {challenge.mfa_enrollment_required && !enrolment ? (
+                <button
+                  type="button"
+                  onClick={beginEnrolment}
+                  disabled={phase === 'pending'}
+                  className="w-full inline-flex items-center justify-center rounded-xl bg-indigo-500 hover:bg-indigo-400 text-white font-medium py-3 px-4 transition disabled:bg-zinc-800 disabled:text-zinc-500"
+                >
+                  {phase === 'pending' ? 'Preparing…' : 'Set up two-factor authentication'}
+                </button>
+              ) : (
+                <>
+                  {enrolment ? (
+                    <div className="rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 space-y-2">
+                      <p className="text-xs text-zinc-400">
+                        Add this key to your authenticator app, then enter the code it shows.
+                      </p>
+                      <code className="block break-all rounded-lg bg-zinc-950 px-3 py-2 text-xs tracking-wider text-indigo-300">
+                        {enrolment.secret}
+                      </code>
+                      <a
+                        href={enrolment.otpauth_uri}
+                        className="inline-block text-xs text-indigo-400 hover:text-indigo-300 underline-offset-2 hover:underline"
+                      >
+                        Open in your authenticator app
+                      </a>
+                    </div>
+                  ) : null}
+
+                  {recoveryCodes ? (
+                    <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 space-y-2">
+                      <p className="text-xs font-medium text-amber-300">
+                        Save these recovery codes. They are shown once.
+                      </p>
+                      <ul className="grid grid-cols-2 gap-1 font-mono text-[11px] text-zinc-300">
+                        {recoveryCodes.map((rc) => (
+                          <li key={rc}>{rc}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ) : null}
+
+                  <label className="block">
+                    <span className="block text-xs uppercase tracking-wider text-zinc-500 mb-2">
+                      Verification code
+                    </span>
+                    <input
+                      type="text"
+                      // `one-time-code` is what lets a phone offer the code
+                      // from the notification shade; without it the user
+                      // switches apps and loses the page on iOS.
+                      autoComplete="one-time-code"
+                      inputMode="text"
+                      autoCapitalize="characters"
+                      spellCheck={false}
+                      autoFocus
+                      placeholder="123456"
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      disabled={phase === 'pending'}
+                      required
+                      className="w-full bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-sm tracking-[0.3em] text-zinc-100 placeholder:tracking-normal placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500/50 disabled:opacity-60"
+                    />
+                  </label>
+                  {/* Navigating automatically would take the recovery
+                      codes off the screen the moment they appeared, and
+                      they are shown exactly once. */}
+                  {recoveryCodes ? (
+                    <button
+                      type="button"
+                      onClick={async () => router.replace(await landingRoute(next))}
+                      className="w-full bg-indigo-500 hover:bg-indigo-400 text-white font-medium rounded-xl py-3 px-4 transition"
+                    >
+                      I have saved my recovery codes — continue
+                    </button>
+                  ) : (
+                    <button
+                      type="submit"
+                      disabled={phase === 'pending' || !code}
+                      className="w-full bg-indigo-500 hover:bg-indigo-400 active:bg-indigo-600 text-white font-medium rounded-xl py-3 px-4 transition disabled:bg-zinc-800 disabled:text-zinc-500"
+                    >
+                      {phase === 'pending' ? 'Verifying…' : enrolment ? 'Confirm' : 'Verify'}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {error ? (
+                <div
+                  role="alert"
+                  className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-xs text-red-300"
+                >
+                  {error}
+                </div>
+              ) : null}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setChallenge(null);
+                  setCode('');
+                  setError(null);
+                  setPassword('');
+                  setEnrolment(null);
+                  setRecoveryCodes(null);
+                }}
+                className="w-full text-xs text-zinc-500 hover:text-zinc-300 underline-offset-2 hover:underline"
+              >
+                Start over
+              </button>
+            </form>
+          ) : (
+          <>
           {/* Form */}
           {sso?.sso_enabled && (
             <div className="mb-4">
@@ -308,6 +502,8 @@ async function landingRoute(requested: string): Promise<string> {
               </div>
             ) : null}
           </form>
+          </>
+          )}
 
           {/* Footer hints */}
           <div className="mt-8 space-y-3 text-center">

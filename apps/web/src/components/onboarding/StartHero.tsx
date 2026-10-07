@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
-import { authApi } from '@/lib/api';
+import { authApi, isMfaChallenge } from '@/lib/api';
 import { demoDeeplink } from '@/lib/demoMode';
 import { CONNECTOR_COUNT } from '@/data/connectorCount';
 
@@ -55,7 +55,13 @@ export function StartHero() {
 
     try {
       if (!authApi.isAuthenticated()) {
-        await authApi.login(email, password);
+        const result = await authApi.login(email, password);
+        // The tenant requires a second factor, so there is no session to
+        // push into. `/login` is where the code is entered.
+        if (isMfaChallenge(result)) {
+          router.push(`/login?next=${encodeURIComponent(target)}`);
+          return;
+        }
       }
       router.push(target);
     } catch (err) {

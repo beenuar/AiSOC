@@ -1,0 +1,157 @@
+# A second factor on the console — through the real app and real Postgres.
+#
+# Why live and not offline
+# ------------------------
+# The property is "a correct password is not enough", and the only thing
+# that can demonstrate it is the real login route against the real user row
+# with the real password hash. A fake session answers whatever the handler
+# asks, so it would return a user with whatever MFA state the test wrote
+# into the double — which is the shape that has shipped defects here before.
+#
+# `ENVIRONMENT=test`, never `development`: `development` is in
+# `AUTH_BYPASS_ENVIRONMENTS`, so an uncredentialed request resolves to a
+# demo administrator, inside the one suite whose whole subject is what it
+# takes to become a principal.
+#
+# No `paths:` filter. The surface is authentication; a change anywhere in
+# `services/api` can reach it, and a filtered gate on a login path is a gate
+# that is absent exactly when something unexpected moved.
+name: Console MFA (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: mfa-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  mfa-live:
+    name: A password alone does not complete a console sign-in
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS
+      # policy even under FORCE ROW LEVEL SECURITY, and the challenge path
+      # writes `aisoc_user_mfa` on a session that binds its tenant from the
+      # user row rather than from a principal — running as the owner would
+      # pass for a reason no deployment enjoys.
+      MFA_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq && sudo apt-get install -y -qq libxmlsec1-dev pkg-config
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # RFC 6238's own vectors. They are what make the in-tree derivation an
+      # implementation of the standard rather than of itself — a round trip
+      # would agree with itself even if every authenticator app rejected the
+      # enrolment.
+      - name: The derivation matches RFC 6238
+        working-directory: services/api
+        run: python -m pytest tests/test_console_mfa.py -v --tb=short
+
+      - name: Enrolment, challenge, recovery, policy and reset
+        working-directory: services/api
+        env:
+          ISOLATION_MFA_DSN: ${{ env.MFA_DSN }}
+          DATABASE_URL: ${{ env.MFA_DSN }}
+        run: python -m pytest ../../tests/isolation/test_console_mfa_live.py -v --tb=short
+
+      # The negative control.
+      #
+      # Removing the branch that turns a correct password into a challenge
+      # must make the suite go red. Without it, "alice signed in with a
+      # code" would pass equally well against a login route that had never
+      # asked for one — it would simply hand out a session first.
+      #
+      # Measured on the fix commit: eight tests fail.
+      - name: The suite fails when a password alone issues a session again
+        working-directory: services/api
+        env:
+          ISOLATION_MFA_DSN: ${{ env.MFA_DSN }}
+          DATABASE_URL: ${{ env.MFA_DSN }}
+        run: |
+          cp app/api/v1/endpoints/auth.py /tmp/auth.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/auth.py")
+          s = p.read_text()
+          needle = (
+              "    challenge = await mfa_challenge_for(db, user_id=user.id, tenant_id=user.tenant_id)\n"
+              "    if challenge is not None:\n"
+              "        return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content=challenge)\n"
+          )
+          if needle not in s:
+              print("negative control could not find the login integration to remove; it has "
+                    "been reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_console_mfa_live.py -q >/dev/null 2>&1; then
+            cp /tmp/auth.bak app/api/v1/endpoints/auth.py
+            echo "FAIL: the suite passed with a password alone issuing a session."
+            exit 1
+          fi
+          cp /tmp/auth.bak app/api/v1/endpoints/auth.py
+          echo "OK: removing the challenge makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_console_mfa_live.py -q
+
+      # Both directions of the authorization accounting this item touches.
+      # `require_current_factor` is registered in `check_route_authz.py` as
+      # an authorizing call, which is a claim that needs its own gate run.
+      - name: Route authorization accounting
+        run: |
+          python3 scripts/check_route_auth.py --self-test
+          python3 scripts/check_route_auth.py
+          python3 scripts/check_route_authz.py --self-test
+          python3 scripts/check_route_authz.py

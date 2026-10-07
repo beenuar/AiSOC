@@ -181,6 +181,28 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "the query token is an HMAC-signed, expiring payload minted by the ChatOps executor and re-verified here before anything is "
         "recorded",
     ),
+    # -- the second factor, which is part of establishing a credential ------
+    #
+    # All three verify in band through `read_challenge`, which refuses a
+    # token that is not of type `mfa_challenge` — so an access token
+    # presented here is rejected rather than honoured, and a live session
+    # cannot mint another one with no code. `/enroll/*` additionally accept
+    # an ordinary bearer, through `get_current_user`; the anonymous arm is
+    # what lets a user whose tenant has just started requiring a factor
+    # enrol at all, since they hold a correct password and no session.
+    "services/api/app/api/v1/endpoints/mfa.py::verify": (
+        "read_challenge",
+        "completes the sign-in that POST /auth/login answered with 202; the challenge token it takes is the credential",
+    ),
+    "services/api/app/api/v1/endpoints/mfa.py::enroll_begin": (
+        "read_challenge",
+        "a session when one exists, otherwise the enrolment challenge from a 202 sign-in -- the path that stops a tenant "
+        "locking out every unenrolled member the moment it turns enforcement on",
+    ),
+    "services/api/app/api/v1/endpoints/mfa.py::enroll_confirm": (
+        "read_challenge",
+        "the other half of the same enrolment; it proves the secret arrived before the row becomes a credential",
+    ),
     "services/api/app/api/v1/endpoints/email_approval.py::email_decide": (
         "verify_token",
         "one-click email approval; the link carries a signed single-use token verified before the decision is applied",
