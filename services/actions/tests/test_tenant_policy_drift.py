@@ -55,7 +55,7 @@ class TestTheParametersMatchTheStatements:
 
     def test_the_trailing_slice_gets_its_limit(self) -> None:
         params = tuple(range(1, 20))
-        _statement, *bound = _bound(RECENT_COUNTS_SQL, params)
+        bound = _bound(RECENT_COUNTS_SQL, params)[1:]
 
         assert len(bound) == _placeholders(RECENT_COUNTS_SQL)
 
