@@ -364,12 +364,25 @@ def run_producer(
     run_id: str,
     summary_path: Path,
 ) -> ProducerSummary:
+    # Where `go run` is invoked from, which is not the repository root. The
+    # producer is its own module (`services/demo-producer/go.mod`) and there
+    # is no go.mod at the root, so `go run ./services/demo-producer` with
+    # cwd=root fails before it starts:
+    #
+    #     go: go.mod file not found in current directory or any parent
+    #     directory; see 'go help modules'
+    #
+    # The harness has therefore never produced a run from a clean checkout
+    # on the path it documents. A prebuilt `--producer-bin` still runs from
+    # the root, because it needs the module context of neither.
+    cwd = root
     if producer_bin:
         argv = [producer_bin]
     else:
         if not shutil.which("go"):
             raise RuntimeError("no --producer-bin given and `go` is not on PATH to build services/demo-producer")
-        argv = ["go", "run", "./services/demo-producer"]
+        argv = ["go", "run", "."]
+        cwd = root / "services" / "demo-producer"
     argv += [
         "--load",
         "--ingest-url",
@@ -391,7 +404,7 @@ def run_producer(
         "--summary",
         str(summary_path),
     ]
-    done = subprocess.run(argv, cwd=root, capture_output=True, text=True, check=False)  # noqa: S603
+    done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)  # noqa: S603
     if done.returncode != 0:
         raise RuntimeError(f"producer failed ({done.returncode}): {(done.stderr or done.stdout).strip()[-600:]}")
     return ProducerSummary(json.loads(summary_path.read_text(encoding="utf-8")))
