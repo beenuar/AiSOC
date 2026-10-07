@@ -453,6 +453,10 @@ services:
     depends_on:
       preflight-secrets:
         condition: service_completed_successfully
+    # Same treatment as its sibling: the base file publishes a port for
+    # local work, and in production only the console and ingest are
+    # reachable from the host. `!reset` rather than an empty list, because
+    # a plain override appends.
     ports: !reset []
 
   tempo:
