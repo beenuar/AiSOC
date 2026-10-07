@@ -59,7 +59,7 @@ from dataclasses import dataclass
 from .behavioural_corpus import _CLEAN
 from .behavioural_runner import BehaviouralCase
 
-__all__ = ["HELDOUT_CASES", "HELDOUT_SEAMS", "HeldOutCase"]
+__all__ = ["HELDOUT", "HELDOUT_CASES", "HELDOUT_SEAMS", "HeldOutCase"]
 
 
 @dataclass(frozen=True)
@@ -116,7 +116,10 @@ HELDOUT_SEAMS: tuple[str, ...] = (
 )
 
 
-_HELDOUT: tuple[HeldOutCase, ...] = (
+#: Every held-out payload, with the seam it targets and what a miss costs.
+#: ``HELDOUT_CASES`` below is the bare pair list the runner takes; this is the
+#: one the report groups by, because a rate without its seam is not actionable.
+HELDOUT: tuple[HeldOutCase, ...] = (
     # ── The callee is a noun phrase, so the verb test does not reach it ──────
     _held(
         "noun_callee",
@@ -236,7 +239,4 @@ _HELDOUT: tuple[HeldOutCase, ...] = (
     ),
 )
 
-HELDOUT_CASES: list[BehaviouralCase] = [h.case for h in _HELDOUT]
-
-#: Exposed for the report, which groups by seam rather than by payload.
-HELDOUT: tuple[HeldOutCase, ...] = _HELDOUT
+HELDOUT_CASES: list[BehaviouralCase] = [h.case for h in HELDOUT]
