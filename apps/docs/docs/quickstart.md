@@ -237,7 +237,7 @@ does not.
 | *(default — CORE)* | **postgres** (5432) · **redis** (6379) · **zookeeper** · **kafka** (9092) · **qdrant** (6333) · **litellm** (4000, LLM gateway) · **ollama** (11434, local model) · **ollama-pull** (one-shot model fetch) · **ingest-worker** (8081, Go) · **fusion** (8003) · **api** (8000) · **agents** (8001) · **threatintel** (8005) · **realtime** (8086) · **web** (3000) · **connectors** (8088) · **actions** (8002) |
 | `full` | **clickhouse** (8123/9000) · **neo4j** (7474/7687) · **opensearch** (9200) · **ueba** (8007) · **enrichment** (8080, Go) · **kafka-ui** (8090) |
 | `extras` | **honeytokens** (8008) · **purple-team** (8006) |
-| `chatops` | **slack-bot** (8009) |
+| `chatops` | **slack-bot** (8009) · **teams-bot** (8010) |
 | `monitoring` | **prometheus** (9091) · **grafana** (3001) · **alertmanager** (9094) · **tempo** (3200) · **otel-collector** (4317/4318) |
 | `osquery` | **osquery-tls** (8091) |
 
@@ -248,7 +248,7 @@ federated search defaults on, so the capability was enabled and aimed at a
 hostname that does not resolve; the measured cost of moving them is 124.8 MiB
 ([ADR-0007](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0007-connectors-and-actions-in-core.md)).
 They are now in no profile, which means every profile run includes them, so
-`chatops` still gets `actions` for `slack-bot`. Named profiles compose, so
+`chatops` still gets `actions` for both chat bots. Named profiles compose, so
 `docker compose --profile full --profile extras up -d` is valid; it just does
 not wait for health the way `make up-full` does.
 
