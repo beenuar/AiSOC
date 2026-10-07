@@ -128,8 +128,10 @@ FETCH_ATTEMPTS = 3
 FETCH_RETRY_SECONDS = 6
 
 #: Commits on the branch used as the freshness oracle, and how many of the
-#: newest runs may be searched for one of them. The slack absorbs the runs for
-#: the newest few commits still being in progress, which is not staleness.
+#: newest runs (of any conclusion — a failed run for a recent commit proves
+#: the read is fresh) may be searched for one of them. On a push event the
+#: run executing this gate is itself in the list, which is the proof working
+#: as intended, not a loophole: a stale snapshot would not contain it.
 FRESHNESS_COMMITS = 30
 FRESH_HEAD_RUNS = 5
 
@@ -648,9 +650,15 @@ def fetch_protection_contexts(repo: str, token: str, branch: str) -> list[str] |
 
 
 def _runs_url(repo: str, workflow_file: str, branch: str, per_page: int, page: int) -> str:
+    # No `status=` filter, deliberately. The freshness check in
+    # `fetch_successful_push_runs` needs every push run: filtering to
+    # successes here made a workflow that genuinely failed on 30+ consecutive
+    # commits indistinguishable from a stale API snapshot, and for this
+    # gate's own workflow that was self-locking — each run failing the
+    # staleness check was itself the reason no recent successful run existed.
     return (
         f"{API}/repos/{repo}/actions/workflows/{urllib.parse.quote(workflow_file)}/runs"
-        f"?branch={urllib.parse.quote(branch)}&event=push&status=success"
+        f"?branch={urllib.parse.quote(branch)}&event=push"
         f"&per_page={per_page}&page={page}"
     )
 
@@ -691,6 +699,19 @@ def fetch_successful_push_runs(
     own commit list, from a different endpoint — because the failure that
     actually happened was a stale snapshot that any second read of *this*
     endpoint agreed with.
+
+    Freshness is asserted against push runs of *any* conclusion, and only the
+    successful ones are graded. A failed or in-progress run for a recent
+    commit proves the endpoint is serving current data just as well as a
+    successful one does; requiring a recent *success* conflated two
+    conditions that need opposite responses — a stale snapshot (refuse to
+    grade) and a workflow that genuinely failed on the last 30+ commits
+    (grade the successes the page does hold, and let the shrunken window
+    speak for itself). The second condition is real: a merge burst outran
+    `ci.yml` on 2026-10-05, this gate then failed every push for it, and
+    because the gate's own workflow thereby stopped producing successful push
+    runs, the staleness check locked against *itself* — no future run could
+    ever have passed.
     """
     if limit > MAX_RELIABLE_WINDOW:
         raise GateError(
@@ -703,20 +724,21 @@ def fetch_successful_push_runs(
     for attempt in range(FETCH_ATTEMPTS):
         batch = _get(_runs_url(repo, workflow_file, branch, MAX_RELIABLE_WINDOW, 1), token).get("workflow_runs") or []
         seen = {int(run["id"]): run for run in batch}
-        ordered = sorted(seen.values(), key=lambda r: str(r.get("created_at") or ""), reverse=True)[:limit]
+        ordered = sorted(seen.values(), key=lambda r: str(r.get("created_at") or ""), reverse=True)
+        successes = [run for run in ordered if str(run.get("conclusion")) == "success"][:limit]
         if recent_shas is None or not ordered:
             # Freshness cannot be asserted for a workflow that does not run on
             # every push; the caller says so in its output rather than
             # implying a check it did not make.
-            return ordered
+            return successes
         if any(str(run.get("head_sha")) in recent_shas for run in ordered[:FRESH_HEAD_RUNS]):
-            return ordered
+            return successes
         last_seen = str(ordered[0].get("created_at"))
         if attempt < FETCH_ATTEMPTS - 1:
             time.sleep(FETCH_RETRY_SECONDS)
 
     raise GateError(
-        f"{workflow_file}: the newest successful push run this endpoint returned is {last_seen}, "
+        f"{workflow_file}: the newest push run of any conclusion this endpoint returned is {last_seen}, "
         f"and it is for none of the last {len(recent_shas or ())} commits on {branch} — which this "
         "workflow runs on every one of. After "
         f"{FETCH_ATTEMPTS} attempts that is a stale read, not a quiet workflow, and grading it "
