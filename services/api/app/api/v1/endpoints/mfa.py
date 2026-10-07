@@ -311,8 +311,8 @@ async def mfa_status(current_user: AuthUser, db: DBSession) -> MfaStatus:
     """Whether this user holds a second factor, and whether they must."""
     remaining = (
         await db.execute(
-            text("SELECT count(*) FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u AND used_at IS NULL").bindparams(
-                u=current_user.user_id
+            text("SELECT count(*) FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u AND tenant_id = :t AND used_at IS NULL").bindparams(
+                u=current_user.user_id, t=current_user.tenant_id
             )
         )
     ).scalar() or 0
@@ -376,11 +376,15 @@ async def enroll_confirm(body: ConfirmRequest, principal: EnrolPrincipal, db: DB
     codes = totp.new_recovery_codes()
     await set_rls_context(db, principal.tenant_id)
     await db.execute(
-        text("UPDATE aisoc_user_mfa SET confirmed_at = now(), last_used_step = :s, updated_at = now() WHERE user_id = :u").bindparams(
-            s=step, u=principal.user_id
+        text(
+            "UPDATE aisoc_user_mfa SET confirmed_at = now(), last_used_step = :s, updated_at = now() WHERE user_id = :u AND tenant_id = :t"
+        ).bindparams(s=step, u=principal.user_id, t=principal.tenant_id)
+    )
+    await db.execute(
+        text("DELETE FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u AND tenant_id = :t").bindparams(
+            u=principal.user_id, t=principal.tenant_id
         )
     )
-    await db.execute(text("DELETE FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u").bindparams(u=principal.user_id))
     for code in codes:
         await db.execute(
             text("INSERT INTO aisoc_user_mfa_recovery_codes (user_id, tenant_id, code_hash) VALUES (:u, :t, :h)").bindparams(
@@ -402,7 +406,7 @@ async def enroll_confirm(body: ConfirmRequest, principal: EnrolPrincipal, db: DB
 
     tokens: dict[str, str] = {}
     if principal.from_challenge:
-        tokens = await _issue_session(db, principal.user_id)
+        tokens = await _issue_session(db, principal.user_id, principal.tenant_id)
     return EnrollConfirmed(recovery_codes=codes, **tokens)
 
 
@@ -419,13 +423,15 @@ async def verify(body: VerifyRequest, db: DBSession, request: Request) -> Sessio
     step = totp.verify_totp(_decrypt_secret(row["secret_encrypted"]), body.code, last_used_step=row["last_used_step"])
     if step is not None:
         await db.execute(
-            text("UPDATE aisoc_user_mfa SET last_used_step = :s, updated_at = now() WHERE user_id = :u").bindparams(s=step, u=user_id)
+            text("UPDATE aisoc_user_mfa SET last_used_step = :s, updated_at = now() WHERE user_id = :u AND tenant_id = :t").bindparams(
+                s=step, u=user_id, t=row["tenant_id"]
+            )
         )
         await db.commit()
-        return SessionTokens(**await _issue_session(db, user_id))
+        return SessionTokens(**await _issue_session(db, user_id, row["tenant_id"]))
 
     if await _consume_recovery_code(db, user_id=user_id, tenant_id=row["tenant_id"], code=body.code, request=request):
-        return SessionTokens(**await _issue_session(db, user_id))
+        return SessionTokens(**await _issue_session(db, user_id, row["tenant_id"]))
 
     logger.warning("mfa.verify_failed user=%s source=%s", _sanitize(user_id), _sanitize(client_ip(request), 64))
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That code is not valid.")
@@ -445,15 +451,17 @@ async def _consume_recovery_code(db: Any, *, user_id: uuid.UUID, tenant_id: uuid
     spent = await db.execute(
         text(
             "UPDATE aisoc_user_mfa_recovery_codes SET used_at = now() "
-            "WHERE user_id = :u AND code_hash = :h AND used_at IS NULL RETURNING id"
-        ).bindparams(u=user_id, h=candidate)
+            "WHERE user_id = :u AND tenant_id = :t AND code_hash = :h AND used_at IS NULL RETURNING id"
+        ).bindparams(u=user_id, t=tenant_id, h=candidate)
     )
     if spent.first() is None:
         await db.rollback()
         return False
     remaining = (
         await db.execute(
-            text("SELECT count(*) FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u AND used_at IS NULL").bindparams(u=user_id)
+            text("SELECT count(*) FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u AND tenant_id = :t AND used_at IS NULL").bindparams(
+                u=user_id, t=tenant_id
+            )
         )
     ).scalar() or 0
     await emit_audit(
@@ -496,16 +504,30 @@ async def require_current_factor(db: Any, *, user_id: uuid.UUID, tenant_id: uuid
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That code is not valid.")
 
 
-async def _issue_session(db: Any, user_id: uuid.UUID) -> dict[str, str]:
+async def _issue_session(db: Any, user_id: uuid.UUID, tenant_id: uuid.UUID) -> dict[str, str]:
+    """Mint the ordinary token pair for a user who has proved both factors.
+
+    Scoped on the tenant as well as the id. `users.id` is unique, so this
+    changes no result today — it is here because the tenant arrives from
+    the row that resolved the factor, and requiring the two to agree means
+    a mismatch fails the sign-in rather than minting a session whose
+    `tenant_id` claim came from somewhere other than the user row.
+    """
     row = (
-        (await db.execute(text("SELECT id, tenant_id, role, email FROM users WHERE id = :u AND is_active IS TRUE").bindparams(u=user_id)))
+        (
+            await db.execute(
+                text("SELECT id, tenant_id, role, email FROM users WHERE id = :u AND tenant_id = :t AND is_active IS TRUE").bindparams(
+                    u=user_id, t=tenant_id
+                )
+            )
+        )
         .mappings()
         .first()
     )
     if row is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     claims = {"sub": str(row["id"]), "tenant_id": str(row["tenant_id"]), "role": row["role"], "email": row["email"]}
-    await db.execute(text("UPDATE users SET last_login = now() WHERE id = :u").bindparams(u=user_id))
+    await db.execute(text("UPDATE users SET last_login = now() WHERE id = :u AND tenant_id = :t").bindparams(u=user_id, t=tenant_id))
     await db.commit()
     return {"access_token": create_access_token(claims), "refresh_token": create_refresh_token(claims)}
 
@@ -527,7 +549,7 @@ async def disable(body: DisableRequest, current_user: AuthUser, db: DBSession, r
     )
 
     await set_rls_context(db, current_user.tenant_id)
-    await _forget(db, user_id=current_user.user_id)
+    await _forget(db, user_id=current_user.user_id, tenant_id=current_user.tenant_id)
     await emit_audit(
         db=db,
         tenant_id=current_user.tenant_id,
@@ -582,7 +604,7 @@ async def reset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such user in this tenant.")
 
     await set_rls_context(db, current_user.tenant_id)
-    await _forget(db, user_id=user_id)
+    await _forget(db, user_id=user_id, tenant_id=current_user.tenant_id)
     await emit_audit(
         db=db,
         tenant_id=current_user.tenant_id,
@@ -598,9 +620,18 @@ async def reset(
     return {"status": "reset", "user_id": str(user_id)}
 
 
-async def _forget(db: Any, *, user_id: uuid.UUID) -> None:
-    await db.execute(text("DELETE FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u").bindparams(u=user_id))
-    await db.execute(text("DELETE FROM aisoc_user_mfa WHERE user_id = :u").bindparams(u=user_id))
+async def _forget(db: Any, *, user_id: uuid.UUID, tenant_id: uuid.UUID) -> None:
+    """Both rows, scoped on the tenant as well as the user.
+
+    `user_id` is unique, so the tenant predicate changes no result. It is
+    there because how a row was addressed is irrelevant to what the
+    statement can reach, and a write that carries its own predicate stays
+    correct after whatever edit comes next.
+    """
+    await db.execute(
+        text("DELETE FROM aisoc_user_mfa_recovery_codes WHERE user_id = :u AND tenant_id = :t").bindparams(u=user_id, t=tenant_id)
+    )
+    await db.execute(text("DELETE FROM aisoc_user_mfa WHERE user_id = :u AND tenant_id = :t").bindparams(u=user_id, t=tenant_id))
 
 
 @router.get("/policy", response_model=MfaPolicy)

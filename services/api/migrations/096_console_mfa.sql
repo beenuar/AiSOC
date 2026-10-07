@@ -88,24 +88,34 @@ CREATE TABLE IF NOT EXISTS aisoc_tenant_mfa_policy (
 -- before authentication — recording a spent recovery code, and advancing
 -- `last_used_step` during a challenge — bind the context from the user row
 -- they have already resolved, the same way `complete_sso_login` does.
-DO $$
-DECLARE
-    t TEXT;
-BEGIN
-    FOREACH t IN ARRAY ARRAY['aisoc_user_mfa', 'aisoc_user_mfa_recovery_codes', 'aisoc_tenant_mfa_policy']
-    LOOP
-        EXECUTE format('ALTER TABLE %I ENABLE ROW LEVEL SECURITY', t);
-        EXECUTE format('ALTER TABLE %I FORCE ROW LEVEL SECURITY', t);
-        EXECUTE format('DROP POLICY IF EXISTS tenant_isolation ON %I', t);
-        EXECUTE format(
-            'CREATE POLICY tenant_isolation ON %I '
-            'USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL) '
-            'WITH CHECK (tenant_id = current_tenant_id())',
-            t
-        );
-    END LOOP;
-END
-$$;
+-- Written out three times rather than looped over in a `DO $$` block.
+-- The loop was the first draft and it is the wrong shape here: a policy
+-- built by `EXECUTE format(...)` is invisible to `check_rls_policy_shape.py`
+-- and `check_tenant_query_predicates.py`, both of which replay this file as
+-- text, so the second reported these tables as having no RLS at all. A
+-- security control a gate cannot see is a control nobody is holding to
+-- account.
+
+ALTER TABLE aisoc_user_mfa ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aisoc_user_mfa FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON aisoc_user_mfa;
+CREATE POLICY tenant_isolation ON aisoc_user_mfa
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id());
+
+ALTER TABLE aisoc_user_mfa_recovery_codes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aisoc_user_mfa_recovery_codes FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON aisoc_user_mfa_recovery_codes;
+CREATE POLICY tenant_isolation ON aisoc_user_mfa_recovery_codes
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id());
+
+ALTER TABLE aisoc_tenant_mfa_policy ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aisoc_tenant_mfa_policy FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON aisoc_tenant_mfa_policy;
+CREATE POLICY tenant_isolation ON aisoc_tenant_mfa_policy
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id());
 
 DO $$
 BEGIN
