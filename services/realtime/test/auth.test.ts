@@ -72,15 +72,18 @@ test('rejects a tampered signature', () => {
   // Two earlier forms were both no-ops, for the same underlying reason:
   // the end of a base64url signature does not carry the bits you would
   // assume. HMAC-SHA256 is 32 bytes, which encodes to 43 characters
-  // carrying 258 bits, so the final character's low four bits are padding
-  // and decode to nothing.
+  // carrying 258 bits, so the final character has only four significant
+  // bits and its low two are padding that decodes to nothing. A correct
+  // encoder zeroes those two, which leaves 16 characters a real signature
+  // can end in rather than 64.
   //
   //   - overwriting the last two characters with a fixed 'xx' left the
   //     token unchanged whenever the signature already ended in 'xx',
   //     about 1 run in 4,096;
-  //   - flipping the last character to a different one changed only those
-  //     padding bits, so the decoded signature was *identical* every time
-  //     and the test failed deterministically.
+  //   - flipping the last character between 'A' and 'B' moved only those
+  //     padding bits, so the decoded signature was identical whenever it
+  //     ended in 'A' — 6.24% of 20,000 minted tokens, about 1 run in 16.
+  //     Not deterministic, which is why it read as a flake.
   //
   // The first character's six bits are all significant, so this changes
   // the signature bytes for certain. The decode assertion below is what
