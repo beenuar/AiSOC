@@ -18,6 +18,8 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from types import SimpleNamespace
+from typing import Any
 
 import pytest
 from app.api.v1.deps import SERVICE_TENANT_HEADER, CurrentUser, _condition_applies
@@ -26,6 +28,7 @@ from app.api.v1.endpoints.api_keys import VALID_SCOPES
 from app.api.v1.endpoints.elevation import MAX_DURATION
 from app.core.rbac_catalog import PERMISSIONS
 from app.core.security import ROLE_PERMISSIONS
+from app.models.enterprise_iam import WorkloadIdentity
 from app.security.abac import OPERATORS, PrivilegeGrant
 from app.services import workload_identity as wi
 from fastapi import HTTPException
@@ -34,16 +37,70 @@ TENANT = uuid.uuid4()
 USER = uuid.uuid4()
 
 
-def _principal(**kwargs) -> CurrentUser:
-    base = {
-        "user_id": USER,
-        "tenant_id": TENANT,
-        "role": "viewer",
-        "email": "v@example.com",
-        "resolved_permissions": frozenset({"alerts:read"}),
+def _principal(
+    *,
+    role: str = "viewer",
+    scopes: list[str] | None = None,
+    resolved_permissions: frozenset[str] | None = frozenset({"alerts:read"}),
+    elevation: tuple[PrivilegeGrant, ...] = (),
+    conditions: tuple[dict[str, Any], ...] = (),
+    attributes: dict[str, Any] | None = None,
+) -> CurrentUser:
+    """A principal with the defaults these tests vary from.
+
+    Explicit keywords rather than `**kwargs`: a dict splatted into a typed
+    constructor widens every value to `object`, which cost 13 `arg-type`
+    findings and, more to the point, means a test could pass a `conditions`
+    list where a tuple is expected and nothing would say so.
+    """
+    return CurrentUser(
+        user_id=USER,
+        tenant_id=TENANT,
+        role=role,
+        email="v@example.com",
+        scopes=scopes,
+        resolved_permissions=resolved_permissions,
+        elevation=elevation,
+        conditions=conditions,
+        attributes=attributes,
+    )
+
+
+def _digest(label: str) -> str:
+    """A real SHA-256 digest, computed rather than written as a literal.
+
+    Two reasons. A 64-character hex literal in a test file is
+    credential-shaped, and the secret scanner is right to say so. And a
+    computed digest is what the code under test actually compares, so the
+    fixture cannot drift from the real hash function.
+    """
+    return wi.hash_workload_secret(f"fixture-{label}")
+
+
+def _row(**overrides: Any) -> WorkloadIdentity:
+    """A real `WorkloadIdentity`, not a stand-in class.
+
+    The hand-rolled double this replaced answered for whichever attributes a
+    test happened to read, which is the shape that lets a double be more
+    capable than the thing it stands for. The ORM model constructs fine
+    without a session, so there is no reason to use anything else.
+    """
+    fields: dict[str, Any] = {
+        "id": uuid.uuid4(),
+        "service": "agents",
+        "description": None,
+        "scopes": ["alerts:read"],
+        "secret_prefix": wi.WORKLOAD_KEY_PREFIX + "abc1234",
+        "secret_hash": _digest("current"),
+        "previous_hash": None,
+        "previous_expires_at": None,
+        "expires_at": None,
+        "last_used_at": None,
+        "revoked_at": None,
+        "created_at": None,
     }
-    base.update(kwargs)
-    return CurrentUser(**base)
+    fields.update(overrides)
+    return WorkloadIdentity(**fields)
 
 
 def _grant(permissions: list[str], *, minutes: int = 30, revoked: bool = False) -> PrivilegeGrant:
@@ -196,6 +253,57 @@ class TestConditionsNarrowAndNeverGrant:
         assert _condition_applies(row, "cases:write", "tenant_admin") is False
 
 
+class TestAttributeBindingNeverBreaksAuthentication:
+    """Binding attributes is advisory; it must not be able to 401 a valid session.
+
+    `bind_connection_attributes` reads the connection, and the graph
+    WebSocket upgrade goes through it as well as every HTTP route. A
+    `WebSocket` is not a `Request`, and an ASGI connection is not
+    obliged to expose a peer address at all, so reading one must
+    degrade rather than raise -- an `AttributeError` here surfaces as
+    an authenticated user being unable to open a socket, which reads
+    as an outage and not as a permission problem.
+
+    Degrading is safe in the direction that matters: an unknown
+    address makes an address condition indeterminate, and
+    indeterminate denies.
+    """
+
+    class _NoPeer:
+        """An ASGI connection that exposes no peer, like the graph socket's."""
+
+    class _Peer:
+        def __init__(self, host: str) -> None:
+            self.client = SimpleNamespace(host=host)
+            self.headers: dict[str, str] = {}
+
+    def test_a_connection_without_a_peer_binds_rather_than_raising(self) -> None:
+        user = _principal(resolved_permissions=frozenset({"cases:write"}))
+        user.bind_connection_attributes(self._NoPeer())
+        assert user.attributes["source_ip"] is None
+
+    def test_an_address_condition_then_denies_rather_than_passing(self) -> None:
+        """The fail-closed half. If an unknown address passed, every
+        attribute condition would be bypassable by connecting over a
+        transport that reports no peer."""
+        user = _principal(
+            resolved_permissions=frozenset({"cases:write"}),
+            conditions=({"permission": "cases:write", "operator": "ip_in_cidr", "value": "10.0.0.0/8"},),
+        )
+        user.bind_connection_attributes(self._NoPeer())
+        with pytest.raises(HTTPException):
+            user.require_permission("cases:write")
+
+    def test_a_connection_with_a_peer_still_carries_the_address(self) -> None:
+        """The negative control. Binding that always produced `None`
+        would pass both tests above and silently deny every address
+        condition on every real request."""
+        user = _principal(resolved_permissions=frozenset({"cases:write"}))
+        user.bind_connection_attributes(self._Peer("10.1.2.3"))
+        assert user.attributes["source_ip"] == "10.1.2.3"
+        user.require_permission("cases:write")
+
+
 class TestElevationAndConditionsCompose:
     def test_an_elevated_permission_is_still_narrowed(self) -> None:
         """Order matters: if grants were applied after conditions,
@@ -314,54 +422,43 @@ class TestWorkloadSecrets:
 
     def test_describe_carries_no_secret_material(self) -> None:
         """This is the list response. A hash in it is a hash to grind."""
+        current, superseded = _digest("current"), _digest("superseded")
+        row = _row(secret_hash=current, previous_hash=superseded)
 
-        class _Row:
-            id = uuid.uuid4()
-            service = "agents"
-            description = None
-            scopes = ["alerts:read"]
-            secret_prefix = "aisoc_wl_abc1234"
-            secret_hash = "deadbeef" * 8
-            previous_hash = "cafebabe" * 8
-            previous_expires_at = None
-            expires_at = None
-            last_used_at = None
-            revoked_at = None
-            created_at = None
+        rendered = wi.describe(row)
 
-        rendered = wi.describe(_Row())
-        assert "deadbeef" * 8 not in str(rendered)
-        assert "cafebabe" * 8 not in str(rendered)
-        assert rendered["secret_prefix"] == "aisoc_wl_abc1234"
+        assert current not in str(rendered)
+        assert superseded not in str(rendered)
+        assert rendered["secret_prefix"] == wi.WORKLOAD_KEY_PREFIX + "abc1234"
 
     def test_a_superseded_secret_with_no_window_is_refused(self) -> None:
         """ "Not set" must not be the most permissive state of a credential."""
+        current, superseded = _digest("current"), _digest("superseded")
+        row = _row(secret_hash=current, previous_hash=superseded, previous_expires_at=None)
 
-        class _Row:
-            secret_hash = "a" * 64
-            previous_hash = "b" * 64
-            previous_expires_at = None
-
-        assert wi._digest_matches(_Row(), "b" * 64, now=datetime.now(UTC)) is False
-        assert wi._digest_matches(_Row(), "a" * 64, now=datetime.now(UTC)) is True
+        assert wi._digest_matches(row, superseded, now=datetime.now(UTC)) is False
+        assert wi._digest_matches(row, current, now=datetime.now(UTC)) is True
 
     def test_a_superseded_secret_inside_its_window_still_works(self) -> None:
         """Rotation without downtime is the whole reason those columns exist."""
+        current, superseded = _digest("current"), _digest("superseded")
+        row = _row(
+            secret_hash=current,
+            previous_hash=superseded,
+            previous_expires_at=datetime.now(UTC) + timedelta(hours=1),
+        )
 
-        class _Row:
-            secret_hash = "a" * 64
-            previous_hash = "b" * 64
-            previous_expires_at = datetime.now(UTC) + timedelta(hours=1)
-
-        assert wi._digest_matches(_Row(), "b" * 64, now=datetime.now(UTC)) is True
+        assert wi._digest_matches(row, superseded, now=datetime.now(UTC)) is True
 
     def test_a_superseded_secret_past_its_window_does_not(self) -> None:
-        class _Row:
-            secret_hash = "a" * 64
-            previous_hash = "b" * 64
-            previous_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+        current, superseded = _digest("current"), _digest("superseded")
+        row = _row(
+            secret_hash=current,
+            previous_hash=superseded,
+            previous_expires_at=datetime.now(UTC) - timedelta(seconds=1),
+        )
 
-        assert wi._digest_matches(_Row(), "b" * 64, now=datetime.now(UTC)) is False
+        assert wi._digest_matches(row, superseded, now=datetime.now(UTC)) is False
 
 
 class TestTheTenantIsNeverCallerChosen:

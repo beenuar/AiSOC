@@ -55,7 +55,22 @@ jobs:
           --health-retries 20
 
     env:
-      IAM_DSN: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      # Two roles, and the split is the point. `POSTGRES_USER` (aisoc) owns
+      # the schema and is a superuser, and a superuser ignores every RLS
+      # policy even under FORCE ROW LEVEL SECURITY — so an application
+      # connected as the owner is not the application a deployment runs, and
+      # a suite about authorization running as one proves less than it looks.
+      # `scripts/check_runtime_db_role.py` caught exactly that here.
+      #
+      # The application gets the DML-only runtime role. Migrations and the
+      # suite's own seeding get the owner: the two new tables carry
+      # `FORCE ROW LEVEL SECURITY` with a `WITH CHECK (tenant_id =
+      # current_tenant_id())` policy, so an INSERT as the runtime role with no
+      # tenant context set is refused — which is correct, and which makes the
+      # owner the right credential for a fixture that is standing in for a
+      # migration.
+      IAM_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
       PGPASSWORD: aisoc_ci_only
       # Not a bypass environment. `development` is in
       # AUTH_BYPASS_ENVIRONMENTS, so an uncredentialed request there resolves
@@ -63,7 +78,7 @@ jobs:
       # that authorization narrows, that would make every assertion pass for
       # the wrong reason.
       ENVIRONMENT: production
-      SECRET_KEY: isolation-iam-signing-secret-at-least-32-characters
+      SECRET_KEY: ci-access-governance-signing-secret-at-least-32-chars
       OTEL_SDK_DISABLED: "true"
 
     steps:
@@ -93,10 +108,21 @@ jobs:
             psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
           done
 
+      # Migration 061 creates the runtime role without a password, because a
+      # password in a migration is a password in the repository.
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
       - name: Conditions narrow, elevation expires, workload credentials authenticate
         working-directory: services/api
         env:
           ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          ISOLATION_IAM_ADMIN_DSN: ${{ env.DATABASE_MIGRATION_URL }}
           DATABASE_URL: ${{ env.IAM_DSN }}
         run: python -m pytest ../../tests/isolation/test_abac_elevation_live.py -v --tb=short
 
@@ -107,16 +133,22 @@ jobs:
         working-directory: services/api
         env:
           ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          ISOLATION_IAM_ADMIN_DSN: ${{ env.DATABASE_MIGRATION_URL }}
           DATABASE_URL: ${{ env.IAM_DSN }}
         run: |
           set -euo pipefail
-          python -m pytest ../../tests/isolation/test_abac_elevation_live.py -q --tb=no -p no:cacheprovider > /tmp/iam-live.txt 2>&1 || true
-          cat /tmp/iam-live.txt
-          if grep -qE '[0-9]+ skipped' /tmp/iam-live.txt; then
+          # Captured into a variable rather than redirected to a file. A
+          # spaced redirect target on a pytest line parses as a directory
+          # argument to `check_ci_install_parity.py`, which then reads this
+          # job as running the whole services/api suite and demands its full
+          # locked dependency set. It runs one file.
+          summary="$(python -m pytest ../../tests/isolation/test_abac_elevation_live.py -q --tb=no -p no:cacheprovider 2>&1 || true)"
+          printf '%s\n' "$summary"
+          if printf '%s' "$summary" | grep -qE '[0-9]+ skipped'; then
             echo "FAIL: a live authorization suite skipped. A skip in this job is a failure."
             exit 1
           fi
-          grep -qE '[0-9]+ passed' /tmp/iam-live.txt || { echo "FAIL: nothing ran."; exit 1; }
+          printf '%s' "$summary" | grep -qE '[0-9]+ passed' || { echo "FAIL: nothing ran."; exit 1; }
 
       # The negative controls.
       #
@@ -127,6 +159,7 @@ jobs:
         working-directory: services/api
         env:
           ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          ISOLATION_IAM_ADMIN_DSN: ${{ env.DATABASE_MIGRATION_URL }}
           DATABASE_URL: ${{ env.IAM_DSN }}
         run: |
           set -euo pipefail
@@ -154,6 +187,7 @@ jobs:
         working-directory: services/api
         env:
           ISOLATION_IAM_DSN: ${{ env.IAM_DSN }}
+          ISOLATION_IAM_ADMIN_DSN: ${{ env.DATABASE_MIGRATION_URL }}
           DATABASE_URL: ${{ env.IAM_DSN }}
         run: |
           set -euo pipefail

@@ -57,14 +57,37 @@ CLIENT_IP = "127.0.0.1"
 MATCHING_CIDR = "127.0.0.0/8"
 MISSING_CIDR = "10.0.0.0/8"
 
-SIGNING_SECRET = "isolation-iam-signing-secret-at-least-32-characters"
+SIGNING_SECRET = "ci-access-governance-signing-secret-at-least-32-chars"
 
 
 def _dsn() -> str:
+    """What the **application** connects as: the DML-only runtime role.
+
+    Not the schema owner. A superuser ignores every row-level-security policy
+    even under `FORCE ROW LEVEL SECURITY`, so a suite about authorization run
+    as one proves less than it appears to —
+    `scripts/check_runtime_db_role.py` holds that line across every
+    deployment surface and caught this job's first draft doing it.
+    """
     value = os.environ.get("ISOLATION_IAM_DSN", "").strip()
     if not value:
         pytest.skip("ISOLATION_IAM_DSN is not set")
     return value
+
+
+def _admin_dsn() -> str:
+    """What the **fixtures** connect as, standing in for a migration.
+
+    `privilege_grants` and `permission_conditions` carry
+    `WITH CHECK (tenant_id = current_tenant_id())`, so an INSERT as the
+    runtime role with no tenant context set is refused — correctly. Seeding
+    is an owner's act, which is why it gets its own credential rather than
+    the suite relaxing the policy it is here to exercise.
+
+    Falls back to the application DSN so a single-role local database still
+    works; CI sets both.
+    """
+    return os.environ.get("ISOLATION_IAM_ADMIN_DSN", "").strip() or _dsn()
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
@@ -91,7 +114,7 @@ async def app_client():
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def pool():
     asyncpg = pytest.importorskip("asyncpg")
-    created = await asyncpg.create_pool(_dsn().replace("postgresql+asyncpg://", "postgresql://"), min_size=1, max_size=4)
+    created = await asyncpg.create_pool(_admin_dsn().replace("postgresql+asyncpg://", "postgresql://"), min_size=1, max_size=4)
     yield created
     await created.close()
 
