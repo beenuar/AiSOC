@@ -43,6 +43,7 @@ from app.llm.prompt_registry import prompt_text
 from app.llm.tool_loop import run_with_tools
 from app.mcp.tools import build_mcp_toolset
 from app.prompting.envelope import system_rule
+from app.prompting.tool_results import unverified_tool_claims
 from app.tools.customer_tools import scoped_customer_tools
 from app.tools.investigation import investigation_tools
 from app.tools.registry import default_registry
@@ -129,6 +130,11 @@ class DeepInvestigationResult:
     #: disputed six months later needs to know which *text*, and the version
     #: history is what turns the pair back into text.
     tenant_skill: dict[str, Any] | None = None
+    #: Tools the narrative credits with a result that no call in this run
+    #: produced. Empty on an honest run, and a claim with no `tool_call` row
+    #: behind it on any other — which `distinct_pivots` cannot distinguish,
+    #: because it counts what the loop did and not what the narrative says.
+    unverified_tool_claims: list[str] = field(default_factory=list)
     error: str | None = None
 
     @property
@@ -541,6 +547,29 @@ async def run_deep_investigation(
     result.pivots, result.unavailable_data = _classify_pivots(result.tool_trace)
     result.distinct_pivots = len(set(result.pivots))
     result.ledger_rows = await _record_tool_calls(state, result.tool_trace)
+
+    # Depth plan 1.3. The narrative is graded against the trace that just
+    # became `tool_call` rows, so a tool the model credits with a result it
+    # never called is named rather than read as a pivot that happened. The
+    # depth fields above cannot see this: `distinct_pivots` counts calls the
+    # loop made, and a narrative describing calls it did not make scores the
+    # same as an honest one.
+    #
+    # Recorded, not demoted. There is no verdict here to demote and no closure
+    # to block — this function returns a narrative — so the finding travels on
+    # the result to whoever does hold a verdict. `auto_triage_agent` is where
+    # the same check blocks an auto-close.
+    result.unverified_tool_claims = unverified_tool_claims(
+        result.narrative,
+        called_tools=[str(entry.get("tool") or "") for entry in result.tool_trace],
+    )
+    if result.unverified_tool_claims:
+        logger.warning(
+            "deep_investigation.unverified_tool_claim",
+            strategy=strategy.id,
+            claimed=result.unverified_tool_claims[:10],
+            tools_called=sorted({str(entry.get("tool") or "") for entry in result.tool_trace}),
+        )
 
     logger.info(
         "deep_investigation.complete",

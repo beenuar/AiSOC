@@ -817,6 +817,18 @@ jobs:
         run: |
           python -m pip install --quiet pyyaml
           python scripts/check_fidelity_datasets.py
+      # Every other labelled set in services/agents/tests/eval_data/ is
+      # malicious by construction, so an agent answering "true positive" to
+      # everything without reading anything would score perfectly on them.
+      # The verdict corpus is the one the scorer accepts, and the property
+      # that makes it worth anything — no class above 60%, so no constant
+      # answer scores above 60% — is not visible in the file. Six malicious
+      # items added because malicious items are the interesting ones to write
+      # would take it past the line with nothing looking wrong.
+      - name: The verdict corpus stays balanced, paired and licensed
+        run: |
+          python3 scripts/check_verdict_corpus.py --self-test
+          python3 scripts/check_verdict_corpus.py
       - name: SLO alerts match the declared objectives
         run: |
           python -m pip install --quiet pyyaml

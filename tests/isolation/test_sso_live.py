@@ -220,15 +220,6 @@ class _Idp:
 _HEADER_UNSAFE = re.compile(r"[^A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]")
 
 
-def _header_safe(value: str) -> str:
-    """A URL fragment safe to place in a response header.
-
-    Reconstructed from allowed characters rather than checked, so neither a
-    reader nor a taint tracker has to reason about what survived.
-    """
-    return _HEADER_UNSAFE.sub("", value)
-
-
 class _OidcProvider:
     """Discovery, JWKS, authorization, token and userinfo over real HTTP.
 
@@ -293,18 +284,27 @@ class _OidcProvider:
                     # splitting even in a fixture, and a provider that lets a
                     # crafted `redirect_uri` inject a header is not modelling
                     # a real one.
-                    # Sanitised **inline**, not through `_header_safe`. The
-                    # helper does exactly this, but CodeQL's taint tracker
-                    # does not follow a sanitiser across a function
-                    # boundary and read the echo as
-                    # `py/http-response-splitting`; it does recognise the
-                    # inline substitution. The same blindness is why this
-                    # repository sanitises log values at the call site
-                    # rather than in a `_log_safe()` helper.
-                    target = _HEADER_UNSAFE.sub("", (query.get("redirect_uri") or [""])[0])
+                    # The destination is read from the environment, never
+                    # echoed from the request, so nothing attacker-shaped
+                    # reaches a response header at all.
+                    #
+                    # Stripping the dangerous characters was not enough:
+                    # through `_header_safe` CodeQL could not follow the
+                    # sanitiser across a function boundary, and inline it
+                    # still reported `py/http-response-splitting`. Taking
+                    # the value from `OIDC_REDIRECT_URI` -- the same
+                    # variable the application reads when it builds the
+                    # authorization request -- removes the flow rather than
+                    # arguing about it, and it is what a real authorization
+                    # server does: it matches the URI registered for the
+                    # client and refuses anything else.
+                    registered = os.environ.get("OIDC_REDIRECT_URI", "")
+                    if (query.get("redirect_uri") or [""])[0] != registered:
+                        self._send(400, b'{"error":"invalid_request"}')
+                        return
                     state = _HEADER_UNSAFE.sub("", (query.get("state") or [""])[0])
                     self.send_response(302)
-                    self.send_header("Location", f"{target}?code={code}&state={state}")
+                    self.send_header("Location", f"{registered}?code={code}&state={state}")
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                 elif path == "/userinfo":

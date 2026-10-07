@@ -70,6 +70,43 @@ its 1.5 GiB limit, PostgreSQL sat near 7% CPU on 97 MiB, and ingest never
 exceeded 29 MiB. Fusion is the bottleneck, which is why the drain rate is
 roughly 45% of what ingest accepts.
 
+## Single host, Docker Compose (CORE profile), 2026-10-07
+
+The depth plan's Phase 0 baseline, taken so every later change to ingest,
+fusion or detection has a "before" on the same harness. Saturation only --
+no steady-state pacing was run, so there is no row to plan latency against
+here; use the 2026-09-27 steady-state column for that.
+
+A different host from the run above, which is most of the difference in the
+drain rate: a 6-CPU, 15.6 GiB Linux VM on Apple silicon, against the
+18-core host the September run used. Quoting the two drain rates against
+each other would be comparing machines, not releases.
+
+| | Saturation |
+|---|---|
+| Events pushed | 20,000 |
+| Ingest accepted | 397.6 events/s |
+| Pipeline drain rate | **130.3 alerts/s** |
+| Event-to-alert p50 | 54,903 ms |
+| Event-to-alert p95 | 100,248 ms |
+| Event-to-alert p99 | 103,933 ms |
+| Event-to-alert max | 105,194 ms |
+| Peak consumer lag | 13,952 messages |
+| Lag after drain | 0 messages |
+| Dead-letter rate | 0.00 |
+| Events that produced no alert | 0 |
+| Events that produced more than one alert | 0 |
+
+Fusion again held one core at roughly 77% while ingest never exceeded 29 MiB,
+so the bottleneck is where the September run found it. Artefact:
+`docs/perf/results/2026-10-07-compose-depth-baseline.json`.
+
+**The harness could not run from a clean checkout before this run.** It
+invoked `go run ./services/demo-producer` from the repository root, where
+there is no `go.mod` -- the producer is its own module -- so the subprocess
+failed before starting. Earlier published figures must have come from a
+prebuilt `--producer-bin`, which needs no module context.
+
 ## Three-node Kubernetes (kind), 2026-09-27
 
 Installed from `infra/helm/aisoc` with `values-ha.yaml` and
