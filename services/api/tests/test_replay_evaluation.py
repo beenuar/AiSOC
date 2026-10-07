@@ -292,6 +292,26 @@ class _StubSession:
     def __init__(self, connector: Any = None) -> None:
         self._connector = connector
 
+    async def begin_nested(self) -> Any:
+        """A SAVEPOINT. The job wraps each optional context read in one.
+
+        Modelled here rather than left off: a double that cannot do what
+        the real session can is how a defect reaches production with a
+        green suite behind it. The frozen-context reads need savepoints
+        because PostgreSQL aborts the whole transaction on a failed
+        statement, so catching the error is not enough to keep the later
+        write alive.
+        """
+
+        class _Savepoint:
+            async def rollback(self) -> None:
+                return None
+
+            async def commit(self) -> None:
+                return None
+
+        return _Savepoint()
+
     async def execute(self, *args: Any, **kwargs: Any) -> Any:
         connector = self._connector
 

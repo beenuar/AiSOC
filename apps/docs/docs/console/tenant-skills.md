@@ -1,7 +1,7 @@
 ---
 title: Tenant skills
 sidebar_label: Tenant skills
-description: Teach the investigation agent what is normal in your estate, backtest it against your own closed findings, and activate it.
+description: Teach the investigation agent what is normal in your estate, backtest it against your own closed findings, and activate it over the API.
 ---
 
 # Tenant skills
@@ -13,6 +13,22 @@ true in *your* estate, which is knowledge a built-in cannot have.
 When a skill matches an alert it supplies the investigation plan instead of
 the built-in strategy, and its guidance reaches the triage prompt. When no
 skill matches, nothing changes.
+
+:::info There is no skill editor in the console yet
+
+Skills are authored, backtested and activated over the API routes listed at
+the bottom of this page. Nothing under `/settings` or anywhere else in the
+console reads or writes them today, so what follows is a `curl` or SDK
+workflow rather than a point-and-click one. An editor is on the roadmap
+alongside the ones for agent definitions and MCP server registrations, which
+are API-only for the same reason.
+
+The API is shaped for that editor: `POST /validate` answers without saving so
+a form can check a document as it is typed, and `GET /api/v1/tenant-skills`
+returns the tool vocabulary alongside the skills so a picker can offer it.
+Those are affordances waiting for a caller, not a description of a screen that
+exists.
+:::
 
 ## What a skill looks like
 
@@ -92,8 +108,7 @@ Every name must be a tool your agent can actually call:
   you have registered, **enabled**, and named on that server's allowlist.
 
 `GET /api/v1/tenant-skills` returns the current list under `available_tools`,
-so the editor can offer them rather than making you discover the vocabulary by
-being refused.
+so you can read the vocabulary rather than discovering it by being refused.
 
 :::note When the check cannot be made
 
@@ -125,11 +140,23 @@ halves of it. The route refuses with a 409 naming which of these is wrong:
 - no backtest attached;
 - the backtest graded a different version;
 - the skill has already expired;
-- the skill is already active.
+- the skill is already active;
+- one of the two attached runs is missing, still going, or failed;
+- the window those runs graded holds no alert this skill matches.
 
 The same rule is written into a database CHECK constraint, so it holds even
 against a direct fix-up, and `scripts/check_tenant_skill_contract.py` fails
 the build if it disappears from either place or from this page.
+
+The last two refusals exist because the first four can all be satisfied by a
+backtest that measured nothing. Two attached ids say a report exists, not that
+it says anything: both runs can have crashed, or can have graded four hundred
+alerts of which none is one this skill applies to. Activation therefore opens
+both runs and compares them over the alerts the skill's `match` block selects.
+What it requires is that the comparison exists, never that it is favourable: a
+threshold on the number would be a target to tune a skill against, and an
+organisational fact that happens not to move last quarter's verdicts is still
+true about your estate.
 
 ## Backtesting
 
@@ -142,6 +169,34 @@ resample count:
 
 Read them side by side at `GET /api/v1/evaluations/replay/{id}`. The only
 difference between the two reports is the skill.
+
+### Compare them over the alerts the skill matches, not over the headlines
+
+A skill applies to a shape of alert, usually a handful out of hundreds. Both
+runs cover the same window, so the difference between their two headline
+figures is an average over every alert in it, most of which the skill never
+touched.
+
+Four matched alerts in twenty: a skill that corrects every one of them moves
+the headline by 0.20, and a skill that breaks every one of them moves it by
+-0.20. Across a few hundred findings neither is visible at all. So a headline
+that barely moved is not evidence that the skill changed little; it is mostly
+evidence that the window was bigger than the skill. The figure that describes
+the skill is the one over the alerts it selects, and that is the comparison
+activation makes.
+
+### A skill only reaches triage on the LLM path
+
+Guidance is read, matched and put into the prompt only when the alert takes
+the LLM path. A tenant with no model configured, a deployment started with
+`AISOC_DETERMINISTIC=1`, and an alert the cost governor answered from its
+deduplication cache all skip it.
+
+So a backtest run under any of those produces two identical reports, and that
+result means **the skill was never applied** rather than the skill was applied
+and changed nothing. Those are different facts and only one of them is about
+your skill. Check that the candidate run's decisions carry a model-backed tier
+before reading a flat result as a verdict on the text.
 
 :::caution What a backtest number does and does not say
 
@@ -176,7 +231,7 @@ skill already steered. Use `POST /{skill_id}/retire`, which keeps it.
 | `GET /api/v1/tenant-skills` | `settings:read` | With `available_tools`. |
 | `GET /api/v1/tenant-skills/{skill_id}` | `settings:read` | |
 | `GET /api/v1/tenant-skills/{skill_id}/versions` | `settings:read` | Resolves a recorded `skill@vN`. |
-| `POST /api/v1/tenant-skills/validate` | `settings:read` | Returns `valid: false` with the message rather than a 422, so the editor can call it as you type. |
+| `POST /api/v1/tenant-skills/validate` | `settings:read` | Returns `valid: false` with the message rather than a 422, so a caller can check a half-typed document without a failed request. |
 | `PUT /api/v1/tenant-skills` | `settings:write` | The id is inside the document. |
 | `POST /api/v1/tenant-skills/{skill_id}/backtest` | `connectors:write` | Reaches your SIEM with stored credentials, so the same bar as testing a connector. |
 | `POST /api/v1/tenant-skills/{skill_id}/activate` | `settings:write` | |
