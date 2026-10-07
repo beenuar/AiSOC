@@ -144,6 +144,52 @@ jobs:
           ISOLATION_REPO_ROOT: ${{ github.workspace }}
         run: python -m pytest ../../tests/isolation/test_lake_live.py -v --tb=short
 
+      # Fix-pass 4.4: the usage meter that counts lake rows. Its offline
+      # cases drive a stand-in for `execute_lake_query`, which proves the
+      # branching and cannot prove the SQL is valid ClickHouse or that
+      # `toDate(ingest_time)` buckets the way the module assumes — the two
+      # ways a usage figure is wrong on a deployment and right in CI.
+      - name: events_ingested counts the lake, per tenant and per day
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: python -m pytest ../../tests/isolation/test_usage_lake_meter_live.py -v --tb=short
+
+      # The negative control for the meter above.
+      #
+      # Drops the tenant predicate from its statement, which is the shape
+      # where one customer's usage export carries another's volume.
+      # Expected: the per-tenant assertions fail.
+      - name: The meter fails when it stops scoping to one tenant
+        working-directory: services/api
+        env:
+          ISOLATION_CLICKHOUSE_HOST: localhost
+          ISOLATION_CLICKHOUSE_PORT: "9000"
+          ISOLATION_REPO_ROOT: ${{ github.workspace }}
+        run: |
+          cp app/services/usage_metering.py /tmp/usage_metering.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/usage_metering.py")
+          s = p.read_text()
+          needle = '"WHERE tenant_id = %(tenant_id)s AND ingest_time >= %(start)s AND ingest_time < %(end)s "'
+          if needle not in s:
+              print("negative control could not find the lake meter's tenant predicate; it has "
+                    "been reshaped and this control is no longer proving anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, '"WHERE ingest_time >= %(start)s AND ingest_time < %(end)s "', 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_usage_lake_meter_live.py -q >/dev/null 2>&1; then
+            cp /tmp/usage_metering.bak app/services/usage_metering.py
+            echo "FAIL: the suite passed with the lake meter counting every tenant's events."
+            exit 1
+          fi
+          cp /tmp/usage_metering.bak app/services/usage_metering.py
+          echo "OK: an unscoped lake meter makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_usage_lake_meter_live.py -q
+
       # Parity 6.1: scheduled hunts read the tenant's own events rather
       # than a fixture corpus. Run from `services/agents`, because both
       # services call their package `app` and running this from

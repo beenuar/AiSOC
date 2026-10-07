@@ -28,7 +28,7 @@ that is done differs by source and is described under
 |---|---|---|
 | Organisation memory | Compiled from tagged analyst disagreement (`/feedback`) | Durable statements about what is normal in your estate |
 | Outcome priors | Every durable verdict, per evidence signature | A repeat alert matching a trusted prior benign disposition is closed without re-triage |
-| Tenant skills | Authored in the console, backtested, activated | Your own investigation approach for alerts of a given shape |
+| Tenant skills | Authored over the [tenant-skills API](./tenant-skills.md), backtested, activated — there is no console editor yet | Your own investigation approach for alerts of a given shape |
 | Knowledge-base runbooks | Documents you ingested at `/kb` | Excerpts from your runbooks that mention something this alert mentions, with citations |
 
 ## Knowledge-base runbooks
@@ -73,8 +73,8 @@ a seventh runbook.
 ### How runbook text is contained
 
 Runbook text is treated as untrusted, and more carefully than a tenant skill
-is. A skill is typed into the console by one person holding `settings:write`,
-into fields that are individually parsed and capped. A knowledge-base article
+is. A skill is written by one person holding `settings:write`, into fields
+that are individually parsed and capped. A knowledge-base article
 is longer, is often imported in bulk from a wiki or a vendor advisory, is
 edited by more people over more time, and reaches the prompt as prose. An
 advisory pasted into a runbook routinely quotes attacker output verbatim,
