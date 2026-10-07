@@ -87,22 +87,37 @@ def _label_for_path(method: str, path: str) -> tuple[str, str]:
     return f"{method.lower()}:{path}", "unknown"
 
 
-def _extract_jwt_claims(request: Request) -> tuple[uuid.UUID | None, uuid.UUID | None, str | None]:
-    """Return (user_id, tenant_id, email) from the Bearer JWT without re-validating."""
-    auth = request.headers.get("authorization", "")
-    if not auth.startswith("Bearer "):
-        return None, None, None
-    token = auth.split(" ", 1)[1]
-    try:
-        import jwt  # noqa: PLC0415
+def _authenticated_actor(
+    request: Request,
+) -> tuple[uuid.UUID | None, uuid.UUID | None, str | None]:
+    """Return (user_id, tenant_id, email) from the *verified* principal.
 
-        payload = jwt.decode(token, options={"verify_signature": False})
-        user_id = uuid.UUID(payload["sub"]) if payload.get("sub") else None
-        tenant_id = uuid.UUID(payload["tenant_id"]) if payload.get("tenant_id") else None
-        email = payload.get("email")
-        return user_id, tenant_id, email
-    except Exception:
+    The identity is read from the principal that ``get_current_user`` resolved
+    and recorded on ``request.state`` — the one place in the API where a
+    credential is actually verified. It is **not** re-derived from the
+    Authorization header here.
+
+    The previous implementation decoded the Bearer JWT with
+    ``jwt.decode(options={"verify_signature": False})`` and trusted its
+    ``sub`` / ``tenant_id`` / ``email`` claims. That ran for every mutating
+    request, before and regardless of authentication, so an unauthenticated
+    caller who sent a structurally valid JWT signed with any key forged those
+    claims straight into the tenant's tamper-evident audit chain
+    (GHSA-w4r8-969c-67p2, CWE-347: improper verification of a cryptographic
+    signature). A request that fails authentication now records nothing,
+    because nothing verified an identity for it. A side effect is that the
+    API-key and service-token paths — which never produced a JWT and so were
+    never audited here before — are now audited as the principal they
+    resolved to.
+    """
+    principal = getattr(request.state, "aisoc_authenticated_principal", None)
+    if principal is None:
         return None, None, None
+    return (
+        getattr(principal, "user_id", None),
+        getattr(principal, "tenant_id", None),
+        getattr(principal, "email", None),
+    )
 
 
 def _truncate(value: str | None, limit: int) -> str | None:
@@ -137,9 +152,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
         if response.status_code >= 500:
             return response
 
-        user_id, tenant_id, email = _extract_jwt_claims(request)
+        user_id, tenant_id, email = _authenticated_actor(request)
         if tenant_id is None:
-            return response  # unauthenticated
+            return response  # nothing authenticated this request — audit nothing
 
         # One audit writer per request.
         #

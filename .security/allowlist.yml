@@ -182,8 +182,17 @@ ceilings:
     # to where it stood before the unused-logger removal lowered it,
     # which is a different thing from raising a ceiling to make a scan
     # pass — the error count stays at the reduced 39.
-    total: 104
-    error: 39
+    #
+    # 104 -> 103 and 39 -> 38, another real reduction rather than the ±1
+    # the note above warns about. The GHSA-w4r8-969c-67p2 fix removed the
+    # `jwt.decode(token, options={"verify_signature": False})` call in
+    # services/api/app/middleware/audit_middleware.py, which the rule set
+    # flags as an `error` (a JWT decoded with signature verification
+    # disabled). That is exactly one `error` finding, and both the error
+    # and total counts dropped by exactly one on this branch, so the delta
+    # is the removed call and not the scanner. Lowering locks it in.
+    total: 103
+    error: 38
     measured_with: "1.86.0"
   checkov:
     failed: 219

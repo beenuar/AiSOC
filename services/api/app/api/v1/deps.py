@@ -400,6 +400,27 @@ async def _resolve_api_key(raw_key: str, db: AsyncSession) -> CurrentUser:
     )
 
 
+def _record_authenticated_principal(request: Request, principal: CurrentUser) -> CurrentUser:
+    """Record the **verified** principal for the audit middleware, and return it.
+
+    :class:`~app.middleware.audit_middleware.AuditMiddleware` runs outside this
+    dependency and used to decode the Authorization header with
+    ``verify_signature=False`` to label its rows, which let an unauthenticated
+    caller forge entries in the tamper-evident audit chain
+    (GHSA-w4r8-969c-67p2). It now reads the actor from this stashed principal
+    instead, so only a credential that actually verified is audited, as the
+    identity it verified to.
+
+    ``request.state`` is backed by the ASGI ``scope["state"]`` dict — the same
+    dict for every ``Request`` built from this scope — which is the channel
+    ``app.services.audit`` already uses to signal the middleware across the
+    ``BaseHTTPMiddleware`` task boundary. A request that fails authentication
+    raises before reaching here, so nothing is recorded for it.
+    """
+    request.state.aisoc_authenticated_principal = principal
+    return principal
+
+
 async def get_current_user(
     request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Security(bearer_scheme)],
@@ -421,14 +442,21 @@ async def get_current_user(
 
     In development mode an unauthenticated request resolves to a deterministic
     demo user (see ``app.api.v1.dev_auth``). Production requires a bearer token.
+
+    Every principal this returns is first recorded on ``request.state`` via
+    :func:`_record_authenticated_principal` so the audit middleware audits the
+    verified identity rather than an unverified token (GHSA-w4r8-969c-67p2).
     """
     if credentials is None:
         if is_dev_mode():
-            return CurrentUser(
-                user_id=DEMO_USER_ID,
-                tenant_id=DEMO_TENANT_ID,
-                role=DEMO_USER_ROLE,
-                email=DEMO_USER_EMAIL,
+            return _record_authenticated_principal(
+                request,
+                CurrentUser(
+                    user_id=DEMO_USER_ID,
+                    tenant_id=DEMO_TENANT_ID,
+                    role=DEMO_USER_ROLE,
+                    email=DEMO_USER_EMAIL,
+                ),
             )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -440,7 +468,7 @@ async def get_current_user(
 
     # --- API key path ---
     if token.startswith(_API_KEY_PREFIX):
-        return await _resolve_api_key(token, db)
+        return _record_authenticated_principal(request, await _resolve_api_key(token, db))
 
     # --- trusted peer service acting for one declared tenant ---
     #
@@ -455,10 +483,10 @@ async def get_current_user(
     declared_tenant = request.headers.get(SERVICE_TENANT_HEADER)
     service_principal = await _resolve_service_principal(token, declared_tenant, db)
     if service_principal is not None:
-        return service_principal
+        return _record_authenticated_principal(request, service_principal)
 
     # --- JWT path ---
-    return await resolve_jwt_principal(token, db)
+    return _record_authenticated_principal(request, await resolve_jwt_principal(token, db))
 
 
 async def resolve_jwt_principal(token: str, db: AsyncSession) -> CurrentUser:
