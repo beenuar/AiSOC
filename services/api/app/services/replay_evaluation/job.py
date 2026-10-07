@@ -43,6 +43,7 @@ are columns rather than report content.
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from dataclasses import dataclass
@@ -51,7 +52,7 @@ from typing import Any
 
 import httpx
 import structlog
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app._vendor.aisoc_benchmark.replay import (
@@ -85,6 +86,18 @@ __all__ = [
 #: failure for a job that was working.
 _HISTORY_TIMEOUT_S = 180.0
 _REPLAY_TIMEOUT_S = 1800.0
+
+#: Caps on the frozen context. Production's triage prompt reads the same
+#: ceiling for statements (`analyst_feedback.active_statements`), and a prior
+#: list is bounded because a tenant with a long history would otherwise push
+#: a multi-megabyte body through a call that already carries the findings.
+_STATEMENT_LIMIT = 200
+_PRIOR_LIMIT = 2000
+
+#: Written by `app.services.human_priors` and by the agents-side
+#: `app.memory.outcomes`; both spell the key this way. The replay sends the
+#: bare signature, because that is what the agents side looks a prior up by.
+_OUTCOME_KEY_PREFIX = "outcome:"
 
 
 class ReplayJobError(Exception):
@@ -218,22 +231,143 @@ async def _read_history(request: ReplayRequest, credentials: dict[str, Any]) -> 
     return body
 
 
-async def _run_replay(request: ReplayRequest, connector_type: str, findings: list[dict[str, Any]]) -> dict[str, Any]:
+@dataclass(frozen=True)
+class FrozenContextCapture:
+    """What production would have had, read at capture time with its dates.
+
+    The split filter is **not** applied here. Each row travels with its own
+    recorded time and `capture_context` on the agents side drops the late
+    ones, so "what counts as after the split" is decided in one place rather
+    than re-implemented either side of an HTTP call -- the drift this
+    repository keeps finding between two surfaces over the same rows.
+
+    `unread` names each part that could not be read. A replay must not die
+    because institutional memory was briefly unavailable, but it must not
+    quietly report a score produced with less context than it claims either,
+    so the gap is published in the method note.
+    """
+
+    statements: list[dict[str, Any]]
+    priors: dict[str, dict[str, Any]]
+    business_context: dict[str, Any] | None
+    unread: tuple[str, ...]
+
+    def as_payload(self, request: ReplayRequest) -> dict[str, Any]:
+        return {
+            "statements": self.statements,
+            "priors": self.priors,
+            "business_context": self.business_context,
+            "skills": list(request.skills or ()),
+            "skills_under_test": [request.skill_under_test] if request.skill_under_test else [],
+        }
+
+
+def _jsonable(row: Any) -> dict[str, Any]:
+    """A row as JSON the agents service can parse.
+
+    Datetimes are rendered ISO rather than dropped: the recorded time is
+    exactly what the split filter reads on the other side, so losing it
+    would silently make every row undated and therefore kept.
+    """
+    out: dict[str, Any] = {}
+    for key, value in dict(row).items():
+        out[key] = value.isoformat() if hasattr(value, "isoformat") else value
+    return out
+
+
+async def _capture_frozen_context(db: AsyncSession, request: ReplayRequest) -> FrozenContextCapture:
+    """Organisation memory, outcome priors and the tenant's business rules.
+
+    Production triages every alert with all three
+    (`services/agents/app/workers/fused_alert_consumer.py` and
+    `main.py`), so a replay that omits them is not measuring production. The
+    direction of that error is the reason it matters: memory and priors
+    mostly *suppress*, so a bare replay re-raises alerts production would
+    have closed.
+    """
+    statements: list[dict[str, Any]] = []
+    priors: dict[str, dict[str, Any]] = {}
+    business_context: dict[str, Any] | None = None
+    unread: list[str] = []
+
+    try:
+        rows = await db.execute(
+            text(
+                "SELECT statement, reason_code, scope, scope_value, observations, updated_at "
+                "FROM aisoc_context_statements "
+                "WHERE tenant_id = CAST(:t AS uuid) "
+                "  AND (expires_at IS NULL OR expires_at > :split) "
+                "ORDER BY observations DESC, updated_at DESC "
+                "LIMIT :lim"
+            ).bindparams(t=str(request.tenant_id), split=request.window_end, lim=_STATEMENT_LIMIT)
+        )
+        statements = [_jsonable(row) for row in rows.mappings()]
+    except Exception as exc:  # noqa: BLE001 - fail soft, and say which part
+        log.warning("replay.context.statements_unread", evaluation_id=str(request.evaluation_id), error=str(exc))
+        unread.append("statements")
+
+    try:
+        rows = await db.execute(
+            text(
+                "SELECT key, value FROM aisoc_institutional_memory WHERE tenant_id = CAST(:t AS uuid) AND key LIKE :prefix LIMIT :lim"
+            ).bindparams(t=str(request.tenant_id), prefix=f"{_OUTCOME_KEY_PREFIX}%", lim=_PRIOR_LIMIT)
+        )
+        for row in rows.mappings():
+            key = str(row["key"])
+            value = row["value"]
+            if isinstance(value, str):
+                try:
+                    value = json.loads(value)
+                except ValueError:
+                    continue
+            if isinstance(value, dict):
+                priors[key[len(_OUTCOME_KEY_PREFIX) :]] = _jsonable(value)
+    except Exception as exc:  # noqa: BLE001 - fail soft, and say which part
+        log.warning("replay.context.priors_unread", evaluation_id=str(request.evaluation_id), error=str(exc))
+        unread.append("priors")
+
+    try:
+        rows = await db.execute(
+            text(
+                "SELECT yaml_text, enabled, updated_at FROM aisoc_business_context_rule_sets WHERE tenant_id = CAST(:t AS uuid)"
+            ).bindparams(t=str(request.tenant_id))
+        )
+        row = next(iter(rows.mappings()), None)
+        if row is not None:
+            updated_at = row["updated_at"]
+            business_context = {
+                "yaml_text": row["yaml_text"] or "",
+                "enabled": bool(row["enabled"]),
+                "updated_at": updated_at.isoformat() if hasattr(updated_at, "isoformat") else updated_at,
+            }
+    except Exception as exc:  # noqa: BLE001 - fail soft, and say which part
+        log.warning("replay.context.business_rules_unread", evaluation_id=str(request.evaluation_id), error=str(exc))
+        unread.append("business_context")
+
+    return FrozenContextCapture(
+        statements=statements,
+        priors=priors,
+        business_context=business_context,
+        unread=tuple(unread),
+    )
+
+
+async def _run_replay(
+    request: ReplayRequest,
+    connector_type: str,
+    findings: list[dict[str, Any]],
+    context: FrozenContextCapture,
+) -> dict[str, Any]:
     url = f"{_agents_base_url()}/api/v1/replay/run"
+    # Always sent. Before fix-pass 3.1 the block went only when a caller
+    # passed skills, so the ordinary replay ran with an empty snapshot while
+    # the docs described one carrying organisation memory.
     payload: dict[str, Any] = {
         "connector_id": connector_type,
         "findings": findings,
         "train_fraction": request.train_fraction,
+        "context": context.as_payload(request),
     }
-    if request.skills is not None or request.skill_under_test is not None:
-        # Sent only when a caller asked for it. An ordinary replay still sends
-        # no context block at all, so its snapshot is the empty one documented
-        # on `FrozenContext` rather than an empty-but-present one that would
-        # read differently in the method note.
-        payload["context"] = {
-            "skills": list(request.skills or ()),
-            "skills_under_test": [request.skill_under_test] if request.skill_under_test else [],
-        }
     try:
         async with httpx.AsyncClient(timeout=_REPLAY_TIMEOUT_S) as client:
             response = await client.post(url, headers=_agents_headers(request.tenant_id), json=payload)
@@ -267,9 +401,15 @@ async def run_evaluation(db: AsyncSession, request: ReplayRequest) -> None:
                 "a result over zero findings would describe the window rather than the agent."
             )
 
-        run = await _run_replay(request, connector_type, findings)
+        context = await _capture_frozen_context(db, request)
+        run = await _run_replay(request, connector_type, findings, context)
         decisions = run["decisions"]
         method = dict(run.get("method") or {})
+        if context.unread:
+            # Published rather than logged: a score produced with less context
+            # than the method section describes is the defect this capture
+            # exists to close, and a silent partial capture would recreate it.
+            method["frozen_context_unread"] = list(context.unread)
 
         score = score_replay(
             decisions,
