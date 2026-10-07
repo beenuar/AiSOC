@@ -47,10 +47,10 @@
     "zustand": "^5.0.15"
   },
   "devDependencies": {
-    "@storybook/addon-a11y": "^10.6.0",
-    "@storybook/addon-themes": "^10.6.0",
-    "@storybook/react-vite": "^10.6.0",
-    "@storybook/test-runner": "^0.24.5",
+    "@storybook/addon-a11y": "^10.6.1",
+    "@storybook/addon-themes": "^10.6.1",
+    "@storybook/react-vite": "^10.6.1",
+    "@storybook/test-runner": "^0.26.0",
     "@tailwindcss/postcss": "^4.3.3",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
@@ -71,7 +71,7 @@
     "http-server": "^14.1.1",
     "jsdom": "^30.1.0",
     "postcss": "^8.5.28",
-    "storybook": "^10.6.0",
+    "storybook": "^10.6.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.3.1",
