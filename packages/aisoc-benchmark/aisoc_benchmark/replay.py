@@ -50,6 +50,7 @@ so.
 from __future__ import annotations
 
 import json
+import math
 import random
 from collections import Counter
 from dataclasses import asdict, dataclass, field
@@ -364,7 +365,10 @@ def _matthews(matrix: dict[str, dict[str, int]], labels: list[str]) -> float | N
     cov_xy = correct * total - sum(actual[label] * predicted[label] for label in labels)
     cov_xx = total * total - sum(predicted[label] ** 2 for label in labels)
     cov_yy = total * total - sum(actual[label] ** 2 for label in labels)
-    denom = (cov_xx * cov_yy) ** 0.5
+    # `math.sqrt` rather than `** 0.5`: typeshed types the float power
+    # operator as returning `Any`, which the baseline gate reports as a
+    # `no-any-return` out of a function declared `float | None`.
+    denom = math.sqrt(cov_xx * cov_yy)
     if denom == 0:
         return 0.0
     return cov_xy / denom

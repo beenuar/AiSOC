@@ -137,7 +137,9 @@ class TestWilsonInterval:
     def test_recall_carries_a_wilson_interval(self) -> None:
         score = score_replay(_skewed_queue(malicious=40, benign=360, verdict_for_all=MALICIOUS))
 
-        low, high = score.malicious_recall_wilson
+        interval = score.malicious_recall_wilson
+        assert interval is not None
+        low, high = interval
         assert 0.0 <= low <= 1.0 and 0.0 <= high <= 1.0
 
     def test_a_perfect_run_still_has_width(self) -> None:
@@ -148,7 +150,9 @@ class TestWilsonInterval:
         """
         score = score_replay(_skewed_queue(malicious=40, benign=360, verdict_for_all=MALICIOUS))
 
-        low, high = score.malicious_recall_wilson
+        interval = score.malicious_recall_wilson
+        assert interval is not None
+        low, high = interval
         assert high == pytest.approx(1.0, abs=1e-9)
         assert low < 0.95, f"a 40/40 run should not claim a lower bound of {low}"
 
@@ -157,9 +161,9 @@ class TestWilsonInterval:
         wide = score_replay(_skewed_queue(malicious=10, benign=90, verdict_for_all=MALICIOUS))
         narrow = score_replay(_skewed_queue(malicious=200, benign=200, verdict_for_all=MALICIOUS))
 
-        assert (wide.malicious_recall_wilson[1] - wide.malicious_recall_wilson[0]) > (
-            narrow.malicious_recall_wilson[1] - narrow.malicious_recall_wilson[0]
-        )
+        wide_interval, narrow_interval = wide.malicious_recall_wilson, narrow.malicious_recall_wilson
+        assert wide_interval is not None and narrow_interval is not None
+        assert (wide_interval[1] - wide_interval[0]) > (narrow_interval[1] - narrow_interval[0])
 
     def test_it_is_deterministic(self) -> None:
         """Closed form, so two runs over one corpus cannot disagree."""
