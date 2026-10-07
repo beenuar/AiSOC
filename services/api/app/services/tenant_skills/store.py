@@ -19,6 +19,17 @@ baseline is a number rather than a comparison. The database constraint says
 the same thing, so neither this module nor a later one can be the only place
 the rule lives.
 
+**Activation reads those two runs rather than only their ids.** Fix-pass 3.8.
+An id and a version number say that a report was attached, not that it says
+anything: two crashed runs, two queued ones, or two runs over a window holding
+no alert this skill selects all satisfy the check above. So activation opens
+both runs, requires that both completed, and compares them over the alerts the
+skill's match block selects rather than over the whole window.
+``app.services.tenant_skills.backtest`` explains why the subset is the point;
+the short version is that a skill matching four alerts in two hundred cannot
+move a headline either way, so the headline cannot be what activation rests
+on. The gate is that the comparison exists, never that it is favourable.
+
 What a backtest is here
 -----------------------
 Two Phase 1 replay evaluations over the same history window: one with the
@@ -48,6 +59,7 @@ from app.models.tenant_skill import (
 from app.models.tenant_skill import (
     TenantSkill as TenantSkillRow,
 )
+from app.services.tenant_skills import backtest as backtest_reader
 from app.services.tenant_skills.models import SkillParseError, TenantSkill, parse_skill_yaml, skill_from_body
 from app.services.tenant_skills.tools import tool_inventory_for_tenant, validate_expected_pivots
 
@@ -325,7 +337,12 @@ async def activate_skill(
     actor_id: uuid.UUID | None,
     now: datetime | None = None,
 ) -> TenantSkillRow:
-    """Put a backtested skill into service. Four refusals, each with its own reason."""
+    """Put a backtested skill into service, refusing anything that would put untested guidance in front of alerts.
+
+    Every refusal says which thing is wrong and what to do about it. They are
+    deliberately not counted here: the count drifted the moment this function
+    grew the two refusals fix-pass 3.8 added.
+    """
     moment = now or datetime.now(UTC)
     row = await _row(db, tenant_id, skill_id)
 
@@ -349,6 +366,16 @@ async def activate_skill(
     if row.status == ACTIVE:
         raise SkillLifecycleError("this skill is already active")
 
+    delta = await backtest_reader.matched_delta(
+        db,
+        tenant_id=tenant_id,
+        match=backtest_reader.match_from_body(row.body or {}),
+        baseline_evaluation_id=row.backtest_baseline_id,
+        candidate_evaluation_id=row.backtest_evaluation_id,
+    )
+    if delta.blocked_reason is not None:
+        raise SkillLifecycleError(delta.blocked_reason)
+
     row.status = ACTIVE
     row.activated_at = moment
     row.activated_by = actor_id
@@ -360,6 +387,7 @@ async def activate_skill(
         skill_id=skill_id,
         version=row.version,
         backtest_evaluation_id=str(row.backtest_evaluation_id),
+        **delta.as_log_fields(),
     )
     return row
 

@@ -243,6 +243,13 @@ class AzureDefenderConnector(BaseConnector):
             "actor": actor,
             "actor_email": actor_email,
             "host": host,
+            # `actor` and `host` are this connector's own spelling and every
+            # consumer downstream reads `username` / `hostname`, so the user
+            # was dropped at the boundary while the host happened to survive
+            # on an alias. Both names are emitted; neither is load-bearing
+            # alone.
+            "username": actor,
+            "hostname": host,
             "service_source": raw.get("serviceSource"),
             "tactics": raw.get("mitreTechniques", []),
             "category": raw.get("category"),

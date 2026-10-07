@@ -58,6 +58,13 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.services.alert_history_adapters import (
+    adapt_defender_alert,
+    adapt_elastic_signal,
+    adapt_qradar_offense,
+    adapt_sentinel_incident,
+    adapt_splunk_notable,
+)
 from app.services.disposition_writeback import (
     BENIGN,
     BENIGN_TRUE_POSITIVE,
@@ -91,10 +98,16 @@ __all__ = [
 class ClosedFinding:
     """One finding a human already closed, with the label they chose.
 
-    ``raw`` carries the vendor payload untouched so the replay runner can hand
-    it to the same connector ``normalize()`` production uses, rather than
-    normalizing a second way here and grading the agent on an input shape it
-    never sees in production.
+    ``raw`` carries the vendor payload in the shape that connector's
+    ``normalize()`` reads, so the replay runner can hand it to the same
+    mapping production uses rather than normalizing a second way here and
+    grading the agent on an input shape it never sees.
+
+    It is the row as the vendor sent it for three of the five vendors. The
+    other two read a different endpoint of the same product than their
+    connector polls, so :mod:`app.services.alert_history_adapters` restructures
+    them first — see that module for which, and why a verbatim row was the
+    wrong thing to carry.
     """
 
     vendor: str
@@ -265,7 +278,7 @@ def parse_splunk_notable(row: Mapping[str, Any]) -> ClosedFinding:
         reason=_opt_str(row, "comment"),
         rule_id=_opt_str(row, "rule_id"),
         severity=(_opt_str(row, "urgency") or "").lower() or None,
-        raw=dict(row),
+        raw=adapt_splunk_notable(row),
     )
 
 
@@ -309,7 +322,7 @@ def parse_sentinel_incident(row: Mapping[str, Any]) -> ClosedFinding:
         reason=(": ".join(reason_parts) or None),
         rule_id=_first_rule_id(props.get("relatedAnalyticRuleIds")),
         severity=(_opt_str(props, "severity") or "").lower() or None,
-        raw=dict(row),
+        raw=adapt_sentinel_incident(row),
     )
 
 
@@ -362,7 +375,7 @@ def parse_elastic_signal(row: Mapping[str, Any]) -> ClosedFinding:
         reason=(str(src["kibana.alert.workflow_reason"]) if src.get("kibana.alert.workflow_reason") else None),
         rule_id=(str(src["kibana.alert.rule.uuid"]) if src.get("kibana.alert.rule.uuid") else None),
         severity=(str(src["kibana.alert.severity"]).lower() if src.get("kibana.alert.severity") else None),
-        raw=dict(row),
+        raw=adapt_elastic_signal(row),
     )
 
 
@@ -406,7 +419,7 @@ def parse_qradar_offense(row: Mapping[str, Any]) -> ClosedFinding:
         reason=(str(raw_label) or None),
         rule_id=(None if row.get("offense_type") is None else str(row.get("offense_type"))),
         severity=_qradar_severity(row.get("severity")),
-        raw=dict(row),
+        raw=adapt_qradar_offense(row),
     )
 
 
@@ -475,5 +488,5 @@ def parse_defender_alert(row: Mapping[str, Any]) -> ClosedFinding:
         reason=_opt_str(row, "determination"),
         rule_id=_opt_str(row, "detectionSource"),
         severity=(_opt_str(row, "severity") or "").lower() or None,
-        raw=dict(row),
+        raw=adapt_defender_alert(row),
     )
