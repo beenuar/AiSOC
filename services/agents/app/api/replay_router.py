@@ -31,6 +31,7 @@ an absence. Those counters travel into the report's method section.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import structlog
@@ -52,6 +53,7 @@ from app.security.tenant_scope import (
     require_console_or_service_auth,
     scoped_tenant_or_403,
 )
+from app.workers.business_context import BusinessContextApplier, load_rules_from_yaml
 
 logger = structlog.get_logger()
 
@@ -63,6 +65,59 @@ ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_
 #: than one normalize batch would have to be split, and a split batch is a
 #: second ordering to get wrong.
 MAX_FINDINGS = 2000
+
+
+def _business_context_applier(context: FrozenContext | None, *, split_at: datetime) -> BusinessContextApplier | None:
+    """The tenant's rules as an applier, or ``None`` when none should apply.
+
+    Four reasons to return ``None``, each of which would otherwise be a
+    quiet wrong answer rather than an error:
+
+    * no rule set was captured -- absent is not an empty rule set;
+    * the tenant disabled theirs, and a replay must not opt them back in;
+    * it was last edited **after** the split, so applying it would grade a
+      window using hindsight about that window;
+    * it does not parse, which the production worker also treats as "apply
+      none" rather than failing triage.
+
+    An undated rule set is kept, matching how ``capture_context`` treats an
+    undated statement: under-applying context is the defect this item
+    closes, so the lenient direction is the recorded one.
+    """
+    raw = (context.business_context if context else None) or {}
+    if not raw or not raw.get("enabled"):
+        return None
+
+    edited = raw.get("updated_at")
+    if isinstance(edited, str) and edited.strip():
+        try:
+            parsed = datetime.fromisoformat(edited.strip().replace("Z", "+00:00"))
+        except ValueError:
+            parsed = None
+        if parsed is not None:
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=UTC)
+            if parsed > split_at:
+                logger.info("replay.business_context.dropped_after_split", edited_at=edited)
+                return None
+
+    yaml_text = str(raw.get("yaml_text") or "")
+    if not yaml_text.strip():
+        return None
+    try:
+        rules = load_rules_from_yaml(yaml_text)
+    except Exception as exc:  # noqa: BLE001 - a bad rule set applies none, as in the worker
+        logger.warning("replay.business_context.unparseable", error=str(exc))
+        return None
+    if not rules:
+        return None
+
+    applier = BusinessContextApplier()
+    # Seeded directly rather than left to read Postgres: the snapshot is the
+    # frozen copy, and a live read would reintroduce exactly the post-split
+    # edit this function just filtered out.
+    applier.seed_tenant_rules(rules)
+    return applier
 
 
 class FrozenContext(BaseModel):
@@ -88,6 +143,17 @@ class FrozenContext(BaseModel):
     priors: dict[str, dict[str, Any]] = Field(default_factory=dict)
     skills: list[dict[str, Any]] = Field(default_factory=list)
     skills_under_test: list[dict[str, Any]] = Field(default_factory=list, max_length=8)
+
+    #: The tenant's authored business-context rule set, as stored: the YAML
+    #: verbatim, whether it is enabled, and when it was last edited.
+    #:
+    #: Production applies these on every alert
+    #: (`BusinessContextApplier` in `main.py`), so a replay that does not is
+    #: grading a different agent. They travel in the snapshot rather than
+    #: being read live for the same reason everything else here does: a rule
+    #: edited after the split must not decide a verdict about a window that
+    #: closed before it.
+    business_context: dict[str, Any] | None = None
 
 
 class ReplayRequest(BaseModel):
@@ -176,6 +242,10 @@ async def run_replay(body: ReplayRequest, principal: ScopedPrincipal) -> ReplayR
         normalizer=normalizer,
         tenant_id=str(tenant_id),
         connector_id=body.connector_id,
+        # Production triages with the tenant's rules applied (`main.py`), so
+        # a replay without them grades an agent nobody runs. Frozen at the
+        # split by `_business_context_applier`.
+        business_context=_business_context_applier(body.context, split_at=split.split_at),
     )
 
     try:

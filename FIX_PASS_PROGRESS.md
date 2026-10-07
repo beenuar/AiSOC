@@ -86,14 +86,14 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 3: Replay, shadow mode and evaluation measure the real thing
 
-- [ ] **3.1** Frozen context, not empty context
+- [x] **3.1** Frozen context, not empty context
 - [x] **3.2** No side effects from a replay
-- [ ] **3.3** Input shapes: per-source adapters for Elastic and Defender
+- [x] **3.3** Input shapes: per-source adapters for Elastic and Defender
 - [x] **3.4** Model attribution: `model_used` is set from the call that answered
-- [ ] **3.5** Non-degenerate acceptance for the reproducibility test
+- [x] **3.5** Non-degenerate acceptance for the reproducibility test
 - [x] **3.6** Tool calls recorded from the ledger, not hard-coded to 0
 - [x] **3.7** Demotion without a page load
-- [ ] **3.8** Skills: activation evidence, LLM-path-only disclosure, console retraction
+- [x] **3.8** Skills: activation evidence, LLM-path-only disclosure, console retraction
 - [~] **3.9** The weekly live evaluation installs from the lockfile and fails loudly; it still cannot *run* without a funded key (M2)
 - [x] **3.10** The 9.3% flip rate is qualified or removed
 - [x] **3.11** CI runs the live tests
@@ -538,12 +538,11 @@ left implied.
 
 ## Wave 3 (partial): what is done and what is not
 
-**Done, each with a reproduction and a negative control:** 3.2, 3.4, 3.6,
-3.7, 3.10, 3.11, 3.12, and the actionable half of 3.9.
+**Done, each with a reproduction and a negative control:** 3.1, 3.2, 3.3,
+3.4, 3.5, 3.6, 3.7, 3.8, 3.10, 3.11, 3.12, and the actionable half of 3.9.
 
-**Not started:** 3.1 (frozen context), 3.3 (per-source input adapters),
-3.5 (non-degenerate acceptance),
-3.8 (skills activation evidence and the console retraction).
+**Wave 3 is closed.** Every item carries its reproduction and its negative
+control; 3.9's remaining half is maintainer-blocked on a funded key (M2).
 
 ### 3.2 A replay has no side effects
 
@@ -609,6 +608,33 @@ the statement so an edit to the shared module cannot put it back.
 to: `autonomy_evidence_rules.py` was listed as a permanent entry reached only
 by tooling, the dispatch re-check gave it a production caller, and the gate
 refused the stale entry.
+### 3.5 Non-degenerate acceptance
+
+Measured before touching anything: all six decisions in the test window came
+back `benign` at `0.10` on tier `deterministic`, so Phase 1's acceptance bar
+was one constant list compared against itself.
+
+The replacement drives the same runner with a recording of
+`llama3.2:3b-instruct-q4_K_M` -- the model the air-gap compose file bundles --
+answering the production triage prompt, served to the real gateway client over
+a loopback socket rather than through a patched transport. Recorded replies
+give the two properties a live model and a constant each give only one of:
+they vary, and they repeat.
+
+Proven non-vacuous rather than asserted to be. Flattening the recording to a
+single verdict leaves the old bar passing (`first == second`) and makes the
+new one fail, and `test_the_acceptance_bar_rejects_a_constant_verdict_stream`
+keeps that proof in the suite.
+
+Two things the recording exposed that a constant could not. The LLM path
+writes the call's elapsed time into a finding string, so `latency_ms` was not
+the only wall clock in a decision and the run was not reproducible until that
+was excluded too. And one of the six real replies is malformed -- the model
+truncated mid-rationale -- which the committed fixture keeps as it arrived,
+because a recording edited until it parses is no longer a recording.
+
+The alerts are synthetic and the fixture's own `provenance` block says so;
+only the replies are real.
 
 ### 3.9 is half done, and the half that is left is M2
 

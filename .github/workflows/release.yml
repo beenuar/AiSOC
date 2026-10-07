@@ -1174,17 +1174,30 @@ jobs:
       # the application's: the break an operator is protected from here is a
       # values-schema break, and the chart versions independently of
       # `appVersion`. `helm push` cannot write a non-SemVer tag, so the channel
-      # is a manifest copy with buildx, which is already on the runner.
+      # is a byte-identical manifest retag through the registry API.
+      #
+      # NOT `docker buildx imagetools create`. That tool composes image
+      # *indexes*: on v17.1.0, the first release to reach this far, it wrapped
+      # the chart manifest in a fresh single-entry OCI index with no
+      # annotations — so `:stable` pointed at a wrapper no helm client should
+      # be handed, and the verify below correctly refused it ("resolves to
+      # '<nothing>'"). A channel tag must serve the *same bytes* as the
+      # version tag: GET the manifest, PUT it under `stable`, unchanged.
       - name: Move the `stable` chart channel
         id: chart-channel
         if: github.event_name == 'push'
         env:
           CHART_VERSION: ${{ steps.package.outputs.version }}
           PROMOTE_STABLE: ${{ inputs.promote_stable }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
           CHART=oci://ghcr.io/beenuar/charts/aisoc
           REF=ghcr.io/beenuar/charts/aisoc
+          MEDIA="application/vnd.oci.image.manifest.v1+json"
+          reg_token=$(curl -fsS -u "x:${GH_TOKEN}" \
+            "https://ghcr.io/token?scope=repository:beenuar/charts/aisoc:pull,push&service=ghcr.io" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
 
           incoming_major="${CHART_VERSION%%.*}"
           is_major=false
@@ -1206,7 +1219,8 @@ jobs:
           # The manifest carries `org.opencontainers.image.version`, which is
           # the chart version helm packaged. `|| true` because a missing tag
           # is the ordinary state before the first promotion, not an error.
-          current=$(docker buildx imagetools inspect "${REF}:stable" --raw 2>/dev/null \
+          current=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                      "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" 2>/dev/null \
                       | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
                       2>/dev/null || true)
           channel_major=""
@@ -1220,12 +1234,25 @@ jobs:
           fi
 
           if { [ "$is_major" != "true" ] && [ "$same_major" = "true" ]; } || [ "${PROMOTE_STABLE}" = "true" ]; then
-            docker buildx imagetools create --tag "${REF}:stable" "${REF}:${CHART_VERSION}"
+            # GET the version tag's manifest and refuse to promote anything
+            # whose own annotation does not name CHART_VERSION — then PUT the
+            # identical bytes under `stable`.
+            curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+              "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${CHART_VERSION}" -o /tmp/chart-manifest.json
+            source_version=$(python3 -c 'import json; print((json.load(open("/tmp/chart-manifest.json")).get("annotations") or {}).get("org.opencontainers.image.version",""))')
+            if [ "$source_version" != "$CHART_VERSION" ]; then
+              echo "::error title=Helm::the ${CHART_VERSION} tag's manifest names '${source_version:-<nothing>}'; refusing to promote it"
+              exit 1
+            fi
+            curl -fsS -X PUT -H "Authorization: Bearer ${reg_token}" -H "Content-Type: ${MEDIA}" \
+              --data-binary @/tmp/chart-manifest.json \
+              "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" > /dev/null
             # Read the tag back and require it to name the version we just
             # pushed. `helm show chart --version stable` cannot do this for
             # the reason above, and a promotion nobody verified is how a
             # channel silently points at the wrong chart.
-            moved_to=$(docker buildx imagetools inspect "${REF}:stable" --raw 2>/dev/null \
+            moved_to=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                         "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" 2>/dev/null \
                          | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
                          2>/dev/null || true)
             if [ "$moved_to" != "$CHART_VERSION" ]; then

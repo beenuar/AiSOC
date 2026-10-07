@@ -126,9 +126,17 @@ class SplunkClient:
         review lookup supplies its own SPL rather than being told its history
         cannot be read. The fields the parser needs are documented in
         `apps/docs/docs/evaluation/replay.md`.
+
+        ``| fields`` keeps only what it names, so the asset and identity
+        columns are named explicitly: without them a replayed notable reaches
+        triage with no host and no user, and the agent is graded on an alert
+        that says who raised it and nothing about who it happened to. These
+        are Enterprise Security's own notable fields — assets correlate on
+        ``src`` / ``dest`` / ``dvc`` and identities on ``user`` / ``src_user``.
         """
         spl = search_override or (
-            "`notable` | search status IN (5, 6) | fields event_id rule_id rule_name urgency disposition review_time reviewer comment _time"
+            "`notable` | search status IN (5, 6) | fields event_id rule_id rule_name urgency disposition "
+            "review_time reviewer comment _time src dest dvc orig_host user src_user"
         )
         rows = await self.run_search(
             spl,
