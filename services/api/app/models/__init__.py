@@ -36,6 +36,7 @@ from app.models.organization import (
     OrganizationMemberTenant,
     OrganizationTenant,
 )
+from app.models.playbook_reference import PlaybookReference
 from app.models.posture import PostureDriftEvent, PostureFinding, PostureScanRun
 from app.models.published_replay import PublishedReplay
 from app.models.remediation import RemediationGateLog, RemediationMaturity, RemediationWhitelist
@@ -103,6 +104,7 @@ __all__ = [
     "PasskeyChallenge",
     "OnCallStatus",
     "AgentApproval",
+    "PlaybookReference",
     "PostureDriftEvent",
     "PostureFinding",
     "PostureScanRun",

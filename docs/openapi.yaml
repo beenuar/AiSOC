@@ -5146,6 +5146,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/playbook-steps/references:
+    post:
+      tags:
+      - playbooks
+      summary: Resolve the named integrations a playbook http step addresses
+      description: 'Return the enabled references this tenant has for the names asked
+        for.
+
+
+        A name that is absent or disabled is simply not in the response. The
+
+        engine reports which ones it needed and did not get; answering with an
+
+        empty string instead would substitute nothing into
+
+        ``${IDP_BASE_URL}/sessions`` and hand httpx a scheme-relative path.
+
+
+        Secret halves (bearer headers, webhook URLs) are returned to the agents
+
+        service, which is an authenticated internal peer holding the service
+
+        token, and are used for exactly one request. The engine records header
+
+        *names* in the run result, never values — the run record is readable by
+
+        anyone with access to the case.'
+      operationId: resolve_playbook_references_api_v1_playbook_steps_references_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: x-aisoc-service-token
+        in: header
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: X-Aisoc-Service-Token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReferenceLookupRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Resolve Playbook References Api V1 Playbook Steps
+                  References Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/plugins:
     get:
       tags:
@@ -30715,6 +30776,23 @@ components:
       - proposed_disposition
       - event_time
       title: RedispositionCandidateModel
+    ReferenceLookupRequest:
+      properties:
+        names:
+          items:
+            type: string
+          type: array
+          maxItems: 32
+          title: Names
+        tenant_id:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+          title: Tenant Id
+      type: object
+      title: ReferenceLookupRequest
+      description: The ``${NAME}`` tokens one ``http`` step needs resolved.
     RefreshRequest:
       properties:
         refresh_token:

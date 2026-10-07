@@ -89,6 +89,13 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         # or a principal, so neither fits the three verbs above.
         "lookup_cloud_audit",
         "lookup_endpoint_telemetry",
+        # Depth 5.1. A distributed osquery query across a fleet. Distinct
+        # from `query_processes`, which names one table; this runs one of a
+        # closed set of allowlisted templates and the caller never supplies
+        # SQL. It was a playbook step type that could not run anywhere: the
+        # engine imported the three clients from this service, which that
+        # image does not contain.
+        "osquery_live_query",
         "suspend_session",
         "sync_detection_rule",
         # The return leg of a two-way SIEM integration: AiSOC's verdict
