@@ -683,12 +683,35 @@ class TestTheVendorPayloadsHaveNotDrifted:
         "ENTRA_REMOVE_MEMBER",
     )
 
-    def test_every_shared_payload_matches_the_offline_copy(self) -> None:
+    async def test_every_shared_payload_matches_the_offline_copy(self) -> None:
         assert OFFLINE_SUITE.exists(), f"{OFFLINE_SUITE} has moved; this pin is reading nothing"
         tree = ast.parse(OFFLINE_SUITE.read_text(encoding="utf-8"))
 
+        # The offline payloads reference module-level names — every one of
+        # them opens `{"schemas": [PATCH_SCHEMA], …}` — so `literal_eval`
+        # alone raises on the first `ast.Name`. Those names are resolved
+        # first, which is also what makes the comparison meaningful: a
+        # changed `PATCH_SCHEMA` has to show up as a changed payload.
+        constants = {
+            target.id: node.value.value
+            for node in tree.body
+            if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant)
+            for target in node.targets
+            if isinstance(target, ast.Name)
+        }
+
+        def evaluate(node: ast.expr) -> object:
+            if isinstance(node, ast.Name):
+                assert node.id in constants, f"the offline suite builds a payload from {node.id!r}, which this pin cannot resolve"
+                return constants[node.id]
+            if isinstance(node, ast.Dict):
+                return {evaluate(k): evaluate(v) for k, v in zip(node.keys, node.values, strict=True) if k is not None}
+            if isinstance(node, ast.List | ast.Tuple):
+                return [evaluate(element) for element in node.elts]
+            return ast.literal_eval(node)
+
         offline = {
-            target.id: ast.literal_eval(node.value)
+            target.id: evaluate(node.value)
             for node in tree.body
             if isinstance(node, ast.Assign)
             for target in node.targets
