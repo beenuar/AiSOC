@@ -75,6 +75,27 @@ _COLUMNS = (
     "mitre_techniques",
     "mitre_tactics",
     "iocs",
+    # The activity projection ingest builds on every event (depth plan 2.2).
+    # These are columns and not only `ocsf_json` because a hunt that has to
+    # JSONExtract out of a ZSTD blob cannot use an index.
+    "actor_kind",
+    "actor_kind_source",
+    "actor_id",
+    "actor_on_behalf_of",
+    "action",
+    "resource_type",
+    "resource_id",
+    "resource_owner",
+    "src_country_code",
+    "src_asn",
+    "src_as_org",
+    "src_reputation",
+    "src_reputation_known",
+    "client_family",
+    "client_version",
+    "client_category",
+    "client_raw",
+    "outcome",
 )
 
 _INSERT_SQL = f"INSERT INTO aisoc.raw_events ({', '.join(_COLUMNS)}) VALUES"
@@ -101,6 +122,13 @@ def _as_int(value: Any, default: int = 0) -> int:
 
 def _as_str(value: Any) -> str:
     return value if isinstance(value, str) else ("" if value is None else str(value))
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _as_ip(value: Any) -> str:
@@ -195,6 +223,48 @@ def _iocs(ocsf: dict[str, Any]) -> list[str]:
     return out
 
 
+def _activity_columns(ocsf: dict[str, Any]) -> dict[str, Any]:
+    """Flatten the activity projection ingest put on the event.
+
+    Every value is defaulted rather than left absent: ClickHouse's column
+    order is positional at insert time, so a row missing one key would shift
+    every column after it. An event from before depth plan 2.2, or from a
+    replayed topic, has no ``activity`` block at all and must still insert.
+
+    ``src_reputation_known`` is carried separately from the score because a
+    clean verdict and an unreachable enrichment service both produce 0.0, and
+    collapsing them would let a broken enrichment path read as a quiet estate.
+    """
+    act = ocsf.get("activity")
+    if not isinstance(act, dict):
+        act = {}
+    actor = act.get("actor") if isinstance(act.get("actor"), dict) else {}
+    resource = act.get("resource") if isinstance(act.get("resource"), dict) else {}
+    location = act.get("location") if isinstance(act.get("location"), dict) else {}
+    client = location.get("client") if isinstance(location.get("client"), dict) else {}
+
+    return {
+        "actor_kind": _as_str(actor.get("kind")),
+        "actor_kind_source": _as_str(actor.get("kind_source")),
+        "actor_id": _as_str(actor.get("id")),
+        "actor_on_behalf_of": _as_str(actor.get("on_behalf_of")),
+        "action": _as_str(act.get("action")),
+        "resource_type": _as_str(resource.get("type")),
+        "resource_id": _as_str(resource.get("id") or resource.get("name")),
+        "resource_owner": _as_str(resource.get("owner")),
+        "src_country_code": _as_str(location.get("country_code")),
+        "src_asn": _as_int(location.get("asn")),
+        "src_as_org": _as_str(location.get("as_org")),
+        "src_reputation": _as_float(location.get("reputation")),
+        "src_reputation_known": 1 if location.get("reputation_known") else 0,
+        "client_family": _as_str(client.get("family")),
+        "client_version": _as_str(client.get("version")),
+        "client_category": _as_str(client.get("category")),
+        "client_raw": _as_str(client.get("raw"))[:1024],
+        "outcome": _as_str(act.get("outcome")),
+    }
+
+
 def event_to_row(message: dict[str, Any]) -> dict[str, Any] | None:
     """Map an ingest NormalizedEvent envelope to a ClickHouse row dict.
 
@@ -236,6 +306,7 @@ def event_to_row(message: dict[str, Any]) -> dict[str, Any] | None:
         "mitre_techniques": techniques,
         "mitre_tactics": tactics,
         "iocs": _iocs(ocsf),
+        **_activity_columns(ocsf),
     }
 
     # Only set a deterministic event_id when the ingest id is a real UUID;

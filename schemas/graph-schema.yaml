@@ -20,7 +20,7 @@
 # are reconciled from configuration snapshots and carry `snapshot_id` and a
 # `valid_from`/`valid_to` window instead.
 
-version: v1.1
+version: v1.2
 
 # ---------------------------------------------------------------------------
 # Node labels
@@ -51,6 +51,12 @@ node_labels:
       - { name: department,    type: string,   required: false }
       - { name: manager_id,    type: string,   required: false }
       - { name: status,        type: string,   required: false }
+      # v1.2 activity projection. actor_kind is written on every event,
+      # including as `unknown`, because the absence of the property and a
+      # source that declined to say are different facts.
+      - { name: actor_kind,        type: string, required: false }
+      - { name: actor_kind_source, type: string, required: false }
+      - { name: on_behalf_of,      type: string, required: false }
 
   - label: ServiceAccount
     description: >-
@@ -62,6 +68,10 @@ node_labels:
       - { name: kind,          type: string,   required: false }
       - { name: owner_user_id, type: string,   required: false }
       - { name: created_at,    type: datetime, required: false }
+      # v1.2 activity projection — see the User label for the rule.
+      - { name: actor_kind,        type: string, required: false }
+      - { name: actor_kind_source, type: string, required: false }
+      - { name: on_behalf_of,      type: string, required: false }
 
   - label: Role
     description: >-
@@ -187,6 +197,18 @@ node_labels:
       - { name: port,        type: int,      required: false }
       - { name: direction,   type: string,   required: false }
       - { name: observed_at, type: datetime, required: false }
+      # v1.2 activity projection, written on the source side only: the
+      # geography and ASN describe where the action came from, and putting
+      # them on the destination would attribute the caller's country to the
+      # thing they reached. reputation_known separates a clean verdict from
+      # an enrichment service that did not answer.
+      - { name: country_code,     type: string, required: false }
+      - { name: asn,              type: int,    required: false }
+      - { name: as_org,           type: string, required: false }
+      - { name: reputation,       type: float,  required: false }
+      - { name: reputation_known, type: bool,   required: false }
+      - { name: client_family,    type: string, required: false }
+      - { name: client_category,  type: string, required: false }
 
   - label: SaaSApp
     description: >-

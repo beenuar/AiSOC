@@ -21,6 +21,7 @@
 package graph
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -82,10 +83,130 @@ func ExtractFromOCSF(eventID, tenantID, connectorType string, ocsf map[string]in
 	// connector since it's pulled from the OCSF mitre_attck enrichment.
 	extractMITRE(ev, ocsf)
 
+	// The activity projection, applied to whichever nodes the extractors
+	// above produced. A post-pass rather than a line in each of the five
+	// extractors: the projection is on the event, not on the connector, and
+	// the next extractor somebody adds would otherwise ship without it and
+	// nobody would notice until a traversal came back missing actor_kind
+	// for one source.
+	applyActivityProperties(ev, ocsf)
+
 	if len(ev.Nodes) == 0 && len(ev.Edges) == 0 {
 		return nil
 	}
 	return ev
+}
+
+// applyActivityProperties copies the projection onto the nodes it describes.
+//
+// Which property lands on which label is declared in schema.go
+// (ActivityNodeProperties) so the schema-drift gate and the writer read one
+// list. Only non-empty values are written, with one deliberate exception:
+// `actor_kind` is written even when it is `unknown`, because "the source
+// declined to say" and "this event predates the projection" are different
+// facts and a Cypher `IS NULL` cannot tell them apart.
+func applyActivityProperties(ev *Event, ocsf map[string]interface{}) {
+	act, ok := ocsf["activity"].(map[string]interface{})
+	if !ok {
+		// The projection is a struct on the normalizer's own path and a map
+		// once it has been through JSON. Both reach this function depending
+		// on whether the graph writer runs in-process or off the topic.
+		act = structToMap(ocsf["activity"])
+		if act == nil {
+			return
+		}
+	}
+	actor := childMap(act, "actor")
+	location := childMap(act, "location")
+	client := childMap(location, "client")
+
+	for i := range ev.Nodes {
+		node := &ev.Nodes[i]
+		if node.Properties == nil {
+			node.Properties = map[string]interface{}{}
+		}
+		switch node.Label {
+		case NodeUser, NodeServiceAccount:
+			node.Properties["actor_kind"] = stringOr(actor["kind"], "unknown")
+			setIfNonEmpty(node.Properties, "actor_kind_source", actor["kind_source"])
+			setIfNonEmpty(node.Properties, "on_behalf_of", actor["on_behalf_of"])
+		case NodeNetworkPath:
+			// Only the source side: the geography and ASN describe where
+			// the action came from, and writing them onto the destination
+			// node would attribute the caller's country to the thing they
+			// reached.
+			if role, _ := node.Properties["role"].(string); role != "src" {
+				continue
+			}
+			setIfNonEmpty(node.Properties, "country_code", location["country_code"])
+			setIfNonEmpty(node.Properties, "as_org", location["as_org"])
+			setIfNonEmpty(node.Properties, "client_family", client["family"])
+			setIfNonEmpty(node.Properties, "client_category", client["category"])
+			if asn := numberOr(location["asn"]); asn != 0 {
+				node.Properties["asn"] = asn
+			}
+			if known, _ := location["reputation_known"].(bool); known {
+				node.Properties["reputation"] = numberOr(location["reputation"])
+				node.Properties["reputation_known"] = true
+			}
+		}
+	}
+}
+
+func childMap(parent map[string]interface{}, key string) map[string]interface{} {
+	if parent == nil {
+		return map[string]interface{}{}
+	}
+	if child, ok := parent[key].(map[string]interface{}); ok {
+		return child
+	}
+	if child := structToMap(parent[key]); child != nil {
+		return child
+	}
+	return map[string]interface{}{}
+}
+
+// structToMap round-trips a value through its JSON form. The projection is a
+// typed struct where the normalizer builds it and a map once it has crossed
+// Kafka; the graph writer runs on both paths and must not see two shapes.
+func structToMap(value interface{}) map[string]interface{} {
+	if value == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	var out map[string]interface{}
+	if err := json.Unmarshal(encoded, &out); err != nil {
+		return nil
+	}
+	return out
+}
+
+func setIfNonEmpty(props map[string]interface{}, key string, value interface{}) {
+	if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
+		props[key] = s
+	}
+}
+
+func stringOr(value interface{}, fallback string) string {
+	if s, ok := value.(string); ok && strings.TrimSpace(s) != "" {
+		return s
+	}
+	return fallback
+}
+
+func numberOr(value interface{}) float64 {
+	switch v := value.(type) {
+	case float64:
+		return v
+	case int64:
+		return float64(v)
+	case int:
+		return float64(v)
+	}
+	return 0
 }
 
 // extractGeneric is the fallback path. Every OCSF event has actor + endpoints

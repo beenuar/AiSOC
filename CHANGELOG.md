@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **One activity projection on every normalized event**, carried into the
+  lake as columns and onto the entity graph as node properties. Five
+  questions, answered the same way whatever the source: who acted
+  (`actor`, with `actor.kind` in `human | service_account | oauth_app |
+  api_token | workload | ai_agent | unknown`), what they did (`action`, a
+  normalized verb), what they did it to (`resource`), where from
+  (`location`, with geography, ASN, reputation and a parsed client) and
+  whether it worked (`outcome`).
+
+  **`actor.kind` is derived, never guessed.** Each source is read through
+  the field whose *documented meaning* is the assertion — CloudTrail's
+  `userIdentity.type` and `invokedBy`, Okta's `actor.type`, M365's
+  `UserType` enumeration, Entra's `initiatedBy`, Workspace's
+  `actor.callerType`, GCP's `serviceAccountDelegationInfo` and the
+  `gserviceaccount.com` namespace, GitHub's `programmatic_access_type` and
+  `actor_is_bot`, and Kubernetes' reserved `system:serviceaccount:` and
+  `system:node:` usernames — with the vendor's reference URL beside each
+  derivation. What the source does not say stays `unknown`, and the event
+  records which field the kind came from so a reviewer can check the
+  derivation rather than trust it. An inferred `human` would be worse than
+  no answer, because the privilege decisions, blast radii and auto-closes
+  downstream all treat the field as evidence.
+
+  **Geography, ASN and reputation** come from `services/enrichment`, which
+  already merges the feeds and owns the vendor keys, through an in-process
+  TTL cache and the service token. Only public addresses are sent: a
+  private, loopback, link-local, carrier-grade-NAT, documentation or
+  benchmarking address has no public answer, and forwarding one would
+  publish the customer's internal topology. `reputation_known` travels
+  beside the score because a clean verdict and an unreachable enrichment
+  service both produce 0.
+
+  **User agents are parsed in Go inside ingest** into a family, a version
+  and one of six categories — browser, CLI, SDK, infrastructure-as-code,
+  infrastructure, and known offensive tooling. The raw string is kept on
+  every event: it is attacker-controlled, every parser is a lossy summary,
+  and a tool renamed to `Mozilla/5.0` is itself the finding. Signature order
+  is load-bearing and tested as such — every offensive signature precedes
+  every browser one, Edge precedes Chrome precedes Safari, and `aws-cli`
+  precedes `Boto3`, because each of those strings contains the next.
+
+  Lake migration `002_activity_projection` adds eighteen columns with
+  bloom-filter indexes on `action` and `resource_id`, so a hunt for "every
+  action by a non-human actor from a new ASN" is an indexed scan rather than
+  a `JSONExtract` over a ZSTD blob. Graph schema `v1.2` is additive: no new
+  label and no new relationship, only the projection's properties on the
+  `User`, `ServiceAccount` and `NetworkPath` nodes the writer already
+  produces. (depth plan 2.2)
+
+- `scripts/check_activity_projection.py`, wired into `ci.yml` with its
+  self-test ahead of it. The projection lives in five hand-written lists and
+  three of the disagreements between them are silent; the gate compares each
+  pair in both directions and fails on a kind outside the closed set, a
+  derivation returning a kind it read from no vendor field, and an `unknown`
+  claiming a source.
+
+### Fixed
+
+- **Nothing compared `clickhouse/001_init.sql` with `lake_migrations.py`,
+  and they are read by different deployments.** The SQL file runs only in
+  the ClickHouse container entrypoint, on a fresh volume; an existing
+  deployment gets its schema from the migration list and never sees the file
+  again. `lake_migrations.py`'s own docstring describes the consequence — "a
+  new column lands on a fresh deployment and silently does not land on an
+  existing one" — and no gate checked it. Reproduced by adding one column to
+  the SQL file alone: `check_store_migrations`, `check_raw_sql_columns`,
+  `check_ioc_lake_mapping` and `check_orm_migration_parity` all passed. The
+  new gate compares the two in both directions.
+
 ## [17.1.0] - 2026-10-07
 
 ### Security
