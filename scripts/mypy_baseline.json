@@ -313,10 +313,6 @@
       "misc": 1,
       "var-annotated": 1
     },
-    "tests/test_osquery_live_query_step.py": {
-      "func-returns-value": 2,
-      "misc": 2
-    },
     "tests/test_playbook_completion_rate.py": {
       "attr-defined": 15
     }

@@ -370,4 +370,6 @@ def notify_payload_preview(vendor_id: str, message: str) -> str:
     if executor is None or not hasattr(executor, "_payload"):
         return ""
     request = LiveActionRequest(capability="notify", vendor_id=vendor_id, params={"message": message})
-    return json.dumps(executor()._payload(request), sort_keys=True)
+    # Guarded by the `hasattr` above: `_payload` is defined by the arms
+    # that build a body, and this returns "" for the ones that do not.
+    return json.dumps(executor()._payload(request), sort_keys=True)  # type: ignore[attr-defined]

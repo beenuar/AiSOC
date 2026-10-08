@@ -39,6 +39,7 @@ from app.clients.pagerduty_client import PagerDutyClient
 from app.executors.notification import NotifySlackExecutor
 from app.live_actions import notify_arms, osquery_arms
 from app.live_actions.builtins import SlackNotify
+from app.live_actions.executor import LiveActionExecutor
 from app.live_actions.models import LiveActionRequest, LiveActionStatus
 from app.models.action import ActionRequest, ActionStatus, ActionType
 
@@ -184,7 +185,7 @@ async def test_email_without_recipients_is_not_a_send() -> None:
 
 
 @pytest.mark.parametrize("arm", notify_arms.NOTIFY_ARMS)
-async def test_every_notify_arm_previews_without_touching_a_vendor(arm: type) -> None:
+async def test_every_notify_arm_previews_without_touching_a_vendor(arm: type[LiveActionExecutor]) -> None:
     """Off by default means a preview reaches nothing, on every arm."""
     with respx.mock(assert_all_called=False) as mock:
         catch_all = mock.route(host__regex=r".*").mock(return_value=httpx.Response(500))
@@ -206,7 +207,7 @@ async def test_every_notify_arm_previews_without_touching_a_vendor(arm: type) ->
 
 
 @pytest.mark.parametrize("arm", notify_arms.NOTIFY_ARMS + osquery_arms.OSQUERY_ARMS)
-def test_declared_credential_keys_are_the_keys_the_arm_reads(arm: type) -> None:
+def test_declared_credential_keys_are_the_keys_the_arm_reads(arm: type[LiveActionExecutor]) -> None:
     """A key the sender reads and the list omits survives a dry run.
 
     That is not a theoretical hazard here: ``_SPLUNK_KEYS`` listed
