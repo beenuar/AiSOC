@@ -44,6 +44,7 @@ from app.db.rls import TenantDBSession
 from app.models.responder import AgentApproval
 from app.services.actions_client import ActionsServiceError, decide_action, submit_action
 from app.services.approval_delivery import deliver_approval
+from app.services.branding.resolver import resolve_branding
 
 logger = logging.getLogger(__name__)
 
@@ -214,7 +215,13 @@ async def create_approval(
     # for somebody to open the console and notice it. The fan-out never
     # raises: the row is already durable, and a channel that is down must
     # leave a record saying so rather than take the approval with it.
-    delivery = await deliver_approval(row)
+    # Resolved here because this is the only layer holding both the session
+    # and the authenticated tenant. The fan-out took no branding at all when
+    # the three channels were unified, so every approval mail rendered the
+    # platform palette no matter what the operator had configured --
+    # `send_approval_email` has accepted a `branding` argument throughout and
+    # nothing passed one.
+    delivery = await deliver_approval(row, await resolve_branding(db, user.tenant_id))
     row.action = {**(row.action or {}), "delivery": delivery.as_dict()}
     await db.commit()
     await db.refresh(row)

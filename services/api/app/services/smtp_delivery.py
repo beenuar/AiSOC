@@ -40,6 +40,7 @@ import ssl
 from dataclasses import dataclass, replace
 from email.message import EmailMessage
 from email.utils import formataddr
+from typing import Any
 
 import structlog
 
@@ -223,8 +224,19 @@ class SmtpApprovalMailer:
         html: str,
         text: str,
         from_addr: str | None = None,
-    ) -> dict[str, object]:
-        settings = self._settings if from_addr is None else replace(self._settings, sender=from_addr)
+        from_name: str | None = None,
+    ) -> dict[str, Any]:
+        # `from_name` is part of the Protocol and was missing here, so this
+        # class did not in fact implement it -- caught as an arg-type finding
+        # at the call site rather than at the class, which is the usual way
+        # round for a Protocol. A caller setting a display name would have
+        # raised TypeError at runtime.
+        overrides: dict[str, Any] = {}
+        if from_addr is not None:
+            overrides["sender"] = from_addr
+        if from_name is not None:
+            overrides["sender_name"] = from_name
+        settings = replace(self._settings, **overrides) if overrides else self._settings
         result = await send_mail(
             recipients=to,
             subject=subject,

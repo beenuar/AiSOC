@@ -38,6 +38,7 @@ from app.db.rls import get_tenant_db
 from app.models.branding import OrgBrandAsset, OrgBranding
 from app.models.organization import Organization, OrganizationTenant
 from app.models.responder import AgentApproval
+from app.services import approval_delivery
 from app.services.email_approval import EmailApprovalError, _quoted_display_name, verify_token
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -71,6 +72,10 @@ class _RecordingMailer:
     passing if the caller stopped sending ``from_name``, which is the field
     this file exists to prove reaches the wire.
     """
+
+    #: The delivery path refuses to send through an unconfigured relay,
+    #: so a double has to answer that question too.
+    configured = True
 
     def __init__(self) -> None:
         self.messages: list[dict[str, Any]] = []
@@ -114,9 +119,11 @@ async def session_factory():
 @pytest.fixture
 def mailer(monkeypatch: pytest.MonkeyPatch) -> _RecordingMailer:
     recorder = _RecordingMailer()
-    monkeypatch.setattr(endpoint, "_build_mailer", lambda: recorder)
-    monkeypatch.setenv("AISOC_APPROVAL_EMAIL_RECIPIENTS", ", ".join(ONCALL))
-    monkeypatch.setenv("AISOC_EMAIL_APPROVAL_SECRET", SECRET)
+    # The mailer moved out of the endpoint into `approval_delivery` when
+    # email, Slack and Teams were given one delivery path, so the seam
+    # is patched where it now lives.
+    monkeypatch.setattr(approval_delivery, "_build_mailer", lambda: recorder)
+    monkeypatch.setenv("AISOC_APPROVAL_TOKEN_SECRET", SECRET)
     # The realtime fan-out is a different notification path with its own
     # tests; leaving it pointed at nothing keeps this one offline.
     monkeypatch.setattr(endpoint.settings, "REALTIME_BASE_URL", "", raising=False)
@@ -151,7 +158,17 @@ async def _brand(session_factory, **overrides) -> None:
         await db.commit()
 
 
-def _request_approval(client: TestClient) -> dict[str, Any]:
+def _request_approval(client: TestClient, *, approvers: list[str] | None = None) -> dict[str, Any]:
+    """Raise an approval, optionally naming nobody.
+
+    Who to notify travels on the approval rather than in process config, so
+    the no-recipients case is expressed by the payload the caller sends.
+    """
+    action: dict[str, Any] = {"action_type": "isolate_host", "target": "WKSTN-01"}
+    if approvers is None:
+        action["approver_emails"] = ONCALL
+    elif approvers:
+        action["approver_emails"] = approvers
     response = client.post(
         "/api/v1/approvals",
         json={
@@ -159,7 +176,7 @@ def _request_approval(client: TestClient) -> dict[str, Any]:
             "summary": "Falcon detection with a confirmed C2 beacon.",
             "risk_level": "high",
             "case_id": "CASE-4471",
-            "action": {"action_type": "isolate_host", "target": "WKSTN-01"},
+            "action": action,
         },
     )
     assert response.status_code == 201, response.text
@@ -187,8 +204,7 @@ class TestTheFallbackHasAProducer:
 
     def test_nothing_is_sent_when_no_recipients_are_configured(self, client, mailer, monkeypatch) -> None:
         """The other direction. Mail to nobody is not a fallback."""
-        monkeypatch.delenv("AISOC_APPROVAL_EMAIL_RECIPIENTS", raising=False)
-        _request_approval(client)
+        _request_approval(client, approvers=[])
         assert mailer.messages == []
 
     def test_a_missing_signing_secret_is_reported_rather_than_silently_skipped(self, client, mailer, monkeypatch, caplog) -> None:
@@ -197,12 +213,18 @@ class TestTheFallbackHasAProducer:
         Returning quietly here is how a wired fallback looks wired and does
         nothing, which is the shape of the defect this file closes.
         """
-        monkeypatch.setenv("AISOC_EMAIL_APPROVAL_SECRET", "")
-        with caplog.at_level("WARNING"):
-            _request_approval(client)
+        monkeypatch.setenv("AISOC_APPROVAL_TOKEN_SECRET", "")
+        created = _request_approval(client)
 
         assert mailer.messages == []
-        assert any("AISOC_EMAIL_APPROVAL_SECRET" in record.getMessage() for record in caplog.records)
+        # Asserted against the delivery report rather than a log line. The
+        # report is persisted on the approval and returned to the caller, so
+        # it is what an operator can actually see; a warning that scrolls
+        # past in a container log is not a channel anyone reads.
+        email = (created.get("action") or {}).get("delivery", {}).get("channels", {}).get("email", {})
+        assert email.get("delivered") is False
+        assert email.get("status") == "skipped"
+        assert "AISOC_APPROVAL_TOKEN_SECRET" in email.get("detail", "")
 
     def test_an_unreachable_mailer_does_not_fail_the_approval(self, client, mailer, monkeypatch) -> None:
         """The approval is already persisted; notification is best effort."""
@@ -211,7 +233,7 @@ class TestTheFallbackHasAProducer:
             async def send(self, **_kwargs: Any) -> dict[str, Any]:
                 raise EmailApprovalError("Mailgun is not configured")
 
-        monkeypatch.setattr(endpoint, "_build_mailer", _Broken)
+        monkeypatch.setattr(approval_delivery, "_build_mailer", _Broken)
         assert _request_approval(client)["status"] == "pending"
 
 
@@ -382,7 +404,7 @@ class TestTheMailBodyIsEscaped:
                 "title": "Isolate WKSTN-01",
                 "summary": "<img src=x onerror=alert(1)>",
                 "risk_level": "high",
-                "action": {"action_type": "isolate_host", "target": "WKSTN-01"},
+                "action": {"action_type": "isolate_host", "target": "WKSTN-01", "approver_emails": ONCALL},
             },
         )
         assert response.status_code == 201, response.text
