@@ -315,6 +315,123 @@ class TestTheReport:
             assert not offenders, f"report references {offenders}"
 
 
+class TestTheOtherTwoDocuments:
+    """The case close-out and the replay evaluation.
+
+    Both are documents an operator forwards outside the SOC, and the doc
+    listed "Executive digest" as the only branded report while these two
+    carried the platform name in their title, their header and their footer.
+    They are covered here rather than in their own suites because this file
+    is the gate the white-label claim row names.
+    """
+
+    @staticmethod
+    def _case_summary():
+        from app.services.case_summary import CaseSummaryInputs, SummaryCaseRow, build_summary_from_rows
+
+        opened = datetime(2026, 3, 10, 9, 0, tzinfo=UTC)
+        return build_summary_from_rows(
+            CaseSummaryInputs(
+                case=SummaryCaseRow(
+                    id=uuid.UUID("c0c0c0c0-0000-0000-0000-00000000000c"),
+                    case_number="CASE-2026-0042",
+                    title="Suspected ransomware",
+                    description=None,
+                    severity="high",
+                    status="closed",
+                    assignee=None,
+                    created_by=None,
+                    opened_at=opened,
+                    triaged_at=None,
+                    resolved_at=None,
+                    closed_at=None,
+                    sla_due_at=None,
+                    mitre_techniques=[],
+                    alert_ids=[],
+                    observable_graph={},
+                    evidence_chain=[],
+                    compliance_frameworks=[],
+                    tags={},
+                    created_at=opened,
+                    updated_at=opened,
+                )
+            ),
+            now=opened,
+        )
+
+    async def test_the_case_summary_carries_the_organisations_brand(self, session_factory):
+        from app.services.case_summary_html import render_case_summary_html
+
+        async with session_factory() as db:
+            await _brand(
+                db,
+                product_name="Acme Shield",
+                primary_color="#123456",
+                accent_color="#654321",
+                support_url="https://support.acme.example",
+            )
+            branding = await resolver.resolve_branding(db, MANAGED_TENANT)
+
+        html = render_case_summary_html(self._case_summary(), branding)
+
+        assert "Acme Shield case auto-summary" in html
+        assert "#123456" in html
+        assert "#654321" in html
+        assert "support.acme.example" in html
+        assert "AiSOC" not in html
+
+    def test_an_unbranded_case_summary_is_unchanged(self):
+        """The negative control. A self-hosted install keeps what it had."""
+        from app.services.case_summary_html import render_case_summary_html
+
+        html = render_case_summary_html(self._case_summary())
+        assert "AiSOC case auto-summary" in html
+
+    async def test_the_replay_report_carries_the_organisations_brand(self, session_factory):
+        """Asserted on the HTML the PDF is rendered from.
+
+        Same reasoning as the digest: WeasyPrint turns exactly this document
+        into the PDF, so the native stack does not have to be installed to
+        know what the PDF says.
+        """
+        from app.services.replay_evaluation.report import _document, markdown_to_html
+
+        async with session_factory() as db:
+            await _brand(db, product_name="Acme Shield", accent_color="#654321", support_email="soc@acme.example")
+            branding = await resolver.resolve_branding(db, MANAGED_TENANT)
+
+        document = _document(markdown_to_html("# Replay\n\nOne paragraph.\n"), branding)
+
+        assert "Acme Shield replay evaluation" in document
+        assert "#654321" in document
+        assert "soc@acme.example" in document
+        assert "AiSOC" not in document
+
+    def test_an_unbranded_replay_report_is_unchanged(self):
+        from app.services.replay_evaluation.report import DEFAULT_BRANDING, _document, markdown_to_html
+
+        document = _document(markdown_to_html("# Replay\n"), DEFAULT_BRANDING)
+        assert "AiSOC replay evaluation" in document
+
+    async def test_the_digest_applies_the_accent_colour(self, session_factory):
+        """The doc listed "accent colour" for the console and the digest.
+
+        Nothing read ``accent_color`` at all, and the one place the digest
+        named ``primary_color`` in its stylesheet was a ``border-top-color``
+        rule the very next selector overrode with a literal grey -- so the
+        section rules rendered in the platform palette whatever an operator
+        configured.
+        """
+        from app.services.digest_html import render_digest_html
+
+        async with session_factory() as db:
+            await _brand(db, product_name="Acme Shield", primary_color="#123456", accent_color="#654321")
+            branding = await resolver.resolve_branding(db, MANAGED_TENANT)
+
+        html = render_digest_html(TestTheReport._digest(), branding)
+        assert "#654321" in html
+
+
 class TestSupportUrlIsNotAScriptVector:
     """``support_url`` is rendered as a link in email and in a PDF."""
 

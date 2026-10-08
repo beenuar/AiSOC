@@ -14,13 +14,56 @@ organisation's portfolio, plus the organisation's own staff console.
 
 | Surface | What changes |
 |---|---|
-| Console | Product name, logo, accent colour |
-| Executive digest (HTML and PDF) | Product name, logo, accent colour, footer, support link |
+| Console sidebar | Product name, logo, primary colour on the wordmark, accent colour on the logo frame |
+| Console browser tab | The product name in the page title |
+| Executive digest (HTML and PDF) | Product name, logo, primary colour, accent colour, footer, support link |
+| Case close-out summary (HTML, print to PDF) | Product name, logo, primary colour, accent colour, footer, support link |
+| Replay evaluation report (PDF) | Product name, logo, primary colour, accent colour, footer, support link |
+| Investigation summary (PDF) | Product name, primary colour, footer, support contact |
+| Email approvals | Product name in the subject and body, `sender_name` as the From display name, primary and accent colours, footer, support contact |
 | Usage CSV export | The organisation named in the header block |
 
 Branding resolves field by field. An organisation that sets a product name
 and no colours renders its name against the platform palette, rather than
 losing the one field it configured.
+
+Two details are deliberate rather than oversights.
+
+The investigation summary PDF carries no logo. It is drawn by `reportlab`
+rather than rendered from HTML, so there is nowhere to place an image without
+writing the asset to disk first; the product name, palette, footer and
+support contact are all present.
+
+The approve and deny buttons in an approval email stay green and red. Those
+two colours say "this one contains a host" and "this one does not", and a
+palette that could swap them would be a safety problem rather than a
+branding feature.
+
+## Email approvals
+
+The signed email fallback is off until it has somewhere to send to. Set both:
+
+```bash
+AISOC_APPROVAL_EMAIL_RECIPIENTS=oncall@acme.example,duty@acme.example
+AISOC_EMAIL_APPROVAL_SECRET=<a long random string>
+MAILGUN_API_KEY=<key>
+MAILGUN_DOMAIN=mail.acme.example
+```
+
+Every address also needs an entry in `AISOC_CHATOPS_APPROVERS` under `email`.
+The recipient is signed into the approval token and forwarded as the approver,
+so an address that is not mapped is refused when somebody clicks rather than
+when the mail is sent.
+
+Each recipient receives their own message with their own pair of links. One
+shared link would record every click as the same identity, and separation of
+duties cannot be evaluated against a distribution list.
+
+The `From` address stays on your own Mailgun sending domain whatever
+`sender_name` says. Only the display name a recipient reads is
+white-labelled: a `From` address on a domain the deployment does not control
+fails SPF and DKIM, which is how approval mail lands in a spam folder on the
+day it matters.
 
 ## Setting it
 
@@ -120,10 +163,22 @@ curl -X DELETE https://<your-aisoc-host>/api/v1/branding/assets/logo \
 Clearing every field on `PUT /api/v1/branding` returns each surface to the
 platform appearance.
 
-## What is not branded yet
+## What is not branded
 
-Email approvals and ChatOps messages resolve the sender name from the same
-place, and the plan lists them alongside the console and reports. The console
-and the report path are implemented and gated; the notification surfaces read
-the resolved `sender_name` but are not yet covered by an end-to-end test, so
-treat those as unverified rather than working.
+Two surfaces are not, and both are a limit rather than an omission.
+
+**Slack and Teams messages carry the platform name.** The interactive
+approval prompt is posted by `services/actions`, and the bot services are
+`services/slack-bot` and `services/teams-bot`. None of the three can read the
+branding store, which lives behind the API alongside the tenant session and
+the credential vault. Reading it from a deployment-wide environment variable
+would be worse than leaving it: branding is set per operator organisation, so
+one name baked into the process would be wrong for every organisation on the
+deployment except one, while looking configured.
+
+**The sign-in page carries the platform name.** `GET /api/v1/branding`
+resolves the organisation from the caller's credential, and on the sign-in
+page there is no credential yet. Nothing maps a hostname to an organisation
+either — `organizations` has a slug and a name and no domain — so the page
+has no way to work out whose product it is about to show. Branding it needs a
+hostname-to-organisation mapping first, which does not exist today.

@@ -1,6 +1,7 @@
 'use client';
 
 import { SWRConfig } from 'swr';
+import { BrandedDocumentTitle } from './BrandedDocumentTitle';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { CommandPalette } from './CommandPalette';
@@ -71,6 +72,9 @@ export function AppShell({ children, demoMode }: AppShellProps) {
           and cost a frame of layout shift on every demo page load.
         */}
         <DemoBanner demoMode={demo} />
+        {/* Renders nothing; it corrects the tab title a build-time
+            `metadata` export could not know the tenant for. */}
+        <BrandedDocumentTitle />
         <Sidebar />
         <div className="md:ml-60">
           <TopBar demoOffset={demo} />

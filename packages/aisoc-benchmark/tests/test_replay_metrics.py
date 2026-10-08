@@ -16,6 +16,7 @@ from aisoc_benchmark.metrics import extract_checkable_indicators
 from aisoc_benchmark.replay import (
     LATENCY_FIELDS,
     LATENCY_LINE_PREFIX,
+    LATENCY_LINE_PREFIXES,
     MIN_MALICIOUS_FOR_HEADLINE,
     format_replay_report,
     score_replay,
@@ -100,7 +101,13 @@ def test_the_withheld_headline_renders_as_words_not_as_zero() -> None:
     report = format_replay_report(score_replay(_corpus(malicious=2, benign=50)))
 
     assert "Withheld." in report
-    assert "0.0%" not in report.split("## Per class")[0].split("## Headline accuracy")[1]
+    # Sliced to the headline section alone. It used to run to "## Per class",
+    # which stopped being the next heading when the scorecard sections landed
+    # between them -- and one of those prints "100.0%", which *contains*
+    # "0.0%", so the old window made this pass or fail on an unrelated
+    # figure's digits.
+    headline = report.split("## Against a constant answer")[0].split("## Headline accuracy")[1]
+    assert "0.0%" not in headline
 
 
 # --------------------------------------------------------------------------
@@ -343,8 +350,13 @@ def test_stripping_latency_changes_exactly_one_line() -> None:
     # points at content rather than at an offset.
     assert len(original_lines) == len(stripped_lines)
     differing = [(a, b) for a, b in zip(original_lines, stripped_lines, strict=True) if a != b]
-    assert len(differing) == 1
-    assert differing[0][0].startswith(LATENCY_LINE_PREFIX)
+    # Asserted as a property rather than a count. The report carries more
+    # than one host-measured line since the scorecard added "time to
+    # verdict", and the guarantee worth keeping is that the stripper touches
+    # *only* lines it declares -- not that there happens to be one of them.
+    assert differing, "the stripper changed nothing, so it is a no-op that still claims to exclude latency"
+    for before, _ in differing:
+        assert before.startswith(LATENCY_LINE_PREFIXES), f"stripped a line it does not declare: {before!r}"
 
 
 def test_the_renderer_emits_the_line_the_stripper_looks_for() -> None:

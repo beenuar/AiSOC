@@ -45,6 +45,17 @@ type Config struct {
 	ShodanEnrichEnabled   bool
 	ShodanCacheExpirySecs int
 
+	// Geography, ASN and reputation on the activity projection's location
+	// block, read from services/enrichment rather than from a vendor
+	// directly: that service already merges the feeds and owns the keys,
+	// and a second merge here would drift from the one triage reads.
+	//
+	// Unset means off, which is why there is no separate enable flag. Only
+	// public addresses are ever sent (see activity.IsPublicIP).
+	EnrichmentServiceURL     string
+	EnrichmentCacheTTLSecs   int
+	EnrichmentTimeoutSeconds int
+
 	// CVE / vulnerability correlation.
 	//
 	// Off by default. Nothing in the platform consumes VulnKafkaTopic —
@@ -197,6 +208,11 @@ func Load() (*Config, error) {
 		ShodanAPIKey:          getEnv("SHODAN_API_KEY", ""),
 		ShodanEnrichEnabled:   getEnv("SHODAN_ENRICH_ENABLED", "false") == "true",
 		ShodanCacheExpirySecs: mustGetEnvInt("SHODAN_CACHE_EXPIRY_SECS", 3600),
+
+		// IOC enrichment for the activity projection's location block.
+		EnrichmentServiceURL:     getEnv("ENRICHMENT_SERVICE_URL", ""),
+		EnrichmentCacheTTLSecs:   mustGetEnvInt("ENRICHMENT_CACHE_TTL_SECS", 3600),
+		EnrichmentTimeoutSeconds: mustGetEnvInt("ENRICHMENT_TIMEOUT_SECS", 2),
 
 		// CVE correlation
 		VulnCorrelEnabled: getEnv("VULN_CORREL_ENABLED", "false") == "true",

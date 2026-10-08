@@ -104,25 +104,41 @@ class NotifySlackExecutor(BaseExecutor):
         channel = request.parameters.get("channel", "#security-alerts")
         message = request.parameters.get("message", request.rationale)
 
-        if webhook_url:
-            try:
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.post(
-                        webhook_url,
-                        json={
-                            "channel": channel,
-                            "text": f"AiSOC Alert\n*Incident:* {request.incident_id}\n{message}",
-                        },
-                    )
-                    resp.raise_for_status()
-            except Exception as exc:
-                logger.warning("Slack notification failed", error=str(exc))
-                return ActionResult(
-                    action_id=request.id,
-                    status=ActionStatus.FAILED,
-                    blast_radius="minimal",
-                    error=str(exc),
+        if not webhook_url:
+            # Reported, not completed. With no webhook this used to fall
+            # through to the COMPLETED return below with
+            # ``message_sent: True`` — a notification nobody received,
+            # recorded as delivered. The caller cannot tell the difference
+            # between that and a real post, which is exactly the state a
+            # notification step exists to rule out.
+            return ActionResult(
+                action_id=request.id,
+                status=ActionStatus.FAILED,
+                blast_radius="minimal",
+                error=(
+                    "no Slack incoming-webhook URL is configured, so nothing was posted. "
+                    "This says nothing about the message or the channel."
+                ),
+            )
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    webhook_url,
+                    json={
+                        "channel": channel,
+                        "text": f"AiSOC Alert\n*Incident:* {request.incident_id}\n{message}",
+                    },
                 )
+                resp.raise_for_status()
+        except Exception as exc:
+            logger.warning("Slack notification failed", error=str(exc))
+            return ActionResult(
+                action_id=request.id,
+                status=ActionStatus.FAILED,
+                blast_radius="minimal",
+                error=str(exc),
+            )
 
         logger.info("Slack notification sent", channel=channel)
         return ActionResult(

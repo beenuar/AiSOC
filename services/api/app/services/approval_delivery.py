@@ -41,6 +41,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.services.branding.resolver import Branding
 from app.services.email_approval import EmailApprovalError, send_approval_email
 from app.services.smtp_delivery import SmtpApprovalMailer
 
@@ -85,10 +86,33 @@ def _approval_recipients(row: Any) -> list[str]:
     return [str(r).strip() for r in recipients if str(r).strip()]
 
 
-async def _deliver_email(row: Any, report: DeliveryReport) -> None:
+def _build_mailer() -> Any:
+    """The transport this module sends through.
+
+    A named seam rather than a bare constructor in the delivery path, so a
+    test can substitute a recorder without an SMTP relay. The indirection
+    exists for that reason alone; there is one implementation.
+    """
+    return SmtpApprovalMailer()
+
+
+async def _deliver_email(row: Any, report: DeliveryReport, branding: Branding | None = None) -> None:
     secret = os.getenv("AISOC_APPROVAL_TOKEN_SECRET", "").strip()
     recipients = _approval_recipients(row)
-    mailer = SmtpApprovalMailer()
+
+    # Constructing the transport and asking whether it is configured are
+    # both inside the guard, because this function documents that it never
+    # raises and neither of those was covered by the try below. A transport
+    # that could not answer `configured` therefore propagated out of a
+    # best-effort notification and 500'd the approval that had already been
+    # persisted -- failing the request for the one reason this path exists
+    # to tolerate.
+    try:
+        mailer = _build_mailer()
+        configured = bool(mailer.configured)
+    except Exception as exc:  # noqa: BLE001 — a transport that cannot be built is a skip, not an outage
+        report.record("email", delivered=False, status="failed", detail=f"the mail transport could not be built: {exc}")
+        return
 
     if not recipients:
         report.record("email", delivered=False, status="skipped", detail="the approval names no approver_emails")
@@ -99,7 +123,7 @@ async def _deliver_email(row: Any, report: DeliveryReport) -> None:
         # worse than not sending it.
         report.record("email", delivered=False, status="skipped", detail="AISOC_APPROVAL_TOKEN_SECRET is unset, so no link could be signed")
         return
-    if not mailer.configured:
+    if not configured:
         report.record("email", delivered=False, status="skipped", detail="no SMTP relay is configured (set SMTP_HOST and SMTP_SENDER)")
         return
 
@@ -118,6 +142,7 @@ async def _deliver_email(row: Any, report: DeliveryReport) -> None:
             web_base_url=os.getenv("CONSOLE_PUBLIC_BASE_URL", "").rstrip("/"),
             secret=secret,
             mailer=mailer,
+            branding=branding,
         )
     except EmailApprovalError as exc:
         report.record("email", delivered=False, status="failed", detail=str(exc))
@@ -182,8 +207,13 @@ async def _deliver_chat(row: Any, report: DeliveryReport, *, channel: str, url_e
     report.record(channel, delivered=posted, status="sent" if posted else "skipped", detail=detail)
 
 
-async def deliver_approval(row: Any) -> DeliveryReport:
+async def deliver_approval(row: Any, branding: Branding | None = None) -> DeliveryReport:
     """Offer one approval on every configured channel. Never raises.
+
+    ``branding`` is the operator's appearance, resolved by the caller, which
+    is the only layer holding both the session and the tenant. Passing None
+    renders the platform default -- `send_approval_email` already treats it
+    that way, so an unbranded deployment is unaffected.
 
     Channels run in sequence rather than concurrently on purpose: three
     channels is a handful of hundred-millisecond calls, and a gather here
@@ -191,7 +221,7 @@ async def deliver_approval(row: Any) -> DeliveryReport:
     waiting on an approval would notice.
     """
     report = DeliveryReport()
-    await _deliver_email(row, report)
+    await _deliver_email(row, report, branding)
     await _deliver_chat(row, report, channel="slack", url_env="AISOC_SLACK_BOT_URL")
     await _deliver_chat(row, report, channel="teams", url_env="AISOC_TEAMS_BOT_URL")
     logger.info(

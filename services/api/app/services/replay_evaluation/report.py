@@ -37,6 +37,7 @@ import re
 from typing import Any
 
 from app._vendor.aisoc_benchmark.replay import LATENCY_FIELDS, strip_latency
+from app.services.branding.resolver import DEFAULT_BRANDING, Branding
 
 logger = logging.getLogger(__name__)
 
@@ -194,18 +195,28 @@ def markdown_to_html(markdown: str) -> str:
     return "\n".join(out)
 
 
-def _document(body_html: str) -> str:
+def _document(body_html: str, brand: Branding) -> str:
     """Wrap the fragment in a print-ready page.
 
     No generation timestamp and no host name anywhere. A report that prints
     "generated at" is a report that cannot reproduce byte for byte, which is
-    this phase's acceptance bar.
+    this phase's acceptance bar. Branding does not break that: the same
+    organisation's branding renders the same bytes, and a report that
+    reproduces only while unbranded is of no use to the operator who has
+    configured one.
     """
+    support = brand.support_url or brand.support_email
+    logo = (
+        f'<img src="{html.escape(brand.logo_data_uri, quote=True)}" alt="{html.escape(brand.product_name)}" '
+        'style="max-height:12mm;max-width:50mm;margin:0 0 3mm;display:block;">'
+        if brand.logo_data_uri
+        else ""
+    )
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AiSOC replay evaluation</title>
+<title>{html.escape(brand.product_name)} replay evaluation</title>
 <style>
   @page {{ margin: 18mm; }}
   body {{
@@ -215,7 +226,7 @@ def _document(body_html: str) -> str:
     line-height: 1.45;
   }}
   h1 {{ font-size: 20pt; margin: 0 0 4mm; }}
-  h2 {{ font-size: 13pt; margin: 7mm 0 2mm; border-bottom: 1px solid #cbd5e1; padding-bottom: 1mm; }}
+  h2 {{ font-size: 13pt; margin: 7mm 0 2mm; border-bottom: 1px solid {html.escape(brand.accent_color, quote=True)}; padding-bottom: 1mm; }}
   h3 {{ font-size: 11pt; margin: 5mm 0 2mm; }}
   p {{ margin: 0 0 2mm; }}
   ul {{ margin: 0 0 3mm 5mm; padding: 0; }}
@@ -223,20 +234,28 @@ def _document(body_html: str) -> str:
   table {{ border-collapse: collapse; width: 100%; margin: 0 0 4mm; font-size: 9pt; }}
   th, td {{ border: 1px solid #cbd5e1; padding: 1.5mm 2mm; text-align: left; }}
   th {{ background: #f1f5f9; font-weight: 600; }}
+  header.brand {{ color: {html.escape(brand.primary_color, quote=True)}; font-size: 8pt;
+    text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 3mm; }}
+  footer.brand {{ color: #94a3b8; font-size: 8pt; margin-top: 8mm; }}
 </style>
 </head>
 <body>
+{logo}<header class="brand">{html.escape(brand.product_name)} replay evaluation</header>
 {body_html}
+<footer class="brand">{html.escape(brand.footer_text)}{f"<br>Support: {html.escape(support)}" if support else ""}</footer>
 </body>
 </html>"""
 
 
-def render_pdf(markdown: str) -> bytes:
+def render_pdf(markdown: str, branding: Branding | None = None) -> bytes:
     """Render the stored report as a PDF.
 
     Raises :class:`PdfUnavailableError` rather than returning an empty or
     partial document, because a zero-byte PDF served with a 200 reads as a
     corrupt report rather than as a missing library.
+
+    ``branding`` defaults to the platform appearance, so an unbranded
+    deployment is unchanged.
     """
     # Imported at call time, following ``app.services.digest_pdf``: WeasyPrint
     # pulls a native stack that is present in the API image and routinely
@@ -251,4 +270,4 @@ def render_pdf(markdown: str) -> bytes:
         logger.warning("replay report PDF export unavailable: %s", exc)
         raise PdfUnavailableError(PDF_UNAVAILABLE_DETAIL) from exc
 
-    return HTML(string=_document(markdown_to_html(markdown))).write_pdf()
+    return HTML(string=_document(markdown_to_html(markdown), branding or DEFAULT_BRANDING)).write_pdf()

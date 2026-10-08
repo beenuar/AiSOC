@@ -29,14 +29,26 @@ Safety posture when the policy cannot be read:
 from __future__ import annotations
 
 import os
+import re
 import time
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
 import structlog
 
+from app.services.autonomy_evidence_rules import (
+    ABSTENTION_VERDICTS,
+    AGREEMENT_COUNTS_SQL,
+    GRADED_DISPOSITIONS,
+    MALICIOUS,
+    RECENT_COUNTS_SQL,
+    PromotionThresholds,
+    evaluate_demotion,
+    scoped_sql,
+    window_from_counts,
+)
 from app.services.maturity import MaturityTier
 
 logger = structlog.get_logger(__name__)
@@ -205,12 +217,98 @@ async def _load_from_store(tenant_id: str, dsn: str) -> TenantPolicy | None:
     )
 
 
+#: A numbered placeholder in one of the shared aggregate statements.
+_PLACEHOLDER = re.compile(r"\$(\d+)")
+
+
+def _bound(statement: str, params: tuple[Any, ...]) -> tuple[Any, ...]:
+    """The statement and only the parameters it actually carries.
+
+    The two aggregates do not bind the same number: the trailing slice takes
+    ``$7`` for its ``LIMIT`` and the window aggregate stops at ``$6``. asyncpg
+    refuses a mismatch outright, and because an unreadable record fails closed
+    here, passing seven to both withheld *every* grant on *every* deployment
+    while logging it as unreadable evidence — a safety control stuck on, which
+    reads like working caution and is a product that has stopped acting.
+
+    Deriving the arity from the statement rather than slicing at a literal
+    means an edit to the shared module cannot put it back.
+    """
+    highest = max((int(index) for index in _PLACEHOLDER.findall(statement)), default=0)
+    return (scoped_sql(statement), *params[:highest])
+
+
+async def _evidence_still_holds(conn: Any, tenant_id: str) -> tuple[bool, list[str]]:
+    """Re-run the demotion evaluator here, against the evidence as it stands now.
+
+    Fix pass 3.7. ``state = 'granted'`` is a cached verdict. The only thing
+    that moved a grant out of that state was ``reconcile_grants``, and its one
+    production caller was the handler behind ``GET /autonomy-policy/grants``
+    — so on a deployment nobody opens that page on, a grant whose agreement
+    had collapsed kept auto-executing containment indefinitely. The API sweep
+    added alongside this closes the durable half; this closes the window
+    between its ticks, on the one path where being wrong executes something at
+    a customer's vendor.
+
+    It is the *same* evaluator, not a second opinion. ``evaluate_demotion``
+    and both aggregate statements live in ``autonomy_evidence_rules``, which
+    ``services/api`` carries byte-identical and a gate keeps that way, for the
+    reason this function is an instance of: a safety control two services
+    define differently is off in whichever one is more generous. The numbered
+    placeholders in those statements were written for an asyncpg caller; this
+    is it.
+
+    Every ``action_verb`` grant is judged on the tenant-wide window, which is
+    the scope ``reconcile_grants`` uses for anything that is not an alert
+    class, so one pair of aggregates answers for all of them.
+
+    Returns ``(holds, refusals)``. A read failure answers ``False``: this
+    service enforces grants and never issues them, so withholding one costs a
+    human approval and granting one that is no longer earned costs a
+    containment nobody authorised.
+    """
+    thresholds = PromotionThresholds()
+    window_end = datetime.now(UTC)
+    window_start = window_end - timedelta(days=thresholds.window_days)
+    params = (
+        UUID(tenant_id),
+        list(GRADED_DISPOSITIONS),
+        sorted(ABSTENTION_VERDICTS),
+        MALICIOUS,
+        window_start,
+        window_end,
+        thresholds.drift_sample,
+    )
+
+    try:
+        window_row = await conn.fetchrow(*_bound(AGREEMENT_COUNTS_SQL, params))
+        recent_row = await conn.fetchrow(*_bound(RECENT_COUNTS_SQL, params))
+    except Exception as exc:  # noqa: BLE001 - an unreadable record is not a track record
+        logger.warning("tenant_policy.evidence_unreadable", tenant_id=tenant_id, error=str(exc)[:300])
+        return False, ["evidence_unreadable"]
+
+    verdict = evaluate_demotion(
+        window=window_from_counts(dict(window_row or {})),
+        recent=window_from_counts(dict(recent_row or {})),
+        thresholds=thresholds,
+    )
+    return verdict.allowed, list(verdict.refusal_values)
+
+
 async def _load_earned_verbs(conn: Any, tenant_id: str) -> dict[str, str]:
     """Which response verbs this tenant has earned the right to run unattended.
 
     Gap-closure Phase 2.3. Only rows in the ``granted`` state count; a demoted
     grant keeps its row so the history survives, and reading it as current is
     exactly the mistake that would let a revoked capability keep executing.
+
+    Fix pass 3.7: the state alone is not enough, so the evidence behind it is
+    re-checked here before any verb is handed back. See
+    :func:`_evidence_still_holds`. The withholding is not persisted — the
+    demotion row and its audit entry belong to ``services/api``, which owns
+    the tenant session and the hash chain, and writing a transition from the
+    dispatch path would be the second way to become autonomous this module's
+    docstring exists to refuse.
 
     A read failure returns nothing rather than raising. That is the safe
     direction here and it is the opposite of the choice made for the tier: an
@@ -234,6 +332,24 @@ async def _load_earned_verbs(conn: Any, tenant_id: str) -> dict[str, str]:
     except Exception as exc:  # noqa: BLE001 - no grant is the safe answer
         logger.warning("tenant_policy.grants_unreadable", tenant_id=tenant_id, error=str(exc)[:300])
         return {}
+
+    if not rows:
+        # No grant, nothing to re-check, and no reason to run two aggregates
+        # over a month of decisions on the hot path for every tenant that has
+        # never asked for unattended execution.
+        return {}
+
+    holds, refusals = await _evidence_still_holds(conn, tenant_id)
+    if not holds:
+        logger.warning(
+            "tenant_policy.grants_withheld",
+            tenant_id=tenant_id,
+            verbs=sorted(str(row["scope_key"]) for row in rows),
+            refusals=refusals,
+            reason="the evidence behind these grants no longer meets the demotion floors",
+        )
+        return {}
+
     return {str(row["scope_key"]): str(row["source"]) for row in rows}
 
 

@@ -73,15 +73,23 @@ class TestLakeRunner:
         return c
 
     async def test_applies_and_records(self, client: AsyncMock) -> None:
+        """A fresh lake applies every declared migration, in declared order.
+
+        Derived from ``MIGRATIONS`` rather than written out, because a list
+        pinned here goes red on the next migration for no reason and teaches
+        whoever is adding one to edit the assertion instead of reading it.
+        """
         applied = await lake_migrations.run_migrations(client)
-        assert applied == ["001_baseline"]
+        assert applied == [m.id for m in lake_migrations.MIGRATIONS]
         statements = [call.args[0] for call in client.execute.await_args_list]
         assert any("_migrations" in s for s in statements), "ledger was not created"
         assert any("INSERT INTO" in s for s in statements), "nothing was recorded"
 
     async def test_an_applied_migration_is_not_reapplied(self, client: AsyncMock) -> None:
-        client.execute = AsyncMock(return_value=[("001_baseline",)])
-        assert await lake_migrations.run_migrations(client) == []
+        """A recorded id is skipped and everything after it still runs."""
+        first, *rest = lake_migrations.MIGRATIONS
+        client.execute = AsyncMock(return_value=[(first.id,)])
+        assert await lake_migrations.run_migrations(client) == [m.id for m in rest]
 
     async def test_a_failure_stops_the_run(self, client: AsyncMock) -> None:
         """Migration N+1 is written against the schema N produced."""

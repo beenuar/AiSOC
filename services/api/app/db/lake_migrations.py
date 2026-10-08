@@ -87,12 +87,67 @@ class LakeMigration:
 _V1_BASELINE = ("CREATE DATABASE IF NOT EXISTS aisoc",)
 
 
+# ── 002: the activity projection ───────────────────────────────────────────
+#
+# Depth plan 2.2. Ingest now answers five questions on every event — who
+# acted, what kind of actor they were, what they did, to which resource, from
+# where, with what outcome — and the lake has to carry the answers as columns
+# rather than only inside `ocsf_json`, or a hunt for "every action by a
+# non-human actor from a new ASN" is a full scan of a ZSTD blob.
+#
+# `actor_kind` is a LowCardinality(String) and not an Enum: an Enum would
+# make adding a kind a schema migration on a table with months of data, and
+# the closed set lives in Go (`activity.ActorKinds`) where the gate can read
+# it. The bloom filters mirror the ones 001_init.sql already puts on the
+# high-cardinality hunt needles.
+_V2_ACTIVITY_PROJECTION = (
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS actor_kind LowCardinality(String) DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS actor_kind_source String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS actor_id String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS actor_on_behalf_of String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS action String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS resource_type String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS resource_id String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS resource_owner String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_country_code LowCardinality(String) DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_asn UInt32 DEFAULT 0",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_as_org String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_reputation Float32 DEFAULT 0",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_reputation_known UInt8 DEFAULT 0",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS client_family LowCardinality(String) DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS client_version String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS client_category LowCardinality(String) DEFAULT ''",
+    # The raw string is kept beside the parse because a user agent is
+    # attacker-controlled and every parser is a lossy summary of it. A tool
+    # renamed to "Mozilla/5.0" is itself the finding, and only the raw
+    # column can show it.
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS client_raw String DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS outcome LowCardinality(String) DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD INDEX IF NOT EXISTS idx_action action TYPE bloom_filter(0.01) GRANULARITY 4",
+    "ALTER TABLE aisoc.raw_events ADD INDEX IF NOT EXISTS idx_resource_id resource_id TYPE bloom_filter(0.01) GRANULARITY 4",
+)
+
+
 MIGRATIONS: tuple[LakeMigration, ...] = (
     LakeMigration(
         id="001_baseline",
         description=("Records the 001_init.sql baseline as applied. Creates nothing an existing deployment does not already have."),
         statements=_V1_BASELINE,
         tags=("baseline",),
+    ),
+    LakeMigration(
+        id="002_activity_projection",
+        description=(
+            "Adds the activity projection columns (actor kind and identity, normalized action, resource, "
+            "source geography/ASN/reputation, parsed client, outcome) to aisoc.raw_events."
+        ),
+        statements=_V2_ACTIVITY_PROJECTION,
+        # Every statement is an ALTER on an existing table, which is exactly
+        # the case that needs ON CLUSTER on a multi-replica deployment. The
+        # repo names no cluster topology, so this is recorded rather than
+        # guessed, and the runner logs it on the way past.
+        needs_cluster_ddl=True,
+        tags=("activity-projection", "depth-2.2"),
     ),
 )
 

@@ -38,6 +38,16 @@ Beyond the documents, two more disagreements would each be silent:
     ``main.py``, and ``test_scim_provisioning.py`` proves reachability by
     sending real requests.
 
+*the console the doc promises*
+    ``apps/docs/docs/operations/scim.md`` told administrators to "mint one
+    from the console". ``/api/v1/scim-tokens`` had shipped with the SCIM
+    surface and nothing under ``apps/web/src`` referenced it — not a panel,
+    not a client function, not the string ``scim`` — so the sentence
+    described a surface that did not exist and the only working route was
+    the curl command beneath it. Checked in both directions: a doc claiming
+    a console that is gone fails, and so does a console surface the doc
+    never mentions, because an unmentioned panel is one nobody finds.
+
 Run:  python3 scripts/check_scim_contract.py [--self-test]
 """
 
@@ -65,6 +75,24 @@ SECURITY = REPO_ROOT / "services/api/app/core/security.py"
 #: became one.
 ROLE_GRANTS = REPO_ROOT / "services/api/app/core/role_grants.py"
 MAIN = REPO_ROOT / "services/api/app/main.py"
+#: The console surface and the doc that promises it. Both sides are named
+#: so the check runs in the direction that drifts: the doc is edited far
+#: more often than the panel, and a panel deleted in a refactor is exactly
+#: as damaging as a doc sentence that was never true.
+CONSOLE_PANEL = REPO_ROOT / "apps/web/src/components/settings/ScimTokensPanel.tsx"
+CONSOLE_SETTINGS = REPO_ROOT / "apps/web/src/components/settings/SettingsView.tsx"
+CONSOLE_CLIENT = REPO_ROOT / "apps/web/src/lib/api.ts"
+SCIM_DOC = REPO_ROOT / "apps/docs/docs/operations/scim.md"
+
+#: The sentence the console has to make true. Matched literally: a reworded
+#: claim should re-run this decision rather than inherit it.
+CONSOLE_CLAIM = "Mint one from\nthe console"
+
+#: The endpoint prefix a console panel must call for the claim to hold. A
+#: panel that renders a form and posts nowhere is the shape this repository
+#: already shipped once, minting an `aisoc_live_…` string in the browser
+#: that authenticated nothing.
+CONSOLE_ENDPOINT = "/api/v1/scim-tokens"
 
 #: Operations RFC 7644 defines that this deployment intends to serve, mapped
 #: to the ``ServiceProviderConfig`` key that advertises them. A key absent
@@ -344,7 +372,7 @@ def _group_rule_roles(tree: ast.Module) -> set[str]:
 def audit(root: Path) -> tuple[list[str], dict[str, int]]:
     """Return ``(problems, counts)``. Counts prove the gate read something."""
     problems: list[str] = []
-    counts = {"routes": 0, "capabilities": 0, "roles": 0, "mutating_handlers": 0}
+    counts = {"routes": 0, "capabilities": 0, "roles": 0, "mutating_handlers": 0, "console_bindings": 0}
 
     router_path = root / ROUTER.relative_to(REPO_ROOT)
     resources_path = root / RESOURCES.relative_to(REPO_ROOT)
@@ -442,7 +470,63 @@ def audit(root: Path) -> tuple[list[str], dict[str, int]]:
                 "nor records why a directory group may not confer it"
             )
 
+    problems.extend(_console_problems(root, counts))
+
     return problems, counts
+
+
+def _console_problems(root: Path, counts: dict[str, int]) -> list[str]:
+    """The doc's "mint one from the console" claim, against the console.
+
+    Both directions. The doc promising a panel that is gone sends an
+    administrator looking for a surface that is not there; a panel the doc
+    never mentions is one nobody finds, and the curl command stays the only
+    documented route.
+    """
+    problems: list[str] = []
+    doc_path = root / SCIM_DOC.relative_to(REPO_ROOT)
+    if not doc_path.is_file():
+        return [f"{SCIM_DOC.name} is absent, so the console claim cannot be checked either way"]
+
+    doc = doc_path.read_text(encoding="utf-8")
+    claims_console = CONSOLE_CLAIM in doc
+
+    # A binding is the endpoint named in the client *and* a panel that calls
+    # the client *and* the panel reachable from the settings surface. Any one
+    # of the three alone is the "exists unwired" shape: a client function
+    # nothing imports, or a component no route renders.
+    bindings: list[str] = []
+    client_path = root / CONSOLE_CLIENT.relative_to(REPO_ROOT)
+    if client_path.is_file() and CONSOLE_ENDPOINT in client_path.read_text(encoding="utf-8"):
+        bindings.append("client")
+
+    panel_path = root / CONSOLE_PANEL.relative_to(REPO_ROOT)
+    if panel_path.is_file() and "scimTokensApi" in panel_path.read_text(encoding="utf-8"):
+        bindings.append("panel")
+
+    # The *rendering*, not the import. An imported component nothing renders
+    # is the "exists unwired" shape, and it reads in a diff exactly like a
+    # working one.
+    settings_path = root / CONSOLE_SETTINGS.relative_to(REPO_ROOT)
+    if settings_path.is_file() and "<ScimTokensPanel" in settings_path.read_text(encoding="utf-8"):
+        bindings.append("settings")
+
+    counts["console_bindings"] = len(bindings)
+    wired = len(bindings) == 3
+
+    if claims_console and not wired:
+        missing = sorted({"client", "panel", "settings"} - set(bindings))
+        problems.append(
+            f"{SCIM_DOC.name} tells administrators to mint a SCIM credential from the console, and the console is "
+            f"missing its {', '.join(missing)}. Either restore the surface or reword the doc; the curl command below "
+            "it is then the only documented route."
+        )
+    if wired and not claims_console:
+        problems.append(
+            f"the console can mint SCIM credentials and {SCIM_DOC.name} no longer says so. A panel nobody is told "
+            "about is one nobody finds."
+        )
+    return problems
 
 
 def _self_test_cases() -> list[tuple[str, bool]]:
@@ -488,13 +572,39 @@ def _self_test_cases() -> list[tuple[str, bool]]:
             '@router.patch("/Users/{user_id}")',
             '@router.post("/Users/{user_id}/patched")',
         ),
+        (
+            # The defect this direction was added for: the doc said the
+            # console could mint a credential for four releases while
+            # nothing under apps/web/src mentioned SCIM at all.
+            "a doc promising a console panel that is not wired is reported",
+            CONSOLE_SETTINGS,
+            "<ScimTokensPanel />",
+            "null /* panel imported, never rendered */",
+        ),
+        (
+            "a console panel the doc does not mention is reported",
+            SCIM_DOC,
+            CONSOLE_CLAIM,
+            "Mint one\nthrough the API",
+        ),
     ]
 
     for description, target, old, new in mutations:
         with tempfile.TemporaryDirectory() as tmp:
             tree = Path(tmp) / "tree"
             # Copy only what the gate reads, so the self-test stays fast.
-            for source in {ROUTER, RESOURCES, ROLES, SECURITY, ROLE_GRANTS, MAIN}:
+            for source in {
+                ROUTER,
+                RESOURCES,
+                ROLES,
+                SECURITY,
+                ROLE_GRANTS,
+                MAIN,
+                CONSOLE_PANEL,
+                CONSOLE_SETTINGS,
+                CONSOLE_CLIENT,
+                SCIM_DOC,
+            }:
                 destination = tree / source.relative_to(REPO_ROOT)
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)
@@ -520,7 +630,8 @@ def main() -> int:
 
     print(
         f"check_scim_contract: read {counts['routes']} SCIM route(s), {counts['capabilities']} advertised capability(ies), "
-        f"{counts['mutating_handlers']} mutating handler(s) and {counts['roles']} enforced role(s)"
+        f"{counts['mutating_handlers']} mutating handler(s), {counts['roles']} enforced role(s) and "
+        f"{counts['console_bindings']}/3 console credential binding(s)"
     )
 
     # "found nothing" and "scanned nothing" must not print the same word.

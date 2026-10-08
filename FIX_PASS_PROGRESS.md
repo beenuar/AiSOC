@@ -86,14 +86,14 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 3: Replay, shadow mode and evaluation measure the real thing
 
-- [ ] **3.1** Frozen context, not empty context
+- [x] **3.1** Frozen context, not empty context
 - [x] **3.2** No side effects from a replay
-- [ ] **3.3** Input shapes: per-source adapters for Elastic and Defender
+- [x] **3.3** Input shapes: per-source adapters for Elastic and Defender
 - [x] **3.4** Model attribution: `model_used` is set from the call that answered
 - [x] **3.5** Non-degenerate acceptance for the reproducibility test
 - [x] **3.6** Tool calls recorded from the ledger, not hard-coded to 0
-- [ ] **3.7** Demotion without a page load
-- [ ] **3.8** Skills: activation evidence, LLM-path-only disclosure, console retraction
+- [x] **3.7** Demotion without a page load
+- [x] **3.8** Skills: activation evidence, LLM-path-only disclosure, console retraction
 - [~] **3.9** The weekly live evaluation installs from the lockfile and fails loudly; it still cannot *run* without a funded key (M2)
 - [x] **3.10** The 9.3% flip rate is qualified or removed
 - [x] **3.11** CI runs the live tests
@@ -540,12 +540,11 @@ left implied.
 
 ## Wave 3 (partial): what is done and what is not
 
-**Done, each with a reproduction and a negative control:** 3.2, 3.4, 3.5, 3.6,
-3.10, 3.11, 3.12, and the actionable half of 3.9.
+**Done, each with a reproduction and a negative control:** 3.1, 3.2, 3.3,
+3.4, 3.5, 3.6, 3.7, 3.8, 3.10, 3.11, 3.12, and the actionable half of 3.9.
 
-**Not started:** 3.1 (frozen context), 3.3 (per-source input adapters),
-3.7 (demotion without a page load),
-3.8 (skills activation evidence and the console retraction).
+**Wave 3 is closed.** Every item carries its reproduction and its negative
+control; 3.9's remaining half is maintainer-blocked on a funded key (M2).
 
 ### 3.2 A replay has no side effects
 
@@ -573,6 +572,44 @@ default was the only branch that ever ran. `tool_calls` was a literal under a
 comment promising it would move. `_classify_pivots` counted a raised call as a
 pivot, so four timeouts looked like four pivots.
 
+### 3.7 Demotion without a page load
+
+Reproduced against a real Postgres before anything was written. A tenant
+earns `auto_execute` on `isolate_host` from a 240-decision record, 30
+disagreements are injected -- window agreement 88.9%, trailing slice 40%, both
+under the floors -- and then, with no read of the API: the grant row still
+says `granted`, and `services/actions` still reports
+`earned_autonomy_for('isolate_host') == 'earned'`. That second one is the
+sharp end. It means the dispatch path would have auto-isolated a production
+host on a track record the product itself no longer accepted.
+
+Two callers now, where there was one. `app.workers.autonomy_drift` sweeps
+every tenant holding a grant on a timer from the API lifespan and writes the
+demotion with its audit row; `tenant_policy` re-runs the same evaluator before
+handing a verb to dispatch and **withholds** one that no longer holds,
+without writing anything -- issuing and revoking stay with the service that
+owns the hash chain.
+
+The sweep is on by default, unlike `shadow_reconcile` beside it, and the
+difference is what each reaches: that one polls a customer's SIEM, this one
+aggregates rows this deployment already wrote. A safety control that has to be
+switched on is off wherever nobody knew to switch it on.
+
+**A defect in the fix, caught by its own positive control.** The two shared
+aggregates bind different parameter counts -- the trailing slice takes `$7`
+for its `LIMIT`, the window aggregate stops at `$6` -- and passing seven to
+both made asyncpg refuse. The refusal was caught and an unreadable record is
+treated as no record, so *every* grant on *every* deployment was withheld
+while the log called the evidence unreadable. It passed the demotion test
+perfectly. Only the test asserting a healthy tenant **keeps** its verb found
+it. A safety control stuck on reads like working caution, which is why
+nothing about the symptom says "broken", and the arity is now derived from
+the statement so an edit to the shared module cannot put it back.
+
+`scripts/check_module_reachability.py` went the way an allowlist is supposed
+to: `autonomy_evidence_rules.py` was listed as a permanent entry reached only
+by tooling, the dispatch re-check gave it a production caller, and the gate
+refused the stale entry.
 ### 3.5 Non-degenerate acceptance
 
 Measured before touching anything: all six decisions in the test window came

@@ -44,7 +44,14 @@ exists.
 ## Creating a credential
 
 SCIM authenticates with a bearer token scoped to one tenant. Mint one from
-the console, or through the API:
+the console, or through the API.
+
+In the console, open **Settings → SCIM provisioning**, name the credential
+after the identity provider it is for, and optionally give it a lifetime in
+days. The table lists every credential for the tenant with its prefix, its
+state and when it was last used.
+
+Through the API:
 
 ```bash
 curl -X POST https://<your-aisoc-host>/api/v1/scim-tokens \
@@ -53,12 +60,15 @@ curl -X POST https://<your-aisoc-host>/api/v1/scim-tokens \
   -d '{"name": "corporate-directory", "expires_in_days": 365}'
 ```
 
-The response carries the raw secret once. It is stored as a SHA-256 digest,
+Either way the raw secret is shown once. It is stored as a SHA-256 digest,
 so it cannot be recovered afterwards; if it is lost, rotate.
 
 Requires the `settings:write` permission.
 
 ## Rotating a credential
+
+Use **Rotate** on the credential's row in the console, choosing the grace
+window first, or:
 
 ```bash
 curl -X POST https://<your-aisoc-host>/api/v1/scim-tokens/<id>/rotate \
@@ -71,9 +81,10 @@ Both secrets work during the grace window, so you can paste the replacement
 into your identity provider without a failed sync in between. The superseded
 token expires by itself at the end of the window.
 
-If you are rotating because a secret was disclosed, send `{"grace_hours": 0}`.
-That revokes the old secret immediately and your next sync will fail until
-the new one is in place, which is the correct trade in that situation.
+If you are rotating because a secret was disclosed, send `{"grace_hours": 0}`
+— **Immediately (after a disclosure)** in the console. That revokes the old
+secret at once and your next sync will fail until the new one is in place,
+which is the correct trade in that situation.
 
 ## Mapping groups to roles
 
@@ -168,7 +179,11 @@ single-provider implementation gets wrong:
   attribute is unset
 
 Both providers' full sequences (create, update, group membership, deactivate)
-run in CI.
+run in CI, twice over: once offline against an in-memory database, and once
+against a real Postgres through the application a deployment runs. The second
+is what covers the parts the first cannot — `UUID` and `TIMESTAMPTZ` columns,
+the composite key behind group membership, and the cascading foreign keys that
+let `DELETE` end access while the row survives.
 
 ## Troubleshooting
 

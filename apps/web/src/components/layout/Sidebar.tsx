@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
 import packageJson from '../../../package.json';
 import { LiveQueueBadge } from './LiveQueueBadge';
-import { useBranding } from '@/hooks/useBranding';
+import { useBrandLogo, useBranding } from '@/hooks/useBranding';
 import { authApi } from '@/lib/api';
 
 const APP_VERSION = packageJson.version;
@@ -378,8 +378,17 @@ export function Sidebar() {
   // unbranded deployment gets the platform defaults from the same call, so
   // there is one code path rather than two that drift.
   const { branding } = useBranding();
+  const logoSrc = useBrandLogo(branding.logo_url);
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Only a white-labelled organisation overrides the chrome. An unbranded
+  // deployment keeps the compiled Tailwind palette, so the platform console
+  // is byte-for-byte what it was rather than the same colours restated as
+  // inline styles.
+  const brandFrameStyle = branding.is_white_labelled
+    ? { borderColor: branding.accent_color, backgroundColor: `${branding.accent_color}33` }
+    : undefined;
 
   // Users management is admin-only. The nav item is hidden entirely for
   // viewer/infosec — the server refuses the page's API calls anyway, but
@@ -427,13 +436,16 @@ export function Sidebar() {
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-5 h-16 border-b border-surface-border">
-        <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-600/20 border border-brand-600/30 flex items-center justify-center overflow-hidden">
-          {branding.logo_url ? (
-            // Served from this deployment. The API never returns a
-            // third-party address, so this cannot become a request to
-            // somebody else's host on every page load.
+        <div
+          className="flex-shrink-0 w-8 h-8 rounded-lg bg-brand-600/20 border border-brand-600/30 flex items-center justify-center overflow-hidden"
+          style={brandFrameStyle}
+        >
+          {logoSrc ? (
+            // An object URL over bytes this deployment served. The raw path
+            // cannot go here: the asset route authenticates a bearer token
+            // and an `<img>` can only carry a cookie.
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={branding.logo_url} alt="" className="w-full h-full object-contain" />
+            <img src={logoSrc} alt="" className="w-full h-full object-contain" />
           ) : (
             <span className="text-brand-400">
               <ShieldIcon />
@@ -442,7 +454,9 @@ export function Sidebar() {
         </div>
         <div>
           {branding.is_white_labelled ? (
-            <span className="text-fg-primary font-bold text-base tracking-tight">{branding.product_name}</span>
+            <span className="text-fg-primary font-bold text-base tracking-tight" style={{ color: branding.primary_color }}>
+              {branding.product_name}
+            </span>
           ) : (
             <>
               <span className="text-fg-primary font-bold text-base tracking-tight">Ai</span>
