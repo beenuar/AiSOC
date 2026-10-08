@@ -36,6 +36,7 @@ from app.models.organization import (
     OrganizationMemberTenant,
     OrganizationTenant,
 )
+from app.models.outbound_webhook import OutboundDelivery, OutboundWebhook
 from app.models.posture import PostureDriftEvent, PostureFinding, PostureScanRun
 from app.models.published_replay import PublishedReplay
 from app.models.remediation import RemediationGateLog, RemediationMaturity, RemediationWhitelist
@@ -96,6 +97,8 @@ __all__ = [
     "OrganizationMemberTenant",
     "OrganizationTenant",
     "OAuthState",
+    "OutboundDelivery",
+    "OutboundWebhook",
     "TenantInboxToken",
     "TenantLlmCredential",
     "McpServer",
