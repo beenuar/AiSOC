@@ -272,6 +272,16 @@ func New(ctx context.Context, cfg Config) (*Writer, error) {
 // would turn an optional dependency into a required one.
 const connectRetryWindow = 60 * time.Second
 
+// ConnectRetryWindow is connectRetryWindow, for a caller that has to build a
+// context deadline around New.
+//
+// It is exported because the caller's deadline was independently written as
+// 10s while this window said 60s, so the retry could only ever use a sixth
+// of its budget: a Neo4j that was merely slow to boot looked permanently
+// unreachable, and graph-at-ingest stayed off for the life of the process
+// over a `warn` line. One number, read by both.
+func ConnectRetryWindow() time.Duration { return connectRetryWindow }
+
 // verifyWithRetry polls until the driver answers or the window closes.
 func verifyWithRetry(ctx context.Context, driver neo4j.DriverWithContext, window time.Duration) error {
 	deadline := time.Now().Add(window)

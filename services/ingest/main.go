@@ -85,7 +85,10 @@ func main() {
 	// the graph writer NEVER block fusion ingest; the writer's queue is
 	// bounded and drops on full + emits a metric.
 	if cfg.GraphEnabled {
-		gctx, gcancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// Derived from the package's own retry window rather than written
+		// here, plus headroom for the final attempt. An independent
+		// number is how the retry came to be capped at a sixth of it.
+		gctx, gcancel := context.WithTimeout(context.Background(), graph.ConnectRetryWindow()+15*time.Second)
 		gw, err := graph.New(gctx, graph.Config{
 			URI:           cfg.Neo4jURI,
 			Username:      cfg.Neo4jUser,
