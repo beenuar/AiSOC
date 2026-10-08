@@ -182,6 +182,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `KNOWN_ABSENT` table so that building it will fail the gate until the prose
   is corrected. (#PR)
 
+### Added
+
+- **An event classification catalogue, read by ingest at boot.**
+  `schemas/event_catalog/<source>.yaml` maps each vendor's own event type
+  onto a normalized action, a sensitivity on the five-tier ladder, and an
+  optional ATT&CK hint. Ten sources, 44 event types: AWS CloudTrail, GCP
+  Cloud Audit, Azure Activity, Entra, Okta, Google Workspace, M365, GitHub,
+  Slack and Kubernetes audit. Every classified event carries the answer, so
+  the lake, the detection matcher and triage read one classification rather
+  than each re-deriving a meaning from an event name.
+
+  **A sensitivity deliberately does not change a severity or whether fusion
+  promotes.** Sensitivity is a property of the event *class*; the vendor's
+  own severity on the record and the OCSF class still decide promotion.
+  Letting `critical` force an alert would make a one-line edit to a data
+  file able to flood a queue, and the promotion contract belongs where it
+  already is. Pinned by a test that a critical-sensitivity and an
+  info-sensitivity event from the same source agree on `severity_id`,
+  `severity`, `class_uid` and `category_uid`.
+
+  An event type a catalogued source has never seen is the one case worth an
+  operator's attention, and it arrives as a `normalization_warnings` entry
+  on the event naming the file to edit. A source with no catalogue, and a
+  record carrying nothing at the declared path, are both silent — warning on
+  either would drown the actionable case.
+
+  The catalogue is embedded into the ingest binary from a byte-identical
+  vendored copy, because `go:embed` cannot reach above its own package and
+  reading a directory from disk at run time is a failure this service has
+  already shipped: the webhook templates were read from `/app/templates`, a
+  path the Dockerfile never populated, so every deployment answered 503
+  behind a startup warning nothing was watching.
+
+- **Recorded Okta and Slack vendor payloads.** Two of the ten sources the
+  catalogue covers had no vendor-payload fixture anywhere in the connectors
+  suite — only schema and conformance checks, which never see a record. A
+  gate grown from fixtures would have passed over both forever while
+  reporting OK. `tests/fixtures/okta/sample_event.json` (7 records, 6 event
+  types) and `tests/fixtures/slack_audit/sample_event.json` (6 records, 6
+  event types) follow each vendor's published log schema and are driven
+  through the real connectors' `normalize()`.
+
+- `scripts/check_event_catalog.py`, wired into `ci.yml` with its self-test
+  ahead of it. Every event type appearing in a catalogue's declared fixtures
+  must be classified or listed as deliberately unclassified with a reason,
+  so adding a fixture that carries a new event type fails CI until somebody
+  decides what it means. It also fails a source whose declared fixtures
+  yield **no** event type, a sensitivity outside the five tiers, a missing
+  normalized action, a malformed ATT&CK id, a thin excuse, an event type
+  both classified and excused, and any drift between `schemas/` and the
+  vendored copy the binary carries.
+
+
 ## [17.1.0] - 2026-10-07
 
 ### Security
