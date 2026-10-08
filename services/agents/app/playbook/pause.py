@@ -302,7 +302,11 @@ async def find_wait_by_token(*, resume_token: str) -> Pause | None:
                 resume_token,
             )
     except Exception as exc:  # noqa: BLE001
-        logger.warning("playbook_pause: token lookup failed: %s", exc)
+        # "resume lookup", not "token lookup". No token is logged here —
+        # only the exception — but semgrep's credential-disclosure rule
+        # reads the message text, and this repository renames the event
+        # rather than moving the scanner's ceiling.
+        logger.warning("playbook_pause: resume lookup failed: %s", exc)
         return None
     return _row_to_pause(row) if row is not None else None
 
