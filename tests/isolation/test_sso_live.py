@@ -54,7 +54,6 @@ from __future__ import annotations
 import base64
 import json
 import os
-import re
 import subprocess
 import tempfile
 import threading
@@ -62,7 +61,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, quote, urlsplit
 
 import pytest
 import pytest_asyncio
@@ -217,9 +216,6 @@ class _Idp:
 # ─── A real OpenID Connect provider, on a real socket ────────────────────────
 
 
-_HEADER_UNSAFE = re.compile(r"[^A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]")
-
-
 class _OidcProvider:
     """Discovery, JWKS, authorization, token and userinfo over real HTTP.
 
@@ -302,7 +298,14 @@ class _OidcProvider:
                     if (query.get("redirect_uri") or [""])[0] != registered:
                         self._send(400, b'{"error":"invalid_request"}')
                         return
-                    state = _HEADER_UNSAFE.sub("", (query.get("state") or [""])[0])
+                    # `state` is echoed because the protocol requires it, so
+                    # it is percent-encoded rather than stripped. Encoding
+                    # is what actually makes a query-string value safe --
+                    # CR and LF become %0D and %0A, which cannot terminate a
+                    # header line -- and it is the sanitiser the taint
+                    # tracker recognises, where the character-class
+                    # substitution above it was not.
+                    state = quote((query.get("state") or [""])[0], safe="")
                     self.send_response(302)
                     self.send_header("Location", f"{registered}?code={code}&state={state}")
                     self.send_header("Content-Length", "0")
