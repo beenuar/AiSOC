@@ -101,9 +101,18 @@ describe('Sidebar branding', () => {
     // white-labelled, it is co-branded by accident.
     expect(screen.queryByText('open-source')).not.toBeInTheDocument();
 
-    await vi.waitFor(() => {
-      expect(container.querySelector('img')).not.toBeNull();
-    });
+    // Two chained async hops, not one: branding resolves, and only then does
+    // the component fetch the asset with its credential and turn the blob
+    // into an object URL. `vi.waitFor` defaults to a second, which is enough
+    // here and was not on a loaded CI runner — this timed out on GitHub's
+    // runners while passing locally every time. The wait is real rather than
+    // a race being papered over, so it gets the headroom explicitly.
+    await vi.waitFor(
+      () => {
+        expect(container.querySelector('img')).not.toBeNull();
+      },
+      { timeout: 10_000 },
+    );
     const logo = container.querySelector('img') as HTMLImageElement;
 
     // The resolved palette reaches the chrome. `accent_color` was read by
