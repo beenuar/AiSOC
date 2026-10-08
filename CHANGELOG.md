@@ -7,7 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-<<<<<<< HEAD
 ### BREAKING
 
 - **Three tables that had no reader now change authorization outcomes.**
@@ -78,21 +77,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     21). Seven permissions seeded by migration `096`; operator documentation
     at `docs/security/access-governance.md`. (#PR)
 
-### Fixed
-
-- **A permission the module declared but no migration seeded could not be
-  granted from the console.** `test_rbac_catalog_seed.py` pinned the
-  vocabulary against `092_rbac_catalog_seed.sql` alone, which has already run
-  on every deployment — so the only correct way to add a permission, a new
-  migration, failed the test, and the tempting fix (editing an applied
-  migration) seeds the row on fresh installs and on nobody else. The pin now
-  reads every migration that seeds the catalog, derived from the tree. Doing
-  so immediately surfaced `playbooks:delete`, seeded by `003_rbac.sql` before
-  `rbac_catalog.py` existed and enforced by no route in the tree: recorded in
-  the test with its reason rather than adopted, because absorbing it would
-  make the catalog claim a permission the product does not enforce. (#PR)
-=======
-### Added
 
 - **A labelled verdict corpus a constant answer cannot win on**
   (`services/agents/tests/eval_data/verdict/`). Every labelled set this tree
@@ -129,7 +113,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pinned in the same file that requires the new one to pass, so loosening the
   guard to admit a corpus breaks the test that says the old ones stay out.
   (Depth plan 1.1)
->>>>>>> origin/main
+
+### Fixed
+
+- **A permission the module declared but no migration seeded could not be
+  granted from the console.** `test_rbac_catalog_seed.py` pinned the
+  vocabulary against `092_rbac_catalog_seed.sql` alone, which has already run
+  on every deployment — so the only correct way to add a permission, a new
+  migration, failed the test, and the tempting fix (editing an applied
+  migration) seeds the row on fresh installs and on nobody else. The pin now
+  reads every migration that seeds the catalog, derived from the tree. Doing
+  so immediately surfaced `playbooks:delete`, seeded by `003_rbac.sql` before
+  `rbac_catalog.py` existed and enforced by no route in the tree: recorded in
+  the test with its reason rather than adopted, because absorbing it would
+  make the catalog claim a permission the product does not enforce. (#PR)
 
 ## [17.1.0] - 2026-10-07
 
