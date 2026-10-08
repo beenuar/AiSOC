@@ -92,7 +92,11 @@ describe('Sidebar branding', () => {
   // cache and a deduping window, so a second `render` in this file resolves
   // from neither the cache nor a fresh request and shows the unbranded
   // wordmark. Splitting these would test the cache rather than the console.
-  it("shows a white-labelled organisation's name, palette and logo, and drops the platform wordmark", async () => {
+  // 20s, against vitest's 5s default. The case waits on two chained async
+  // hops and the wait below is budgeted at 8s, so the test has to outlive
+  // it — at the default the case timed out before asserting anything, which
+  // reports nothing about the logo either way.
+  it("shows a white-labelled organisation's name, palette and logo, and drops the platform wordmark", { timeout: 20_000 }, async () => {
     const { container } = render(<Sidebar />);
 
     expect(await screen.findByText('Acme Shield')).toBeInTheDocument();
@@ -111,7 +115,7 @@ describe('Sidebar branding', () => {
       () => {
         expect(container.querySelector('img')).not.toBeNull();
       },
-      { timeout: 10_000 },
+      { timeout: 8_000 },
     );
     const logo = container.querySelector('img') as HTMLImageElement;
 
