@@ -264,3 +264,8 @@ file = "apps/docs/src/pages/index.tsx"
 start = "const COMPARE_HEADERS"
 end = "function compareCellClass"
 reason = "Capability comparison table rendered on the documentation portal landing page."
+
+[[allow]]
+paths = ["services/ingest/internal/normalizer/ocsf_classes.go"]
+names = ["Torq", "Tines", "Wazuh"]
+reason = "The OCSF class decision for every declared connector type. Each name is a connector id this platform ingests under, beside the reason its stream stays on Security Finding — all three of these send a judgement the vendor's own ruleset or workflow already made, which is why they are not reclassified to a raw-activity class. Dropping a name here would return that connector to the generic mapping, which promotes every record to an alert; the same first-party integration reference the connector modules and the bundled catalog already carry."

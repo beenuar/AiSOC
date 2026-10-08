@@ -218,18 +218,20 @@ def parse_declared_connectors(directory: Path) -> set[str]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
             for stmt in cls.body:
-                target = None
+                # The value is bound in each branch rather than read off
+                # `stmt` afterwards: past the if/elif the name is still an
+                # `ast.stmt`, which has no `.value`, so the later read was
+                # four unchecked attribute accesses that happened to be safe.
                 if isinstance(stmt, ast.Assign):
                     target = next((getattr(t, "id", None) for t in stmt.targets), None)
+                    value: ast.expr | None = stmt.value
                 elif isinstance(stmt, ast.AnnAssign):
                     target = getattr(stmt.target, "id", None)
-                if (
-                    target == "connector_id"
-                    and isinstance(stmt.value, ast.Constant)
-                    and isinstance(stmt.value.value, str)
-                    and stmt.value.value
-                ):
-                    out.add(stmt.value.value)
+                    value = stmt.value
+                else:
+                    continue
+                if target == "connector_id" and isinstance(value, ast.Constant) and isinstance(value.value, str) and value.value:
+                    out.add(value.value)
     return out
 
 
@@ -292,8 +294,8 @@ def evaluate(
     # no decision at all, reaching the default silently.
     generic: list[str] = []
     for name in sorted(declared):
-        entry = connector_classes.get(name)
-        if entry is None:
+        decision = connector_classes.get(name)
+        if decision is None:
             failures.append(
                 (
                     "connector-unclassified",
@@ -303,7 +305,7 @@ def evaluate(
                 )
             )
             generic.append(name)
-        elif entry["class_uid"] is None:
+        elif decision["class_uid"] is None:
             generic.append(name)
 
     # PROMOTION. A class a connector is mapped to must be able to promote.
