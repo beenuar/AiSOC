@@ -487,7 +487,7 @@ suites' job, and anything at all against a live vendor MCP server.
 ## Phase 13: Enterprise identity and MSSP plumbing
 
 - [x] **13.1 SCIM 2.0** with Users, Groups, ServiceProviderConfig, ResourceTypes and Schemas, per-organization hashed rotatable tokens, and audited deprovisioning. Migration `070_scim_provisioning.sql`; router at `/scim/v2` (17 routes); `scripts/check_scim_contract.py` wired into `isolation.yml`; Okta-shaped and Entra-shaped sequences pass in `test_scim_provisioning.py` (54 tests). See D26, D27 and D28.
-- [~] **13.2 MSSP white-label** per organization. Console and PDF/digest are implemented and gated; assets are held as bytes in `aisoc_org_brand_assets` and SVGs are allowlist-sanitised (migration `072_org_branding.sql`, `app/services/branding/`). Email approvals and ChatOps read the resolved `sender_name` but are **not** covered end to end, and the doc says so. See D29.
+- [~] **13.2 MSSP white-label** per organization. Console, digest, case close-out summary, replay report, investigation PDF and email approvals are implemented and gated; assets are held as bytes in `aisoc_org_brand_assets` and SVGs are allowlist-sanitised (migration `072_org_branding.sql`, `app/services/branding/`). ChatOps is the one surface of the five that stays unbranded, as a scope decision with a recorded reason rather than as pending work. See D29.
 - [x] **13.3 Usage metering** from real rows: `app/services/usage_metering.py`, ten meters each a query against the table holding the evidence, `GET /api/v1/usage`, `/usage/reconciliation` and `/usage/export.csv`. Linked to `entitlements.headroom_for_tenant`. No pricing logic, gated. See D30.
 - [ ] **13.4 Console i18n** with a pilot locale, RTL, locale-aware formatting and a missing-keys gate.
 
@@ -1547,24 +1547,45 @@ a revocation exists, so credentials minted before this change fail closed.
 Both the access-token path and the refresh path check it. The refresh path
 matters more: a refresh token outlives an access token by days.
 
-### D29. White-label reaches the two surfaces the acceptance names, and not the other three
+### D29. White-label reaches four of the five surfaces, and the fifth is a scope decision
 
 13.2 lists five surfaces: console, PDF reports, digests, email approvals and
 ChatOps. The phase's own "Done when" names two of them, "a white-labelled
-organization's PDF report and console show its branding", and those two are
-implemented and gated end to end.
+organization's PDF report and console show its branding", and those two were
+implemented and gated end to end first.
 
 The digest *is* the PDF path, so it comes with them: `render_digest_pdf` runs
 `render_digest_html` through WeasyPrint, and the test asserts on the HTML,
-which is what the PDF contains.
+which is what the PDF contains. The case close-out summary, the replay
+evaluation report and the investigation summary PDF followed, each with an
+unbranded negative control.
 
-Email approvals and ChatOps resolve the same `sender_name` from the same
-resolver, and there is no end-to-end test that an outbound message carries it.
-Recorded as `[~]` rather than `[x]`, and
-`apps/docs/docs/operations/white-label.md` says "treat those as unverified
-rather than working" instead of implying coverage that does not exist. The
-alternative, marking the item done because the field resolves, is the shape
-this program exists to prevent.
+**The record here was wrong, and the way it was wrong is the lesson.** This
+entry said email approvals and ChatOps "resolve the same `sender_name` from
+the same resolver", missing only an end-to-end test. Neither half was true.
+`sender_name` had no reader anywhere outside the resolver that produced it;
+`send_approval_email` had no caller at all; and the tokens it would have
+minted carried no approver, so the consuming endpoint — which refuses a token
+that names nobody — would have rejected every link in a mail that did get
+sent. Three dead things in a row, each of which had a passing test, and the
+tracker credited the field for resolving. A resolved value is not a rendered
+one, and "covered by no end-to-end test" is a much weaker statement than
+"read by nothing", so writing the weaker one hid the stronger.
+
+Email approvals are now branded and wired: `POST /api/v1/approvals` is the
+producer, one message per recipient with that recipient signed in as the
+approver, and `sender_name` is the `From` display name — which is what the
+field is for, and the first reader it has ever had.
+
+ChatOps stays unbranded as a **scope decision with a reason**, recorded in
+`apps/docs/docs/operations/white-label.md` and in the claim row rather than
+left to look pending. The prompt is posted by `services/actions`, and the
+bots are `services/slack-bot` and `services/teams-bot`; none can reach the
+branding store, which sits behind the API with the tenant session and the
+credential vault. The tempting shortcut is a deployment-wide product name in
+an environment variable, and it is worse than leaving it alone: branding is
+per operator organisation, so one baked-in name is wrong for every
+organisation on the deployment except one while reading as configured.
 
 **The design decision worth keeping:** asset bytes live in Postgres and are
 served from this deployment. A logo referenced by URL is an outbound request

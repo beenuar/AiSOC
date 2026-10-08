@@ -13,8 +13,10 @@ Design goals:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
+import re
 import secrets
 import time
 import uuid
@@ -26,7 +28,7 @@ import httpx
 
 from app.playbook import pause as playbook_pause
 
-from . import action_bridge, idempotency
+from . import action_bridge, idempotency, references
 from .bounds import (
     ABSOLUTE_MAX_LOOP_ITERATIONS,
     ABSOLUTE_MAX_PARALLEL_BRANCHES,
@@ -413,44 +415,154 @@ async def _handle_investigate(step: PlaybookStep, context: dict[str, Any], http:
     return r.json()
 
 
-async def _handle_notify(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
-    channel = step.params.get("channel", "webhook")
-    url = step.params.get("url", "")
-    message = step.params.get("message", "AiSOC playbook notification")
-    # Simple template substitution
-    for k, v in context.items():
-        message = message.replace(f"{{{{{k}}}}}", str(v))
+#: ``${NAME}`` — an integration this tenant has configured. Resolved by the
+#: API against connector instances and the vault; see `app.playbook.references`.
+_REFERENCE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
 
-    if channel == "webhook" and url:
-        # SSRF guard: webhook URLs are author-controlled; reject loopback,
-        # cloud-metadata, and other unsafe destinations before dispatching.
+#: ``{{dot.path}}`` — a value from the run context. Rendered in this process,
+#: because the context never leaves it.
+_CONTEXT_TOKEN = re.compile(r"\{\{\s*([A-Za-z_][\w.]*)\s*\}\}")
+
+
+def _render_context(text: str, context: dict[str, Any]) -> str:
+    """Substitute ``{{dot.path}}`` from the run context.
+
+    An unresolved path renders as the empty string rather than leaving the
+    braces in place. Leaving them would put a literal ``{{alert.user}}`` into
+    a URL path or a pager message, which reads to whoever receives it as a
+    templating bug in AiSOC rather than as a field the alert did not carry.
+    ``_resolve_field`` already distinguishes the two for conditions; here the
+    step's own result records which paths were empty.
+    """
+
+    def _one(match: re.Match[str]) -> str:
+        value = _resolve_field(context, match.group(1))
+        if value is None:
+            return ""
+        if isinstance(value, dict | list):
+            return json.dumps(value, separators=(",", ":"))
+        return str(value)
+
+    return _CONTEXT_TOKEN.sub(_one, text)
+
+
+def _unrendered_context_paths(text: str, context: dict[str, Any]) -> list[str]:
+    return sorted({m.group(1) for m in _CONTEXT_TOKEN.finditer(text) if _resolve_field(context, m.group(1)) is None})
+
+
+def _notify_execute_enabled() -> bool:
+    """Whether a notify step may reach a person.
+
+    Off unless an operator turns it on, for the reason every outbound verb
+    in this engine is: a playbook that pages on-call the moment it is
+    imported is a worse first-run experience than one that previews.
+    Governance downstream can still refuse what this allows.
+    """
+    return os.getenv("AISOC_PLAYBOOK_NOTIFY_EXECUTE", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _http_execute_enabled() -> bool:
+    """Whether an http step may leave the process.
+
+    An ``http`` step in the shipped packs deletes sessions, posts WAF rules
+    and resets passwords in bulk. It changes vendor state through a path the
+    capability contract cannot see, so it ships off and previews instead.
+    """
+    return os.getenv("AISOC_PLAYBOOK_HTTP_EXECUTE", "0").strip().lower() in {"1", "true", "yes", "on"}
+
+
+async def _handle_http(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient | None) -> dict:
+    """Call one path on one of the tenant's configured integrations.
+
+    Three things happen in an order that matters:
+
+    1. ``{{dot.path}}`` is rendered from the run context, in this process.
+    2. ``${NAME}`` is resolved by the API from connector instances and the
+       vault. Before this, nothing resolved it and all 69 steps in the packs
+       died at the guard with ``scheme '' is not allowed`` — ``urlsplit``
+       reads a string beginning ``${`` as having no scheme.
+    3. The *resolved* URL goes through the SSRF guard. After substitution,
+       not before: the value came out of a tenant record, so it is exactly
+       as untrusted as the step that asked for it.
+    """
+    method = str(step.params.get("method", "POST")).upper()
+    raw_url = str(step.params.get("url", ""))
+    headers_ref = str(step.params.get("headers_env") or "")
+    body_template = step.params.get("body_template")
+
+    url = _render_context(raw_url, context)
+    names = [m.group(1) for m in _REFERENCE.finditer(url)]
+    if headers_ref:
+        names.append(headers_ref)
+
+    resolved = await references.resolve(tenant_id=str(context.get("tenant_id") or ""), names=names) if names else {}
+
+    missing = sorted({name for name in names if name not in resolved})
+    if missing:
+        return {
+            "executed": False,
+            "error": (
+                f"this tenant has no integration configured for {', '.join(missing)}, so the step was not sent. "
+                f"Connect it, or map the name on the connector instance."
+            ),
+            "unresolved_references": missing,
+        }
+
+    url = _REFERENCE.sub(lambda m: str(resolved[m.group(1)].get("value", "")), url)
+
+    headers: dict[str, str] = {str(k): str(v) for k, v in (step.params.get("headers") or {}).items()}
+    if headers_ref:
+        headers.update({str(k): str(v) for k, v in (resolved[headers_ref].get("headers") or {}).items()})
+
+    body: Any = step.params.get("body", {})
+    if isinstance(body_template, str):
+        rendered = _render_context(body_template, context)
         try:
-            validate_outbound_url(url)
-        except SSRFError as exc:
-            raise SSRFError(f"notify step rejected: {exc}") from exc
-        r = await http.post(url, json={"text": message}, timeout=step.timeout_seconds)
-        return {"status": r.status_code}
-    # Why it did not deliver, accurately. This said "no url" whatever the
-    # cause, including when a url *was* supplied and the channel simply
-    # was not `webhook` — so an operator debugging a silent playbook went
-    # looking for a missing field that was right there in front of them.
-    reason = "no url" if not url else f"channel {channel!r} has no sender; only 'webhook' delivers, and a url was supplied"
-    return {"channel": channel, "message": message, "delivered": False, "reason": reason}
+            body = json.loads(rendered)
+        except json.JSONDecodeError:
+            # Sent as text rather than guessed at. A body_template that does
+            # not render to JSON is an authoring error, and silently posting
+            # ``{}`` instead would make a bulk password reset look like it
+            # ran against nobody.
+            body = None
+            headers.setdefault("Content-Type", "text/plain")
 
-
-async def _handle_http(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
-    method = step.params.get("method", "POST").upper()
-    url = step.params.get("url", "")
-    body = step.params.get("body", {})
-    headers = step.params.get("headers", {})
-    # SSRF guard: arbitrary HTTP calls from playbooks must not reach
-    # loopback, RFC1918, link-local, or cloud-metadata endpoints by default.
     try:
         validate_outbound_url(url)
     except SSRFError as exc:
         raise SSRFError(f"http step rejected: {exc}") from exc
-    r = await http.request(method, url, json=body, headers=headers, timeout=step.timeout_seconds)
-    return {"status": r.status_code, "body": r.text[:500]}
+
+    # Header *names* only, in both branches. The run record is readable by
+    # anyone with access to the case, and a resolved bearer token in it is a
+    # credential leak that outlives the incident.
+    record: dict[str, Any] = {
+        "url": url,
+        "method": method,
+        "header_names": sorted(headers),
+        "unrendered_context_paths": _unrendered_context_paths(raw_url, context),
+    }
+
+    if not _http_execute_enabled():
+        return {
+            **record,
+            "executed": False,
+            "previewed": True,
+            "reason": "http steps preview unless AISOC_PLAYBOOK_HTTP_EXECUTE is set; nothing was sent",
+        }
+
+    assert http is not None, "a live http step needs the engine's client"
+    if body is None:
+        response = await http.request(
+            method, url, content=_render_context(str(body_template), context), headers=headers, timeout=step.timeout_seconds
+        )
+    else:
+        response = await http.request(method, url, json=body, headers=headers, timeout=step.timeout_seconds)
+    return {
+        **record,
+        "executed": 200 <= response.status_code < 300,
+        "status": response.status_code,
+        "body": response.text[:500],
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -491,7 +603,65 @@ _TARGET_KEYS: dict[StepType, tuple[str, ...]] = {
     StepType.SEARCH_SIEM: ("query", "search"),
     StepType.CREATE_NOTABLE_EVENT: ("title", "name"),
     StepType.CREATE_TICKET: (),
+    # Depth 5.1. `notify` was answered inside the engine with one sender
+    # (`channel == "webhook"`) while all 63 steps in the packs address Slack,
+    # Teams, email or PagerDuty by `webhook_env` / `service_key_env`. It is a
+    # contracted capability in `services/actions` with a Slack arm that
+    # predates this work, so the verb moves to where its credentials and its
+    # contract already live rather than growing a second set of senders here.
+    StepType.NOTIFY: ("recipient", "channel_name", "to"),
+    # Same move, different reason. The in-engine handler imported
+    # `app.clients.osctrl_client`, which exists only in `services/actions`, so
+    # every live query in this image raised. The clients it wanted are beside
+    # the executors it now dispatches to.
+    StepType.OSQUERY_LIVE_QUERY: ("host", "hostname", "device_id", "host_id"),
 }
+
+#: Verbs whose step params do not already read as the capability's params.
+#: Keyed by step type, each returns ``(vendor_id, params)``.
+#:
+#: Written as a table rather than inside the handler factory so the mapping
+#: is visible next to the target keys above. A verb that needs one of these
+#: and does not have one dispatches with the author's spelling, which the
+#: executor does not read — the shape that made every pack notify send the
+#: default string, because the packs write `message_template` and the old
+#: handler read `message`.
+_PARAM_ADAPTERS: dict[StepType, Any] = {}
+
+
+def _notify_params(step: PlaybookStep, context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Channel picks the vendor arm; the rendered template is the message.
+
+    The channel is pinned into ``vendor_id`` rather than left for the
+    executor to infer, for the reason the SIEM arms pin ``alert_vendor``:
+    otherwise whichever destination happens to have credentials first
+    decides where a page goes.
+    """
+    params = dict(step.params)
+    template = params.pop("message_template", None) or params.get("message") or "AiSOC playbook notification"
+    params["message"] = _render_context(str(template), context)
+    channel = str(params.pop("channel", "") or "").strip().lower()
+    return channel, params
+
+
+def _osquery_params(step: PlaybookStep, context: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """The backend picks the vendor arm; the hosts are the fleet to ask.
+
+    The timeout is clamped here and again in the executor. Not belt and
+    braces for its own sake: ``params`` is an untyped dict that bypasses the
+    Pydantic bound on ``PlaybookStep.timeout_seconds``, so a playbook could
+    otherwise ask a fleet for a day — and the two services deploy
+    independently, so neither can rely on the other having clamped first.
+    """
+    params = dict(step.params)
+    backend = str(params.pop("backend", "") or "osctrl").strip().lower()
+    if not params.get("target_hosts"):
+        host = _resolve_target(step, context)
+        if host:
+            params["target_hosts"] = [host]
+    params["timeout_seconds"] = clamp_timeout(params.get("timeout_seconds", 60), default=60)
+    return backend, params
+
 
 #: Step types that name a verb but deliberately have no bridge, with the
 #: reason. The engine reports the reason instead of a bare "no handler", and
@@ -549,12 +719,18 @@ def _make_response_handler(step_type: StepType):
     """
 
     async def _handler(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
+        adapter = _PARAM_ADAPTERS.get(step_type)
+        if adapter is None:
+            vendor_id = str(step.params.get("vendor") or step.params.get("vendor_id") or "")
+            params = dict(step.params)
+        else:
+            vendor_id, params = adapter(step, context)
         report = await action_bridge.dispatch_step(
             capability=step_type.value,
             tenant_id=str(context.get("tenant_id") or ""),
             target=_resolve_target(step, context),
-            params=dict(step.params),
-            vendor_id=str(step.params.get("vendor") or step.params.get("vendor_id") or ""),
+            params=params,
+            vendor_id=vendor_id,
             confidence=_resolve_confidence(step, context),
             playbook_run_id=str(context.get("_run_id") or ""),
             playbook_step_id=step.id,
@@ -582,131 +758,23 @@ async def _handle_close_case(step: PlaybookStep, context: dict[str, Any], http: 
     return {"case_id": case_id, "status": "closed"}
 
 
-async def _handle_osquery_live_query(step: PlaybookStep, context: dict[str, Any], http: httpx.AsyncClient) -> dict:
-    """Dispatch a distributed osquery live query via osctrl, FleetDM, or aisoc-direct.
-
-    Expected ``step.params`` keys
-    ------------------------------
-    backend : str
-        One of ``"osctrl"``, ``"fleetdm"``, ``"aisoc_direct"``.
-    instance_id : str
-        Connector instance ID (looked up from the API to retrieve credentials).
-    target_hosts : list[str]
-        Host UUIDs / hostnames to query.
-    template : str
-        Allowlist template ID (see ``osquery_allowlist``).
-    template_params : dict, optional
-        Parameters forwarded to the template renderer.
-    timeout_seconds : int, optional
-        How long to wait for all hosts to respond (default: 60).
-    """
-    # These osquery clients live in `services/actions`, not in this service —
-    # `services/agents/app/clients/` does not exist. Every `osquery_live_query`
-    # step therefore died with an unhandled ModuleNotFoundError at execution
-    # time, and the `except AllowlistError` handler below referenced a name
-    # that could never bind. The NL playbook drafter actively offers this step
-    # type, so a user could author a playbook that was guaranteed to crash.
-    #
-    # Fail with an actionable message instead of a traceback. Wiring this
-    # properly means dispatching through the actions service over HTTP, the
-    # same way SIEM writeback already does, rather than importing across a
-    # service boundary that does not exist in this image.
-    try:
-        from app.clients.aisoc_direct_client import AiSOCDirectClient  # noqa: PLC0415
-        from app.clients.fleetdm_client import FleetDMClient  # noqa: PLC0415
-        from app.clients.osctrl_client import OsctrlClient  # noqa: PLC0415
-        from app.clients.osquery_allowlist import AllowlistError  # noqa: PLC0415
-    except ModuleNotFoundError as exc:
-        # Raised, not returned. A returned dict leaves ``step_status`` at
-        # SUCCESS, so every live query in the shipped agents image — where
-        # these clients are always absent — was reported as a step that ran
-        # while nothing had been asked of any endpoint. That is the same
-        # defect the missing-handler branch above exists to remove, and it
-        # became reachable from the console the moment the editor could
-        # author this step type.
-        #
-        # Permanent because the module will not appear between attempt one
-        # and attempt four: the image either ships the clients or it does not.
-        logger.error("playbook.osquery_clients_unavailable: %s", exc)
-        raise PermanentStepFailure(
-            "osquery_live_query is not executable in the agents service: the "
-            "osquery backend clients ship in services/actions. Run this step "
-            "through the actions service, or remove it from the playbook."
-        ) from exc
-
-    backend: str = step.params.get("backend", "osctrl")
-    target_hosts: list[str] = step.params.get("target_hosts") or [context.get("host_id") or context.get("host", "")]
-    template: str = step.params.get("template", "")
-    template_params: dict[str, Any] = step.params.get("template_params") or {}
-    # Runtime clamp — params bypass the Pydantic validator on PlaybookStep, so
-    # a malicious or malformed playbook could otherwise pin the connector
-    # thread for hours. See services/agents/app/playbook/bounds.py.
-    timeout_seconds: int = clamp_timeout(step.params.get("timeout_seconds", 60), default=60)
-
-    if not template:
-        return {"error": "osquery_live_query: 'template' param is required", "partial": True}
-
-    # Credential resolution: fetch the connector instance config from the API.
-    instance_id: str = step.params.get("instance_id") or context.get("connector_instance_id", "")
-    creds: dict[str, Any] = {}
-    if instance_id:
-        try:
-            r = await http.get(
-                f"{_API_URL}/api/v1/connectors/instances/{instance_id}",
-                timeout=10,
-            )
-            if r.status_code == 200:
-                creds = r.json().get("auth_config") or {}
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("Could not fetch connector creds for %s: %s", instance_id, exc)
-
-    try:
-        if backend == "osctrl":
-            client = OsctrlClient(
-                base_url=creds.get("base_url") or step.params.get("base_url", ""),
-                environment=creds.get("environment") or step.params.get("environment", "default"),
-                api_token=creds.get("api_token") or step.params.get("api_token", ""),
-                verify_tls=step.params.get("verify_tls", True),
-            )
-            return await client.live_query(target_hosts, template, template_params, timeout_seconds)
-
-        if backend == "fleetdm":
-            client_fleet = FleetDMClient(
-                base_url=creds.get("base_url") or step.params.get("base_url", ""),
-                api_token=creds.get("api_token") or step.params.get("api_token") or None,
-                username=creds.get("username") or step.params.get("username") or None,
-                password=creds.get("password") or step.params.get("password") or None,
-                verify_tls=step.params.get("verify_tls", True),
-            )
-            return await client_fleet.live_query(target_hosts, template, template_params, timeout_seconds)
-
-        if backend == "aisoc_direct":
-            client_direct = AiSOCDirectClient(
-                base_url=creds.get("base_url") or step.params.get("base_url", ""),
-                api_token=creds.get("api_token") or step.params.get("api_token", ""),
-            )
-            return await client_direct.live_query(target_hosts, template, template_params, timeout_seconds)
-
-        return {"error": f"Unknown osquery backend: {backend!r}", "partial": True}
-
-    except AllowlistError as exc:
-        return {"error": f"osquery allowlist violation: {exc}", "partial": True}
-    except NotImplementedError as exc:
-        return {"error": str(exc), "partial": True, "stub": True}
-
-
 #: Verbs dispatched through the action registry. Derived from `_TARGET_KEYS`
 #: so the two cannot drift: a verb added to one without the other would
 #: either dispatch with no target or declare a target nothing reads.
 RESPONSE_STEP_TYPES: frozenset[StepType] = frozenset(_TARGET_KEYS)
 
+_PARAM_ADAPTERS.update(
+    {
+        StepType.NOTIFY: _notify_params,
+        StepType.OSQUERY_LIVE_QUERY: _osquery_params,
+    }
+)
+
 _HANDLERS = {
     StepType.ENRICH: _handle_enrich,
     StepType.INVESTIGATE: _handle_investigate,
-    StepType.NOTIFY: _handle_notify,
     StepType.HTTP: _handle_http,
     StepType.CLOSE_CASE: _handle_close_case,
-    StepType.OSQUERY_LIVE_QUERY: _handle_osquery_live_query,
     **{step_type: _make_response_handler(step_type) for step_type in sorted(RESPONSE_STEP_TYPES, key=lambda s: s.value)},
 }
 
@@ -1405,7 +1473,11 @@ async def _invoke_step(
                 # Reporting those as SUCCESS is the defect this
                 # whole path exists to remove, so they fail closed
                 # and the default `on_failure: abort` halts the run.
-                if step.type in RESPONSE_STEP_TYPES and not result.get("executed"):
+                # `not dry_run` carried over from main: a preview reports
+                # `executed: false` by construction, so without this the
+                # engine called its own preview a failure and all 62 packs
+                # previewed as broken. The refactor would have dropped it.
+                if not dry_run and step.type in RESPONSE_STEP_TYPES and not result.get("executed"):
                     step_status = StepStatus.FAILED
                     result.setdefault(
                         "error",

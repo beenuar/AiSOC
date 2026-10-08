@@ -133,6 +133,11 @@ class Capability(str, Enum):
     GET_HOST = "get_host"
     GET_DETECTIONS = "get_detections"
     GET_USER_ACTIVITY = "get_user_activity"
+    # A distributed osquery query across a fleet, through osctrl, FleetDM or
+    # AiSOC's own TLS endpoint. Narrower than it looks: the caller names one
+    # of a closed set of allowlisted templates and never writes SQL, which is
+    # the same boundary LOOKUP_ENDPOINT_TELEMETRY draws.
+    OSQUERY_LIVE_QUERY = "osquery_live_query"
     # Gap-closure Phase 4.2. Two reads that do not fit the three above
     # because their subject is neither a host nor a principal: a cloud
     # control-plane audit trail, and endpoint telemetry searched by

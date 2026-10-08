@@ -78,11 +78,19 @@ const VALID_PARAMS: Record<StepType, Record<string, unknown>> = {
 const TARGET_KEY: Record<StepType, string | null> = {
   enrich: null,
   investigate: null,
-  notify: null,
+  // Depth 5.1 made `notify` a governed verb. Its target is the channel:
+  // `engine._notify_params` pins it into `vendor_id` rather than letting the
+  // executor infer it, for the same reason the SIEM arms pin
+  // `alert_vendor` — otherwise whichever destination happens to have
+  // credentials first decides where a page goes.
+  notify: 'channel',
   close_case: null,
   http: null,
   condition: null,
-  osquery_live_query: null,
+  // Governed by depth 5.1 alongside `notify`. The fleet it asks is the
+  // target: `engine._osquery_params` sends `target_hosts`, falling back to
+  // the run's resolved target when the step names none.
+  osquery_live_query: 'target_hosts',
   approval: null,
   block_ip: 'ip_field', // pre-existing convention
   isolate_host: 'host_field', // pre-existing convention

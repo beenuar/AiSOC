@@ -13,12 +13,18 @@ Design goals
 * Inline CSS only, so the document is portable when downloaded.
 * Print-friendly typography and colour-blind-safe palette.
 * Defensive HTML escaping — every field touches tenant data.
+* White-labelled: the product name, palette, logo, footer and support
+  contact come from the branding resolver. Severity and recommendation
+  colours do not, because those encode how bad something is rather than
+  whose product it is.
 """
 
 from __future__ import annotations
 
 import html
 from datetime import UTC, datetime
+
+from app.services.branding.resolver import DEFAULT_BRANDING, Branding
 
 from .case_summary import (
     CaseAutoSummary,
@@ -88,12 +94,23 @@ def _kpi(label: str, value: str, *, hint: str | None = None) -> str:
     )
 
 
-def _header_block(case: CaseSummaryHeader, lifecycle: CaseLifecycleTimings, headline: str) -> str:
+def _header_block(case: CaseSummaryHeader, lifecycle: CaseLifecycleTimings, headline: str, brand: Branding) -> str:
     label = case.case_number or str(case.case_id)[:8]
+    # The logo is inlined rather than referenced for the same reason the
+    # digest inlines it: a case file is archived and reopened years later, and
+    # a referenced asset turns into a broken image the moment somebody tidies
+    # up a bucket.
+    logo = (
+        f'<img src="{_esc(brand.logo_data_uri)}" alt="{_esc(brand.product_name)}" '
+        'style="max-height:36px;max-width:180px;margin-bottom:8px;display:block;">'
+        if brand.logo_data_uri
+        else ""
+    )
     return (
         "<header>"
-        '<div style="font-size:11px;color:#64748b;text-transform:uppercase;'
-        'letter-spacing:0.08em;">AiSOC case auto-summary</div>'
+        f"{logo}"
+        f'<div style="font-size:11px;color:{_esc(brand.primary_color)};text-transform:uppercase;'
+        f'letter-spacing:0.08em;">{_esc(brand.product_name)} case auto-summary</div>'
         f"<h1>{_esc(label)} — {_esc(case.title)}</h1>"
         f'<div style="margin-top:6px;">{_severity_chip(case.severity)} '
         f'<span style="display:inline-block;padding:2px 8px;border-radius:9999px;'
@@ -270,13 +287,22 @@ def _recommendation_block(recs: list[CaseRecommendation]) -> str:
     return "<h2>Post-mortem</h2>" + cards
 
 
-def render_case_summary_html(summary: CaseAutoSummary) -> str:
-    """Render a ``CaseAutoSummary`` to a self-contained HTML document."""
+def render_case_summary_html(summary: CaseAutoSummary, branding: Branding | None = None) -> str:
+    """Render a ``CaseAutoSummary`` to a self-contained HTML document.
+
+    ``branding`` defaults to the platform appearance, so an unbranded
+    deployment is unchanged. This is the close-out artifact a managed
+    customer receives for their own case file, which makes it one of the two
+    documents white-label exists for; it carried the platform name in its
+    title, its header and its footer.
+    """
+    brand = branding or DEFAULT_BRANDING
+    support = brand.support_url or brand.support_email
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>AiSOC Case Summary — {_esc(summary.case.case_number or summary.case.title)}</title>
+<title>{_esc(brand.product_name)} Case Summary — {_esc(summary.case.case_number or summary.case.title)}</title>
 <style>
   @page {{ margin: 18mm; }}
   body {{
@@ -290,7 +316,7 @@ def render_case_summary_html(summary: CaseAutoSummary) -> str:
   h1, h2, h3 {{ color: #0f172a; margin-top: 0; }}
   h1 {{ font-size: 22px; margin-bottom: 4px; }}
   h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em;
-       color: #475569; margin: 20px 0 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; }}
+       color: #475569; margin: 20px 0 10px; border-top: 2px solid {_esc(brand.accent_color)}; padding-top: 14px; }}
   table th, table td {{ border-bottom: 1px solid #f1f5f9; }}
   @media print {{
     body {{ padding: 0; }}
@@ -299,7 +325,7 @@ def render_case_summary_html(summary: CaseAutoSummary) -> str:
 </style>
 </head>
 <body>
-  {_header_block(summary.case, summary.lifecycle, summary.headline)}
+  {_header_block(summary.case, summary.lifecycle, summary.headline, brand)}
   {_description_block(summary.case)}
 
   <h2>Lifecycle</h2>
@@ -316,8 +342,9 @@ def render_case_summary_html(summary: CaseAutoSummary) -> str:
   {_recommendation_block(summary.recommendations)}
 
   <footer style="margin-top:32px;color:#94a3b8;font-size:11px;text-align:center;">
-    AiSOC — open-source AI Security Operations Center.
-    Print this page (Ctrl/Cmd-P → Save as PDF) for case-file archival.
+    {_esc(brand.footer_text)}
+    {f"<div>Support: {_esc(support)}</div>" if support else ""}
+    <div>Print this page (Ctrl/Cmd-P → Save as PDF) for case-file archival.</div>
   </footer>
 </body>
 </html>"""

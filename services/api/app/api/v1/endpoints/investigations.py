@@ -32,6 +32,7 @@ import io
 import textwrap
 import uuid
 from datetime import UTC, datetime
+from html import escape
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -48,6 +49,7 @@ from app.models.investigation import (
     InvestigationEvent,
     InvestigationRun,
 )
+from app.services.branding.resolver import DEFAULT_BRANDING, Branding, resolve_branding
 from app.services.evidence_bundle import build_bundle, bundle_filename, serialize_bundle
 
 router = APIRouter(prefix="/investigations", tags=["investigations"])
@@ -1038,7 +1040,7 @@ async def export_summary_pdf(
             detail="No summary artifact found. POST /close first to generate one.",
         )
 
-    pdf_bytes = _render_pdf(art.content or "", str(run_id))
+    pdf_bytes = _render_pdf(art.content or "", str(run_id), await resolve_branding(db, current_user.tenant_id))
     filename = f"investigation-{run_id}.pdf"
     return StreamingResponse(
         io.BytesIO(pdf_bytes),
@@ -1047,13 +1049,21 @@ async def export_summary_pdf(
     )
 
 
-def _render_pdf(markdown_text: str, run_id: str) -> bytes:
+def _render_pdf(markdown_text: str, run_id: str, branding: Branding | None = None) -> bytes:
     """Render Markdown text to a minimal PDF using reportlab.
 
     Falls back to a plain-text PDF if reportlab is not installed so the
     endpoint never 500s in environments that haven't installed the optional
     dependency.
+
+    The brand lines are drawn rather than referenced: reportlab has no HTML
+    model, so there is nowhere to put a logo without an image file on disk.
+    A managed customer reading this export sees their provider's name and
+    support contact, which is the part of white-label that matters on a
+    document forwarded outside the SOC.
     """
+    brand = branding or DEFAULT_BRANDING
+    support = brand.support_url or brand.support_email
     try:
         from reportlab.lib.pagesizes import A4  # type: ignore[import-untyped]
         from reportlab.lib.styles import getSampleStyleSheet  # type: ignore[import-untyped]
@@ -1075,6 +1085,16 @@ def _render_pdf(markdown_text: str, run_id: str) -> bytes:
         )
         styles = getSampleStyleSheet()
         story = []
+        # reportlab's `Paragraph` parses a mini-markup, so an operator-supplied
+        # product name containing `<` would either break the parse or inject
+        # into it. Escaped for the same reason every other renderer escapes it.
+        story.append(
+            Paragraph(
+                f"<font size='8' color='{brand.primary_color}'>{escape(brand.product_name).upper()}</font>",
+                styles["Normal"],
+            )
+        )
+        story.append(Spacer(1, 0.3 * cm))
 
         for line in markdown_text.splitlines():
             stripped = line.strip()
@@ -1096,13 +1116,19 @@ def _render_pdf(markdown_text: str, run_id: str) -> bytes:
             else:
                 story.append(Spacer(1, 0.2 * cm))
 
+        story.append(Spacer(1, 0.6 * cm))
+        footer = escape(brand.footer_text) + (f"<br/>Support: {escape(support)}" if support else "")
+        story.append(Paragraph(f"<font size='7' color='#94a3b8'>{footer}</font>", styles["Normal"]))
+
         doc.build(story)
         return buf.getvalue()
 
     except ImportError:
-        # reportlab not installed — emit a plain-text PDF-like fallback
+        # reportlab not installed — emit a plain-text PDF-like fallback. The
+        # brand lines are repeated here so the two paths do not disagree about
+        # whose document this is.
         header = b"%PDF-1.4\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n"
-        body = markdown_text.encode("utf-8", errors="replace")
+        body = f"{brand.product_name}\n\n{markdown_text}\n\n{brand.footer_text}\n".encode(errors="replace")
         return header + body
 
 

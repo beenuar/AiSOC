@@ -425,3 +425,29 @@ func TestVerifyWithRetryHonoursCancellation(t *testing.T) {
 		t.Fatal("verifyWithRetry ignored a cancelled context")
 	}
 }
+
+// TestTheRetryWindowIsNotCappedByItsCaller pins the two numbers together.
+//
+// `main.go` built a 10s deadline around `New` while `connectRetryWindow`
+// said 60s, so the retry could only ever use a sixth of its budget. The
+// visible effect was that a Neo4j which was merely slow to boot read as
+// permanently unreachable, and graph-at-ingest stayed off for the life of
+// the process over a single `warn` line — which is how the CI event-spine
+// job began failing its "graph-at-ingest is on by default" assertion.
+//
+// The caller now derives its deadline from `ConnectRetryWindow()`. This
+// asserts the accessor really is the constant, so the two cannot drift
+// apart again by someone editing one of them.
+func TestTheRetryWindowIsNotCappedByItsCaller(t *testing.T) {
+	if ConnectRetryWindow() != connectRetryWindow {
+		t.Fatalf("the exported window (%s) is not the constant the retry loop uses (%s)",
+			ConnectRetryWindow(), connectRetryWindow)
+	}
+	// A caller that honours it must allow at least one full window. Stated
+	// as an inequality rather than an equality so adding headroom stays
+	// legal and shrinking below the window does not.
+	if ConnectRetryWindow() < 30*time.Second {
+		t.Fatalf("a window of %s is too short for a cold Neo4j container; "+
+			"the job this guards waits on a 15s healthcheck interval", ConnectRetryWindow())
+	}
+}

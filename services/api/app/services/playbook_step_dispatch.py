@@ -47,7 +47,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.connector import Connector
 from app.security.credential_vault import CredentialVaultError, get_vault
-from app.services import actions_client
+from app.services import actions_client, playbook_references
 from app.services.agent_tools import vendor_aliases
 
 logger = structlog.get_logger(__name__)
@@ -148,6 +148,28 @@ async def dispatch_step(
             detail=exc.upstream_detail,
         )
 
+    if capability == "notify":
+        # `notify` is the one verb whose credentials are not a connector's.
+        # A Slack incoming webhook, a PagerDuty Events routing key and an
+        # SMTP relay are destinations a tenant configures per playbook
+        # reference, which is how the shipped packs address them
+        # (`webhook_env: "SLACK_SOC_WEBHOOK"`). Routing it through
+        # `_pick_connector` would look for a connector type that does not
+        # exist and report `no_integration` for a destination the tenant
+        # had configured.
+        return await _dispatch_notify(
+            db,
+            tenant_id=tenant_id,
+            params=dict(params or {}),
+            pinned_channel=vendor_id,
+            confidence=confidence,
+            dry_run=dry_run,
+            requested_by=requested_by,
+            playbook_run_id=playbook_run_id,
+            playbook_step_id=playbook_step_id,
+            log=log,
+        )
+
     if not implementers:
         # Distinct from "this tenant has no integration": nothing in the
         # product can perform this verb, so no amount of configuration helps.
@@ -223,6 +245,88 @@ async def dispatch_step(
     report = _interpret(capability, resolved_vendor, body, dry_run=dry_run)
     log.info("playbook_step.dispatched", status=report.status, executed=report.executed)
     return report
+
+
+async def _dispatch_notify(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    params: dict[str, Any],
+    pinned_channel: str,
+    confidence: float | None,
+    dry_run: bool,
+    requested_by: str,
+    playbook_run_id: str,
+    playbook_step_id: str,
+    log: Any,
+) -> StepDispatchReport:
+    """Send one notification to a destination the tenant has configured.
+
+    The destination decides the channel, not the step. A playbook that says
+    ``channel: pagerduty`` against a reference holding a Slack webhook is a
+    page delivered to something that cannot read it, so the two have to
+    agree and the mismatch is reported rather than resolved in favour of
+    either.
+    """
+    try:
+        channel, destination_params, reason = await playbook_references.notify_destination(db, tenant_id=tenant_id, params=params)
+    except playbook_references.ReferenceError as exc:
+        return StepDispatchReport(
+            capability="notify",
+            status="failed",
+            executed=False,
+            summary="The notification destination could not be read.",
+            detail=str(exc)[:500],
+        )
+
+    if reason:
+        return StepDispatchReport(
+            capability="notify",
+            status="no_integration",
+            executed=False,
+            summary=f"Nothing was sent: {reason}.",
+            detail="Configure the destination under Settings → Playbook references and enable it.",
+        )
+
+    if pinned_channel and pinned_channel != channel:
+        return StepDispatchReport(
+            capability="notify",
+            status="failed",
+            executed=False,
+            vendor_id=channel,
+            summary=f"The step asked for {pinned_channel!r} and its destination serves {channel!r}.",
+            detail="A credential and a transport that disagree deliver nowhere; neither side is guessed at.",
+        )
+
+    send_params = {k: v for k, v in params.items() if k not in playbook_references.NOTIFY_DESTINATION_KEYS}
+    send_params.update(destination_params)
+
+    try:
+        body = await actions_client.dispatch_live_action(
+            capability="notify",
+            vendor_id=channel,
+            target=str(params.get("recipient") or ""),
+            tenant_id=str(tenant_id),
+            params=send_params,
+            auth_config=None,
+            dry_run=dry_run,
+            requested_by=requested_by,
+            confidence=confidence,
+            playbook_run_id=playbook_run_id or None,
+            playbook_step_id=playbook_step_id or None,
+        )
+    except actions_client.ActionsServiceError as exc:
+        log.warning("playbook_step.notify_refused", status_code=exc.status_code)
+        return StepDispatchReport(
+            capability="notify",
+            status="failed",
+            executed=False,
+            vendor_id=channel,
+            summary="The action service refused the notification.",
+            detail=exc.upstream_detail,
+        )
+
+    return _interpret("notify", channel, body, dry_run=dry_run)
 
 
 async def _pick_connector(

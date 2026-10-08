@@ -96,6 +96,8 @@ from .investigation_reads import (
     SentinelOneGetHost,
 )
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
+from .notify_arms import NOTIFY_ARMS
+from .osquery_arms import OSQUERY_ARMS
 from .vendor_breadth import VENDOR_BREADTH_EXECUTORS
 
 logger = structlog.get_logger(__name__)
@@ -838,6 +840,23 @@ class PagerDutyCreateTicket(_LegacyExecutorAdapter):
 
 @apply_contract
 class SlackNotify(_LegacyExecutorAdapter):
+    """Post a notification to Slack through an incoming webhook.
+
+    API reference: https://api.slack.com/messaging/webhooks
+
+    Overrides ``execute`` for the same reason ``_ChatOpsVerify`` does, and it
+    is the same defect wearing different clothes. The base class previews by
+    stripping ``_credential_keys`` so the legacy executor falls into its
+    simulation branch; ``NotifySlackExecutor`` has no simulation branch, so
+    a stripped ``webhook_url`` took its no-webhook path — which, until this
+    change, returned COMPLETED with ``message_sent: true``. Every dry run
+    therefore reported a completed send.
+
+    Fixing the executor to fail closed with no webhook (it now does) is
+    necessary and not sufficient: a preview would then report a *failure*,
+    which is equally untrue. Simulate here, before anything is stripped.
+    """
+
     vendor_id = "slack"
     capability = "notify"
     description = "Post an incident notification to a Slack channel."
@@ -845,6 +864,22 @@ class SlackNotify(_LegacyExecutorAdapter):
     _legacy_executor = NotifySlackExecutor()
     _legacy_action_type = ActionType.NOTIFY_SLACK
     _credential_keys = ("webhook_url",)
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        if request.dry_run:
+            message = str((request.params or {}).get("message") or "AiSOC playbook notification")
+            return LiveActionResult(
+                request_id=request.request_id,
+                status=LiveActionStatus.SIMULATED,
+                capability=self.capability,
+                vendor_id=self.vendor_id,
+                summary=f"would notify slack: {message[:120]}",
+                details={"would_notify": "slack", "message": message},
+            )
+        return await super().execute(request)
+
+
+# ---------------------------------------------------------------------------
 
 
 # ---------------------------------------------------------------------------
@@ -1014,11 +1049,18 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     JiraCreateTicket,
     ServiceNowCreateTicket,
     PagerDutyCreateTicket,
-    SlackNotify,
     # Human-in-the-loop: a working executor whose honest "not answered yet"
     # had no status to land in until AWAITING_COMPLETION existed.
     SlackChatOpsVerify,
     TeamsChatOpsVerify,
+    # Depth 5.1. `notify` had one arm and the playbook engine reached none of
+    # them, so all 63 notify steps in the shipped packs delivered nothing.
+    SlackNotify,
+    *NOTIFY_ARMS,
+    # Depth 5.1. The engine's osquery handler imported clients that live here,
+    # so it raised in every agents image. Same verb, run where its clients and
+    # its credentials are.
+    *OSQUERY_ARMS,
 )
 
 

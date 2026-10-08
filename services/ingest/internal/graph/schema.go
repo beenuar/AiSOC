@@ -41,7 +41,52 @@ package graph
 //
 // Every v1.0 label and relationship is unchanged, so a consumer pinned to
 // v1.0 keeps working and simply does not see the new vocabulary.
-const SchemaVersion = "v1.1"
+//
+// v1.2 (the activity projection) is strictly additive and adds no label and
+// no relationship. It adds properties, which is why it is a minor bump: the
+// projection ingest now builds on every event (depth plan 2.2) carries onto
+// the nodes it already writes, so a traversal can ask "which of these
+// accounts is a person" without leaving the graph. See ActivityNodeProperties
+// below for exactly which keys land where.
+const SchemaVersion = "v1.2"
+
+// ActivityNodeProperties names the properties the activity projection adds,
+// per label. Declared here rather than only written in the extractor so the
+// schema-drift gate compares the same list the writer uses, and so a reader
+// of the vocabulary sees them without reading the extractor.
+//
+// `actor_kind` is the one that matters: it is the difference between an
+// account and the person, app or token behind it, and a traversal that
+// cannot tell those apart computes a blast radius for the wrong principal.
+// It is written only when ingest derived it from a vendor field — an
+// `unknown` kind is written as `unknown` rather than omitted, because the
+// absence of the property and a source that declined to say are different
+// facts and a Cypher `IS NULL` cannot distinguish them.
+var ActivityNodeProperties = map[NodeLabel][]string{
+	NodeUser: {
+		"actor_kind",
+		// The vendor field the kind was read from, so a reviewer can check
+		// the derivation without re-reading the Go.
+		"actor_kind_source",
+		"on_behalf_of",
+	},
+	NodeServiceAccount: {
+		"actor_kind",
+		"actor_kind_source",
+		"on_behalf_of",
+	},
+	NodeNetworkPath: {
+		"country_code",
+		"asn",
+		"as_org",
+		"reputation",
+		// Whether anything answered. A clean verdict and an unreachable
+		// enrichment service both produce 0.
+		"reputation_known",
+		"client_family",
+		"client_category",
+	},
+}
 
 // NodeLabel is the canonical entity type — matches the Neo4j label.
 type NodeLabel string

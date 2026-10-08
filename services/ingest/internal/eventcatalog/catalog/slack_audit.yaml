@@ -1,0 +1,35 @@
+# Slack Audit Logs API. Event types are the `action` values, which Slack
+# names as past-tense verbs over an entity.
+source: slack_audit
+event_type_path: action
+fixture_requires: [actor]
+fixture_files:
+  - services/connectors/tests/fixtures/slack_audit/sample_event.json
+events:
+  user_login:
+    action: user.login
+    sensitivity: low
+    attack: [T1078]
+  file_downloaded:
+    action: file.downloaded
+    sensitivity: info
+    attack: [T1213]
+  app_installed:
+    # A third-party app arrives holding the scopes the installer consented
+    # to, which is how data leaves a workspace without anyone downloading
+    # anything.
+    action: app.installed
+    sensitivity: high
+    attack: [T1550.001]
+  user_session_reset_by_admin:
+    action: user.session.reset.by.admin
+    sensitivity: medium
+  public_channel_created:
+    action: public.channel.created
+    sensitivity: info
+  organization_export_started:
+    # Every message and file in the workspace, in one archive.
+    action: organization.export.started
+    sensitivity: critical
+    attack: [T1213]
+unclassified: {}

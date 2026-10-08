@@ -1,0 +1,36 @@
+# AWS CloudTrail. Event types are the API call names in `eventName`.
+#
+# Sensitivity reflects what the call class means, not what any one
+# occurrence scored: DescribeInstances is reconnaissance-shaped and happens
+# thousands of times an hour in a healthy account, DeleteTrail is an
+# incident on its own reading.
+source: aws_cloudtrail
+event_type_path: eventName
+fixture_files:
+  - services/connectors/tests/test_aws_cloudtrail.py
+events:
+  ConsoleLogin:
+    action: console.login
+    sensitivity: medium
+    attack: [T1078.004]
+  CreateAccessKey:
+    action: create.access.key
+    sensitivity: high
+    attack: [T1098.001]
+  DeleteTrail:
+    # Destroying the audit trail is the one event where the absence of
+    # everything after it is the finding.
+    action: delete.trail
+    sensitivity: critical
+    attack: [T1562.008]
+  PutEventSelectors:
+    # Narrowing what the trail records is the quieter half of the same
+    # technique, which is why it sits one tier below rather than at info.
+    action: put.event.selectors
+    sensitivity: high
+    attack: [T1562.008]
+  DescribeInstances:
+    action: describe.instances
+    sensitivity: info
+    attack: [T1580]
+unclassified: {}

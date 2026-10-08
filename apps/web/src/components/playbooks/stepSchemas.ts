@@ -269,9 +269,10 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
   },
   notify: {
     type: 'notify',
-    execution: 'executed',
+    execution: 'governed',
     label: 'Notify',
-    description: 'Send a notification to Slack, PagerDuty, email, or a generic webhook.',
+    description:
+      'Send a notification to the tenant\u2019s configured Slack, Teams, email or PagerDuty destination. The destination is a named playbook reference, so a shared pack carries no webhook of its own.',
     accent: '#facc15',
     bgColor: '#1a3d2e',
     icon: '🔔',
@@ -304,8 +305,8 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
         key: 'webhook_env',
         label: 'Webhook URL env',
         kind: 'env_ref',
-        placeholder: 'SOC_WEBHOOK_URL',
-        help: 'Required only for the generic webhook channel.',
+        placeholder: 'SLACK_SOC_WEBHOOK',
+        help: 'Names a playbook reference holding the Slack or Teams incoming webhook. Configure it under Settings; a reference is disabled until somebody enables it.',
       },
     ],
   },
@@ -579,10 +580,10 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
   },
   osquery_live_query: {
     type: 'osquery_live_query',
-    execution: 'executed',
+    execution: 'governed',
     label: 'Live query',
     description:
-      'Run an allowlisted osquery query across hosts through osctrl, FleetDM or the AiSOC agent. The query itself is a template ID, not free SQL, so a playbook cannot ask an endpoint an arbitrary question. Needs an agents image carrying the osquery backend clients; without them the engine fails the step rather than reporting a query it never sent.',
+      'Run an allowlisted osquery query across hosts through osctrl, FleetDM or the AiSOC agent. The query itself is a template ID, not free SQL, so a playbook cannot ask an endpoint an arbitrary question. Dispatched through the action registry, which is where the three backend clients live \u2014 the engine used to import them from a service its own image does not contain, so every live query raised.',
     accent: '#2dd4bf',
     bgColor: '#123333',
     icon: '🔎',
