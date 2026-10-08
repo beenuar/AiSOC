@@ -12,6 +12,7 @@ import (
 	"github.com/beenuar/aisoc/services/ingest/internal/attck"
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
 	"github.com/beenuar/aisoc/services/ingest/internal/enrichment"
+	"github.com/beenuar/aisoc/services/ingest/internal/eventcatalog"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
@@ -78,6 +79,7 @@ type Normalizer struct {
 	version    string
 	shodan     *enrichment.ShodanEnricher
 	vulnCorrel *enrichment.VulnCorrelator
+	catalog    *eventcatalog.Catalog
 	ipEnricher *activity.IPEnricher
 
 	// VulnMatches is a channel where VULNERABILITY_MATCH events are published.
@@ -417,9 +419,24 @@ func New(cfg *config.Config) (*Normalizer, error) {
 		log.Warn().Err(err).Msg("ATT&CK corpus unavailable; technique enrichment disabled")
 	}
 
+	// The event catalogue, at boot. A parse failure is fatal rather than
+	// logged: a half-loaded catalogue answers "never seen" for every type
+	// in the file that failed, which is indistinguishable from a source
+	// nobody has classified, and the warning that said so would have
+	// scrolled past weeks earlier.
+	catalog, err := eventcatalog.Load()
+	if err != nil {
+		return nil, fmt.Errorf("event catalogue: %w", err)
+	}
+	log.Info().
+		Int("sources", len(catalog.Sources())).
+		Int("event_types", catalog.Size()).
+		Msg("event classification catalogue loaded")
+
 	n := &Normalizer{
 		cfg:     cfg,
 		version: "1.1.0",
+		catalog: catalog,
 		ipEnricher: activity.NewIPEnricher(
 			cfg.EnrichmentServiceURL,
 			cfg.ServiceToken,
@@ -829,6 +846,13 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 	// An event that provably cannot become an alert says so, on the event.
 	if w := unpromotableWarning(profile.classUID, ocsf["severity_id"]); w != "" {
 		warnings = append(warnings, w)
+	}
+
+	// The event classification, from the catalogue read at boot.
+	if classification, warning := n.classify(connectorType, raw.Payload); classification != nil {
+		ocsf["event_classification"] = classification
+	} else if warning != "" {
+		warnings = append(warnings, warning)
 	}
 
 	// The activity projection: who acted, what kind of actor they were, what

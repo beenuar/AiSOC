@@ -659,6 +659,19 @@ jobs:
         run: python3 scripts/check_ocsf_class_coverage.py --self-test
       - name: OCSF class coverage gate
         run: python3 scripts/check_ocsf_class_coverage.py --check
+      # One layer in again: a connector's events reach a profile, and the
+      # catalogue says what each of its event types *means*. Grown from the
+      # fixtures, so adding a fixture that carries a new event type fails
+      # here until somebody decides what it is — a catalogue that only grows
+      # when someone remembers is a catalogue that stops growing. It also
+      # refuses a source whose fixtures yield nothing, because a gate over an
+      # empty corpus passes for the wrong reason.
+      - name: Event catalogue gate — self-test
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 scripts/check_event_catalog.py --self-test
+      - name: Event catalogue gate
+        run: python3 scripts/check_event_catalog.py
       # The activity projection lives in five hand-written lists: the Go, the
       # lake's CREATE TABLE, the lake's migration, the fusion writer's column
       # tuple and the graph schema. Three of the disagreements between them

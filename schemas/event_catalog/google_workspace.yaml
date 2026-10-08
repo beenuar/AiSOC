@@ -1,0 +1,32 @@
+# Google Workspace Reports API. Event types are the `name` of each entry in
+# the activity's `events` list; one activity can carry several.
+source: google_workspace
+event_type_path: events[].name
+fixture_files:
+  - services/connectors/tests/test_saas_connectors.py
+events:
+  GRANT_ADMIN_PRIVILEGE:
+    action: grant.admin.privilege
+    sensitivity: critical
+    attack: [T1098]
+  suspicious_login:
+    # Google has already judged this one, which is why it is not merely a
+    # sign-in.
+    action: suspicious.login
+    sensitivity: high
+    attack: [T1078]
+  login_failure:
+    # On its own this is noise; in volume it is a spray. Sensitivity is a
+    # property of the event class, and the windowed engine is what reads
+    # the volume.
+    action: login.failure
+    sensitivity: low
+    attack: [T1110]
+  change_acl_editors:
+    action: change.acl.editors
+    sensitivity: medium
+    attack: [T1222]
+  view:
+    action: view
+    sensitivity: info
+unclassified: {}

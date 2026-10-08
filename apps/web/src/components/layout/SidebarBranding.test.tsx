@@ -71,7 +71,17 @@ beforeEach(() => {
   requests = [];
   vi.stubGlobal('fetch', async (url: string, init?: RequestInit) => {
     requests.push({ url: String(url), headers: (init?.headers ?? {}) as Record<string, string> });
-    return new Response(new Blob(['<svg/>'], { type: 'image/svg+xml' }), { status: 200 });
+    // The two members `brandingApi.logo` reads, and nothing else. A real
+    // `Response` wrapping a real `Blob` depends on undici/jsdom interop that
+    // differs between a developer machine and the runner: this test passed
+    // here under every combination tried — single file, full suite, with
+    // coverage — and returned a null logo on CI. Doubling the contract the
+    // code reads removes the variable rather than guessing at it.
+    return {
+      ok: true,
+      status: 200,
+      blob: async () => new Blob(['<svg/>'], { type: 'image/svg+xml' }),
+    } as unknown as Response;
   });
   // jsdom implements neither half of the object-URL API. Browser plumbing,
   // not ours — stubbed so the component's own code path still runs.
@@ -92,7 +102,11 @@ describe('Sidebar branding', () => {
   // cache and a deduping window, so a second `render` in this file resolves
   // from neither the cache nor a fresh request and shows the unbranded
   // wordmark. Splitting these would test the cache rather than the console.
-  it("shows a white-labelled organisation's name, palette and logo, and drops the platform wordmark", async () => {
+  // 20s, against vitest's 5s default. The case waits on two chained async
+  // hops and the wait below is budgeted at 8s, so the test has to outlive
+  // it — at the default the case timed out before asserting anything, which
+  // reports nothing about the logo either way.
+  it("shows a white-labelled organisation's name, palette and logo, and drops the platform wordmark", { timeout: 20_000 }, async () => {
     const { container } = render(<Sidebar />);
 
     expect(await screen.findByText('Acme Shield')).toBeInTheDocument();
@@ -103,15 +117,31 @@ describe('Sidebar branding', () => {
 
     // Two chained async hops, not one: branding resolves, and only then does
     // the component fetch the asset with its credential and turn the blob
-    // into an object URL. `vi.waitFor` defaults to a second, which is enough
-    // here and was not on a loaded CI runner — this timed out on GitHub's
-    // runners while passing locally every time. The wait is real rather than
-    // a race being papered over, so it gets the headroom explicitly.
+    // into an object URL. The wait is budgeted at 8s inside the 20s test
+    // timeout above, so the two cannot cross — at vitest's 5s default this
+    // case timed out before it could assert anything.
+    //
+    // The request is asserted before the element, so a failure says which
+    // of the two hops broke. "expected null not to be null" on its own does
+    // not distinguish a logo that was never requested from one that was
+    // requested and never rendered, and that ambiguity cost a full CI round.
     await vi.waitFor(
       () => {
-        expect(container.querySelector('img')).not.toBeNull();
+        expect(
+          requests.map((r) => r.url),
+          'the component never requested the logo asset',
+        ).toContainEqual(expect.stringContaining('/branding/assets/'));
       },
-      { timeout: 10_000 },
+      { timeout: 8_000 },
+    );
+    await vi.waitFor(
+      () => {
+        expect(
+          container.querySelector('img'),
+          'the asset was requested but no <img> rendered, so the blob never became an object URL',
+        ).not.toBeNull();
+      },
+      { timeout: 8_000 },
     );
     const logo = container.querySelector('img') as HTMLImageElement;
 
