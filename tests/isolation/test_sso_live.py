@@ -54,6 +54,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import re
 import subprocess
 import tempfile
 import threading
@@ -61,7 +62,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, quote, urlsplit
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 import pytest_asyncio
@@ -216,6 +217,12 @@ class _Idp:
 # ─── A real OpenID Connect provider, on a real socket ────────────────────────
 
 
+#: What an OAuth `state` is allowed to look like coming back out of this
+#: provider. RFC 6749 calls it an opaque value the client round-trips, so a
+#: real one is a nonce; anything else is refused rather than repaired.
+_OPAQUE_TOKEN = re.compile(r"[A-Za-z0-9._~-]{0,512}")
+
+
 class _OidcProvider:
     """Discovery, JWKS, authorization, token and userinfo over real HTTP.
 
@@ -299,15 +306,26 @@ class _OidcProvider:
                         self._send(400, b'{"error":"invalid_request"}')
                         return
                     # `state` is echoed because the protocol requires it, so
-                    # it is percent-encoded rather than stripped. Encoding
-                    # is what actually makes a query-string value safe --
-                    # CR and LF become %0D and %0A, which cannot terminate a
-                    # header line -- and it is the sanitiser the taint
-                    # tracker recognises, where the character-class
-                    # substitution above it was not.
-                    state = quote((query.get("state") or [""])[0], safe="")
+                    # it is *validated* rather than transformed: anything
+                    # outside an opaque-token alphabet is refused, which is
+                    # also what a real authorization server should do with
+                    # a parameter it only ever round-trips.
+                    #
+                    # Three weaker forms were tried first and each left the
+                    # flow in place: stripping through a helper (the taint
+                    # tracker does not follow a sanitiser across a function
+                    # boundary), the same substitution inline, and
+                    # percent-encoding. A full match against a safe
+                    # character class is a guard rather than a
+                    # transformation, so the value reaching the header is
+                    # proven to contain no CR or LF rather than cleaned of
+                    # them.
+                    raw_state = (query.get("state") or [""])[0]
+                    if not _OPAQUE_TOKEN.fullmatch(raw_state):
+                        self._send(400, b'{"error":"invalid_request"}')
+                        return
                     self.send_response(302)
-                    self.send_header("Location", f"{registered}?code={code}&state={state}")
+                    self.send_header("Location", f"{registered}?code={code}&state={raw_state}")
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                 elif path == "/userinfo":
