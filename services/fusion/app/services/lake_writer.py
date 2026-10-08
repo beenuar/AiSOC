@@ -124,6 +124,16 @@ def _as_str(value: Any) -> str:
     return value if isinstance(value, str) else ("" if value is None else str(value))
 
 
+def _as_dict(value: Any) -> dict[str, Any]:
+    """A nested object, or an empty one — never None.
+
+    Sibling of `_as_str` and `_as_int` above, for the same reason: the
+    projection reads an envelope a connector shaped, so any level of it can
+    be missing or be the wrong type.
+    """
+    return value if isinstance(value, dict) else {}
+
+
 def _as_float(value: Any, default: float = 0.0) -> float:
     try:
         return float(value)
@@ -235,13 +245,11 @@ def _activity_columns(ocsf: dict[str, Any]) -> dict[str, Any]:
     clean verdict and an unreachable enrichment service both produce 0.0, and
     collapsing them would let a broken enrichment path read as a quiet estate.
     """
-    act = ocsf.get("activity")
-    if not isinstance(act, dict):
-        act = {}
-    actor = act.get("actor") if isinstance(act.get("actor"), dict) else {}
-    resource = act.get("resource") if isinstance(act.get("resource"), dict) else {}
-    location = act.get("location") if isinstance(act.get("location"), dict) else {}
-    client = location.get("client") if isinstance(location.get("client"), dict) else {}
+    act = _as_dict(ocsf.get("activity"))
+    actor = _as_dict(act.get("actor"))
+    resource = _as_dict(act.get("resource"))
+    location = _as_dict(act.get("location"))
+    client = _as_dict(location.get("client"))
 
     return {
         "actor_kind": _as_str(actor.get("kind")),
