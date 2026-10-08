@@ -438,6 +438,26 @@ class Settings(BaseSettings):
     # instruction to delete. `audit_days` is stored but not purged — the audit
     # log is an append-only hash chain and truncating it invalidates every
     # subsequent verification.
+    # Depth 5.2. `report_templates.cron_schedule` has been a storable,
+    # editable field with no reader anywhere in the tree, so a tenant could
+    # set a schedule in the console and never receive a report. On by
+    # default: the worker generates and stores, and delivers only where an
+    # SMTP relay is configured, so switching it on cannot start emailing
+    # anybody a deployment has not set up a relay for.
+    REPORT_SCHEDULER_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("REPORT_SCHEDULER_ENABLED", "AISOC_REPORT_SCHEDULER_ENABLED"),
+    )
+    # Drains the outbound-webhook retry queue. On by default for the same
+    # reason: a destination is `enabled = FALSE` on creation, so with no
+    # destination configured this worker finds nothing and does nothing —
+    # and with one configured, a queue nothing drains is a table that fills
+    # up while the dead-letter view reads empty.
+    OUTBOUND_WEBHOOK_WORKER_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("OUTBOUND_WEBHOOK_WORKER_ENABLED", "AISOC_OUTBOUND_WEBHOOK_WORKER_ENABLED"),
+    )
+
     RETENTION_WORKER_ENABLED: bool = Field(
         default=False,
         validation_alias=AliasChoices("RETENTION_WORKER_ENABLED", "AISOC_RETENTION_WORKER_ENABLED"),
@@ -494,6 +514,20 @@ class Settings(BaseSettings):
     SHADOW_RECONCILE_MAX_LOOKBACK_HOURS: int = 168  # 7d
     SHADOW_RECONCILE_MAX_WINDOW_HOURS: int = 24
     SHADOW_RECONCILE_LIMIT: int = 1000
+
+    # Fix pass 3.7. Re-checks every standing autonomy grant against the
+    # demotion floors on a timer. Default **on**, unlike the sweep above, and
+    # the difference is what each one reaches: that one polls a customer's
+    # SIEM, this one aggregates rows this deployment already wrote and makes
+    # no outbound call. The thing it catches is a grant that has stopped being
+    # earned, which nobody is watching for by definition, so shipping it off
+    # would leave it off wherever it matters.
+    AUTONOMY_DRIFT_ENABLED: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("AUTONOMY_DRIFT_ENABLED", "AISOC_AUTONOMY_DRIFT_ENABLED"),
+    )
+    AUTONOMY_DRIFT_INTERVAL_SECONDS: int = 600  # 10m
+    AUTONOMY_DRIFT_MAX_TENANTS_PER_TICK: int = 100
 
     # Database
     # The default points at the bundled compose Postgres with its dev password.

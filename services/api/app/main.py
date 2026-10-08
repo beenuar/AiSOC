@@ -37,8 +37,11 @@ from app.services.plugin_manager import get_plugin_manager
 from app.services.scim.resources import SCIM_CONTENT_TYPE
 from app.services.scim.resources import error_response as scim_error_response
 from app.workers.approval_expiry import run_forever as run_approval_expiry
+from app.workers.autonomy_drift import run_forever as run_autonomy_drift
 from app.workers.hunt_scheduler import run_forever as run_hunt_scheduler
 from app.workers.oauth_refresh import run_forever as run_oauth_refresh
+from app.workers.outbound_webhook_delivery import run_forever as run_outbound_webhook_delivery
+from app.workers.report_scheduler import run_forever as run_report_scheduler
 from app.workers.retention_purge import run_forever as run_retention_purge
 from app.workers.retro_hunt_consumer import run_forever as run_retro_hunt_consumer
 from app.workers.shadow_reconcile import run_forever as run_shadow_reconcile
@@ -67,11 +70,22 @@ _RETENTION_PURGE_LOCK_TTL_SECONDS = 1800
 # held for half an hour after a crashed replica would leave approvals
 # un-expired for far longer than the work takes.
 _APPROVAL_EXPIRY_LOCK_TTL_SECONDS = 300
+# Comfortably past one pass. The scheduler's own poll is 300s and a pass
+# is bounded by the number of templates, so a lock that outlived the
+# interval would mean a replica holding it across two ticks.
+_REPORT_SCHEDULER_LOCK_TTL_SECONDS = 600
 # A shadow-reconciliation pass makes up to SHADOW_RECONCILE_MAX_CONNECTORS_PER_TICK
 # vendor searches, each bounded at 120s. 30m covers a slow pass without letting
 # a second replica start one on top of it, which would double a customer's
 # search load for no extra evidence.
 _SHADOW_RECONCILE_LOCK_TTL_SECONDS = 1800
+
+# A drift pass runs two bounded aggregates per tenant holding a grant, against
+# this deployment's own database and nothing else. Same shape and same TTL as
+# the approval sweep: short, because a lock still held after a replica crashed
+# would leave grants un-demoted for far longer than the work takes, and a
+# capability nobody has earned staying live is the condition this closes.
+_AUTONOMY_DRIFT_LOCK_TTL_SECONDS = 300
 
 
 async def _run_guarded_scheduler_worker(
@@ -510,6 +524,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "Set APPROVAL_EXPIRY_ENABLED=true to sweep them"
         )
 
+    # Fix pass 3.7. `reconcile_grants` shipped with one caller, the handler
+    # behind `GET /autonomy-policy/grants`, so a grant whose agreement had
+    # collapsed stayed `granted` -- and kept auto-executing -- until somebody
+    # opened the autonomy page. This is the caller that needs no human.
+    autonomy_drift_task: asyncio.Task | None = None
+    if settings.AUTONOMY_DRIFT_ENABLED:
+        try:
+            autonomy_drift_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="autonomy_drift",
+                    ttl_seconds=_AUTONOMY_DRIFT_LOCK_TTL_SECONDS,
+                    worker=run_autonomy_drift,
+                ),
+                name="autonomy_drift_worker",
+            )
+            logger.info("autonomy_drift worker started")
+        except Exception as exc:
+            logger.warning("autonomy_drift worker failed to start", error=str(exc))
+    else:
+        # Said out loud. With this off a grant is only re-checked when the
+        # autonomy page is read or when the dispatch path refreshes its
+        # policy cache, and the first of those is a human nobody scheduled.
+        logger.info(
+            "autonomy_drift worker disabled; a standing grant whose evidence has slipped will keep its "
+            "'granted' state until somebody opens the autonomy page. Set AUTONOMY_DRIFT_ENABLED=true to sweep them"
+        )
+
     # Gap-closure Phase 8.1. The consumer for the `NEW_IOC` events
     # `services/threatintel` has always emitted and nothing has ever read.
     #
@@ -527,6 +568,48 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info("retro_hunt consumer started")
         except Exception as exc:
             logger.warning("retro_hunt consumer failed to start", error=str(exc))
+
+    # Phase 2.6 — flip /readyz to 200. All lifespan-managed
+    # dependencies have been touched at this point (DB, Redis,
+    # Neo4j, schedulers); the load balancer can route traffic
+    # to this pod safely now.
+    app.state.mark_ready()
+
+    # Depth 5.2. The reader `report_templates.cron_schedule` never had.
+    # Guarded by the same scheduler lock the three workers above use, so
+    # two replicas do not both generate a tenant's weekly report.
+    report_scheduler_task: asyncio.Task | None = None
+    if settings.REPORT_SCHEDULER_ENABLED:
+        try:
+            report_scheduler_task = asyncio.create_task(
+                _run_guarded_scheduler_worker(
+                    job_name="report_scheduler",
+                    ttl_seconds=_REPORT_SCHEDULER_LOCK_TTL_SECONDS,
+                    worker=run_report_scheduler,
+                ),
+                name="report_scheduler_worker",
+            )
+            logger.info("report_scheduler worker started")
+        except Exception as exc:
+            logger.warning("report_scheduler worker failed to start", error=str(exc))
+    else:
+        logger.info("report_scheduler disabled; a tenant's stored cron_schedule will not produce a report")
+
+    # Depth 5.2. Drains the outbound-webhook retry queue. Deliberately not
+    # under the scheduler lock: each attempt is one row and one commit, so
+    # two replicas can at worst send one event twice — which the envelope's
+    # stable id lets a receiver deduplicate, and which is the right way
+    # round compared with a single lock holder stalling the whole queue.
+    outbound_webhook_task: asyncio.Task | None = None
+    if settings.OUTBOUND_WEBHOOK_WORKER_ENABLED:
+        try:
+            outbound_webhook_task = asyncio.create_task(
+                run_outbound_webhook_delivery(),
+                name="outbound_webhook_worker",
+            )
+            logger.info("outbound_webhook worker started")
+        except Exception as exc:
+            logger.warning("outbound_webhook worker failed to start", error=str(exc))
 
     # Phase 2.6 — flip /readyz to 200. All lifespan-managed
     # dependencies have been touched at this point (DB, Redis,
@@ -578,6 +661,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception as exc:
             logger.warning("approval_expiry worker shutdown error", error=type(exc).__name__)
 
+    if autonomy_drift_task is not None and not autonomy_drift_task.done():
+        autonomy_drift_task.cancel()
+        try:
+            await autonomy_drift_task
+        except asyncio.CancelledError:
+            logger.debug("autonomy_drift worker cancelled during shutdown")
+        except Exception as exc:
+            logger.warning("autonomy_drift worker shutdown error", error=type(exc).__name__)
+
     if retention_purge_task is not None and not retention_purge_task.done():
         retention_purge_task.cancel()
         try:
@@ -595,6 +687,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.debug("shadow_reconcile worker cancelled during shutdown")
         except Exception as exc:
             logger.warning("shadow_reconcile worker shutdown error", error=type(exc).__name__)
+
+    for task, label in ((report_scheduler_task, "report_scheduler"), (outbound_webhook_task, "outbound_webhook")):
+        if task is not None and not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                logger.debug(f"{label} worker cancelled during shutdown")
+            except Exception as exc:
+                logger.warning(f"{label} worker shutdown error", error=type(exc).__name__)
 
     if retro_hunt_task is not None and not retro_hunt_task.done():
         retro_hunt_task.cancel()

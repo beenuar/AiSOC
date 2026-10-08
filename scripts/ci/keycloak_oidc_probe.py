@@ -91,6 +91,15 @@ def bootstrap() -> str:
                 "email": EMAIL,
                 "emailVerified": True,
                 "enabled": True,
+                # Keycloak's `VERIFY_PROFILE` required action is on by
+                # default and is evaluated against profile completeness at
+                # token time rather than stored on the user, so the account
+                # reads as `requiredActions: []` and still refuses the
+                # password grant with `invalid_grant: "Account is not fully
+                # set up"`. A name is what it is waiting for; without these
+                # two fields this probe cannot obtain a token at all.
+                "firstName": "Alice",
+                "lastName": "Analyst",
                 "credentials": [{"type": "password", "value": PASSWORD, "temporary": False}],
             },
         ),

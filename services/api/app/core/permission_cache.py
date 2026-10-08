@@ -45,6 +45,24 @@ Without Redis the version is unavailable and the cache falls back to a
 short TTL, which is honest about what it can offer: a single-process
 deployment is correct either way, and a multi-replica one without Redis
 converges within the TTL. That degradation is logged once, not silently.
+
+Two more things the principal carries (depth 8.2)
+-------------------------------------------------
+`resolve_authorization` returns the standing set plus the two facts that
+narrow and widen it, resolved in the same place and on the same version
+counter:
+
+* **elevation** — live rows from `privilege_grants`, carried as grants
+  rather than merged here, so expiry is evaluated at *use*. A background
+  sweep is a job that can be down, and a grant outliving its window
+  because a worker crashed is the failure mode JIT elevation exists to
+  remove. Caching the union would reintroduce exactly that.
+* **conditions** — `permission_conditions` for the tenant, applied by
+  `CurrentUser.require_permission` after the role check has allowed.
+
+Both are resolved once per request at authentication, for the same reason
+the permission set is: a query per permission check turns a database blip
+into a platform-wide authorization outage.
 """
 
 from __future__ import annotations
@@ -57,6 +75,8 @@ from typing import Any, Final
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.security.abac import PrivilegeGrant
 
 logger = logging.getLogger("aisoc.permissions")
 
@@ -140,6 +160,52 @@ class PermissionCache:
 CACHE = PermissionCache()
 
 
+@dataclass
+class _VersionedCache:
+    """The same version-and-TTL contract, for payloads that are not sets.
+
+    Elevation grants and attribute conditions need exactly the invalidation
+    `PermissionCache` provides and cannot reuse it, because its entries are
+    typed as permission sets and the gate on that class reads them as such.
+    A second copy of the *policy* would be the drift this file exists to
+    prevent, so the policy is one expression here and the storage is two.
+    """
+
+    _entries: dict[tuple[str, str], tuple[str, float, Any]] = field(default_factory=dict)
+
+    def get(self, key: tuple[str, str], version: str) -> Any | None:
+        entry = self._entries.get(key)
+        if entry is None:
+            return None
+        cached_version, expires_at, payload = entry
+        if cached_version != version or expires_at <= time.monotonic():
+            self._entries.pop(key, None)
+            return None
+        return payload
+
+    def put(self, key: tuple[str, str], version: str, payload: Any) -> None:
+        if len(self._entries) >= MAX_ENTRIES:
+            oldest = min(self._entries, key=lambda k: self._entries[k][1])
+            self._entries.pop(oldest, None)
+        self._entries[key] = (version, time.monotonic() + FALLBACK_TTL_SECONDS, payload)
+
+    def invalidate_tenant(self, tenant_id: str) -> int:
+        doomed = [k for k in self._entries if k[0] == tenant_id]
+        for key in doomed:
+            self._entries.pop(key, None)
+        return len(doomed)
+
+    def clear(self) -> None:
+        self._entries.clear()
+
+
+#: Live elevation grants, keyed `(tenant_id, user_id)`.
+ELEVATION_CACHE = _VersionedCache()
+
+#: Attribute conditions, keyed `(tenant_id, "")` — they are tenant-wide.
+CONDITION_CACHE = _VersionedCache()
+
+
 @lru_cache(maxsize=1)
 def _redis_client() -> Any | None:
     """Built once and reused.
@@ -164,9 +230,11 @@ def _redis_client() -> Any | None:
 
 
 def reset_for_tests() -> None:
-    """Drop the cache and the client handle. Tests only."""
+    """Drop the caches and the client handle. Tests only."""
     _redis_client.cache_clear()
     CACHE.clear()
+    ELEVATION_CACHE.clear()
+    CONDITION_CACHE.clear()
     CACHE._warned_no_redis = False
 
 
@@ -197,20 +265,31 @@ async def current_version(tenant_id: str) -> str:
 async def bump_version(tenant_id: str) -> None:
     """Invalidate this tenant's cached permissions on every replica.
 
-    Called after any write to `user_roles` or `role_permissions`. Failing
-    soft on a Redis error is correct here and only here: the TTL still
-    bounds the staleness, and refusing the *grant* because the cache could
-    not be invalidated would make RBAC administration depend on Redis.
+    Called after any write to `user_roles`, `role_permissions`,
+    `privilege_grants` or `permission_conditions` — every store that can
+    change what a principal may do. One counter covers all four because a
+    second counter is a second thing to forget to bump, and the direction
+    that gets forgotten is always the revoke.
+
+    Failing soft on a Redis error is correct here and only here: the TTL
+    still bounds the staleness, and refusing the *grant* because the cache
+    could not be invalidated would make RBAC administration depend on Redis.
     """
     client = _redis_client()
     if client is None:
-        CACHE.invalidate_tenant(tenant_id)
+        _invalidate_local(tenant_id)
         return
     try:
         await client.incr(_REDIS_VERSION_KEY.format(tenant_id=tenant_id))
     except Exception as exc:  # noqa: BLE001
         logger.warning("permission cache: could not bump the RBAC version: %s", exc)
+    _invalidate_local(tenant_id)
+
+
+def _invalidate_local(tenant_id: str) -> None:
     CACHE.invalidate_tenant(tenant_id)
+    ELEVATION_CACHE.invalidate_tenant(tenant_id)
+    CONDITION_CACHE.invalidate_tenant(tenant_id)
 
 
 async def _tenant_has_rbac(db: AsyncSession, tenant_id: Any) -> bool:
@@ -278,3 +357,78 @@ async def resolve_permissions(db: AsyncSession, *, tenant_id: Any, user_id: Any,
 def grants(permissions: frozenset[str], wanted: str) -> bool:
     """Whether a resolved set covers *wanted*, including wildcards."""
     return "*" in permissions or wanted in permissions or f"{wanted.split(':')[0]}:*" in permissions
+
+
+async def resolve_elevation(db: AsyncSession, *, tenant_id: Any, user_id: Any) -> tuple[PrivilegeGrant, ...]:
+    """Approved, unexpired elevation rows for this principal.
+
+    Returned as grants rather than folded into the permission set, so
+    `effective_permissions` can decide at *use* whether each one is still
+    live. A grant cached as a flat union would keep working until the TTL
+    even after its own `expires_at` had passed, which is the failure JIT
+    elevation exists to remove.
+
+    An unapproved row confers nothing: `approved_by_id IS NULL` means the
+    request is still pending, and the whole point of approval is that it is
+    a gate rather than a record.
+    """
+    from app.models.enterprise_iam import PrivilegeGrant as GrantRow  # noqa: PLC0415
+
+    tenant_key, user_key = str(tenant_id), str(user_id)
+    version = await current_version(tenant_key)
+    cached = ELEVATION_CACHE.get((tenant_key, user_key), version)
+    if cached is not None:
+        return cached  # type: ignore[no-any-return]
+
+    rows = await db.execute(
+        select(GrantRow.permissions, GrantRow.expires_at, GrantRow.revoked_at).where(
+            GrantRow.tenant_id == tenant_id,
+            GrantRow.user_id == user_id,
+            GrantRow.approved_by_id.isnot(None),
+            GrantRow.revoked_at.is_(None),
+            GrantRow.expires_at > func.now(),
+        )
+    )
+    resolved = tuple(
+        PrivilegeGrant(permissions=tuple(permissions or ()), expires_at=expires_at, revoked_at=revoked_at)
+        for permissions, expires_at, revoked_at in rows.all()
+    )
+    ELEVATION_CACHE.put((tenant_key, user_key), version, resolved)
+    return resolved
+
+
+async def resolve_conditions(db: AsyncSession, *, tenant_id: Any) -> tuple[dict[str, Any], ...]:
+    """Enabled attribute conditions for this tenant.
+
+    Tenant-wide rather than per-permission: a principal's checks are not
+    known at authentication time, and one query for a handful of rows beats
+    a query per permission check. Filtering to the permission being checked
+    happens in `CurrentUser.require_permission`.
+    """
+    from app.models.enterprise_iam import PermissionCondition  # noqa: PLC0415
+
+    tenant_key = str(tenant_id)
+    version = await current_version(tenant_key)
+    cached = CONDITION_CACHE.get((tenant_key, ""), version)
+    if cached is not None:
+        return cached  # type: ignore[no-any-return]
+
+    rows = await db.execute(
+        select(
+            PermissionCondition.permission,
+            PermissionCondition.role,
+            PermissionCondition.condition,
+            PermissionCondition.description,
+        ).where(PermissionCondition.tenant_id == tenant_id, PermissionCondition.enabled.is_(True))
+    )
+    resolved = tuple(
+        {
+            "permission": permission,
+            "role": role,
+            "description": description,
+            **(condition or {}),
+        }
+        for permission, role, condition, description in rows.all()
+    )
+    CONDITION_CACHE.put((tenant_key, ""), version, resolved)
+    return resolved

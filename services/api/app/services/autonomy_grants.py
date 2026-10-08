@@ -430,10 +430,15 @@ async def reconcile_grants(
 ) -> list[GrantTransition]:
     """Re-check every standing grant and demote the ones that no longer hold.
 
-    Demotion is automatic in the sense that nobody has to ask for it: this
-    runs whenever the grants are read and whenever the dispatch path refreshes
-    its view, so a grant cannot outlive its evidence by more than the interval
-    between those.
+    Demotion is automatic in the sense that nobody has to ask for it. For most
+    of this function's life that sentence was false: its only production
+    caller was the handler behind ``GET /autonomy-policy/grants``, so a grant
+    outlived its evidence until somebody opened a page, which on an unattended
+    deployment is never. ``app.workers.autonomy_drift`` is the caller that
+    needs no human, and ``services/actions`` re-runs the same evaluator before
+    handing a verb to dispatch, so the longest a grant can outlive its
+    evidence is now one sweep interval and the dispatch path refuses it even
+    inside that.
 
     An override is re-checked too, and demoted on the same floors. An operator
     overruling a refusal is saying "I accept this today", not "stop measuring";

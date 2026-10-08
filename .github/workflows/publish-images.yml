@@ -114,6 +114,7 @@ jobs:
           - threatintel
           - ueba
           - slack-bot
+          - teams-bot
           - honeytokens
           - purple-team
           - osquery-tls
@@ -193,6 +194,13 @@ jobs:
             context: services/slack-bot
             dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-slack-bot
+          # Depth 5.2. The Teams bot held the card builder and the signed
+          # callback handler and shipped in no image and no compose file, so
+          # nothing could post a card and nothing could receive a decision.
+          - service: teams-bot
+            context: services/teams-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-teams-bot
 
           # Named by docker-compose.yml and the Helm chart since they were
           # written, and published by nothing until now — so `docker compose
@@ -316,6 +324,7 @@ jobs:
           - threatintel
           - ueba
           - slack-bot
+          - teams-bot
           - honeytokens
           - purple-team
           - osquery-tls
@@ -347,6 +356,8 @@ jobs:
             image: ghcr.io/beenuar/aisoc-ueba
           - service: slack-bot
             image: ghcr.io/beenuar/aisoc-slack-bot
+          - service: teams-bot
+            image: ghcr.io/beenuar/aisoc-teams-bot
           - service: honeytokens
             image: ghcr.io/beenuar/aisoc-honeytokens
           - service: purple-team
