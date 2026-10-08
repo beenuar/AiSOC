@@ -34,7 +34,7 @@ import logging
 import os
 from collections.abc import Iterable, Sequence
 
-from fastapi import Request
+from starlette.requests import HTTPConnection
 
 logger = logging.getLogger("aisoc.audit.trusted_proxy")
 
@@ -107,7 +107,7 @@ def _parse_forwarded_for(header: str | None) -> list[str]:
 
 
 def resolve_client_ip(
-    request: Request,
+    request: HTTPConnection,
     *,
     trusted_networks: Iterable[ipaddress._BaseNetwork] | None = None,
 ) -> str | None:
@@ -115,8 +115,9 @@ def resolve_client_ip(
 
     Algorithm:
 
-    1. ``peer_ip`` = direct TCP peer (``request.client.host``). If absent,
-       we cannot attribute anything, return ``None``.
+    1. ``peer_ip`` = direct TCP peer (``request.client.host``). If the
+       connection does not expose a peer at all, we cannot attribute
+       anything, return ``None``.
     2. If no trusted-proxy CIDRs are configured, return ``peer_ip``. This
        is the audit-safe default and means ``X-Forwarded-For`` is
        ignored even if present.
@@ -130,9 +131,13 @@ def resolve_client_ip(
        empty, return ``peer_ip``.
 
     The function never raises — malformed headers degrade to the direct
-    peer.
+    peer, and a connection that exposes no peer at all degrades to
+    ``None``. Returning ``None`` is safe for the ABAC caller because an
+    address condition evaluated against an unknown address is
+    indeterminate, and indeterminate denies; raising would instead fail
+    the whole authentication of an otherwise-valid principal.
     """
-    client = request.client
+    client = getattr(request, "client", None)
     peer_ip = client.host if client else None
     if not peer_ip:
         return None

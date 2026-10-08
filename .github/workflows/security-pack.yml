@@ -1,0 +1,55 @@
+name: Security pack
+
+# The buyer security pack (`docs/security/`) makes one promise: every
+# statement names the file or the CI job that makes it true. That promise
+# decays silently — a module is renamed, a workflow deleted, a heading
+# reworded, and the pack goes on reading like a document somebody verified.
+#
+# Four security documents in this repository once described controls that did
+# not exist. A link checker would not have caught all four, because a link can
+# resolve to a file whose contents do not support the sentence — but it catches
+# the cheapest half, which is the half that rots fastest.
+#
+# No path filter on `push`. A pack statement can be falsified by a change
+# nowhere near `docs/security/` — deleting a workflow the questionnaire cites
+# is the obvious case — so filtering on the pack's own paths would mean the
+# gate runs exactly when it is least needed.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  # Per commit on push, per pull request on PRs. Keyed on `github.ref` alone,
+  # a push to main cancels the run before it, which is how 259 of 1,000 push
+  # runs here were cancelled rather than graded.
+  group: security-pack-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  security-pack-links:
+    name: Every security-pack claim points at something real
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The self-test first. A gate nobody has seen fail is indistinguishable
+      # from one that cannot, and this one has eight cases: four that must
+      # fail, a stale-exemption case covering the other direction, a clean
+      # control, and a refusal to report an empty tree as verified.
+      - name: The gate detects its own regressions
+        run: python3 scripts/check_security_pack_links.py --self-test
+
+      - name: Every relative link, anchor and named gate resolves
+        run: python3 scripts/check_security_pack_links.py
