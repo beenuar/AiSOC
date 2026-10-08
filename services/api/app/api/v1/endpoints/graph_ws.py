@@ -148,8 +148,17 @@ async def _authenticate_ws(
     # The upgrade response cannot carry `WWW-Authenticate`, which is the only
     # reason this is not a plain `Depends`, so the 401 is translated into a
     # close frame here and nowhere else.
+    #
+    # `bind_connection_attributes` is what the HTTP funnel
+    # (`_record_authenticated_principal`) does for every other credential.
+    # A `WebSocket` carries the same `.client` and `.headers` the binding
+    # reads, and without it a tenant that configures an attribute condition
+    # would find their graph stream judged on an empty context — which
+    # denies, so the symptom is a stream that closes for a reason nothing
+    # explains.
     try:
-        return await resolve_jwt_principal(token, db)
+        principal = await resolve_jwt_principal(token, db)
+        return principal.bind_connection_attributes(websocket)
     except HTTPException as exc:
         await websocket.close(
             code=status.WS_1008_POLICY_VIOLATION,

@@ -67,6 +67,23 @@ VALID_SCOPES: frozenset[str] = frozenset(
         "actions:read",
         "lake:query",
         "hunts:read",
+        # Depth 8.2. Mintable so a tenant can automate its own access
+        # governance — an on-call rotation approving elevations from a
+        # script, a change-management job adding a condition for a
+        # maintenance window. A permission absent from this set is one only
+        # a wildcard key can exercise, which is how `hunts:read` ended up
+        # reachable solely by the credential nobody should be using.
+        #
+        # `authorize_permission_grant` still refuses any of these to a
+        # minter who does not hold them, so being listed here widens
+        # nothing by itself.
+        "elevation:read",
+        "elevation:request",
+        "elevation:approve",
+        "access_conditions:read",
+        "access_conditions:write",
+        "workload_identities:read",
+        "workload_identities:write",
         "users:read",
         "threat_intel:read",
         "threat_intel:write",
