@@ -244,6 +244,19 @@ RATCHET: dict[str, str] = {
         "never sent while the dead-letter view reads empty. The row carries the tenant it belongs to "
         "and every read surface filters on it"
     ),
+    "services/agents/app/playbook/pause.py::find_wait_by_token::aisoc_playbook_pauses": (
+        "the resume token is the whole credential, so a caller presenting one has no tenant to filter "
+        "by — the same shape as the SCIM-token and WebAuthn-challenge entries above. It is minted "
+        "separately from the row id precisely so it cannot be guessed from anything an analyst can "
+        "read, and `kind = 'wait'` is in the predicate so an approval can never be resumed this way"
+    ),
+    "services/agents/app/playbook/pause.py::due_waits::aisoc_playbook_pauses": (
+        "the wait sweeper asks 'which waits are due', which cannot presuppose a tenant — the same "
+        "discover-a-working-set shape as due_deliveries and report_scheduler.run_once below. It is "
+        "read-only; `resolve` claims one row at a time under a tenant, and the two scoped reads "
+        "beside it (find_waiting, resolve) do filter, so resuming another tenant's run takes two "
+        "mistakes rather than one"
+    ),
     "services/api/app/workers/report_scheduler.py::run_once::ReportTemplate": (
         "the report scheduler asks 'whose schedule is due', which cannot presuppose a tenant — the same "
         "reasoning recorded for hunt_scheduler.run_once and oauth_refresh._select_due_connectors, both of "
@@ -400,7 +413,22 @@ RATCHET: dict[str, str] = {
 # "what is due" and `report_scheduler.run_once` is "whose schedule fired" —
 # both are the discover-a-working-set shape already recorded three times
 # above, and both act per tenant once they have the set.
-MAX_RATCHET = 42
+# 42 -> 43 (depth 5.3): the `wait` step's two reads, one of each shape that
+# is already recorded here. `find_wait_by_token` is a credential lookup —
+# the resume token is the whole credential, minted separately from the row
+# id precisely so it is not guessable from anything an analyst can read, and
+# a caller presenting one has no tenant to filter by; it is the same shape
+# as the SCIM token and WebAuthn challenge entries above. `due_waits` is a
+# sweeper discovering its working set, read-only, with `resolve` claiming
+# one row at a time under a tenant. The two scoped reads beside them
+# (`find_waiting`, `resolve`) do take a tenant and filter on it, so resuming
+# another tenant's run still takes two mistakes rather than one.
+#
+# Two entries added against a ceiling that rises by one, because 42 was a
+# ceiling with a spare slot in it and the list held 41. The ceiling now
+# equals the list, so the next unscoped statement has to be argued for
+# rather than absorbed — which is what this number is for.
+MAX_RATCHET = 43
 
 
 # ---------------------------------------------------------------------------

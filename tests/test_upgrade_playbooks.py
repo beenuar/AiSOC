@@ -126,8 +126,12 @@ class TestTheCommandLine:
     def test_a_blocked_file_exits_two_and_is_not_rewritten(self, tmp_path: Path) -> None:
         pack = tmp_path / "playbooks"
         pack.mkdir()
-        target = pack / "loopy.playbook.json"
-        original = json.dumps(_v3(type="loop"))
+        # `run_playbook`, not `loop`. Depth 5.3 gave the engine a bounded
+        # iteration construct, so `loop` is no longer blocked and this case
+        # needs a type that still is — nested playbooks are deliberately
+        # unimplemented, so that one is not going to lapse.
+        target = pack / "nested.playbook.json"
+        original = json.dumps(_v3(type="run_playbook"))
         target.write_text(original)
 
         assert up.main(["--repo-root", str(ROOT), "--dir", str(pack), "--write"]) == 2

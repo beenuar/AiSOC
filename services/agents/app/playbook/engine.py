@@ -826,6 +826,10 @@ def _wait_ttl(step: PlaybookStep, seconds: int) -> float:
         if raw is not None:
             return float(raw)
     except (TypeError, ValueError):
+        # An unparseable deadline falls through to the computed default
+        # below rather than failing the step. The value is author-supplied
+        # in playbook YAML, and refusing to run a containment playbook over
+        # a malformed TTL would be the worse outcome of the two.
         pass
     return max(playbook_pause.DEFAULT_WAIT_TTL_HOURS, (seconds / 3600.0) * 2)
 

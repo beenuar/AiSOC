@@ -55,10 +55,15 @@ STEP_TYPE_RENAMES: dict[str, str] = {
 }
 
 #: v3 step types with no v4 equivalent, and why. Reported, never rewritten.
+#
+# `wait`, `parallel` and `loop` were here, each with a reason that was true
+# when it was written and is not now: depth 5.3 gave the engine a durable
+# pause, a fan-out with a join and a bounded iteration construct, and they
+# are in `engine._CONTROL_FLOW` and the schema's enum. An entry claiming a
+# v3 spelling has no v4 equivalent, for a verb v4 runs, would block an
+# upgrade that should succeed — which is what the test beside this table
+# checks, and what caught it.
 UNMAPPABLE: dict[str, str] = {
-    "loop": "the engine is a single-threaded index walk with no iteration construct",
-    "parallel": "the engine runs one step at a time; there is no fan-out",
-    "wait": "the engine has no timer and no pause",
     "run_playbook": (
         "nested playbooks are deliberately not implemented: a nested playbook's steps are "
         "not visible where the parent declares its policy, so the parent cannot bound them"
