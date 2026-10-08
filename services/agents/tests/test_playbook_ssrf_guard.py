@@ -8,7 +8,8 @@ from collections.abc import Iterable
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from app.playbook.engine import _handle_http, _handle_notify
+from app.playbook import engine as engine_mod
+from app.playbook.engine import _handle_http
 from app.playbook.models import PlaybookStep, StepType
 from app.playbook.ssrf_guard import SSRFError, validate_outbound_url
 
@@ -286,7 +287,36 @@ class TestOperatorExtensions:
 
 @pytest.mark.asyncio
 class TestHandlerIntegration:
-    async def test_handle_http_blocks_metadata(self) -> None:
+    """The guard, exercised through the step handler that calls it.
+
+    ``notify`` is no longer here. It used to have a sender of its own in the
+    engine — one channel, ``webhook``, which none of the 63 shipped notify
+    steps use — and it is now dispatched through the action registry, where
+    the destination is a vault-held tenant reference rather than a URL in
+    the playbook. There is no author-controlled URL left for this guard to
+    check, so a test here would be asserting over a path that no longer
+    exists. The arms' own outbound calls are covered in
+    ``services/actions/tests/test_notify_and_osquery_arms.py``.
+    """
+
+    @staticmethod
+    def _no_references(monkeypatch: pytest.MonkeyPatch) -> None:
+        """These URLs carry no ``${NAME}``, so nothing should be looked up.
+
+        Patched to raise rather than to return ``{}``: a handler that asked
+        the API to resolve an empty list would be a network round trip per
+        step, and the silent version of that is a performance bug nobody
+        sees until a pack has sixty steps in it.
+        """
+
+        async def _refuse(*, tenant_id: str, names: list[str]):
+            raise AssertionError(f"no reference lookup expected, got {names!r}")
+
+        monkeypatch.setattr(engine_mod.references, "resolve", _refuse)
+
+    async def test_handle_http_blocks_metadata(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._no_references(monkeypatch)
+        monkeypatch.setenv("AISOC_PLAYBOOK_HTTP_EXECUTE", "1")
         step = PlaybookStep(
             name="http-bad",
             type=StepType.HTTP,
@@ -298,7 +328,9 @@ class TestHandlerIntegration:
             await _handle_http(step, {}, client)
         client.request.assert_not_awaited()
 
-    async def test_handle_http_blocks_empty_url(self) -> None:
+    async def test_handle_http_blocks_empty_url(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._no_references(monkeypatch)
+        monkeypatch.setenv("AISOC_PLAYBOOK_HTTP_EXECUTE", "1")
         step = PlaybookStep(name="http-empty", type=StepType.HTTP, params={"url": ""})
         client = MagicMock()
         client.request = AsyncMock()
@@ -306,7 +338,9 @@ class TestHandlerIntegration:
             await _handle_http(step, {}, client)
         client.request.assert_not_awaited()
 
-    async def test_handle_http_blocks_loopback(self) -> None:
+    async def test_handle_http_blocks_loopback(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._no_references(monkeypatch)
+        monkeypatch.setenv("AISOC_PLAYBOOK_HTTP_EXECUTE", "1")
         step = PlaybookStep(
             name="http-loop",
             type=StepType.HTTP,
@@ -318,7 +352,22 @@ class TestHandlerIntegration:
             await _handle_http(step, {}, client)
         client.request.assert_not_awaited()
 
+    async def test_handle_http_is_guarded_before_the_execute_switch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A preview must refuse a blocked destination, not quietly report it.
+
+        Running the guard only on the live branch would let a playbook that
+        previews cleanly fail the moment somebody enables execution — the
+        opposite of what a preview is for.
+        """
+        self._no_references(monkeypatch)
+        monkeypatch.delenv("AISOC_PLAYBOOK_HTTP_EXECUTE", raising=False)
+        step = PlaybookStep(name="http-bad", type=StepType.HTTP, params={"url": "http://169.254.169.254/"})
+        with pytest.raises(SSRFError):
+            await _handle_http(step, {}, MagicMock())
+
     async def test_handle_http_passes_for_public(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self._no_references(monkeypatch)
+        monkeypatch.setenv("AISOC_PLAYBOOK_HTTP_EXECUTE", "1")
         _patch_dns(monkeypatch, {"ok.example": ["8.8.8.8"]})
         step = PlaybookStep(
             name="http-good",
@@ -332,47 +381,8 @@ class TestHandlerIntegration:
         client.request = AsyncMock(return_value=response)
         out = await _handle_http(step, {}, client)
         assert out["status"] == 202
+        assert out["executed"] is True
         client.request.assert_awaited_once()
-
-    async def test_handle_notify_no_url_passthrough(self) -> None:
-        step = PlaybookStep(
-            name="notify-empty",
-            type=StepType.NOTIFY,
-            params={"channel": "webhook", "url": "", "message": "hi"},
-        )
-        client = MagicMock()
-        client.post = AsyncMock()
-        out = await _handle_notify(step, {}, client)
-        # Empty URL → handler returns informational stub; never calls http.
-        assert out["delivered"] is False
-        client.post.assert_not_awaited()
-
-    async def test_handle_notify_blocks_bad_webhook(self) -> None:
-        step = PlaybookStep(
-            name="notify-bad",
-            type=StepType.NOTIFY,
-            params={"channel": "webhook", "url": "http://10.0.0.1/hook", "message": "x"},
-        )
-        client = MagicMock()
-        client.post = AsyncMock()
-        with pytest.raises(SSRFError):
-            await _handle_notify(step, {}, client)
-        client.post.assert_not_awaited()
-
-    async def test_handle_notify_passes_for_public(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        _patch_dns(monkeypatch, {"hooks.example": ["1.1.1.1"]})
-        step = PlaybookStep(
-            name="notify-good",
-            type=StepType.NOTIFY,
-            params={"channel": "webhook", "url": "https://hooks.example/x", "message": "hi"},
-        )
-        response = MagicMock()
-        response.status_code = 200
-        client = MagicMock()
-        client.post = AsyncMock(return_value=response)
-        out = await _handle_notify(step, {}, client)
-        assert out["status"] == 200
-        client.post.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------

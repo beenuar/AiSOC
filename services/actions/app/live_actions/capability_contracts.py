@@ -122,6 +122,27 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
             "passes was lifted out of attacker-influenced alert text."
         ),
     ),
+    "osquery_live_query": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_READ,
+        has_verification_probe=False,
+        verification_gap=(
+            "A read leaves nothing behind to read back, the same gap "
+            "search_siem and lookup_endpoint_telemetry record. The rows the "
+            "fleet returned are the response; asking again would be a second "
+            "query, not a confirmation of the first."
+        ),
+        note=(
+            "Runs one of a closed set of allowlisted osquery templates across "
+            "a fleet. READ_ONLY is a statement about the SQL, which the "
+            "caller cannot write: app.clients.osquery_allowlist owns every "
+            "template and renders the parameters. A verb that accepted query "
+            "text would not be read-only at this tier, because osquery can "
+            "read any file the agent can."
+        ),
+    ),
     "search_siem": CapabilityContract(
         impact=ActionImpact.READ_ONLY,
         approval=ApprovalRequirement.AUTOMATIC,

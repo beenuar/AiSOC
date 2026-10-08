@@ -158,3 +158,103 @@ async def test_disabled_writer_is_noop():
     w._disabled = True  # noqa: SLF001
     assert await w.write_event(_message()) is False
     await w.flush()  # no raise
+
+
+# ── depth plan 2.2: the activity projection ────────────────────────────────
+
+
+def _with_activity(**activity_overrides) -> dict:
+    activity = {
+        "actor": {
+            "kind": "api_token",
+            "kind_source": "actor.callerType",
+            "id": "arn:aws:iam::123456789012:user/deploy",
+            "on_behalf_of": "alice@example.com",
+        },
+        "action": "create.access.key",
+        "resource": {"type": "AWS::IAM::User", "id": "arn:aws:iam::123456789012:user/x", "owner": "123456789012"},
+        "location": {
+            "ip": "8.8.8.8",
+            "country_code": "SE",
+            "asn": 1299,
+            "as_org": "Arelion",
+            "reputation": 72.5,
+            "reputation_known": True,
+            "client": {"raw": "aws-cli/2.15.30", "family": "aws-cli", "version": "2.15.30", "category": "cli"},
+        },
+        "outcome": "failure",
+    }
+    activity.update(activity_overrides)
+    return _message(activity=activity)
+
+
+async def test_activity_projection_lands_in_its_own_columns():
+    """The projection is columns, not only a slice of the ocsf_json blob.
+
+    A hunt for "every action by a non-human actor from a new ASN" has to be
+    an indexed scan; JSONExtract over a ZSTD column cannot use an index.
+    """
+    row = event_to_row(_with_activity())
+    assert row is not None
+    assert row["actor_kind"] == "api_token"
+    assert row["actor_kind_source"] == "actor.callerType"
+    assert row["actor_on_behalf_of"] == "alice@example.com"
+    assert row["action"] == "create.access.key"
+    assert row["resource_type"] == "AWS::IAM::User"
+    assert row["resource_owner"] == "123456789012"
+    assert row["src_country_code"] == "SE"
+    assert row["src_asn"] == 1299
+    assert row["src_as_org"] == "Arelion"
+    assert row["src_reputation"] == pytest.approx(72.5)
+    assert row["src_reputation_known"] == 1
+    assert row["client_family"] == "aws-cli"
+    assert row["client_category"] == "cli"
+    assert row["client_raw"] == "aws-cli/2.15.30"
+    assert row["outcome"] == "failure"
+
+
+async def test_an_event_with_no_projection_still_inserts():
+    """The insert is positional, so a missing key would shift every column
+    after it. An event from before the projection, or replayed off an older
+    topic, has no `activity` block and must still land."""
+    row = event_to_row(_message())
+    assert row is not None
+    assert set(row) >= {"actor_kind", "action", "src_asn", "outcome"}
+    assert row["actor_kind"] == ""
+    assert row["src_asn"] == 0
+    assert row["src_reputation_known"] == 0
+
+
+async def test_an_unanswered_reputation_is_not_a_clean_one():
+    """A clean verdict and an unreachable enrichment service both produce
+    0.0. Only the flag separates them, and a surface rendering 0 as "clean"
+    when nobody answered is a fabricated confidence."""
+    row = event_to_row(_with_activity(location={"ip": "8.8.8.8", "reputation": 0.0, "reputation_known": False}))
+    assert row is not None
+    assert row["src_reputation"] == pytest.approx(0.0)
+    assert row["src_reputation_known"] == 0
+
+    answered = event_to_row(_with_activity(location={"ip": "8.8.8.8", "reputation": 0.0, "reputation_known": True}))
+    assert answered is not None
+    assert answered["src_reputation_known"] == 1
+
+
+async def test_every_declared_column_is_present_in_every_row():
+    """_INSERT_SQL is built by joining _COLUMNS and the driver reads the row
+    positionally, so a row missing one key inserts every later value into the
+    wrong column."""
+    from app.services.lake_writer import _COLUMNS
+
+    for message in (_with_activity(), _message()):
+        row = event_to_row(message)
+        assert row is not None
+        missing = [c for c in _COLUMNS if c not in row]
+        assert not missing, f"row is missing declared columns: {missing}"
+
+
+async def test_an_attacker_chosen_user_agent_is_bounded():
+    """The raw agent is kept deliberately, which means an attacker chooses
+    the length of a string that reaches a lake column."""
+    row = event_to_row(_with_activity(location={"client": {"raw": "x" * 50_000}}))
+    assert row is not None
+    assert len(row["client_raw"]) <= 1024

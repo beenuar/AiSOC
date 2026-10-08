@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints.alert_writeback import optional_user, service_token_valid
 from app.db.database import get_db
+from app.services import playbook_references
 from app.services.playbook_step_dispatch import dispatch_step
 
 logger = structlog.get_logger(__name__)
@@ -115,3 +116,42 @@ async def dispatch_playbook_step(
         playbook_step_id=body.playbook_step_id,
     )
     return report.as_dict()
+
+
+class ReferenceLookupRequest(BaseModel):
+    """The ``${NAME}`` tokens one ``http`` step needs resolved."""
+
+    names: list[str] = Field(default_factory=list, max_length=32)
+    #: Required from a service caller, which has no session to read it from.
+    tenant_id: uuid.UUID | None = None
+
+
+@router.post("/references", summary="Resolve the named integrations a playbook http step addresses")
+async def resolve_playbook_references(
+    body: ReferenceLookupRequest,
+    user: Annotated[CurrentUser | None, Depends(optional_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> dict[str, Any]:
+    """Return the enabled references this tenant has for the names asked for.
+
+    A name that is absent or disabled is simply not in the response. The
+    engine reports which ones it needed and did not get; answering with an
+    empty string instead would substitute nothing into
+    ``${IDP_BASE_URL}/sessions`` and hand httpx a scheme-relative path.
+
+    Secret halves (bearer headers, webhook URLs) are returned to the agents
+    service, which is an authenticated internal peer holding the service
+    token, and are used for exactly one request. The engine records header
+    *names* in the run result, never values — the run record is readable by
+    anyone with access to the case.
+    """
+    tenant_id, _requested_by = _resolve_caller(body.tenant_id, user, x_aisoc_service_token)
+    try:
+        references = await playbook_references.resolve(db, tenant_id=tenant_id, names=list(body.names))
+    except playbook_references.ReferenceError as exc:
+        # A reference that exists and will not decrypt is reported, not
+        # treated as absent: "you have not configured this" would send an
+        # operator to add a row that is already there.
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return {"references": references}

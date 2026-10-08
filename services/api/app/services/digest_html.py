@@ -212,6 +212,7 @@ def render_digest_html(digest: ExecutiveDigest, branding: Branding | None = None
     period = digest.period
     product = _esc(brand.product_name)
     primary = _esc(brand.primary_color)
+    accent = _esc(brand.accent_color)
     logo_block = ""
     if brand.logo_data_uri:
         logo_block = f'<img src="{_esc(brand.logo_data_uri)}" alt="{product}" style="max-height:40px;max-width:200px;margin-bottom:10px;">'
@@ -237,9 +238,8 @@ def render_digest_html(digest: ExecutiveDigest, branding: Branding | None = None
   }}
   h1, h2, h3 {{ color: #0f172a; margin-top: 0; }}
   h1 {{ font-size: 22px; margin-bottom: 4px; }}
-  h2 {{ border-top-color: {primary}; }}
   h2 {{ font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em;
-       color: #475569; margin: 20px 0 10px; border-top: 1px solid #e2e8f0; padding-top: 14px; }}
+       color: #475569; margin: 20px 0 10px; border-top: 2px solid {accent}; padding-top: 14px; }}
   table th, table td {{ border-bottom: 1px solid #f1f5f9; }}
   @media print {{
     body {{ padding: 0; }}

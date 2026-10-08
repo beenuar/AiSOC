@@ -43,6 +43,7 @@ from app._vendor.aisoc_benchmark.replay import MIN_MALICIOUS_FOR_HEADLINE
 from app.api.v1.deps import AuthUser, DBSession
 from app.db.database import AsyncSessionLocal
 from app.models.connector import Connector
+from app.services.branding.resolver import resolve_branding
 from app.services.replay_evaluation import report as report_export
 from app.services.replay_evaluation import store
 from app.services.replay_evaluation.job import (
@@ -396,7 +397,10 @@ async def export_replay(
         )
 
     try:
-        pdf = report_export.render_pdf(markdown)
+        # Inlined, because WeasyPrint renders server-side: a referenced logo
+        # would be an outbound request made by this service to an address a
+        # customer administrator supplied.
+        pdf = report_export.render_pdf(markdown, await resolve_branding(db, user.tenant_id, inline_logo=True))
     except report_export.PdfUnavailableError as exc:
         # 503 rather than 500: the report exists and the other two formats
         # work, so this is a missing capability on this deployment rather
