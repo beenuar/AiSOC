@@ -483,6 +483,8 @@ def self_test(root: Path) -> int:
         load(Path("/nonexistent-tree-for-the-self-test"))
         empty_refused = False
     except GateError:
+        # Refusing an empty tree is the behaviour under test, so the
+        # exception is the pass and there is nothing to handle.
         pass
     ok &= empty_refused
     print(f"  {'PASS' if empty_refused else 'FAIL'}  TREE: a tree with no inputs is refused rather than reported clean")

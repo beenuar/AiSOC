@@ -143,7 +143,14 @@ func (e *IPEnricher) lookup(ctx context.Context, ip string) (ipFacts, bool) {
 
 	facts, err := e.fetch(ctx, ip)
 	if err != nil {
-		e.log.Debug("enrichment lookup failed", "ip", ip, "error", err)
+		// Logged as the reparsed canonical address rather than the caller's
+		// string. The value arrives from a connector-supplied event, and
+		// although it has already passed IsPublicIP, that is a predicate a
+		// taint tracker cannot follow across the call -- it read this as
+		// go/log-injection. net.IP.String() reconstructs the address from
+		// parsed octets, so a newline cannot survive it and a reader can see
+		// why without tracing the caller.
+		e.log.Debug("enrichment lookup failed", "ip", net.ParseIP(ip).String(), "error", err)
 		return ipFacts{}, false
 	}
 
