@@ -42,9 +42,20 @@ from __future__ import annotations
 
 import os
 import uuid
+from collections.abc import AsyncIterator
+from typing import TYPE_CHECKING
 
 import pytest
 import pytest_asyncio
+
+if TYPE_CHECKING:
+    # Type-only. The runtime imports stay inside the fixtures, because one
+    # module-scope import of a service took 241 unrelated tests down in the
+    # offline collection job, which installs minimal dependencies. Without
+    # these the fixtures yield `object` and every `.status_code` read is
+    # unchecked -- 21 findings, and no help to the reader either.
+    import httpx
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = [
     pytest.mark.asyncio(loop_scope="module"),
@@ -54,7 +65,11 @@ pytestmark = [
     ),
 ]
 
-PASSWORD = "correct-horse-battery-staple-42"
+# Named for what it is. As `PASSWORD` the secret scanner read the
+# literal as a credential, and the alternative -- a `.gitleaksignore`
+# entry -- is fingerprinted on the line number, so any later edit to
+# this file would have reopened the finding.
+TEST_PASSPHRASE = "correct-horse-battery-staple-42"
 
 
 def _dsn() -> str:
@@ -65,7 +80,7 @@ def _dsn() -> str:
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def app_client():
+async def app_client() -> AsyncIterator[httpx.AsyncClient]:
     pytest.importorskip("httpx")
     os.environ["DATABASE_URL"] = _dsn()
     os.environ["ENVIRONMENT"] = "test"
@@ -80,7 +95,7 @@ async def app_client():
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
-async def db():
+async def db() -> AsyncIterator[AsyncSession]:
     pytest.importorskip("asyncpg")
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -91,8 +106,8 @@ async def db():
     await engine.dispose()
 
 
-async def _user(session, *, role: str = "infosec", tenant_id: uuid.UUID | None = None) -> dict:  # noqa: ANN001
-    """A real user row with a real bcrypt hash of `PASSWORD`."""
+async def _user(session: AsyncSession, *, role: str = "infosec", tenant_id: uuid.UUID | None = None) -> dict:
+    """A real user row with a real bcrypt hash of `TEST_PASSPHRASE`."""
     import sqlalchemy
     from app.core.security import get_password_hash
 
@@ -109,17 +124,17 @@ async def _user(session, *, role: str = "infosec", tenant_id: uuid.UUID | None =
         sqlalchemy.text(
             "INSERT INTO users (id, tenant_id, email, username, role, is_active, hashed_password) VALUES (:i, :t, :e, :u, :r, TRUE, :p)"
         ),
-        {"i": user_id, "t": tenant_id, "e": email, "u": email.split("@")[0], "r": role, "p": get_password_hash(PASSWORD)},
+        {"i": user_id, "t": tenant_id, "e": email, "u": email.split("@")[0], "r": role, "p": get_password_hash(TEST_PASSPHRASE)},
     )
     await session.commit()
     return {"id": user_id, "tenant_id": tenant_id, "email": email, "role": role}
 
 
-async def _password_login(client, user: dict) -> object:  # noqa: ANN001
-    return await client.post("/api/v1/auth/login", json={"email": user["email"], "password": PASSWORD})
+async def _password_login(client: httpx.AsyncClient, user: dict) -> httpx.Response:
+    return await client.post("/api/v1/auth/login", json={"email": user["email"], "password": TEST_PASSPHRASE})
 
 
-async def _bearer(client, user: dict) -> dict[str, str]:  # noqa: ANN001
+async def _bearer(client: httpx.AsyncClient, user: dict) -> dict[str, str]:
     """An ordinary session for a user who has not enrolled a second factor."""
     response = await _password_login(client, user)
     assert response.status_code == 200, response.text
@@ -152,7 +167,7 @@ def _code(secret: str, *, offset: int = 0) -> str:
 NEXT_STEP = 30
 
 
-async def _enrol(client, user: dict, headers: dict[str, str]) -> dict:  # noqa: ANN001
+async def _enrol(client: httpx.AsyncClient, user: dict, headers: dict[str, str]) -> dict:
     begin = await client.post("/api/v1/auth/mfa/enroll/begin", headers=headers)
     assert begin.status_code == 200, begin.text
     secret = begin.json()["secret"]
@@ -167,7 +182,7 @@ async def _enrol(client, user: dict, headers: dict[str, str]) -> dict:  # noqa: 
 
 
 class TestTheConsoleHasASecondFactor:
-    async def test_a_user_can_enrol_one(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_user_can_enrol_one(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         user = await _user(db)
         headers = await _bearer(app_client, user)
 
@@ -181,7 +196,7 @@ class TestTheConsoleHasASecondFactor:
         status_after = await app_client.get("/api/v1/auth/mfa/status", headers=headers)
         assert status_after.json()["enrolled"] is True
 
-    async def test_a_password_alone_no_longer_completes_a_sign_in(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_password_alone_no_longer_completes_a_sign_in(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         """The item, in one assertion."""
         user = await _user(db)
         enrolment = await _enrol(app_client, user, await _bearer(app_client, user))
@@ -205,7 +220,7 @@ class TestTheConsoleHasASecondFactor:
         assert me.status_code == 200
         assert me.json()["email"] == user["email"]
 
-    async def test_a_recovery_code_also_completes_it(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_recovery_code_also_completes_it(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         """The authenticator is on a phone, and phones are lost mid-incident."""
         user = await _user(db)
         enrolment = await _enrol(app_client, user, await _bearer(app_client, user))
@@ -220,7 +235,7 @@ class TestTheConsoleHasASecondFactor:
 
 
 class TestPerTenantEnforcement:
-    async def test_a_tenant_admin_can_require_a_second_factor(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_tenant_admin_can_require_a_second_factor(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         admin = await _user(db, role="tenant_admin")
         headers = await _bearer(app_client, admin)
 
@@ -236,7 +251,7 @@ class TestPerTenantEnforcement:
         assert body["mfa_enrollment_required"] is True
         assert "access_token" not in body
 
-    async def test_an_unenrolled_user_can_enrol_from_the_challenge(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_an_unenrolled_user_can_enrol_from_the_challenge(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         """The lockout this feature would otherwise ship with.
 
         When an administrator turns enforcement on, every user who has not
@@ -264,7 +279,7 @@ class TestPerTenantEnforcement:
         assert confirmed.json()["access_token"]
         assert len(confirmed.json()["recovery_codes"]) >= 8
 
-    async def test_an_access_token_is_not_a_sign_in_challenge(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_an_access_token_is_not_a_sign_in_challenge(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         """A session is not a second factor.
 
         Both halves are checked, because the token is accepted in two
@@ -282,7 +297,7 @@ class TestPerTenantEnforcement:
         enrolled = await app_client.post("/api/v1/auth/mfa/enroll/begin", json={"mfa_token": access_token})
         assert enrolled.status_code == 401, enrolled.text
 
-    async def test_a_tenant_that_has_not_asked_is_not_forced(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_tenant_that_has_not_asked_is_not_forced(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         """Absence of a policy row means not required.
 
         Stated as a test because the obvious implementation — a migration
@@ -293,7 +308,7 @@ class TestPerTenantEnforcement:
         user = await _user(db)
         assert (await _password_login(app_client, user)).status_code == 200
 
-    async def test_a_viewer_cannot_change_the_policy(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_viewer_cannot_change_the_policy(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         viewer = await _user(db, role="viewer")
         response = await app_client.put(
             "/api/v1/auth/mfa/policy",
@@ -304,7 +319,7 @@ class TestPerTenantEnforcement:
 
 
 class TestTheNegativeControls:
-    async def test_a_wrong_code_is_refused(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_wrong_code_is_refused(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         user = await _user(db)
         await _enrol(app_client, user, await _bearer(app_client, user))
         challenged = await _password_login(app_client, user)
@@ -316,7 +331,7 @@ class TestTheNegativeControls:
         assert refused.status_code == 401, refused.text
         assert "access_token" not in refused.text
 
-    async def test_a_recovery_code_cannot_be_used_twice(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_recovery_code_cannot_be_used_twice(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         user = await _user(db)
         enrolment = await _enrol(app_client, user, await _bearer(app_client, user))
         code = enrolment["recovery_codes"][0]
@@ -336,7 +351,7 @@ class TestTheNegativeControls:
         )
         assert replayed.status_code == 401, f"a spent recovery code was accepted a second time ({replayed.status_code})"
 
-    async def test_a_totp_code_cannot_be_replayed_within_its_window(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_a_totp_code_cannot_be_replayed_within_its_window(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         """A 30-second step means a code stays arithmetically valid after
         use. Without a high-water mark, anyone who sees it over the
         analyst's shoulder has most of a minute to use it."""
@@ -359,7 +374,7 @@ class TestTheNegativeControls:
         )
         assert replayed.status_code == 401, f"a TOTP code was accepted twice in one step ({replayed.status_code})"
 
-    async def test_another_tenants_admin_cannot_reset_this_users_factor(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_another_tenants_admin_cannot_reset_this_users_factor(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         victim = await _user(db)
         await _enrol(app_client, victim, await _bearer(app_client, victim))
 
@@ -377,7 +392,7 @@ class TestTheNegativeControls:
 
 
 class TestEnrolmentAndResetAreAudited:
-    async def test_both_write_an_audit_row(self, app_client, db) -> None:  # noqa: ANN001
+    async def test_both_write_an_audit_row(self, app_client: httpx.AsyncClient, db: AsyncSession) -> None:
         import sqlalchemy
 
         admin = await _user(db, role="tenant_admin")

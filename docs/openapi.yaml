@@ -25,6 +25,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/TokenResponse'
+        '202':
+          description: The password was accepted and a second factor is outstanding.
+            The body carries `mfa_token` plus either `mfa_required` (complete it at
+            `POST /auth/mfa/verify`) or `mfa_enrollment_required` (the tenant requires
+            a factor this account has not enrolled; enrol at `POST /auth/mfa/enroll/begin`).
+            No session is issued.
+          content:
+            application/json:
+              example:
+                mfa_required: true
+                mfa_token: eyJ…
+                methods:
+                - totp
+                - recovery_code
         '422':
           description: Validation Error
           content:
