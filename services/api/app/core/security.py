@@ -89,6 +89,21 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+        # Depth 8.2. A tenant administrator governs access inside their own
+        # tenant: who may elevate, who approves, and which attribute
+        # conditions narrow a permission.
+        #
+        # `workload_identities:*` is deliberately NOT here. Those credentials
+        # are deployment-wide — a service authenticates before any tenant is
+        # known — so minting one from a tenant-scoped session would confer
+        # authority over every tenant's data. Only the wildcard roles hold
+        # them, which is the one case where "no scoped role holds this" is
+        # the decision rather than the oversight it usually is.
+        "elevation:read",
+        "elevation:request",
+        "elevation:approve",
+        "access_conditions:read",
+        "access_conditions:write",
     ],
     "soc_lead": [
         "alerts:read",
@@ -120,6 +135,12 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+        # A lead is the approver an analyst's elevation goes to, which is
+        # the role the separation-of-duties rule assumes exists.
+        "elevation:read",
+        "elevation:request",
+        "elevation:approve",
+        "access_conditions:read",
     ],
     "soc_analyst": [
         "alerts:read",
@@ -147,6 +168,9 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+        # Request, never approve. The analyst asking to isolate a host is
+        # not the person who should decide they may.
+        "elevation:request",
     ],
     "threat_hunter": [
         "alerts:read",
@@ -172,6 +196,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # tenant's own knowledge base, so every role that can read an
         # alert can read it.
         "knowledge_base:read",
+        "elevation:request",
     ],
     "viewer": [
         "alerts:read",

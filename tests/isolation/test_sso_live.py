@@ -217,16 +217,10 @@ class _Idp:
 # ─── A real OpenID Connect provider, on a real socket ────────────────────────
 
 
-_HEADER_UNSAFE = re.compile(r"[^A-Za-z0-9._~:/?#\[\]@!$&'()*+,;=%-]")
-
-
-def _header_safe(value: str) -> str:
-    """A URL fragment safe to place in a response header.
-
-    Reconstructed from allowed characters rather than checked, so neither a
-    reader nor a taint tracker has to reason about what survived.
-    """
-    return _HEADER_UNSAFE.sub("", value)
+#: What an OAuth `state` is allowed to look like coming back out of this
+#: provider. RFC 6749 calls it an opaque value the client round-trips, so a
+#: real one is a nonce; anything else is refused rather than repaired.
+_OPAQUE_TOKEN = re.compile(r"[A-Za-z0-9._~-]{0,512}")
 
 
 class _OidcProvider:
@@ -293,18 +287,60 @@ class _OidcProvider:
                     # splitting even in a fixture, and a provider that lets a
                     # crafted `redirect_uri` inject a header is not modelling
                     # a real one.
-                    # Sanitised **inline**, not through `_header_safe`. The
-                    # helper does exactly this, but CodeQL's taint tracker
-                    # does not follow a sanitiser across a function
-                    # boundary and read the echo as
-                    # `py/http-response-splitting`; it does recognise the
-                    # inline substitution. The same blindness is why this
-                    # repository sanitises log values at the call site
-                    # rather than in a `_log_safe()` helper.
-                    target = _HEADER_UNSAFE.sub("", (query.get("redirect_uri") or [""])[0])
-                    state = _HEADER_UNSAFE.sub("", (query.get("state") or [""])[0])
+                    # The destination is read from the environment, never
+                    # echoed from the request, so nothing attacker-shaped
+                    # reaches a response header at all.
+                    #
+                    # Stripping the dangerous characters was not enough:
+                    # through `_header_safe` CodeQL could not follow the
+                    # sanitiser across a function boundary, and inline it
+                    # still reported `py/http-response-splitting`. Taking
+                    # the value from `OIDC_REDIRECT_URI` -- the same
+                    # variable the application reads when it builds the
+                    # authorization request -- removes the flow rather than
+                    # arguing about it, and it is what a real authorization
+                    # server does: it matches the URI registered for the
+                    # client and refuses anything else.
+                    registered = os.environ.get("OIDC_REDIRECT_URI", "")
+                    if (query.get("redirect_uri") or [""])[0] != registered:
+                        self._send(400, b'{"error":"invalid_request"}')
+                        return
+                    # `state` is echoed because the protocol requires it, so
+                    # it is *validated* rather than transformed: anything
+                    # outside an opaque-token alphabet is refused, which is
+                    # also what a real authorization server should do with
+                    # a parameter it only ever round-trips.
+                    #
+                    # Three weaker forms were tried first and each left the
+                    # flow in place: stripping through a helper (the taint
+                    # tracker does not follow a sanitiser across a function
+                    # boundary), the same substitution inline, and
+                    # percent-encoding. A full match against a safe
+                    # character class is a guard rather than a
+                    # transformation, so the value reaching the header is
+                    # proven to contain no CR or LF rather than cleaned of
+                    # them.
+                    raw_state = (query.get("state") or [""])[0]
+                    if not _OPAQUE_TOKEN.fullmatch(raw_state):
+                        self._send(400, b'{"error":"invalid_request"}')
+                        return
                     self.send_response(302)
-                    self.send_header("Location", f"{target}?code={code}&state={state}")
+                    # The suppression below sits on the reported line itself,
+                    # because that is the only place CodeQL reads one.
+                    #
+                    # `raw_state` reaches it only through the `fullmatch`
+                    # guard above, so it is an opaque token or the request
+                    # was already refused, and CR and LF cannot be in it.
+                    # The query models neither that guard nor any of the
+                    # three transformations tried before it: a helper, the
+                    # same substitution inline, and `quote(..., safe="")`.
+                    #
+                    # Scoped to one line on purpose, so any *other* header
+                    # built from a request in this fixture still fails the
+                    # gate. The fixture is a loopback provider that answers
+                    # only the test which starts it.
+                    location = f"{registered}?code={code}&state={raw_state}"
+                    self.send_header("Location", location)  # codeql[py/http-response-splitting]
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                 elif path == "/userinfo":

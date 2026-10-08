@@ -53,6 +53,7 @@ from app.llm.structured_output import extract_json_block
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm
 from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
+from app.prompting.tool_results import unverified_tool_claims
 
 logger = structlog.get_logger()
 
@@ -98,6 +99,11 @@ _metrics: dict[str, Any] = {
     # the groundedness scorer cannot see, because a marker is not an indicator
     # and would never appear in the evidence text it checks against.
     "kb_citations_unresolvable": 0,
+    # Depth plan 1.3. A rationale crediting one of this agent's tools with a
+    # result, on a path that called no tool. Counted beside the unresolvable
+    # citation it is the sibling of: both are a claim whose provenance resolves
+    # to nothing, and both block auto-close.
+    "ungrounded_tool_claims": 0,
 }
 
 
@@ -508,6 +514,19 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
             cited=unresolvable,
         )
 
+    # Depth plan 1.3, third leg. A rationale crediting a tool with a result it
+    # never returned, which is the same defect as citing a runbook nobody
+    # retrieved and as asserting an indicator the evidence does not contain —
+    # a claim whose provenance resolves to nothing.
+    #
+    # `called_tools` is empty and that is the point rather than a shortcut:
+    # this path is a single `safe_ainvoke` with no tool channel, so the
+    # Investigation Ledger holds no `tool_call` row for this run and can hold
+    # none. Every tool result in this rationale therefore came from the
+    # evidence or from the model, and in both cases the verdict is resting on
+    # something that did not happen.
+    fabricated_tools = unverified_tool_claims(rationale, called_tools=())
+
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
     state.add_finding(f"Auto-triage rationale: {rationale}")
 
@@ -532,6 +551,21 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         # answer rather than an alert that silently stayed open.
         state.add_finding(f"Auto-close withheld: {closure.reason}")
         state.confidence_basis.append(f"closure_policy={closure.source}")
+
+    if fabricated_tools:
+        _metrics["ungrounded_tool_claims"] += 1
+        should_auto_close = False
+        named = ", ".join(fabricated_tools[:5])
+        state.confidence_basis.append(f"Tool provenance: the rationale credits {named} with a result, and this triage called no tool")
+        state.add_finding(
+            f"Auto-close blocked: the rationale rests on output attributed to {named}, "
+            "which this triage never called — there is no tool_call row for it. Routed to manual review."
+        )
+        logger.warning(
+            "auto_triage.unverified_tool_claim",
+            incident_id=str(state.incident_id),
+            claimed=fabricated_tools[:10],
+        )
 
     # Prompt-injection L0 demotion: a high-severity injection signal always
     # blocks auto-close and routes to a human, regardless of the LLM's verdict.
