@@ -2,6 +2,23 @@
 
 AiSOC is security software, so we take vulnerabilities in our own stack seriously. This document explains how to report issues responsibly and what to expect from us.
 
+## Security pack
+
+If you are reviewing AiSOC rather than reporting a bug in it, start at
+[`docs/security/`](docs/security/README.md) — architecture and data-flow
+diagrams, the threat models, data handling per deployment mode, a completed
+security questionnaire, and what we can and cannot tell you about
+sub-processors.
+
+Every statement in that pack names the file or the CI job that makes it true,
+and the gaps are collected in one table rather than left for you to find.
+
+- Index: [`docs/security/README.md`](docs/security/README.md).
+- Architecture and data flow: [`docs/security/architecture-and-data-flow.md`](docs/security/architecture-and-data-flow.md).
+- Data handling by deployment mode: [`docs/security/data-handling.md`](docs/security/data-handling.md).
+- Security questionnaire, with the gap list: [`docs/security/questionnaire.md`](docs/security/questionnaire.md).
+- Sub-processors: [`docs/security/subprocessors.md`](docs/security/subprocessors.md).
+
 ## Threat models
 
 - Agent + tool surface (prompt injection, tool abuse): [`docs/security/agent-threat-model.md`](docs/security/agent-threat-model.md).

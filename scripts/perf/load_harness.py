@@ -227,6 +227,61 @@ def compose_target(project_dir: Path, compose_files: list[str], ingest_url: str)
     )
 
 
+def _fusion_replicas(target: Target) -> int | None:
+    """How many fusion containers were actually running, or None.
+
+    Counted from the runtime rather than from a compose file, because a file
+    says what was requested and a rate is produced by what was running. Both
+    deployment shapes already expose a listing command for the resource
+    sampler, so this reads the same source the samples came from.
+    """
+    if not target.stats:
+        return None
+    try:
+        done = subprocess.run(  # noqa: S603 - fixed argv, same prefix the sampler uses
+            target.stats, capture_output=True, text=True, timeout=45, check=False
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if done.returncode != 0:
+        return None
+    # A fusion container is named for its service in both runtimes; a worker
+    # or a one-shot named after it is not a replica serving the spine.
+    count = sum(1 for line in done.stdout.splitlines() if "fusion" in line.split("\t")[0].split()[0].lower())
+    return count or None
+
+
+def _kafka_partitions(target: Target, group: str = _FUSION_GROUP) -> int | None:
+    """Partitions the fusion group is consuming, or None.
+
+    Read from the same `--describe` output the lag measurement uses, which
+    prints one row per partition, so this adds no new dependency and cannot
+    disagree with the lag figure published beside it.
+    """
+    if not target.kafka:
+        return None
+    try:
+        done = subprocess.run(  # noqa: S603
+            [*target.kafka, "--bootstrap-server", "localhost:9092", "--describe", "--group", group],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    if done.returncode != 0:
+        return None
+    partitions: set[str] = set()
+    for line in done.stdout.splitlines():
+        fields = line.split()
+        # GROUP TOPIC PARTITION ...; the header and blank lines have no digit
+        # in the third column.
+        if len(fields) >= 3 and fields[2].isdigit():
+            partitions.add(f"{fields[1]}:{fields[2]}")
+    return len(partitions) or None
+
+
 def kubernetes_target(namespace: str, release: str, ingest_url: str, postgres_ref: str, kafka_ref: str) -> Target:
     kubectl = ["kubectl", "-n", namespace]
     return Target(
@@ -364,12 +419,25 @@ def run_producer(
     run_id: str,
     summary_path: Path,
 ) -> ProducerSummary:
+    # Where `go run` is invoked from, which is not the repository root. The
+    # producer is its own module (`services/demo-producer/go.mod`) and there
+    # is no go.mod at the root, so `go run ./services/demo-producer` with
+    # cwd=root fails before it starts:
+    #
+    #     go: go.mod file not found in current directory or any parent
+    #     directory; see 'go help modules'
+    #
+    # The harness has therefore never produced a run from a clean checkout
+    # on the path it documents. A prebuilt `--producer-bin` still runs from
+    # the root, because it needs the module context of neither.
+    cwd = root
     if producer_bin:
         argv = [producer_bin]
     else:
         if not shutil.which("go"):
             raise RuntimeError("no --producer-bin given and `go` is not on PATH to build services/demo-producer")
-        argv = ["go", "run", "./services/demo-producer"]
+        argv = ["go", "run", "."]
+        cwd = root / "services" / "demo-producer"
     argv += [
         "--load",
         "--ingest-url",
@@ -391,7 +459,7 @@ def run_producer(
         "--summary",
         str(summary_path),
     ]
-    done = subprocess.run(argv, cwd=root, capture_output=True, text=True, check=False)  # noqa: S603
+    done = subprocess.run(argv, cwd=cwd, capture_output=True, text=True, check=False)  # noqa: S603
     if done.returncode != 0:
         raise RuntimeError(f"producer failed ({done.returncode}): {(done.stderr or done.stdout).strip()[-600:]}")
     return ProducerSummary(json.loads(summary_path.read_text(encoding="utf-8")))
@@ -705,6 +773,22 @@ def main(argv: list[str] | None = None) -> int:
     }
     if args.target == "compose":
         shape["hosts"] = 1
+    # `throughput_claims.py` requires both of these beside an alert-path rate,
+    # and it is right to: that rate is the one a reader uses to decide whether
+    # a deployment keeps up, and it means nothing without the fan-out it was
+    # measured at. Both are *read from the running deployment* -- a default
+    # written down here would be a guess that looks like a measurement, which
+    # is the failure the required-context rule exists to catch.
+    #
+    # Omitted, not defaulted, when the deployment cannot be asked. The grader
+    # then says the number is unreproducible, which is true, instead of
+    # publishing it beside a replica count nobody verified.
+    replicas = _fusion_replicas(target)
+    if replicas is not None:
+        shape["fusion_replicas"] = replicas
+    partitions = _kafka_partitions(target)
+    if partitions is not None:
+        shape["kafka_partitions"] = partitions
 
     report = build_report(
         target=target,
