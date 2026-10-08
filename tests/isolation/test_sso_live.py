@@ -325,24 +325,22 @@ class _OidcProvider:
                         self._send(400, b'{"error":"invalid_request"}')
                         return
                     self.send_response(302)
-                    # codeql[py/http-response-splitting] — suppressed on the
-                    # line, with the reason, rather than dismissed in the UI
-                    # each time the scan renumbers the alert.
+                    # The suppression below sits on the reported line itself,
+                    # because that is the only place CodeQL reads one.
                     #
-                    # `raw_state` reaches here only through the `fullmatch`
+                    # `raw_state` reaches it only through the `fullmatch`
                     # guard above, so it is an opaque token or the request
-                    # was already refused; CR and LF cannot be in it. The
-                    # query does not model that guard, and it models none of
-                    # the three transformations tried before it either --
-                    # a helper, the same substitution inline, and
-                    # `quote(..., safe="")`.
+                    # was already refused, and CR and LF cannot be in it.
+                    # The query models neither that guard nor any of the
+                    # three transformations tried before it: a helper, the
+                    # same substitution inline, and `quote(..., safe="")`.
                     #
-                    # This is a loopback test fixture, not a served
-                    # endpoint: the provider answers only the test that
-                    # starts it. The suppression is scoped to this one line
-                    # so any *other* header built from a request still
-                    # fails the gate.
-                    self.send_header("Location", f"{registered}?code={code}&state={raw_state}")
+                    # Scoped to one line on purpose, so any *other* header
+                    # built from a request in this fixture still fails the
+                    # gate. The fixture is a loopback provider that answers
+                    # only the test which starts it.
+                    location = f"{registered}?code={code}&state={raw_state}"
+                    self.send_header("Location", location)  # codeql[py/http-response-splitting]
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                 elif path == "/userinfo":
