@@ -59,6 +59,7 @@ from app.api.v1.endpoints import (
     marketplace,
     mcp_servers,
     metrics,
+    mfa,
     mssp,
     nl_detection,
     nl_query,
@@ -101,6 +102,11 @@ from app.api.v1.endpoints import (
 api_router = APIRouter(prefix="/api/v1")
 
 api_router.include_router(auth.router)
+# The second factor. `auth.login` answers 202 with a challenge when a
+# factor is outstanding, and every route that resolves one lives here —
+# so without this include a correct password reaches a challenge that
+# nothing can answer.
+api_router.include_router(mfa.router)
 api_router.include_router(api_keys.router)
 api_router.include_router(alerts.router)
 # Structured AI explainer (POST /alerts/{id}/explain) — single-shot

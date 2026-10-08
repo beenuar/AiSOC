@@ -23,13 +23,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import logging
 import secrets
 import struct
 import time
 from urllib.parse import quote
-
-logger = logging.getLogger(__name__)
 
 #: Seconds per step. 30 is what every authenticator app assumes, and it is
 #: not configurable for that reason.
