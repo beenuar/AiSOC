@@ -53,6 +53,7 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -152,7 +153,10 @@ def extract_at_path(record: dict, declared_path: str) -> str | None:
     two are small enough that a shared implementation would cost more than
     it saves, and the fixtures exercise both.
     """
-    cur = record
+    # Annotated rather than inferred: it starts as the record but walks into
+    # whatever each segment finds, so `dict` -- what mypy takes from the first
+    # assignment -- is wrong from the second one onward.
+    cur: Any = record
     for segment in declared_path.split("."):
         list_hop = segment.endswith("[]")
         key = segment[:-2] if list_hop else segment
