@@ -128,6 +128,21 @@ CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
         "core",
         r"CORE profile: (\d+) long-running services",
     ),
+    # The depth plan's progress file. It republishes both counts in its
+    # re-derived-figures table and in a deviation explaining why the `full`
+    # baseline was not taken on a host that size, so both are claims and
+    # both are registered. Registered when written rather than after it
+    # drifted, which is the only time registering is cheap.
+    (
+        "DEPTH_PROGRESS.md",
+        "core",
+        r"\*\*PASS\*\* -- (\d+) services healthy",
+    ),
+    (
+        "DEPTH_PROGRESS.md",
+        "full",
+        r"The `full` profile is (\d+) services",
+    ),
     # The five below went unchecked until ADR-0007 moved CORE to 16 and they
     # kept saying 14. Two of them are the landing page and the FAQ, so the
     # wrong number was the one a reader met first.
