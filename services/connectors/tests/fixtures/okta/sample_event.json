@@ -1,0 +1,90 @@
+[
+  {
+    "uuid": "a1b2c3d4-0000-4000-8000-000000000001",
+    "published": "2026-10-07T09:14:02.413Z",
+    "eventType": "user.session.start",
+    "displayMessage": "User login to Okta",
+    "severity": "INFO",
+    "actor": {
+      "id": "00u1a2b3c4d5e6f7g8h9",
+      "type": "User",
+      "alternateId": "alice@example.com",
+      "displayName": "Alice Example"
+    },
+    "client": {
+      "ipAddress": "203.0.113.10",
+      "userAgent": {
+        "rawUserAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "os": "Mac OS X",
+        "browser": "CHROME"
+      },
+      "zone": "null",
+      "device": "Computer"
+    },
+    "outcome": { "result": "SUCCESS" },
+    "target": [
+      { "id": "0oa1a2b3c4d5e6f7g8h9", "type": "AppInstance", "alternateId": "AWS Account Federation", "displayName": "AWS" }
+    ]
+  },
+  {
+    "uuid": "a1b2c3d4-0000-4000-8000-000000000002",
+    "published": "2026-10-07T09:15:40.001Z",
+    "eventType": "user.session.start",
+    "displayMessage": "User login to Okta",
+    "severity": "WARN",
+    "actor": { "id": "00u1a2b3c4d5e6f7g8h9", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Example" },
+    "client": { "ipAddress": "198.51.100.44" },
+    "outcome": { "result": "FAILURE", "reason": "INVALID_CREDENTIALS" }
+  },
+  {
+    "uuid": "a1b2c3d4-0000-4000-8000-000000000003",
+    "published": "2026-10-07T09:20:11.500Z",
+    "eventType": "user.account.lock",
+    "displayMessage": "Max sign in attempts exceeded",
+    "severity": "WARN",
+    "actor": { "id": "00u1a2b3c4d5e6f7g8h9", "type": "User", "alternateId": "alice@example.com", "displayName": "Alice Example" },
+    "client": { "ipAddress": "198.51.100.44" },
+    "outcome": { "result": "SUCCESS" }
+  },
+  {
+    "uuid": "a1b2c3d4-0000-4000-8000-000000000004",
+    "published": "2026-10-07T09:31:07.220Z",
+    "eventType": "user.account.privilege.grant",
+    "displayMessage": "Grant user privilege",
+    "severity": "INFO",
+    "actor": { "id": "00uADMIN0000000000", "type": "User", "alternateId": "admin@example.com", "displayName": "Admin Example" },
+    "client": { "ipAddress": "203.0.113.11" },
+    "outcome": { "result": "SUCCESS" },
+    "target": [{ "id": "00u1a2b3c4d5e6f7g8h9", "type": "User", "alternateId": "alice@example.com" }]
+  },
+  {
+    "uuid": "a1b2c3d4-0000-4000-8000-000000000005",
+    "published": "2026-10-07T09:42:55.900Z",
+    "eventType": "system.api_token.create",
+    "displayMessage": "Create API token",
+    "severity": "INFO",
+    "actor": { "id": "00uADMIN0000000000", "type": "User", "alternateId": "admin@example.com", "displayName": "Admin Example" },
+    "client": { "ipAddress": "203.0.113.11" },
+    "outcome": { "result": "SUCCESS" }
+  },
+  {
+    "uuid": "a1b2c3d4-0000-4000-8000-000000000006",
+    "published": "2026-10-07T09:50:02.000Z",
+    "eventType": "user.mfa.factor.deactivate",
+    "displayMessage": "Deactivate factor for user",
+    "severity": "INFO",
+    "actor": { "id": "00uSYSTEM000000000", "type": "SystemPrincipal", "displayName": "Okta System" },
+    "client": { "ipAddress": "203.0.113.12" },
+    "outcome": { "result": "SUCCESS" }
+  },
+  {
+    "uuid": "a1b2c3d4-0000-4000-8000-000000000007",
+    "published": "2026-10-07T10:02:19.100Z",
+    "eventType": "security.request.blocked",
+    "displayMessage": "Request from suspicious actor blocked",
+    "severity": "WARN",
+    "actor": { "id": "unknown", "type": "User", "displayName": "unknown" },
+    "client": { "ipAddress": "198.51.100.200" },
+    "outcome": { "result": "DENY", "reason": "Suspicious activity" }
+  }
+]

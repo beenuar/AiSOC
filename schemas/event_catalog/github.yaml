@@ -1,0 +1,25 @@
+# GitHub organisation audit log. Event types are the `action` values,
+# namespaced `area.verb`.
+source: github
+event_type_path: action
+fixture_requires: [actor]
+fixture_files:
+  - services/connectors/tests/test_saas_connectors.py
+events:
+  org.update_member:
+    action: org.update.member
+    sensitivity: high
+    attack: [T1098]
+  team.destroy:
+    action: team.destroy
+    sensitivity: medium
+  secret_scanning.disable:
+    # Turning off the control that finds leaked credentials, in the system
+    # that holds the code they are leaked in.
+    action: secret.scanning.disable
+    sensitivity: critical
+    attack: [T1562.001]
+  issues.opened:
+    action: issues.opened
+    sensitivity: info
+unclassified: {}

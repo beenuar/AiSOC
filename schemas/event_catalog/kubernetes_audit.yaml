@@ -1,0 +1,33 @@
+# Kubernetes apiserver audit. The event type is the `verb`, and on its own
+# it says nothing about what was acted on — `create` on a ConfigMap and
+# `create` on a ClusterRoleBinding are not the same event.
+#
+# The catalogue classifies the verb, which is what this source's event type
+# *is*, and the resource is carried separately on the event. `impersonate`
+# is the exception that needs no resource to be interesting.
+source: kubernetes_audit
+event_type_path: verb
+fixture_requires: [objectRef]
+fixture_files:
+  - services/connectors/tests/test_kubernetes_audit.py
+events:
+  get:
+    action: get
+    sensitivity: info
+  list:
+    action: list
+    sensitivity: info
+    attack: [T1613]
+  create:
+    action: create
+    sensitivity: medium
+  patch:
+    action: patch
+    sensitivity: medium
+  impersonate:
+    # The only verb that is a privilege decision by itself: the request is
+    # asking the apiserver to act as somebody else.
+    action: impersonate
+    sensitivity: critical
+    attack: [T1134]
+unclassified: {}
