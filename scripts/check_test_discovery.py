@@ -136,6 +136,9 @@ _PIP_INSTALL = re.compile(r"\b(?:pip3?|python3?(?:\.\d+)?\s+-m\s+pip)\s+install\
 #: test *name*, which this gate does not model — it is a filter a developer
 #: types, not a standing property of a workflow, and no workflow here uses it.
 #: ``-m`` is different and is captured below.
+#: A shell redirection: `>f`, `>>f`, `2>f`, `<f`, or the bare operator.
+_REDIRECT = re.compile(r"^(?:[0-9]*>>?|<|&>)")
+
 _OPTS_WITH_VALUE = frozenset({"-k", "-p", "-n", "--rootdir", "--cov", "--cov-config", "--cov-report", "--junitxml", "--tb", "-W"})
 
 
@@ -296,6 +299,16 @@ def _split_args(args: list[str]) -> tuple[list[str], list[str], str]:
             index += 1
         elif token.startswith("-"):
             pass
+        elif _REDIRECT.match(token):
+            # A redirection, not a path. `shlex` does not know shell syntax,
+            # so `-q \<newline>--junitxml=… >/dev/null` tokenised the target
+            # as a positional argument and the gate reported the step as
+            # naming `services/api/>/dev/null`, a path that is not in the
+            # tree — a real invocation failing a gate that had mis-read it.
+            # `>file` is one token, `> file` is two, so a bare operator also
+            # consumes the token after it.
+            if token in {">", ">>", "<", "2>", "2>>", "&>"} and index + 1 < len(args):
+                index += 1
         else:
             paths.append(token)
         index += 1
