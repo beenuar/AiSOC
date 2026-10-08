@@ -40,6 +40,14 @@ The consuming endpoint is ``GET /api/v1/actions/email-decide``. It did
 not exist for several releases while ``approval_url`` defaulted to
 ``/v1/actions/email-decide``, a path present nowhere else in the tree,
 so every rendered approve and deny button linked to a 404.
+
+* **The mail is white-labelled.** A managed-service provider's analyst
+  receives this in their own inbox, so the product name, the sender name,
+  the footer and the support contact come from
+  :mod:`app.services.branding.resolver` rather than from a literal. The
+  subject line read ``[AiSOC]`` for every organisation, and the resolved
+  ``sender_name`` -- the one field whose whole purpose is naming who mail
+  comes from -- was read by nothing in the tree.
 """
 
 from __future__ import annotations
@@ -47,6 +55,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import html
 import json
 import os
 import time
@@ -56,6 +65,8 @@ from urllib.parse import urlencode
 
 import httpx
 import structlog
+
+from app.services.branding.resolver import DEFAULT_BRANDING, Branding
 
 log = structlog.get_logger(__name__)
 
@@ -255,11 +266,37 @@ class MailDeliveryClient(Protocol):
         html: str,
         text: str,
         from_addr: str | None = None,
+        from_name: str | None = None,
     ) -> dict[str, Any]:
         # Protocol stub body uses ``pass`` rather than ``...`` to silence
         # CodeQL ``py/ineffectual-statement``. Semantically identical for
         # an unimplemented Protocol method.
         pass
+
+
+def _esc(value: str) -> str:
+    """HTML-escape one interpolated value, quotes included.
+
+    The attribute values here sit in single quotes, which `html.escape`
+    covers along with the double kind.
+    """
+    return html.escape(str(value), quote=True)
+
+
+def _quoted_display_name(name: str) -> str:
+    """One RFC 5322 ``quoted-string`` for a ``From`` display name.
+
+    The name is operator-supplied through ``PUT /api/v1/branding``, and it is
+    about to be composed into a mail header. A carriage return or newline in
+    it is header injection -- the rest of the value becomes additional
+    headers, which is how a ``Bcc`` gets added to approval mail nobody else
+    was supposed to see. Control characters are removed rather than escaped
+    because none of them belong in a product name, and the backslash and
+    quote are escaped because a quoted-string is where this lands.
+    """
+    cleaned = "".join(character for character in name if character.isprintable())
+    escaped = cleaned.replace("\\", "\\\\").replace('"', '\\"')
+    return f'"{escaped[:80]}"'
 
 
 def _default_from_addr(domain: str) -> str:
@@ -306,12 +343,18 @@ class MailgunClient:
         html: str,
         text: str,
         from_addr: str | None = None,
+        from_name: str | None = None,
     ) -> dict[str, Any]:
         if not self._api_key or not self._domain:
             raise EmailApprovalError("Mailgun is not configured — set MAILGUN_API_KEY and MAILGUN_DOMAIN")
         url = f"{self._base_url}/{self._domain}/messages"
+        # The address stays the operator's own sending domain whatever the
+        # display name says, because that is what SPF and DKIM are checked
+        # against. Only the name a recipient reads is white-labelled.
+        address = from_addr or self._from_addr
+        sender = f"{_quoted_display_name(from_name)} <{address}>" if from_name else address
         data: dict[str, Any] = {
-            "from": from_addr or self._from_addr,
+            "from": sender,
             "to": to,
             "subject": subject,
             "text": text,
@@ -337,44 +380,62 @@ def render_approval_email(
     approve_url: str,
     reject_url: str,
     web_base_url: str,
+    branding: Branding | None = None,
 ) -> tuple[str, str, str]:
     """
     Render a plain-text + HTML approval email for a pending action.
 
     Returns ``(subject, text_body, html_body)``.
+
+    ``branding`` defaults to the platform appearance, so an unbranded
+    deployment is unchanged. The approve and deny buttons keep their green
+    and red: those two colours mean "this one contains, this one does not"
+    and an organisation's palette must not be able to swap them.
     """
+    brand = branding or DEFAULT_BRANDING
     case_number = case.get("case_number") or str(case.get("id") or "")[:8] or "(unknown)"
     action_type = action.get("action_type") or "unknown"
     target = action.get("target") or "unknown"
     rationale = (action.get("rationale") or "(no rationale provided)").strip()
+    product = brand.product_name
+    support = brand.support_url or brand.support_email
 
-    subject = f"[AiSOC] Approval needed: {action_type} on {target} — case {case_number}"
+    subject = f"[{product}] Approval needed: {action_type} on {target} — case {case_number}"
 
     text_body = (
-        f"AiSOC approval request\n\n"
+        f"{product} approval request\n\n"
         f"Case:     {case_number}\n"
         f"Action:   {action_type}\n"
         f"Target:   {target}\n"
         f"Rationale: {rationale}\n\n"
         f"Approve: {approve_url}\n"
         f"Deny:    {reject_url}\n\n"
-        f"Open case in AiSOC: {web_base_url.rstrip('/')}/cases/{case.get('id') or ''}\n\n"
+        f"Open case in {product}: {web_base_url.rstrip('/')}/cases/{case.get('id') or ''}\n\n"
         f"This link expires in 60 minutes. Replies to this email are not monitored.\n"
+        + (f"Support: {support}\n" if support else "")
+        + f"{brand.footer_text}\n"
     )
 
+    # Everything interpolated below is escaped. The brand fields are
+    # operator-supplied free text, and ``rationale`` is the agent's summary of
+    # evidence an attacker influenced -- model output written into HTML that an
+    # on-call analyst opens in a mail client.
     html_body = (
-        f"<p><strong>AiSOC approval request</strong></p>"
+        f"<p style='color:{_esc(brand.primary_color)};font-size:11px;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:4px'>{_esc(product)}</p>"  # noqa: E501
+        f"<p><strong>{_esc(product)} approval request</strong></p>"
         f"<table style='border-collapse:collapse'>"
-        f"<tr><td><strong>Case</strong></td><td>{case_number}</td></tr>"
-        f"<tr><td><strong>Action</strong></td><td><code>{action_type}</code></td></tr>"
-        f"<tr><td><strong>Target</strong></td><td><code>{target}</code></td></tr>"
-        f"<tr><td><strong>Rationale</strong></td><td>{rationale}</td></tr>"
+        f"<tr><td><strong>Case</strong></td><td>{_esc(case_number)}</td></tr>"
+        f"<tr><td><strong>Action</strong></td><td><code>{_esc(action_type)}</code></td></tr>"
+        f"<tr><td><strong>Target</strong></td><td><code>{_esc(target)}</code></td></tr>"
+        f"<tr><td><strong>Rationale</strong></td><td>{_esc(rationale)}</td></tr>"
         f"</table>"
         f"<p style='margin-top:16px'>"
-        f"<a href='{approve_url}' style='background:#16a34a;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;margin-right:8px'>Approve</a>"  # noqa: E501
-        f"<a href='{reject_url}' style='background:#dc2626;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none'>Deny</a>"
+        f"<a href='{_esc(approve_url)}' style='background:#16a34a;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none;margin-right:8px'>Approve</a>"  # noqa: E501
+        f"<a href='{_esc(reject_url)}' style='background:#dc2626;color:#fff;padding:8px 14px;border-radius:6px;text-decoration:none'>Deny</a>"  # noqa: E501
         f"</p>"
         f"<p style='color:#6b7280;font-size:12px'>This link expires in 60 minutes.</p>"
+        f"<hr style='border:none;border-top:2px solid {_esc(brand.accent_color)};margin:16px 0 8px'>"
+        f"<p style='color:#6b7280;font-size:11px'>{_esc(brand.footer_text)}" + (f"<br>Support: {_esc(support)}" if support else "") + "</p>"
     )
     return subject, text_body, html_body
 
@@ -388,6 +449,7 @@ async def send_approval_email(
     web_base_url: str,
     secret: str,
     mailer: MailDeliveryClient,
+    branding: Branding | None = None,
     ttl_seconds: int = DEFAULT_TTL_SECONDS,
     now: float | None = None,
 ) -> dict[str, Any]:
@@ -395,48 +457,65 @@ async def send_approval_email(
     Mint signed approve/deny URLs, render the email body, and dispatch
     through the configured mailer.
 
-    Returns the mailer response unchanged so callers can persist the
-    Mailgun message id for the case timeline.
+    Returns ``{"sent": n, "responses": [...]}`` so a caller can persist the
+    mailer message ids for the case timeline.
+
+    One message per recipient, each carrying its own pair of tokens, because
+    the approver is signed into the token and the consuming endpoint refuses
+    a token that names nobody. Minting one pair for the whole list would make
+    every click record the same identity, which separation of duties cannot
+    be evaluated against -- and minting them with no approver at all, which
+    is what this function did while it had no caller, produces links that
+    ``/actions/email-decide`` rejects on arrival.
     """
     if not recipients:
         raise EmailApprovalError("no recipients provided")
+    brand = branding or DEFAULT_BRANDING
 
     action_id = str(action.get("id") or action.get("action_id") or "")
     case_id = str(case.get("id") or "")
     if not action_id:
         raise EmailApprovalError("action.id is required")
 
-    approve = approval_url(
-        base_url=api_base_url,
-        decision="approved",
-        action_id=action_id,
-        case_id=case_id,
-        secret=secret,
-        ttl_seconds=ttl_seconds,
-        now=now,
-    )
-    reject = approval_url(
-        base_url=api_base_url,
-        decision="rejected",
-        action_id=action_id,
-        case_id=case_id,
-        secret=secret,
-        ttl_seconds=ttl_seconds,
-        now=now,
-    )
-    subject, text_body, html_body = render_approval_email(
-        case=case,
-        action=action,
-        approve_url=approve,
-        reject_url=reject,
-        web_base_url=web_base_url,
-    )
-    response = await mailer.send(to=recipients, subject=subject, html=html_body, text=text_body)
+    responses: list[dict[str, Any]] = []
+    for recipient in recipients:
+        urls = {
+            decision: approval_url(
+                base_url=api_base_url,
+                decision=decision,
+                action_id=action_id,
+                case_id=case_id,
+                secret=secret,
+                approver=recipient,
+                ttl_seconds=ttl_seconds,
+                now=now,
+            )
+            for decision in ("approved", "rejected")
+        }
+        subject, text_body, html_body = render_approval_email(
+            case=case,
+            action=action,
+            approve_url=urls["approved"],
+            reject_url=urls["rejected"],
+            web_base_url=web_base_url,
+            branding=brand,
+        )
+        responses.append(
+            await mailer.send(
+                to=[recipient],
+                subject=subject,
+                html=html_body,
+                text=text_body,
+                from_name=brand.sender_name,
+            )
+        )
+
     log.info(
         "email_approval.sent",
         action_id=action_id,
         case_id=case_id,
         recipients=len(recipients),
         ttl_seconds=ttl_seconds,
+        white_labelled=brand.is_white_labelled,
     )
-    return response
+    return {"sent": len(responses), "responses": responses}

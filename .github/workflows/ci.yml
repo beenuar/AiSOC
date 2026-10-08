@@ -659,6 +659,17 @@ jobs:
         run: python3 scripts/check_ocsf_class_coverage.py --self-test
       - name: OCSF class coverage gate
         run: python3 scripts/check_ocsf_class_coverage.py --check
+      # The activity projection lives in five hand-written lists: the Go, the
+      # lake's CREATE TABLE, the lake's migration, the fusion writer's column
+      # tuple and the graph schema. Three of the disagreements between them
+      # are silent, and the one nothing checked is the pair of lake files —
+      # 001_init.sql runs only in the container entrypoint on a fresh volume,
+      # so a column added there alone exists on new installs and on no
+      # upgrade.
+      - name: Activity projection drift gate — self-test
+        run: python3 scripts/check_activity_projection.py --self-test
+      - name: Activity projection drift gate
+        run: python3 scripts/check_activity_projection.py
       # The same shape one layer over: an inbox template that ships has to be
       # mintable, and a mintable id has to have a template to apply. Both
       # directions, because only one of them was ever checked informally and

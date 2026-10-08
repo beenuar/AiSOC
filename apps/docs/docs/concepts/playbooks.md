@@ -97,11 +97,9 @@ being true.
 |--------|--------------|
 | `enrich` | Calls the enrichment service for IOC reputation, geo, ASN, GreyNoise, VT, OTX. |
 | `investigate` | Triggers the AI investigator agent with focus areas (`forensics`, `lateral_movement`, etc.). |
-| `notify` | Sends a webhook notification. SSRF-guarded. |
-| `http` | Generic outbound HTTP request — `method`, `url`, `body`, `headers`. SSRF-guarded. |
+| `http` | Calls one path on an integration this tenant has configured — see [Integration references](#integration-references). SSRF-guarded, and **off by default**. |
 | `close_case` | Marks the AiSOC case as closed via the API service. |
 | `condition` | Pure branching node. Evaluates `condition` and routes to `next_true` / `next_false`. |
-| `osquery_live_query` | Distributed osquery via osctrl / FleetDM / aisoc-direct, against an allow-listed template. |
 
 **Governed** — the step is dispatched to the action registry in the actions
 service, which grades it against the verb's own capability contract and the
@@ -110,13 +108,43 @@ tenant's autonomy policy before anything reaches a vendor:
 `block_ip`, `block_ioc`, `isolate_host`, `kill_process`, `quarantine_file`,
 `run_av_scan`, `run_script`, `disable_user`, `reset_password`,
 `revoke_session`, `force_mfa`, `search_siem`, `create_notable_event`,
-`create_ticket`.
+`create_ticket`, `notify`, `osquery_live_query`.
+
+`notify` delivers to the tenant's configured Slack, Teams, email or PagerDuty
+destination; the channel comes from the destination, not from the step, so a
+credential and a transport cannot disagree. `osquery_live_query` runs an
+allow-listed template across an osctrl, FleetDM or aisoc-direct fleet — the
+caller passes a template id and parameters, never SQL.
 
 Each step is dispatched **individually**. Approving or running a playbook does
 not authorise whatever its steps happen to contain: the contract is applied
 per verb, per step, at the moment that step runs. See
 [Live actions](./live-actions.md) for what each verb declares about its impact,
 reversibility, approval requirement and verification probe.
+
+### Integration references
+
+An `http` step addresses its target by **name**, never by host:
+
+```json
+{ "url": "${IDP_BASE_URL}/users/{{alert.user}}/sessions", "headers_env": "IDP_BEARER_HEADERS" }
+```
+
+`${NAME}` resolves against the tenant's playbook references — a base URL, a
+set of bearer headers, a Slack or Teams incoming webhook, a PagerDuty routing
+key or an SMTP relay. `{{dot.path}}` resolves against the run context.
+
+This is the security property rather than a formatting convention. A pack is
+shared content: a literal host in one is either somebody else's tenant or an
+invitation to point a playbook wherever its author likes. With a name, an
+author chooses which of *this* tenant's integrations to call and which path
+under it, and cannot choose the origin. The resolved URL still goes through
+the SSRF guard, because the stored value is tenant data and therefore as
+untrusted as the step that asked for it.
+
+Secrets live in the credential vault and the run record holds header *names*,
+never values. A reference is **disabled when created**, so importing a pack
+cannot start paging an on-call rota.
 
 What comes back is a report whose `executed` field is the single thing that
 means a vendor was actually touched:

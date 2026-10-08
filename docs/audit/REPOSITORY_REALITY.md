@@ -208,13 +208,30 @@ principal, OIDC or SAML authenticates them.
 
 ## White-label and usage metering
 
-**White-label — WORKING on two of five surfaces, and the tracker says which.**
-Console and the executive digest in HTML and PDF carry a white-labelled
-organisation's product name, palette and logo, asserted in CI. Email approvals
-and ChatOps resolve the same `sender_name` from the same resolver and have **no
-end-to-end test**, so they are recorded as unverified rather than working. The
-plan lists five surfaces and its own acceptance names two; marking the item
-done because a field resolves would be the failure this audit exists to catch.
+**White-label — WORKING on four of five surfaces, and the fifth is out of
+scope rather than pending.** The console, the executive digest in HTML and
+PDF, the case close-out summary, the replay evaluation report, the
+investigation summary PDF and the signed email approval all carry a
+white-labelled organisation's product name, palette and — where the renderer
+has somewhere to put one — its logo, each asserted in CI against an unbranded
+negative control.
+
+The earlier record here said email approvals and ChatOps "resolve the same
+`sender_name` from the same resolver". That was not true of either:
+`sender_name` had no reader anywhere in the tree outside the resolver that
+produced it, and `send_approval_email` had no caller at all, so the signed
+fallback the documentation names for "Slack and Teams are unreachable"
+produced nothing. Both are closed; the sentence is recorded because a tracker
+that credits a field for resolving is the failure this audit exists to catch,
+and it had.
+
+ChatOps stays unbranded on purpose. The prompt is posted by
+`services/actions` and by the two bot services, none of which can read the
+branding store, and a deployment-wide product name would be wrong for every
+organisation on the deployment but one. The sign-in page is unbranded for a
+different reason: branding resolves from the caller's credential, and there is
+none yet. Both are stated as limits in
+`apps/docs/docs/operations/white-label.md` rather than implied to be pending.
 
 Brand assets are held as bytes in Postgres and served from this deployment.
 Nothing is fetched from a third-party URL, in the console or in the

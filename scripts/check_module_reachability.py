@@ -113,14 +113,15 @@ ALLOWED_UNREACHABLE: dict[str, str] = {
     # and its demotion evaluator before handing a verb to dispatch. The entry
     # went the way an allowlist entry is supposed to go — a module stopped
     # being unreachable and the gate said so.
-    # ── Vendor clients reached only through a capability executor ─────────
-    # These are constructed by name at dispatch time, not imported. The
-    # import graph cannot see that, and inventing a dynamic-loader entry for
-    # a factory that takes a string would excuse more than it explains.
-    "services/actions/app/clients/aisoc_direct_client.py": "Vendor client, constructed by capability name at dispatch.",
-    "services/actions/app/clients/fleetdm_client.py": "Vendor client, constructed by capability name at dispatch.",
-    "services/actions/app/clients/osctrl_client.py": "Vendor client, constructed by capability name at dispatch.",
-    "services/actions/app/clients/osquery_allowlist.py": "Query allowlist, read by the osquery clients above.",
+    # The four osquery entries that used to sit here are gone, and the
+    # reason is worth keeping: they were not "constructed by name at
+    # dispatch", they were genuinely unreachable. The only caller was a
+    # playbook handler in `services/agents` importing `app.clients.*`,
+    # a package that image does not contain, so the import raised on every
+    # live query. Depth 5.1 made `osquery_live_query` a capability with
+    # three arms in this service, and `osquery_arms.py` imports all four
+    # at module scope — which is why the gate now reports them as excused
+    # entries that no longer describe anything.
     # ── Built, never wired, and no plan item claims them ──────────────────
     # Recorded rather than deleted: deleting working code is a product
     # decision, and each of these is a complete implementation with tests.

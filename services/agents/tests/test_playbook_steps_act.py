@@ -125,9 +125,22 @@ def _step(step_type: str, **params: Any):  # noqa: ANN202
     )
 
 
+@pytest.fixture
+def http_execute(monkeypatch: pytest.MonkeyPatch):  # noqa: ANN201
+    """Turn the http step on.
+
+    It previews by default since depth 5.1: an `http` step in the shipped
+    packs deletes sessions and resets passwords in bulk, through a path the
+    capability contract cannot see. A suite that asserts a request arrived
+    has to opt in, which is the same shape as `allow_loopback` above.
+    """
+    monkeypatch.setenv("AISOC_PLAYBOOK_HTTP_EXECUTE", "1")
+    yield
+
+
 @pytest.mark.asyncio
 class TestTheHttpStepActs:
-    async def test_it_reaches_the_endpoint(self, endpoint, allow_loopback) -> None:  # noqa: ANN001
+    async def test_it_reaches_the_endpoint(self, endpoint, allow_loopback, http_execute) -> None:  # noqa: ANN001
         """The claim: an `http_request` step makes a request."""
         import httpx
         from app.playbook.engine import _handle_http
@@ -143,7 +156,7 @@ class TestTheHttpStepActs:
         assert _Endpoint.received[0]["path"] == "/hook"
         assert result.get("status") == 200
 
-    async def test_the_body_arrives(self, endpoint, allow_loopback) -> None:  # noqa: ANN001
+    async def test_the_body_arrives(self, endpoint, allow_loopback, http_execute) -> None:  # noqa: ANN001
         """A request with an empty body would satisfy the test above while
         delivering nothing the recipient can act on."""
         import httpx
@@ -160,62 +173,60 @@ class TestTheHttpStepActs:
 
 
 @pytest.mark.asyncio
-class TestTheNotifyStepActs:
-    async def test_a_webhook_notify_reaches_the_endpoint(self, endpoint, allow_loopback) -> None:  # noqa: ANN001
-        import httpx
-        from app.playbook.engine import _handle_notify
+class TestTheNotifyStepDoesNotInventADelivery:
+    """`notify` no longer sends from this process, and that is the fix.
 
-        async with httpx.AsyncClient() as client:
-            result = await _handle_notify(
-                _step("notify", channel="webhook", url=f"{endpoint}/hook", message="contained"),
-                {},
-                client,
-            )
+    It had one sender here — `channel == "webhook"` — which none of the 63
+    notify steps in the shipped packs use, so every one of them answered
+    `{"delivered": false, "reason": "no url"}`. It is now dispatched to
+    `services/actions`, where the destination is a vault-held tenant
+    reference rather than a URL written into shared pack content, and where
+    the capability contract and the tenant's autonomy policy apply.
 
-        assert _Endpoint.received, "the notify step produced a result and sent no request"
-        assert result.get("status") == 200
+    The "did a request arrive" question this file exists to ask is asked of
+    the arms themselves, over a mock vendor server, in
+    `services/actions/tests/test_notify_and_osquery_arms.py`. What belongs
+    here is the negative: the engine must not answer for them.
+    """
 
-    async def test_a_notify_with_no_url_says_it_delivered_nothing(self, endpoint) -> None:  # noqa: ANN001
-        """The honest branch.
+    async def test_the_engine_has_no_notify_sender_of_its_own(self) -> None:
+        from app.playbook import engine as engine_mod
 
-        A notify step with nowhere to send must not report success — an
-        analyst who believes a page went out and finds later that it did
-        not is worse off than one told immediately.
+        assert not hasattr(engine_mod, "_handle_notify")
+
+    async def test_a_notify_step_is_dispatched_and_never_posted_from_here(self, endpoint, allow_loopback, monkeypatch) -> None:  # noqa: ANN001
+        """Even handed a reachable URL, the step must not post it.
+
+        The old handler would have: `channel: webhook` plus a `url` was its
+        one delivering combination. A step that still sent from here would
+        bypass the contract, the approval matrix and the audit record.
         """
-        import httpx
-        from app.playbook.engine import _handle_notify
+        from app.playbook import engine as engine_mod
+        from app.playbook.models import StepType
 
-        async with httpx.AsyncClient() as client:
-            result = await _handle_notify(_step("notify", channel="webhook", message="hi"), {}, client)
+        seen: dict[str, Any] = {}
 
-        assert result.get("delivered") is False
-        assert result.get("reason") == "no url", result
-        assert not _Endpoint.received
+        async def _fake_dispatch(**kwargs: Any) -> dict[str, Any]:
+            seen.update(kwargs)
+            return {"executed": True, "status": "succeeded"}
 
-    async def test_a_channel_with_no_sender_says_so_rather_than_no_url(self, endpoint) -> None:  # noqa: ANN001
-        """The reason has to name the real cause.
+        monkeypatch.setattr(engine_mod.action_bridge, "dispatch_step", _fake_dispatch)
 
-        It said "no url" whatever happened, including when a url *was*
-        supplied and the channel simply had no sender — sending an
-        operator to look for a missing field that was right in front of
-        them.
-        """
-        import httpx
-        from app.playbook.engine import _handle_notify
+        await engine_mod._HANDLERS[StepType.NOTIFY](
+            _step("notify", channel="webhook", url=f"{endpoint}/hook", message="contained"),
+            {"tenant_id": "t"},
+            None,
+        )
 
-        async with httpx.AsyncClient() as client:
-            result = await _handle_notify(_step("notify", channel="slack", url=f"{endpoint}/slack", message="hi"), {}, client)
-
-        assert result.get("delivered") is False
-        assert "no url" not in (result.get("reason") or ""), f"a url was supplied and the reason still blames a missing one: {result!r}"
-        assert "slack" in (result.get("reason") or "")
+        assert seen["capability"] == "notify"
+        assert not _Endpoint.received, "the notify step posted from the engine instead of dispatching"
 
 
 @pytest.mark.asyncio
 class TestTheGuardRefusesAndNothingArrives:
     """A step that always calls out is as wrong as one that never does."""
 
-    async def test_loopback_is_refused_by_default(self, endpoint) -> None:  # noqa: ANN001
+    async def test_loopback_is_refused_by_default(self, endpoint, http_execute) -> None:  # noqa: ANN001
         """No `allow_loopback` here: this is the shipped default.
 
         Playbook URLs are author-controlled, and a playbook that can
@@ -234,7 +245,7 @@ class TestTheGuardRefusesAndNothingArrives:
             "the guard refused and the request still arrived — a refusal in name only, since the side effect has already happened"
         )
 
-    async def test_cloud_metadata_is_refused(self) -> None:
+    async def test_cloud_metadata_is_refused(self, http_execute) -> None:  # noqa: ANN001
         """169.254.169.254 is refused even when private IPs are allowed:
         it is the one destination whose whole purpose is handing out
         credentials."""

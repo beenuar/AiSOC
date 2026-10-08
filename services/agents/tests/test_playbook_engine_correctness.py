@@ -365,7 +365,11 @@ class TestEngineConditionGate:
 
         async def handler(step: PlaybookStep, ctx: dict, http: Any) -> dict:
             called["hit"] = True
-            return {"ok": True}
+            # `notify` is dispatched through the action registry since depth
+            # 5.1, and the engine reads `executed` rather than "the handler
+            # returned" — a double that answers `{"ok": True}` would be a
+            # double more capable than the real report.
+            return {"ok": True, "executed": True}
 
         patch_handlers({StepType.NOTIFY: handler})
 
@@ -391,7 +395,11 @@ class TestEngineConditionGate:
 
         async def handler(step: PlaybookStep, ctx: dict, http: Any) -> dict:
             called["hit"] = True
-            return {"ok": True}
+            # `notify` is dispatched through the action registry since depth
+            # 5.1, and the engine reads `executed` rather than "the handler
+            # returned" — a double that answers `{"ok": True}` would be a
+            # double more capable than the real report.
+            return {"ok": True, "executed": True}
 
         patch_handlers({StepType.NOTIFY: handler})
 
