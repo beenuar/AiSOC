@@ -107,17 +107,12 @@ ALLOWED_UNREACHABLE: dict[str, str] = {
         "shows: deleting its sibling below broke two gates that read it "
         "without importing it."
     ),
-    "services/actions/app/services/autonomy_evidence_rules.py": (
-        "Reached by tooling rather than by import, which is why it appears "
-        "here and why the entry used to be wrong. It is the source of "
-        "truth for what counts as a graded disposition, and two gates read "
-        "it: `check_replay_contract_parity.py` compares its "
-        "GRADED_DISPOSITIONS, ABSTENTION_VERDICTS and MALICIOUS spellings "
-        "against the benchmark's, and `sync_vendored_autonomy_evidence.py "
-        "--check` byte-compares the API's vendored copy, because a safety "
-        "control defined twice is off in whichever copy is more generous. "
-        "An import-graph checker cannot see either. Permanent entry."
-    ),
+    # `services/actions/app/services/autonomy_evidence_rules.py` was here,
+    # described as a permanent entry reached only by tooling. Fix pass 3.7
+    # gave it a production caller: `tenant_policy` runs its two aggregates
+    # and its demotion evaluator before handing a verb to dispatch. The entry
+    # went the way an allowlist entry is supposed to go — a module stopped
+    # being unreachable and the gate said so.
     # ── Vendor clients reached only through a capability executor ─────────
     # These are constructed by name at dispatch time, not imported. The
     # import graph cannot see that, and inventing a dynamic-loader entry for

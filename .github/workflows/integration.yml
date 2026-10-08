@@ -868,6 +868,28 @@ jobs:
           AUTONOMY_PROMOTION_LIVE_REQUIRED: '1'
         run: python -m pytest ../../tests/isolation/test_autonomy_promotion_live.py -v --tb=short
 
+      # Fix pass 3.7. The dispatch half of the same control, and it needs its
+      # own step because it needs a different `app`: `services/api` and
+      # `services/actions` both package their code as top-level `app`, so one
+      # process holds one of them.
+      #
+      # `services/actions` resolved unattended execution from `state =
+      # 'granted'` alone, and the only thing that ever moved a grant out of
+      # that column was `reconcile_grants` — called by the autonomy page and
+      # nothing else. A fake connection cannot settle whether the aggregate
+      # and the evaluator agree about real rows, and the arity defect this
+      # code shipped with proves it: seven parameters into a statement that
+      # binds six failed closed, so every grant on every deployment was
+      # withheld, and no double would have refused the parameter count.
+      #
+      # AUTONOMY_DRIFT_LIVE_REQUIRED turns an unreachable database into a
+      # failure rather than a skip, for the same reason as the jobs above.
+      - name: Dispatch re-checks a grant's evidence (live Postgres)
+        working-directory: services/actions
+        env:
+          AUTONOMY_DRIFT_LIVE_REQUIRED: '1'
+        run: python -m pytest ../../tests/isolation/test_autonomy_drift_at_dispatch_live.py -v --tb=short
+
       # Gap-closure Phase 6.3. A replay freezes the knowledge base with a
       # predicate in SQL rather than with a captured set, so every offline
       # test of that freeze proves the reader *asks* for a cutoff and none of

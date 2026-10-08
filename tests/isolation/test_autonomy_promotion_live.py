@@ -646,3 +646,109 @@ class TestTheTransitionsAreInTheHashChainedLog:
             assert valid, f"chain broken at row {index}: {reason}"
             # The second row chains onto the first rather than starting a new one.
             assert rows[1]["prev_hash"] == rows[0]["entry_hash"]
+
+
+class TestDemotionDoesNotWaitForAPageLoad:
+    """Fix pass 3.7. Every test here reaches the grants through the sweep.
+
+    ``reconcile_grants`` had one production caller: the handler behind ``GET
+    /api/v1/autonomy-policy/grants``. The class above proves the evaluator
+    demotes correctly; it proves it by calling ``reconcile_grants`` directly,
+    which is also what the endpoint does, so between them they say nothing
+    about whether a demotion ever happens on a deployment nobody is clicking
+    around in. On an unattended one — which is every deployment running the
+    product as intended — the floors were decoration.
+
+    So nothing below touches the router, the endpoint or an HTTP client. The
+    sweep is handed a session and asked what it did.
+    """
+
+    async def test_the_sweep_demotes_a_drifted_grant_with_no_read_of_the_api(self):
+        async with probe() as (session, tenant_id, user_id):
+            from app.workers.autonomy_drift import run_once
+            from sqlalchemy import text
+
+            base = datetime.now(UTC) - timedelta(days=20)
+            await _record(session, tenant_id, count=200, verdict=FALSE_POSITIVE, disposition=FALSE_POSITIVE, resolved_at=base)
+            await _record(session, tenant_id, count=40, verdict=MALICIOUS, disposition=MALICIOUS, resolved_at=base + timedelta(days=1))
+            assert (await _promote(session, tenant_id, user_id)).granted is True
+
+            await _record(
+                session,
+                tenant_id,
+                count=30,
+                verdict=FALSE_POSITIVE,
+                disposition=MALICIOUS,
+                resolved_at=datetime.now(UTC) - timedelta(minutes=30),
+            )
+
+            run = await run_once(db=session)
+
+            mine = [row for row in run.demoted if row["tenant_id"] == str(tenant_id)]
+            assert len(mine) == 1, f"the sweep did not demote this tenant: {run.as_dict()}"
+            assert "recent_drift" in mine[0]["refusals"]
+
+            state = (
+                await session.execute(
+                    text("SELECT state FROM aisoc_autonomy_grants WHERE tenant_id = :t"),
+                    {"t": tenant_id},
+                )
+            ).scalar_one()
+            assert state == "demoted"
+            assert await _audit_actions(session, tenant_id) == ["autonomy:granted", "autonomy:demoted"]
+
+    async def test_the_sweep_leaves_a_grant_whose_record_still_holds(self):
+        """The control that matters more than the demotion.
+
+        A sweep that demoted everything would pass the test above and would
+        be worse than no sweep: it would take every tenant's autonomy away on
+        the first tick, and the symptom — a product that has quietly stopped
+        acting — reads as caution rather than as a fault.
+        """
+        async with probe() as (session, tenant_id, user_id):
+            from app.workers.autonomy_drift import run_once
+            from sqlalchemy import text
+
+            base = datetime.now(UTC) - timedelta(days=20)
+            await _record(session, tenant_id, count=200, verdict=FALSE_POSITIVE, disposition=FALSE_POSITIVE, resolved_at=base)
+            await _record(session, tenant_id, count=40, verdict=MALICIOUS, disposition=MALICIOUS, resolved_at=base + timedelta(days=1))
+            assert (await _promote(session, tenant_id, user_id)).granted is True
+
+            # Thirty more decisions, all agreed. Nothing has drifted.
+            await _record(
+                session,
+                tenant_id,
+                count=30,
+                verdict=FALSE_POSITIVE,
+                disposition=FALSE_POSITIVE,
+                resolved_at=datetime.now(UTC) - timedelta(minutes=30),
+            )
+
+            run = await run_once(db=session)
+
+            assert [row for row in run.demoted if row["tenant_id"] == str(tenant_id)] == []
+            state = (
+                await session.execute(
+                    text("SELECT state FROM aisoc_autonomy_grants WHERE tenant_id = :t"),
+                    {"t": tenant_id},
+                )
+            ).scalar_one()
+            assert state == "granted"
+            assert await _audit_actions(session, tenant_id) == ["autonomy:granted"]
+
+    async def test_a_tenant_with_no_grant_is_not_swept(self):
+        """The sweep's candidate list is grants, not the customer list.
+
+        Enumerating every tenant to discover that almost none of them holds
+        autonomy would make the cost of this feature scale with how many
+        customers a deployment has rather than with how many use it.
+        """
+        async with probe() as (session, tenant_id, _user_id):
+            from app.workers.autonomy_drift import run_once
+
+            base = datetime.now(UTC) - timedelta(days=20)
+            await _record(session, tenant_id, count=50, verdict=FALSE_POSITIVE, disposition=MALICIOUS, resolved_at=base)
+
+            run = await run_once(db=session)
+
+            assert [row for row in run.demoted if row["tenant_id"] == str(tenant_id)] == []
