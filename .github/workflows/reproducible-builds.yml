@@ -288,8 +288,26 @@ jobs:
               lockonly+=("$service")
             fi
           done
-          printf 'images=%s\n' "$(printf '%s\n' "${images[@]}" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
-          printf 'lockonly=%s\n' "$(printf '%s\n' "${lockonly[@]}" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+          # An empty array must serialise to `[]`, not to `[""]`.
+          #
+          # `printf '%s\n' "${empty[@]}"` prints one blank line rather than
+          # nothing, so piping it through jq yielded a single empty-string
+          # element and the matrix ran one job for a service with no name.
+          # That is what put `poetry -C services/` in the log and failed the
+          # lock-only leg, and it is also why the coverage check reported
+          # "14 of 13 services" -- the phantom counted. Every service here
+          # currently has a Dockerfile, so `lockonly` is empty and the bug
+          # was reachable the moment the last image-less service gained one.
+          emit() {
+            local name="$1"; shift
+            if [ "$#" -eq 0 ]; then
+              printf '%s=[]\n' "$name" >> "$GITHUB_OUTPUT"
+            else
+              printf '%s=%s\n' "$name" "$(printf '%s\n' "$@" | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+            fi
+          }
+          emit images "${images[@]}"
+          emit lockonly "${lockonly[@]}"
           printf 'total=%s\n' "$total" >> "$GITHUB_OUTPUT"
           echo "$total service(s): ${#images[@]} with an image, ${#lockonly[@]} lock-only"
 
