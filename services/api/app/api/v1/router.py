@@ -3,6 +3,7 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    access_conditions,
     admin_users,
     agent_tools,
     agents,
@@ -32,6 +33,7 @@ from app.api.v1.endpoints import (
     detection_rules,
     easm,
     effective_permissions,
+    elevation,
     email_approval,
     evaluations,
     federated,
@@ -63,6 +65,7 @@ from app.api.v1.endpoints import (
     oauth,
     onboarding,
     oncall,
+    outbound_webhooks,
     passkeys,
     phishing,
     playbook_steps,
@@ -92,6 +95,7 @@ from app.api.v1.endpoints import (
     translation,
     usage,
     waitlist,
+    workload_identities,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -159,6 +163,13 @@ api_router.include_router(mcp_servers.router)
 # on the path of an investigation.
 api_router.include_router(tenant_skills.router)
 api_router.include_router(rbac.router)
+# Depth 8.2 — the three tables migration 087 created and nothing read.
+# Enforcement is not here: elevation and conditions are applied inside
+# `CurrentUser.require_permission`, which is the single permission path.
+# These routers administer the rows that path reads.
+api_router.include_router(elevation.router)
+api_router.include_router(access_conditions.router)
+api_router.include_router(workload_identities.router)
 api_router.include_router(admin_users.router)
 api_router.include_router(audit.router)
 api_router.include_router(branding.router)
@@ -213,6 +224,7 @@ api_router.include_router(costs.router)
 api_router.include_router(push.router)
 api_router.include_router(oncall.router)
 api_router.include_router(approvals.router)
+api_router.include_router(outbound_webhooks.router)
 api_router.include_router(passkeys.router)
 
 # The live-action registry, proxied for the browser. Upstream it sits behind

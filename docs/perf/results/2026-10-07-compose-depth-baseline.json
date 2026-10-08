@@ -1,0 +1,477 @@
+{
+  "schema": "aisoc.load_harness/v1",
+  "measured_at": "2026-10-07T11:14:43+00:00",
+  "hardware": {
+    "os": "Darwin 25.5.0",
+    "arch": "arm64",
+    "python": "3.14.3",
+    "cpu_count": 18,
+    "cpu": "Apple M5 Max",
+    "memory_bytes": "137438953472",
+    "container_runtime": "docker 29.5.2",
+    "runtime_cpus": "6",
+    "runtime_memory_bytes": "16732983296"
+  },
+  "deployment": "docker-compose",
+  "not_a_production_slo": true,
+  "slo_disclaimer": "These are measurements of one deployment on the hardware named above, on the date named above. They are not a service-level objective and no support commitment is derived from them. Sustained throughput on other hardware, other storage and other event mixes will differ. The regression floors in perf.yml are set well below the measured values so they fire on a catastrophic regression rather than on runner jitter.",
+  "run": {
+    "run_id": "p91371524",
+    "attempted_events": 20000,
+    "accepted_events": 20000,
+    "alerts_observed": 20000,
+    "distinct_events_alerted": 20000,
+    "missing_events": 0,
+    "duplicate_alert_rows": 0,
+    "push_wall_seconds": 50.297136583,
+    "drain_wall_seconds": 104.24750685691833,
+    "drain_settled": true,
+    "clock_offset_seconds": -0.07260012626647949,
+    "clock_offset_spread_seconds": 0.011321544647216797,
+    "producer": {
+      "run_id": "p91371524",
+      "mode": "load",
+      "marker_prefix": "aisoc-load",
+      "ingest_url": "http://localhost:8081/v1/ingest/batch",
+      "tenant": "00000000-0000-0000-0000-000000000001",
+      "started_at": "2026-10-07T11:12:05.022007Z",
+      "ended_at": "2026-10-07T11:12:55.319143583Z",
+      "wall_seconds": 50.297136583,
+      "workers": 8,
+      "batch_size": 50,
+      "target_eps": 0,
+      "requested_events": 20000,
+      "attempted_events": 20000,
+      "accepted_events": 20000,
+      "rejected_events": 0,
+      "refused_events": 0,
+      "transport_error_events": 0,
+      "accepted_eps": 397.6369503062293,
+      "http_status_counts": {
+        "200": 400
+      },
+      "seq_low": 0,
+      "seq_high": 19999
+    },
+    "shape": {
+      "batch_size": 50,
+      "workers": 8,
+      "target_eps": 0,
+      "commit_sha": "1b8bc2d4afd4e970783d8cf7d2f6a68fe69e9073",
+      "hosts": 1
+    },
+    "total_wall_seconds": 159.52085781097412
+  },
+  "metrics": {
+    "consumer_lag_drained": {
+      "unit": "messages",
+      "measured": true,
+      "samples": 1,
+      "value": 0.0
+    },
+    "consumer_lag_in_flight": {
+      "unit": "messages",
+      "measured": true,
+      "samples": 1,
+      "value": 13952.0
+    },
+    "dead_letter_rate": {
+      "unit": "fraction",
+      "measured": true,
+      "samples": 20000,
+      "value": 0.0
+    },
+    "delivery_ratio": {
+      "unit": "fraction",
+      "measured": true,
+      "samples": 20000,
+      "value": 1.0
+    },
+    "ingest_accepted_eps": {
+      "unit": "events/s",
+      "measured": true,
+      "samples": 20000,
+      "value": 397.6369503062293
+    },
+    "latency_max_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 20000,
+      "value": 105194.19479370117
+    },
+    "latency_p50_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 20000,
+      "value": 54903.111934661865
+    },
+    "latency_p95_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 20000,
+      "value": 100247.81155586243
+    },
+    "latency_p99_ms": {
+      "unit": "ms",
+      "measured": true,
+      "samples": 20000,
+      "value": 103932.60407447815
+    },
+    "pipeline_eps": {
+      "unit": "alerts/s",
+      "measured": true,
+      "samples": 20000,
+      "value": 130.28617931659625
+    }
+  },
+  "resources": [
+    {
+      "at": "2026-10-07T11:12:56+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.09%",
+          "memory": "168.9MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.05%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "69.70%",
+          "memory": "77.79MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.00%",
+          "memory": "28.49MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "7.62%",
+          "memory": "438.8MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "4.75%",
+          "memory": "117.1MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:12:58+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.13%",
+          "memory": "168.9MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.06%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "76.91%",
+          "memory": "77.89MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.00%",
+          "memory": "28.49MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "10.88%",
+          "memory": "439.2MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "5.29%",
+          "memory": "117.9MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:05+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.13%",
+          "memory": "168.9MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.08%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "40.97%",
+          "memory": "78.2MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.04%",
+          "memory": "28.49MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "63.26%",
+          "memory": "514.6MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "5.40%",
+          "memory": "120.8MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:12+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.21%",
+          "memory": "168.9MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.05%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "76.52%",
+          "memory": "78.56MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.00%",
+          "memory": "28.49MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "10.65%",
+          "memory": "443.8MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "5.43%",
+          "memory": "124.2MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:20+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.12%",
+          "memory": "168.9MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "8.23%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "47.11%",
+          "memory": "78.87MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.03%",
+          "memory": "28.49MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "4.80%",
+          "memory": "450.8MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "3.21%",
+          "memory": "127.4MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:27+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.09%",
+          "memory": "168.9MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.05%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "77.96%",
+          "memory": "79.19MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.01%",
+          "memory": "28.48MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "6.86%",
+          "memory": "460.2MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "4.73%",
+          "memory": "130.2MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:34+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.14%",
+          "memory": "169MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.08%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "40.66%",
+          "memory": "79.52MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.00%",
+          "memory": "28.48MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "3.97%",
+          "memory": "484.4MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "2.66%",
+          "memory": "133.1MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:41+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.12%",
+          "memory": "169MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.06%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "77.53%",
+          "memory": "80.06MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.02%",
+          "memory": "28.48MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "6.80%",
+          "memory": "485.9MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "4.98%",
+          "memory": "135.9MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:48+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.10%",
+          "memory": "169MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.05%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "76.91%",
+          "memory": "80.12MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.02%",
+          "memory": "28.48MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "7.33%",
+          "memory": "538.9MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "5.05%",
+          "memory": "139.4MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:13:55+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.12%",
+          "memory": "169MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.08%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "43.25%",
+          "memory": "80.4MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.00%",
+          "memory": "28.48MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "4.13%",
+          "memory": "597.3MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "2.73%",
+          "memory": "141.9MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:14:03+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.09%",
+          "memory": "169MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.06%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "71.19%",
+          "memory": "80.71MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.03%",
+          "memory": "28.48MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "6.92%",
+          "memory": "659.4MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "4.63%",
+          "memory": "144.4MiB / 15.58GiB"
+        }
+      }
+    },
+    {
+      "at": "2026-10-07T11:14:10+00:00",
+      "containers": {
+        "agents": {
+          "cpu": "0.10%",
+          "memory": "169MiB / 15.58GiB"
+        },
+        "api": {
+          "cpu": "0.05%",
+          "memory": "219.6MiB / 15.58GiB"
+        },
+        "fusion": {
+          "cpu": "77.11%",
+          "memory": "81.04MiB / 15.58GiB"
+        },
+        "ingest": {
+          "cpu": "0.02%",
+          "memory": "28.46MiB / 15.58GiB"
+        },
+        "kafka": {
+          "cpu": "7.51%",
+          "memory": "726.1MiB / 1.5GiB"
+        },
+        "postgres": {
+          "cpu": "5.05%",
+          "memory": "147.2MiB / 15.58GiB"
+        }
+      }
+    }
+  ]
+}

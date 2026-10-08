@@ -60,10 +60,17 @@ Phase 0 of the world-class program (`AISOC_CURSOR_PROMPT_V2.md`). This document 
 ## Overclaims (ranked)
 
 1. **"No data exfiltration / runs entirely on your infrastructure."** The default investigation path uses a cloud LLM (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) and reasons over raw evidence. There is no PII pseudonymization (`services/agents/app/privacy/` does not exist), so usernames, hostnames, internal IPs, file paths, and command lines are sent verbatim to a third-party provider. The claim is only true in the local-model / air-gapped configuration, which is not the default and has no egress-blocked CI proof. Fix in Phase 1.4 + Phase 2.
-   **Partly closed.** `services/agents/app/privacy/` now exists (`redactor.py`,
-   with `services/agents/tests/test_privacy_redactor.py`), and
-   [`docs/trust/data-flows.md`](../trust/data-flows.md) describes the redactor as
-   the shipped default. The egress-blocked CI proof is still outstanding.
+   **Closed.** Three steps, and the middle one is the lesson. First
+   `services/agents/app/privacy/redactor.py` landed with a unit test — but
+   **no LLM call site invoked it**, so `docs/trust/data-flows.md` described a
+   planned control as shipped. Parity 2.4 then wired it at the contract layer
+   (`services/agents/app/llm/contract.py` calls `egress_privacy.open_session`,
+   the one place all sixteen agent call sites pass through) and re-gated the
+   claim on a *call-path* test rather than a function test — which immediately
+   found a bare username going out in the clear. The egress-blocked CI proof
+   is `.github/workflows/container-egress.yml`, with a canary and a red run so
+   a green result is not the same as a blind probe. See
+   [`docs/security/data-handling.md`](../security/data-handling.md).
 2. **"6000+ imported detection rules."** ~5921 of 6113 imported rules live under `_quarantine/` (`enabled: false`) because their upstream query language (SPL / YARA-L / CAR pseudocode) does not execute on the engine. The coverage heatmap (`scripts/build_marketplace.py::coverage_block`) counts MITRE tags on rule metadata, not rules that fire. Fix in Phase 4 Tier 3 + Phase 10.
    **Closed in v11.2.0.** Published counts now lead with the executable figure beside the library one (2,603 of 6,991), and 1,770 Sigma rules were translated into the matcher's own language after each was replayed through its real connector and the real engine and watched to fire. The blocker was never the quarantine flag: Windows events nest their payload under `System`/`EventData`, one level below the namespace the matcher reads, so no Windows rule could fire whatever its `enabled:` said.
 3. **"Detection-as-Code ... CI rejects any candidate that regresses MITRE accuracy."** True in letter, misleading in spirit: the gate never evaluates the proposed rule (see Circular Gates). Fix in Phase 4.
