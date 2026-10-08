@@ -25,6 +25,21 @@ single path stays single:
    is the resolver's bootstrap path; a second is a route deciding for
    itself, which is how the second model gets rebuilt.
 
+Depth 8.2 added two more things the path has to do, and the reason they
+are checked *here* rather than by a gate of their own is the whole point
+of the item: attribute conditions and time-boxed elevation have to be
+evaluated inside this one path. A condition applied beside the permission
+check would be a second authority that can disagree with the first, which
+is the shape that produced GHSA-pm3f-h6gc-rvgp.
+
+5. **Conditions narrow inside the check.** `require_permission` must reach
+   the condition evaluator on every branch — not only the database-backed
+   one — or a tenant's attribute rule binds sessions and silently not API
+   keys.
+6. **Elevation is applied at use.** The check must consult live grants
+   rather than a set frozen at authentication, or `expires_at` stops
+   meaning anything until a cache entry happens to lapse.
+
 Each is checked structurally with `ast`, because every one of them is a
 question about which function calls which, and a text search cannot tell a
 call from a mention in a docstring.
@@ -91,6 +106,26 @@ def _reads(node: ast.AST, attribute: str) -> bool:
     return any(isinstance(n, ast.Attribute) and n.attr == attribute for n in ast.walk(node))
 
 
+def _conditions_are_branch_local(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
+    """Whether the condition call sits inside an `if`, rather than after it.
+
+    The distinction a text search cannot make, and the one that matters: a
+    call nested in the database-backed branch leaves API-key and
+    static-map principals unconstrained, and the tenant's console shows
+    the rule as configured either way.
+
+    Implemented as "does any statement at the function's own top level
+    call it", because that is exactly the placement that binds every
+    branch.
+    """
+    for statement in fn.body:
+        if isinstance(statement, (ast.If, ast.Try, ast.For, ast.While, ast.With)):
+            continue
+        if "_narrow_by_conditions" in _calls(statement):
+            return False
+    return True
+
+
 def inspect(root: pathlib.Path) -> Report:
     report = Report()
 
@@ -117,6 +152,53 @@ def inspect(root: pathlib.Path) -> Report:
             report.findings.append(
                 "CurrentUser.require_permission does not call `grants()`, so wildcard handling has drifted from the resolver's"
             )
+        # 5. conditions narrow inside the check, on every branch
+        #
+        # Asserted on the *function body* rather than on a branch, because
+        # the property is "whichever branch allowed, conditions still run".
+        # A call placed inside the database-backed `elif` would satisfy a
+        # naive search while leaving API-key and static-map principals
+        # unconstrained — and those are the two a tenant is least likely to
+        # notice, because nothing errors.
+        if "_narrow_by_conditions" not in _calls(enforcer):
+            report.findings.append(
+                "CurrentUser.require_permission does not apply attribute conditions, so every "
+                "`permission_conditions` row a tenant configured is inert"
+            )
+        elif _conditions_are_branch_local(enforcer):
+            report.findings.append(
+                "CurrentUser.require_permission applies conditions inside a branch, so they bind "
+                "only one kind of principal; they must run after whichever branch allowed"
+            )
+
+        # 6. elevation is applied at use, not frozen at authentication
+        if not any(name in _calls(enforcer) for name in ("elevated_permissions", "effective_permissions")):
+            report.findings.append(
+                "CurrentUser.require_permission does not consult live elevation, so an approved "
+                "`privilege_grants` row confers nothing and `expires_at` governs nothing"
+            )
+
+    elevated = None
+    for node in ast.walk(deps):
+        if isinstance(node, ast.ClassDef) and node.name == "CurrentUser":
+            elevated = _function(node, "elevated_permissions")
+    if elevated is None:
+        report.findings.append("CurrentUser.elevated_permissions is gone, so elevation is no longer resolved at use")
+    elif not _reads(elevated, "elevation"):
+        report.findings.append("CurrentUser.elevated_permissions no longer reads the grants, so elevation is decorative")
+
+    narrower = None
+    for node in ast.walk(deps):
+        if isinstance(node, ast.ClassDef) and node.name == "CurrentUser":
+            narrower = _function(node, "_narrow_by_conditions")
+    if narrower is None:
+        report.findings.append("CurrentUser._narrow_by_conditions is gone")
+    elif "narrow_by_conditions" not in _calls(narrower):
+        report.findings.append(
+            "CurrentUser._narrow_by_conditions no longer calls the shared evaluator, so a second "
+            "condition implementation exists and the two can disagree"
+        )
+
     if check is None:
         report.findings.append("the require_permission factory is gone")
 
@@ -243,19 +325,23 @@ def self_test() -> int:
     # condition to `False` and the case passed — `grants(self.resolved_...)`
     # was still in the body, so the attribute was still mentioned and the
     # structural read still found it. A regression removes the branch.
-    probe(
-        "detects a check that stops reading the resolved set",
-        deps=deps_source.replace(
-            """        elif self.resolved_permissions is not None:
-            # Database-backed: what the RBAC tables actually grant.
-            if not grants(self.resolved_permissions, permission):
+    resolved_branch = """        elif self.resolved_permissions is not None:
+            # Database-backed: what the RBAC tables actually grant, plus
+            # any elevation live at this instant.
+            if not grants(self.elevated_permissions(), permission):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission denied: {permission}",
                 )
-        elif not has_permission(self.role, permission):""",
-            """        elif not has_permission(self.role, permission):""",
-        ),
+        elif not has_permission(self.role, permission):"""
+    assert resolved_branch in deps_source, (
+        "the self-test's probe text no longer matches deps.py, so the probes below would be no-ops "
+        "and this gate would report PASS for a tree it never modified"
+    )
+
+    probe(
+        "detects a check that stops reading the resolved set",
+        deps=deps_source.replace(resolved_branch, """        elif not has_permission(self.role, permission):"""),
     )
     probe(
         "detects authentication that stops resolving one",
@@ -264,6 +350,34 @@ def self_test() -> int:
     probe(
         "detects an RBAC write that does not invalidate",
         rbac=rbac_source.replace("await bump_version(str(current_user.tenant_id))", "pass", 1),
+    )
+
+    # Depth 8.2. Each of the three below is a way the wiring could be
+    # removed while the tables, the routes and the console all still look
+    # configured — which is precisely the state this item repaired.
+    probe(
+        "detects conditions dropped from the permission check",
+        deps=deps_source.replace("        self._narrow_by_conditions(permission)\n", "", 1),
+    )
+    # The realistic shape of this regression: somebody tucks the call into
+    # the database-backed branch, where it reads as correct and leaves
+    # API-key and static-map principals unconstrained.
+    branch_local = deps_source.replace(
+        resolved_branch,
+        resolved_branch.replace(
+            "        elif not has_permission(self.role, permission):",
+            "            self._narrow_by_conditions(permission)\n        elif not has_permission(self.role, permission):",
+        ),
+    ).replace("\n        self._narrow_by_conditions(permission)\n", "\n", 1)
+    assert branch_local != deps_source, "the branch-local probe did not modify deps.py, so it proves nothing"
+    probe("detects conditions moved inside a branch, binding one principal type", deps=branch_local)
+    probe(
+        "detects elevation frozen at authentication instead of applied at use",
+        deps=deps_source.replace("grants(self.elevated_permissions(), permission)", "grants(self.resolved_permissions, permission)"),
+    )
+    probe(
+        "detects a second condition evaluator replacing the shared one",
+        deps=deps_source.replace("verdict = narrow_by_conditions(permission, applicable, self.attributes)", "verdict = _local_evaluator()"),
     )
 
     # And a direction it must not fire in.

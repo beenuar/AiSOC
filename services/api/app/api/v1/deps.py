@@ -26,7 +26,7 @@ import logging
 import os
 import uuid
 from datetime import UTC, datetime
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, HTTPException, Request, Security, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -41,7 +41,13 @@ from app.api.v1.dev_auth import (
     DEMO_USER_ROLE,
     is_dev_mode,
 )
-from app.core.permission_cache import grants, resolve_permissions
+from app.core.permission_cache import (
+    grants,
+    resolve_conditions,
+    resolve_elevation,
+    resolve_permissions,
+)
+from app.core.role_grants import narrow_by_conditions
 from app.core.security import (
     ROLE_PERMISSIONS,
     decode_token,
@@ -49,14 +55,38 @@ from app.core.security import (
     hash_api_key,
     token_is_revoked,
 )
+from app.core.trusted_proxy import resolve_client_ip
 from app.db.database import get_db
 from app.models.tenant import ApiKey, Tenant, User
+from app.security import abac
+from app.security.abac import PrivilegeGrant
+from app.services import workload_identity as workload_identity_service
+from app.services.workload_identity import authenticate_workload, is_workload_secret
 
 logger = logging.getLogger("aisoc.deps")
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
 _API_KEY_PREFIX = "aisoc_"
+
+
+def _condition_applies(row: dict[str, Any], permission: str, role: str) -> bool:
+    """Whether one stored condition governs this check.
+
+    Scoped to the permission it names, with the same ``resource:*`` form
+    the permission check itself understands so an operator can constrain a
+    whole resource in one row. A condition applied to every permission
+    would turn one narrow rule into a tenant-wide outage; a condition that
+    did not understand the wildcard would silently not apply where an
+    operator expected it to.
+
+    ``role`` is an optional narrowing: ``NULL`` means every role.
+    """
+    target = row.get("permission")
+    if target not in (permission, f"{permission.split(':')[0]}:*", "*"):
+        return False
+    scoped_to = row.get("role")
+    return scoped_to in (None, "", role)
 
 
 class CurrentUser:
@@ -70,6 +100,9 @@ class CurrentUser:
       1. API-key scopes (explicit list)
       2. RBAC ``user_roles`` → ``role_permissions`` (database-backed)
       3. Static ``ROLE_PERMISSIONS`` fallback (legacy / bootstrap)
+
+    …then, for every one of those three, any attribute condition the tenant
+    configured, which can only narrow. See :meth:`require_permission`.
     """
 
     def __init__(
@@ -81,6 +114,10 @@ class CurrentUser:
         scopes: list[str] | None = None,
         api_key_prefix: str | None = None,
         resolved_permissions: frozenset[str] | None = None,
+        elevation: tuple[PrivilegeGrant, ...] = (),
+        conditions: tuple[dict[str, Any], ...] = (),
+        attributes: dict[str, Any] | None = None,
+        workload_service: str | None = None,
     ) -> None:
         self.user_id = user_id
         self.tenant_id = tenant_id
@@ -107,6 +144,24 @@ class CurrentUser:
         # permission, watch it appear in the UI, and have 275 of 302 routes
         # ignore it.
         self.resolved_permissions = resolved_permissions
+        # Approved, unexpired `privilege_grants` rows. Held as grants rather
+        # than merged into the set above so expiry is decided at *use*: a
+        # background sweep is a job that can be down, and a grant outliving
+        # its window because a worker crashed is the failure mode JIT
+        # elevation exists to remove.
+        self.elevation = elevation
+        # `permission_conditions` rows for the tenant. They narrow, never
+        # grant, and are applied after whichever branch above allowed.
+        self.conditions = conditions
+        # What the conditions are judged against. Every key here is derived
+        # by the server from the verified request — never read from a body
+        # or from a header the caller controls — because an attribute a
+        # caller can set is not a constraint on that caller.
+        self.attributes = attributes or {}
+        # Which internal service a workload credential belongs to, so an
+        # audit row names `agents` rather than "a service". `None` for
+        # every human and API-key principal.
+        self.workload_service = workload_service
 
     def __repr__(self) -> str:
         # Without this a stray `str(user)` persists `<...CurrentUser object at
@@ -116,7 +171,40 @@ class CurrentUser:
         # the session is not something a stack trace should carry.
         return f"CurrentUser(user_id={self.user_id}, tenant_id={self.tenant_id}, role={self.role})"
 
+    def elevated_permissions(self) -> frozenset[str]:
+        """The resolved set widened by elevation that is live *right now*.
+
+        Evaluated on every call rather than folded in at authentication,
+        which is what makes expiry automatic: a grant whose `expires_at`
+        passed mid-session stops applying on the next check, with no sweep
+        job in the path.
+        """
+        base = self.resolved_permissions or frozenset()
+        if not self.elevation:
+            return base
+        return abac.effective_permissions(base, list(self.elevation))
+
     def require_permission(self, permission: str) -> None:
+        """The one permission check. Everything authorization does is here.
+
+        Three ways to be allowed and one way to be narrowed, in this order:
+
+        1. an API key's explicit scopes,
+        2. the RBAC tables, widened by live elevation,
+        3. the static role map, when nothing resolved a set;
+
+        then, whichever allowed, any attribute condition the tenant
+        configured for this permission. Conditions run **after** and can
+        only deny. A condition that could grant would be a second
+        authorization system reaching a different answer from the first,
+        and the two would disagree on the day it mattered — which is the
+        shape that produced GHSA-pm3f-h6gc-rvgp here.
+
+        Elevation deliberately does **not** widen an API key. A key's
+        scopes are a narrower grant chosen at mint time; letting a person's
+        temporary elevation flow into a bearer credential they minted
+        earlier would make the elevation outlive its own window.
+        """
         if self.scopes is not None:
             # API-key path: check explicit scopes list
             allowed = "*" in self.scopes or permission in self.scopes or f"{permission.split(':')[0]}:*" in self.scopes
@@ -126,8 +214,9 @@ class CurrentUser:
                     detail=f"API key missing scope: {permission}",
                 )
         elif self.resolved_permissions is not None:
-            # Database-backed: what the RBAC tables actually grant.
-            if not grants(self.resolved_permissions, permission):
+            # Database-backed: what the RBAC tables actually grant, plus
+            # any elevation live at this instant.
+            if not grants(self.elevated_permissions(), permission):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail=f"Permission denied: {permission}",
@@ -138,6 +227,37 @@ class CurrentUser:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permission denied: {permission}",
+            )
+
+        self._narrow_by_conditions(permission)
+
+    def _narrow_by_conditions(self, permission: str) -> None:
+        """Apply the tenant's attribute conditions to an allowed permission.
+
+        Reached from exactly one place, on purpose. A condition evaluated
+        *beside* the permission check rather than inside it would be a
+        second authority that can disagree with the first, and a route
+        added next year would get the role check and miss this one.
+        """
+        if not self.conditions:
+            return
+        applicable = [row for row in self.conditions if _condition_applies(row, permission, self.role)]
+        if not applicable:
+            return
+
+        verdict = narrow_by_conditions(permission, applicable, self.attributes)
+        if not verdict.allowed:
+            logger.info(
+                "deps.condition_denied permission=%s reason=%s",
+                str(permission).replace("\r", "").replace("\n", " ")[:64],
+                str(verdict.denied_by).replace("\r", "").replace("\n", " ")[:200],
+            )
+            # Named as a condition rather than a bare "permission denied".
+            # An attribute refusal is indistinguishable from a missing role
+            # otherwise, and people debug the wrong thing for an hour.
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied by an access condition on {permission}: {verdict.denied_by}",
             )
 
     def effective_permissions(self) -> list[str]:
@@ -170,13 +290,58 @@ class CurrentUser:
             # defeat the point of scoping a key.
             return sorted(set(self.scopes))
         if self.resolved_permissions is not None:
-            return sorted(self.resolved_permissions)
+            # Elevation included, for the same reason the order above is
+            # shared: `services/actions` re-authorises an approval against
+            # this list, and an elevated analyst refused there while
+            # allowed here would surface as an intermittent 403 rather
+            # than as a bug.
+            return sorted(self.elevated_permissions())
         # Static fallback. `ROLE_PERMISSIONS` is read here, in the one module
         # that owns principal resolution, rather than in a route -- a route
         # deciding its own permissions is what `check_one_permission_model`
         # refuses, and it refuses it because a published advisory came from
         # exactly that.
         return sorted(set(ROLE_PERMISSIONS.get(self.role, [])))
+
+    def bind_connection_attributes(self, connection: Any) -> "CurrentUser":
+        """Record the facts attribute conditions are judged against.
+
+        Takes a ``Request`` or a ``WebSocket`` — both carry ``.client`` and
+        ``.headers``, which is all this reads, and the WebSocket upgrade
+        has to be covered or a tenant that configures a condition finds
+        their graph stream behaving differently from every HTTP route.
+
+        ``source_ip`` goes through :func:`resolve_client_ip`, which only
+        honours ``X-Forwarded-For`` when the direct peer is on the
+        configured trusted-proxy allow-list. Reading the header directly
+        would let a caller satisfy an address condition by claiming an
+        address, which is not a constraint on that caller at all.
+
+        ``auth_method`` and ``role`` are derived here rather than supplied,
+        for the same reason.
+        """
+        self.attributes = {
+            "source_ip": resolve_client_ip(connection),
+            "role": self.role,
+            "auth_method": self.auth_method(),
+        }
+        return self
+
+    def auth_method(self) -> str:
+        """How this principal authenticated: a condition can constrain it.
+
+        "``cases:delete`` from a console session, not from a key somebody
+        minted a year ago" is a rule operators ask for, and it needs the
+        credential type to be an attribute rather than something inferred
+        from the role.
+        """
+        if self.workload_service is not None:
+            return "workload"
+        if self.scopes is not None:
+            return "api_key"
+        if self.role == "api_service":
+            return "service_token"
+        return "session"
 
     async def has_permission_db(self, permission: str, db: AsyncSession) -> bool:
         """Check permission via RBAC tables (granular RBAC).
@@ -298,6 +463,29 @@ async def _resolve_service_principal(
     if not expected or not hmac.compare_digest(token, expected):
         return None
 
+    tenant_id = await _resolve_tenant_for_service(declared_tenant, db)
+
+    return CurrentUser(
+        # A service is not a person. The id is deterministic from the tenant
+        # so an audit row says which tenant a service acted for, and the
+        # email names the mechanism rather than impersonating an operator.
+        user_id=uuid.uuid5(uuid.NAMESPACE_URL, f"aisoc:service:{tenant_id}"),
+        tenant_id=tenant_id,
+        role="api_service",
+        email=f"service@{tenant_id}.internal",
+        resolved_permissions=SERVICE_PRINCIPAL_PERMISSIONS,
+    )
+
+
+async def _resolve_tenant_for_service(declared_tenant: str | None, db: AsyncSession) -> uuid.UUID:
+    """The tenant a service caller named, verified against the table.
+
+    Shared by the workload path and the shared-token path so there is one
+    answer to "which tenant is this service acting for". Two copies of this
+    rule would be two chances for one of them to treat a missing tenant as
+    "no filter", and every cross-tenant leak in this codebase has taken
+    exactly that shape — a scope that was absent rather than narrow.
+    """
     if not declared_tenant or not declared_tenant.strip():
         logger.warning("deps.service_caller_named_no_tenant header=%s", SERVICE_TENANT_HEADER)
         raise HTTPException(
@@ -323,16 +511,54 @@ async def _resolve_service_principal(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="service token named a tenant that does not exist",
         )
+    return tenant_id
+
+
+async def _resolve_workload_principal(secret: str, declared_tenant: str | None, db: AsyncSession) -> CurrentUser:
+    """A named internal service, acting for one declared tenant.
+
+    The replacement for ``AISOC_SERVICE_TOKEN``, which is one string every
+    internal caller presents: unattributable, unscopable, and unrotatable
+    without restarting everything at once.
+
+    Three differences from the shared token, and they are the whole point.
+    The audit trail names the *service*. The scope list is per workload, so
+    the ingest pipeline does not carry the agents worker's authority. And
+    the credential can be rotated with a grace window instead of a
+    simultaneous restart.
+
+    What is identical, deliberately: the tenant is a mandatory header,
+    verified against the table. A credential that works for every tenant
+    is a cross-tenant read whichever way it was minted.
+    """
+    identity = await authenticate_workload(db, secret)
+    if identity is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or revoked workload credential",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Tenant *after* the credential check, so an unauthenticated caller
+    # cannot probe which tenant ids exist by watching 403 against 401.
+    tenant_id = await _resolve_tenant_for_service(declared_tenant, db)
+
+    await workload_identity_service.touch(db, identity.id)
 
     return CurrentUser(
-        # A service is not a person. The id is deterministic from the tenant
-        # so an audit row says which tenant a service acted for, and the
-        # email names the mechanism rather than impersonating an operator.
-        user_id=uuid.uuid5(uuid.NAMESPACE_URL, f"aisoc:service:{tenant_id}"),
+        # Deterministic from the service and tenant, so an audit row names
+        # which workload acted for which tenant and two runs of the same
+        # service aggregate instead of scattering.
+        user_id=uuid.uuid5(uuid.NAMESPACE_URL, f"aisoc:workload:{identity.service}:{tenant_id}"),
         tenant_id=tenant_id,
         role="api_service",
-        email=f"service@{tenant_id}.internal",
-        resolved_permissions=SERVICE_PRINCIPAL_PERMISSIONS,
+        email=f"workload:{identity.service}@{tenant_id}.internal",
+        # Scopes, not a resolved set: a workload's authority is the list on
+        # its row, exactly as an API key's is the list on its row. Resolving
+        # it to a role would widen it to whatever that role holds.
+        scopes=list(identity.scopes or []),
+        api_key_prefix=identity.secret_prefix,
+        workload_service=identity.service,
     )
 
 
@@ -416,9 +642,15 @@ def _record_authenticated_principal(request: Request, principal: CurrentUser) ->
     ``app.services.audit`` already uses to signal the middleware across the
     ``BaseHTTPMiddleware`` task boundary. A request that fails authentication
     raises before reaching here, so nothing is recorded for it.
+
+    It is also where every HTTP principal is bound to the request it
+    authenticated on, which is what attribute conditions are judged
+    against. Doing it here rather than in each of the four credential
+    branches is the point: a fifth credential type added later gets the
+    binding by passing through the funnel it already has to pass through.
     """
     request.state.aisoc_authenticated_principal = principal
-    return principal
+    return principal.bind_connection_attributes(request)
 
 
 async def get_current_user(
@@ -466,6 +698,18 @@ async def get_current_user(
 
     token = credentials.credentials
 
+    # --- workload identity path ---
+    #
+    # Ahead of the API-key branch because `aisoc_wl_` is a strict extension
+    # of `aisoc_`, so `startswith(_API_KEY_PREFIX)` matches a workload
+    # secret too and would resolve it as an unknown API key — a 401 that
+    # reads as a bad credential rather than as a misordered branch.
+    # `test_workload_identity.py` asserts this ordering so it survives an
+    # edit that does not know why it is here.
+    declared_tenant = request.headers.get(SERVICE_TENANT_HEADER)
+    if is_workload_secret(token):
+        return _record_authenticated_principal(request, await _resolve_workload_principal(token, declared_tenant, db))
+
     # --- API key path ---
     if token.startswith(_API_KEY_PREFIX):
         return _record_authenticated_principal(request, await _resolve_api_key(token, db))
@@ -475,12 +719,11 @@ async def get_current_user(
     # Ahead of the JWT path because a service token is not a JWT and would
     # otherwise be decoded, fail, and answer "Could not validate credentials",
     # which is what it did.
-    # Read off the request rather than declared as a `Header` parameter.
-    # Declaring it adds a 422 response to all 456 operations in the published
-    # spec, because a parameter that exists can fail validation -- and this is
-    # how a peer *service* names the tenant it acts for, not part of the
-    # contract a customer codes against.
-    declared_tenant = request.headers.get(SERVICE_TENANT_HEADER)
+    # `declared_tenant` is read off the request above rather than declared as
+    # a `Header` parameter. Declaring it adds a 422 response to all 456
+    # operations in the published spec, because a parameter that exists can
+    # fail validation -- and this is how a peer *service* names the tenant it
+    # acts for, not part of the contract a customer codes against.
     service_principal = await _resolve_service_principal(token, declared_tenant, db)
     if service_principal is not None:
         return _record_authenticated_principal(request, service_principal)
@@ -558,8 +801,10 @@ async def resolve_jwt_principal(token: str, db: AsyncSession) -> CurrentUser:
     # to it is no worse than before — whereas failing closed would be a new
     # and much louder outage. The event is logged at error, not debug.
     resolved: frozenset[str] | None = None
+    elevation: tuple[PrivilegeGrant, ...] = ()
     try:
         resolved = await resolve_permissions(db, tenant_id=user.tenant_id, user_id=user.id, static_role=user.role)
+        elevation = await resolve_elevation(db, tenant_id=user.tenant_id, user_id=user.id)
     except Exception as exc:  # noqa: BLE001
         logger.error(
             "permission resolution failed for user %s; falling back to the static role map: %s",
@@ -567,12 +812,23 @@ async def resolve_jwt_principal(token: str, db: AsyncSession) -> CurrentUser:
             str(exc).replace("\r", "").replace("\n", " ")[:200],
         )
 
+    # Conditions fail **closed**, which is the opposite of the line above
+    # and is the right direction for each. Permissions failing open to the
+    # static map keeps a database blip from locking every operator out
+    # mid-incident — it restores the behaviour that shipped for fourteen
+    # releases. A condition failing open would *remove* a restriction an
+    # operator configured, turning the same blip into a silent widening
+    # nobody is paged for.
+    conditions = await resolve_conditions(db, tenant_id=user.tenant_id)
+
     return CurrentUser(
         user_id=user.id,
         tenant_id=user.tenant_id,
         role=user.role,
         email=user.email,
         resolved_permissions=resolved,
+        elevation=elevation,
+        conditions=conditions,
     )
 
 
