@@ -402,6 +402,7 @@ async def enroll_confirm(body: ConfirmRequest, principal: EnrolPrincipal, db: DB
         tenant_id=principal.tenant_id,
         actor_id=principal.user_id,
         actor_email=principal.email,
+        api_key_prefix=getattr(principal, "api_key_prefix", None),
         action="mfa.enrolled",
         resource="user",
         resource_id=str(principal.user_id),
@@ -474,6 +475,12 @@ async def _consume_recovery_code(db: Any, *, user_id: uuid.UUID, tenant_id: uuid
         db=db,
         tenant_id=tenant_id,
         actor_id=user_id,
+        # No principal exists yet: this is a recovery code redeemed
+        # mid-sign-in, before any session or key is issued. Recorded
+        # as None because no API key can have acted, not because the
+        # credential is unknown — the challenge token is the
+        # credential, and `changes` carries the source address.
+        api_key_prefix=None,
         action="mfa.recovery_code_used",
         resource="user",
         resource_id=str(user_id),
@@ -561,6 +568,7 @@ async def disable(body: DisableRequest, current_user: AuthUser, db: DBSession, r
         tenant_id=current_user.tenant_id,
         actor_id=current_user.user_id,
         actor_email=current_user.email,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
         action="mfa.disabled",
         resource="user",
         resource_id=str(current_user.user_id),
@@ -616,6 +624,7 @@ async def reset(
         tenant_id=current_user.tenant_id,
         actor_id=current_user.user_id,
         actor_email=current_user.email,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
         action="mfa.reset",
         resource="user",
         resource_id=str(user_id),
@@ -674,6 +683,7 @@ async def put_policy(
         tenant_id=current_user.tenant_id,
         actor_id=current_user.user_id,
         actor_email=current_user.email,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
         action="mfa.policy_changed",
         resource="tenant",
         resource_id=str(current_user.tenant_id),
