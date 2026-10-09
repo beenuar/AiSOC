@@ -321,3 +321,40 @@ class _FakeGovernor:
 
     def check(self, tenant_id, fingerprint):  # noqa: ANN001, ARG002
         return self._decision
+
+async def _llm_raises_and_fallback_says(monkeypatch, verdict: str):
+    monkeypatch.setattr(worker_mod, "resolve_llm_config", _fake_llm_config(allowed=True))
+    monkeypatch.setenv("AISOC_DETERMINISTIC", "0")
+
+    async def _raise(_state):
+        raise RuntimeError("litellm.Timeout: Connection timed out. Timeout passed=60.0")
+
+    async def _fallback(state):
+        state.verdict = verdict
+        return state
+
+    monkeypatch.setattr(worker_mod, "run_auto_triage", _raise)
+    monkeypatch.setattr(worker_mod, "run_triage", _fallback)
+
+
+@pytest.mark.parametrize("severity", ["critical", "high", "CRITICAL"])
+async def test_llm_failure_never_closes_a_severe_alert(monkeypatch, severity):
+    # A failed model call is not evidence. The fallback said likely_benign on a
+    # critical ransomware alert once; it must be held for review instead.
+    await _llm_raises_and_fallback_says(monkeypatch, "likely_benign")
+    result = await _worker().triage(_fused(severity=severity))
+    assert result["tier"] == "deterministic"
+    assert result["verdict"] == "needs_review"
+
+
+@pytest.mark.parametrize("severity", ["low", "medium", "info"])
+async def test_llm_failure_on_a_minor_alert_keeps_the_fallback_verdict(monkeypatch, severity):
+    await _llm_raises_and_fallback_says(monkeypatch, "benign")
+    result = await _worker().triage(_fused(severity=severity))
+    assert result["verdict"] == "benign"
+
+
+async def test_llm_failure_does_not_downgrade_a_true_positive(monkeypatch):
+    await _llm_raises_and_fallback_says(monkeypatch, "true_positive")
+    result = await _worker().triage(_fused(severity="critical"))
+    assert result["verdict"] == "true_positive"
