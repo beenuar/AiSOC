@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Major CDN edge
 playbook: tpl-command-and-control
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (not-windowed): `answer_count` is the number of records in one DNS
+  response, a per-event field, not a count over a window.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

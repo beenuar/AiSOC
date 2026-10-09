@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Bulk reorg (must be ticketed)
 playbook: tpl-privilege-escalation
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-ident-priv-role-burst-granted; this stateless form
+  named a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

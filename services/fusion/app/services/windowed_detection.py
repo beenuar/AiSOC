@@ -29,6 +29,7 @@ from typing import Any
 import structlog
 
 from app.models.alert import AlertSeverity, RawAlert
+from app.services.derived_fields import enrich, requested_derived_fields
 from app.services.detection_engine import DetectionHit
 from app.services.detection_matcher import matches
 from app.services.provenance import extract_provenance
@@ -186,6 +187,10 @@ class WindowedDetectionEngine:
         # what the tests rely on.
         self._rules = rules if rules is not None else load_window_rules()
         self._prefix = key_prefix
+        # Same contract as the stateless engine: computed once at load,
+        # because the set changes when rules change and not when traffic
+        # arrives.
+        self._derived_wanted: set[str] = requested_derived_fields([{"match_when": rule.match_when} for rule in self._rules])
 
     @property
     def rule_count(self) -> int:
@@ -225,7 +230,7 @@ class WindowedDetectionEngine:
             return merged
         return fields
 
-    async def evaluate(self, message: dict[str, Any]) -> list[DetectionHit]:
+    async def evaluate(self, message: dict[str, Any], overlay: Any | None = None) -> list[DetectionHit]:
         """Count this event into any matching window; return threshold-crossing hits."""
         ocsf = message.get("ocsf_event")
         if not isinstance(ocsf, dict):
@@ -234,6 +239,24 @@ class WindowedDetectionEngine:
         if not tenant:
             return []
         fields = self._fields(message)
+        # The same two enrichment passes the stateless engine runs, for the
+        # same reason it runs them. `_fields` has always claimed to match that
+        # engine's namespace "exactly" and did not: it recovered the raw
+        # fields and stopped, so a windowed rule reading `is_business_hours`
+        # or a per-tenant `<x>_in_allowlist` boolean saw nothing and could not
+        # fire. Two of the rules translated out of the stateless corpus carry
+        # an allowlist clause, so without this they would have been moved from
+        # one engine that could not fire them to another.
+        fields = enrich(fields, self._derived_wanted)
+        if overlay is not None:
+            # Per tenant rather than in the shared pass: a global allowlist
+            # would make one tenant's exceptions apply to everybody. An
+            # unconfigured allowlist contributes no key at all rather than
+            # False, because a `not_in_allowlist` clause against a missing key
+            # is true for every event.
+            derived = overlay.derived_allowlist_fields(fields)
+            if derived:
+                fields = {**fields, **derived}
         now = time.time()
         hits: list[DetectionHit] = []
         for rule in self._rules:

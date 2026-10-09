@@ -162,6 +162,44 @@ publish `0.000` where it means "not measured". Phase 1.4 adds local 7--8B
 candidates, which need no key and *can* be measured here; the hosted rows stay
 `[!]` until the maintainer funds a key.
 
+### D4 -- Not all 74 "windowed" rules need a window
+
+The reachability gate attributes a rule to the windowed family by matching
+its field names against `_count$|^count_|_per_|time_window|_window_|_5min|_ratio$`.
+Eight of the 74 are per-event properties the pattern misreads: `row_count` is
+the size of one export record, `answer_count` the number of records in one DNS
+response, `insecure_registries_count` the length of a list in one daemon
+config event, `subdomain_hex_ratio` a property of one query name, and
+`active_keys_per_account` the state of an account at one moment. They are
+refused under the `not-windowed` kind rather than translated, and the family
+label in `check_detection_fields.py` is left as it is: changing the classifier
+would move the published family counts that Phase 0.2 recorded, for no gain
+now that each rule carries an individual reason.
+
+### D5 -- Five windowed rules that predate this work group by a field nothing emits
+
+`wd-secret-enumeration` (`distinct_by=secret_name`), `wd-windows-password-spray`,
+`wd-sysmon-remote-thread-fanout`, `wd-sysmon-dns-query-fanout` and
+`wd-sysmon-process-spawn-burst` name entity fields outside the statically
+recovered namespace. Four of the five are Windows `EventData` keys the
+`windows_event` connector lifts wholesale, so the namespace under-approximates
+and the rules are probably fine; `secret_name` has no such explanation. The
+new gate **reports** these rather than failing on them, because failing would
+be a false alarm about working rules, and the entity question is answered by
+replay rather than by a name lookup. Not fixed here: changing a shipped
+rule's `group_by` is a content decision with its own blast radius.
+
+### D6 -- The windowed engine ran a narrower field namespace than the stateless one
+
+`WindowedDetectionEngine._fields` carried a docstring saying it matched the
+stateless engine's namespace "exactly". It did not: the stateless engine then
+applies `derived_fields.enrich()` and the per-tenant allowlist overlay, and
+the windowed engine applied neither. Two of the rules translated here carry an
+`<x>_in_allowlist` clause, so without fixing this they would have moved from
+one engine that could not fire them to another. Both passes are now applied in
+`evaluate()`, which takes the overlay the consumer had already resolved for
+the stateless engine.
+
 ## Phase 1: Verdict quality you can publish
 
 - [ ] **1.1** Balanced, labelled verdict corpus
@@ -185,7 +223,8 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 
 ## Phase 3: Detection depth for cloud, identity and SaaS
 
-- [ ] **3.1** Translate the 74 windowed `det-*` rules
+- [x] **3.1** Translate the 74 windowed `det-*` rules — 50 translated, 24
+  refused with a reason. `MAX_UNREACHABLE` 119 → 45.
 - [ ] **3.2** Ordered sequences and Sigma correlations
 - [ ] **3.3** Enrichment inputs (parity 5.5)
 - [ ] **3.4** Behavioural baselines in CORE
@@ -252,3 +291,4 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 | 2026-10-07 | 0.1 | This file created at base commit `1b8bc2d4`. |
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |
+| 2026-10-09 | 3.1 | All 74 decided. 50 translated into `wd-*` rules derived from each original's own clauses and replayed through the real engine (162 assertions); 24 refused with a reason across five kinds. `MAX_UNREACHABLE` 119 → 45, published executable 2,603 → 2,529, windowed 18 → 68. Three findings recorded as D4–D6 below. |

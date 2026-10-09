@@ -18,7 +18,10 @@ detection:
 false_positives:
 - Sanctioned automation/IaC pipeline
 playbook: tpl-credential-access
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (operand-not-emitted): counts distinct impersonation *targets*. The
+  GCP audit connector emits the caller (`actor`) and no target service account, so nothing identifies
+  what is being impersonated.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

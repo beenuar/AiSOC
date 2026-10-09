@@ -21,7 +21,9 @@ false_positives:
 - Compliance scanners (AWS Config, Prowler, CloudCustodian)
 - IaC tools running plan/apply
 playbook: tpl-cloud-recon
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-aws-iam-enumeration; this stateless form named a
+  counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

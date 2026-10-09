@@ -76,7 +76,15 @@ NORMALIZER = ROOT / "services" / "ingest" / "internal" / "normalizer" / "normali
 # family by deriving the booleans from the tenant overlay. 14 rules moved
 # (one rule carried two clauses), leaving the four families that genuinely
 # need engine or enrichment work.
-MAX_UNREACHABLE = 119
+#
+# 119 before depth plan 3.1, which decided all 74 rules of the windowed
+# family: 50 became `wd-*` rules replayed through the real engine, and 24
+# were refused with a reason and stopped being published as executable
+# (`scripts/windowed_translation.py`, gated by
+# `scripts/check_windowed_translation.py`). Two of the 74 carried a second
+# clause as well, which is why the identity-enrichment family moved from 24
+# to 22 and the comparison family from 8 to 7.
+MAX_UNREACHABLE = 45
 
 #: Fields that no telemetry carries because they are computed, not observed:
 #: sliding-window counters, allowlist membership, privilege flags, and

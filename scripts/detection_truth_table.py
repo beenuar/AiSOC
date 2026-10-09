@@ -77,6 +77,24 @@ RULESET = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.jso
 #: Imported rules the compiler translated and proved fireable. The engine
 #: loads this beside the native ruleset, so it is equally a source of truth.
 IMPORTED_RULESET = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset_imported.json"
+#: The sliding-window corpus, loaded by a second engine in the same worker.
+#: Counted and published separately — see the note under the headline.
+WINDOWED_RULESET = ROOT / "services" / "fusion" / "app" / "data" / "windowed_ruleset.json"
+
+
+def _windowed_count() -> int:
+    """Windowed rules declared in the committed artefact.
+
+    Read rather than imported: this script runs on a bare interpreter in CI
+    and must not need the fusion package installed to publish a number.
+    """
+    if not WINDOWED_RULESET.is_file():
+        raise SystemExit(f"{Path(sys.argv[0]).name}: windowed ruleset missing at {WINDOWED_RULESET} — refusing to publish a count of zero")
+    rules = json.loads(WINDOWED_RULESET.read_text(encoding="utf-8")).get("rules")
+    if not isinstance(rules, list) or not rules:
+        raise SystemExit(f"{Path(sys.argv[0]).name}: {WINDOWED_RULESET} declares no rules — refusing to publish a count of zero")
+    return len(rules)
+
 
 # Directories under detections/ that are not rules.
 SKIP_DIRS = {"fixtures", "playbooks"}
@@ -273,6 +291,24 @@ def render_markdown(c: Counts) -> str:
     lines.append(f"| **executable (loaded by the engine)** | **{c.executable}** |")
     lines.append(f"| non-executable (provenance/coverage only) | {c.non_executable} |")
     lines.append(f"| — of which: enabled, but no compiled spec | {c.counted_but_not_loaded} |")
+    lines.append(f"| windowed rules in `windowed_ruleset.json` | {_windowed_count()} |")
+    lines.append("")
+    lines.append("The windowed figure is its own row rather than part of the headline because")
+    lines.append("a windowed rule is a different kind of thing: it counts events or distinct")
+    lines.append("values for one entity over a sliding window and fires on a threshold, so it")
+    lines.append("has no YAML under `detections/` and no entry in the marketplace index. Adding")
+    lines.append("it to the executable total would make two incomparable numbers into one. The")
+    lines.append("engine carries three further built-in rules declared in")
+    lines.append("`services/fusion/app/services/windowed_detection.py`, which are not in the")
+    lines.append("JSON and so are not in the figure above.")
+    lines.append("")
+    lines.append("50 of those rules were translated out of the stateless corpus by depth plan")
+    lines.append("3.1: they named a counter no source emits, so they were loaded, counted as")
+    lines.append("executable and could never fire. Each one's threshold and window are derived")
+    lines.append("from the original's own clauses and replayed through the real engine")
+    lines.append("(`services/fusion/tests/test_windowed_translation_replay.py`). The other 24 of")
+    lines.append("that family could not be expressed as a count over a window and are refused")
+    lines.append("with a reason that travels into each rule's `quarantine_reason`.")
     lines.append("")
     if c.counted_but_not_loaded:
         lines.append(f"Those {c.counted_but_not_loaded} rules are the ones an earlier version of this")

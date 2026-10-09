@@ -18,7 +18,10 @@ detection:
 false_positives:
 - Approved bulk syncs (allowlist src)
 playbook: tpl-data-exfil
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (aggregate): needs a sum of `bytes_out` per source and a z-score against
+  a learned baseline. Both are out of scope for a counting engine (the baseline arrives with depth plan
+  3.4).'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Legitimate identity-management tooling (allowlist principal)
 playbook: tpl-recon
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-ldap-bind-anomaly; this stateless form named a counter
+  no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'
