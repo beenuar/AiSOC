@@ -195,7 +195,18 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 
 ## Phase 4: Collection and scale
 
-- [ ] **4.1** Cloud-native collection (S3+SQS org trail, Pub/Sub, Event Hubs)
+- [x] **4.1** Cloud-native collection (S3+SQS org trail, Pub/Sub, Event Hubs).
+  Three connectors (`aws_cloudtrail_s3`, `gcp_pubsub`, `azure_event_hubs`),
+  each resumable and each declaring a bounded `collection_budget` that says
+  where the overflow goes. Gated by
+  `scripts/check_cloud_native_collection.py` (self-test: one injected
+  violation per rule, plus a refusal on both an absent and an empty tree),
+  wired into `ci.yml :: python-lint`. 83 new tests, connectors suite 1014 ->
+  1098. **One verification gap, stated rather than buried:** no Azure
+  subscription is reachable from here, so the Event Hubs capture fixture was
+  synthesised from the Avro specification rather than recorded from a live
+  hub, and the Data Lake Gen2 listing path has never run against a real
+  storage account. The claim row is `PARTIAL` for exactly that reason.
 - [ ] **4.2** Standard inputs (syslog, OTLP, Kafka, TAXII 2.1)
 - [ ] **4.3** Retention the tenant chooses
 - [ ] **4.4** Throughput (parity 6.9) and a cloud-hardware run
@@ -252,3 +263,4 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 | 2026-10-07 | 0.1 | This file created at base commit `1b8bc2d4`. |
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |
+| 2026-10-09 | 4.1 | Reproduced: `check_cloud_native_collection.py` on the unmodified tree reported all three collection paths absent. Implemented `aws_cloudtrail_s3` (SQS-notified S3 objects; management events, data events and VPC flow logs; delete-after-emit), `gcp_pubsub` (REST pull on a log-sink subscription; ack-after-read) and `azure_event_hubs` (Capture blobs over the Data Lake Gen2 JSON API, with a focused Avro OCF reader). Negative controls recorded in the PR: deleting the SQS message before the object is read, acknowledging the Pub/Sub batch before it is built, ignoring the Avro union branch index, and ignoring the flow-log header line each fail a named test, and all were restored. Connectors suite 1014 -> 1098 passed. |

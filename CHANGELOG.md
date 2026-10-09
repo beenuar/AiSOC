@@ -44,6 +44,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Cloud telemetry collected the way an estate actually emits it.** Every
+  cloud connector before this read an API that answers a time window, which
+  is the small-account shape: `cloudtrail:LookupEvents` is capped at two
+  transactions per second per region per account, returns management events
+  only, and never carries data events or VPC flow logs at all. Three
+  connectors read the queue- and object-backed paths the hyperscalers
+  designed for continuous export instead — `aws_cloudtrail_s3` (an
+  organisation trail on S3 announced over SQS, carrying management events,
+  data events and VPC flow logs for every member account), `gcp_pubsub` (a
+  pull subscription on a Cloud Logging sink) and `azure_event_hubs` (Entra
+  sign-in logs, Entra audit logs and the Activity log through an Event Hub's
+  Capture output). The older three stay: a single account with no trail, no
+  sink and no Event Hubs namespace should not have to build one.
+
+  A queue is not a time window, so two properties are declared rather than
+  implied. Each connector resumes from a cursor, because a queue collector
+  that restarts and reads from "now" loses everything delivered while it was
+  down and one that reads from the beginning replays the bucket, and both
+  are silent. And each declares a bounded `collection_budget` carrying the
+  sentence that says where the overflow goes — a bound that *drops* the
+  remainder looks identical in code to one that leaves it on the queue, and
+  only one of them is backpressure. Acknowledgement always follows the read:
+  an SQS message is deleted after its object's events are out, a Pub/Sub
+  batch is acknowledged after its entries are in hand, and a test proves the
+  ordering by failing the build step rather than by describing it.
+  `scripts/check_cloud_native_collection.py` holds all of it, with a
+  self-test that injects one violation per rule.
+
+  Stated plainly: no vendor account is reachable from CI, so every payload
+  under test is recorded or synthesised. The Azure capture fixture in
+  particular was built from the Avro specification rather than taken from a
+  running Event Hub, and the Data Lake Gen2 listing path has never been
+  exercised against a real storage account. The claim row says so.
+
 - **Attribute conditions, time-boxed elevation and workload identities, all
   inside the one permission path.** The placement is the item, not a detail:
   conditions are applied by `CurrentUser.require_permission` after whichever

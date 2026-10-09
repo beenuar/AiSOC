@@ -6,7 +6,7 @@
 > async coroutines, valid capabilities, secret fields marked `secret`).
 > Live-vendor sandbox smoke is a separate wave; this gates the contract.
 
-**84 / 84 connectors conform** to the runtime contract.
+**87 / 87 connectors conform** to the runtime contract.
 
 | connector | category | fields | vaulted | caps | test_connection | fetch_alerts | normalize |
 |-----------|----------|-------:|--------:|-----:|:---------------:|:------------:|:---------:|
@@ -15,12 +15,14 @@
 | auditd | edr | 3 | 0 | 2 | ✅ | ✅ | ✅ |
 | auth0 | iam | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | aws_cloudtrail | cloud | 4 | 1 | 1 | ✅ | ✅ | ✅ |
+| aws_cloudtrail_s3 | cloud | 7 | 1 | 2 | ✅ | ✅ | ✅ |
 | aws_guardduty | cloud | 3 | 1 | 1 | ✅ | ✅ | ✅ |
 | aws_security_hub | cloud | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | aws_vpc_flow | cloud | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | azure_activity | cloud | 4 | 1 | 1 | ✅ | ✅ | ✅ |
 | azure_defender | edr | 3 | 1 | 5 | ✅ | ✅ | ✅ |
 | azure_entra | iam | 3 | 1 | 2 | ✅ | ✅ | ✅ |
+| azure_event_hubs | cloud | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | box | saas | 1 | 1 | 3 | ✅ | ✅ | ✅ |
 | carbon_black | edr | 4 | 1 | 6 | ✅ | ✅ | ✅ |
 | chronicle | siem | 4 | 1 | 5 | ✅ | ✅ | ✅ |
@@ -43,6 +45,7 @@
 | falco | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | fleetdm | edr | 4 | 1 | 4 | ✅ | ✅ | ✅ |
 | gcp_cloud_audit | cloud | 2 | 1 | 1 | ✅ | ✅ | ✅ |
+| gcp_pubsub | cloud | 4 | 1 | 2 | ✅ | ✅ | ✅ |
 | gcp_scc | cloud | 2 | 1 | 1 | ✅ | ✅ | ✅ |
 | github | vcs | 2 | 1 | 2 | ✅ | ✅ | ✅ |
 | gitlab | vcs | 3 | 1 | 2 | ✅ | ✅ | ✅ |

@@ -96,7 +96,7 @@ curl -X POST http://localhost:8081/v1/ingest/batch \
        "title":"Encoded PowerShell from Office","host":"WIN-FIN-01"}]}'
 ```
 
-Or pull, by configuring one of **84 click-and-connect data connectors** in **Settings → Connectors**
+Or pull, by configuring one of **87 click-and-connect data connectors** in **Settings → Connectors**
 (needs the `full` profile) — Splunk, Sentinel, Elastic, CrowdStrike, Okta, AWS and Kubernetes audit
 among those with vendor-specific normalization and setup docs
 ([coverage](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage)). Without a vendor profile
