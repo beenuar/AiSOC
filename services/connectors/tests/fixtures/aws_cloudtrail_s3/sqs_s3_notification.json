@@ -1,0 +1,24 @@
+{
+  "Records": [
+    {
+      "eventVersion": "2.1",
+      "eventSource": "aws:s3",
+      "awsRegion": "us-east-1",
+      "eventTime": "2026-10-08T11:02:17.123Z",
+      "eventName": "ObjectCreated:Put",
+      "s3": {
+        "s3SchemaVersion": "1.0",
+        "configurationId": "aisoc-org-trail",
+        "bucket": {
+          "name": "example-org-trail",
+          "arn": "arn:aws:s3:::example-org-trail"
+        },
+        "object": {
+          "key": "AWSLogs/o-abc123def4/123456789012/CloudTrail/us-east-1/2026/10/08/123456789012_CloudTrail_us-east-1_20261008T1100Z_a1b2c3d4.json.gz",
+          "size": 4211,
+          "eTag": "6f1ed002ab5595859014ebf0951522d9"
+        }
+      }
+    }
+  ]
+}

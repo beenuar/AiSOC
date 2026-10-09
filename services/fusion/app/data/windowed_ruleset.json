@@ -1,5 +1,5 @@
 {
-  "count": 68,
+  "count": 72,
   "rules": [
     {
       "category": "application",
@@ -1136,6 +1136,110 @@
       "threshold": 201,
       "translated_from": "net-dhcp-starvation",
       "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "correlates": [
+        "aws-iam-create-access-key"
+      ],
+      "correlation_type": "event_count",
+      "group_by": "user_arn",
+      "id": "aisoc-corr-aws-access-key-minting-burst",
+      "match_when": {
+        "eventName_pattern_match_any": [
+          "^CreateAccessKey$"
+        ],
+        "eventSource_pattern_match_any": [
+          "^iam\\.amazonaws\\.com$"
+        ]
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "One principal minted several AWS access keys in a burst",
+      "severity": "high",
+      "threshold": 6,
+      "window_seconds": 600
+    },
+    {
+      "category": "cloud",
+      "correlates": [
+        "aws-api-call"
+      ],
+      "correlation_type": "value_count",
+      "distinct_by": "awsRegion",
+      "group_by": "user_arn",
+      "id": "aisoc-corr-aws-principal-region-fanout",
+      "match_when": {
+        "cloud_platform_pattern_match_any": [
+          "^aws$"
+        ]
+      },
+      "mitre": [
+        "T1580"
+      ],
+      "name": "One principal acting across an unusual number of AWS regions",
+      "severity": "medium",
+      "threshold": 6,
+      "window_seconds": 900
+    },
+    {
+      "category": "cloud",
+      "correlates": [
+        "azure-directory-role-assigned",
+        "azure-resource-lock-deleted"
+      ],
+      "correlation_type": "temporal",
+      "group_by": "actor",
+      "id": "aisoc-corr-azure-role-grant-and-lock-removal",
+      "mitre": [
+        "T1098"
+      ],
+      "name": "One actor both assigned a directory role and removed a resource lock",
+      "ordered": false,
+      "sequence": [
+        {
+          "operationName_pattern_match_any": [
+            "^Add\\ member\\ to\\ role$"
+          ]
+        },
+        {
+          "operationName_pattern_match_any": [
+            "^Microsoft\\.Authorization/locks/delete$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 1800
+    },
+    {
+      "category": "identity",
+      "correlates": [
+        "okta-mfa-push-sent",
+        "okta-session-start"
+      ],
+      "correlation_type": "temporal_ordered",
+      "group_by": "actor_email",
+      "id": "aisoc-corr-okta-mfa-push-then-session",
+      "mitre": [
+        "T1621"
+      ],
+      "name": "Okta MFA push followed by a session for the same account",
+      "ordered": true,
+      "sequence": [
+        {
+          "eventType_pattern_match_any": [
+            "^system\\.push\\.send_factor_verify_push$"
+          ]
+        },
+        {
+          "eventType_pattern_match_any": [
+            "^user\\.session\\.start$"
+          ]
+        }
+      ],
+      "severity": "medium",
+      "window_seconds": 900
     }
   ]
 }

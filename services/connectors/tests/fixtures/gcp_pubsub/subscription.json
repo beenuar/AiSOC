@@ -1,0 +1,11 @@
+{
+  "name": "projects/example-logging/subscriptions/aisoc-log-sink-sub",
+  "topic": "projects/example-logging/topics/aisoc-log-sink",
+  "pushConfig": {},
+  "ackDeadlineSeconds": 120,
+  "messageRetentionDuration": "604800s",
+  "expirationPolicy": {
+    "ttl": "2678400s"
+  },
+  "state": "ACTIVE"
+}

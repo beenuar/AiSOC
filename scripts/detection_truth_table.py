@@ -310,6 +310,12 @@ def render_markdown(c: Counts) -> str:
     lines.append("that family could not be expressed as a count over a window and are refused")
     lines.append("with a reason that travels into each rule's `quarantine_reason`.")
     lines.append("")
+    lines.append("Four more are Sigma correlation documents compiled by")
+    lines.append("`scripts/sigma_correlation.py`. They are **first-party content, not imported")
+    lines.append("coverage**: no upstream correlation rule is vendored in this tree, so the")
+    lines.append("import path had no corpus and the rules under `detections/sigma-correlations/`")
+    lines.append("were hand-authored in the upstream format to give it one.")
+    lines.append("")
     if c.counted_but_not_loaded:
         lines.append(f"Those {c.counted_but_not_loaded} rules are the ones an earlier version of this")
         lines.append("table counted as executable. They carry `enabled: true` and a body whose")

@@ -4,10 +4,10 @@
 // Every `connector_type` the ingest normalizer resolves, derived from the
 // registry that decides what the platform can ingest:
 //
-//    84  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
+//    87  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
 //     6  connectorProfiles keys no connector declares under that spelling
 //     5  alternate spellings connectorTypeCanonical folds onto a declared id
-//    95  total
+//    98  total
 //
 // The union used to be written by hand, which is how ten members came to name
 // nothing: `ibm_qradar` reached no profile and no connector, so strict mode
@@ -24,12 +24,14 @@ export const CONNECTOR_TYPES = [
   "auditd",             // registry
   "auth0",              // registry
   "aws_cloudtrail",     // registry
+  "aws_cloudtrail_s3",  // registry
   "aws_guardduty",      // registry
   "aws_security_hub",   // registry
   "aws_vpc_flow",       // registry
   "azure_activity",     // registry
   "azure_defender",     // registry
   "azure_entra",        // registry
+  "azure_event_hubs",   // registry
   "box",                // registry
   "carbon_black",       // registry
   "chronicle",          // registry
@@ -53,6 +55,7 @@ export const CONNECTOR_TYPES = [
   "falco",              // registry
   "fleetdm",            // registry
   "gcp_cloud_audit",    // registry
+  "gcp_pubsub",         // registry
   "gcp_scc",            // registry
   "github",             // registry
   "gitlab",             // registry

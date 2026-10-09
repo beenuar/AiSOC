@@ -111,6 +111,19 @@ jobs:
       - name: Prove the windowed-translation gate is not vacuous
         run: python3 scripts/check_windowed_translation.py --self-test
 
+      # The Sigma compiler translated rule documents and had never looked at a
+      # `correlation:` block. The two facts hid each other: there was no
+      # importer, and the 3,132 imported documents contain no correlation for
+      # it to have failed on. This compiles every correlation document into
+      # the windowed engine or refuses it with a reason, and fails a rule
+      # whose selector or group-by names a field nothing emits — with no
+      # ceiling, because the corpus is new and starts clean.
+      - name: Verify Sigma correlations compile into the windowed engine
+        run: python3 scripts/check_sigma_correlations.py --check
+
+      - name: Prove the Sigma-correlation gate is not vacuous
+        run: python3 scripts/check_sigma_correlations.py --self-test
+
       # Recompiles every imported Sigma rule AND re-proves it: each shipped
       # rule is replayed, as a vendor-shaped event, through its connector's
       # real normalize() and the real engine. A rule that stops firing — because

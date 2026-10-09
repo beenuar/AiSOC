@@ -159,11 +159,18 @@ var connectorOCSFClass = map[string]connectorClass{
 	// ---------------------------------------------------------------
 	// Category 3 — identity. Sign-ins and directory changes.
 	// ---------------------------------------------------------------
-	"okta":         {classUID: classAuthentication},
-	"azure_entra":  {classUID: classAuthentication},
-	"auth0":        {classUID: classAuthentication},
-	"duo_security": {classUID: classAuthentication},
-	"onepassword":  {classUID: classAuthentication},
+	"okta":        {classUID: classAuthentication},
+	"azure_entra": {classUID: classAuthentication},
+	// Depth plan 4.1. One diagnostic setting streams Entra sign-ins, Entra
+	// audit records and the Activity log to the same hub, and sign-ins
+	// outnumber the other two by orders of magnitude in any real tenant —
+	// so this is classed with azure_entra, which reads the same records over
+	// Graph. The minority is control-plane operations, which read as API
+	// activity and which the per-event catalogue reaches.
+	"azure_event_hubs": {classUID: classAuthentication},
+	"auth0":            {classUID: classAuthentication},
+	"duo_security":     {classUID: classAuthentication},
+	"onepassword":      {classUID: classAuthentication},
 	// JumpCloud's directory insights are account lifecycle first and
 	// authentication second: its event_type vocabulary is dominated by user
 	// and group create, update and delete, with `success` carrying the auth
@@ -219,10 +226,25 @@ var connectorOCSFClass = map[string]connectorClass{
 	// Category 6 — application and data activity.
 	// ---------------------------------------------------------------
 	// Cloud control-plane audit logs: one API call per record.
-	"gcp_cloud_audit":  {classUID: classAPIActivity},
-	"azure_activity":   {classUID: classAPIActivity},
-	"oci":              {classUID: classAPIActivity},
-	"kubernetes_audit": {classUID: classAPIActivity},
+	"gcp_cloud_audit": {classUID: classAPIActivity},
+	// Depth plan 4.1. A Cloud Logging sink carries whatever its filter
+	// selected, and in a security deployment that is dominated by audit
+	// logs — the same stream gcp_cloud_audit polls, arriving by a different
+	// road. Classed with it rather than left generic, under this table's own
+	// rule for a mixed stream: the class covering the security-relevant
+	// majority, with the minority named. The minority here is VPC flow and
+	// firewall records, which the per-event catalogue is what reaches.
+	"gcp_pubsub": {classUID: classAPIActivity},
+	// Depth plan 4.1. Every CloudTrail record is an API call, including the
+	// data events this connector adds — `GetObject` is an API call. VPC flow
+	// records arrive in the same bucket and are the minority; an operator
+	// who does not want them switches them off at the connector. Unlike
+	// aws_cloudtrail below, this one is not a curated allow-list, so there
+	// is no upstream decision to defer to and the class has to be stated.
+	"aws_cloudtrail_s3": {classUID: classAPIActivity},
+	"azure_activity":    {classUID: classAPIActivity},
+	"oci":               {classUID: classAPIActivity},
+	"kubernetes_audit":  {classUID: classAPIActivity},
 	// Cloudflare's connector reads /accounts/{id}/audit_logs — the account
 	// control plane, not the HTTP request logs its vendor is better known
 	// for. Reading the connector rather than the brand is what keeps this

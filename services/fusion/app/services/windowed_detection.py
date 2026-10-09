@@ -29,7 +29,7 @@ from typing import Any
 import structlog
 
 from app.models.alert import AlertSeverity, RawAlert
-from app.services.derived_fields import enrich, requested_derived_fields
+from app.services.derived_fields import enrich, parse_event_time, requested_derived_fields
 from app.services.detection_engine import DetectionHit
 from app.services.detection_matcher import matches
 from app.services.provenance import extract_provenance
@@ -68,6 +68,59 @@ class WindowRule:
     # needing a windowed evaluator name a `distinct_*` field, so without this
     # they had nowhere to go even after the engine existed.
     distinct_by: str = ""
+
+
+@dataclass(frozen=True)
+class SequenceRule:
+    """A then B (then C) by the same entity, ordered by event time.
+
+    A threshold cannot express an ordering, and the ordering is usually the
+    detection: "fifty failed logons" is an attempt, "failed logons then a
+    success for the same account" is a compromise. Every sequence detection in
+    the corpus had nowhere to go, because the counting engine sees each event
+    alone and remembers only how many there were.
+
+    The stages are ordered and disjoint in time: a stage advances only from an
+    earlier event *by event time*, and one event advances at most one stage,
+    so a rule whose stages overlap still needs as many events as it has
+    stages.
+    """
+
+    id: str
+    name: str
+    severity: str
+    category: str
+    mitre: list[str]
+    #: Ordered selectors, one per stage. Two or more.
+    sequence: tuple[dict[str, Any], ...]
+    #: Flat field naming the entity every stage must share.
+    group_by: str
+    #: The whole sequence must fit in this, measured from the first stage.
+    #: Measured from the first and not from the previous stage, so a slow
+    #: drip cannot walk a sequence forward indefinitely.
+    window_seconds: int
+    #: When False the stages may occur in any order inside the window, which
+    #: is what Sigma's `temporal` correlation means as against
+    #: `temporal_ordered`. Kept as a flag on one rule type rather than a
+    #: second type, because every other property — entity, window, staging,
+    #: one-event-one-stage — is identical and duplicating them is how the two
+    #: drift apart.
+    ordered: bool = True
+
+
+#: How far out of order an event may arrive and still be stitched into a
+#: sequence. A connector polling a vendor delivers the vendor's order, not the
+#: clock's, so arrival order is not evidence of event order — but holding
+#: state forever to accommodate that would be a memory leak with a detection
+#: attached. An event older than this relative to what the entity has already
+#: shown is counted for its own stage and does not re-open an earlier one.
+#:
+#: The plan this implements says "with the existing watermark". There is no
+#: watermark in this pipeline — the only ones in the tree belong to the
+#: shadow-reconcile router and the dead-letter replay, which are unrelated
+#: subsystems — so the bound is stated here rather than inherited from
+#: something that does not exist.
+SEQUENCE_REORDER_TOLERANCE_SECONDS = 300
 
 
 # Built-in windowed rules. Intentionally small + high-signal; the corpus can grow
@@ -148,6 +201,12 @@ def load_window_rules(path: Path | None = None) -> tuple[WindowRule, ...]:
         rule_id = str(entry.get("id") or "")
         if not rule_id or rule_id in seen:
             continue
+        if entry.get("sequence"):
+            # A sequence rule lives in the same artefact and is loaded by
+            # `load_sequence_rules`. Skipped silently rather than warned
+            # about: a warning per sequence rule on every boot would train
+            # operators to ignore the log line that means something.
+            continue
         try:
             rule = WindowRule(
                 id=rule_id,
@@ -177,24 +236,160 @@ def load_window_rules(path: Path | None = None) -> tuple[WindowRule, ...]:
     return tuple(loaded)
 
 
+def load_sequence_rules(path: Path | None = None) -> tuple[SequenceRule, ...]:
+    """Ordered-sequence rules from the same artefact.
+
+    Fail-soft the same way the counting loader is, and for the same reason: a
+    malformed entry is skipped individually so one authoring mistake cannot
+    empty the corpus. There are no built-in sequences, so a missing file
+    yields none — which is the honest answer rather than a fallback.
+    """
+    target = path or _WINDOWED_RULESET_PATH
+    if not target.exists():
+        return ()
+    try:
+        payload = json.loads(target.read_text(encoding="utf-8"))
+    except (ValueError, OSError) as exc:
+        logger.warning("windowed_detection.sequence_ruleset_load_failed", path=str(target), error=str(exc))
+        return ()
+
+    loaded: list[SequenceRule] = []
+    seen: set[str] = set()
+    for entry in payload.get("rules") or []:
+        if not isinstance(entry, dict) or not entry.get("sequence"):
+            continue
+        rule_id = str(entry.get("id") or "")
+        if not rule_id or rule_id in seen:
+            continue
+        try:
+            stages = tuple(dict(stage) for stage in entry["sequence"])
+            rule = SequenceRule(
+                id=rule_id,
+                name=str(entry["name"]),
+                severity=str(entry["severity"]),
+                category=str(entry["category"]),
+                mitre=[str(m).upper() for m in entry.get("mitre") or []],
+                sequence=stages,
+                group_by=str(entry["group_by"]),
+                window_seconds=int(entry["window_seconds"]),
+                ordered=bool(entry.get("ordered", True)),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            logger.warning("windowed_detection.sequence_skipped", rule_id=rule_id, error=str(exc))
+            continue
+        if len(rule.sequence) < 2:
+            # One stage is a stateless rule paying for Redis state.
+            logger.warning("windowed_detection.sequence_too_short", rule_id=rule_id, stages=len(rule.sequence))
+            continue
+        if any(not stage for stage in rule.sequence):
+            # An empty stage matches every event, so the sequence collapses
+            # to whichever stages remain — a different detection under this
+            # one's name.
+            logger.warning("windowed_detection.sequence_stage_empty", rule_id=rule_id)
+            continue
+        if rule.window_seconds < 1:
+            logger.warning("windowed_detection.sequence_bounds_invalid", rule_id=rule_id)
+            continue
+        loaded.append(rule)
+        seen.add(rule_id)
+
+    if loaded:
+        logger.info("windowed_detection.sequence_ruleset_loaded", count=len(loaded))
+    return tuple(loaded)
+
+
+def _unordered_set_exists(observations: list[list[tuple[float, str]]], window_seconds: int) -> bool:
+    """Is there one *distinct* event per stage inside one window, any order?
+
+    The distinctness is the subtle half. Without it a single event matching
+    every stage satisfies the rule on its own, which for an unordered
+    correlation is not a near-miss but the common case: unordered stages are
+    usually written as variations on one activity.
+    """
+    if not observations or any(not stage for stage in observations):
+        return False
+    merged = sorted({entry for stage in observations for entry in stage})
+    for start in merged:
+        window = [entry for entry in merged if start[0] <= entry[0] <= start[0] + window_seconds]
+        # One event per stage, no event used twice: a bipartite matching,
+        # small enough (stages are two or three) to settle by trying each
+        # stage's candidates in turn.
+        if _matching_exists([[e for e in stage if e in set(window)] for stage in observations], set()):
+            return True
+    return False
+
+
+def _matching_exists(candidates: list[list[tuple[float, str]]], used: set[tuple[float, str]]) -> bool:
+    if not candidates:
+        return True
+    for entry in candidates[0]:
+        if entry in used:
+            continue
+        if _matching_exists(candidates[1:], used | {entry}):
+            return True
+    return False
+
+
+def _chain_exists(observations: list[list[tuple[float, str]]], window_seconds: int) -> bool:
+    """Is there one event per stage, strictly increasing, inside the window?
+
+    Ordered by ``(event time, event token)``. The token is the tie-breaker and
+    it is load-bearing rather than tidy: two distinct events routinely share a
+    second, and one event that satisfies two stages must never complete a
+    sequence by itself. Comparing times alone would allow both mistakes in
+    opposite directions.
+
+    Candidate starts are tried newest-first because the latest feasible start
+    gives the tightest span, so the first chain found is the one most likely
+    to fit the window.
+    """
+    if not observations or any(not stage for stage in observations):
+        return False
+    for start in reversed(observations[0]):
+        cursor = start
+        for stage in observations[1:]:
+            nxt = next((entry for entry in stage if entry > cursor), None)
+            if nxt is None:
+                cursor = None  # type: ignore[assignment]
+                break
+            cursor = nxt
+        if cursor is not None and cursor[0] - start[0] <= window_seconds:
+            return True
+    return False
+
+
 class WindowedDetectionEngine:
     """Redis-backed sliding-window threshold detections."""
 
-    def __init__(self, redis: Any, rules: tuple[WindowRule, ...] | None = None, *, key_prefix: str = "aisoc:wd") -> None:
+    def __init__(
+        self,
+        redis: Any,
+        rules: tuple[WindowRule, ...] | None = None,
+        *,
+        sequences: tuple[SequenceRule, ...] | None = None,
+        key_prefix: str = "aisoc:wd",
+    ) -> None:
         self._redis = redis
         # None means "whatever is declared", so a deployment picks up exported
         # rules without a code change. An explicit tuple still wins, which is
         # what the tests rely on.
         self._rules = rules if rules is not None else load_window_rules()
+        self._sequences = sequences if sequences is not None else load_sequence_rules()
         self._prefix = key_prefix
         # Same contract as the stateless engine: computed once at load,
         # because the set changes when rules change and not when traffic
         # arrives.
-        self._derived_wanted: set[str] = requested_derived_fields([{"match_when": rule.match_when} for rule in self._rules])
+        clauses: list[dict[str, Any]] = [{"match_when": rule.match_when} for rule in self._rules]
+        clauses += [{"match_when": stage} for rule in self._sequences for stage in rule.sequence]
+        self._derived_wanted: set[str] = requested_derived_fields(clauses)
 
     @property
     def rule_count(self) -> int:
         return len(self._rules)
+
+    @property
+    def sequence_count(self) -> int:
+        return len(self._sequences)
 
     @staticmethod
     def _fields(message: dict[str, Any]) -> dict[str, Any]:
@@ -288,7 +483,92 @@ class WindowedDetectionEngine:
                     )
             except Exception as exc:  # noqa: BLE001 — one rule/Redis error must not wedge detection
                 logger.debug("windowed_detection.rule_error", rule=rule.id, error=str(exc))
+
+        if self._sequences:
+            # One token per event, shared by every stage it matches, so two
+            # stages satisfied by the *same* event can never be mistaken for
+            # two events. Timestamps alone cannot carry that: two genuinely
+            # distinct events routinely share a second.
+            token = uuid.uuid4().hex
+            for sequence in self._sequences:
+                try:
+                    hit = await self._advance_sequence(sequence, tenant, fields, now, token)
+                    if hit is not None:
+                        hits.append(hit)
+                except Exception as exc:  # noqa: BLE001 — same fail-soft contract
+                    logger.debug("windowed_detection.sequence_error", rule=sequence.id, error=str(exc))
         return hits
+
+    @staticmethod
+    def _event_seconds(fields: dict[str, Any], now: float) -> float:
+        """When the event happened, falling back to when we heard about it.
+
+        Ordering a sequence by arrival would make it a different detection on
+        every poll cadence, so event time wins wherever a source provides
+        one. A source that stamps nothing must still be able to fire a
+        sequence, which is what the fallback is for.
+        """
+        when = parse_event_time(fields)
+        return when.timestamp() if when is not None else now
+
+    async def _advance_sequence(
+        self, rule: SequenceRule, tenant: str, fields: dict[str, Any], now: float, token: str
+    ) -> DetectionHit | None:
+        """Record what this event satisfies, then look for a complete chain.
+
+        Recording first and searching second is what makes the ordering a
+        property of **event time** rather than of arrival. The obvious
+        implementation — a cursor that only moves forward as events arrive —
+        is wrong for this platform: almost every connector here polls, so a
+        batch arrives in the vendor's order and the event that starts a
+        sequence routinely lands after the one that finishes it. That
+        implementation would silently detect nothing on exactly the sources
+        the corpus is thinnest on.
+        """
+        entity = fields.get(rule.group_by)
+        if not entity:
+            return None
+        matched = [index for index, stage in enumerate(rule.sequence) if matches(stage, fields)]
+        if not matched:
+            return None
+
+        when = self._event_seconds(fields, now)
+        retain = rule.window_seconds + SEQUENCE_REORDER_TOLERANCE_SECONDS
+        base = f"{self._prefix}:seq:{tenant}:{rule.id}:{entity}"
+
+        for index in matched:
+            key = f"{base}:{index}"
+            await self._redis.zadd(key, {token: when})
+            # Trimmed against this event's own time, not the wall clock: an
+            # event that arrives late is old by construction, and trimming it
+            # against now would discard the observation it just made.
+            await self._redis.zremrangebyscore(key, 0, when - retain)
+            await self._redis.expire(key, retain)
+
+        observations: list[list[tuple[float, str]]] = []
+        for index in range(len(rule.sequence)):
+            entries = await self._redis.zrangebyscore(f"{base}:{index}", when - retain, when + retain, withscores=True)
+            stage: list[tuple[float, str]] = []
+            for member, score in entries or []:
+                name = member.decode() if isinstance(member, bytes | bytearray) else str(member)
+                stage.append((float(score), name))
+            stage.sort()
+            observations.append(stage)
+
+        complete = (
+            _chain_exists(observations, rule.window_seconds) if rule.ordered else _unordered_set_exists(observations, rule.window_seconds)
+        )
+        if not complete:
+            return None
+        if not await self._redis.set(f"{base}:fired", "1", nx=True, ex=rule.window_seconds):
+            return None
+        return DetectionHit(
+            rule_id=rule.id,
+            name=rule.name,
+            severity=rule.severity,
+            category=rule.category,
+            mitre=list(rule.mitre),
+        )
 
     async def _observe_and_check(
         self,

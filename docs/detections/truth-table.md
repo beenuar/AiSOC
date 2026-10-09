@@ -23,7 +23,7 @@ lever that reaches the engine is adding a spec and re-running
 | **executable (loaded by the engine)** | **2529** |
 | non-executable (provenance/coverage only) | 4462 |
 | — of which: enabled, but no compiled spec | 0 |
-| windowed rules in `windowed_ruleset.json` | 68 |
+| windowed rules in `windowed_ruleset.json` | 72 |
 
 The windowed figure is its own row rather than part of the headline because
 a windowed rule is a different kind of thing: it counts events or distinct
@@ -41,6 +41,12 @@ from the original's own clauses and replayed through the real engine
 (`services/fusion/tests/test_windowed_translation_replay.py`). The other 24 of
 that family could not be expressed as a count over a window and are refused
 with a reason that travels into each rule's `quarantine_reason`.
+
+Four more are Sigma correlation documents compiled by
+`scripts/sigma_correlation.py`. They are **first-party content, not imported
+coverage**: no upstream correlation rule is vendored in this tree, so the
+import path had no corpus and the rules under `detections/sigma-correlations/`
+were hand-authored in the upstream format to give it one.
 
 ## By tier
 

@@ -1,0 +1,34 @@
+title: AWS console sign-in failure
+name: aws-console-login-failed-multi
+id: aisoc-corr-base-aws-console-login-failed-multi
+status: experimental
+description: One failed AWS console sign-in.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: signin.amazonaws.com
+    eventName: ConsoleLogin
+    errorMessage: 'Failed authentication'
+  condition: selection
+---
+title: AWS sign-in failures grouped by principal and region
+id: aisoc-corr-aws-login-failures-principal-and-region
+status: experimental
+description: >-
+  Kept as a refusal. The engine accumulates against one entity; choosing either
+  field would group by something the author did not ask for, and silently widen
+  or narrow every count.
+level: medium
+category: cloud
+correlation:
+  type: event_count
+  rules:
+    - aws-console-login-failed-multi
+  group-by:
+    - user_arn
+    - awsRegion
+  timespan: 10m
+  condition:
+    gt: 20
