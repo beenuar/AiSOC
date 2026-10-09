@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -101,6 +101,38 @@ class AlertResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+    @model_validator(mode="wrap")
+    @classmethod
+    def _affected_from_entities(cls, data: Any, handler: Any) -> "AlertResponse":
+        """Fill the affected_* lists from what fusion stores, when empty.
+
+        The fusion alert sink writes the host and user into `entities` and the
+        addresses into `iocs`; nothing in the pipeline writes the affected_*
+        columns, which only the API's own create path fills. So every alert the
+        pipeline produced reached the console with no affected host, user or
+        IP although the row held all three.
+        """
+        model = handler(data)
+
+        def values(field: str, kind: str) -> list[str]:
+            raw = data.get(field) if isinstance(data, dict) else getattr(data, field, None)
+            if not isinstance(raw, list):
+                return []
+            out: list[str] = []
+            for item in raw:
+                if isinstance(item, dict) and item.get("type") == kind and isinstance(item.get("value"), str):
+                    if item["value"] and item["value"] not in out:
+                        out.append(item["value"])
+            return out
+
+        if not model.affected_hosts:
+            model.affected_hosts = values("entities", "host")
+        if not model.affected_users:
+            model.affected_users = values("entities", "user")
+        if not model.affected_ips:
+            model.affected_ips = values("iocs", "ip")
+        return model
 
 
 class AlertDetailResponse(AlertResponse):
