@@ -20,7 +20,9 @@ detection:
 false_positives:
 - Network monitoring with large MTU echo (rare; allowlist)
 playbook: tpl-c2
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (aggregate): `avg_payload_bytes` is a mean over the window, and `packet_count`
+  is a per-flow sum. Counting flow records measures neither.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

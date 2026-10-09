@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Scheduled BI export
 playbook: tpl-exfiltration
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-gcp-bq-mass-export; this stateless form named a
+  counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

@@ -18,7 +18,9 @@ detection:
 false_positives:
 - Approved data migration
 playbook: tpl-exfiltration
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (not-windowed): `row_count` is a per-event field of one export record,
+  not a count over a window. The Salesforce connector does not surface it.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

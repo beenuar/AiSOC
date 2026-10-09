@@ -18,7 +18,10 @@ detection:
 false_positives:
 - First-time use of legitimate hosting providers (must investigate)
 playbook: tpl-c2
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (rarity): fires when a destination ASN has been seen *fewer* than five
+  times in thirty days. The engine fires when a count is high; a rarity signal needs the first-seen store
+  (depth plan 3.3) and the baseline module (3.4).'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

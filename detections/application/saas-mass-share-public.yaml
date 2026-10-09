@@ -20,7 +20,9 @@ detection:
 false_positives:
 - Approved customer-share workflows (allowlist user)
 playbook: tpl-data-exfil
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-saas-mass-share-public; this stateless form named
+  a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

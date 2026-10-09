@@ -20,7 +20,9 @@ detection:
 false_positives:
 - DNSSEC and large CDN providers (allowlist parent domain)
 playbook: tpl-data-exfil
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (aggregate): `avg_subdomain_len` is a mean over the window. Dropping
+  it leaves ''100 DNS queries in 30 minutes'', which every workstation clears.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

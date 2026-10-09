@@ -18,7 +18,10 @@ detection:
 false_positives:
 - Internal mirror without TLS (deprecated, must be ticketed)
 playbook: tpl-supply-chain
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (not-windowed): `insecure_registries_count` is the length of a list
+  inside one daemon config event, not a count over a window. The reachability gate reads it as windowed
+  because the name ends in `_count`.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

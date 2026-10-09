@@ -94,6 +94,23 @@ jobs:
       - name: Verify exported windowed ruleset is current
         run: python3 scripts/export_windowed_ruleset.py --check
 
+      # 74 rules named a sliding-window counter no source emits, so each read
+      # None on its first clause and could never fire while still counting
+      # toward the published executable total. Every one is now either
+      # translated into a `wd-*` rule — threshold and window derived from the
+      # original's own clauses, not re-chosen — or refused with a reason. This
+      # re-derives each translation and compares it with what is committed, so
+      # a rounder threshold or a dropped selector clause fails here rather
+      # than shipping as a different detection under the original's name.
+      - name: Verify every windowed det-* rule is translated or refused
+        run: python3 scripts/check_windowed_translation.py --check
+
+      # The gate above is only worth the violations it can catch. This injects
+      # one per rule it enforces and requires each to be caught, and requires
+      # a refusal over a tree with no rules in it.
+      - name: Prove the windowed-translation gate is not vacuous
+        run: python3 scripts/check_windowed_translation.py --self-test
+
       # Recompiles every imported Sigma rule AND re-proves it: each shipped
       # rule is replayed, as a vendor-shaped event, through its connector's
       # real normalize() and the real engine. A rule that stops firing — because

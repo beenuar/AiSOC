@@ -409,6 +409,13 @@ def _literal_str_representer(dumper: yaml.Dumper, data: _LiteralStr):  # type: i
 yaml.add_representer(_LiteralStr, _literal_str_representer)  # type: ignore[arg-type]
 
 
+def _retirement_reason(category: str, slug: str) -> str:
+    """Why this rule is not loaded by the stateless engine, or '' if it is."""
+    from windowed_translation import retirement_reason  # noqa: PLC0415
+
+    return retirement_reason(f"{category}/{slug}")
+
+
 def render_rule_yaml(*, rule_id: str, category: str, spec: dict) -> str:
     """Render the canonical YAML for one detection rule."""
     name: str = spec["name"]
@@ -437,7 +444,15 @@ def render_rule_yaml(*, rule_id: str, category: str, spec: dict) -> str:
     }
     if playbook:
         rule["playbook"] = playbook
-    rule["enabled"] = True
+    # A rule the windowed-translation pass decided about is not loaded by the
+    # stateless engine, so the catalogue must not present it as running. The
+    # reason travels with it: `build_marketplace.py` reads `quarantine_reason`
+    # off the YAML, so a reader of the marketplace entry sees the windowed
+    # rule that replaced it, or why no rule could.
+    retirement = _retirement_reason(category, spec["slug"])
+    rule["enabled"] = not retirement
+    if retirement:
+        rule["quarantine_reason"] = retirement
     rule["author"] = "AiSOC"
     rule["created"] = "2026-05-03"
     rule["modified"] = "2026-05-03"

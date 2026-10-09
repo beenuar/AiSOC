@@ -18,7 +18,9 @@ detection:
 false_positives:
 - Genuine push-loop after device swap
 playbook: tpl-credential-access
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-ident-mfa-fatigue-burst; this stateless form named
+  a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'
