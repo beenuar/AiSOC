@@ -18,7 +18,9 @@ detection:
 false_positives:
 - IAM Access Analyzer routine
 playbook: tpl-discovery
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-aws-iam-account-summary-recon; this stateless form
+  named a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

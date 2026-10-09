@@ -1,5 +1,5 @@
 {
-  "count": 18,
+  "count": 68,
   "rules": [
     {
       "category": "application",
@@ -289,6 +289,853 @@
       "severity": "medium",
       "threshold": 100,
       "window_seconds": 120
+    },
+    {
+      "category": "application",
+      "group_by": "src_ip",
+      "id": "wd-rate-limit-burst",
+      "match_when": {
+        "method": "POST",
+        "request_uri_endswith": "/login"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Rate Limit Burst on Authentication Endpoint",
+      "severity": "medium",
+      "threshold": 201,
+      "translated_from": "rate-limit-burst",
+      "window_seconds": 300
+    },
+    {
+      "category": "application",
+      "group_by": "actor_email",
+      "id": "wd-saas-mass-share-public",
+      "match_when": {
+        "event_type": "drive.acl.change",
+        "share_visibility": "public"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "SaaS File Mass Public-Share by Single User",
+      "severity": "high",
+      "threshold": 11,
+      "translated_from": "saas-mass-share-public",
+      "window_seconds": 1800
+    },
+    {
+      "category": "application",
+      "group_by": "src_ip",
+      "id": "wd-app-account-enum-reset",
+      "match_when": {
+        "event_type": "password_reset_request"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "High Volume Of Password Reset Requests From Single IP",
+      "severity": "medium",
+      "threshold": 31,
+      "translated_from": "app-account-enum-reset",
+      "window_seconds": 300
+    },
+    {
+      "category": "application",
+      "group_by": "actor_email",
+      "id": "wd-app-box-public-link-mass-create",
+      "match_when": {
+        "access": "open",
+        "event_type": "shared_link.create"
+      },
+      "mitre": [
+        "T1567.002"
+      ],
+      "name": "Box Created Many Public Links In Short Window",
+      "severity": "high",
+      "threshold": 21,
+      "translated_from": "app-box-public-link-mass-create",
+      "window_seconds": 300
+    },
+    {
+      "category": "cloud",
+      "distinct_by": "event_name",
+      "group_by": "user_arn",
+      "id": "wd-aws-iam-enumeration",
+      "match_when": {
+        "event_source": "iam.amazonaws.com"
+      },
+      "mitre": [
+        "T1087.004",
+        "T1069.003"
+      ],
+      "name": "AWS IAM Enumeration Burst",
+      "severity": "high",
+      "threshold": 26,
+      "translated_from": "aws-iam-enumeration",
+      "window_seconds": 300
+    },
+    {
+      "category": "cloud",
+      "group_by": "user_arn",
+      "id": "wd-aws-s3-mass-getobject",
+      "match_when": {
+        "event_name": "GetObject"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "AWS S3 GetObject Volume Anomaly per Principal",
+      "severity": "high",
+      "threshold": 5001,
+      "translated_from": "aws-s3-mass-getobject",
+      "window_seconds": 1800
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-azure-resource-mass-delete",
+      "match_when": {
+        "operation_name_endswith": "/delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Azure Resource Mass Deletion",
+      "severity": "critical",
+      "threshold": 51,
+      "translated_from": "azure-resource-mass-delete",
+      "window_seconds": 900
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-gcp-secret-manager-mass-export",
+      "match_when": {
+        "method_name": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion"
+      },
+      "mitre": [
+        "T1555.005",
+        "T1530"
+      ],
+      "name": "GCP Secret Manager Mass AccessSecretVersion",
+      "severity": "critical",
+      "threshold": 26,
+      "translated_from": "gcp-secret-manager-mass-export",
+      "window_seconds": 600
+    },
+    {
+      "category": "cloud",
+      "group_by": "user_arn",
+      "id": "wd-aws-iam-create-user-burst",
+      "match_when": {
+        "event_name": "CreateUser"
+      },
+      "mitre": [
+        "T1136.003"
+      ],
+      "name": "AWS IAM CreateUser Burst",
+      "severity": "medium",
+      "threshold": 11,
+      "translated_from": "aws-iam-create-user-burst",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "user_arn",
+      "id": "wd-aws-iam-account-summary-recon",
+      "match_when": {
+        "event_name_in": [
+          "GetAccountSummary",
+          "GetAccountAuthorizationDetails"
+        ]
+      },
+      "mitre": [
+        "T1087.004"
+      ],
+      "name": "AWS IAM GetAccountSummary Recon Burst",
+      "severity": "low",
+      "threshold": 6,
+      "translated_from": "aws-iam-account-summary-recon",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "user_arn",
+      "id": "wd-aws-s3-mass-deleteobject",
+      "match_when": {
+        "event_name": "DeleteObject"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "AWS S3 Mass DeleteObject Burst",
+      "severity": "critical",
+      "threshold": 1001,
+      "translated_from": "aws-s3-mass-deleteobject",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-azure-ad-bulk-user-creation",
+      "match_when": {
+        "operation_name": "Add user"
+      },
+      "mitre": [
+        "T1136.003"
+      ],
+      "name": "Entra ID Bulk User Creation Burst",
+      "severity": "medium",
+      "threshold": 26,
+      "translated_from": "azure-ad-bulk-user-creation",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-azure-ad-bulk-license-assignment",
+      "match_when": {
+        "operation_name": "Change user license"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra ID Bulk License Assignment",
+      "severity": "low",
+      "threshold": 51,
+      "translated_from": "azure-ad-bulk-license-assignment",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-azure-arm-locks-removed-bulk",
+      "match_when": {
+        "operation_name_endswith": "locks/delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Azure ResourceGroup Locks Removed In Bulk",
+      "severity": "high",
+      "threshold": 11,
+      "translated_from": "azure-arm-locks-removed-bulk",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-azure-arm-mass-resource-modify",
+      "match_when": {
+        "operation_name_endswith_any": [
+          "/write",
+          "/delete"
+        ]
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Azure Mass Resource Modify Burst",
+      "severity": "medium",
+      "threshold": 201,
+      "translated_from": "azure-arm-mass-resource-modify",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "distinct_by": "resource",
+      "group_by": "actor",
+      "id": "wd-azure-keyvault-secret-mass-get",
+      "match_when": {
+        "operation_name": "SecretGet"
+      },
+      "mitre": [
+        "T1552.001"
+      ],
+      "name": "Azure Key Vault Mass GetSecret",
+      "severity": "high",
+      "threshold": 31,
+      "translated_from": "azure-keyvault-secret-mass-get",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-gcp-iam-service-account-key-mass-create",
+      "match_when": {
+        "method_name_endswith": "CreateServiceAccountKey"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Service Account Key Burst",
+      "severity": "high",
+      "threshold": 6,
+      "translated_from": "gcp-iam-service-account-key-mass-create",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-gcp-gcs-mass-delete",
+      "match_when": {
+        "method_name": "storage.objects.delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCS Mass Object Delete Burst",
+      "severity": "critical",
+      "threshold": 1001,
+      "translated_from": "gcp-gcs-mass-delete",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "group_by": "actor",
+      "id": "wd-gcp-bq-mass-export",
+      "match_when": {
+        "job_type": "EXPORT",
+        "method_name_in": [
+          "jobservice.jobcompleted",
+          "jobs.insert"
+        ]
+      },
+      "mitre": [
+        "T1567.002"
+      ],
+      "name": "BigQuery Mass Export Burst",
+      "severity": "high",
+      "threshold": 6,
+      "translated_from": "gcp-bq-mass-export",
+      "window_seconds": 60
+    },
+    {
+      "category": "cloud",
+      "distinct_by": "k8s_object_name",
+      "group_by": "k8s_user",
+      "id": "wd-k8s-secret-mass-get",
+      "match_when": {
+        "object_resource": "secrets",
+        "verb": "get"
+      },
+      "mitre": [
+        "T1552.001"
+      ],
+      "name": "Kubernetes Secret Mass Get",
+      "severity": "high",
+      "threshold": 31,
+      "translated_from": "k8s-secret-mass-get",
+      "window_seconds": 60
+    },
+    {
+      "category": "data-exfil",
+      "group_by": "actor",
+      "id": "wd-container-mass-image-export",
+      "match_when": {
+        "dst_registry_in_allowlist": false,
+        "event_type": "image.push"
+      },
+      "mitre": [
+        "T1567"
+      ],
+      "name": "Container Image Mass Export to External Registry",
+      "severity": "high",
+      "threshold": 6,
+      "translated_from": "container-mass-image-export",
+      "window_seconds": 1800
+    },
+    {
+      "category": "data-exfil",
+      "group_by": "actor",
+      "id": "wd-secrets-mass-fetch",
+      "match_when": {
+        "event_type": "GetSecretValue",
+        "principal_type": "human"
+      },
+      "mitre": [
+        "T1555",
+        "T1530"
+      ],
+      "name": "Secrets Manager Bulk Fetch by Human Principal",
+      "severity": "high",
+      "threshold": 26,
+      "translated_from": "secrets-mass-fetch",
+      "window_seconds": 600
+    },
+    {
+      "category": "endpoint",
+      "group_by": "process_name",
+      "id": "wd-ransomware-file-extension-change",
+      "match_when": {
+        "extension_change_pattern": "to-novel-extension"
+      },
+      "mitre": [
+        "T1486"
+      ],
+      "name": "Mass File Extension Rename Indicative of Ransomware",
+      "severity": "critical",
+      "threshold": 201,
+      "translated_from": "ransomware-file-extension-change",
+      "window_seconds": 300
+    },
+    {
+      "category": "identity",
+      "group_by": "actor_email",
+      "id": "wd-brute-force-login",
+      "match_when": {
+        "event_type": "user.session.start",
+        "outcome": "FAILURE"
+      },
+      "mitre": [
+        "T1110.001"
+      ],
+      "name": "Authentication Brute-Force Burst",
+      "severity": "high",
+      "threshold": 21,
+      "translated_from": "brute-force-login",
+      "window_seconds": 600
+    },
+    {
+      "category": "identity",
+      "distinct_by": "actor_email",
+      "group_by": "src_ip",
+      "id": "wd-okta-password-spray",
+      "match_when": {
+        "event_type": "user.session.start",
+        "outcome": "FAILURE"
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Password Spray Across Many Users from Single IP",
+      "severity": "high",
+      "threshold": 31,
+      "translated_from": "password-spray",
+      "window_seconds": 1800
+    },
+    {
+      "category": "identity",
+      "group_by": "actor_email",
+      "id": "wd-okta-mfa-push-bombing",
+      "match_when": {
+        "event_type": "user.mfa.factor.push"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "MFA Push Bombing (MFA Fatigue)",
+      "severity": "high",
+      "threshold": 7,
+      "translated_from": "mfa-fatigue",
+      "window_seconds": 300
+    },
+    {
+      "category": "identity",
+      "distinct_by": "src_ip",
+      "group_by": "actor_email",
+      "id": "wd-shared-account-login-spike",
+      "match_when": {
+        "event_type": "user.session.start"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Shared Account Login Spike (Distinct IPs)",
+      "severity": "medium",
+      "threshold": 6,
+      "translated_from": "shared-account-login-spike",
+      "window_seconds": 600
+    },
+    {
+      "category": "identity",
+      "distinct_by": "src_ip",
+      "group_by": "user",
+      "id": "wd-ident-password-spray-distributed",
+      "match_when": {
+        "event_type": "auth_failure"
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Distributed Password Spray From Many IPs",
+      "severity": "high",
+      "threshold": 31,
+      "translated_from": "ident-password-spray-distributed",
+      "window_seconds": 3600
+    },
+    {
+      "category": "identity",
+      "group_by": "src_ip",
+      "id": "wd-ident-credstuffing-known-breached-list",
+      "match_when": {
+        "event_type": "auth_failure",
+        "user_agent_in_known_botnet_list": true
+      },
+      "mitre": [
+        "T1110.004"
+      ],
+      "name": "Credential Stuffing Pattern Against Login Endpoint",
+      "severity": "high",
+      "threshold": 51,
+      "translated_from": "ident-credstuffing-known-breached-list",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-ident-mfa-fatigue-burst",
+      "match_when": {
+        "event_type": "mfa_challenge"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "MFA Fatigue Burst Against Single User",
+      "severity": "high",
+      "threshold": 6,
+      "translated_from": "ident-mfa-fatigue-burst",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-ident-account-locked-many-times",
+      "match_when": {
+        "event_type": "account_locked"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Account Locked Out 3+ Times In 1 Hour",
+      "severity": "medium",
+      "threshold": 3,
+      "translated_from": "ident-account-locked-many-times",
+      "window_seconds": 3600
+    },
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-ident-totp-skewed-clock",
+      "match_when": {
+        "event_type": "mfa_challenge",
+        "totp_clock_skew_seconds_gt": 60
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "TOTP Verification Repeatedly Skews Clock",
+      "severity": "low",
+      "threshold": 6,
+      "translated_from": "ident-totp-skewed-clock",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "actor",
+      "id": "wd-ident-priv-role-burst-granted",
+      "match_when": {
+        "event_type": "role_grant",
+        "role_priv": true
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Privileged Role Grant Burst Across Many Users",
+      "severity": "high",
+      "threshold": 11,
+      "translated_from": "ident-priv-role-burst-granted",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "actor",
+      "id": "wd-ident-priv-role-removed-bulk",
+      "match_when": {
+        "event_type": "role_revoke",
+        "role_priv": true
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Privileged Role Removed From Many Users In Burst",
+      "severity": "medium",
+      "threshold": 11,
+      "translated_from": "ident-priv-role-removed-bulk",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "user",
+      "id": "wd-ident-ad-machine-account-quota-abuse",
+      "match_when": {
+        "event_id": 4741
+      },
+      "mitre": [
+        "T1136.001"
+      ],
+      "name": "Machine Account Quota Exhausted By Single User",
+      "severity": "high",
+      "threshold": 6,
+      "translated_from": "ident-ad-machine-account-quota-abuse",
+      "window_seconds": 86400
+    },
+    {
+      "category": "identity",
+      "group_by": "hostname",
+      "id": "wd-ident-kerberos-failure-spike-from-host",
+      "match_when": {
+        "event_id": 4771
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Kerberos Pre-Auth Failure Spike From Host",
+      "severity": "medium",
+      "threshold": 51,
+      "translated_from": "ident-kerberos-failure-spike-from-host",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "actor",
+      "id": "wd-ident-okta-admin-app-assigned-many-users",
+      "match_when": {
+        "event_type": "application.user_membership.add"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Okta Admin App Assigned To Many Users In Burst",
+      "severity": "medium",
+      "threshold": 26,
+      "translated_from": "ident-okta-admin-app-assigned-many-users",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "actor",
+      "id": "wd-ident-okta-mass-deactivate-users",
+      "match_when": {
+        "event_type": "user.lifecycle.deactivate"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Okta Mass User Deactivation",
+      "severity": "high",
+      "threshold": 26,
+      "translated_from": "ident-okta-mass-deactivate-users",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "actor",
+      "id": "wd-ident-ping-admin-role-burst",
+      "match_when": {
+        "event_type": "ADMIN_ROLE_GRANT"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "PingOne Admin Role Burst Granted",
+      "severity": "high",
+      "threshold": 6,
+      "translated_from": "ident-ping-admin-role-burst",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "actor",
+      "id": "wd-ident-oidc-many-clients-from-single-actor",
+      "match_when": {
+        "event_type": "client.create"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "OIDC Client Burst Created By Single Actor",
+      "severity": "medium",
+      "threshold": 6,
+      "translated_from": "ident-oidc-many-clients-from-single-actor",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "group_by": "actor",
+      "id": "wd-ident-github-org-collaborator-removed-bulk",
+      "match_when": {
+        "action": "org.remove_member"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "GitHub Org Bulk Member Removed",
+      "severity": "medium",
+      "threshold": 21,
+      "translated_from": "ident-github-org-collaborator-removed-bulk",
+      "window_seconds": 60
+    },
+    {
+      "category": "identity",
+      "distinct_by": "repository",
+      "group_by": "actor",
+      "id": "wd-ident-github-deploy-key-added-org-wide",
+      "match_when": {
+        "action": "deploy_key.add"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GitHub Deploy Key Added Across Many Repos",
+      "severity": "medium",
+      "threshold": 11,
+      "translated_from": "ident-github-deploy-key-added-org-wide",
+      "window_seconds": 3600
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-ssh-failed-from-internet",
+      "match_when": {
+        "event_type": "ssh-reject",
+        "outcome": "FAILURE",
+        "src_ip_class": "internet"
+      },
+      "mitre": [
+        "T1110.001"
+      ],
+      "name": "SSH Brute-Force From Internet",
+      "severity": "high",
+      "threshold": 31,
+      "translated_from": "ssh-failed-from-internet",
+      "window_seconds": 600
+    },
+    {
+      "category": "network",
+      "distinct_by": "dst_ip",
+      "group_by": "src",
+      "id": "wd-smb-lateral-movement",
+      "match_when": {
+        "event_id": 5145,
+        "share_name_in": [
+          "ADMIN$",
+          "C$"
+        ]
+      },
+      "mitre": [
+        "T1021.002"
+      ],
+      "name": "SMB Lateral Movement (Many ADMIN$ Connections)",
+      "severity": "high",
+      "threshold": 6,
+      "translated_from": "smb-lateral-movement",
+      "window_seconds": 600
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-ldap-bind-anomaly",
+      "match_when": {
+        "event_id": 1644
+      },
+      "mitre": [
+        "T1087.002"
+      ],
+      "name": "LDAP Bind from Workstation to Domain Controller (Excessive)",
+      "severity": "medium",
+      "threshold": 201,
+      "translated_from": "ldap-bind-anomaly",
+      "window_seconds": 300
+    },
+    {
+      "category": "network",
+      "group_by": "dst_ip",
+      "id": "wd-ddos-syn-flood",
+      "match_when": {
+        "tcp_flag": "SYN"
+      },
+      "mitre": [
+        "T1498.001"
+      ],
+      "name": "SYN Flood Pattern Against Public Endpoint",
+      "severity": "high",
+      "threshold": 5001,
+      "translated_from": "ddos-syn-flood",
+      "window_seconds": 60
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-internal-host-spamming-mail",
+      "match_when": {
+        "dst_port_in": [
+          25,
+          465,
+          587
+        ],
+        "protocol": "TCP"
+      },
+      "mitre": [
+        "T1566"
+      ],
+      "name": "Internal Host Spamming SMTP",
+      "severity": "high",
+      "threshold": 201,
+      "translated_from": "internal-host-spamming-mail",
+      "window_seconds": 600
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-net-dns-nxdomain-spike",
+      "match_when": {
+        "event_type": "dns_response",
+        "rcode": "NXDOMAIN",
+        "src_role": "endpoint"
+      },
+      "mitre": [
+        "T1568.002"
+      ],
+      "name": "High Volume Of NXDOMAIN Responses From Single Host",
+      "severity": "medium",
+      "threshold": 201,
+      "translated_from": "net-dns-nxdomain-spike",
+      "window_seconds": 300
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-net-dns-any-query-spike",
+      "match_when": {
+        "event_type": "dns_query",
+        "qtype": "ANY"
+      },
+      "mitre": [
+        "T1018"
+      ],
+      "name": "DNS Query Type ANY Volume From Single Host",
+      "severity": "medium",
+      "threshold": 51,
+      "translated_from": "net-dns-any-query-spike",
+      "window_seconds": 300
+    },
+    {
+      "category": "network",
+      "group_by": "src_ip",
+      "id": "wd-net-dhcp-starvation",
+      "match_when": {
+        "event_type": "dhcp"
+      },
+      "mitre": [
+        "T1498"
+      ],
+      "name": "DHCP Starvation: Rapid Lease Churn From Single MAC Range",
+      "severity": "high",
+      "threshold": 201,
+      "translated_from": "net-dhcp-starvation",
+      "window_seconds": 60
     }
   ]
 }

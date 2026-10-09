@@ -20,7 +20,10 @@ detection:
 false_positives:
 - Approved cross-cloud replication pipeline
 playbook: tpl-exfiltration
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (aggregate): `bytes_out_per_minute` is a sum of a numeric field over
+  the window. The engine counts occurrences and distinct values; it adds nothing up, so a gigabyte in
+  one transfer and a gigabyte in a thousand are the same count to it.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

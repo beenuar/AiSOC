@@ -288,17 +288,20 @@ class FusionWorker:
             if self._lake is not None and await self._lake.write_event(payload):
                 _METRICS["laked"] += 1
 
+            # Resolved once and shared by both engines. Parity 5.4: without
+            # the overlay the stateless engine evaluated the shared corpus and
+            # nothing else, so a tenant who disabled a noisy rule in the
+            # console kept receiving its alerts while the console showed it
+            # disabled. The windowed engine reads it for the same reason and
+            # for its allowlist booleans.
+            overlay = None
+            if self._overlays is not None and validation.tenant_id and (self._detector is not None or self._windowed is not None):
+                overlay = await self._overlays.get(str(validation.tenant_id))
+
             # Phase A2 — run the executable detection corpus against the live
             # event. Each firing rule becomes a RawAlert routed through fusion,
             # so telemetry that isn't a vendor-asserted finding still alerts.
             if self._detector is not None:
-                # Parity 5.4. Without the overlay this evaluated the shared
-                # corpus and nothing else, so a tenant who disabled a noisy
-                # rule in the console kept receiving its alerts while the
-                # console showed it disabled.
-                overlay = None
-                if self._overlays is not None and validation.tenant_id:
-                    overlay = await self._overlays.get(str(validation.tenant_id))
                 for hit in self._detector.evaluate(payload, overlay):
                     det_alert = self._detector.build_alert(payload, hit)
                     if det_alert is not None:
@@ -308,7 +311,7 @@ class FusionWorker:
             # Wave 2 — stateful/windowed detections (brute force, spray, scans)
             # count this event into its sliding window and fire once on threshold.
             if self._windowed is not None:
-                for hit in await self._windowed.evaluate(payload):
+                for hit in await self._windowed.evaluate(payload, overlay):
                     win_alert = self._windowed.build_alert(payload, hit)
                     if win_alert is not None:
                         _METRICS["detected"] += 1

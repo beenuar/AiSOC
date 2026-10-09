@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Shared corporate workstation (multi-user)
 playbook: tpl-account-anomaly
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-shared-account-login-spike; this stateless form
+  named a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

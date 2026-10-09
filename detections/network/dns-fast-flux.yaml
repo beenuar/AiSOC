@@ -19,7 +19,10 @@ detection:
 false_positives:
 - Large CDNs (allowlist parent zone)
 playbook: tpl-c2
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (operand-not-emitted): counts distinct A records, which live as a list
+  inside a single DNS response rather than one per event. The engine counts distinct values of one field
+  per event, so it cannot see inside the answer set.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

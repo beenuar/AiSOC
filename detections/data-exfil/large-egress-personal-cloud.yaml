@@ -19,7 +19,11 @@ detection:
 false_positives:
 - Allowlisted business cloud-storage backups (rare)
 playbook: tpl-data-exfil
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (not-windowed): carries a `time_window_minutes_lt` clause and no counter
+  at all, so there is nothing to accumulate. `bytes_out` is a per-event proxy field; the window clause
+  is vestigial and is what makes the rule unreachable. Deleting that one clause is a content decision,
+  not a translation.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

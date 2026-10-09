@@ -27,6 +27,14 @@ count, threshold, window. It is not a general aggregation language. Anything
 needing joins, subsearches or multi-field grouping is out of scope here and
 should stay quarantined with an honest reason rather than be half-translated.
 
+Two sources feed the artefact. The list in this file is authored here, for the
+reason above. The second source is `scripts/windowed_translation.py`, which
+derives a windowed rule from each `det-*` spec that named a counter no source
+emits — threshold, window and selector all read off the original's own
+clauses, so a translated rule cannot drift from the number its author chose.
+Rules that cannot be expressed as a count over a window are refused there with
+a reason rather than half-translated into this file.
+
 Usage:
     python3 scripts/export_windowed_ruleset.py           # write the JSON
     python3 scripts/export_windowed_ruleset.py --check   # fail on drift
@@ -325,8 +333,20 @@ WINDOWED_RULES: list[dict] = [
 ]
 
 
+def all_rules() -> list[dict]:
+    """Rules authored here, then rules translated from the `det-*` corpus.
+
+    Order matters only for the diff: keeping the translations in their own
+    block means a change to one never renumbers the other.
+    """
+    from windowed_translation import translated_rules  # noqa: PLC0415
+
+    return [*WINDOWED_RULES, *translated_rules()]
+
+
 def build() -> dict:
-    return {"count": len(WINDOWED_RULES), "rules": WINDOWED_RULES}
+    rules = all_rules()
+    return {"count": len(rules), "rules": rules}
 
 
 def _strip_count(payload: dict) -> list:
@@ -339,9 +359,10 @@ def main() -> int:
     args = parser.parse_args()
 
     payload = build()
+    rules = payload["rules"]
     rendered = json.dumps(payload, indent=2, sort_keys=True) + "\n"
 
-    ids = [r["id"] for r in WINDOWED_RULES]
+    ids = [r["id"] for r in rules]
     if len(ids) != len(set(ids)):
         duplicates = sorted({i for i in ids if ids.count(i) > 1})
         print(f"ERROR: duplicate windowed rule ids: {duplicates}", file=sys.stderr)
@@ -357,12 +378,13 @@ def main() -> int:
                 file=sys.stderr,
             )
             return 1
-        print(f"OK: windowed ruleset current ({len(WINDOWED_RULES)} rules)")
+        print(f"OK: windowed ruleset current ({len(rules)} rules)")
         return 0
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(rendered, encoding="utf-8")
-    print(f"wrote {OUT.relative_to(ROOT)} — {len(WINDOWED_RULES)} windowed rules")
+    translated = len(rules) - len(WINDOWED_RULES)
+    print(f"wrote {OUT.relative_to(ROOT)} — {len(rules)} windowed rules ({len(WINDOWED_RULES)} authored, {translated} translated)")
     return 0
 
 

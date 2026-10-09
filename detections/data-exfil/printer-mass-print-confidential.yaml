@@ -20,7 +20,10 @@ detection:
 false_positives:
 - Approved bulk-print operations (must be ticketed)
 playbook: tpl-data-exfil
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (aggregate): `page_count_per_user` sums pages across print jobs. Counting
+  jobs instead would fire on 500 one-page prints and miss one 1,500-page print, which inverts what the
+  rule is for.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

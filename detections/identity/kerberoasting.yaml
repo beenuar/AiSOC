@@ -20,7 +20,10 @@ detection:
 false_positives:
 - Legacy services that still issue RC4 tickets (host_role=legacy tag)
 playbook: tpl-credential-theft
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (operand-not-emitted): counts distinct service principal names requested
+  per account. Windows 4769 carries the SPN in `ServiceName`, which no source in this tree lifts, so there
+  is nothing to be distinct about.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

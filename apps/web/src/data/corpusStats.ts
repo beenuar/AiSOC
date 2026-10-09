@@ -13,6 +13,13 @@ import data from './corpus-stats.json';
 /** Rules the fusion engine loads and evaluates. */
 export const EXECUTABLE_DETECTION_COUNT: number = data.executable;
 
+/** Sliding-window rules, loaded by a second engine in the same worker.
+ *  Separate from EXECUTABLE_DETECTION_COUNT on purpose: a windowed rule
+ *  counts events for one entity over a window and has no YAML, so the two
+ *  figures come from different artefacts and must not be summed into one
+ *  'detections' number. */
+export const WINDOWED_DETECTION_COUNT: number = data.windowed;
+
 /** Detection YAML indexed in the marketplace, quarantined rules included. */
 export const DETECTIONS_ON_DISK: number = data.onDisk;
 

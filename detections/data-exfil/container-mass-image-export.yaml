@@ -20,7 +20,9 @@ detection:
 false_positives:
 - Approved OSS image releases (allowlist destination)
 playbook: tpl-data-exfil
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-container-mass-image-export; this stateless form
+  named a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

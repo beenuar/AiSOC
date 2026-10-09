@@ -18,7 +18,11 @@ detection:
 false_positives:
 - Compliance audit job
 playbook: tpl-discovery
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (operand-not-emitted): counts distinct *target* users of ListAccessKeys.
+  CloudTrail carries that in `requestParameters.UserName`, and the matcher has no dotted-path traversal,
+  so the connector''s `user_name` is the caller rather than the target. Counting the caller would be a
+  different detection.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

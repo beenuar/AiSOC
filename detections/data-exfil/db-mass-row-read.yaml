@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Reporting jobs (allowlist principal)
 playbook: tpl-data-exfil
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (aggregate): needs a sum of rows read per session and a z-score against
+  a learned baseline; the engine computes neither.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

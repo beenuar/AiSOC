@@ -1,5 +1,5 @@
 {
-  "count": 833,
+  "count": 759,
   "rules": [
     {
       "category": "application",
@@ -154,24 +154,6 @@
       "service": "http",
       "severity": "critical",
       "slug": "command-injection"
-    },
-    {
-      "category": "application",
-      "id": "det-application-008",
-      "match_when": {
-        "method": "POST",
-        "request_count_per_src_gt": 200,
-        "request_uri_endswith": "/login",
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1110"
-      ],
-      "name": "Rate Limit Burst on Authentication Endpoint",
-      "product": "waf",
-      "service": "http",
-      "severity": "medium",
-      "slug": "rate-limit-burst"
     },
     {
       "category": "application",
@@ -361,22 +343,6 @@
     },
     {
       "category": "application",
-      "id": "det-application-019",
-      "match_when": {
-        "distinct_object_ids_per_src_gt": 1000,
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1592"
-      ],
-      "name": "Sequential ID Enumeration Pattern Against API",
-      "product": "waf",
-      "service": "http",
-      "severity": "high",
-      "slug": "api-mass-enumeration-ids"
-    },
-    {
-      "category": "application",
       "id": "det-application-020",
       "match_when": {
         "event_type": "object.read",
@@ -443,24 +409,6 @@
       "service": "audit",
       "severity": "high",
       "slug": "gitlab-runner-shared-tag"
-    },
-    {
-      "category": "application",
-      "id": "det-application-024",
-      "match_when": {
-        "event_type": "drive.acl.change",
-        "file_count_per_user_gt": 10,
-        "share_visibility": "public",
-        "time_window_minutes_lt": 30
-      },
-      "mitre": [
-        "T1530"
-      ],
-      "name": "SaaS File Mass Public-Share by Single User",
-      "product": "google-workspace",
-      "service": "drive",
-      "severity": "high",
-      "slug": "saas-mass-share-public"
     },
     {
       "category": "application",
@@ -750,22 +698,6 @@
     },
     {
       "category": "application",
-      "id": "det-application-040",
-      "match_when": {
-        "count_5min_per_ip_gt": 30,
-        "event_type": "password_reset_request"
-      },
-      "mitre": [
-        "T1110"
-      ],
-      "name": "High Volume Of Password Reset Requests From Single IP",
-      "product": "application",
-      "service": "auth",
-      "severity": "medium",
-      "slug": "app-account-enum-reset"
-    },
-    {
-      "category": "application",
       "id": "det-application-041",
       "match_when": {
         "event_type": "ws_upgrade",
@@ -1006,22 +938,6 @@
     },
     {
       "category": "application",
-      "id": "det-application-055",
-      "match_when": {
-        "event_type": "daemon_config",
-        "insecure_registries_count_gt": 0
-      },
-      "mitre": [
-        "T1195.002"
-      ],
-      "name": "Docker Daemon Started With --insecure-registry Flag",
-      "product": "docker",
-      "service": "dockerd",
-      "severity": "medium",
-      "slug": "app-docker-insecure-registry-flag"
-    },
-    {
-      "category": "application",
       "id": "det-application-056",
       "match_when": {
         "cvss_max_gte": 9.0,
@@ -1054,22 +970,6 @@
       "service": "repo",
       "severity": "high",
       "slug": "app-protected-branch-disabled"
-    },
-    {
-      "category": "application",
-      "id": "det-application-058",
-      "match_when": {
-        "event_type": "DataExport",
-        "row_count_gt": 100000
-      },
-      "mitre": [
-        "T1530"
-      ],
-      "name": "Salesforce Mass Data Export Initiated",
-      "product": "salesforce",
-      "service": "audit",
-      "severity": "high",
-      "slug": "app-salesforce-mass-export"
     },
     {
       "category": "application",
@@ -1121,23 +1021,6 @@
     },
     {
       "category": "application",
-      "id": "det-application-062",
-      "match_when": {
-        "access": "open",
-        "count_5min_per_user_gt": 20,
-        "event_type": "shared_link.create"
-      },
-      "mitre": [
-        "T1567.002"
-      ],
-      "name": "Box Created Many Public Links In Short Window",
-      "product": "box",
-      "service": "audit",
-      "severity": "high",
-      "slug": "app-box-public-link-mass-create"
-    },
-    {
-      "category": "application",
       "id": "det-application-063",
       "match_when": {
         "actor_is_admin": false,
@@ -1167,22 +1050,6 @@
       "service": "audit",
       "severity": "medium",
       "slug": "app-confluence-space-export-bulk"
-    },
-    {
-      "category": "application",
-      "id": "det-application-065",
-      "match_when": {
-        "event_type": "record_export",
-        "row_count_gt": 50000
-      },
-      "mitre": [
-        "T1530"
-      ],
-      "name": "ServiceNow Bulk Record Export",
-      "product": "servicenow",
-      "service": "audit",
-      "severity": "medium",
-      "slug": "app-servicenow-record-export-bulk"
     },
     {
       "category": "application",
@@ -1537,24 +1404,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-002",
-      "match_when": {
-        "event_name_count_gt": 25,
-        "event_source": "iam.amazonaws.com",
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1087.004",
-        "T1069.003"
-      ],
-      "name": "AWS IAM Enumeration Burst",
-      "product": "aws",
-      "service": "cloudtrail",
-      "severity": "high",
-      "slug": "aws-iam-enumeration"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-003",
       "match_when": {
         "event_name_in": [
@@ -1779,23 +1628,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-015",
-      "match_when": {
-        "event_name": "GetObject",
-        "object_count_per_principal_gt": 5000,
-        "time_window_minutes_lt": 30
-      },
-      "mitre": [
-        "T1530"
-      ],
-      "name": "AWS S3 GetObject Volume Anomaly per Principal",
-      "product": "aws",
-      "service": "cloudtrail",
-      "severity": "high",
-      "slug": "aws-s3-mass-getobject"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-016",
       "match_when": {
         "operation_name": "AddMemberToRole",
@@ -1961,23 +1793,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-025",
-      "match_when": {
-        "delete_count_per_principal_gt": 50,
-        "operation_name_endswith": "/delete",
-        "time_window_minutes_lt": 15
-      },
-      "mitre": [
-        "T1485"
-      ],
-      "name": "Azure Resource Mass Deletion",
-      "product": "azure",
-      "service": "activity",
-      "severity": "critical",
-      "slug": "azure-resource-mass-delete"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-026",
       "match_when": {
         "method_name": "SetIamPolicy",
@@ -2115,24 +1930,6 @@
       "service": "audit",
       "severity": "high",
       "slug": "gcp-service-account-impersonation"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-034",
-      "match_when": {
-        "method_name": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion",
-        "secret_count_per_principal_gt": 25,
-        "time_window_minutes_lt": 10
-      },
-      "mitre": [
-        "T1555.005",
-        "T1530"
-      ],
-      "name": "GCP Secret Manager Mass AccessSecretVersion",
-      "product": "gcp",
-      "service": "audit",
-      "severity": "critical",
-      "slug": "gcp-secret-manager-mass-export"
     },
     {
       "category": "cloud",
@@ -2407,57 +2204,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-050",
-      "match_when": {
-        "event_name": "CreateUser",
-        "events_per_minute_gt": 10
-      },
-      "mitre": [
-        "T1136.003"
-      ],
-      "name": "AWS IAM CreateUser Burst",
-      "product": "aws",
-      "service": "iam",
-      "severity": "medium",
-      "slug": "aws-iam-create-user-burst"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-051",
-      "match_when": {
-        "event_name_in": [
-          "GetAccountSummary",
-          "GetAccountAuthorizationDetails"
-        ],
-        "events_per_minute_gt": 5
-      },
-      "mitre": [
-        "T1087.004"
-      ],
-      "name": "AWS IAM GetAccountSummary Recon Burst",
-      "product": "aws",
-      "service": "iam",
-      "severity": "low",
-      "slug": "aws-iam-account-summary-recon"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-052",
-      "match_when": {
-        "distinct_users_per_minute_gt": 20,
-        "event_name": "ListAccessKeys"
-      },
-      "mitre": [
-        "T1087.004"
-      ],
-      "name": "AWS IAM ListAccessKeys Recon Across Users",
-      "product": "aws",
-      "service": "iam",
-      "severity": "medium",
-      "slug": "aws-iam-list-keys-recon"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-053",
       "match_when": {
         "event_name": "CreateLoginProfile",
@@ -2592,22 +2338,6 @@
       "service": "s3",
       "severity": "high",
       "slug": "aws-s3-object-lock-disabled"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-061",
-      "match_when": {
-        "event_name": "DeleteObject",
-        "objects_per_minute_gt": 1000
-      },
-      "mitre": [
-        "T1485"
-      ],
-      "name": "AWS S3 Mass DeleteObject Burst",
-      "product": "aws",
-      "service": "s3",
-      "severity": "critical",
-      "slug": "aws-s3-mass-deleteobject"
     },
     {
       "category": "cloud",
@@ -3069,22 +2799,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-089",
-      "match_when": {
-        "distinct_secrets_per_minute_gt": 30,
-        "event_name": "GetSecretValue"
-      },
-      "mitre": [
-        "T1552.001"
-      ],
-      "name": "AWS SecretsManager Mass GetSecretValue",
-      "product": "aws",
-      "service": "secretsmanager",
-      "severity": "high",
-      "slug": "aws-secretsmanager-mass-getsecret"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-090",
       "match_when": {
         "event_name": "PutParameter",
@@ -3363,22 +3077,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-107",
-      "match_when": {
-        "events_per_minute_gt": 25,
-        "operation_name": "Add user"
-      },
-      "mitre": [
-        "T1136.003"
-      ],
-      "name": "Entra ID Bulk User Creation Burst",
-      "product": "azure",
-      "service": "entra-audit",
-      "severity": "medium",
-      "slug": "azure-ad-bulk-user-creation"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-108",
       "match_when": {
         "operation_name": "Delete named location"
@@ -3407,22 +3105,6 @@
       "service": "entra-audit",
       "severity": "high",
       "slug": "azure-ad-legacy-auth-allowed"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-110",
-      "match_when": {
-        "events_per_minute_gt": 50,
-        "operation_name": "Change user license"
-      },
-      "mitre": [
-        "T1078.004"
-      ],
-      "name": "Entra ID Bulk License Assignment",
-      "product": "azure",
-      "service": "entra-audit",
-      "severity": "low",
-      "slug": "azure-ad-bulk-license-assignment"
     },
     {
       "category": "cloud",
@@ -3508,22 +3190,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-116",
-      "match_when": {
-        "events_per_minute_gt": 10,
-        "operation_name_endswith": "locks/delete"
-      },
-      "mitre": [
-        "T1485"
-      ],
-      "name": "Azure ResourceGroup Locks Removed In Bulk",
-      "product": "azure",
-      "service": "activity",
-      "severity": "high",
-      "slug": "azure-arm-locks-removed-bulk"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-117",
       "match_when": {
         "operation_name_endswith": "diagnosticSettings/delete"
@@ -3536,25 +3202,6 @@
       "service": "activity",
       "severity": "critical",
       "slug": "azure-arm-diagnostic-settings-deleted"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-118",
-      "match_when": {
-        "events_per_minute_gt": 200,
-        "operation_name_endswith_any": [
-          "/write",
-          "/delete"
-        ]
-      },
-      "mitre": [
-        "T1485"
-      ],
-      "name": "Azure Mass Resource Modify Burst",
-      "product": "azure",
-      "service": "activity",
-      "severity": "medium",
-      "slug": "azure-arm-mass-resource-modify"
     },
     {
       "category": "cloud",
@@ -3683,22 +3330,6 @@
       "service": "keyvault",
       "severity": "high",
       "slug": "azure-keyvault-purge-protection-disabled"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-127",
-      "match_when": {
-        "distinct_secrets_per_minute_gt": 30,
-        "operation_name": "SecretGet"
-      },
-      "mitre": [
-        "T1552.001"
-      ],
-      "name": "Azure Key Vault Mass GetSecret",
-      "product": "azure",
-      "service": "keyvault",
-      "severity": "high",
-      "slug": "azure-keyvault-secret-mass-get"
     },
     {
       "category": "cloud",
@@ -3928,22 +3559,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-142",
-      "match_when": {
-        "events_per_minute_gt": 5,
-        "method_name_endswith": "CreateServiceAccountKey"
-      },
-      "mitre": [
-        "T1098.001"
-      ],
-      "name": "GCP Service Account Key Burst",
-      "product": "gcp",
-      "service": "audit",
-      "severity": "high",
-      "slug": "gcp-iam-service-account-key-mass-create"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-143",
       "match_when": {
         "added_member_external_domain": true,
@@ -3957,22 +3572,6 @@
       "service": "audit",
       "severity": "high",
       "slug": "gcp-iam-grant-from-foreign-domain"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-144",
-      "match_when": {
-        "distinct_targets_per_minute_gt": 10,
-        "method_name_endswith": "GenerateAccessToken"
-      },
-      "mitre": [
-        "T1078.004"
-      ],
-      "name": "GCP Service Account Impersonation Burst",
-      "product": "gcp",
-      "service": "audit",
-      "severity": "high",
-      "slug": "gcp-iam-impersonation-burst"
     },
     {
       "category": "cloud",
@@ -4027,22 +3626,6 @@
       "service": "audit",
       "severity": "medium",
       "slug": "gcp-gcs-uniform-access-disabled"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-148",
-      "match_when": {
-        "events_per_minute_gt": 1000,
-        "method_name": "storage.objects.delete"
-      },
-      "mitre": [
-        "T1485"
-      ],
-      "name": "GCS Mass Object Delete Burst",
-      "product": "gcp",
-      "service": "audit",
-      "severity": "critical",
-      "slug": "gcp-gcs-mass-delete"
     },
     {
       "category": "cloud",
@@ -4193,26 +3776,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-158",
-      "match_when": {
-        "events_per_minute_gt": 5,
-        "job_type": "EXPORT",
-        "method_name_in": [
-          "jobservice.jobcompleted",
-          "jobs.insert"
-        ]
-      },
-      "mitre": [
-        "T1567.002"
-      ],
-      "name": "BigQuery Mass Export Burst",
-      "product": "gcp",
-      "service": "audit",
-      "severity": "high",
-      "slug": "gcp-bq-mass-export"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-159",
       "match_when": {
         "method_name": "jobservice.jobcompleted",
@@ -4342,23 +3905,6 @@
       "service": "audit",
       "severity": "critical",
       "slug": "k8s-cluster-admin-binding-non-system"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-167",
-      "match_when": {
-        "distinct_secrets_per_minute_gt": 30,
-        "object_resource": "secrets",
-        "verb": "get"
-      },
-      "mitre": [
-        "T1552.001"
-      ],
-      "name": "Kubernetes Secret Mass Get",
-      "product": "kubernetes",
-      "service": "audit",
-      "severity": "high",
-      "slug": "k8s-secret-mass-get"
     },
     {
       "category": "cloud",
@@ -4687,32 +4233,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-186",
-      "match_when": {
-        "bytes_out_per_minute_gt": 1073741824,
-        "dst_cloud_in": [
-          "aws",
-          "azure",
-          "gcp"
-        ],
-        "src_cloud_in": [
-          "aws",
-          "azure",
-          "gcp"
-        ],
-        "src_cloud_neq_dst_cloud": true
-      },
-      "mitre": [
-        "T1567"
-      ],
-      "name": "Multi-Cloud Cross-Cloud Mass Egress Burst",
-      "product": "multi-cloud",
-      "service": "netflow",
-      "severity": "high",
-      "slug": "cloud-multi-cross-cloud-mass-egress"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-187",
       "match_when": {
         "action": "manual_override",
@@ -4788,39 +4308,6 @@
     },
     {
       "category": "data-exfil",
-      "id": "det-data-exfil-001",
-      "match_when": {
-        "bytes_out_gt": 100000000,
-        "dst_in_personal_cloud_list": true,
-        "time_window_minutes_lt": 60
-      },
-      "mitre": [
-        "T1567.002"
-      ],
-      "name": "Large Outbound Transfer to Personal Cloud Storage",
-      "product": "proxy",
-      "service": "http",
-      "severity": "high",
-      "slug": "large-egress-personal-cloud"
-    },
-    {
-      "category": "data-exfil",
-      "id": "det-data-exfil-002",
-      "match_when": {
-        "baseline_z_score_gt": 4,
-        "bytes_out_per_src_gt": 200000000
-      },
-      "mitre": [
-        "T1041"
-      ],
-      "name": "Outbound Bytes Spike Above Baseline (Anomaly)",
-      "product": "ndr",
-      "service": "flow",
-      "severity": "high",
-      "slug": "egress-spike-baseline"
-    },
-    {
-      "category": "data-exfil",
       "id": "det-data-exfil-003",
       "match_when": {
         "image_basename_in": [
@@ -4875,26 +4362,6 @@
     },
     {
       "category": "data-exfil",
-      "id": "det-data-exfil-006",
-      "match_when": {
-        "actor_in_export_allowlist": false,
-        "event_type_in": [
-          "DataExport",
-          "ReportExport"
-        ],
-        "row_count_gt": 50000
-      },
-      "mitre": [
-        "T1530"
-      ],
-      "name": "Salesforce Bulk Data Export by Non-Allowlisted User",
-      "product": "salesforce",
-      "service": "audit",
-      "severity": "high",
-      "slug": "salesforce-bulk-export"
-    },
-    {
-      "category": "data-exfil",
       "id": "det-data-exfil-007",
       "match_when": {
         "event_type": "QUERY",
@@ -4909,23 +4376,6 @@
       "service": "queryhistory",
       "severity": "high",
       "slug": "snowflake-mass-export"
-    },
-    {
-      "category": "data-exfil",
-      "id": "det-data-exfil-008",
-      "match_when": {
-        "baseline_z_score_gt": 4,
-        "event_type": "SQL_SELECT",
-        "rows_read_per_session_gt": 500000
-      },
-      "mitre": [
-        "T1530"
-      ],
-      "name": "Database Application Reads Anomalously High Row Count",
-      "product": "db",
-      "service": "query",
-      "severity": "medium",
-      "slug": "db-mass-row-read"
     },
     {
       "category": "data-exfil",
@@ -5013,24 +4463,6 @@
     },
     {
       "category": "data-exfil",
-      "id": "det-data-exfil-013",
-      "match_when": {
-        "doc_classification": "confidential",
-        "event_id": 307,
-        "page_count_per_user_gt": 500,
-        "time_window_hours_lt": 1
-      },
-      "mitre": [
-        "T1052"
-      ],
-      "name": "Mass Print Job From Confidential Document Repository",
-      "product": "windows",
-      "service": "print",
-      "severity": "medium",
-      "slug": "printer-mass-print-confidential"
-    },
-    {
-      "category": "data-exfil",
       "id": "det-data-exfil-014",
       "match_when": {
         "event_type": "FileCreate",
@@ -5099,24 +4531,6 @@
     },
     {
       "category": "data-exfil",
-      "id": "det-data-exfil-018",
-      "match_when": {
-        "dst_registry_in_allowlist": false,
-        "event_type": "image.push",
-        "image_count_per_principal_gt": 5,
-        "time_window_minutes_lt": 30
-      },
-      "mitre": [
-        "T1567"
-      ],
-      "name": "Container Image Mass Export to External Registry",
-      "product": "cloud",
-      "service": "registry",
-      "severity": "high",
-      "slug": "container-mass-image-export"
-    },
-    {
-      "category": "data-exfil",
       "id": "det-data-exfil-019",
       "match_when": {
         "bytes_in_gt": 200000000,
@@ -5130,25 +4544,6 @@
       "service": "session",
       "severity": "medium",
       "slug": "vpn-large-download-foreign"
-    },
-    {
-      "category": "data-exfil",
-      "id": "det-data-exfil-020",
-      "match_when": {
-        "event_type": "GetSecretValue",
-        "principal_type": "human",
-        "secret_count_per_principal_gt": 25,
-        "time_window_minutes_lt": 10
-      },
-      "mitre": [
-        "T1555",
-        "T1530"
-      ],
-      "name": "Secrets Manager Bulk Fetch by Human Principal",
-      "product": "cloud",
-      "service": "secrets",
-      "severity": "high",
-      "slug": "secrets-mass-fetch"
     },
     {
       "category": "endpoint",
@@ -5205,23 +4600,6 @@
       "service": "object-access",
       "severity": "critical",
       "slug": "credential-dumping-lsass"
-    },
-    {
-      "category": "endpoint",
-      "id": "det-endpoint-003",
-      "match_when": {
-        "extension_change_pattern": "to-novel-extension",
-        "rename_count_per_process_gt": 200,
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1486"
-      ],
-      "name": "Mass File Extension Rename Indicative of Ransomware",
-      "product": "edr",
-      "service": "file-rename",
-      "severity": "critical",
-      "slug": "ransomware-file-extension-change"
     },
     {
       "category": "endpoint",
@@ -10678,24 +10056,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-001",
-      "match_when": {
-        "event_type": "user.session.start",
-        "fail_count_gt": 20,
-        "outcome": "FAILURE",
-        "time_window_minutes_lt": 10
-      },
-      "mitre": [
-        "T1110.001"
-      ],
-      "name": "Authentication Brute-Force Burst",
-      "product": "okta",
-      "service": "system-log",
-      "severity": "high",
-      "slug": "brute-force-login"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-002",
       "match_when": {
         "event_type": "user.session.start",
@@ -10711,24 +10071,6 @@
       "service": "system-log",
       "severity": "high",
       "slug": "impossible-travel"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-003",
-      "match_when": {
-        "distinct_users_per_ip_gt": 30,
-        "event_type": "user.session.start",
-        "outcome": "FAILURE",
-        "time_window_minutes_lt": 30
-      },
-      "mitre": [
-        "T1110.003"
-      ],
-      "name": "Password Spray Across Many Users from Single IP",
-      "product": "okta",
-      "service": "system-log",
-      "severity": "high",
-      "slug": "password-spray"
     },
     {
       "category": "identity",
@@ -10819,23 +10161,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-008",
-      "match_when": {
-        "event_type": "user.mfa.factor.push",
-        "mfa_push_count_gt": 6,
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1621"
-      ],
-      "name": "MFA Push Bombing (MFA Fatigue)",
-      "product": "okta",
-      "service": "system-log",
-      "severity": "high",
-      "slug": "mfa-fatigue"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-009",
       "match_when": {
         "event_type": "policy.lifecycle.update",
@@ -10916,23 +10241,6 @@
       "service": "auth",
       "severity": "high",
       "slug": "default-credential-login"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-014",
-      "match_when": {
-        "distinct_ip_count_per_user_gt": 5,
-        "event_type": "user.session.start",
-        "time_window_minutes_lt": 10
-      },
-      "mitre": [
-        "T1078"
-      ],
-      "name": "Shared Account Login Spike (Distinct IPs)",
-      "product": "okta",
-      "service": "system-log",
-      "severity": "medium",
-      "slug": "shared-account-login-spike"
     },
     {
       "category": "identity",
@@ -11269,27 +10577,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-032",
-      "match_when": {
-        "event_id": 4769,
-        "spn_count_per_user_gt": 5,
-        "ticket_encryption_in": [
-          "RC4-HMAC",
-          "0x17"
-        ],
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1558.003"
-      ],
-      "name": "Kerberoasting (Service-Ticket Request for SPN)",
-      "product": "windows",
-      "service": "security",
-      "severity": "high",
-      "slug": "kerberoasting"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-033",
       "match_when": {
         "event_id": 4768,
@@ -11433,56 +10720,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-041",
-      "match_when": {
-        "distinct_users_per_minute_gt": 30,
-        "event_type": "auth_failure",
-        "tries_per_user_lte": 5
-      },
-      "mitre": [
-        "T1110.003"
-      ],
-      "name": "Password Spray: Single IP, Many Targets, Few Tries Each",
-      "product": "identity",
-      "service": "auth",
-      "severity": "high",
-      "slug": "ident-password-spray-many-targets"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-042",
-      "match_when": {
-        "distinct_ips_per_user_per_hour_gt": 30,
-        "event_type": "auth_failure"
-      },
-      "mitre": [
-        "T1110.003"
-      ],
-      "name": "Distributed Password Spray From Many IPs",
-      "product": "identity",
-      "service": "auth",
-      "severity": "high",
-      "slug": "ident-password-spray-distributed"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-043",
-      "match_when": {
-        "event_type": "auth_failure",
-        "tries_per_minute_gt": 50,
-        "user_agent_in_known_botnet_list": true
-      },
-      "mitre": [
-        "T1110.004"
-      ],
-      "name": "Credential Stuffing Pattern Against Login Endpoint",
-      "product": "identity",
-      "service": "auth",
-      "severity": "high",
-      "slug": "ident-credstuffing-known-breached-list"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-044",
       "match_when": {
         "event_type": "auth_success",
@@ -11549,22 +10786,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-048",
-      "match_when": {
-        "event_type": "mfa_challenge",
-        "user_challenges_per_minute_gt": 5
-      },
-      "mitre": [
-        "T1621"
-      ],
-      "name": "MFA Fatigue Burst Against Single User",
-      "product": "identity",
-      "service": "auth",
-      "severity": "high",
-      "slug": "ident-mfa-fatigue-burst"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-049",
       "match_when": {
         "current_state": "approve",
@@ -11580,22 +10801,6 @@
       "service": "auth",
       "severity": "medium",
       "slug": "ident-mfa-deny-then-success"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-050",
-      "match_when": {
-        "event_type": "account_locked",
-        "lockouts_per_hour_gte": 3
-      },
-      "mitre": [
-        "T1110"
-      ],
-      "name": "Account Locked Out 3+ Times In 1 Hour",
-      "product": "identity",
-      "service": "auth",
-      "severity": "medium",
-      "slug": "ident-account-locked-many-times"
     },
     {
       "category": "identity",
@@ -11834,23 +11039,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-065",
-      "match_when": {
-        "event_type": "mfa_challenge",
-        "events_per_minute_gt": 5,
-        "totp_clock_skew_seconds_gt": 60
-      },
-      "mitre": [
-        "T1110"
-      ],
-      "name": "TOTP Verification Repeatedly Skews Clock",
-      "product": "identity",
-      "service": "mfa",
-      "severity": "low",
-      "slug": "ident-totp-skewed-clock"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-066",
       "match_when": {
         "event_type": "role_grant",
@@ -11934,23 +11122,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-071",
-      "match_when": {
-        "event_type": "role_grant",
-        "events_per_minute_gt": 10,
-        "role_priv": true
-      },
-      "mitre": [
-        "T1098"
-      ],
-      "name": "Privileged Role Grant Burst Across Many Users",
-      "product": "identity",
-      "service": "audit",
-      "severity": "high",
-      "slug": "ident-priv-role-burst-granted"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-072",
       "match_when": {
         "event_type": "auth_success",
@@ -12021,39 +11192,6 @@
       "service": "oauth",
       "severity": "high",
       "slug": "ident-app-impersonation-priv"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-076",
-      "match_when": {
-        "event_type": "role_revoke",
-        "events_per_minute_gt": 10,
-        "role_priv": true
-      },
-      "mitre": [
-        "T1531"
-      ],
-      "name": "Privileged Role Removed From Many Users In Burst",
-      "product": "identity",
-      "service": "audit",
-      "severity": "medium",
-      "slug": "ident-priv-role-removed-bulk"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-077",
-      "match_when": {
-        "active_keys_per_account_gt": 5,
-        "event_type": "key_inventory"
-      },
-      "mitre": [
-        "T1098.001"
-      ],
-      "name": "Service Account With 5+ Active API Keys",
-      "product": "identity",
-      "service": "audit",
-      "severity": "medium",
-      "slug": "ident-orphan-svc-acct-many-keys"
     },
     {
       "category": "identity",
@@ -12217,22 +11355,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-087",
-      "match_when": {
-        "event_id": 4741,
-        "machines_created_per_user_per_day_gt": 5
-      },
-      "mitre": [
-        "T1136.001"
-      ],
-      "name": "Machine Account Quota Exhausted By Single User",
-      "product": "active-directory",
-      "service": "audit",
-      "severity": "high",
-      "slug": "ident-ad-machine-account-quota-abuse"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-088",
       "match_when": {
         "event_id": 4729,
@@ -12363,22 +11485,6 @@
       "service": "kerberos",
       "severity": "critical",
       "slug": "ident-skeleton-key-encryption-downgrade"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-096",
-      "match_when": {
-        "event_id": 4771,
-        "failures_per_host_per_minute_gt": 50
-      },
-      "mitre": [
-        "T1110"
-      ],
-      "name": "Kerberos Pre-Auth Failure Spike From Host",
-      "product": "active-directory",
-      "service": "kerberos",
-      "severity": "medium",
-      "slug": "ident-kerberos-failure-spike-from-host"
     },
     {
       "category": "identity",
@@ -12531,22 +11637,6 @@
       "service": "saml",
       "severity": "critical",
       "slug": "ident-saml-issuer-mismatch"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-106",
-      "match_when": {
-        "event_type": "application.user_membership.add",
-        "events_per_minute_gt": 25
-      },
-      "mitre": [
-        "T1098"
-      ],
-      "name": "Okta Admin App Assigned To Many Users In Burst",
-      "product": "okta",
-      "service": "audit",
-      "severity": "medium",
-      "slug": "ident-okta-admin-app-assigned-many-users"
     },
     {
       "category": "identity",
@@ -12716,22 +11806,6 @@
       "service": "audit",
       "severity": "medium",
       "slug": "ident-okta-radius-app-added"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-117",
-      "match_when": {
-        "event_type": "user.lifecycle.deactivate",
-        "events_per_minute_gt": 25
-      },
-      "mitre": [
-        "T1531"
-      ],
-      "name": "Okta Mass User Deactivation",
-      "product": "okta",
-      "service": "audit",
-      "severity": "high",
-      "slug": "ident-okta-mass-deactivate-users"
     },
     {
       "category": "identity",
@@ -12910,22 +11984,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-129",
-      "match_when": {
-        "event_type": "ADMIN_ROLE_GRANT",
-        "events_per_minute_gt": 5
-      },
-      "mitre": [
-        "T1098"
-      ],
-      "name": "PingOne Admin Role Burst Granted",
-      "product": "ping",
-      "service": "audit",
-      "severity": "high",
-      "slug": "ident-ping-admin-role-burst"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-130",
       "match_when": {
         "event_type": "DEVICE_DELETED",
@@ -13050,22 +12108,6 @@
       "service": "oidc",
       "severity": "high",
       "slug": "ident-oidc-issuer-trust-changed"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-138",
-      "match_when": {
-        "event_type": "client.create",
-        "events_per_minute_per_actor_gt": 5
-      },
-      "mitre": [
-        "T1136"
-      ],
-      "name": "OIDC Client Burst Created By Single Actor",
-      "product": "identity",
-      "service": "oidc",
-      "severity": "medium",
-      "slug": "ident-oidc-many-clients-from-single-actor"
     },
     {
       "category": "identity",
@@ -13335,38 +12377,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-155",
-      "match_when": {
-        "action": "org.remove_member",
-        "events_per_minute_gt": 20
-      },
-      "mitre": [
-        "T1531"
-      ],
-      "name": "GitHub Org Bulk Member Removed",
-      "product": "github",
-      "service": "audit",
-      "severity": "medium",
-      "slug": "ident-github-org-collaborator-removed-bulk"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-156",
-      "match_when": {
-        "action": "deploy_key.add",
-        "distinct_repos_per_actor_per_hour_gt": 10
-      },
-      "mitre": [
-        "T1098.001"
-      ],
-      "name": "GitHub Deploy Key Added Across Many Repos",
-      "product": "github",
-      "service": "audit",
-      "severity": "medium",
-      "slug": "ident-github-deploy-key-added-org-wide"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-157",
       "match_when": {
         "action_in": [
@@ -13434,97 +12444,6 @@
     },
     {
       "category": "network",
-      "id": "det-network-001",
-      "match_when": {
-        "connection_count_gt": 50,
-        "interval_consistency_gt": 0.85,
-        "time_window_minutes_lt": 60
-      },
-      "mitre": [
-        "T1071.001"
-      ],
-      "name": "C2 Beacon Pattern (Periodic High-Frequency)",
-      "product": "ndr",
-      "service": "flow",
-      "severity": "high",
-      "slug": "c2-beacon-high-frequency"
-    },
-    {
-      "category": "network",
-      "id": "det-network-002",
-      "match_when": {
-        "avg_subdomain_len_gt": 50,
-        "query_count_gt": 100,
-        "time_window_minutes_lt": 30
-      },
-      "mitre": [
-        "T1048.003"
-      ],
-      "name": "DNS Tunneling / Exfiltration (High Length Subdomains)",
-      "product": "dns",
-      "service": "query",
-      "severity": "high",
-      "slug": "dns-data-exfiltration"
-    },
-    {
-      "category": "network",
-      "id": "det-network-003",
-      "match_when": {
-        "distinct_dst_per_src_gt": 25,
-        "distinct_ports_per_src_gt": 50,
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1046"
-      ],
-      "name": "Internal Network Port Scan",
-      "product": "ndr",
-      "service": "flow",
-      "severity": "high",
-      "slug": "port-scan-internal"
-    },
-    {
-      "category": "network",
-      "id": "det-network-004",
-      "match_when": {
-        "event_type": "ssh-reject",
-        "fail_count_gt": 30,
-        "outcome": "FAILURE",
-        "src_ip_class": "internet",
-        "time_window_minutes_lt": 10
-      },
-      "mitre": [
-        "T1110.001"
-      ],
-      "name": "SSH Brute-Force From Internet",
-      "product": "linux",
-      "service": "auth",
-      "severity": "high",
-      "slug": "ssh-failed-from-internet"
-    },
-    {
-      "category": "network",
-      "id": "det-network-005",
-      "match_when": {
-        "distinct_dst_per_src_gt": 5,
-        "event_id": 5145,
-        "share_name_in": [
-          "ADMIN$",
-          "C$"
-        ],
-        "time_window_minutes_lt": 10
-      },
-      "mitre": [
-        "T1021.002"
-      ],
-      "name": "SMB Lateral Movement (Many ADMIN$ Connections)",
-      "product": "windows",
-      "service": "security",
-      "severity": "high",
-      "slug": "smb-lateral-movement"
-    },
-    {
-      "category": "network",
       "id": "det-network-006",
       "match_when": {
         "dst_ip_class": "internal",
@@ -13577,23 +12496,6 @@
     },
     {
       "category": "network",
-      "id": "det-network-009",
-      "match_when": {
-        "distinct_a_records_gt": 30,
-        "time_window_hours_lt": 1,
-        "ttl_seconds_lt": 60
-      },
-      "mitre": [
-        "T1568.001"
-      ],
-      "name": "DNS Fast-Flux (Many Distinct A-Records / Short TTL)",
-      "product": "dns",
-      "service": "query",
-      "severity": "high",
-      "slug": "dns-fast-flux"
-    },
-    {
-      "category": "network",
       "id": "det-network-010",
       "match_when": {
         "event_id": 5158,
@@ -13623,24 +12525,6 @@
       "service": "dhcp",
       "severity": "high",
       "slug": "dhcp-rogue-server"
-    },
-    {
-      "category": "network",
-      "id": "det-network-012",
-      "match_when": {
-        "avg_payload_bytes_gt": 512,
-        "packet_count_gt": 500,
-        "protocol": "ICMP",
-        "time_window_minutes_lt": 30
-      },
-      "mitre": [
-        "T1095"
-      ],
-      "name": "ICMP Tunneling Pattern (Large Payloads)",
-      "product": "ndr",
-      "service": "flow",
-      "severity": "high",
-      "slug": "icmp-tunnel"
     },
     {
       "category": "network",
@@ -13675,22 +12559,6 @@
     },
     {
       "category": "network",
-      "id": "det-network-015",
-      "match_when": {
-        "dst_asn_seen_count_lt": 5,
-        "time_window_days_gt": 30
-      },
-      "mitre": [
-        "T1071.001"
-      ],
-      "name": "Outbound Traffic to Rare/Suspicious ASN",
-      "product": "ndr",
-      "service": "flow",
-      "severity": "medium",
-      "slug": "egress-to-rare-asn"
-    },
-    {
-      "category": "network",
       "id": "det-network-016",
       "match_when": {
         "event_id": 4624,
@@ -13705,23 +12573,6 @@
       "service": "security",
       "severity": "medium",
       "slug": "smb-null-session"
-    },
-    {
-      "category": "network",
-      "id": "det-network-017",
-      "match_when": {
-        "event_id": 1644,
-        "ldap_query_count_per_src_gt": 200,
-        "time_window_minutes_lt": 5
-      },
-      "mitre": [
-        "T1087.002"
-      ],
-      "name": "LDAP Bind from Workstation to Domain Controller (Excessive)",
-      "product": "windows",
-      "service": "directory-service",
-      "severity": "medium",
-      "slug": "ldap-bind-anomaly"
     },
     {
       "category": "network",
@@ -13746,23 +12597,6 @@
     },
     {
       "category": "network",
-      "id": "det-network-019",
-      "match_when": {
-        "syn_count_per_dst_gt": 5000,
-        "tcp_flag": "SYN",
-        "time_window_minutes_lt": 1
-      },
-      "mitre": [
-        "T1498.001"
-      ],
-      "name": "SYN Flood Pattern Against Public Endpoint",
-      "product": "ndr",
-      "service": "flow",
-      "severity": "high",
-      "slug": "ddos-syn-flood"
-    },
-    {
-      "category": "network",
       "id": "det-network-020",
       "match_when": {
         "dst_in_blocklist": true
@@ -13775,28 +12609,6 @@
       "service": "flow",
       "severity": "high",
       "slug": "egress-to-blocklisted-ip"
-    },
-    {
-      "category": "network",
-      "id": "det-network-021",
-      "match_when": {
-        "dst_port_in": [
-          25,
-          465,
-          587
-        ],
-        "protocol": "TCP",
-        "smtp_count_per_src_gt": 200,
-        "time_window_minutes_lt": 10
-      },
-      "mitre": [
-        "T1566"
-      ],
-      "name": "Internal Host Spamming SMTP",
-      "product": "ndr",
-      "service": "flow",
-      "severity": "high",
-      "slug": "internal-host-spamming-mail"
     },
     {
       "category": "network",
@@ -14008,41 +12820,6 @@
     },
     {
       "category": "network",
-      "id": "det-network-033",
-      "match_when": {
-        "count_5min_gt": 200,
-        "event_type": "dns_response",
-        "rcode": "NXDOMAIN",
-        "src_role": "endpoint"
-      },
-      "mitre": [
-        "T1568.002"
-      ],
-      "name": "High Volume Of NXDOMAIN Responses From Single Host",
-      "product": "dns",
-      "service": "resolver",
-      "severity": "medium",
-      "slug": "net-dns-nxdomain-spike"
-    },
-    {
-      "category": "network",
-      "id": "det-network-034",
-      "match_when": {
-        "count_5min_gt": 50,
-        "event_type": "dns_query",
-        "qtype": "ANY"
-      },
-      "mitre": [
-        "T1018"
-      ],
-      "name": "DNS Query Type ANY Volume From Single Host",
-      "product": "dns",
-      "service": "resolver",
-      "severity": "medium",
-      "slug": "net-dns-any-query-spike"
-    },
-    {
-      "category": "network",
       "id": "det-network-035",
       "match_when": {
         "event_type": "dns_query",
@@ -14098,23 +12875,6 @@
     },
     {
       "category": "network",
-      "id": "det-network-038",
-      "match_when": {
-        "event_type": "dns_query",
-        "subdomain_hex_ratio_gt": 0.9,
-        "subdomain_length_gt": 30
-      },
-      "mitre": [
-        "T1071.004"
-      ],
-      "name": "DNS Tunnel Indicator: Long Hex Subdomain Sequence",
-      "product": "dns",
-      "service": "resolver",
-      "severity": "high",
-      "slug": "net-dns-tunnel-pattern-len"
-    },
-    {
-      "category": "network",
       "id": "det-network-039",
       "match_when": {
         "destination_port": 443,
@@ -14167,23 +12927,6 @@
       "service": "resolver",
       "severity": "critical",
       "slug": "net-dns-tor-onion"
-    },
-    {
-      "category": "network",
-      "id": "det-network-042",
-      "match_when": {
-        "answer_count_gt": 8,
-        "event_type": "dns_response",
-        "ttl_seconds_lt": 60
-      },
-      "mitre": [
-        "T1568.001"
-      ],
-      "name": "DNS Fast-Flux Pattern (Many A Records, Short TTL)",
-      "product": "dns",
-      "service": "resolver",
-      "severity": "medium",
-      "slug": "net-dns-fast-flux"
     },
     {
       "category": "network",
@@ -14841,22 +13584,6 @@
       "service": "netflow",
       "severity": "high",
       "slug": "net-icmp-high-entropy-payload"
-    },
-    {
-      "category": "network",
-      "id": "det-network-080",
-      "match_when": {
-        "event_type": "dhcp",
-        "leases_per_minute_per_relay_gt": 200
-      },
-      "mitre": [
-        "T1498"
-      ],
-      "name": "DHCP Starvation: Rapid Lease Churn From Single MAC Range",
-      "product": "firewall",
-      "service": "dhcp",
-      "severity": "high",
-      "slug": "net-dhcp-starvation"
     },
     {
       "category": "network",

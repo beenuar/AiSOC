@@ -73,24 +73,41 @@ from gate_toolkit import repo_root, self_test_main
 REPO_ROOT = repo_root()
 RULESET = REPO_ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
 IMPORTED_RULESET = REPO_ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset_imported.json"
+#: The sliding-window corpus. A second engine in the same worker loads it, so
+#: it is capability the product ships and the README was not counting it at
+#: all. Published as its own figure rather than folded into ``executable``:
+#: a windowed rule has no YAML and no marketplace entry, so the two numbers
+#: reconcile against different things and adding them would hide that.
+WINDOWED_RULESET = REPO_ROOT / "services" / "fusion" / "app" / "data" / "windowed_ruleset.json"
 MARKETPLACE = REPO_ROOT / "marketplace" / "index.json"
 TRUTH_TABLE = REPO_ROOT / "docs" / "detections" / "truth-table.md"
 JSON_OUT = REPO_ROOT / "apps" / "web" / "src" / "data" / "corpus-stats.json"
 TS_OUT = REPO_ROOT / "apps" / "web" / "src" / "data" / "corpusStats.ts"
 
-#: Prose that quotes the executable-rule count outside the TypeScript surfaces.
-#: Same contract as ``generate_connector_count.py``: each regex must match, and
-#: the ``n`` group is rewritten in place (or reported, under ``--check``).
-COUNT_BEARING_FILES: tuple[tuple[Path, tuple[re.Pattern[str], ...]], ...] = (
+#: Prose that quotes a corpus figure outside the TypeScript surfaces. Same
+#: contract as ``generate_connector_count.py``: each regex must match, and the
+#: ``n`` group is rewritten in place (or reported, under ``--check``).
+#:
+#: The middle element names *which* figure the prose bears. It used to be
+#: implicit — every pattern here got the executable count — which was fine
+#: while there was one number and silently wrong the moment there were two.
+COUNT_BEARING_FILES: tuple[tuple[Path, str, tuple[re.Pattern[str], ...]], ...] = (
     (
         REPO_ROOT / "README.md",
+        "executable",
         (
             re.compile(r"(?P<pre>fusion runs )(?P<n>\d+)(?P<post> executable detection rules)"),
             re.compile(r"(?P<pre>\| Detection engine \()(?P<n>\d+)(?P<post> executable rules\))"),
         ),
     ),
     (
+        REPO_ROOT / "README.md",
+        "windowed",
+        (re.compile(r"(?P<pre>plus )(?P<n>\d+)(?P<post> sliding-window rules)"),),
+    ),
+    (
         REPO_ROOT / "ROADMAP.md",
+        "executable",
         (re.compile(r"(?P<pre>detection-evaluation worker \()(?P<n>\d+)(?P<post> executable rules on the stream\))"),),
     ),
 )
@@ -200,6 +217,24 @@ def read_truth_table_executable() -> int:
     return int(match.group("n"))
 
 
+def read_windowed_ruleset() -> int:
+    """Rules in the sliding-window corpus.
+
+    Its own read rather than part of ``read_engine_ruleset`` because it
+    reconciles against nothing: a windowed rule has no YAML, so the
+    three-way cross-check below cannot cover it and pretending otherwise
+    would be the one-directional gate this file's docstring warns about.
+    """
+    data = _read_json(WINDOWED_RULESET, "windowed ruleset")
+    rules = data.get("rules")
+    if not isinstance(rules, list) or not rules:
+        raise SystemExit(f"{Path(sys.argv[0]).name}: {WINDOWED_RULESET} declares no rules — refusing to publish a zero corpus")
+    declared = data.get("count")
+    if isinstance(declared, int) and declared != len(rules):
+        raise SystemExit(f"{Path(sys.argv[0]).name}: {WINDOWED_RULESET} `count` is {declared} but it holds {len(rules)} rules")
+    return len(rules)
+
+
 def build_payload() -> dict[str, Any]:
     executable, categories = read_engine_ruleset()
     corpus = read_marketplace()
@@ -218,6 +253,7 @@ def build_payload() -> dict[str, Any]:
 
     return {
         "executable": executable,
+        "windowed": read_windowed_ruleset(),
         "onDisk": corpus["on_disk"],
         "quarantined": corpus["quarantined"],
         "plugins": corpus["plugins"],
@@ -227,6 +263,7 @@ def build_payload() -> dict[str, Any]:
         "categories": categories,
         "generatedFrom": [
             "services/fusion/app/data/detection_ruleset.json",
+            "services/fusion/app/data/windowed_ruleset.json",
             "marketplace/index.json",
             "docs/detections/truth-table.md",
         ],
@@ -251,6 +288,13 @@ def render_typescript(payload: dict[str, Any]) -> str:
         "\n"
         "/** Rules the fusion engine loads and evaluates. */\n"
         "export const EXECUTABLE_DETECTION_COUNT: number = data.executable;\n"
+        "\n"
+        "/** Sliding-window rules, loaded by a second engine in the same worker.\n"
+        " *  Separate from EXECUTABLE_DETECTION_COUNT on purpose: a windowed rule\n"
+        " *  counts events for one entity over a window and has no YAML, so the two\n"
+        " *  figures come from different artefacts and must not be summed into one\n"
+        " *  'detections' number. */\n"
+        "export const WINDOWED_DETECTION_COUNT: number = data.windowed;\n"
         "\n"
         "/** Detection YAML indexed in the marketplace, quarantined rules included. */\n"
         "export const DETECTIONS_ON_DISK: number = data.onDisk;\n"
@@ -301,13 +345,14 @@ def artefact_drift(payload: dict[str, Any], existing_json: str | None, existing_
     return drift
 
 
-def reconcile_prose(executable: int, *, check_only: bool) -> list[str]:
+def reconcile_prose(payload: dict[str, Any], *, check_only: bool) -> list[str]:
     """Rewrite or verify every COUNT_BEARING_FILES entry."""
     drift: list[str] = []
-    for path, patterns in COUNT_BEARING_FILES:
+    for path, figure, patterns in COUNT_BEARING_FILES:
         if not path.exists():
             drift.append(f"missing file {path.relative_to(REPO_ROOT)}")
             continue
+        expected = str(payload[figure])
         before = path.read_text(encoding="utf-8")
         after = before
         for pattern in patterns:
@@ -317,11 +362,11 @@ def reconcile_prose(executable: int, *, check_only: bool) -> list[str]:
                 continue
             # Rewrite right-to-left so earlier match offsets stay valid.
             for match in reversed(matches):
-                if match.group("n") != str(executable):
-                    after = after[: match.start("n")] + str(executable) + after[match.end("n") :]
+                if match.group("n") != expected:
+                    after = after[: match.start("n")] + expected + after[match.end("n") :]
         if after != before:
             if check_only:
-                drift.append(f"{path.relative_to(REPO_ROOT)}: executable-rule count drift (expected {executable})")
+                drift.append(f"{path.relative_to(REPO_ROOT)}: {figure} count drift (expected {expected})")
             else:
                 path.write_text(after, encoding="utf-8")
     return drift
@@ -387,7 +432,7 @@ def main(argv: list[str]) -> int:
     else:
         write_outputs(payload)
 
-    drift.extend(reconcile_prose(executable, check_only=args.check))
+    drift.extend(reconcile_prose(payload, check_only=args.check))
 
     if drift:
         print(f"corpus-stats drift detected (executable={executable}):", file=sys.stderr)

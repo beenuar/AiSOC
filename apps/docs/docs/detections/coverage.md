@@ -10,7 +10,7 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-09-28T06:03:48Z`
+Generated: `2026-10-09T03:35:19Z`
 
 This page is a **curated selection**, not the size of the corpus.
 It picks the highest-scoring rules per threat family from the set
@@ -27,45 +27,45 @@ Sigma compiler began translating rules where they sat: rules under
 
 ## Headline numbers
 
-- **Curated detections**: `509` (target: ≥ 300)
-- **Executable rules considered**: `2603` (quality floor: 0.55)
-- **Unique MITRE techniques covered**: `140`
+- **Curated detections**: `490` (target: ≥ 300)
+- **Executable rules considered**: `2529` (quality floor: 0.55)
+- **Unique MITRE techniques covered**: `136`
 
 ## Coverage by buyer family
 
 | Family | Count | Target | Covered |
 |---|---|---|---|
-| **Ransomware** | 70 | ≥ 25 | ✅ |
+| **Ransomware** | 64 | ≥ 25 | ✅ |
 | **Credential Access** | 100 | ≥ 25 | ✅ |
-| **Lateral Movement** | 68 | ≥ 25 | ✅ |
-| **Data Exfiltration** | 52 | ≥ 25 | ✅ |
+| **Lateral Movement** | 67 | ≥ 25 | ✅ |
+| **Data Exfiltration** | 44 | ≥ 25 | ✅ |
 | **Cloud** | 100 | ≥ 25 | ✅ |
 | **Identity** | 100 | ≥ 25 | ✅ |
-| **Supply Chain** | 44 | ≥ 25 | ✅ |
-| **Kubernetes / Containers** | 71 | ≥ 25 | ✅ |
+| **Supply Chain** | 41 | ≥ 25 | ✅ |
+| **Kubernetes / Containers** | 69 | ≥ 25 | ✅ |
 
 ## Distribution
 
 ### By tier
 
-- `imported`: 148
-- `native`: 361
+- `imported`: 160
+- `native`: 330
 
 ### By severity
 
-- `critical`: 105
-- `high`: 273
-- `low`: 17
-- `medium`: 114
+- `critical`: 100
+- `high`: 266
+- `low`: 16
+- `medium`: 108
 
 ### By category
 
-- `application`: 36
-- `cloud`: 155
-- `data-exfil`: 20
-- `endpoint`: 210
-- `identity`: 77
-- `network`: 11
+- `application`: 31
+- `cloud`: 150
+- `data-exfil`: 13
+- `endpoint`: 218
+- `identity`: 69
+- `network`: 9
 
 ## How to audit
 

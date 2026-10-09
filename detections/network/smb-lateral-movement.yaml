@@ -20,7 +20,9 @@ detection:
 false_positives:
 - Vulnerability scanners (must be allowlisted)
 playbook: tpl-lateral-movement
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-smb-lateral-movement; this stateless form named
+  a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

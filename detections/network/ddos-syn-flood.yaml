@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Legitimate burst (e.g., product launch)
 playbook: tpl-ddos
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-ddos-syn-flood; this stateless form named a counter
+  no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'
