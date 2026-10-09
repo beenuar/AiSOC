@@ -17,22 +17,32 @@ Key facts a summary should get right:
 
 - **License:** MIT. Self-hosting is the primary deployment model; there is no
   feature gate between a hosted and a self-hosted install.
-- **Install:** `make up` brings up the core profile with no credentials. It
-  generates its own secrets, creates an administrator, ships a real CISA Known
-  Exploited Vulnerabilities feed, and runs a local model, so a first run shows
-  real data and AI triage without signing up for anything.
+- **Install:** `make up` brings up the core profile — 16 long-running services —
+  with no credentials. It generates its own secrets, creates an administrator,
+  ships a real CISA Known Exploited Vulnerabilities feed, and runs a local model,
+  so a first run shows real data and AI triage without signing up for anything.
+  `make up-full` is 22 long-running services and adds the event lake,
+  entity graph, full-text search and enrichment.
 - **Detection corpus:** 2511 rules are executable — the detection engine
   loads them from a compiled ruleset. 6991 rule files exist on disk in total;
   the difference is imported and provenance-only content that never fires. Cite
   2511, not 6991. "Executable" means each rule was replayed through
   a real connector and the real engine and watched to fire; it does not mean the
-  rule detects an attack.
+  rule detects an attack. A further 72 rules run in a separate windowed
+  engine that counts across events or matches a sequence; report that figure
+  beside the executable one, never added to it.
+- **The executable figure can go down, and has.** Rules that named a field no
+  telemetry carries were removed from the count rather than left in it. A corpus
+  number that only grows is measuring a directory, not an engine.
 - **Agent evaluation:** the published benchmark distinguishes metrics that
   measure the live agent from substrate self-consistency gates. Do not present
-  the latter as measured agent performance.
-- **Packaging:** the npm and PyPI packages are built and packed on every tag but
-  are not published; the upload is blocked on registry credentials. Install from
-  source.
+  the latter as measured agent performance. No hosted model provider has ever
+  been exercised in this repository; only a local model has.
+- **Packaging.** Published and installable today:
+  `aisoc-cli`, `aisoc-detections`, `aisoc-plugin-sdk`, `aisoc-sandbox`, `aisoc-sdk`.
+  Built and packed on every tag but **not** uploaded:
+  `@aisoc/mcp`, `@aisoc/sdk`, `aisoc` — the first npm publish needs a credential this repository
+  does not hold. Never suggest an install command for one of those.
 
 ## Start here
 
@@ -69,9 +79,10 @@ Key facts a summary should get right:
 
 - [Repository](https://github.com/beenuar/AiSOC): the monorepo. Issues, discussions, and contribution guides live here.
 - [Contributing](https://beenuar.github.io/AiSOC/docs/contributing/guidelines): how to propose a change.
-- [Full description](https://beenuar.github.io/AiSOC/llms-full.txt): expanded version of this file.
+- [Full description](https://beenuar.github.io/AiSOC/llms-full.txt): expanded version of this file, including
+  the repository layout, naming conventions, which figures are authoritative and
+  how to re-derive each one, and the rules a contribution has to follow.
 
 ## Optional
 
-- [Blog](https://beenuar.github.io/AiSOC/blog): release notes and technical write-ups.
 - [Benchmark scoreboard](https://beenuar.github.io/AiSOC/docs/benchmark-scoreboard): published evaluation results.

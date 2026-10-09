@@ -118,6 +118,20 @@ CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
         "full",
         r"`full` is (\d+) long-running containers",
     ),
+    # The repository-overview page, which carries the service map a reader
+    # navigating the code actually consults. It listed `connectors` and
+    # `actions` under `full` long after both moved into CORE; registering the
+    # counts beside that table is what makes the next such move fail here.
+    (
+        "apps/docs/docs/architecture/overview.md",
+        "core",
+        r"CORE is (\d+) long-running services",
+    ),
+    (
+        "apps/docs/docs/architecture/overview.md",
+        "full",
+        r"`full` is (\d+) long-running services",
+    ),
     (
         "apps/docs/docs/quickstart.md",
         "core",
