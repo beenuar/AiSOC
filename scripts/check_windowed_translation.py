@@ -203,10 +203,10 @@ def check(
 
     lock = load_id_lock()
     for key in translation.DECISIONS:
-        rule_id = lock.get(key)
-        if rule_id and rule_id in engine_ids:
+        locked_id = lock.get(key)
+        if locked_id and locked_id in engine_ids:
             problems.append(
-                f"{key} ({rule_id}) is decided but still in {RULESET.name} — scripts/export_detection_ruleset.py must drop a decided rule"
+                f"{key} ({locked_id}) is decided but still in {RULESET.name} — scripts/export_detection_ruleset.py must drop a decided rule"
             )
     return problems
 

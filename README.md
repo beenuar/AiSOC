@@ -111,7 +111,7 @@ of those are partial: field matches carried, thresholds did not
 ## How it works
 
 Ingest normalizes to a common shape and Kafka carries it, then
-fusion runs 2529 executable detection rules, of 6991 on disk, plus 68 sliding-window rules that count across events, applies **your tenant's own tuning**
+fusion runs 2529 executable detection rules, of 6991 on disk, plus 72 sliding-window rules that count across events, applies **your tenant's own tuning**
 on top — the disables, floors and suppressions the console writes, so a rule you turned off actually stops firing — and decides what
 becomes an alert. Correlation groups related alerts, an agent investigates and writes its reasoning
 to the Investigation Ledger, and a playbook may start from the result. Separately, new threat

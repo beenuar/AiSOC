@@ -69,6 +69,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The published executable figure falls 2,603 → 2,529 because 74 rules that
   could not fire stopped being counted as executable; the windowed corpus is
   now published as its own figure beside it rather than going uncounted.
+- **Ordered and unordered sequences in the windowed engine, and a Sigma
+  correlation importer that feeds it.** A threshold cannot express an
+  ordering, and the ordering is usually the detection: "fifty failed logons"
+  is an attempt, "a failed logon then a success for the same account" is a
+  compromise. `SequenceRule` stages two or more selectors for one entity
+  inside one window, ordered by **event time** rather than arrival — almost
+  every connector here polls, so a batch arrives in the vendor's order and
+  the event that starts a sequence routinely lands after the one that
+  finishes it. One event advances at most one stage, which a per-event token
+  enforces rather than a timestamp comparison, because two distinct events
+  routinely share a second. `ordered: false` gives Sigma's unordered
+  `temporal` semantics from the same rule type.
+  `scripts/sigma_correlation.py` compiles `event_count`, `value_count`,
+  `temporal` and `temporal_ordered` documents into those forms and **refuses
+  rather than approximates** the rest: a `lt`/`lte` condition is a rarity
+  signal needing a baseline, a multi-field `group-by` has no single entity,
+  `aliases` need field mapping the engine does not have. The importer had
+  never been written and the imported corpus contains no correlation
+  document, so the two gaps hid each other; the rules under
+  `detections/sigma-correlations/` are hand-authored in the upstream format
+  to give it a corpus and are labelled first-party content rather than
+  imported coverage. `scripts/check_sigma_correlations.py` fails a
+  correlation whose selector or `group-by` names a field nothing emits, with
+  no ceiling.
 - **Attribute conditions, time-boxed elevation and workload identities, all
   inside the one permission path.** The placement is the item, not a detail:
   conditions are applied by `CurrentUser.require_permission` after whichever

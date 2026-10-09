@@ -1,0 +1,47 @@
+title: Okta MFA verification push sent
+name: okta-mfa-push-sent
+id: aisoc-corr-base-okta-mfa-push
+status: experimental
+description: One Okta push factor verification. Routine on its own.
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: system.push.send_factor_verify_push
+  condition: selection
+---
+title: Okta session started
+name: okta-session-start
+id: aisoc-corr-base-okta-session-start
+status: experimental
+description: One Okta session start.
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.session.start
+  condition: selection
+---
+title: Okta MFA push followed by a session for the same account
+id: aisoc-corr-okta-mfa-push-then-session
+status: experimental
+description: >-
+  A push factor verification and then a session start for the same account
+  inside fifteen minutes. The ordering is the detection: pushes alone are an
+  attempt, and a session that follows them is the attempt succeeding. Pair this
+  with the push-volume rule rather than using it alone — one push followed by a
+  session is the ordinary path a user takes every morning.
+level: medium
+category: identity
+tags:
+  - attack.t1621
+correlation:
+  type: temporal_ordered
+  rules:
+    - okta-mfa-push-sent
+    - okta-session-start
+  group-by:
+    - actor_email
+  timespan: 15m

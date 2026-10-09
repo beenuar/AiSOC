@@ -334,14 +334,19 @@ WINDOWED_RULES: list[dict] = [
 
 
 def all_rules() -> list[dict]:
-    """Rules authored here, then rules translated from the `det-*` corpus.
+    """Three sources, kept in their own blocks so a change to one is legible.
 
-    Order matters only for the diff: keeping the translations in their own
-    block means a change to one never renumbers the other.
+    Authored here; translated from the `det-*` corpus by
+    `windowed_translation.py`; compiled from Sigma correlation documents by
+    `sigma_correlation.py`. One artefact rather than three, because the
+    engine has one loader and a second file is a second thing that can go
+    stale unnoticed.
     """
+    from check_sigma_correlations import compile_corpus  # noqa: PLC0415
     from windowed_translation import translated_rules  # noqa: PLC0415
 
-    return [*WINDOWED_RULES, *translated_rules()]
+    correlations, _refused, _seen = compile_corpus()
+    return [*WINDOWED_RULES, *translated_rules(), *correlations]
 
 
 def build() -> dict:
@@ -383,8 +388,12 @@ def main() -> int:
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(rendered, encoding="utf-8")
-    translated = len(rules) - len(WINDOWED_RULES)
-    print(f"wrote {OUT.relative_to(ROOT)} — {len(rules)} windowed rules ({len(WINDOWED_RULES)} authored, {translated} translated)")
+    translated = sum(1 for rule in rules if rule.get("translated_from"))
+    correlations = sum(1 for rule in rules if rule.get("correlation_type"))
+    print(
+        f"wrote {OUT.relative_to(ROOT)} — {len(rules)} windowed rules "
+        f"({len(WINDOWED_RULES)} authored, {translated} translated, {correlations} Sigma correlations)"
+    )
     return 0
 
 
