@@ -18,7 +18,10 @@ detection:
 false_positives:
 - Sanctioned automation/IaC pipeline
 playbook: tpl-credential-access
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (not-windowed): `active_keys_per_account` is the state of an account
+  at one moment, reported by an inventory event. A window counts what happened, not what is true; this
+  needs the posture snapshot (depth plan 2.5).'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

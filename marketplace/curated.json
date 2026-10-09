@@ -1,65 +1,59 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-09-28T06:03:48Z",
+  "generated": "2026-10-09T01:31:46Z",
   "stats": {
-    "considered": 2603,
-    "eligible": 2592,
-    "selected": 509,
+    "considered": 2529,
+    "eligible": 2518,
+    "selected": 490,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 140,
+    "unique_techniques": 136,
     "selected_by_tier": {
-      "imported": 148,
-      "native": 361
+      "imported": 160,
+      "native": 330
     },
     "selected_by_severity": {
-      "critical": 105,
-      "high": 273,
-      "low": 17,
-      "medium": 114
+      "critical": 100,
+      "high": 266,
+      "low": 16,
+      "medium": 108
     },
     "selected_by_category": {
-      "application": 36,
-      "cloud": 155,
-      "data-exfil": 20,
-      "endpoint": 210,
-      "identity": 77,
-      "network": 11
+      "application": 31,
+      "cloud": 150,
+      "data-exfil": 13,
+      "endpoint": 218,
+      "identity": 69,
+      "network": 9
     }
   },
   "families": {
     "ransomware": {
       "label": "Ransomware",
-      "count": 70,
+      "count": 64,
       "rule_ids": [
         "det-application-050",
         "det-application-078",
         "det-cloud-004",
         "det-cloud-008",
         "det-cloud-019",
-        "det-cloud-025",
         "det-cloud-030",
         "det-cloud-060",
-        "det-cloud-061",
         "det-cloud-066",
         "det-cloud-076",
         "det-cloud-088",
-        "det-cloud-116",
-        "det-cloud-118",
         "det-cloud-119",
         "det-cloud-124",
         "det-cloud-125",
         "det-cloud-126",
         "det-cloud-135",
-        "det-cloud-148",
         "det-cloud-149",
         "det-cloud-150",
         "det-cloud-160",
         "det-cloud-161",
         "det-cloud-179",
-        "det-endpoint-003",
         "det-endpoint-012",
         "det-endpoint-074",
         "det-endpoint-075",
@@ -113,9 +107,7 @@
       "count": 100,
       "rule_ids": [
         "det-application-004",
-        "det-application-008",
         "det-application-020",
-        "det-application-040",
         "det-application-075",
         "det-application-085",
         "det-cloud-047",
@@ -133,31 +125,22 @@
         "det-cloud-176",
         "det-cloud-183",
         "det-cloud-189",
-        "det-data-exfil-020",
         "det-endpoint-093",
         "det-endpoint-096",
         "det-endpoint-141",
         "det-endpoint-267",
         "det-endpoint-272",
-        "det-identity-001",
-        "det-identity-003",
         "det-identity-010",
         "det-identity-022",
         "det-identity-038",
-        "det-identity-041",
-        "det-identity-042",
-        "det-identity-043",
         "det-identity-044",
-        "det-identity-050",
         "det-identity-056",
         "det-identity-057",
         "det-identity-058",
         "det-identity-059",
         "det-identity-061",
-        "det-identity-065",
         "det-identity-075",
         "det-identity-088",
-        "det-identity-096",
         "det-identity-101",
         "det-identity-105",
         "det-identity-107",
@@ -177,7 +160,6 @@
         "det-identity-157",
         "det-identity-158",
         "det-identity-160",
-        "det-network-004",
         "det-network-026",
         "det-network-076",
         "sigmahq-sigma-0adc67e0-a68f-4ffd-9c43-28905aad5d6a",
@@ -189,14 +171,18 @@
         "sigmahq-sigma-24c77512-782b-448a-8950-eddb0785fc71",
         "sigmahq-sigma-24e3e58a-646b-4b50-adef-02ef935b9fc8",
         "sigmahq-sigma-25cde13e-8e20-4c29-b949-4e795b76f16f",
+        "sigmahq-sigma-2b7d6fc0-71ac-4cf7-8ed1-b5788ee5257a",
         "sigmahq-sigma-2d3cdeec-c0db-45b4-aa86-082f7eb75701",
         "sigmahq-sigma-3245cd30-e015-40ff-a31d-5cadd5f377ec",
+        "sigmahq-sigma-34275eb8-fa19-436b-b959-3d9ecd53fa1f",
         "sigmahq-sigma-37c1333a-a0db-48be-b64b-7393b2386e3b",
         "sigmahq-sigma-39b31e81-5f5f-4898-9c0e-2160cfc0f9bf",
         "sigmahq-sigma-416bc4a2-7217-4519-8dc7-c3271817f1d5",
         "sigmahq-sigma-42a993dd-bb3e-48c8-b372-4d6684c4106c",
+        "sigmahq-sigma-42b1a5b8-353f-4f10-b256-39de4467faff",
         "sigmahq-sigma-4833155a-4053-4c9c-a997-777fcea0baa7",
         "sigmahq-sigma-48d91a3a-2363-43ba-a456-ca71ac3da5c2",
+        "sigmahq-sigma-4d78a000-ab52-4564-88a5-7ab5242b20c7",
         "sigmahq-sigma-53bb4f7f-48a8-4475-ac30-5a82ddfdf6fc",
         "sigmahq-sigma-58f4ea09-0fc2-4520-ba18-b85c540b0eaf",
         "sigmahq-sigma-5a44727c-3b85-4713-8c44-4401d5499629",
@@ -211,14 +197,22 @@
         "sigmahq-sigma-aaafa146-074c-11eb-adc1-0242ac120002",
         "sigmahq-sigma-b4a6d707-9430-4f5f-af68-0337f52d5c42",
         "sigmahq-sigma-baef1ec6-2ca9-47a3-97cc-4cf2bda10b77",
-        "sigmahq-sigma-c8da0dfd-4ed0-4b68-962d-13c9c884384e"
+        "sigmahq-sigma-bb76d96b-821c-47cf-944b-7ce377864492",
+        "sigmahq-sigma-c8da0dfd-4ed0-4b68-962d-13c9c884384e",
+        "sigmahq-sigma-cd185561-4760-45d6-a63e-a51325112cae",
+        "sigmahq-sigma-d3adb3ef-b7e7-4003-9092-1924c797db35",
+        "sigmahq-sigma-d557dc06-62e8-4468-a8e8-7984124908ce",
+        "sigmahq-sigma-e4d22291-f3d5-4b78-9a0c-a1fbaf32a6a4",
+        "sigmahq-sigma-e7a21b5f-d8c4-4ae5-b8d9-93c5d3f28e1c",
+        "sigmahq-sigma-f598ea0c-c25a-4f72-a219-50c44411c791",
+        "sigmahq-sigma-f7644214-0eb0-4ace-9455-331ec4c09253"
       ],
       "min_target": 25,
       "covered": true
     },
     "lateral": {
       "label": "Lateral Movement",
-      "count": 68,
+      "count": 67,
       "rule_ids": [
         "det-endpoint-010",
         "det-endpoint-111",
@@ -229,7 +223,6 @@
         "det-identity-102",
         "det-identity-103",
         "det-identity-104",
-        "det-network-005",
         "det-network-022",
         "det-network-030",
         "det-network-064",
@@ -294,7 +287,7 @@
     },
     "exfil": {
       "label": "Data Exfiltration",
-      "count": 52,
+      "count": 44,
       "rule_ids": [
         "det-application-081",
         "det-cloud-058",
@@ -302,27 +295,19 @@
         "det-cloud-063",
         "det-cloud-073",
         "det-cloud-184",
-        "det-cloud-186",
-        "det-data-exfil-001",
-        "det-data-exfil-002",
         "det-data-exfil-003",
         "det-data-exfil-004",
         "det-data-exfil-005",
-        "det-data-exfil-006",
         "det-data-exfil-007",
-        "det-data-exfil-008",
         "det-data-exfil-009",
         "det-data-exfil-010",
         "det-data-exfil-011",
         "det-data-exfil-012",
-        "det-data-exfil-013",
         "det-data-exfil-014",
         "det-data-exfil-015",
         "det-data-exfil-016",
         "det-data-exfil-017",
-        "det-data-exfil-018",
         "det-data-exfil-019",
-        "det-data-exfil-020",
         "det-endpoint-174",
         "det-endpoint-175",
         "det-endpoint-270",
@@ -357,13 +342,10 @@
       "count": 100,
       "rule_ids": [
         "det-application-017",
-        "det-application-024",
-        "det-application-058",
         "det-application-063",
         "det-application-069",
         "det-application-073",
         "det-cloud-001",
-        "det-cloud-002",
         "det-cloud-003",
         "det-cloud-004",
         "det-cloud-006",
@@ -374,7 +356,6 @@
         "det-cloud-012",
         "det-cloud-013",
         "det-cloud-014",
-        "det-cloud-015",
         "det-cloud-016",
         "det-cloud-017",
         "det-cloud-018",
@@ -384,7 +365,6 @@
         "det-cloud-022",
         "det-cloud-023",
         "det-cloud-024",
-        "det-cloud-025",
         "det-cloud-026",
         "det-cloud-027",
         "det-cloud-028",
@@ -393,7 +373,6 @@
         "det-cloud-031",
         "det-cloud-032",
         "det-cloud-033",
-        "det-cloud-034",
         "det-cloud-035",
         "det-cloud-036",
         "det-cloud-038",
@@ -413,14 +392,21 @@
         "det-cloud-057",
         "det-cloud-058",
         "det-cloud-060",
-        "det-cloud-061",
         "det-cloud-062",
         "det-cloud-063",
         "det-cloud-067",
         "det-cloud-068",
+        "det-cloud-069",
+        "det-cloud-070",
+        "det-cloud-071",
         "det-cloud-072",
+        "det-cloud-073",
+        "det-cloud-075",
         "det-cloud-077",
+        "det-cloud-078",
+        "det-cloud-079",
         "det-cloud-081",
+        "det-cloud-083",
         "det-cloud-087",
         "det-cloud-091",
         "det-cloud-092",
@@ -434,7 +420,6 @@
         "det-cloud-128",
         "det-cloud-136",
         "det-cloud-146",
-        "det-cloud-148",
         "det-cloud-152",
         "det-cloud-157",
         "det-cloud-166",
@@ -505,8 +490,6 @@
         "det-cloud-138",
         "det-cloud-139",
         "det-cloud-140",
-        "det-cloud-142",
-        "det-cloud-144",
         "det-cloud-166",
         "det-cloud-170",
         "det-cloud-171",
@@ -531,19 +514,21 @@
         "det-endpoint-263",
         "det-endpoint-264",
         "det-endpoint-265",
-        "det-identity-001",
         "det-identity-002",
-        "det-identity-003",
         "det-identity-004",
         "det-identity-006",
-        "det-identity-008",
         "det-identity-009",
         "det-identity-011",
         "det-identity-012",
         "det-identity-013",
         "det-identity-016",
+        "det-identity-018",
+        "det-identity-019",
         "det-identity-020",
         "det-identity-021",
+        "det-identity-022",
+        "det-identity-023",
+        "det-identity-024",
         "det-identity-027",
         "det-identity-031",
         "det-identity-034",
@@ -570,7 +555,7 @@
     },
     "supply-chain": {
       "label": "Supply Chain",
-      "count": 44,
+      "count": 41,
       "rule_ids": [
         "det-application-006",
         "det-application-014",
@@ -584,7 +569,6 @@
         "det-application-052",
         "det-application-053",
         "det-application-054",
-        "det-application-055",
         "det-application-057",
         "det-application-059",
         "det-cloud-014",
@@ -602,8 +586,6 @@
         "det-identity-114",
         "det-identity-153",
         "det-identity-154",
-        "det-identity-155",
-        "det-identity-156",
         "sigmahq-sigma-0ee4d8a5-4e67-4faf-acfa-62a78457d1f2",
         "sigmahq-sigma-1f0489be-b496-4ddf-b3a9-5900f2044e9c",
         "sigmahq-sigma-401e5d00-b944-11ea-8f9a-00163ecd60ae",
@@ -622,12 +604,11 @@
     },
     "k8s": {
       "label": "Kubernetes / Containers",
-      "count": 71,
+      "count": 69,
       "rule_ids": [
         "det-application-018",
         "det-application-023",
         "det-application-049",
-        "det-application-055",
         "det-application-056",
         "det-cloud-037",
         "det-cloud-080",
@@ -639,7 +620,6 @@
         "det-cloud-156",
         "det-cloud-165",
         "det-cloud-166",
-        "det-cloud-167",
         "det-cloud-168",
         "det-cloud-169",
         "det-cloud-170",
@@ -701,7 +681,7 @@
     }
   },
   "mitre_techniques": {
-    "T1003": 14,
+    "T1003": 17,
     "T1003.001": 2,
     "T1003.002": 1,
     "T1003.004": 1,
@@ -712,7 +692,7 @@
     "T1020": 3,
     "T1021": 3,
     "T1021.001": 9,
-    "T1021.002": 23,
+    "T1021.002": 22,
     "T1021.003": 8,
     "T1021.004": 4,
     "T1021.005": 1,
@@ -721,12 +701,11 @@
     "T1027.010": 1,
     "T1033": 1,
     "T1039": 1,
-    "T1040": 2,
-    "T1041": 8,
-    "T1046": 1,
+    "T1040": 3,
+    "T1041": 7,
+    "T1046": 2,
     "T1047": 5,
     "T1048": 7,
-    "T1052": 1,
     "T1053": 1,
     "T1059.001": 6,
     "T1059.003": 3,
@@ -735,86 +714,84 @@
     "T1059.006": 3,
     "T1059.007": 2,
     "T1068": 1,
-    "T1069.003": 1,
     "T1070": 2,
     "T1070.004": 1,
     "T1071.001": 1,
     "T1078": 14,
     "T1078.001": 3,
-    "T1078.004": 25,
-    "T1082": 1,
+    "T1078.004": 24,
+    "T1082": 2,
     "T1087": 1,
-    "T1087.004": 1,
     "T1090": 2,
     "T1090.002": 1,
-    "T1098": 16,
-    "T1098.001": 13,
+    "T1098": 17,
+    "T1098.001": 12,
     "T1098.003": 5,
     "T1098.004": 4,
     "T1098.007": 1,
     "T1102": 2,
     "T1105": 1,
-    "T1106": 1,
-    "T1110": 12,
-    "T1110.001": 4,
+    "T1106": 2,
+    "T1110": 8,
+    "T1110.001": 2,
     "T1110.002": 1,
-    "T1110.003": 3,
-    "T1110.004": 2,
+    "T1110.004": 1,
     "T1114.002": 1,
     "T1114.003": 1,
-    "T1133": 4,
+    "T1133": 6,
     "T1134.001": 1,
     "T1136.001": 3,
     "T1136.002": 1,
-    "T1187": 2,
-    "T1190": 10,
+    "T1187": 3,
+    "T1190": 11,
     "T1195": 1,
     "T1195.001": 1,
-    "T1195.002": 8,
+    "T1195.002": 7,
     "T1199": 11,
     "T1201": 1,
     "T1203": 1,
     "T1204.002": 1,
     "T1210": 4,
     "T1211": 1,
-    "T1212": 3,
+    "T1212": 5,
     "T1218": 4,
     "T1219": 2,
+    "T1484.001": 1,
     "T1484.002": 1,
-    "T1485": 34,
-    "T1486": 8,
+    "T1485": 29,
+    "T1486": 7,
     "T1489": 10,
     "T1490": 19,
     "T1496": 4,
     "T1499.004": 1,
     "T1505.003": 8,
-    "T1518": 1,
+    "T1518": 2,
     "T1525": 8,
     "T1528": 6,
-    "T1530": 24,
-    "T1531": 2,
+    "T1530": 17,
+    "T1531": 1,
     "T1537": 7,
     "T1539": 4,
     "T1543.003": 2,
     "T1548": 1,
-    "T1548.002": 1,
+    "T1548.002": 2,
+    "T1548.003": 1,
     "T1550": 5,
     "T1550.001": 1,
     "T1550.003": 2,
     "T1552": 3,
-    "T1552.001": 6,
+    "T1552.001": 7,
     "T1552.004": 1,
     "T1552.007": 1,
     "T1553.002": 1,
     "T1554": 3,
     "T1555": 5,
-    "T1555.003": 2,
-    "T1555.005": 1,
-    "T1556": 38,
+    "T1555.003": 3,
+    "T1556": 41,
     "T1556.001": 1,
     "T1556.006": 5,
     "T1556.007": 1,
-    "T1557.001": 1,
+    "T1557.001": 2,
     "T1558": 2,
     "T1558.001": 2,
     "T1558.002": 1,
@@ -825,8 +802,8 @@
     "T1562.008": 7,
     "T1563.002": 1,
     "T1565": 1,
-    "T1567": 15,
-    "T1567.002": 3,
+    "T1567": 13,
+    "T1567.002": 2,
     "T1568.002": 1,
     "T1569": 1,
     "T1569.002": 4,
@@ -839,7 +816,6 @@
     "T1610": 11,
     "T1611": 24,
     "T1612": 1,
-    "T1621": 1,
     "T1685": 2
   },
   "items": [
@@ -889,31 +865,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "waf",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-application-008",
-      "name": "Rate Limit Burst on Authentication Endpoint",
-      "path": "detections/application/rate-limit-burst.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1110"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
         "executable(+0.15)"
       ],
       "log_source_product": "waf",
@@ -1094,56 +1045,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "gitlab",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-application-024",
-      "name": "SaaS File Mass Public-Share by Single User",
-      "path": "detections/application/saas-mass-share-public.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1530"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "google-workspace",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-application-040",
-      "name": "High Volume Of Password Reset Requests From Single IP",
-      "path": "detections/application/app-account-enum-reset.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1110"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "application",
       "has_executable_body": true
     },
     {
@@ -1374,32 +1275,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-application-055",
-      "name": "Docker Daemon Started With --insecure-registry Flag",
-      "path": "detections/application/app-docker-insecure-registry-flag.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1195.002"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "supply-chain",
-        "k8s"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "docker",
-      "has_executable_body": true
-    },
-    {
       "id": "det-application-056",
       "name": "Container Image With Critical CVE Pushed To Prod Registry",
       "path": "detections/application/app-image-critical-cve-pushed.yaml",
@@ -1448,31 +1323,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "github",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-application-058",
-      "name": "Salesforce Mass Data Export Initiated",
-      "path": "detections/application/app-salesforce-mass-export.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1530"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "salesforce",
       "has_executable_body": true
     },
     {
@@ -1780,32 +1630,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-002",
-      "name": "AWS IAM Enumeration Burst",
-      "path": "detections/cloud/aws-iam-enumeration.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1087.004",
-        "T1069.003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "aws",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-003",
       "name": "AWS S3 Bucket Made Public",
       "path": "detections/cloud/aws-s3-public-bucket.yaml",
@@ -2066,31 +1890,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-015",
-      "name": "AWS S3 GetObject Volume Anomaly per Principal",
-      "path": "detections/cloud/aws-s3-mass-getobject.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1530"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "aws",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-016",
       "name": "Azure AD Owner/Global-Admin Role Assignment",
       "path": "detections/cloud/azure-ad-role-owner-assignment.yaml",
@@ -2321,32 +2120,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-025",
-      "name": "Azure Resource Mass Deletion",
-      "path": "detections/cloud/azure-resource-mass-delete.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1485"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware",
-        "cloud"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "azure",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-026",
       "name": "GCP IAM Primitive Role (Owner/Editor) Granted",
       "path": "detections/cloud/gcp-iam-primitive-role-grant.yaml",
@@ -2545,32 +2318,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "gcp",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-034",
-      "name": "GCP Secret Manager Mass AccessSecretVersion",
-      "path": "detections/cloud/gcp-secret-manager-mass-export.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1555.005",
-        "T1530"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:critical(+0.150)",
         "executable(+0.15)"
       ],
       "log_source_product": "gcp",
@@ -3095,32 +2842,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-061",
-      "name": "AWS S3 Mass DeleteObject Burst",
-      "path": "detections/cloud/aws-s3-mass-deleteobject.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1485"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware",
-        "cloud"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "aws",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-062",
       "name": "AWS EBS Snapshot Shared With Foreign Account",
       "path": "detections/cloud/aws-ebs-snapshot-shared-foreign.yaml",
@@ -3234,6 +2955,56 @@
       "severity": "high",
       "mitre_techniques": [
         "T1090"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-069",
+      "name": "AWS SG Rule Allows SSH From 0.0.0.0/0",
+      "path": "detections/cloud/aws-security-group-rule-add-22-from-anywhere.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1133"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-070",
+      "name": "AWS SG Rule Allows RDP From 0.0.0.0/0",
+      "path": "detections/cloud/aws-security-group-rule-add-3389-from-anywhere.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1133"
       ],
       "mitre_tactics": [],
       "families": [
@@ -3425,6 +3196,56 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-078",
+      "name": "AWS Lambda Env Var Contains Secret Pattern",
+      "path": "detections/cloud/aws-lambda-env-var-secret-pattern.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1552.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-cloud-079",
+      "name": "AWS Lambda Function URL With AuthType=NONE",
+      "path": "detections/cloud/aws-lambda-create-url-public.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1190"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "aws",
@@ -4028,32 +3849,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-116",
-      "name": "Azure ResourceGroup Locks Removed In Bulk",
-      "path": "detections/cloud/azure-arm-locks-removed-bulk.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1485"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "azure",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-117",
       "name": "Azure Diagnostic Settings Deleted",
       "path": "detections/cloud/azure-arm-diagnostic-settings-deleted.yaml",
@@ -4073,32 +3868,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "azure",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-118",
-      "name": "Azure Mass Resource Modify Burst",
-      "path": "detections/cloud/azure-arm-mass-resource-modify.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1485"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware",
-        "cloud"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
         "executable(+0.15)"
       ],
       "log_source_product": "azure",
@@ -4468,32 +4237,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-142",
-      "name": "GCP Service Account Key Burst",
-      "path": "detections/cloud/gcp-iam-service-account-key-mass-create.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "gcp",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-143",
       "name": "GCP IAM Binding To External Domain",
       "path": "detections/cloud/gcp-iam-grant-from-foreign-domain.yaml",
@@ -4508,32 +4251,6 @@
       "families": [
         "cloud",
         "supply-chain"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "gcp",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-144",
-      "name": "GCP Service Account Impersonation Burst",
-      "path": "detections/cloud/gcp-iam-impersonation-burst.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1078.004"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
       ],
       "quality_score": 0.977,
       "quality_notes": [
@@ -4585,32 +4302,6 @@
       ],
       "mitre_tactics": [],
       "families": [
-        "cloud"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "gcp",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-148",
-      "name": "GCS Mass Object Delete Burst",
-      "path": "detections/cloud/gcp-gcs-mass-delete.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1485"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware",
         "cloud"
       ],
       "quality_score": 1.0,
@@ -4904,32 +4595,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "kubernetes",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-cloud-167",
-      "name": "Kubernetes Secret Mass Get",
-      "path": "detections/cloud/k8s-secret-mass-get.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1552.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "k8s"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "kubernetes",
@@ -5360,32 +5025,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-cloud-186",
-      "name": "Multi-Cloud Cross-Cloud Mass Egress Burst",
-      "path": "detections/cloud/cloud-multi-cross-cloud-mass-egress.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "cloud",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1567"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "multi-cloud",
-      "has_executable_body": true
-    },
-    {
       "id": "det-cloud-187",
       "name": "Infra-As-Code Drift Bypassed With Manual Override",
       "path": "detections/cloud/cloud-iac-drift-bypassed.yaml",
@@ -5465,56 +5104,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-data-exfil-001",
-      "name": "Large Outbound Transfer to Personal Cloud Storage",
-      "path": "detections/data-exfil/large-egress-personal-cloud.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1567.002"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "proxy",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-data-exfil-002",
-      "name": "Outbound Bytes Spike Above Baseline (Anomaly)",
-      "path": "detections/data-exfil/egress-spike-baseline.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1041"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "ndr",
-      "has_executable_body": true
-    },
-    {
       "id": "det-data-exfil-003",
       "name": "rclone or megacmd Process Spawned on Host",
       "path": "detections/data-exfil/rclone-process-on-host.yaml",
@@ -5591,32 +5180,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-data-exfil-006",
-      "name": "Salesforce Bulk Data Export by Non-Allowlisted User",
-      "path": "detections/data-exfil/salesforce-bulk-export.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1530"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "salesforce",
-      "has_executable_body": true
-    },
-    {
       "id": "det-data-exfil-007",
       "name": "Snowflake Large Result-Set Download by Non-Service Account",
       "path": "detections/data-exfil/snowflake-mass-export.yaml",
@@ -5640,32 +5203,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "snowflake",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-data-exfil-008",
-      "name": "Database Application Reads Anomalously High Row Count",
-      "path": "detections/data-exfil/db-mass-row-read.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1530"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "db",
       "has_executable_body": true
     },
     {
@@ -5771,31 +5308,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-data-exfil-013",
-      "name": "Mass Print Job From Confidential Document Repository",
-      "path": "detections/data-exfil/printer-mass-print-confidential.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1052"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "windows",
-      "has_executable_body": true
-    },
-    {
       "id": "det-data-exfil-014",
       "name": "Bulk Zip Creation on File Server",
       "path": "detections/data-exfil/bulk-zip-on-fileserver.yaml",
@@ -5898,31 +5410,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-data-exfil-018",
-      "name": "Container Image Mass Export to External Registry",
-      "path": "detections/data-exfil/container-mass-image-export.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1567"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "cloud",
-      "has_executable_body": true
-    },
-    {
       "id": "det-data-exfil-019",
       "name": "VPN Tunnel Large Download from Foreign Country",
       "path": "detections/data-exfil/vpn-large-download-foreign.yaml",
@@ -5945,59 +5432,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "vpn",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-data-exfil-020",
-      "name": "Secrets Manager Bulk Fetch by Human Principal",
-      "path": "detections/data-exfil/secrets-mass-fetch.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1555",
-        "T1530"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "exfil",
-        "cloud"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:2(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "cloud",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-endpoint-003",
-      "name": "Mass File Extension Rename Indicative of Ransomware",
-      "path": "detections/endpoint/ransomware-file-extension-change.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "endpoint",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1486"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "ransomware"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "edr",
       "has_executable_body": true
     },
     {
@@ -7841,33 +7275,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-identity-001",
-      "name": "Authentication Brute-Force Burst",
-      "path": "detections/identity/brute-force-login.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1110.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
       "id": "det-identity-002",
       "name": "Impossible Travel Between Two Authentications",
       "path": "detections/identity/impossible-travel.yaml",
@@ -7880,33 +7287,6 @@
       ],
       "mitre_tactics": [],
       "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-003",
-      "name": "Password Spray Across Many Users from Single IP",
-      "path": "detections/identity/password-spray.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1110.003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
         "cloud",
         "identity"
       ],
@@ -7956,32 +7336,6 @@
       "severity": "high",
       "mitre_techniques": [
         "T1078"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "okta",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-008",
-      "name": "MFA Push Bombing (MFA Fatigue)",
-      "path": "detections/identity/mfa-fatigue.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1621"
       ],
       "mitre_tactics": [],
       "families": [
@@ -8154,6 +7508,56 @@
       "has_executable_body": true
     },
     {
+      "id": "det-identity-018",
+      "name": "Sudo Used Without MFA",
+      "path": "detections/identity/sudo-no-mfa.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1548.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "linux",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-019",
+      "name": "Active Directory Group Policy Modified",
+      "path": "detections/identity/group-policy-modification.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1484.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
       "id": "det-identity-020",
       "name": "Kubernetes ClusterRoleBinding to cluster-admin",
       "path": "detections/identity/rbac-cluster-admin-binding.yaml",
@@ -8230,6 +7634,32 @@
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-identity-023",
+      "name": "OAuth App Granted Broad Scopes by User",
+      "path": "detections/identity/oauth-broad-scope-grant.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "identity",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "google-workspace",
       "has_executable_body": true
     },
     {
@@ -8467,84 +7897,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-identity-041",
-      "name": "Password Spray: Single IP, Many Targets, Few Tries Each",
-      "path": "detections/identity/ident-password-spray-many-targets.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1110.003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "identity",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-042",
-      "name": "Distributed Password Spray From Many IPs",
-      "path": "detections/identity/ident-password-spray-distributed.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1110.003"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "identity",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-043",
-      "name": "Credential Stuffing Pattern Against Login Endpoint",
-      "path": "detections/identity/ident-credstuffing-known-breached-list.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1110.004"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "identity",
-      "has_executable_body": true
-    },
-    {
       "id": "det-identity-044",
       "name": "Successful Login After 50+ Recent Failures",
       "path": "detections/identity/ident-bruteforce-success-after-failures.yaml",
@@ -8565,32 +7917,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "identity",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-050",
-      "name": "Account Locked Out 3+ Times In 1 Hour",
-      "path": "detections/identity/ident-account-locked-many-times.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1110"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
         "executable(+0.15)"
       ],
       "log_source_product": "identity",
@@ -8746,32 +8072,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "identity",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-065",
-      "name": "TOTP Verification Repeatedly Skews Clock",
-      "path": "detections/identity/ident-totp-skewed-clock.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "low",
-      "mitre_techniques": [
-        "T1110"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.932,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:low(+0.083)",
         "executable(+0.15)"
       ],
       "log_source_product": "identity",
@@ -8974,32 +8274,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "active-directory",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-096",
-      "name": "Kerberos Pre-Auth Failure Spike From Host",
-      "path": "detections/identity/ident-kerberos-failure-spike-from-host.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1110"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
         "executable(+0.15)"
       ],
       "log_source_product": "active-directory",
@@ -9711,59 +8985,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-identity-155",
-      "name": "GitHub Org Bulk Member Removed",
-      "path": "detections/identity/ident-github-org-collaborator-removed-bulk.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1531"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "identity",
-        "supply-chain"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "github",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-156",
-      "name": "GitHub Deploy Key Added Across Many Repos",
-      "path": "detections/identity/ident-github-deploy-key-added-org-wide.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1098.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity",
-        "supply-chain"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "github",
-      "has_executable_body": true
-    },
-    {
       "id": "det-identity-157",
       "name": "Zoom Account Policy Disables Meeting Passcode",
       "path": "detections/identity/ident-zoom-passcode-disabled-meeting-policy.yaml",
@@ -9839,56 +9060,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "mdm",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-network-004",
-      "name": "SSH Brute-Force From Internet",
-      "path": "detections/network/ssh-failed-from-internet.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "network",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1110.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "linux",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-network-005",
-      "name": "SMB Lateral Movement (Many ADMIN$ Connections)",
-      "path": "detections/network/smb-lateral-movement.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "network",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1021.002"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "lateral"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "windows",
       "has_executable_body": true
     },
     {
@@ -10762,6 +9933,32 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-2b7d6fc0-71ac-4cf7-8ed1-b5788ee5257a",
+      "name": "Account Lockout",
+      "path": "detections/sigma-imports/_quarantine/account-lockout.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1110"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-2d3cdeec-c0db-45b4-aa86-082f7eb75701",
       "name": "Microsoft IIS Service Account Password Dumped",
       "path": "detections/sigma-imports/_quarantine/microsoft-iis-service-account-password-dumped.yaml",
@@ -10943,6 +10140,31 @@
         "executable(+0.15)"
       ],
       "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-34275eb8-fa19-436b-b959-3d9ecd53fa1f",
+      "name": "Loaded Module Enumeration Via Tasklist.EXE",
+      "path": "detections/sigma-imports/_quarantine/loaded-module-enumeration-via-tasklist-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
       "has_executable_body": true
     },
     {
@@ -11130,6 +10352,31 @@
         "tier:imported(+0.3)",
         "mitre_techniques:6(+0.2)",
         "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-42b1a5b8-353f-4f10-b256-39de4467faff",
+      "name": "Harvesting Of Wifi Credentials Via Netsh.EXE",
+      "path": "detections/sigma-imports/_quarantine/harvesting-of-wifi-credentials-via-netsh-exe.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1040"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
@@ -11344,6 +10591,34 @@
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-4d78a000-ab52-4564-88a5-7ab5242b20c7",
+      "name": "Change to Authentication Method",
+      "path": "detections/sigma-imports/_quarantine/change-to-authentication-method.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1556",
+        "T1098"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
       "has_executable_body": true
     },
     {
@@ -13257,6 +12532,31 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-bb76d96b-821c-47cf-944b-7ce377864492",
+      "name": "Suspicious NTLM Authentication on the Printer Spooler Service",
+      "path": "detections/sigma-imports/_quarantine/suspicious-ntlm-authentication-on-the-printer-spooler-service.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1212"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-bcfece3d-56fe-4545-9931-3b8e92927db1",
       "name": "Winrs Local Command Execution",
       "path": "detections/sigma-imports/_quarantine/winrs-local-command-execution.yaml",
@@ -13435,6 +12735,31 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-cd185561-4760-45d6-a63e-a51325112cae",
+      "name": "Live Memory Dump Using Powershell",
+      "path": "detections/sigma-imports/_quarantine/live-memory-dump-using-powershell.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-ce72ef99-22f1-43d4-8695-419dcb5d9330",
       "name": "Suspicious Windows Service Tampering",
       "path": "detections/sigma-imports/_quarantine/suspicious-windows-service-tampering.yaml",
@@ -13531,6 +12856,65 @@
         "tier:imported(+0.3)",
         "mitre_techniques:2(+0.2)",
         "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-d3adb3ef-b7e7-4003-9092-1924c797db35",
+      "name": "AWS Identity Center Identity Provider Change",
+      "path": "detections/sigma-imports/_quarantine/aws-identity-center-identity-provider-change.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-d557dc06-62e8-4468-a8e8-7984124908ce",
+      "name": "HackTool - WinPwn Execution",
+      "path": "detections/sigma-imports/_quarantine/hacktool-winpwn-execution.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1046",
+        "T1082",
+        "T1106",
+        "T1518",
+        "T1548.002",
+        "T1552.001",
+        "T1555",
+        "T1555.003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:8(+0.2)",
+        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
@@ -13656,6 +13040,57 @@
         "tier:imported(+0.3)",
         "mitre_techniques:1(+0.2)",
         "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-e4d22291-f3d5-4b78-9a0c-a1fbaf32a6a4",
+      "name": "Potentially Suspicious ODBC Driver Registered",
+      "path": "detections/sigma-imports/_quarantine/potentially-suspicious-odbc-driver-registered.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1003"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-e7a21b5f-d8c4-4ae5-b8d9-93c5d3f28e1c",
+      "name": "Suspicious DNS Query Indicating Kerberos Coercion via DNS Object SPN Spoofing",
+      "path": "detections/sigma-imports/_quarantine/suspicious-dns-query-indicating-kerberos-coercion-via-dns-object-spn-spoofing.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1557.001",
+        "T1187"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
@@ -13820,6 +13255,32 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-f598ea0c-c25a-4f72-a219-50c44411c791",
+      "name": "Possible Shadow Credentials Added",
+      "path": "detections/sigma-imports/_quarantine/possible-shadow-credentials-added.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "identity"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-f72aa3e8-49f9-4c7d-bd74-f8ab84ff9bbb",
       "name": "Suspicious RDP Redirect Using TSCON",
       "path": "detections/sigma-imports/_quarantine/suspicious-rdp-redirect-using-tscon.yaml",
@@ -13839,6 +13300,31 @@
       "quality_notes": [
         "tier:imported(+0.3)",
         "mitre_techniques:2(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-f7644214-0eb0-4ace-9455-331ec4c09253",
+      "name": "Kerberos Manipulation",
+      "path": "detections/sigma-imports/_quarantine/kerberos-manipulation.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1212"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.777,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],

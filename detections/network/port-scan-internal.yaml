@@ -19,7 +19,10 @@ detection:
 false_positives:
 - Vulnerability scanners (must be allowlisted)
 playbook: tpl-recon
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (multi-distinct): requires distinct destination ports *and* distinct
+  destinations per source. The engine holds one distinct operand per rule; splitting this into two rules
+  would fire twice on one scan and once on neither half.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

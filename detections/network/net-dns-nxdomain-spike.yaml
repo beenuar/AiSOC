@@ -20,7 +20,9 @@ detection:
 false_positives:
 - Malformed in-house tooling (educate)
 playbook: tpl-command-and-control
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-net-dns-nxdomain-spike; this stateless form named
+  a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

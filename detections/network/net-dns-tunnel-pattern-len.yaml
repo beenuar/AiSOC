@@ -19,7 +19,10 @@ detection:
 false_positives:
 - DNSSEC validation lookups
 playbook: tpl-command-and-control
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (not-windowed): `subdomain_hex_ratio` is a property of one query name,
+  not a count over a window; the reachability gate reads it as windowed because the name ends in `_ratio`.
+  It is cheap to derive from the query name and belongs with the derived fields, not here.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

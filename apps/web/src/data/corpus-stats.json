@@ -1,21 +1,23 @@
 {
-  "executable": 2603,
+  "executable": 2529,
+  "windowed": 68,
   "onDisk": 6991,
-  "quarantined": 4388,
+  "quarantined": 4462,
   "plugins": 77,
   "playbookPacks": 62,
   "playbooks": 87,
   "marketplaceItems": 7155,
   "categories": {
-    "application": 86,
-    "cloud": 257,
-    "data-exfil": 20,
-    "endpoint": 1983,
-    "identity": 176,
-    "network": 81
+    "application": 78,
+    "cloud": 237,
+    "data-exfil": 13,
+    "endpoint": 1982,
+    "identity": 154,
+    "network": 65
   },
   "generatedFrom": [
     "services/fusion/app/data/detection_ruleset.json",
+    "services/fusion/app/data/windowed_ruleset.json",
     "marketplace/index.json",
     "docs/detections/truth-table.md"
   ],

@@ -18,7 +18,9 @@ detection:
 false_positives:
 - Bulk offboarding
 playbook: tpl-impact
-enabled: true
+enabled: false
+quarantine_reason: superseded by the windowed rule wd-ident-okta-mass-deactivate-users; this stateless
+  form named a counter no source emits
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

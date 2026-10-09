@@ -78,6 +78,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   over-retains, which is recoverable, and narrowing it is recorded as
   follow-up.
 
+- **The 74 detection rules that needed a sliding window now have one, or a
+  recorded reason why they cannot.** Each named a counter no source emits —
+  `fail_count`, `events_per_minute`, `distinct_secrets_per_minute` — so the
+  stateless matcher read `None` on its first clause and the rule could never
+  fire, while being loaded by the engine and counted toward the published
+  executable total. Fixture replay could not catch it: the fixtures are
+  synthesized from the rule they test. 50 are now `wd-*` rules whose
+  threshold, window and selector are **derived from the original's own
+  clauses** rather than re-chosen, so a translation cannot quietly become a
+  different detection under the old rule's name and severity; 24 could not be
+  expressed as a count over a window and are refused, each with a reason that
+  travels into its `quarantine_reason` and onto its marketplace entry.
+  Refusals group into five kinds — `aggregate` (a sum, mean or variance the
+  engine does not compute), `not-windowed` (a per-event property the family
+  pattern misreads), `operand-not-emitted`, `multi-distinct` and `rarity`.
+  `scripts/windowed_translation.py` holds the decisions,
+  `scripts/check_windowed_translation.py` enforces that nothing is simply
+  dropped and re-derives every translation against its spec, and
+  `services/fusion/tests/test_windowed_translation_replay.py` drives each rule
+  through the real engine: it fires at its threshold, does not at one short,
+  never counts an event its selector rejects, and counts per entity.
+  Measured: unreachable native rules 119 → 45, windowed corpus 18 → 68.
+  The published executable figure falls 2,603 → 2,529 because 74 rules that
+  could not fire stopped being counted as executable; the windowed corpus is
+  now published as its own figure beside it rather than going uncounted.
 - **Attribute conditions, time-boxed elevation and workload identities, all
   inside the one permission path.** The placement is the item, not a detail:
   conditions are applied by `CurrentUser.require_permission` after whichever

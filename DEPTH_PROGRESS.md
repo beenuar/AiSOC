@@ -14,6 +14,38 @@ the negative control showing that reverting it fails again.
 - **Plan captured at:** `90ea2fd`. Figures in the plan body are hints at that
   commit; Phase 0.2 below re-derives each one and the tree wins.
 
+## Reconciliation, 2026-10-09
+
+Eleven items had merged to `main` and every one still read `[ ]` here. The
+tracker is the mutable half of a locked plan, so a tick that lags the tree
+makes it describe a repository that no longer exists -- the same failure the
+plan exists to catch, one level up.
+
+Reconciled against the tree rather than against the pull requests: each item
+below was confirmed by the artefact it was supposed to produce being present
+on `main` (the corpus file, the OCSF decision table, the event catalogue
+directory, the scorecard fields, the notify arms, the report scheduler, the
+step bounds, the access-conditions routes, the security pack), not by a merged
+title. Each carries the reproduce, change and negative control the legend
+requires in its own pull request body.
+
+| Item | Landed in | Confirmed by |
+| --- | --- | --- |
+| 1.1 | #1205 | `services/agents/tests/eval_data/verdict/verdict_corpus_v1.json` |
+| 1.2 | #1191 | nine scorecard fields in `aisoc_benchmark/replay.py` |
+| 1.3 | #1197 | `scripts/check_verdict_corpus.py`, `prompting/tool_results.py` |
+| 2.1 | #1195 | `internal/normalizer/ocsf_classes.go` |
+| 2.2 | #1204 | `scripts/check_activity_projection.py` |
+| 2.3 | #1209 | `schemas/event_catalog/` |
+| 5.1 | #1203 | `live_actions/notify_arms.py` |
+| 5.2 | #1211 | `app/workers/report_scheduler.py` |
+| 5.3 | #1207 | `app/playbook/bounds.py` |
+| 8.2 | #1206 | `endpoints/access_conditions.py` |
+| 8.3 | #1210 | `docs/security/` |
+
+Not started: phases 3, 4, 6, 7, 9 and the whole of 10, plus 1.4--1.6 and
+2.4--2.7. Those remain `[ ]` and are not claimed here.
+
 ## Migration and ADR numbers claimed
 
 Phases run in parallel lanes, so a number is claimed here **before** the file
@@ -162,22 +194,60 @@ publish `0.000` where it means "not measured". Phase 1.4 adds local 7--8B
 candidates, which need no key and *can* be measured here; the hosted rows stay
 `[!]` until the maintainer funds a key.
 
+### D4 -- Not all 74 "windowed" rules need a window
+
+The reachability gate attributes a rule to the windowed family by matching
+its field names against `_count$|^count_|_per_|time_window|_window_|_5min|_ratio$`.
+Eight of the 74 are per-event properties the pattern misreads: `row_count` is
+the size of one export record, `answer_count` the number of records in one DNS
+response, `insecure_registries_count` the length of a list in one daemon
+config event, `subdomain_hex_ratio` a property of one query name, and
+`active_keys_per_account` the state of an account at one moment. They are
+refused under the `not-windowed` kind rather than translated, and the family
+label in `check_detection_fields.py` is left as it is: changing the classifier
+would move the published family counts that Phase 0.2 recorded, for no gain
+now that each rule carries an individual reason.
+
+### D5 -- Five windowed rules that predate this work group by a field nothing emits
+
+`wd-secret-enumeration` (`distinct_by=secret_name`), `wd-windows-password-spray`,
+`wd-sysmon-remote-thread-fanout`, `wd-sysmon-dns-query-fanout` and
+`wd-sysmon-process-spawn-burst` name entity fields outside the statically
+recovered namespace. Four of the five are Windows `EventData` keys the
+`windows_event` connector lifts wholesale, so the namespace under-approximates
+and the rules are probably fine; `secret_name` has no such explanation. The
+new gate **reports** these rather than failing on them, because failing would
+be a false alarm about working rules, and the entity question is answered by
+replay rather than by a name lookup. Not fixed here: changing a shipped
+rule's `group_by` is a content decision with its own blast radius.
+
+### D6 -- The windowed engine ran a narrower field namespace than the stateless one
+
+`WindowedDetectionEngine._fields` carried a docstring saying it matched the
+stateless engine's namespace "exactly". It did not: the stateless engine then
+applies `derived_fields.enrich()` and the per-tenant allowlist overlay, and
+the windowed engine applied neither. Two of the rules translated here carry an
+`<x>_in_allowlist` clause, so without fixing this they would have moved from
+one engine that could not fire them to another. Both passes are now applied in
+`evaluate()`, which takes the overlay the consumer had already resolved for
+the stateless engine.
+
 ## Phase 1: Verdict quality you can publish
 
-- [ ] **1.1** Balanced, labelled verdict corpus
-- [ ] **1.2** Scorecard: balanced accuracy, MCC, per-class precision/recall,
+- [x] **1.1** Balanced, labelled verdict corpus
+- [x] **1.2** Scorecard: balanced accuracy, MCC, per-class precision/recall,
   Wilson interval, false negatives, auto-close precision, escalation rate,
   time to verdict
-- [ ] **1.3** Close `fake_tool_output` structurally (≤ 0.10 tuned and held-out)
+- [x] **1.3** Close `fake_tool_output` structurally (≤ 0.10 tuned and held-out)
 - [ ] **1.4** A 7--8B local model in the matrix, chosen by score
 - [ ] **1.5** `make replay-eval` design-partner kit
 - [ ] **1.6** Published "Verdict quality" table with a `--check` drift gate
 
 ## Phase 2: A semantic layer and live posture
 
-- [ ] **2.1** OCSF classes beyond five
-- [ ] **2.2** Activity projection on every event
-- [ ] **2.3** Event classification catalogue
+- [x] **2.1** OCSF classes beyond five
+- [x] **2.2** Activity projection on every event
+- [x] **2.3** Event classification catalogue
 - [ ] **2.4** Sessions per principal
 - [ ] **2.5** `__posture_snapshot__` collectors (AWS, Azure, GCP, Workspace, GitHub)
 - [ ] **2.6** Use the posture everywhere
@@ -185,7 +255,8 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 
 ## Phase 3: Detection depth for cloud, identity and SaaS
 
-- [ ] **3.1** Translate the 74 windowed `det-*` rules
+- [x] **3.1** Translate the 74 windowed `det-*` rules — 50 translated, 24
+  refused with a reason. `MAX_UNREACHABLE` 119 → 45.
 - [ ] **3.2** Ordered sequences and Sigma correlations
 - [ ] **3.3** Enrichment inputs (parity 5.5)
 - [ ] **3.4** Behavioural baselines in CORE
@@ -227,9 +298,9 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 
 ## Phase 5: Response that finishes
 
-- [ ] **5.1** Steps that act (parity 5.3)
-- [ ] **5.2** Delivery (parity 5.7)
-- [ ] **5.3** `wait`, `parallel`, `loop` with idempotency keys
+- [x] **5.1** Steps that act (parity 5.3)
+- [x] **5.2** Delivery (parity 5.7)
+- [x] **5.3** `wait`, `parallel`, `loop` with idempotency keys
 - [ ] **5.4** Stateful user and manager verification
 - [ ] **5.5** Executor arms 74 → at least 150
 - [ ] **5.6** Plain-language playbooks
@@ -252,8 +323,8 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 ## Phase 8: Enterprise gates
 
 - [ ] **8.1** Identity and administration
-- [ ] **8.2** ABAC, elevation and workload identities
-- [ ] **8.3** Buyer security pack
+- [x] **8.2** ABAC, elevation and workload identities
+- [x] **8.3** Buyer security pack
 
 ## Phase 9: Analyst surfaces
 
@@ -277,3 +348,4 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
 | 2026-10-09 | 4.3 | Reproduced: `check_retention_window.py` on the unmodified tree reported six problems — the lake deleting at 90 days against a 3,650-day cap, no `MODIFY TTL` migration, tiering deleting at 90, and the purge worker calling neither `alerts_under_legal_hold` nor `may_purge` and reporting nothing withheld. Fixed all but the cold-query bullet. Four negative controls recorded in the PR, including the positive control: a purge stuck closed withholds every tenant and fails four of the eight hold tests, which is the only thing that separates a working control from commendable caution. One pre-existing test (`test_storage_tiering.py`) pinned the 90-day tiering DELETE and now reads the shared constant; `test_retention_worker.py`'s session double could not answer the new holds query, so the worker failed closed and five of its cases failed — the double was taught the query rather than the fail-closed behaviour relaxed. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |
+| 2026-10-09 | 3.1 | All 74 decided. 50 translated into `wd-*` rules derived from each original's own clauses and replayed through the real engine (162 assertions); 24 refused with a reason across five kinds. `MAX_UNREACHABLE` 119 → 45, published executable 2,603 → 2,529, windowed 18 → 68. Three findings recorded as D4–D6 below. |

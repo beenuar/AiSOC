@@ -20,7 +20,10 @@ detection:
 false_positives:
 - Telemetry / heartbeat agents to known endpoints (allowlist destination)
 playbook: tpl-c2
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (aggregate): `interval_consistency` is the regularity of inter-arrival
+  times across the window — a variance, not a count. Keeping only the connection count turns a beacon
+  detection into a chatty-host detection.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'
