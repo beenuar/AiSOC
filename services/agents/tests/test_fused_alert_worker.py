@@ -322,6 +322,7 @@ class _FakeGovernor:
     def check(self, tenant_id, fingerprint):  # noqa: ANN001, ARG002
         return self._decision
 
+
 async def _llm_raises_and_fallback_says(monkeypatch, verdict: str):
     monkeypatch.setattr(worker_mod, "resolve_llm_config", _fake_llm_config(allowed=True))
     monkeypatch.setenv("AISOC_DETERMINISTIC", "0")
