@@ -35,7 +35,7 @@ AiSOC is an MIT-licensed agentic Security Operations Center that fuses raw
 events into incidents, runs four named agents — Detect, Triage, Hunt, and
 Respond — against them, and records every prompt, tool call, and rationale
 to a replayable Investigation Ledger. It ships with 84 click-and-connect
-data sources, 2,529 executable detection rules, 62 playbook packs, and a public
+data sources, 2,511 executable detection rules, 62 playbook packs, and a public
 benchmark harness that gates every PR. You can self-host the whole stack
 in five minutes, take it air-gapped on a flag, or join the managed
 waitlist at `tryaisoc.com` — same code in every direction.
@@ -237,7 +237,7 @@ number is MIT-licensed and reproducible from a fresh clone.
 **Defence.** The agent orchestrator is ~600 lines of LangGraph in
 `services/agents/app/orchestrator/`. The detection corpus is YAML under
 `detections/` (6,991 rules on disk across cloud, endpoint, identity,
-network, application, and data-exfil, of which 2,529 are executable). The benchmark dataset and harness are in
+network, application, and data-exfil, of which 2,511 are executable). The benchmark dataset and harness are in
 `services/agents/tests/eval_data/` and `scripts/run_evals.py`. Anyone can
 run `python3 scripts/run_evals.py` and reproduce every number on the
 benchmark page in roughly 35 ms. There is no private fork, no
@@ -423,7 +423,7 @@ section tracking.
 - **Persona:** Manager primary.
 - **Conversion behaviour:** Click through to the marketplace; encourage
   SDK contribution.
-- **Content blocks:** H2 ("87 connectors, 2,529 executable detections, 62
+- **Content blocks:** H2 ("87 connectors, 2,511 executable detections, 62
   playbook packs") · category chips (EDR, SIEM, Cloud, IAM, SaaS, VCS,
   Network, NDR, AI) ·
   marquee or grid of connector logos · "Build your own in 50 lines" code

@@ -124,14 +124,14 @@ block the front door, and the reason an event is not lost when fusion restarts.
 ## 4 · Fusion evaluates detections
 
 [`services/fusion`](https://github.com/beenuar/AiSOC/tree/main/services/fusion)
-(container port 8003) consumes the spine and runs **2,529 executable detection
+(container port 8003) consumes the spine and runs **2,511 executable detection
 rules** against each event.
 
 The rules the engine runs are compiled into
 [`app/data/detection_ruleset.json`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/data/detection_ruleset.json)
 and its imported counterpart beside it. The YAML under `detections/` is a
 *projection* of those, not the engine's input — 6,991 rules are on disk and
-2,529 load, which is why the corpus figure and the executable figure are
+2,511 load, which is why the corpus figure and the executable figure are
 published separately. See
 [the detection truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
 

@@ -46,7 +46,7 @@ AiSOC/
 │   └── aisoc-cli/        # CLI: scaffold / validate / publish plugins & detections (PyPI: aisoc-cli — unpublished, see below)
 ├── detections/           # Detection rules as YAML. A *projection* of the compiled
 │                         # ruleset, not the engine's input: 6,991 rules on disk,
-│                         # 2,529 executable. (7,022 YAML files live here; 25 are
+│                         # 2,511 executable. (7,022 YAML files live here; 25 are
 │                         # response playbooks and 6 are Sigma correlations.) Recount with
 │                         # scripts/generate_corpus_stats.py rather than trusting this line.
 ├── hunts/                # Hunt-as-Code YAML definitions (hypothesis + indicators + schedule)

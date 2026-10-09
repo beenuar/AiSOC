@@ -143,7 +143,7 @@ Three tiers:
 2. **Imported rules** — 6,113 rules from SigmaHQ, Splunk Security Content, Chronicle and MITRE CAR, each carrying provenance and an upstream link. Tagged `tier: imported`. 1,770 of them execute: the Sigma compiler translates rules into the matcher's own language, while Splunk SPL, Chronicle YARA-L and MITRE CAR pseudocode have no evaluator in this repository and are kept for provenance and coverage mapping.
 3. **Community contributions** — rules submitted via PR or installed from the marketplace. Tagged by author and license.
 
-**2,529 of the 6,991 execute, and that is the number to quote for coverage.** A rule counts as executable only after a vendor-shaped event was replayed through its real connector and the real engine and the rule was watched to fire — it is a claim that the rule is *reachable*, not that it detects an attack. See [Detection Coverage](../detections/coverage.md) and the [truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
+**2,511 of the 6,991 execute, and that is the number to quote for coverage.** A rule counts as executable only after a vendor-shaped event was replayed through its real connector and the real engine and the rule was watched to fire — it is a claim that the rule is *reachable*, not that it detects an attack. See [Detection Coverage](../detections/coverage.md) and the [truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
 
 Everything executable runs on the same engine: native YAML over OpenSearch + ClickHouse plus YARA, KQL, EQL, and SPL via federated search.
 

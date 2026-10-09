@@ -14,7 +14,7 @@ defend had been published for months. The connector catalogue went the same
 way — 35 of 84 had no documentation, and the sidebar listed 34 pages against
 96 files, so most of what existed could not be found.
 
-The detection figure is 2,529 now, and how it moved is the part worth keeping.
+The detection figure is 2,511 now, and how it moved is the part worth keeping.
 It was not closed by writing rules. Someone asked why the existing ones could
 not fire and found a single cause — Windows events nest their payload one
 level below the namespace the matcher reads, so the two most-used fields in
