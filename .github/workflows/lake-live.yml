@@ -42,7 +42,7 @@ jobs:
     # tenant come from the credential rather than from an argument.
     services:
       postgres:
-        image: postgres:16-alpine
+        image: public.ecr.aws/docker/library/postgres:16-alpine
         env:
           POSTGRES_USER: aisoc
           POSTGRES_PASSWORD: aisoc_ci_only
