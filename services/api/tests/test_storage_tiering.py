@@ -14,6 +14,8 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from app.services.retention import MAX_LAKE_DAYS
+
 _TIERING = Path(__file__).resolve().parents[1] / "clickhouse" / "tiering"
 _POLICY = _TIERING / "storage-policy.xml"
 _DDL = _TIERING / "002_tiering.sql"
@@ -43,6 +45,14 @@ def test_tiering_ddl_rebinds_and_moves_to_cold():
     assert "TO VOLUME 'cold'" in sql
     assert "DELETE" in sql
     assert "aisoc.raw_events" in sql
-    # 30-day hot window, 90-day retention (matches the cost model / ADR 0005).
+    # 30-day hot window, then cold until the retention ceiling.
+    #
+    # The DELETE used to be pinned at 90 days here. That was correct while
+    # the table's own ceiling was also 90; with the ceiling at 400 (depth
+    # plan 4.3) it meant an operator who applied this file silently cut
+    # their tenants' retention by 310 days as a side effect of moving data
+    # to cheaper disk. Tiering is a storage decision and must not shorten
+    # retention, so the DELETE is read from the same constant the lake's
+    # TTL and the per-tenant clamp use rather than written again here.
     assert "30 DAY" in sql
-    assert "90 DAY" in sql
+    assert f"{MAX_LAKE_DAYS} DAY DELETE" in sql

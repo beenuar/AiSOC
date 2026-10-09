@@ -48,7 +48,13 @@ from app.core.config import settings
 from app.db.clickhouse import execute_lake_query
 from app.db.cross_tenant import assert_cross_tenant_session
 from app.db.database import AsyncSessionLocal
-from app.services.retention import _clamp, build_lake_purge_sql, resolve_policy
+from app.services.retention import (
+    _clamp,
+    alerts_under_legal_hold,
+    build_lake_purge_sql,
+    may_purge,
+    resolve_policy,
+)
 from app.workers._tick_failures import TickFailures
 
 logger = logging.getLogger("aisoc.retention_purge")
@@ -66,7 +72,21 @@ class TenantPurgeResult:
     alerts_days: int
     lake_rows: int = 0
     alert_rows: int = 0
+    #: Rows that were past the window and were not deleted because a legal
+    #: hold covers this tenant. Counted rather than merely skipped: a hold
+    #: that silently stops a purge and a purge that silently had nothing to
+    #: do look identical in a log, and an auditor asking "did the hold
+    #: work" can only be answered by a number.
+    held_lake_rows: int = 0
+    held_alert_rows: int = 0
+    #: The matters the hold was placed under, so the operator reading the
+    #: log knows which one to go and release.
+    hold_refs: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
+
+    @property
+    def held(self) -> bool:
+        return bool(self.hold_refs)
 
 
 @dataclass
@@ -82,6 +102,18 @@ class PurgeRun:
     @property
     def alert_rows(self) -> int:
         return sum(t.alert_rows for t in self.tenants)
+
+    @property
+    def held_lake_rows(self) -> int:
+        return sum(t.held_lake_rows for t in self.tenants)
+
+    @property
+    def held_alert_rows(self) -> int:
+        return sum(t.held_alert_rows for t in self.tenants)
+
+    @property
+    def tenants_held(self) -> int:
+        return sum(1 for t in self.tenants if t.held)
 
     @property
     def errors(self) -> list[str]:
@@ -140,6 +172,44 @@ async def _load_policies(db: AsyncSession) -> list[tuple[uuid.UUID, dict[str, in
             )
         )
     return out
+
+
+async def _tenant_is_held(db: AsyncSession, tenant_id: uuid.UUID) -> list[str]:
+    """Matter references for every live hold covering this tenant, or [].
+
+    Read before every sweep rather than cached: a hold placed between two
+    runs has to take effect on the next one, and a cache measured in hours
+    is a cache that deletes evidence placed under hold this morning.
+
+    **Why any hold stops the whole tenant.** Both purges here are bulk
+    statements — one ClickHouse mutation over a tenant's aged events, one
+    `DELETE` over its aged alerts — and neither can evaluate a per-subject
+    predicate row by row without first enumerating which rows belong to the
+    held user, host or case. So the conservative reading is the only safe
+    one: if anything is held, nothing in that tenant is purged this sweep.
+    That over-retains, which is recoverable; the alternative under-retains,
+    which is not. Narrowing a hold to its own subjects is recorded as
+    follow-up in DEPTH_PROGRESS.md rather than approximated here.
+
+    The decision itself goes through ``may_purge`` so there is exactly one
+    place in the tree where a hold beats a purge, and it returns a decision
+    object rather than a boolean so a caller cannot read "held" as "not
+    expired".
+    """
+    holds = await alerts_under_legal_hold(db, tenant_id)
+    if not holds:
+        return []
+    decision = may_purge(
+        expired=True,
+        # The subject of a bulk tenant purge is the tenant. Every live hold
+        # in this tenant matches it, which is the fail-closed reading
+        # described above.
+        subjects={hold.subject_kind: hold.subject_value for hold in holds},
+        holds=holds,
+    )
+    if decision.may_purge:
+        return []
+    return sorted({hold.matter_ref or hold.id for hold in holds})
 
 
 async def _purge_lake(tenant_id: uuid.UUID, days: int, *, dry_run: bool) -> int:
@@ -210,7 +280,26 @@ async def run_once(
             )
 
             try:
-                result.lake_rows = await _purge_lake(tenant_id, policy.raw_events_days, dry_run=dry_run)
+                result.hold_refs = await _tenant_is_held(db, tenant_id)
+            except Exception as exc:
+                # Unreadable hold evidence withholds the purge. The opposite
+                # default deletes evidence under litigation because a query
+                # failed, which is the one outcome that cannot be
+                # apologised for.
+                result.hold_refs = ["<unreadable>"]
+                result.errors.append(f"legal_holds: {type(exc).__name__}")
+                logger.warning("retention_purge.holds_unreadable tenant=%s err=%s", tenant_id, type(exc).__name__)
+
+            # A held tenant is still counted, in dry-run mode, so the run
+            # reports how much the hold is protecting rather than reporting
+            # a tenant with nothing to purge.
+            held = result.held
+            try:
+                purged = await _purge_lake(tenant_id, policy.raw_events_days, dry_run=dry_run or held)
+                if held:
+                    result.held_lake_rows = purged
+                else:
+                    result.lake_rows = purged
             except Exception as exc:
                 # One unreachable store must not stop the other purges, and
                 # must not look like "nothing needed deleting".
@@ -222,13 +311,26 @@ async def run_once(
                 )
 
             try:
-                result.alert_rows = await _purge_alerts(db, tenant_id, policy.alerts_days, dry_run=dry_run)
+                purged = await _purge_alerts(db, tenant_id, policy.alerts_days, dry_run=dry_run or held)
+                if held:
+                    result.held_alert_rows = purged
+                else:
+                    result.alert_rows = purged
             except Exception as exc:
                 result.errors.append(f"alerts: {type(exc).__name__}")
                 logger.warning(
                     "retention_purge.alerts_failed tenant=%s err=%s",
                     tenant_id,
                     type(exc).__name__,
+                )
+
+            if held:
+                logger.info(
+                    "retention_purge.held tenant=%s matters=%s lake_rows=%d alert_rows=%d",
+                    tenant_id,
+                    ",".join(result.hold_refs),
+                    result.held_lake_rows,
+                    result.held_alert_rows,
                 )
 
             run.tenants.append(result)
@@ -241,11 +343,14 @@ async def run_once(
 
     if run.tenants:
         logger.info(
-            "retention_purge %s tenants=%d lake_rows=%d alert_rows=%d errors=%d",
+            "retention_purge %s tenants=%d lake_rows=%d alert_rows=%d held_tenants=%d held_lake_rows=%d held_alert_rows=%d errors=%d",
             "preview (dry run, nothing deleted)" if dry_run else "applied",
             len(run.tenants),
             run.lake_rows,
             run.alert_rows,
+            run.tenants_held,
+            run.held_lake_rows,
+            run.held_alert_rows,
             len(run.errors),
         )
     return run

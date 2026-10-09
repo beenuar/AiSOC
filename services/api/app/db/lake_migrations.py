@@ -127,6 +127,26 @@ _V2_ACTIVITY_PROJECTION = (
     "ALTER TABLE aisoc.raw_events ADD INDEX IF NOT EXISTS idx_resource_id resource_id TYPE bloom_filter(0.01) GRANULARITY 4",
 )
 
+# ── 003: the retention ceiling ─────────────────────────────────────────────
+#
+# Depth plan 4.3. `001_init.sql` wrote `TTL ... + INTERVAL 90 DAY` into the
+# table, and ClickHouse enforces that during merges with no reference to any
+# per-tenant setting — so a tenant who chose 400 days lost every event at day
+# 90, with nothing erroring and the console still showing 400.
+#
+# The init file now writes the ceiling instead, and this is the half an
+# *existing* deployment applies: that file runs only in the container
+# entrypoint on a fresh volume, so a TTL changed there alone lands on new
+# installs and silently not on the ones that already hold data — which are
+# precisely the ones with retention to lose.
+#
+# `MODIFY TTL` rewrites the table's TTL expression and schedules a
+# re-evaluation of existing parts. It does not resurrect rows already
+# deleted under the old 90-day TTL; nothing can. An operator upgrading a
+# deployment that has been running longer than 90 days keeps what it has and
+# starts accumulating toward the new ceiling from here.
+_V3_RETENTION_CEILING = ("ALTER TABLE aisoc.raw_events MODIFY TTL toDateTime(event_time) + INTERVAL 400 DAY",)
+
 
 MIGRATIONS: tuple[LakeMigration, ...] = (
     LakeMigration(
@@ -148,6 +168,16 @@ MIGRATIONS: tuple[LakeMigration, ...] = (
         # guessed, and the runner logs it on the way past.
         needs_cluster_ddl=True,
         tags=("activity-projection", "depth-2.2"),
+    ),
+    LakeMigration(
+        id="003_retention_ceiling",
+        description=(
+            "Raises the aisoc.raw_events TTL from 90 days to the 400-day ceiling a tenant may choose, so the "
+            "lake stops deleting before the per-tenant window the purge worker enforces."
+        ),
+        statements=_V3_RETENTION_CEILING,
+        needs_cluster_ddl=True,
+        tags=("retention", "depth-4.3"),
     ),
 )
 

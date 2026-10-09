@@ -44,6 +44,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The retention window a tenant chooses is now the one the lake honours,
+  and a legal hold outranks it.** Three things made the retention promise
+  false, and the tree had all three.
+
+  `aisoc.raw_events` carried `TTL ... + INTERVAL 90 DAY` written into the
+  table. ClickHouse enforces that during merges with no reference to any
+  per-tenant setting, so a tenant who chose 400 days — and whose policy row
+  said 400 — lost every event at day 90. Nothing errored. The console kept
+  saying 400. The table TTL is now a *ceiling* (`MAX_LAKE_DAYS`, 400 days)
+  with the per-tenant window enforced above it by the purge worker, and the
+  three places that number appears are held equal by a gate.
+
+  `retention.alerts_under_legal_hold` and `retention.may_purge` were
+  written, tested, and reachable from no production caller — so "a hold
+  outranks retention unconditionally", which migration `088`'s own comment
+  states, was true of a function and false of the system. The purge worker
+  reads the holds in force before every sweep and withholds what they
+  cover. Unreadable hold evidence withholds too: the opposite default
+  deletes evidence under litigation because a query failed.
+
+  And the run now reports what a hold withheld, by count and by matter
+  reference. A hold that silently stops a purge and a purge that silently
+  had nothing to do look identical in a log, and an auditor asking "did the
+  hold work" can only be answered by a number.
+
+  Two things stated rather than buried. **A deployment whose purge worker
+  is not armed now grows its lake for 400 days instead of 90** — the worker
+  is off and in dry-run by default, so arm it or lower both numbers
+  together. And **a hold currently stops the whole tenant's sweep rather
+  than only its own subjects**, because both purges are bulk statements
+  that cannot evaluate a per-subject predicate row by row; that
+  over-retains, which is recoverable, and narrowing it is recorded as
+  follow-up.
+
 - **Attribute conditions, time-boxed elevation and workload identities, all
   inside the one permission path.** The placement is the item, not a detail:
   conditions are applied by `CurrentUser.require_permission` after whichever

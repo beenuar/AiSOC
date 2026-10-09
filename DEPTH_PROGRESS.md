@@ -197,7 +197,31 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 
 - [ ] **4.1** Cloud-native collection (S3+SQS org trail, Pub/Sub, Event Hubs)
 - [ ] **4.2** Standard inputs (syslog, OTLP, Kafka, TAXII 2.1)
-- [ ] **4.3** Retention the tenant chooses
+- [~] **4.3** Retention the tenant chooses. **Two of three bullets
+  closed.** The lake TTL is now a 400-day ceiling rather than a fixed 90
+  days, in `001_init.sql`, in the tiering DELETE and in a `MODIFY TTL`
+  migration so an existing volume converges; `MAX_LAKE_DAYS` bounds what a
+  tenant may choose and the three numbers are held equal. Legal hold now
+  blocks the purge, through `may_purge` so the decision has one home, with
+  unreadable hold evidence withholding rather than proceeding, and the run
+  reporting what it withheld. Gated by
+  `scripts/check_retention_window.py` (self-test: eight injected
+  violations, one per rule) wired into `ci.yml :: python-lint`. 13 new
+  tests, api suite 4,569 -> 4,582.
+
+  **Open, and not attempted:** the third bullet — a cold-data query through
+  `/lake/sql` or a hunt reporting an estimated cost and a progress state
+  instead of timing out silently. `/lake/sql`'s `cost` today is a
+  rate-limit token price, not a scan estimate, and there is no progress
+  state at all.
+
+  **Two limits on what is closed**, recorded rather than left to be found:
+  the lake half is gated statically — no test in CI watches a row survive
+  past day 90 on a real ClickHouse, so what is proven is that the numbers
+  agree and the migration exists; and a hold stops the whole tenant's sweep
+  rather than only its own subjects, because both purges are bulk
+  statements. Narrowing that needs a per-subject predicate on each store
+  and is follow-up.
 - [ ] **4.4** Throughput (parity 6.9) and a cloud-hardware run
 - [ ] **4.5** Deployment completeness (parity 6.8)
 
@@ -251,4 +275,5 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 |---|---|---|
 | 2026-10-07 | 0.1 | This file created at base commit `1b8bc2d4`. |
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
+| 2026-10-09 | 4.3 | Reproduced: `check_retention_window.py` on the unmodified tree reported six problems — the lake deleting at 90 days against a 3,650-day cap, no `MODIFY TTL` migration, tiering deleting at 90, and the purge worker calling neither `alerts_under_legal_hold` nor `may_purge` and reporting nothing withheld. Fixed all but the cold-query bullet. Four negative controls recorded in the PR, including the positive control: a purge stuck closed withholds every tenant and fails four of the eight hold tests, which is the only thing that separates a working control from commendable caution. One pre-existing test (`test_storage_tiering.py`) pinned the 90-day tiering DELETE and now reads the shared constant; `test_retention_worker.py`'s session double could not answer the new holds query, so the worker failed closed and five of its cases failed — the double was taught the query rather than the fail-closed behaviour relaxed. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |

@@ -19,6 +19,22 @@ from app.services import governance
 MIN_DAYS = 1
 MAX_DAYS = 3650  # 10 years
 
+#: The longest lake window a tenant may choose, and the number the lake's
+#: own `TTL` must not delete before.
+#:
+#: Separate from ``MAX_DAYS`` because the two bound different stores. Alerts
+#: and audit rows live in Postgres and are small; raw events live in
+#: ClickHouse and are the expensive ones, so the ceiling that decides how
+#: much disk a deployment can be asked to hold is stated on its own rather
+#: than inherited from a cap meant for a different table.
+#:
+#: Raising it is two edits that must land together, which is why they are
+#: named here: this constant, and the `MODIFY TTL` migration in
+#: ``app/db/lake_migrations.py``. Changing one alone either lets a tenant
+#: choose a window ClickHouse will not honour, or holds rows nobody asked
+#: for. ``scripts/check_retention_window.py`` fails when they disagree.
+MAX_LAKE_DAYS = 400
+
 # Data classes we retain, with sane defaults (days).
 DEFAULT_RETENTION: dict[str, int] = {
     "raw_events": 90,  # ClickHouse lake
@@ -37,15 +53,15 @@ class RetentionPolicy:
         return asdict(self)
 
 
-def _clamp(value: int) -> int:
-    return max(MIN_DAYS, min(MAX_DAYS, int(value)))
+def _clamp(value: int, ceiling: int = MAX_DAYS) -> int:
+    return max(MIN_DAYS, min(ceiling, int(value)))
 
 
 def resolve_policy(config: dict[str, int] | None) -> RetentionPolicy:
     """Merge a tenant's stored config over defaults, clamped to safe bounds."""
     cfg = dict(config or {})
     return RetentionPolicy(
-        raw_events_days=_clamp(cfg.get("raw_events_days", DEFAULT_RETENTION["raw_events"])),
+        raw_events_days=_clamp(cfg.get("raw_events_days", DEFAULT_RETENTION["raw_events"]), MAX_LAKE_DAYS),
         alerts_days=_clamp(cfg.get("alerts_days", DEFAULT_RETENTION["alerts"])),
         audit_days=_clamp(cfg.get("audit_days", DEFAULT_RETENTION["audit"])),
     )
@@ -57,7 +73,7 @@ def build_lake_purge_sql(tenant_id: uuid.UUID, days: int) -> str:
     Uses a lightweight ``ALTER TABLE … DELETE`` (ClickHouse mutation). The
     tenant predicate is mandatory so a purge can never cross tenants; the day
     count is clamped and interpolated as an integer literal (never string)."""
-    days = _clamp(days)
+    days = _clamp(days, MAX_LAKE_DAYS)
     tid = str(tenant_id)
     # tenant_id is a UUID (validated by type); days is an int literal.
     return f"ALTER TABLE aisoc.raw_events DELETE WHERE tenant_id = '{tid}' AND event_time < now() - INTERVAL {days} DAY"

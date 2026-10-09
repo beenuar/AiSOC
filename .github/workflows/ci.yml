@@ -649,6 +649,19 @@ jobs:
         run: python3 scripts/check_connector_profiles.py --self-test
       - name: Connector profile drift gate
         run: python3 scripts/check_connector_profiles.py
+      # The lake's TTL is written into the table and ClickHouse enforces it
+      # during merges, with no reference to any per-tenant setting — so a
+      # tenant who chose 400 days lost every event at day 90, with nothing
+      # erroring and the console still showing 400. This holds the table
+      # TTL, the tiering DELETE and the per-tenant ceiling to one number,
+      # requires an existing deployment to be migrated onto it (001_init.sql
+      # runs only on a fresh volume), and requires the purge worker to read
+      # the holds in force and report what they withheld. Self-test first:
+      # one injected violation per rule, on the same tree.
+      - name: Retention window gate — self-test
+        run: python3 scripts/check_retention_window.py --self-test
+      - name: Retention window gate
+        run: python3 scripts/check_retention_window.py
       # One layer in from the name: the profile gate asks whether a connector
       # reaches a normalization path, this asks which OCSF class it reaches
       # when it gets there. The class uid divided by a thousand is the

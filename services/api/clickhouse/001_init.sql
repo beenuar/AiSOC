@@ -4,8 +4,23 @@
 CREATE DATABASE IF NOT EXISTS aisoc;
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- Raw OCSF events (hot tier, 90 days: see the TTL below, which is what
--- actually governs. This comment said 30 days over a 90 DAY TTL.)
+-- Raw OCSF events.
+--
+-- The TTL below is a CEILING, not a retention policy. It used to be 90 days,
+-- which meant a tenant who chose 400 days in the console — and whose policy
+-- row said 400 — lost every event at day 90, with nothing erroring and the
+-- console still showing their setting. ClickHouse enforces a table TTL during
+-- merges and knows nothing about per-tenant policy.
+--
+-- So the table keeps rows for as long as the longest window anyone may choose
+-- (`MAX_LAKE_DAYS` in services/api/app/services/retention.py), and the
+-- per-tenant window is enforced above it by app/workers/retention_purge.py.
+-- The two numbers are held equal by scripts/check_retention_window.py.
+--
+-- What that means operationally, said plainly: on a deployment where the
+-- purge worker is not armed (it is off and in dry-run by default) the lake
+-- now grows for 400 days rather than 90. Arm the worker, or lower both
+-- numbers together.
 -- ──────────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS aisoc.raw_events (
     event_id        UUID DEFAULT generateUUIDv4(),
@@ -86,7 +101,7 @@ CREATE TABLE IF NOT EXISTS aisoc.raw_events (
 ENGINE = ReplacingMergeTree(ingest_time)
 PARTITION BY (toYYYYMM(event_time), tenant_id)
 ORDER BY (tenant_id, event_time, class_uid, event_id)
-TTL toDateTime(event_time) + INTERVAL 90 DAY
+TTL toDateTime(event_time) + INTERVAL 400 DAY
 SETTINGS index_granularity = 8192;
 
 -- ──────────────────────────────────────────────────────────────────────────────
