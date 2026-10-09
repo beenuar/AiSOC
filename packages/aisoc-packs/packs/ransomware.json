@@ -12,7 +12,7 @@
     "T1489"
   ],
   "detections": [
-    "det-endpoint-003",
+    "wd-ransomware-file-extension-change",
     "det-endpoint-123",
     "det-endpoint-182"
   ],
@@ -77,11 +77,11 @@
   ],
   "validation": [
     {
-      "action": "Replay the positive fixture for det-endpoint-003 through the live engine.",
+      "action": "Replay 200 rename events for one process within five minutes through the live windowed engine.",
       "expect": "Exactly one alert, severity critical, technique T1486."
     },
     {
-      "action": "Replay the negative fixture for det-endpoint-003.",
+      "action": "Replay 199 of the same rename events \u2014 one short of the threshold.",
       "expect": "No alert. A pack whose detections fire on benign activity is worse than no pack."
     },
     {
