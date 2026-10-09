@@ -6222,7 +6222,11 @@
           "lsass",
           "-ma lsass"
         ],
-        "process_name_endswith": "procdump.exe"
+        "process_name_endswith_any": [
+          "procdump.exe",
+          "procdump64.exe",
+          "procdump64a.exe"
+        ]
       },
       "mitre": [
         "T1003.001"
