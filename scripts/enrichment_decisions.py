@@ -35,7 +35,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ["DECISIONS", "NEEDS_CONNECTOR_FIELD", "NEEDS_EXTERNAL_SOURCE", "NEEDS_INVENTORY", "Refusal"]
+# `KINDS` belongs here: `check_enrichment_decisions.py` reads it as
+# `module.KINDS` after loading this file by path, which no static
+# analysis can follow — CodeQL reported it as an unused global. Naming
+# it as an export is both true and the thing that makes the use visible.
+__all__ = ["DECISIONS", "KINDS", "NEEDS_CONNECTOR_FIELD", "NEEDS_EXTERNAL_SOURCE", "NEEDS_INVENTORY", "Refusal"]
 
 #: The field exists at the vendor and no connector surfaces it. Closing these
 #: is the activity projection of depth plan 2.2.
