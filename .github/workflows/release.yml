@@ -433,6 +433,14 @@ jobs:
             context: services/slack-bot
             dockerfile: Dockerfile
             image: ghcr.io/beenuar/aisoc-slack-bot
+          # teams-bot shipped in the matrix with no include block, so it had
+          # no image to be tagged with and `docker/build-push-action` refused
+          # with "tag is needed when pushing to registry" on both
+          # architectures — the one image a release could not publish.
+          - service: teams-bot
+            context: services/teams-bot
+            dockerfile: Dockerfile
+            image: ghcr.io/beenuar/aisoc-teams-bot
 
           # Named by docker-compose.yml and the Helm chart since they were
           # written, and published by nothing until now. The chart has no
@@ -599,6 +607,8 @@ jobs:
             image: ghcr.io/beenuar/aisoc-ueba
           - service: slack-bot
             image: ghcr.io/beenuar/aisoc-slack-bot
+          - service: teams-bot
+            image: ghcr.io/beenuar/aisoc-teams-bot
           - service: honeytokens
             image: ghcr.io/beenuar/aisoc-honeytokens
           - service: purple-team
