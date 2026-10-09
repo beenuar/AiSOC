@@ -129,7 +129,7 @@ hanging.
 event is replayed through the real connector and engine and that rule is *watched to fire* — never
 inferred from a directory or an `enabled:` flag. The proof can fail: `--prove-gate` reverts the
 Windows connector and requires all 1,687 Windows rules to go silent. It means reachable, not that it
-detects an attack. 119 still cannot fire, counted by family rather than hidden.
+detects an attack. 45 still cannot fire, counted by family rather than hidden.
 ([why 1,362 were refused](docs/detections/sigma-compilation.md))
 
 **Every answer carries its receipts.** The copilot cites each checkable claim to the ledger entry behind
@@ -227,9 +227,9 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 
 Secrets are generated per deployment and never committed; connector credentials are encrypted at rest. Services connect to Postgres as a DML-only role, so row-level security actually applies, and tenant isolation is enforced at the query layer in every store. RBAC gates every mutating route, ingest is authenticated, and the default install sends no prompt anywhere — the model runs beside it.
 
-SAML and OIDC sign-in with per-connection tenant and group mapping, and SCIM provisioning
-([setup](apps/docs/docs/operations/enterprise-sso.md)). Attribute conditions and time-boxed
-elevation are schema only: migration 087 creates the tables and no code reads them yet.
+SAML and OIDC sign-in with per-connection tenant and group mapping, SCIM provisioning, and a TOTP
+second factor with recovery codes and per-tenant enforcement ([SSO](apps/docs/docs/operations/enterprise-sso.md) ·
+[2FA](apps/docs/docs/operations/console-mfa.md)). Attribute conditions, time-boxed elevation and workload identities narrow a permission inside the one authorization path; enforcing MFA *per role* is still absent.
 
 **A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fix; report via [SECURITY.md](SECURITY.md).
 

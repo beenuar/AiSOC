@@ -27,7 +27,7 @@ DRL-1.1 summary: you may use, modify, and redistribute Sigma rules provided you 
 | Field | Value |
 |---|---|
 | **Upstream repo** | [mitre-attack/car](https://github.com/mitre-attack/car) |
-| **License** | [Apache-2.0](https://github.com/mitre-attack/car/blob/master/LICENSE) |
+| **License** | [Apache-2.0](https://github.com/mitre-attack/car/blob/master/LICENSE.txt) |
 | **Imported via** | [`tools/detection_import/car_importer.py`](../tools/detection_import/car_importer.py) |
 | **Provenance file** | every rule carries `provenance.source: mitre-attack/car`, `provenance.source_id: CAR-YYYY-MM-NNN`, `provenance.source_commit: <sha>` |
 

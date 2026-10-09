@@ -414,7 +414,7 @@ tenant) with ZSET-backed top-N sorted queues for O(log N) reads.
 
 Admin only (`roles:write`); every mutation requires a `reason`, writes an
 audit row, and revokes the target's active sessions. See
-[Roles & Permissions](roles-and-permissions.md) for the full model.
+[Roles & Permissions](../roles-and-permissions.md) for the full model.
 
 | Method | Path | Purpose |
 |--------|------|---------|

@@ -304,7 +304,8 @@ Each agent emits chain-of-thought traces persisted in PostgreSQL for explainabil
 
 * [API Reference](../api/API_REFERENCE.md)
 * [Local Development](../runbooks/LOCAL_DEVELOPMENT.md)
-* [PROGRESS.md](../../PROGRESS.md)
+* [The lettered deferrals](../audit/DEFERRED_SUBPHASES.md) — this entry used to
+  link `PROGRESS.md`, which is gitignored and was never committed.
 
 ---
 

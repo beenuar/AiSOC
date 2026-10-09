@@ -25,7 +25,7 @@ aisoc submit examples/alerts/lateral-movement.json
 ### Step 0 · DetectAgent · detect
 
 Matches the two Okta `user.session.start` events against the executable
-detection corpus (2,603 rules as of this writing — `docs/detections/truth-table.md`
+detection corpus (2,529 rules as of this writing — `docs/detections/truth-table.md`
 carries the generated count). The `okta-impossible-travel` rule fires on the
 geographical delta + the sub-10-minute time window, and Fusion lifts
 the per-alert confidence by another notch because both sessions
@@ -87,7 +87,8 @@ require password reset, create the case, page the SOC on-call. The
 
 1. Approve `user.session.revoke_all` (the only single-user-blast-radius
    action) immediately via the responder PWA.
-2. Pivot on the second IP (203.0.113.50) in the [Threat Intel](https://docs.tryaisoc.com/console/threat-intel) tab to see if it has appeared in
+2. Pivot on the second IP (203.0.113.50) in the console's **Threat
+   Intelligence** tab (`/threat-intel`) to see if it has appeared in
    other tenants' OTX feeds.
 3. Page Alice's manager from the case to confirm whether she travelled.
 4. If credential reuse is suspected: rotate every API key in Alice's

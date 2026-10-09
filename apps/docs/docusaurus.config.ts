@@ -2,12 +2,17 @@ import { themes as prismThemes } from "prism-react-renderer";
 import type { Config } from "@docusaurus/types";
 import type * as Preset from "@docusaurus/preset-classic";
 
-// Two deploy targets share this build:
-//   1. GitHub Pages (default): https://beenuar.github.io/AiSOC/
-//   2. Custom domain          : https://docs.tryaisoc.com/  (served behind cloudflared tunnel)
+// The live docs site is GitHub Pages: https://beenuar.github.io/AiSOC/ — that
+// is the default below and the only URL this project publishes.
 //
-// Override at build time with:
-//   DOCS_URL=https://docs.tryaisoc.com DOCS_BASE_URL=/ pnpm --filter @aisoc/docs build
+// A custom domain is supported but is not stood up: `docs.tryaisoc.com` does
+// not resolve, so do not treat the example below as a second live target.
+// Point DOCS_URL at a host you control and have fetched:
+//   DOCS_URL=https://docs.example.com DOCS_BASE_URL=/ pnpm --filter @aisoc/docs build
+//
+// Getting this wrong is not cosmetic: DOCS_URL lands in every canonical tag
+// and in the sitemap, so a hostname nobody can reach becomes the address
+// search engines are told is authoritative.
 const DOCS_URL = process.env.DOCS_URL || "https://beenuar.github.io";
 const DOCS_BASE_URL = process.env.DOCS_BASE_URL || "/AiSOC/";
 

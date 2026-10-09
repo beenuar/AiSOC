@@ -43,7 +43,7 @@ fails CI if any name in either direction stops resolving.
 independent: anything can consume the spine without ingest knowing about it.
 
 **4. Fusion consumes it and evaluates detections.**
-[`services/fusion`](../../services/fusion) runs the 2,603 executable rules
+[`services/fusion`](../../services/fusion) runs the 2,529 executable rules
 against the event — 833 native and 1,770 imported Sigma rules, each of which
 was replayed through its real connector and this engine and watched to fire
 before it was allowed into the compiled ruleset. Separately it decides whether the event is *promotable* —
@@ -59,7 +59,7 @@ alerts while the console showed it disabled — the worst shape a defect can
 have, because it tells the operator the problem is solved.
 
 It is an overlay rather than a per-tenant ruleset: the *difference* applied
-over one shared corpus, not N copies of 2,603 rules rebuilt whenever anyone
+over one shared corpus, not N copies of 2,529 rules rebuilt whenever anyone
 edits anything. Suppression is applied **after** the match so the dropped hit
 is logged with the tuning, its author and its reason — "no alert" with no
 explanation is indistinguishable from a rule that simply did not match. A
@@ -281,7 +281,7 @@ flowchart TD
     C --> E["OCSF-shaped envelope"]
     D --> E
     E --> F[("Kafka aisoc.raw_events")]
-    F --> G["Detection engine<br/>2,603 executable rules"]
+    F --> G["Detection engine<br/>2,529 executable rules"]
     F --> H{"Promotable?<br/>category 2, or severity >= high"}
     G -->|rule fires| I["Alert"]
     H -->|yes| I

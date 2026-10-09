@@ -143,7 +143,7 @@ Three tiers:
 2. **Imported rules** — 6,113 rules from SigmaHQ, Splunk Security Content, Chronicle and MITRE CAR, each carrying provenance and an upstream link. Tagged `tier: imported`. 1,770 of them execute: the Sigma compiler translates rules into the matcher's own language, while Splunk SPL, Chronicle YARA-L and MITRE CAR pseudocode have no evaluator in this repository and are kept for provenance and coverage mapping.
 3. **Community contributions** — rules submitted via PR or installed from the marketplace. Tagged by author and license.
 
-**2,603 of the 6,991 execute, and that is the number to quote for coverage.** A rule counts as executable only after a vendor-shaped event was replayed through its real connector and the real engine and the rule was watched to fire — it is a claim that the rule is *reachable*, not that it detects an attack. See [Detection Coverage](../detections/coverage.md) and the [truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
+**2,529 of the 6,991 execute, and that is the number to quote for coverage.** A rule counts as executable only after a vendor-shaped event was replayed through its real connector and the real engine and the rule was watched to fire — it is a claim that the rule is *reachable*, not that it detects an attack. See [Detection Coverage](../detections/coverage.md) and the [truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
 
 Everything executable runs on the same engine: native YAML over OpenSearch + ClickHouse plus YARA, KQL, EQL, and SPL via federated search.
 
@@ -182,12 +182,19 @@ Wherever you deploy. AiSOC is self-hosted; we don't run a hosted service that ho
 
 ### How long are events / cases retained?
 
-By default — forever, because most AiSOC users are running on disk they own. To bound retention:
+By default — forever, because most AiSOC users are running on disk they own, and because the retention worker ships **off** with a dry-run mode. To bound retention, set a per-tenant policy; `services/api/app/services/retention.py` clamps every window to between 1 day and 3,650 days and the worker purges within the tenant's own predicate.
 
-- **Raw events** in OpenSearch / ClickHouse: configurable per-tenant ILM policy.
-- **Cases** in Postgres: archived to cold object storage after a configurable age, soft-deleted from the main DB.
+| Data class | Policy key | Default when a policy is set |
+|---|---|---|
+| Raw events (ClickHouse lake) | `raw_events_days` | 90 |
+| Alerts (Postgres) | `alerts_days` | 365 |
+| Audit / ledger | `audit_days` | 730 |
+
 - **Investigation Ledger**: kept as long as the case is kept. It's the audit primitive.
-- **Audit log**: hash-chained, append-only. Truncating the audit log breaks the chain — by design.
+- **Audit log**: `audit_days` is storable but **not purged** — the log is an append-only hash chain, so truncating it invalidates every later verification. Chain-aware truncation with a re-anchored checkpoint is a gap, not a feature.
+- **Legal hold outranks retention unconditionally.** The worker reads live holds before every run rather than caching them. See [Data governance](./data-governance.md).
+
+This answer previously described per-tenant **ILM policies** and cases "archived to cold object storage after a configurable age". Neither exists: retention is day-count windows purged in place, and nothing in the tree writes cases to object storage.
 
 ### Does AiSOC handle PII?
 
@@ -202,7 +209,15 @@ For GDPR / CCPA workflows, the audit log surfaces every read/write of identifiab
 
 ### Can I delete a user's data on request?
 
-Yes. `DELETE /api/v1/identity/{user_id}/data` tombstones every alert, case, and event referencing the identity within the requesting tenant, and rewrites the audit log entries to redact the identifier (the audit chain integrity is preserved; only the indexed value is replaced with a tombstone). The action itself is recorded in the audit log.
+**Not through a dedicated endpoint — there isn't one.** This answer used to name `DELETE /api/v1/identity/{user_id}/data` and describe it tombstoning every alert, case and event for an identity. **No such route has ever existed**, in the code or in [`docs/openapi.yaml`](https://github.com/beenuar/AiSOC/blob/main/docs/openapi.yaml), and the project's own security pack lists a data-subject-request endpoint as a [gap](https://github.com/beenuar/AiSOC/blob/main/docs/security/questionnaire.md#the-gap-list). Two documents disagreeing about a compliance control is worse than the gap itself, so this one is corrected to match the tree.
+
+What does exist today:
+
+- **Tenant deletion** — `services/api/app/services/tenant_deletion.py` removes a tenant and cascades across its tables.
+- **Audit export** — `services/api/app/services/audit_export.py` produces CSV and HTML bundles for a subject-access response assembled by hand.
+- **Retention windows and legal hold** — see above, and [Data governance](./data-governance.md).
+
+Assembling and executing a subject request is therefore an operator procedure, not an API call. [ADR-0002](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0002-compliance-claims.md) records the open question.
 
 ---
 

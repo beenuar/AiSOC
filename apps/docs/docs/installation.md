@@ -296,7 +296,7 @@ file an issue with the installer's full output —
   **not** join AD, change Defender settings, or reconfigure Windows
   Update.
 - The Docker images pulled by the demo
-  (`ghcr.io/beenuar/aisoc-*`) are signed with [Cosign](https://docs.sigstore.dev/cosign/overview/);
+  (`ghcr.io/beenuar/aisoc-*`) are signed with [Cosign](https://docs.sigstore.dev/cosign/signing/overview/);
   the [Docker deployment page](./deployment/docker#image-provenance)
   documents the signature verification workflow.
 - The demo seeds **synthetic data only**. No real customer data, IOCs,

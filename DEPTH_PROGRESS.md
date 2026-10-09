@@ -305,8 +305,7 @@ invented fields on the first run of the gate.
   refused with a reason. `MAX_UNREACHABLE` 119 → 45.
 - [x] **3.2** Ordered sequences and Sigma correlations — the windowed engine
   stages ordered and unordered sequences; all four translatable Sigma
-  correlation types compile. See D7 and D8.
-- [ ] **3.2** Ordered sequences and Sigma correlations
+  correlation types compile. Windowed corpus 68 → 72. See D7 and D8.
 - [ ] **3.3** Enrichment inputs (parity 5.5)
 - [ ] **3.4** Behavioural baselines in CORE
 - [ ] **3.5** Threat-and-anomaly condition rules

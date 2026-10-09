@@ -323,7 +323,7 @@ response actions — and both are the same shape as things that have already
 gone wrong in this repository. The detection corpus reached ~6,000 rules of
 which 833 executed; the connector catalogue reached 84 connectors of which 35
 had no documentation. Both recovered by making the artifact derived and the
-count gated — and the detection gap then closed properly, to 2,603, once
+count gated — and the detection gap then closed properly, to 2,529 today, once
 somebody asked *why* the other rules could not fire instead of treating the
 number as a backlog.
 

@@ -189,7 +189,10 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "marketing/launch/blog-outlines.md": (2, _MARKETING),
     "marketing/launch/product-hunt.md": (1, _MARKETING),
     # --- history: changelog, releases, decision records, incident notes ----
-    "CHANGELOG.md": (24, _HISTORY),
+    # 24 before the v7.2.0 benchmark-scoreboard entry's dead `docs.` link was
+    # repointed at the OSS docs site; the sentence is annotated rather than
+    # rewritten, so the history still says what it said.
+    "CHANGELOG.md": (23, _HISTORY),
     "RELEASES.md": (4, _HISTORY),
     "AGENTS.md": (6, _HISTORY),
     "docs/decisions/0004-live-demo-strategy.md": (5, _HISTORY),
@@ -220,7 +223,11 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "services/agents/app/workers/fused_alert_consumer.py": (1, _UUID_SEED),
     # --- documentation about the managed instance --------------------------
     "apps/docs/docs/operations/managed-instance.md": (14, _DOCS),
-    "apps/docs/docusaurus.config.ts": (2, _DOCS),
+    # 2 before the header stopped advertising `docs.tryaisoc.com` as a second
+    # live deploy target. It does not resolve; the one remaining mention says
+    # so. DOCS_URL lands in canonical tags and the sitemap, so a non-resolving
+    # host here is published as the authoritative address for every page.
+    "apps/docs/docusaurus.config.ts": (1, _DOCS),
     "docs/operations/live-demo-runbook.md": (7, _DOCS),
     "docs/design/landing-page-brief.md": (3, _DOCS),
     "docs/design/landing-page-content.md": (3, _DOCS),
@@ -228,8 +235,13 @@ ALLOWED: dict[str, tuple[int, str]] = {
     "docs/design/README.md": (1, _DOCS),
     "docs/managed-mode.md": (1, _DOCS),
     "docs/press/README.md": (1, _DOCS),
-    "examples/lateral-movement.md": (1, _DOCS),
-    "examples/phishing-payload.md": (1, _DOCS),
+    # examples/lateral-movement.md and examples/phishing-payload.md were
+    # exempted here under "accurate as written". They were not: both linked
+    # `docs.tryaisoc.com`, which does not resolve at all (DNS failure, not a
+    # 404). The sentences now name the console surface instead of linking a
+    # host that was never stood up, so the exemptions are gone rather than
+    # re-counted. A hostname exemption is only honest once the URL has been
+    # fetched.
     "services/slack-bot/README.md": (1, _DOCS),
     ".env.example": (2, _DOCS),
     # --- plan files: never edited, reported instead ------------------------

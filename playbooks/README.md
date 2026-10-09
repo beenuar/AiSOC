@@ -9,20 +9,20 @@ rollback paths.
 
 ```
 playbooks/
-└── packs/
-    └── v1/                       # Canonical, versioned production pack (62 playbooks
-    │                                 #   across 21 directories; the figure
-    │                                 #   marketplace/index.json publishes)
-        ├── account-takeover/     # 5  — ATO, MFA fatigue, session theft, OAuth abuse
-        ├── ransomware/           # 5  — host isolate, shadow-copy, fileserver, C2, exposure
-        ├── bec/                  # 5  — inbox rules, payment redirect, impersonation, token theft
-        ├── insider-risk/         # 5  — mass download, exit-risk, privilege misuse, src-exfil
-        ├── cloud-misconfig/      # 10 — S3, IAM, key-leak, root MFA, CloudTrail, SG, RDS, GKE, Azure, x-account
-        ├── data-exfil/           # 5  — large upload, archive, DNS tunnel, personal cloud, USB
-        ├── lateral-movement/     # 5  — PsExec, RDP, kerberoast, PTH, cross-domain
-        ├── supply-chain/         # 5  — npm, PyPI, GH Action, vendor breach, IaC drift
-        └── ddos/                 # 5  — L3/L4, L7, DNS amp, SYN flood, auth-endpoint
+└── packs/                        # Canonical, versioned production pack: 62 playbooks
+    └── v1/                       #   across 21 directories — the figure
+                                  #   marketplace/index.json publishes
+        ├── account-takeover/     # ATO, MFA fatigue, session theft, OAuth abuse
+        ├── ransomware/           # host isolate, shadow-copy, fileserver, C2, exposure
+        ├── bec/                  # inbox rules, payment redirect, impersonation, token theft
+        ├── cloud-misconfig/      # S3, IAM, key-leak, root MFA, CloudTrail, SG, RDS, GKE, Azure
+        ├── …                     # 17 more: phishing, malware, privilege-escalation,
+        └── ddos/                 #   container-escape, brute-force, web-compromise, …
 ```
+
+`ls playbooks/packs/v1` is the list; the four above are a sample, not the
+whole tree. Counts per directory are not published here because they move
+with the generator and nothing would hold them true.
 
 The runtime (`services/agents/app/playbook/store.py`) loads `packs/v1/**`
 on startup and merges with user-defined playbooks in
@@ -66,42 +66,67 @@ Each file is a `*.playbook.json` document validated against the Pydantic
 
 ### Supported step types
 
-| Type            | Purpose                                                |
-| --------------- | ------------------------------------------------------ |
-| `enrich`        | Call enrichment service for an indicator               |
-| `investigate`   | Hand off to the AI investigator agent                  |
-| `notify`        | Slack / email / PagerDuty / webhook                    |
-| `block_ip`      | Edge or firewall IP block                              |
-| `isolate_host`  | EDR host isolation                                     |
-| `create_ticket` | Open a ticket in the SOC / HR / procurement queue      |
-| `close_case`    | Auto-close (typically gated on `verdict`)              |
-| `http`          | Generic outbound HTTP for any custom integration       |
-| `condition`     | Branching gate; reads `field op value` from run context |
+All twenty-five members of `StepType` in
+[`models.py`](../services/agents/app/playbook/models.py), which is the only
+place this vocabulary is defined. This table listed nine of them for a long
+time, which is how the approval pattern below came to be documented wrongly.
+
+| Type | Purpose |
+| --- | --- |
+| `enrich` | Call the enrichment service for an indicator |
+| `investigate` | Hand off to the AI investigator agent |
+| `notify` | Slack / Teams / email / PagerDuty / signed webhook. A governed verb |
+| `http` | Outbound HTTP to a **named** tenant integration, through the SSRF guard |
+| `condition` | Branching gate; reads `field op value` from run context |
+| `wait` | Hold for a timer or a callback. Short timers sleep in place; longer ones become a durable pause |
+| `parallel` | Run child steps concurrently, then join |
+| `loop` | Run child steps once per item, bounded |
+| `approval` | Suspend the run until an analyst decides. Durable — see below |
+| `block_ip` | Edge or firewall IP block |
+| `block_ioc` | Block an IOC (hash, domain, IP) |
+| `isolate_host` | EDR host isolation |
+| `kill_process` | Terminate a process on an endpoint |
+| `quarantine_file` | Quarantine a file on an endpoint |
+| `run_av_scan` | Trigger an on-demand AV scan |
+| `run_script` | Run a vendor-side response script |
+| `osquery_live_query` | Distributed osquery via osctrl / FleetDM / `aisoc-direct`. A governed verb |
+| `disable_user` | Disable an identity |
+| `reset_password` | Force a password reset |
+| `revoke_session` | Revoke active sessions |
+| `force_mfa` | Force re-authentication with a second factor |
+| `search_siem` | Run a query against a connected SIEM |
+| `create_notable_event` | Write a notable / incident back to the SIEM |
+| `create_ticket` | Open a ticket in the SOC / HR / procurement queue |
+| `close_case` | Auto-close (typically gated on `verdict`) |
+
+Every verb that touches somebody's estate is graded against its own
+capability contract at dispatch, and previews rather than acts unless
+`AISOC_PLAYBOOK_ACTIONS_EXECUTE` is set. See
+[Playbooks](../apps/docs/docs/concepts/playbooks.md) for the full
+`status` / `executed` table.
 
 ### Human-approval gates
 
-Approval gates are modelled as `condition` steps that read a flag from
-run context (e.g. `context.approved_by_oncall`). The flag is expected to
-be set by an out-of-band approval system — Slack interactive button,
-email link, or the AiSOC web console — before the gated step runs.
+Use an `approval` step. The run suspends to Postgres, survives a restart of
+the agents service, resumes at the step after the approval once it is
+decided, and expires with a recorded outcome rather than hanging.
 
 ```json
 {
   "id": "approve",
-  "name": "Wait for human approval",
-  "type": "condition",
-  "params": {},
-  "condition": {
-    "field": "context.approved_by_oncall",
-    "operator": "eq",
-    "value": true
-  },
-  "next_true": "reset",
-  "on_failure": "abort",
-  "retry_max": 0,
-  "timeout_seconds": 5
+  "name": "Approve credential reset",
+  "type": "approval",
+  "params": { "prompt": "Reset this account's password?" },
+  "on_failure": "abort"
 }
 ```
+
+**Do not model a gate as a `condition` step reading a flag somebody sets out
+of band.** This file used to document exactly that, and it never worked: the
+engine evaluates each condition once against the run context and moves on, so
+the "wait" was a single false evaluation, and no endpoint ever existed to flip
+the flag. A playbook written that way ran straight through its gate into
+whatever it was gating.
 
 ### Rollback
 

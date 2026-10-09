@@ -493,7 +493,7 @@ The full inventory (every file, env-var, and test count) lives under `[7.6.0]` i
 - **Public weekly benchmark scoreboard** — [`apps/docs/docs/benchmark-scoreboard.mdx`](apps/docs/docs/benchmark-scoreboard.mdx) reads `apps/docs/static/data/scoreboard.json`, refreshed weekly by `.github/workflows/wet-eval.yml`. Substrate rows are visually separated from wet-eval rows — substrate numbers can never be quoted as live agent performance.
 
 **Security & correctness wave** — 12 critical/high CVE-class fixes that landed ahead of v7.4.0. See [`apps/docs/docs/operations/security.md`](apps/docs/docs/operations/security.md) for the full inventory.
-- Rule-engine `eval()` RCE eliminated — conditions are parsed to a whitelisted AST in [`services/api/app/services/rules_engine.py`](services/api/app/services/rules_engine.py) ([#116](https://github.com/beenuar/AiSOC/pull/116)).
+- Rule-engine `eval()` RCE eliminated — conditions are parsed to a whitelisted AST in [`services/api/app/services/rule_engine.py`](services/api/app/services/rule_engine.py) ([#116](https://github.com/beenuar/AiSOC/pull/116)).
 - `/hunts` and `/cases` tenant isolation enforced at the **query layer** (`WHERE tenant_id = …`), not via RLS alone ([#117](https://github.com/beenuar/AiSOC/pull/117), [#118](https://github.com/beenuar/AiSOC/pull/118)).
 - CORS lockdown — a shared `cors.py` is vendored byte-identical into every Python service and refuses to start with `*` + credentials in production ([#119](https://github.com/beenuar/AiSOC/pull/119)).
 - Playbook SSRF guard — every outbound `http_request` / `notify` runs through [`services/agents/app/playbook/ssrf_guard.py`](services/agents/app/playbook/ssrf_guard.py) with a cloud-metadata block list ([#120](https://github.com/beenuar/AiSOC/pull/120)).

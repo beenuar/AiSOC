@@ -203,8 +203,9 @@ allows, and can never allow one it refuses. `AISOC_AGENTS_SERVICE_TOKEN` must
 also be set, or the agents service cannot reach the API's service path and the
 step fails closed saying so.
 
-**No handler** — `approval` is the one step type the engine accepts and cannot
-run. It fails closed with a reason; see
+**Every declared step type has a handler.** `approval` was once the exception
+— the engine had no pause and no resume, so the step failed closed and twelve
+shipped playbooks aborted on it. It is a durable pause now; see
 [Approvals and dry-runs](#approvals-and-dry-runs) below.
 
 Common step fields:
@@ -282,29 +283,33 @@ step whose type has no handler is reported as
 `unimplemented: true, would_fail: true`, so a preview tells you which steps a
 real run would stop on.
 
-**An `approval` step is not implemented, and is no longer the mechanism.**
-The engine is a single pass with no pause or resume, so there is nothing to
-suspend and nothing to wake. It fails closed with a reason rather than
-pretending, which halts the run under the default `on_failure: abort`.
+**An `approval` step is a durable pause.** The run suspends to Postgres
+(`services/agents/app/playbook/pause.py`), survives a restart of the agents
+service, resumes from the step *after* the approval once it is decided, and
+expires with a recorded outcome rather than hanging. A `wait` step uses the
+same mechanism: a short timer sleeps in place, anything longer becomes a
+durable pause.
 
-You usually do not need one. Every response step is graded against its own
+You often do not need one. Every response step is graded against its own
 capability contract at dispatch and comes back `pending_approval` on its own
 when a human is required — `isolate_host`, for instance, declares
 `approval: analyst`, which no autonomy tier or confidence level lifts. An
-`approval` step in front of it would gate a decision that is already gated.
+`approval` step in front of it gates a decision that is already gated. That is
+a reason to leave it out of a playbook, not a reason the engine refuses it.
 
-Where you want an action to actually wait for a named approver, submit it to
-the actions service (`POST /actions`), which holds it at `awaiting_approval`
-and records the deciding principal. That path is real and audited.
+Where you want an action held for a *named* approver with the deciding
+principal recorded, submit it to the actions service (`POST /actions`), which
+holds it at `awaiting_approval`.
 
-This section previously described a second supported pattern: model the gate
-as a `condition` step backed by a field an operator sets via
-`POST /v1/playbook-runs/{id}/approve`, and "the engine pauses on the condition
-until the field flips, then resumes". No such endpoint exists, and the engine
-has no pause or resume — the loop evaluates each condition once against the
-run context and moves on. Worse, until recently an `approval` step reported
-`SUCCESS` without doing anything, so a playbook that modelled a gate ran
-straight through it into whatever it was gating.
+Two things this section said before, both now wrong, kept because knowing
+which way a doc was wrong is worth more than a clean page. It said the step
+"is not implemented … the engine is a single pass with no pause or resume" —
+true when written, false since the pause landed. Before *that* it described
+modelling the gate as a `condition` step flipped by
+`POST /v1/playbook-runs/{id}/approve`; no such endpoint has ever existed, and
+an `approval` step used to report `SUCCESS` without doing anything, so a
+playbook that modelled a gate ran straight through it into whatever it was
+gating.
 
 ## Realtime events
 

@@ -12196,7 +12196,10 @@ edge mutations within ~1s of the upstream event reaching ingest.
 ### Public weekly benchmark scoreboard at /docs/benchmark-scoreboard
 
 Public, append-only weekly scoreboard now lives at
-[`/docs/benchmark-scoreboard`](https://docs.tryaisoc.com/docs/benchmark-scoreboard).
+[`/docs/benchmark-scoreboard`](https://beenuar.github.io/AiSOC/docs/benchmark-scoreboard).
+(This entry originally linked the same page on a `docs.` subdomain of the
+hosted service. That host has never resolved, so the link is repointed at the
+OSS docs site rather than left dead — the page itself is the one described.)
 One row per published eval run — date, agent version, commit SHA, MITRE
 accuracy, MTC p50/p95, total USD, total tokens — sourced from a
 checked-in JSON file at `apps/docs/static/data/scoreboard.json` and

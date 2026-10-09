@@ -1,7 +1,7 @@
 # Security pack
 
-For a reviewer doing diligence on AiSOC. Six documents, in the order a
-security questionnaire usually walks them.
+For a reviewer doing diligence on AiSOC, in the order a security
+questionnaire usually walks them.
 
 | Document | Answers |
 |---|---|
@@ -9,9 +9,14 @@ security questionnaire usually walks them.
 | [Data handling by deployment mode](data-handling.md) | What leaves your perimeter under each of the four ways AiSOC can be run, and what is retained where. |
 | [Platform threat model](platform-threat-model.md) | STRIDE over the platform, with the credential vault as the top asset. |
 | [Agent and tool threat model](agent-threat-model.md) | STRIDE over the prompt and tool boundaries, both of which take attacker-influenced input. |
+| [Access governance](access-governance.md) | Attribute conditions, time-boxed elevation and per-service workload identities, and where each is narrower than its heading sounds. |
 | [Connector least privilege](connector-least-privilege.md) | The minimum vendor scope each connector needs. |
 | [Security questionnaire](questionnaire.md) | Standard control questions, answered, with the gap list stated rather than omitted. |
 | [Sub-processors](subprocessors.md) | What this repository can and cannot establish about the hosted service. |
+
+Leaving `access-governance.md` out of this table is how the questionnaire
+came to answer "no reader" about three controls that had one: a reviewer
+walking the pack never reached the page that documents them.
 
 ## The one rule these documents follow
 

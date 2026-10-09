@@ -59,12 +59,12 @@ They are not a real intrusion and no caption may imply they are.
 | `threat-intel-kev.png` | `/threat-intel` | 1,725 real KEV entries; the page distinguishes the catalogue size from the page it is showing. |
 | `soc-operations.png` | `/dashboards/operations` | Pipeline health against a tenant with no connectors — *"Nothing is feeding the pipeline yet, so an empty alert queue is expected."* |
 | `connectors.png` | `/connectors` | The connector surface with nothing connected. |
-| `connector-wizard.png` | `/connectors` → Add connector | The catalogue, reporting **84 connector types available** — the generated count, not a hand-typed one. |
+| `connector-wizard.png` | `/connectors` → Add connector | The catalogue, reporting **84 connector types available** — the generated count at the time of capture, not a hand-typed one. The generator now reports **87**; the image is the older run. |
 | `attack-graph.png` | `/graph` | The entity graph over real ingested telemetry, with Neo4j running. |
 | `attack-graph-core-degraded.png` | `/graph` | The same page in CORE, where Neo4j is not running: it names the failure (`API 503 … /api/v1/graph`) instead of drawing an invented graph. |
 | `federated-search.png` | `/federated-search` | Honest empty state — no SIEM connected, and it says which four it would query. |
 | `playbooks.png` | `/playbooks` | The playbook library. |
-| `playbook-editor.png` | `/playbooks/{id}` → Add step | The step palette. Twenty-one tiles, from a twenty-two-member vocabulary: `approval` is withheld because the engine has no pause/resume. |
+| `playbook-editor.png` | `/playbooks/{id}` → Add step | The step palette, captured when the vocabulary was twenty-two members and `approval` was withheld for having no pause/resume. Both have changed: the engine declares **twenty-five** step types and `approval` is a durable pause, so the palette now offers it. Re-capture before citing the tile count. |
 | `detection-rules.png` | `/detection` | The detection rule surface. |
 | `hunt.png` | `/hunt` | The hunt workbench. |
 | `cases-empty.png` | `/cases` | No cases, said plainly. |
