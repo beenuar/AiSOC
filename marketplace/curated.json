@@ -1,31 +1,31 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-09T03:35:19Z",
+  "generated": "2026-10-09T04:33:12Z",
   "stats": {
-    "considered": 2529,
-    "eligible": 2518,
-    "selected": 490,
+    "considered": 2511,
+    "eligible": 2500,
+    "selected": 489,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 136,
+    "unique_techniques": 137,
     "selected_by_tier": {
-      "imported": 160,
-      "native": 330
+      "imported": 163,
+      "native": 326
     },
     "selected_by_severity": {
-      "critical": 100,
-      "high": 266,
+      "critical": 99,
+      "high": 264,
       "low": 16,
-      "medium": 108
+      "medium": 110
     },
     "selected_by_category": {
-      "application": 31,
-      "cloud": 150,
+      "application": 29,
+      "cloud": 152,
       "data-exfil": 13,
-      "endpoint": 218,
-      "identity": 69,
+      "endpoint": 219,
+      "identity": 67,
       "network": 9
     }
   },
@@ -107,7 +107,6 @@
       "count": 100,
       "rule_ids": [
         "det-application-004",
-        "det-application-020",
         "det-application-075",
         "det-application-085",
         "det-cloud-047",
@@ -137,9 +136,7 @@
         "det-identity-056",
         "det-identity-057",
         "det-identity-058",
-        "det-identity-059",
         "det-identity-061",
-        "det-identity-075",
         "det-identity-088",
         "det-identity-101",
         "det-identity-105",
@@ -184,9 +181,12 @@
         "sigmahq-sigma-48d91a3a-2363-43ba-a456-ca71ac3da5c2",
         "sigmahq-sigma-4d78a000-ab52-4564-88a5-7ab5242b20c7",
         "sigmahq-sigma-53bb4f7f-48a8-4475-ac30-5a82ddfdf6fc",
+        "sigmahq-sigma-5496ff55-42ec-4369-81cb-00f417029e25",
         "sigmahq-sigma-58f4ea09-0fc2-4520-ba18-b85c540b0eaf",
         "sigmahq-sigma-5a44727c-3b85-4713-8c44-4401d5499629",
+        "sigmahq-sigma-603c6630-5225-49c1-8047-26c964553e0e",
         "sigmahq-sigma-60f6535a-760f-42a9-be3f-c9a0a025906e",
+        "sigmahq-sigma-6393e346-1977-46ef-8987-ad414a145fad",
         "sigmahq-sigma-7679d464-4f74-45e2-9e01-ac66c5eb041a",
         "sigmahq-sigma-7892ec59-c5bb-496d-8968-e5d210ca3ac4",
         "sigmahq-sigma-7ec2c172-dceb-4c10-92c9-87c1881b7e18",
@@ -555,7 +555,7 @@
     },
     "supply-chain": {
       "label": "Supply Chain",
-      "count": 41,
+      "count": 40,
       "rule_ids": [
         "det-application-006",
         "det-application-014",
@@ -567,7 +567,6 @@
         "det-application-048",
         "det-application-049",
         "det-application-052",
-        "det-application-053",
         "det-application-054",
         "det-application-057",
         "det-application-059",
@@ -719,7 +718,7 @@
     "T1071.001": 1,
     "T1078": 14,
     "T1078.001": 3,
-    "T1078.004": 24,
+    "T1078.004": 25,
     "T1082": 2,
     "T1087": 1,
     "T1090": 2,
@@ -732,7 +731,7 @@
     "T1102": 2,
     "T1105": 1,
     "T1106": 2,
-    "T1110": 8,
+    "T1110": 10,
     "T1110.001": 2,
     "T1110.002": 1,
     "T1110.004": 1,
@@ -746,14 +745,14 @@
     "T1190": 11,
     "T1195": 1,
     "T1195.001": 1,
-    "T1195.002": 7,
+    "T1195.002": 6,
     "T1199": 11,
     "T1201": 1,
     "T1203": 1,
     "T1204.002": 1,
     "T1210": 4,
     "T1211": 1,
-    "T1212": 5,
+    "T1212": 4,
     "T1218": 4,
     "T1219": 2,
     "T1484.001": 1,
@@ -767,7 +766,7 @@
     "T1505.003": 8,
     "T1518": 2,
     "T1525": 8,
-    "T1528": 6,
+    "T1528": 5,
     "T1530": 17,
     "T1531": 1,
     "T1537": 7,
@@ -785,9 +784,9 @@
     "T1552.007": 1,
     "T1553.002": 1,
     "T1554": 3,
-    "T1555": 5,
+    "T1555": 6,
     "T1555.003": 3,
-    "T1556": 41,
+    "T1556": 40,
     "T1556.001": 1,
     "T1556.006": 5,
     "T1556.007": 1,
@@ -816,6 +815,7 @@
     "T1610": 11,
     "T1611": 24,
     "T1612": 1,
+    "T1621": 1,
     "T1685": 2
   },
   "items": [
@@ -994,31 +994,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "kubernetes",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-application-020",
-      "name": "API Returned Object Outside Caller's Tenant",
-      "path": "detections/application/api-permission-bypass-idor.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "critical",
-      "mitre_techniques": [
-        "T1212"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access"
-      ],
-      "quality_score": 1.0,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "app",
       "has_executable_body": true
     },
     {
@@ -1222,31 +1197,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "github",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-application-053",
-      "name": "NPM Package Published From New Account",
-      "path": "detections/application/app-npm-package-publish-new-account.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1195.002"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "supply-chain"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "npm",
       "has_executable_body": true
     },
     {
@@ -8026,32 +7976,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-identity-059",
-      "name": "Session Timeout Extended For Privileged Group",
-      "path": "detections/identity/ident-session-timeout-extended-priv.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "medium",
-      "mitre_techniques": [
-        "T1556"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.955,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:medium(+0.105)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "identity",
-      "has_executable_body": true
-    },
-    {
       "id": "det-identity-061",
       "name": "Login From ASN Recently Seen In Credential-Stuffing Activity",
       "path": "detections/identity/ident-login-from-known-asn-ddos.yaml",
@@ -8097,32 +8021,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "identity",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-075",
-      "name": "OAuth App Acting As Privileged User",
-      "path": "detections/identity/ident-app-impersonation-priv.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1528"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "credential-access",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "identity",
@@ -10701,6 +10599,35 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-5496ff55-42ec-4369-81cb-00f417029e25",
+      "name": "Multifactor Authentication Interrupted",
+      "path": "detections/sigma-imports/_quarantine/multifactor-authentication-interrupted.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1110",
+        "T1621"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:3(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "azure",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-551d9c1f-816c-445b-a7a6-7a3864720d60",
       "name": "Potential Excel.EXE DCOM Lateral Movement Via ActivateMicrosoftApp",
       "path": "detections/sigma-imports/_quarantine/potential-excel-exe-dcom-lateral-movement-via-activatemicrosoftapp.yaml",
@@ -10904,6 +10831,31 @@
       "has_executable_body": true
     },
     {
+      "id": "sigmahq-sigma-603c6630-5225-49c1-8047-26c964553e0e",
+      "name": "Enumerate Credentials from Windows Credential Manager With PowerShell",
+      "path": "detections/sigma-imports/_quarantine/enumerate-credentials-from-windows-credential-manager-with-powershell.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "endpoint",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1555"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
       "id": "sigmahq-sigma-60bfeac3-0d35-4302-8efb-1dd16f715bc6",
       "name": "Suspicious SysAidServer Child",
       "path": "detections/sigma-imports/_quarantine/suspicious-sysaidserver-child.yaml",
@@ -11007,6 +10959,32 @@
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
+      "has_executable_body": true
+    },
+    {
+      "id": "sigmahq-sigma-6393e346-1977-46ef-8987-ad414a145fad",
+      "name": "AWS ConsoleLogin Failed Authentication",
+      "path": "detections/sigma-imports/_quarantine/aws-consolelogin-failed-authentication.yaml",
+      "tier": "imported",
+      "source": "sigmahq",
+      "category": "cloud",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1110"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "credential-access",
+        "cloud"
+      ],
+      "quality_score": 0.755,
+      "quality_notes": [
+        "tier:imported(+0.3)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "aws",
       "has_executable_body": true
     },
     {

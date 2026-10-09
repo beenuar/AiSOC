@@ -19,7 +19,10 @@ detection:
 false_positives:
 - Confirmed test/tuning activity
 playbook: tpl-defense-evasion
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-inventory): asks whether a policy''s scope is privileged. The
+  scope is emitted; what is missing is a list of which scopes are privileged, which no source provides
+  and no tenant configures today.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

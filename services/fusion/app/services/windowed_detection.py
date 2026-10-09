@@ -452,6 +452,9 @@ class WindowedDetectionEngine:
             derived = overlay.derived_allowlist_fields(fields)
             if derived:
                 fields = {**fields, **derived}
+            privileged = overlay.derived_identity_fields(fields)
+            if privileged:
+                fields = {**fields, **privileged}
         now = time.time()
         hits: list[DetectionHit] = []
         for rule in self._rules:

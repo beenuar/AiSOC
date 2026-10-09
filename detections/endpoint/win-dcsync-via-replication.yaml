@@ -19,7 +19,10 @@ detection:
 false_positives:
 - AD migration tool with replication granted
 playbook: tpl-credential-access
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-inventory): asks whether the replicating account is a domain
+  controller. That needs a directory inventory of DC machine accounts; `identity_nodes` carries a privilege
+  tier per principal and no such flag.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

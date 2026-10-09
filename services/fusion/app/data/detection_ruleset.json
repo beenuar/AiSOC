@@ -1,5 +1,5 @@
 {
-  "count": 759,
+  "count": 741,
   "rules": [
     {
       "category": "application",
@@ -340,22 +340,6 @@
       "service": "audit",
       "severity": "high",
       "slug": "container-image-pulled-untrusted-registry"
-    },
-    {
-      "category": "application",
-      "id": "det-application-020",
-      "match_when": {
-        "event_type": "object.read",
-        "object_tenant_id_eq_caller_tenant_id": false
-      },
-      "mitre": [
-        "T1212"
-      ],
-      "name": "API Returned Object Outside Caller's Tenant",
-      "product": "app",
-      "service": "audit",
-      "severity": "critical",
-      "slug": "api-permission-bypass-idor"
     },
     {
       "category": "application",
@@ -902,23 +886,6 @@
       "service": "repo",
       "severity": "medium",
       "slug": "app-deploy-key-added-github"
-    },
-    {
-      "category": "application",
-      "id": "det-application-053",
-      "match_when": {
-        "event_type": "package_publish",
-        "package_visibility": "public",
-        "publisher_account_age_days_lt": 14
-      },
-      "mitre": [
-        "T1195.002"
-      ],
-      "name": "NPM Package Published From New Account",
-      "product": "npm",
-      "service": "registry",
-      "severity": "high",
-      "slug": "app-npm-package-publish-new-account"
     },
     {
       "category": "application",
@@ -2069,22 +2036,6 @@
     },
     {
       "category": "cloud",
-      "id": "det-cloud-042",
-      "match_when": {
-        "event_name": "ListAccessKeys",
-        "key_age_days_gt": 365
-      },
-      "mitre": [
-        "T1078.004"
-      ],
-      "name": "AWS IAM Access Key Older Than 365 Days",
-      "product": "aws",
-      "service": "iam",
-      "severity": "medium",
-      "slug": "aws-iam-key-rotation-skipped"
-    },
-    {
-      "category": "cloud",
       "id": "det-cloud-043",
       "match_when": {
         "event_name": "DeactivateMFADevice",
@@ -2907,23 +2858,6 @@
       "service": "route53domains",
       "severity": "high",
       "slug": "aws-route53-domain-transfer-out"
-    },
-    {
-      "category": "cloud",
-      "id": "det-cloud-097",
-      "match_when": {
-        "distribution_age_days_gt": 30,
-        "event_name": "UpdateDistribution",
-        "origin_changed": true
-      },
-      "mitre": [
-        "T1565.002"
-      ],
-      "name": "AWS CloudFront Origin Changed Mid-Service",
-      "product": "aws",
-      "service": "cloudfront",
-      "severity": "high",
-      "slug": "aws-cloudfront-origin-changed"
     },
     {
       "category": "cloud",
@@ -6483,23 +6417,6 @@
     },
     {
       "category": "endpoint",
-      "id": "det-endpoint-101",
-      "match_when": {
-        "account_is_dc": false,
-        "event_id": 4662,
-        "object_properties_contains": "1131f6aa-9c07-11d1-f79f-00c04fc2dcd2"
-      },
-      "mitre": [
-        "T1003.006"
-      ],
-      "name": "DCSync Replication Right Used By Non-DC Account",
-      "product": "windows",
-      "service": "security",
-      "severity": "critical",
-      "slug": "win-dcsync-via-replication"
-    },
-    {
-      "category": "endpoint",
       "id": "det-endpoint-102",
       "match_when": {
         "event_id": 4768,
@@ -7188,40 +7105,6 @@
       "service": "auditd",
       "severity": "high",
       "slug": "linux-initd-script-add"
-    },
-    {
-      "category": "endpoint",
-      "id": "det-endpoint-138",
-      "match_when": {
-        "actor_uid_neq_owner_uid": true,
-        "path_endswith": "/.bashrc",
-        "syscall": "openat"
-      },
-      "mitre": [
-        "T1546.004"
-      ],
-      "name": "~/.bashrc Modified By Other User",
-      "product": "linux",
-      "service": "auditd",
-      "severity": "medium",
-      "slug": "linux-bashrc-modified-by-other-user"
-    },
-    {
-      "category": "endpoint",
-      "id": "det-endpoint-139",
-      "match_when": {
-        "actor_uid_neq_owner_uid": true,
-        "path_endswith": "/.zshrc",
-        "syscall": "openat"
-      },
-      "mitre": [
-        "T1546.004"
-      ],
-      "name": "~/.zshrc Modified By Other User",
-      "product": "linux",
-      "service": "auditd",
-      "severity": "medium",
-      "slug": "linux-zshrc-modified-by-other-user"
     },
     {
       "category": "endpoint",
@@ -8609,23 +8492,6 @@
       "service": "endpointsecurity",
       "severity": "medium",
       "slug": "macos-security-find-generic-password"
-    },
-    {
-      "category": "endpoint",
-      "id": "det-endpoint-215",
-      "match_when": {
-        "actor_uid_neq_owner_uid": true,
-        "event_type": "ES_EVENT_TYPE_NOTIFY_OPEN",
-        "path_endswith": "/Keychains/login.keychain-db"
-      },
-      "mitre": [
-        "T1555.001"
-      ],
-      "name": "login.keychain-db Read By Non-Owner UID",
-      "product": "macos",
-      "service": "endpointsecurity",
-      "severity": "high",
-      "slug": "macos-keychain-db-read-by-other-uid"
     },
     {
       "category": "endpoint",
@@ -10869,23 +10735,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-055",
-      "match_when": {
-        "event_type": "factor_swap",
-        "old_factor_age_days_gt": 30,
-        "session_seconds_lt": 600
-      },
-      "mitre": [
-        "T1556.006"
-      ],
-      "name": "FIDO2 Key Added And Old Key Removed In Same Session",
-      "product": "identity",
-      "service": "mfa",
-      "severity": "high",
-      "slug": "ident-fido2-key-added-then-removed-old"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-056",
       "match_when": {
         "event_type": "factor_create",
@@ -10932,23 +10781,6 @@
       "service": "policy",
       "severity": "medium",
       "slug": "ident-password-policy-history-reduced"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-059",
-      "match_when": {
-        "event_type": "policy_update",
-        "scope_priv": true,
-        "session_timeout_minutes_increased": true
-      },
-      "mitre": [
-        "T1556"
-      ],
-      "name": "Session Timeout Extended For Privileged Group",
-      "product": "identity",
-      "service": "policy",
-      "severity": "medium",
-      "slug": "ident-session-timeout-extended-priv"
     },
     {
       "category": "identity",
@@ -11090,22 +10922,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-069",
-      "match_when": {
-        "approver_eq_actor": true,
-        "event_type": "pim_activation"
-      },
-      "mitre": [
-        "T1078"
-      ],
-      "name": "JIT/PIM Privileged Activation Self-Approved",
-      "product": "identity",
-      "service": "pim",
-      "severity": "high",
-      "slug": "ident-pim-activation-self-approval"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-070",
       "match_when": {
         "event_type": "pim_activation",
@@ -11119,23 +10935,6 @@
       "service": "pim",
       "severity": "medium",
       "slug": "ident-pim-activation-anomalous-time"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-072",
-      "match_when": {
-        "event_type": "auth_success",
-        "is_interactive": true,
-        "user_type": "service_account"
-      },
-      "mitre": [
-        "T1078.004"
-      ],
-      "name": "Service Account Used For Interactive Login",
-      "product": "identity",
-      "service": "auth",
-      "severity": "high",
-      "slug": "ident-svc-account-interactive-login"
     },
     {
       "category": "identity",
@@ -11171,27 +10970,6 @@
       "service": "audit",
       "severity": "high",
       "slug": "ident-onboard-priv-roles-immediate"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-075",
-      "match_when": {
-        "act_as_user_priv": true,
-        "event_type": "oauth_action",
-        "scope_contains_any": [
-          "full_access",
-          "admin",
-          "*.write"
-        ]
-      },
-      "mitre": [
-        "T1528"
-      ],
-      "name": "OAuth App Acting As Privileged User",
-      "product": "identity",
-      "service": "oauth",
-      "severity": "high",
-      "slug": "ident-app-impersonation-priv"
     },
     {
       "category": "identity",
@@ -11267,22 +11045,6 @@
       "service": "audit",
       "severity": "critical",
       "slug": "ident-ad-dcsync-rights-granted"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-082",
-      "match_when": {
-        "event_id": 5136,
-        "gpo_link_priv": true
-      },
-      "mitre": [
-        "T1484.001"
-      ],
-      "name": "Privileged GPO Modified",
-      "product": "active-directory",
-      "service": "audit",
-      "severity": "high",
-      "slug": "ident-ad-gpo-modified-priv"
     },
     {
       "category": "identity",
@@ -11488,23 +11250,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-097",
-      "match_when": {
-        "auth_type": "NTLMv2",
-        "event_id": 8004,
-        "workstation_neq_source_address": true
-      },
-      "mitre": [
-        "T1557.001"
-      ],
-      "name": "NTLM Authentication With Mismatched WorkstationName",
-      "product": "active-directory",
-      "service": "ntlm",
-      "severity": "high",
-      "slug": "ident-ntlm-relay-indicator"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-098",
       "match_when": {
         "auth_type": "NTLMv2",
@@ -11537,23 +11282,6 @@
       "service": "auth",
       "severity": "high",
       "slug": "ident-pass-the-hash-anomalous-logon"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-100",
-      "match_when": {
-        "event_id": 4624,
-        "logon_type": 3,
-        "ticket_source_ip_neq_session_ip": true
-      },
-      "mitre": [
-        "T1550.003"
-      ],
-      "name": "Pass-The-Ticket Indicator: TGT Source IP Mismatch",
-      "product": "active-directory",
-      "service": "kerberos",
-      "severity": "high",
-      "slug": "ident-pass-the-ticket-anomalous-tgt-source"
     },
     {
       "category": "identity",
@@ -12476,26 +12204,6 @@
     },
     {
       "category": "network",
-      "id": "det-network-008",
-      "match_when": {
-        "domain_age_days_lt": 7,
-        "method_in": [
-          "GET",
-          "POST",
-          "CONNECT"
-        ]
-      },
-      "mitre": [
-        "T1071.001"
-      ],
-      "name": "Outbound HTTP(S) to Newly Registered Domain",
-      "product": "proxy",
-      "service": "http",
-      "severity": "medium",
-      "slug": "newly-registered-domain-traffic"
-    },
-    {
-      "category": "network",
       "id": "det-network-010",
       "match_when": {
         "event_id": 5158,
@@ -12785,22 +12493,6 @@
       "service": "security",
       "severity": "high",
       "slug": "wmi-remote-execution"
-    },
-    {
-      "category": "network",
-      "id": "det-network-031",
-      "match_when": {
-        "domain_age_days_lt": 7,
-        "event_type": "dns_query"
-      },
-      "mitre": [
-        "T1071.004"
-      ],
-      "name": "DNS Query For Newly Registered Domain (NRD)",
-      "product": "dns",
-      "service": "resolver",
-      "severity": "medium",
-      "slug": "net-dns-newly-registered-domain"
     },
     {
       "category": "network",

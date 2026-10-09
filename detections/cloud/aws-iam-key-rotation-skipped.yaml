@@ -19,7 +19,10 @@ false_positives:
 - Sanctioned automation/IaC pipeline
 - Service-account key intentionally pinned
 playbook: tpl-credential-hygiene
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): wants an access key''s creation date. CloudTrail
+  reports key *use* and not key age; the date is in the IAM credential report, which arrives with the
+  AWS posture snapshot (depth plan 2.5).'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

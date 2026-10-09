@@ -18,7 +18,10 @@ detection:
 false_positives:
 - Admin-impersonation operations (must originate from internal tooling)
 playbook: tpl-data-exposure
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): compares the object''s owning tenant with
+  the caller''s, and no application source in this tree surfaces either. The engine can compare two fields
+  of one event; it cannot compare two fields that are not there.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

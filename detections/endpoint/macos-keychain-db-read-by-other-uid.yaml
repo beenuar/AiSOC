@@ -19,7 +19,9 @@ detection:
 false_positives:
 - DFIR responder running a documented playbook
 playbook: tpl-credential-access
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): compares the reading uid with the keychain
+  owner''s uid, and no source emits the owner.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

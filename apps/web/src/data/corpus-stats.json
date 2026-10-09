@@ -1,19 +1,19 @@
 {
-  "executable": 2529,
+  "executable": 2511,
   "windowed": 72,
   "onDisk": 6991,
-  "quarantined": 4462,
+  "quarantined": 4480,
   "plugins": 80,
   "playbookPacks": 62,
   "playbooks": 87,
   "marketplaceItems": 7158,
   "categories": {
-    "application": 78,
-    "cloud": 237,
+    "application": 76,
+    "cloud": 235,
     "data-exfil": 13,
-    "endpoint": 1982,
-    "identity": 154,
-    "network": 65
+    "endpoint": 1978,
+    "identity": 146,
+    "network": 63
   },
   "generatedFrom": [
     "services/fusion/app/data/detection_ruleset.json",

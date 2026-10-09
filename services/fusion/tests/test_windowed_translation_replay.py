@@ -236,6 +236,9 @@ async def test_a_translated_rule_reads_a_tenant_allowlist_boolean() -> None:
         def derived_allowlist_fields(self, fields: dict[str, Any]) -> dict[str, Any]:
             return {clause: False}
 
+        def derived_identity_fields(self, fields: dict[str, Any]) -> dict[str, Any]:
+            return {}
+
     loaded = {r.id: r for r in load_window_rules()}
     engine = WindowedDetectionEngine(_FakeRedis(), rules=(loaded[rule["id"]],))
     tenant = str(uuid4())
