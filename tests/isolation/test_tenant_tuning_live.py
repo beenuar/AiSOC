@@ -160,14 +160,21 @@ class TestTheQueryRunsAtAll:
         from app.services.tenant_overlay import OverlayCache
 
         await _write_tuning(pool, tenant, status="disabled")
-        rows = await OverlayCache(pool, reload_seconds=0)._fetch(tenant)
+        fetched = await OverlayCache(pool, reload_seconds=0)._fetch(tenant)
 
-        assert rows is not None, (
-            "_fetch returned None, which means the query raised and the fail-soft path "
+        assert fetched is not None, (
+            "_fetch returned None, which means a query raised and the fail-soft path "
             "swallowed it. A tenant with tuning configured would see none applied, and "
             "nothing would say so."
         )
+        # Two result sets since depth plan 3.3: the tuning rows, and this
+        # tenant's privileged identities from `identity_nodes`. Both run
+        # against the real schema here, which is the point — the second
+        # query is as able to name a column that does not exist as the
+        # first was, and that defect looked exactly like "no tuning".
+        rows, identities = fetched
         assert len(rows) == 1, f"expected the one tuned rule, got {rows!r}"
+        assert identities == [], f"this tenant imported no directory, so the privilege query must return nothing, got {identities!r}"
 
 
 class TestSuppression:
