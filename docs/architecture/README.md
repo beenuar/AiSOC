@@ -11,17 +11,36 @@ being quietly drawn in.
 Follow a single event. This is the whole system, in order.
 
 **1. Something sends telemetry.** Either a connector polls a vendor API on a
-schedule, or a tool pushes to the ingest HTTP API directly:
+schedule, or a tool pushes to the ingest HTTP API directly, with a token from
+`make ingest-token`:
 
 ```bash
 curl -X POST http://localhost:8081/v1/ingest/batch \
   -H 'Content-Type: application/json' \
-  -H 'X-Tenant-ID: <your-tenant>' \
+  -H "Authorization: Bearer $AISOC_INGEST_TOKEN" \
   -d '{"connector_id":"edr-1","connector_type":"crowdstrike","source_format":"json",
        "events":[{"severity":"high","title":"Encoded PowerShell from Office",
                   "host":"WIN-FIN-01","process_name":"powershell.exe",
                   "parent_process":"winword.exe"}]}'
 ```
+
+**The tenant comes from the credential, never from a header.** `X-Tenant-ID` is
+read but is never authority: it is *intersected* with what the credential
+authorises, so naming a tenant outside that scope narrows to nothing and is
+refused rather than reaching out. There is no dev-mode bypass, and an ingest
+service that cannot verify a credential answers 503 rather than accepting the
+write.
+
+**Polling is not always a REST call.** A cloud estate publishes to a queue or an
+object store rather than answering a list API, so four collectors read those
+surfaces directly: a CloudTrail organisation trail on **S3 notified over SQS**
+(management events, data events and VPC flow logs — none of which
+`cloudtrail:LookupEvents` returns), a **GCP Pub/Sub** subscription on a Cloud
+Logging sink, an **Azure Event Hubs** capture, and a **syslog/CEF** listener.
+Each declares a resumable cursor, so a restart neither re-reads from "now" and
+loses the gap nor replays the whole bucket, and a bounded per-poll budget, so a
+week-deep backlog applies backpressure instead of becoming an out-of-memory
+kill or a flood through ingest.
 
 **2. Ingest normalizes it.** [`services/ingest`](../../services/ingest) maps
 the vendor payload onto a common OCSF-shaped envelope using a per-connector
@@ -38,17 +57,72 @@ connectors service declares are the ones to use — `crowdstrike`, not
 [`scripts/check_connector_profiles.py`](../../scripts/check_connector_profiles.py)
 fails CI if any name in either direction stops resolving.
 
+The profile also decides the **OCSF class**. There are 17 of them in
+[`ocsf_classes.go`](../../services/ingest/internal/normalizer/ocsf_classes.go),
+verified against the published OCSF schema; of the 87 declared connector types,
+45 name a class of their own and the other 42 sit on the generic `2001` mapping
+**with a recorded reason each**. That decision is load-bearing rather than
+cosmetic: promotion reads the class, so a connector silently left on a category-4
+default archives its events and never raises an alert.
+
+**Every event carries an activity projection.** Alongside the vendor's own
+fields, ingest writes a fixed five-part answer to "what happened" — actor,
+action, resource, location, outcome — in
+[`internal/activity`](../../services/ingest/internal/activity). `actor.kind` is
+one of seven values (`human`, `service_account`, `workload`, `api_token`,
+`oauth_app`, `ai_agent`, `unknown`) and is **derived from a documented vendor
+field in each of 27 cases, never guessed from the shape of a username**: a
+service account that looks like a person, or a CI token that looks like a
+service account, is the misreading that makes an identity rule either noisy or
+blind. The same eighteen projection columns exist in the ClickHouse table, the
+lake migration and the fusion writer, and
+[`scripts/check_activity_projection.py`](../../scripts/check_activity_projection.py)
+holds all five of the Go definition, the lake table, the lake migration, the
+fusion writer and the graph schema in agreement — a projection that five
+components spell differently is five projections.
+
+**And a classification for the event type.** `schemas/event_catalog/` declares
+44 event types across 10 sources (CloudTrail, Entra, Azure Activity, GCP Cloud
+Audit, Kubernetes audit, Okta, GitHub, Google Workspace, M365 and Slack audit),
+each with a sensitivity on the same five-tier ladder. Ingest reads it at boot
+from a vendored copy that is byte-compared against the source, so the catalogue
+cannot drift from what the Go binary actually loads.
+
 **3. It enters the event spine.** Ingest publishes to the Kafka topic
 `aisoc.raw_events`. This is the boundary that makes everything downstream
 independent: anything can consume the spine without ingest knowing about it.
 
 **4. Fusion consumes it and evaluates detections.**
-[`services/fusion`](../../services/fusion) runs the 2,603 executable rules
-against the event — 833 native and 1,770 imported Sigma rules, each of which
+[`services/fusion`](../../services/fusion) runs the 2,511 executable rules
+against the event — 741 native and 1,770 imported Sigma rules, each of which
 was replayed through its real connector and this engine and watched to fire
 before it was allowed into the compiled ruleset. Separately it decides whether the event is *promotable* —
 a vendor finding (OCSF category 2) or anything at severity ≥ high becomes an
 alert; routine telemetry does not.
+
+That figure went **down** from 2,603, and the direction is the point. Rules that
+named a counter no source emits were being loaded, counted as executable and
+could never fire; they were either rewritten as windowed rules or refused with a
+reason, rather than left in the total. Rules that still cannot fire are counted
+by [`scripts/check_detection_fields.py`](../../scripts/check_detection_fields.py)
+against a ratchet that only moves down, and it now stands at **2** — both waiting
+on a behavioural baseline.
+
+**Some detections need more than one event.** A separate windowed engine
+([`windowed_detection.py`](../../services/fusion/app/services/windowed_detection.py))
+holds 72 compiled rules plus three built-ins. Seventy count events or distinct
+values for one entity over a sliding window and fire on a threshold; the other
+two are **sequences** — A then B by the same entity, either ordered in time or
+not, with stages disjoint so a drip cannot walk a sequence forward forever.
+Four of the 72 are compiled from Sigma **correlation** documents
+(`event_count`, `value_count`, `temporal`, `temporal_ordered`) by
+[`scripts/sigma_correlation.py`](../../scripts/sigma_correlation.py), which
+refuses what it cannot carry and records why — a correlation grouping by two
+fields when the engine accumulates against one entity is refused rather than
+approximated. The windowed count is published separately from the executable
+figure on purpose: a threshold over a window and a single-event match are not
+the same kind of thing, and adding them would make two incomparable numbers
+into one.
 
 Each match is then checked against that tenant's **tuning overlay**
 ([`tenant_overlay.py`](../../services/fusion/app/services/tenant_overlay.py)):
@@ -59,7 +133,7 @@ alerts while the console showed it disabled — the worst shape a defect can
 have, because it tells the operator the problem is solved.
 
 It is an overlay rather than a per-tenant ruleset: the *difference* applied
-over one shared corpus, not N copies of 2,603 rules rebuilt whenever anyone
+over one shared corpus, not N copies of 2,511 rules rebuilt whenever anyone
 edits anything. Suppression is applied **after** the match so the dropped hit
 is logged with the tuning, its author and its reason — "no alert" with no
 explanation is indistinguishable from a rule that simply did not match. A
@@ -104,6 +178,23 @@ is a run that hangs forever while nobody learns it did.
 **11. Response stays governed.** An action is proposed; a human with the right
 permission approves it; the result is verified against the vendor rather than
 assumed from an HTTP 200.
+
+A playbook's step vocabulary is **25 types**, and all 25 are runnable — the
+schema, the engine, the shared TypeScript types and the console editor are held
+in agreement in both directions by
+[`scripts/check_playbook_schema_parity.py`](../../scripts/check_playbook_schema_parity.py),
+because an editor that offers a step the engine cannot run and an engine with a
+step the editor hides are the same defect seen from two sides. Beyond the linear
+walk there are `wait` (a timer or a callback), `parallel` (fan out, then join)
+and `loop` (once per item, bounded) — each carrying an **idempotency key**, so a
+resumed or retried run does not repeat a step that already took effect. Of the
+25, nine execute directly and **16 are governed verbs** graded against a
+capability contract at dispatch, `notify` and `osquery_live_query` among them:
+sending a message to a channel and running a live query across a fleet are both
+things an operator should be able to withhold.
+
+Delivery outward is real rather than described: signed outbound webhooks, SMTP
+mail, email approvals, and a report scheduler.
 
 > **Where it stops, stated precisely.** A *playbook* can now be triggered
 > automatically — that changed, and the three switches above are what bound
@@ -158,6 +249,8 @@ flowchart LR
         oll["ollama<br/>llama3.2:3b · :11434"]
         ti["services/threatintel<br/>Python · :8005"]
         qd[("Qdrant<br/>IOC + actor vectors")]
+        conn["services/connectors<br/>Python · :8003"]
+        act["services/actions<br/>Python · :8085"]
     end
 
     subgraph full ["full profile — optional"]
@@ -165,10 +258,14 @@ flowchart LR
         neo[("Neo4j<br/>entity graph")]
         os[("OpenSearch<br/>full-text IOC search")]
         enr["services/enrichment"]
-        conn["services/connectors"]
+        ueba["services/ueba"]
     end
 
-    conn -.->|"polls vendors"| ing
+    vend["Vendor APIs<br/>EDR · cloud · identity"]
+    conn -->|"polls"| ing
+    vend --> conn
+    api -->|"approved capability"| act
+    act -->|"executes, then probes to verify"| vend
     ing --> kaf
     kaf --> fus
     fus --> pg
@@ -176,6 +273,8 @@ flowchart LR
     fus --> rds
     fus -.-> ch
     fus -.-> enr
+    kaf -.-> ueba
+    ueba -.-> pg
     kafd --> rt
     kafd --> agt
     agt --> pg
@@ -224,6 +323,28 @@ flowchart TB
 | **Qdrant** | Vector similarity for IOC and actor matching, and the read path the console's Threat Intelligence page is served from. | No threat-intel page. It is in CORE for that reason, and because it is by a wide margin the cheapest of the four stores — 245 MB of image, ~79 MiB resident. |
 | **OpenSearch** | Full-text and structured search over the threat-intel corpus — `threatintel-iocs` and `threatintel-actors`. | Feeds still write to Qdrant and the page still works; full-text IOC search is unavailable and `services/threatintel` logs that it is. |
 
+### How long any of it is kept
+
+Retention is per tenant, and the lake is the part that needs a ceiling rather
+than a preference: a tenant choosing to keep raw events forever is choosing an
+unbounded ClickHouse bill, so the TTL a tenant picks is clamped to a maximum
+the deployment sets. The purge worker
+([`retention.py`](../../services/api/app/services/retention.py)) binds its
+tenant predicate **explicitly** rather than leaning on row-level security,
+because it runs on a session with row security off and would otherwise purge
+every tenant under the first tenant's window. A dry run reports the blast
+radius using the same predicate as the delete, so the preview cannot disagree
+with the thing it previews.
+
+**Legal holds are read, not merely stored.** Alerts under a hold
+(`alerts_under_legal_hold`, migration `088`) survive a purge that would
+otherwise have reached them — a retention policy that silently deleted
+evidence under hold would be worse than having no policy, because nobody would
+know. One window is deliberately *not* purged: `audit_days` is storable but the
+audit log is an append-only hash chain, and truncating it invalidates every
+later verification, so it needs chain-aware truncation with a re-anchored
+checkpoint before it can be honoured.
+
 **Who reads OpenSearch, precisely:** only `services/threatintel`. This page
 previously said nothing read it at all, which came from checking
 `services/api` — which genuinely holds no OpenSearch client — and stopping
@@ -269,6 +390,38 @@ Three properties worth naming, because each is enforced in code:
 - **Approval is authorized, not just recorded.** The approver must hold the
   action's permission tier and must not be the requester.
 
+### Who that approver is, and what they are allowed to be
+
+Console sign-in is SAML, OIDC or local, with a second factor: TOTP plus
+single-use recovery codes, enforceable per tenant rather than per user, so an
+administrator can require it of everyone instead of hoping.
+
+Permissions resolve through **one** path, which is what makes the rest
+checkable — [`check_one_permission_model.py`](../../scripts/check_one_permission_model.py)
+requires the call to sit at a function's own level rather than inside a branch,
+because a permission check behind an `if` is a permission check somebody can
+route around. Three things hang off that single path:
+
+* **Attribute conditions (ABAC).** A tenant can narrow a permission it has
+  already granted — `cases:write` only from a named CIDR, say. A condition can
+  only ever turn an allow into a deny; it cannot grant something the role does
+  not hold, and a condition that cannot be evaluated denies rather than
+  passing. A client-supplied `X-Forwarded-For` cannot move a caller into a
+  permitted range.
+* **Time-boxed elevation.** A grant confers its permissions until it expires
+  and not one request longer.
+* **Workload identities.** A non-human caller is a first-class principal with
+  its own scopes, rather than a human account with a shared password.
+
+All three have readers on the live path and a live-Postgres job behind them
+([`access-governance-live.yml`](../../.github/workflows/access-governance-live.yml),
+[`mfa-live.yml`](../../.github/workflows/mfa-live.yml)) that carries a negative
+control — it deletes the check and requires the suite to go red. One operator is
+deliberately refused at write time: a condition on `mfa_satisfied`, because the
+principal does not yet carry that fact and a stored condition naming it could
+only ever be indeterminate, which denies. Refusing it is better than storing a
+condition that quietly locks a tenant out.
+
 ---
 
 ## Diagram 5 — connector to alert
@@ -281,7 +434,7 @@ flowchart TD
     C --> E["OCSF-shaped envelope"]
     D --> E
     E --> F[("Kafka aisoc.raw_events")]
-    F --> G["Detection engine<br/>2,603 executable rules"]
+    F --> G["Detection engine<br/>2,511 executable rules<br/>+ 72 windowed"]
     F --> H{"Promotable?<br/>category 2, or severity >= high"}
     G -->|rule fires| I["Alert"]
     H -->|yes| I

@@ -60,8 +60,8 @@ curl -X POST http://localhost:8081/v1/ingest/batch \
 **Pull.** [`services/connectors`](https://github.com/beenuar/AiSOC/tree/main/services/connectors)
 polls a vendor API on a schedule, decrypts that tenant's stored credentials
 through the vault at poll time, and forwards the result to the same ingest
-endpoint. It is a `full`-profile service; CORE accepts pushes instead. The
-registry is **now 87 connectors** — that figure is generated from
+endpoint. It runs in **CORE**, so a default install can pull as well as receive.
+The registry is **now 87 connectors** — that figure is generated from
 `services/connectors/app/connectors/__init__.py` by
 [`scripts/generate_connector_count.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/generate_connector_count.py),
 which fails CI if this sentence disagrees with the tree.
@@ -124,16 +124,24 @@ block the front door, and the reason an event is not lost when fusion restarts.
 ## 4 · Fusion evaluates detections
 
 [`services/fusion`](https://github.com/beenuar/AiSOC/tree/main/services/fusion)
-(container port 8003) consumes the spine and runs **2,603 executable detection
+(container port 8003) consumes the spine and runs **2,511 executable detection
 rules** against each event.
 
 The rules the engine runs are compiled into
 [`app/data/detection_ruleset.json`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/data/detection_ruleset.json)
 and its imported counterpart beside it. The YAML under `detections/` is a
 *projection* of those, not the engine's input — 6,991 rules are on disk and
-2,603 load, which is why the corpus figure and the executable figure are
+2,511 load, which is why the corpus figure and the executable figure are
 published separately. See
 [the detection truth table](https://github.com/beenuar/AiSOC/blob/main/docs/detections/truth-table.md).
+
+:::note The executable figure went down, and that was the fix
+It was 2,603. Rules naming a counter no telemetry emits were being loaded and
+counted while being unable to fire under any circumstances. They were either
+rewritten as windowed rules or refused with a recorded reason, and the total
+fell accordingly. A corpus figure that only ever grows is measuring the
+directory, not the engine.
+:::
 
 Executable is a claim backed by a replay, not by a flag: a rule enters the
 compiled ruleset only after a vendor-shaped event has been pushed through the
@@ -150,6 +158,30 @@ It does not claim the rules detect attacks, only that they are reachable.
 | Derive fields rules match on | [`derived_fields.py`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/services/derived_fields.py) |
 | Rules needing a time window | [`windowed_detection.py`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/services/windowed_detection.py) |
 | Events the consumer cannot parse | [`dlq.py`](https://github.com/beenuar/AiSOC/blob/main/services/fusion/app/services/dlq.py) → `aisoc.alerts.dlq` |
+
+### Detections that need more than one event
+
+A single-event match cannot express "five failures then a success". A separate
+**windowed** engine holds 72 compiled rules plus three built-ins:
+
+- **70 count** events, or distinct values, for one entity over a sliding window
+  and fire on a threshold.
+- **2 are sequences** — A then B by the same entity, ordered in time or not.
+  Stages are disjoint, so a slow drip cannot walk a sequence forward forever,
+  and the whole sequence must fit inside one window measured from its first
+  stage.
+
+Four of the 72 are compiled from Sigma **correlation** documents — `event_count`,
+`value_count`, `temporal` and `temporal_ordered` — by
+[`scripts/sigma_correlation.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/sigma_correlation.py).
+It refuses what it cannot carry and records why on the rule: a correlation
+grouping by two fields is refused because the engine accumulates against one
+entity, and a `lt` condition is refused because firing when a count is *low*
+needs a baseline rather than a counter.
+
+This figure is published beside the executable count rather than added to it. A
+threshold over a window and a single-event match are different kinds of claim,
+and summing them would make two incomparable numbers into one.
 
 ## 5 · Enrichment, if it is running
 
@@ -249,11 +281,23 @@ Four properties, each enforced in code rather than asserted:
 
 CORE ships a pinned `llama3.2:3b-instruct-q4_K_M` behind the gateway, so a
 clone with no account produces a real verdict with real token counts. It is a
-3B quantized model, and the difference from a frontier model is visible: in a
-measured run of 19 auto-triages on a CORE stack, **7 returned schema-valid
-output and 12 did not**. The 12 fell back to the deterministic path, logged
-`auto_triage_worker.llm_failed_fallback`, and the Investigation Rail shows
-which path produced the verdict it is displaying.
+3B quantized model, and the difference from a frontier model is measurable:
+over 50 alerts from the committed synthetic corpus, through the gateway exactly
+as production routes, at the production `temperature=0.0` / `max_tokens=512`,
+replies triage could use went from **44 of 50 to 50 of 50** once the model was
+asked for a JSON object rather than having its prose corrected afterwards
+([`scripts/measure_triage_reliability.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/measure_triage_reliability.py)).
+All six failures carried a correct verdict and confidence with a malformed
+`rationale`, and `finish_reason` was `stop` on all 50, so truncation was not
+involved. When validation does fail, triage falls back to the deterministic
+path, logs `auto_triage_worker.llm_failed_fallback`, and the Investigation Rail
+shows which path produced the verdict it is displaying.
+
+An earlier figure of "7 of 19" was published here. It does not reproduce, and
+it has been replaced by the harness above — which drives the production prompt
+and the production parser by importing them, and uses a *different* alert for
+every attempt, because production pins `temperature=0.0` and asking one alert
+twenty times measures one reply twenty times rather than a rate.
 
 **No hosted provider has ever been exercised in this repository.** There is no
 funded key, so per-model figures read *not measured* rather than zero. The
@@ -303,19 +347,49 @@ execution.
 Without vendor credentials an executor returns `simulated` and says so.
 `executed` is the single field that means a vendor was actually touched.
 
-Playbooks reach this same path. The engine's step vocabulary is 22 types
+Playbooks reach this same path. The engine's step vocabulary is **25 types**
 ([`models.py`](https://github.com/beenuar/AiSOC/blob/main/services/agents/app/playbook/models.py)),
-and the editor's palette offers **21** of them — `approval` is withheld because
-the engine is a single-threaded index walk with no pause or resume, so a step
-it cannot run is not offered as a button.
+and all 25 are runnable and offered in the console editor. Nine execute
+directly; the other **16 are governed verbs**, graded against a capability
+contract at dispatch — `notify` and `osquery_live_query` among them, because
+messaging a channel and running a live query across a fleet are both things an
+operator should be able to withhold.
+[`scripts/check_playbook_schema_parity.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/check_playbook_schema_parity.py)
+holds the JSON schema, the engine, the shared TypeScript types and the editor in
+agreement **in both directions**: an editor offering a step the engine cannot
+run, and an engine carrying a step the editor hides, are the same defect seen
+from two sides.
+
+Beyond the linear walk the engine runs `wait` (a timer or a callback),
+`parallel` (fan out, then join) and `loop` (once per item, bounded). Each step
+execution carries an **idempotency key** derived from the run, the step and its
+path, so a resumed or retried run does not repeat something that already took
+effect.
+
+`approval` is a **durable pause**, which this page previously said it could not
+be. A run that reaches one suspends to PostgreSQL — the step index and the whole
+run context — survives a restart, resumes at the step *after* the approval, and
+expires with a recorded outcome rather than hanging. `playbook-pause-live.yml`
+proves it against live Postgres with a negative control.
 
 ---
 
 ## Where the path stops
 
-Step 10 has no automatic trigger. There is no code path that dispatches a
-response without a human. That is deliberate, and it is the honest boundary of
-the word "autonomous" in this project.
+A *playbook* can be triggered automatically by a fused alert, and three
+switches must all agree before one acts — the deployment, the tenant, and the
+playbook itself — with every default off. Anything short of all three runs in
+**preview**, with its plan and simulated steps attached to the alert so an
+analyst can read what it would have done. Preview is the default state, not a
+mode somebody has to remember to choose.
+
+What that did **not** change is step 10. Every response step is still graded
+against its own capability contract at dispatch and returns `pending_approval`
+on its own when a human is required, so approving a playbook never authorises
+whatever its steps happen to contain. There is still no code path that touches
+a vendor without either a human approval or an explicit per-tenant autonomy
+policy for that specific verb. That is the honest boundary of the word
+"autonomous" in this project.
 
 ## What runs in which profile
 

@@ -7,9 +7,9 @@
 **An open-source, self-hostable AI Security Operations Center.** It ingests your security telemetry, detects and correlates threats, investigates them with AI agents whose reasoning is fully auditable, and proposes responses a human approves.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT) [![Version](https://img.shields.io/badge/version-17.1.0-f59e0b?style=flat-square)](CHANGELOG.md) [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
-[![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC) [![Technical Guide](https://img.shields.io/badge/Technical%20Guide-22%20page%20PDF-dc2626?style=flat-square)](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/papers/aisoc-technical-guide.pdf)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC) [![Technical Guide](https://img.shields.io/badge/Technical%20Guide-26%20page%20PDF-dc2626?style=flat-square)](https://raw.githubusercontent.com/beenuar/AiSOC/main/apps/web/public/papers/aisoc-technical-guide.pdf)
 
-**[Technical Guide (PDF)](https://github.com/beenuar/AiSOC/blob/main/apps/web/public/papers/aisoc-technical-guide.pdf)** · [Docs](https://beenuar.github.io/AiSOC/) · [Architecture](docs/architecture/README.md) · [What actually works](docs/audit/REPOSITORY_REALITY.md) · [Discussions](https://github.com/beenuar/AiSOC/discussions)
+**[Technical Guide (PDF)](https://raw.githubusercontent.com/beenuar/AiSOC/main/apps/web/public/papers/aisoc-technical-guide.pdf)** · [Docs](https://beenuar.github.io/AiSOC/) · [Architecture](docs/architecture/README.md) · [What actually works](docs/audit/REPOSITORY_REALITY.md) · [Discussions](https://github.com/beenuar/AiSOC/discussions)
 
 </div>
 
@@ -45,9 +45,8 @@ git clone https://github.com/beenuar/AiSOC && cd AiSOC
 make up
 ```
 
-The [Technical Guide](apps/web/public/papers/aisoc-technical-guide.pdf) covers this in depth —
-server sizing, where the model runs, every failure mode with its cause and fix, the REST API, MCP,
-and a screenshot of each console surface.
+The [Technical Guide](https://raw.githubusercontent.com/beenuar/AiSOC/main/apps/web/public/papers/aisoc-technical-guide.pdf) covers this in depth: server sizing, where the
+model runs, every failure mode with its cause and fix, the REST API, MCP, and every console surface.
 
 Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM**, plus `python3`
 (3.9+) and `bash`; `make doctor` checks all of it and
@@ -55,13 +54,13 @@ Needs Docker Compose v2 with **8 GB memory and 20 GB free disk in the Docker VM*
 was measured against. The first run downloads a ~2 GB model into a volume only `make clean` clears.
 
 `make up` also creates `.env` and generates the **fifteen** secrets in it — the credential vault, the
-session signing key, five service-to-service credentials and four datastore passwords — then creates
-an administrator and prints its password, generated on your machine, shown once and stored nowhere.
-Copy it, or mint another with `make bootstrap ARGS=--reset-password`.
+session signing key, five service-to-service credentials and four datastore passwords — then creates an
+administrator and prints its password, generated on your machine, shown once and stored nowhere. Lost
+it? `make bootstrap ARGS=--reset-password` mints another.
 
-**A port already in use does not stop the install.** AiSOC publishes on a free one, names what held
-the old one, and moves the console address with it — measured on a bare clone with 5432 and 11434
-both taken, 64 seconds to a signed-in console.
+**A port already in use does not stop the install.** AiSOC publishes on a free one, names what held the
+old one, and moves the console address with it: 64 seconds to a signed-in console on a bare clone with
+5432 and 11434 both taken.
 
 Then **prove it works**. `make smoke` posts one real event to the ingest API and follows it through
 Kafka, detection, correlation and Postgres, then reads the alert back out of the public API. Every
@@ -71,7 +70,6 @@ stage reports PASS or FAIL:
 $ make smoke
 [PASS] raw telemetry accepted by ingest
 [PASS] event traversed the spine and became an alert
-[PASS] alert is retrievable by id from the API
 PASS: 10/10 stages
 ```
 
@@ -97,27 +95,27 @@ curl -X POST http://localhost:8081/v1/ingest/batch \
 ```
 
 Or pull, by configuring one of **87 click-and-connect data connectors** in **Settings → Connectors**
-(needs the `full` profile) — Splunk, Sentinel, Elastic, CrowdStrike, Okta, AWS and Kubernetes audit
-among those with vendor-specific normalization and setup docs
+— Splunk, Sentinel, Elastic, CrowdStrike, Okta, AWS and Kubernetes audit among those with
+vendor-specific normalization and setup docs
 ([coverage](https://beenuar.github.io/AiSOC/docs/connectors/api-coverage)). Without a vendor profile
 a connector still ingests through a generic mapping that resolves host, user and source IP.
 
+**A real cloud estate does not hand you its logs over a REST call.** Four collectors read the
+surfaces one actually emits to: a CloudTrail organisation trail on **S3 notified over SQS**
+(management events, data events and VPC flow logs), a **GCP Pub/Sub** subscription on a Cloud Logging
+sink, an **Azure Event Hubs** capture, and a **syslog/CEF** listener. Each keeps a resumable cursor
+and a bounded per-poll budget, so a backlog applies backpressure instead of flooding ingest.
+
 Bringing existing detections? `packages/aisoc-migrate` translates Splunk SPL, Sentinel KQL and
-Elastic EQL, and **refuses rather than approximating** what it cannot carry — an almost-right rule is
-harder to find than a missing one. On the 2,005 Splunk rules bundled here, 1,734 translate and 1,711
-of those are partial: field matches carried, thresholds did not
-([what to do with a partial](apps/docs/docs/migration/from-splunk.md)).
+Elastic EQL and **refuses rather than approximating** what it cannot carry, because an almost-right
+rule is harder to find than a missing one: of the 2,005 Splunk rules bundled here 1,734 translate and
+1,711 of those are partial ([what that means](apps/docs/docs/migration/from-splunk.md)).
 
 ## How it works
 
-Ingest normalizes to a common shape and Kafka carries it, then
-fusion runs 2511 executable detection rules, of 6991 on disk, plus 72 sliding-window rules that count across events, applies **your tenant's own tuning**
-on top — the disables, floors and suppressions the console writes, so a rule you turned off actually stops firing — and decides what
-becomes an alert. Correlation groups related alerts, an agent investigates and writes its reasoning
-to the Investigation Ledger, and a playbook may start from the result. Separately, new threat
-intelligence sweeps the lake for sightings you already collected, and a hypothesis becomes a hunt
-without anyone writing a query — the model fills a closed schema and every value is bound as a
-parameter, so it cannot express a query at all.
+Ingest normalizes to a common shape and stamps an **activity projection** on every event — actor, action, resource, location, outcome, with `actor.kind` read from each vendor's own documented field rather than inferred — then Kafka carries it.
+Then fusion runs 2511 executable detection rules, of 6991 on disk, plus 72 sliding-window rules (70 count across events; 2 match a sequence), applies **your tenant's own tuning** on top — the disables, floors and suppressions the console writes, so a rule you turned off actually stops firing — and decides what becomes an alert.
+Correlation groups related alerts, an agent investigates and writes its reasoning to the Investigation Ledger, and a playbook may start from the result. Separately, new threat intelligence sweeps the lake for sightings you already collected, and a hypothesis becomes a hunt without anyone writing a query — the model fills a closed schema and every value is bound as a parameter, so it cannot express a query at all.
 
 **A playbook triggered by an alert previews before it acts.** Three switches must agree — the
 deployment, the tenant, the playbook — and every default is off; anything less runs in preview with
@@ -129,16 +127,16 @@ hanging.
 event is replayed through the real connector and engine and that rule is *watched to fire* — never
 inferred from a directory or an `enabled:` flag. The proof can fail: `--prove-gate` reverts the
 Windows connector and requires all 1,687 Windows rules to go silent. It means reachable, not that it
-detects an attack. 119 still cannot fire, counted by family rather than hidden.
-([why 1,362 were refused](docs/detections/sigma-compilation.md))
+detects an attack. **Two** rules still cannot fire — down from 119, because a rule that could not fire
+stopped being counted as executable — and both are waiting on a behavioural baseline. The ratchet
+only moves down. ([why 1,362 were refused](docs/detections/sigma-compilation.md))
 
 **Every answer carries its receipts.** The copilot cites each checkable claim to the ledger entry behind
 it and labels the rest *uncited* rather than dropping them, and any investigation exports as a **signed
 evidence bundle** — byte-identical, prompts as digests, OCSF 1.9.0. ([how](docs/architecture/evidence-bundles.md))
 
-**[docs/architecture/README.md](docs/architecture/README.md)** walks that path one step at a time — eleven
-steps, five diagrams, every box linking to the code — and [mirrors to the docs
-portal](https://beenuar.github.io/AiSOC/docs/architecture).
+**[docs/architecture/README.md](docs/architecture/README.md)** walks that path one step at a time —
+eleven steps, five diagrams, every box linking to the code — and [mirrors to the docs portal](https://beenuar.github.io/AiSOC/docs/architecture).
 
 ## Deployment profiles
 
@@ -227,9 +225,11 @@ Agents triage alerts and investigate incidents. What they can and cannot do:
 
 Secrets are generated per deployment and never committed; connector credentials are encrypted at rest. Services connect to Postgres as a DML-only role, so row-level security actually applies, and tenant isolation is enforced at the query layer in every store. RBAC gates every mutating route, ingest is authenticated, and the default install sends no prompt anywhere — the model runs beside it.
 
-SAML and OIDC sign-in with per-connection tenant and group mapping, and SCIM provisioning
-([setup](apps/docs/docs/operations/enterprise-sso.md)). Attribute conditions and time-boxed
-elevation are schema only: migration 087 creates the tables and no code reads them yet.
+SAML and OIDC sign-in with per-connection tenant and group mapping, SCIM provisioning, and console
+**MFA** — TOTP with recovery codes, enforceable per tenant. Attribute conditions, time-boxed
+elevation and workload identities run inside the one permission path, where a condition can only
+narrow a permission and never grant one. ([SSO](apps/docs/docs/operations/enterprise-sso.md) ·
+[access governance](docs/security/access-governance.md))
 
 **A service with no credential refuses to serve rather than serving unauthenticated.** The [changelog](CHANGELOG.md) records each fix; report via [SECURITY.md](SECURITY.md).
 

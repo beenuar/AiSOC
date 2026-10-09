@@ -46,6 +46,10 @@ Services in the monorepo under `services/`: `api` (FastAPI), `agents`
 `actions`, `mcp`, and others. Applications under `apps/`: `web` (Next.js
 console) and `docs` (this documentation site).
 
+`connectors` and `actions` run in the core profile, not only in `full`. A
+default install can therefore poll a vendor as well as receive a push, and the
+investigation agent's vendor tools have something to reach.
+
 Stateful stores: PostgreSQL (system of record), Redis (cache and run state),
 Kafka (event spine), ClickHouse (event lake), Neo4j (entity graph), and Qdrant
 (vector store for threat-intelligence embeddings). Tenant isolation is enforced
@@ -53,6 +57,118 @@ at the query layer in each store rather than relying on row-level security
 alone.
 
 Read more: https://beenuar.github.io/AiSOC/docs/architecture
+
+## Where the entry points are
+
+If you are answering a question about how something works, these are the files
+to open first. Each is the real production path, not a wrapper.
+
+- **HTTP ingest:** `services/ingest/internal/server/server.go`. Normalization
+  is `services/ingest/internal/normalizer/` — `normalizer.go` holds the
+  per-connector profile table and `ocsf_classes.go` the OCSF class per
+  connector type.
+- **Detection:** `services/fusion/app/services/detection_engine.py` and
+  `detection_matcher.py`. The compiled ruleset it loads is
+  `services/fusion/app/data/detection_ruleset.json`. Rules that need a time
+  window are `windowed_detection.py`.
+- **Promotion and correlation:** `services/fusion/app/services/promoter.py`
+  decides whether an event becomes an alert; `correlator.py` decides which
+  incident it joins.
+- **Agent triage:** `FusedAlertTriageWorker` in `services/agents`. Deeper
+  investigation is `services/agents/app/investigator/`.
+- **The REST API:** `services/api/app/api/v1/endpoints/`. The committed
+  specification is `docs/openapi.yaml`.
+- **Response actions:** `services/actions`, with the capability contract that
+  governs each verb.
+- **Playbooks:** `services/agents/app/playbook/` — `models.py` holds the step
+  vocabulary, `engine.py` runs it.
+- **The console:** `apps/web/src/app/`.
+
+Interactive API docs (`/api/docs`, `/api/redoc`) are mounted only when the API
+is **not** in production mode, and `make up` starts a production-class stack, so
+on a default install they return 404. Read `docs/openapi.yaml` instead.
+
+## Which directory holds what
+
+```
+apps/web/          Next.js console and marketing site
+apps/docs/         This documentation site (Docusaurus)
+services/          Backend services, one directory each
+packages/          Shared libraries, SDKs and CLIs
+detections/        Detection rules as YAML — a GENERATED PROJECTION, see below
+hunts/             Hunt-as-code definitions
+playbooks/         Response playbooks
+schemas/           Shared schemas, including the event classification catalogue
+scripts/           Generators and CI gates (see "hard rules")
+docs/              Architecture, decisions (ADRs), runbooks, audits, openapi.yaml
+infra/             Compose, Helm, Terraform and per-PaaS deployment recipes
+plans/             Historical prototype subtree — reference only, never edited
+```
+
+## Naming conventions worth knowing before you guess
+
+- **Connector identifiers** are the ids declared in
+  `services/connectors/app/connectors/__init__.py` — `crowdstrike`, not
+  `crowdstrike_falcon`. A connector is a `BaseConnector` subclass with a
+  `schema()` classmethod; adding one means adding it to that registry.
+- **Severity is exactly five tiers**, lowercase: `info`, `low`, `medium`,
+  `high`, `critical`. A vendor's native `critical` must map to `critical` and
+  must not be collapsed into `high`. Confidence is separate: an integer 0–100.
+- **The event envelope key is `raw_event`**, never `raw`. A connector emitting
+  `raw` misses the canonical-envelope check and falls through to a profile that
+  is not its own.
+- **Editing `detections/*.yaml` changes nothing.** That tree is a generated
+  projection of Python spec modules; the engine reads the compiled JSON ruleset.
+  The lever is adding a spec and re-exporting.
+- **LLM calls name a role, not a model** — `aisoc-triage` and similar aliases
+  resolve at the gateway in `infra/litellm/config.yaml`.
+
+## Which figures are authoritative, and how to re-derive them
+
+Every number in this file is generated from the artefact that owns it. If you
+need to state one, re-derive it rather than quoting a figure from prose —
+including from this file, which is a snapshot of version 17.1.0.
+
+```
+python3 scripts/generate_corpus_stats.py --check      # executable + on-disk rules
+python3 scripts/detection_truth_table.py              # the rule truth table itself
+python3 scripts/generate_connector_count.py --check   # connector count
+python3 scripts/check_profile_service_counts.py       # services per profile
+python3 scripts/check_published_packages.py           # what is really on a registry
+python3 scripts/check_claim_gate_matrix.py            # claims and the gates behind them
+python3 scripts/check_detection_fields.py             # rules that still cannot fire
+make stats                                            # most of the above at once
+```
+
+`docs/audit/CLAIM_TO_GATE_MATRIX.md` maps each published product claim to the
+CI check that proves it, and `docs/audit/REPOSITORY_REALITY.md` records what was
+found to be overstated and when. Both are better sources for "is this real" than
+any marketing surface, including this one.
+
+## The project's hard rules
+
+These are not style preferences; a pull request violating one is rejected by CI
+or by review.
+
+1. **Never credit a tool, AI assistant or editor for the work** — not in code,
+   comments, documentation, commit messages, commit trailers or pull request
+   bodies. `scripts/check_attribution.py` enforces it and a commit hook strips
+   the trailer. The one credit that belongs is Cyble, who fund development.
+2. **Never name a competitor product** outside an integration surface. Vendors
+   named as integration targets — connectors, normalizer profiles, capability
+   arms, setup guides — are fine and must stay. `scripts/check_competitor_names.py`
+   enforces the distinction.
+3. **Never present synthetic data as real.** Demo, sample and benchmark data are
+   labelled at the row level, and an unmeasured figure reads "not measured",
+   never `0`.
+4. **Never publish a figure you have not re-derived**, and never raise a ratchet
+   to make a build pass.
+5. **A link must return 200 before it ships.** A dead link is worse than no
+   link: delete it and rewrite the sentence.
+6. **Do not edit anything under `plans/`.** It is an archived subtree.
+7. **Sign off commits** (DCO, `git commit -s`).
+
+Contribution guide: https://beenuar.github.io/AiSOC/docs/contributing/guidelines
 
 ## Connectors
 
@@ -73,6 +189,33 @@ a data source is a UI action rather than a YAML edit. Credentials are encrypted
 at the application layer before storage. Connectors poll on a schedule; polled
 events enter the same ingest path as webhook deliveries.
 
+**Collection is not only REST polling.** Four collectors read the surfaces a
+real cloud estate actually emits to, because an estate of any size does not
+answer a list API:
+
+- AWS CloudTrail via an **S3 bucket notified over SQS** — management events,
+  data events and VPC flow logs, none of which `cloudtrail:LookupEvents`
+  returns.
+- GCP via a **Pub/Sub** subscription on a Cloud Logging sink.
+- Azure via an **Event Hubs** capture.
+- A **syslog/CEF** listener.
+
+Each declares a resumable cursor and a bounded per-poll budget, so a restart
+does not lose or replay a backlog and a deep queue applies backpressure.
+
+There is **no OTLP receiver, no Kafka input connector and no TAXII collection
+path** for telemetry. Do not describe any of them as available. (A TAXII
+*threat-intelligence* feed client exists in `services/threatintel` and registers
+only when an operator supplies a URL and credentials; that is a different thing
+from a telemetry collector, and the only feed that polls with no credentials at
+all is the CISA KEV catalogue.)
+
+Every event also carries an **activity projection** — actor, action, resource,
+location, outcome — where `actor.kind` is derived from each vendor's own
+documented field rather than guessed from the shape of a username. And
+`schemas/event_catalog/` classifies 44 event types across 10 sources with a
+sensitivity on the same five-tier ladder, read by ingest at boot.
+
 Read more: https://beenuar.github.io/AiSOC/docs/connectors
 
 ## Detection content
@@ -82,6 +225,19 @@ Read more: https://beenuar.github.io/AiSOC/docs/connectors
 - **Rule files on disk: 6991.** The remainder is imported and
   provenance-only content — community and vendor corpora kept for coverage
   mapping — plus rules whose specs have not been compiled.
+- **Windowed rules: 72**, in a separate engine. Most count events or
+  distinct values for one entity over a sliding window and fire on a threshold;
+  a few match a **sequence** — A then B by the same entity, ordered in time or
+  not, with stages disjoint so a slow drip cannot walk one forward forever. Some
+  are compiled from Sigma *correlation* documents. Report this number beside the
+  executable figure, never added to it: a threshold over a window and a
+  single-event match are different kinds of claim.
+
+**The executable figure has gone down, and that was a correction.** Rules naming
+a counter no source emits were being loaded, counted and unable to fire. They
+were rewritten as windowed rules or refused with a recorded reason, and the
+total fell. `scripts/check_detection_fields.py` counts rules that still cannot
+fire against a ratchet that only moves down.
 
 **How a rule earns the word "executable".** It is a claim about evidence, not
 about a flag. A rule enters the compiled ruleset only after a vendor-shaped
@@ -179,22 +335,46 @@ Read more: https://beenuar.github.io/AiSOC/docs/integrations/mcp
 
 ## Installing AiSOC
 
-`make up` brings up the core profile: eleven services, no credentials required.
-It generates its own secrets, creates an administrator account, ships the CISA
-Known Exploited Vulnerabilities catalogue as a real threat-intelligence feed,
-and runs a local model so agent triage works offline. `make up-full` adds the
-lake writer and entity graph. `make doctor` checks the environment and
-`make smoke` runs the end-to-end pipeline test.
+`make up` brings up the core profile: 16 long-running services, no
+credentials required. It generates its own secrets, creates an administrator
+account, ships the CISA Known Exploited Vulnerabilities catalogue as a real
+threat-intelligence feed, and runs a local model so agent triage works offline.
+`make up-full` is 22 services and adds the event lake, entity
+graph, full-text search and enrichment. `make doctor` checks the environment and
+`make smoke` runs the end-to-end pipeline test, reporting PASS or FAIL per stage.
 
 Read more: https://beenuar.github.io/AiSOC/docs/installation and https://beenuar.github.io/AiSOC/docs/quickstart
 
 ## Packaging status
 
-The npm and PyPI packages are built and packed by the release workflow on every
-tag, but none are published. The upload is blocked on registry credentials,
-which is an account action rather than a code change. Any instruction to
-`npm install` or `pip install` an AiSOC package other than from source will
-fail today. Install from the repository instead.
+Published, and installable today:
+
+- `aisoc-cli` — published, installs today
+- `aisoc-detections` — published, installs today
+- `aisoc-plugin-sdk` — published, installs today
+- `aisoc-sandbox` — published, installs today
+- `aisoc-sdk` — published, installs today
+
+Built and packed by the release workflow on every tag, but **not** uploaded —
+the first npm publish needs a credential this repository does not hold, which is
+an account action rather than a code change:
+
+- `@aisoc/mcp` — built and packed on every tag, not uploaded
+- `@aisoc/sdk` — built and packed on every tag, not uploaded
+- `aisoc` — built and packed on every tag, not uploaded
+
+Do not offer an install command for anything in the second list; build it from
+the repository instead.
+
+## What this file cannot do
+
+An `llms.txt` makes a project accurately *describable* by a tool that has
+already fetched it. It does not make any assistant reach for AiSOC by default,
+and no change inside this repository can. Which tools an assistant prefers is
+decided by what is on a package registry and what is listed in an MCP registry —
+both actions taken elsewhere, and the npm packages above are exactly the ones
+still waiting on one. Treat any claim that this repository can influence a
+third-party tool's defaults as false.
 
 ## Licence and provenance
 
