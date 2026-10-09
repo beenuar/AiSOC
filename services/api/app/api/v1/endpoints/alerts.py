@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -28,6 +28,7 @@ from app.services.alert_rail import (
     RelatedEntity,
     build_rail_envelope,
 )
+from app.services.audit import emit_audit
 from app.services.event_sanitiser import (
     SubmitPayloadTooLarge,
     sanitise_event_batch,
@@ -681,8 +682,15 @@ async def submit_alert(
 async def list_alerts(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
     db: TenantDBSession,
+    http_request: Request,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
+    limit: int | None = Query(
+        default=None,
+        ge=1,
+        le=200,
+        description="Alias for `page_size`, bounded identically. Supplying both with different values is a 400.",
+    ),
     severity: str | None = Query(default=None),
     status: str | None = Query(default=None),
     category: str | None = Query(default=None),
@@ -698,7 +706,34 @@ async def list_alerts(
     that pre-date the confidence column will have NULL and therefore won't
     match either filter — that's intentional; analysts who care about
     confidence should only see alerts that actually carry the signal.
+
+    `limit` is an accepted spelling of `page_size`. Supplying both with
+    different values is a 400.
     """
+    # Why `limit` is declared at all (issue #1246): the route named only
+    # `page_size`, and FastAPI discards an undeclared query parameter in
+    # silence — `?limit=1000` neither clamped nor 422'd, it served the default
+    # 25 under a 200, and `?limit=5` served 25 as well. Declaring the alias
+    # with the identical `ge=1, le=200` bound makes both halves loud: an
+    # in-range value takes effect, an out-of-range one is refused by the
+    # validator `page_size` has always used.
+    #
+    # Clamping 1000 down to 200 was the other option and is the same defect in
+    # better clothing — the caller is served a page size they did not ask for
+    # and are not told. Two spellings that disagree are refused for the same
+    # reason rather than one being picked.
+    if limit is not None:
+        # Presence in the raw query string, not value inequality: `page_size`
+        # carries a default of 25, so `limit=5&page_size=25` is indistinguishable
+        # from `limit=5` by value alone and refusing it would break the alias
+        # for every caller who happens to pick the default.
+        if "page_size" in http_request.query_params and limit != page_size:
+            raise HTTPException(
+                status_code=400,
+                detail=f"`limit` ({limit}) and `page_size` ({page_size}) disagree. They are the same parameter — supply one.",
+            )
+        page_size = limit
+
     filters = [Alert.tenant_id == current_user.tenant_id]
 
     if severity:
@@ -882,14 +917,54 @@ async def get_alert(
     )
 
 
+#: Columns ``update_alert`` stamps itself rather than taking from the caller.
+#:
+#: Excluded from the audit payload because they are derived: ``resolved_at``
+#: and ``assigned_at`` are a function of the status and assignee transitions
+#: recorded beside them, and ``updated_at`` is a function of the write
+#: happening at all. Recording them would pad every entry with three rows an
+#: auditor has to read past to find the one decision a human made.
+_AUDIT_DERIVED_COLUMNS = frozenset({"updated_at", "resolved_at", "assigned_at"})
+
+
+def _audit_value(value: Any) -> Any:
+    """Render a column value for the JSONB ``changes`` payload.
+
+    ``changes`` is serialised with ``json.dumps``, which raises on the UUID and
+    datetime values this table stores. A failure there aborts the transaction
+    the alert update is in, so an unconvertible value would turn an audit
+    improvement into a 500 on the route it was meant to make accountable.
+    """
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, list):
+        return [_audit_value(v) for v in value]
+    return value
+
+
 @router.patch("/{alert_id}", response_model=AlertResponse)
 async def update_alert(
     alert_id: uuid.UUID,
     request: AlertUpdateRequest,
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
     db: DBSession,
+    http_request: Request,
 ) -> AlertResponse:
-    """Update alert status, priority, tags, assignment, or case link."""
+    """Update alert status, priority, tags, assignment, or case link.
+
+    Emits an `alerts:update` audit event carrying a before/after payload for
+    the fields this call changed.
+    """
+    # Until issue #1246 this route emitted nothing, so the only row a closure
+    # produced came from `AuditMiddleware` — which builds its `AuditLog` with
+    # no `changes` argument and labels the action from the URL. Marking a
+    # critical alert as a false positive therefore recorded that *something*
+    # changed and never what, which is the one thing an auditor reading that
+    # line needs. The payload below is derived from `updates`, the same dict
+    # that is written, rather than listed out a second time, so a column added
+    # to the write cannot quietly stay out of the trail.
     result = await db.execute(select(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id))
     alert = result.scalar_one_or_none()
     if alert is None:
@@ -915,11 +990,39 @@ async def update_alert(
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)
+        # Read the prior values off the loaded row before the write lands.
+        # A Core UPDATE synchronises the session, so asking afterwards can
+        # return the value we just set and record `{"from": X, "to": X}`.
+        changes = {
+            column: {"from": _audit_value(getattr(alert, column, None)), "to": _audit_value(value)}
+            for column, value in updates.items()
+            if column not in _AUDIT_DERIVED_COLUMNS
+        }
         # Tenant predicate on the write as well as the read above. The read
         # already 404s another tenant's alert, so this is belt and braces
         # today — but a write scoped only by a preceding read is one reorder
         # away from being scoped by nothing.
         await db.execute(update(Alert).where(Alert.id == alert_id, Alert.tenant_id == current_user.tenant_id).values(**updates))
+        # Same session, same transaction, committed below: the alert change
+        # and the record of it land together or not at all.
+        #
+        # `http_request` is passed so the row carries the source IP and so
+        # `AuditMiddleware` sees the mark and stands down. Without it the
+        # request has two audit writers, which is what forked the chain
+        # before migration 074 — and the unique index now refuses the second
+        # row, so the symptom would be a *dropped* entry rather than a fork.
+        await emit_audit(
+            db=db,
+            tenant_id=current_user.tenant_id,
+            actor_id=current_user.user_id,
+            actor_email=current_user.email,
+            api_key_prefix=getattr(current_user, "api_key_prefix", None),
+            action="alerts:update",
+            resource="alert",
+            resource_id=str(alert_id),
+            changes=changes,
+            request=http_request,
+        )
         await db.commit()
         await db.refresh(alert)
 

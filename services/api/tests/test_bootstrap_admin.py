@@ -30,11 +30,12 @@ import pytest
 import pytest_asyncio
 from app.core.security import verify_password
 from app.db.database import Base
+from app.models.audit import AuditLog
 from app.models.tenant import Tenant, User
 from app.scripts import bootstrap_admin as ba
 from pydantic import BaseModel, EmailStr, ValidationError
 from sqlalchemy import select
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import INET, JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.ext.compiler import compiles
@@ -56,6 +57,11 @@ def _uuid_sqlite(_type_, _compiler_, **_kw_):
     return "CHAR(36)"
 
 
+@compiles(INET, "sqlite")
+def _inet_sqlite(_type_, _compiler_, **_kw_):
+    return "TEXT"
+
+
 class _LoginRequest(BaseModel):
     """The shape `POST /api/v1/auth/login` validates against."""
 
@@ -72,9 +78,21 @@ async def session_factory(monkeypatch):
     """
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
-        # Only the two tables this touches. A whole-metadata create_all drags
+        # Only the tables this touches. A whole-metadata create_all drags
         # in models using Postgres ARRAY, which SQLite cannot render.
-        await conn.run_sync(Base.metadata.create_all, tables=[Tenant.__table__, User.__table__])
+        #
+        # `audit_log` joined the list when the script started recording the
+        # administrator it mints (issue #1246). The *chain* still cannot run
+        # here — `audit_chain_head` is raw SQL with no ORM table and
+        # `_ADVANCE_HEAD` calls `NOW()`, which SQLite has no equivalent for —
+        # so `emit_audit` takes its documented fallback, logs at ERROR and
+        # writes the row unchained. That is why the chained behaviour is
+        # asserted in `test_bootstrap_admin_is_audited.py` against the real
+        # migration chain, and only the account outcomes are asserted here.
+        await conn.run_sync(
+            Base.metadata.create_all,
+            tables=[Tenant.__table__, User.__table__, AuditLog.__table__],
+        )
     factory = async_sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(ba, "AsyncSessionLocal", factory)
     yield factory

@@ -1,0 +1,200 @@
+# Alert accountability — through the real app and real Postgres (issue #1246).
+#
+# Three defects, all of which pass every offline suite because the thing that
+# is wrong is a row that is never written or a parameter that is never bound:
+#
+#   1. PATCH /api/v1/alerts/{id} emitted no audit event, so the only row a
+#      closure produced came from AuditMiddleware — which builds its AuditLog
+#      with no `changes` argument. Marking a critical alert as a false
+#      positive recorded that something changed and never what.
+#   2. `bootstrap_admin` wrote no audit row at all. AuditMiddleware is HTTP
+#      middleware, so the CLI that mints the account holding `*` over the
+#      tenant was the one privileged operation with no record anywhere.
+#   3. `?limit=N` was discarded in silence. FastAPI drops an undeclared query
+#      parameter, so the request neither clamped nor 422'd — it served the
+#      default 25 under a 200.
+#
+# The suites need a live PostgreSQL: the audit hash chain, its dense
+# `chain_index` and `uq_audit_log_chain_successor` have no SQLite equivalent,
+# and `emit_audit` deliberately degrades to an *unchained* row when the chain
+# tables are missing — so a SQLite run would pass while proving nothing. They
+# skip when no database answers, which is why this job sets
+# ALERT_AUDIT_PROOF_REQUIRED=1: here, a skip is a failure.
+#
+# No `paths:` filter. An accountability guard that only grades pull requests
+# touching a named path is a guard that the next refactor walks around.
+name: Alert audit (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: alert-audit-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  alert-audit-live:
+    name: An alert closure, a bootstrap and a page size are all accountable
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: public.ecr.aws/docker/library/postgres:16-alpine
+        env:
+          POSTGRES_USER: aisoc
+          POSTGRES_PASSWORD: aisoc_ci_only
+          POSTGRES_DB: aisoc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U aisoc"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      # The owner, not the DML-only runtime role. These suites create tenants,
+      # users and — for the bootstrap proof — a database of their own, none of
+      # which `aisoc_app` can do. Tenant isolation is not what is under test
+      # here; `isolation-live.yml` and `audit-forgery-live.yml` own that and
+      # both connect as the restricted role.
+      DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      # Not a bypass environment. The HTTP suites mint real JWTs and travel
+      # through the real auth dependencies; a dev-mode principal would make
+      # "the actor is the authenticated analyst" pass for the wrong reason.
+      ENVIRONMENT: production
+      SECRET_KEY: ci-alert-audit-signing-secret-at-least-32-chars
+      ALERT_AUDIT_PROOF_REQUIRED: "1"
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real service pulls in the real service's whole import chain.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: A closure records what changed, a bootstrap is audited, a limit binds
+        working-directory: services/api
+        run: |
+          python -m pytest \
+            tests/test_alert_patch_records_what_changed.py \
+            tests/test_bootstrap_admin_is_audited.py \
+            tests/test_alert_list_limit_is_not_silently_ignored.py \
+            -v --tb=short
+
+      # ── Negative controls ──────────────────────────────────────────────
+      #
+      # Each one puts the reported defect back and requires the matching
+      # assertion to go red. Without them a suite that stopped exercising the
+      # path — a fixture that silently seeds nothing, a skip that reads as a
+      # pass — would stay green forever.
+
+      - name: Removing the handler's emit_audit makes the closure proof fail
+        working-directory: services/api
+        run: |
+          cp app/api/v1/endpoints/alerts.py /tmp/alerts.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/alerts.py")
+          s = p.read_text()
+          start = s.find("        await emit_audit(")
+          if start < 0:
+              print("negative control: no emit_audit call in alerts.py to remove — "
+                    "the handler has been reshaped and this control no longer proves anything")
+              sys.exit(1)
+          end = s.find("\n        )\n", start)
+          if end < 0:
+              print("negative control: could not find the end of the emit_audit call")
+              sys.exit(1)
+          p.write_text(s[:start] + s[end + len("\n        )\n"):])
+          PY
+          if python -m pytest tests/test_alert_patch_records_what_changed.py -q >/dev/null 2>&1; then
+            cp /tmp/alerts.bak app/api/v1/endpoints/alerts.py
+            echo "FAIL: the closure proof passed with the handler emitting no audit event."
+            exit 1
+          fi
+          cp /tmp/alerts.bak app/api/v1/endpoints/alerts.py
+          echo "OK: removing the handler's audit event makes the suite fail, as it must."
+
+      - name: Dropping the limit parameter makes the pagination proof fail
+        working-directory: services/api
+        run: |
+          cp app/api/v1/endpoints/alerts.py /tmp/alerts.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/alerts.py")
+          s = p.read_text()
+
+          def cut(text, start_anchor, end_anchor):
+              start = text.find(start_anchor)
+              if start < 0:
+                  print(f"negative control: anchor not found: {start_anchor!r}")
+                  sys.exit(1)
+              end = text.find(end_anchor, start)
+              if end < 0:
+                  print(f"negative control: end anchor not found: {end_anchor!r}")
+                  sys.exit(1)
+              return text[:start] + text[end + len(end_anchor):]
+
+          # Undeclare the parameter, then remove the body that reads it, which
+          # is exactly the pre-fix route: FastAPI discards `?limit=` unheard.
+          s = cut(s, "    limit: int | None = Query(", "\n    ),\n")
+          s = cut(s, "    if limit is not None:", "        page_size = limit\n")
+          p.write_text(s)
+          PY
+          if python -m pytest tests/test_alert_list_limit_is_not_silently_ignored.py -q >/dev/null 2>&1; then
+            cp /tmp/alerts.bak app/api/v1/endpoints/alerts.py
+            echo "FAIL: the pagination proof passed with ?limit= discarded."
+            exit 1
+          fi
+          cp /tmp/alerts.bak app/api/v1/endpoints/alerts.py
+          echo "OK: discarding ?limit= makes the suite fail, as it must."
+
+      - name: Silencing the bootstrap audit makes the bootstrap proof fail
+        working-directory: services/api
+        run: |
+          cp app/scripts/bootstrap_admin.py /tmp/bootstrap.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/scripts/bootstrap_admin.py")
+          s = p.read_text()
+          needle = "    await emit_audit(\n"
+          if needle not in s:
+              print("negative control: no emit_audit call in bootstrap_admin.py to silence — "
+                    "the script has been reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    return  # NEGATIVE CONTROL\n" + needle, 1))
+          PY
+          if python -m pytest tests/test_bootstrap_admin_is_audited.py -q >/dev/null 2>&1; then
+            cp /tmp/bootstrap.bak app/scripts/bootstrap_admin.py
+            echo "FAIL: the bootstrap proof passed with the script writing no audit row."
+            exit 1
+          fi
+          cp /tmp/bootstrap.bak app/scripts/bootstrap_admin.py
+          echo "OK: silencing the bootstrap audit makes the suite fail, as it must."

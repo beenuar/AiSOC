@@ -607,7 +607,12 @@ paths:
 
         match either filter — that''s intentional; analysts who care about
 
-        confidence should only see alerts that actually carry the signal.'
+        confidence should only see alerts that actually carry the signal.
+
+
+        `limit` is an accepted spelling of `page_size`. Supplying both with
+
+        different values is a 400.'
       operationId: list_alerts_api_v1_alerts_get
       security:
       - HTTPBearer: []
@@ -629,6 +634,20 @@ paths:
           minimum: 1
           default: 25
           title: Page Size
+      - name: limit
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 200
+            minimum: 1
+          - type: 'null'
+          description: Alias for `page_size`, bounded identically. Supplying both
+            with different values is a 400.
+          title: Limit
+        description: Alias for `page_size`, bounded identically. Supplying both with
+          different values is a 400.
       - name: severity
         in: query
         required: false
@@ -833,7 +852,12 @@ paths:
       tags:
       - alerts
       summary: Update Alert
-      description: Update alert status, priority, tags, assignment, or case link.
+      description: 'Update alert status, priority, tags, assignment, or case link.
+
+
+        Emits an `alerts:update` audit event carrying a before/after payload for
+
+        the fields this call changed.'
       operationId: update_alert_api_v1_alerts__alert_id__patch
       security:
       - HTTPBearer: []
