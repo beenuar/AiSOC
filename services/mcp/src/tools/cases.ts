@@ -21,31 +21,20 @@ import { zodToJsonSchema } from "./alerts.js";
 import type { ToolDefinition } from "./types.js";
 import { json } from "./types.js";
 
+/** One row of GET /api/v1/cases, which returns a bare array of these. */
 interface CaseResponse {
   id: string;
-  case_number: string;
+  case_number: string | null;
   title: string;
   description: string | null;
   status: string;
-  priority: string;
   severity: string;
-  case_type: string | null;
   alert_ids: string[];
   tags: string[];
-  assigned_to_id: string | null;
-  resolution: string | null;
-  lessons_learned: string | null;
+  assignee: string | null;
   created_at: string;
   closed_at: string | null;
   [key: string]: unknown;
-}
-
-interface CaseListResponse {
-  items: CaseResponse[];
-  total: number;
-  page: number;
-  page_size: number;
-  pages: number;
 }
 
 interface InvestigateResponse {
@@ -59,11 +48,16 @@ interface InvestigateResponse {
 // aisoc_list_cases
 // ---------------------------------------------------------------------------
 
+// Values from the `aisoc_cases` CHECK constraints. The API does not validate
+// the filter, so a status outside this set silently returned no cases.
+const CASE_STATUSES = ["new", "triaged", "investigating", "contained", "resolved", "closed"] as const;
+const CASE_SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
+
 const ListCasesSchema = z
   .object({
-    status: z.enum(["new", "open", "investigating", "containment", "eradication", "recovery", "closed", "cancelled"]).optional(),
-    priority: z.enum(["p0", "p1", "p2", "p3"]).optional(),
-    assigned_to_me: z.boolean().optional(),
+    status: z.enum(CASE_STATUSES).optional(),
+    severity: z.enum(CASE_SEVERITIES).optional(),
+    assignee: z.string().min(1).optional().describe("User id the case is assigned to."),
     page: z.number().int().min(1).max(1000).default(1),
     page_size: z.number().int().min(1).max(50).default(25),
   })
@@ -73,27 +67,30 @@ export const listCasesTool: ToolDefinition<typeof ListCasesSchema> = {
   metadata: {
     name: "aisoc_list_cases",
     description:
-      "List security cases (incidents). Filter by status, priority, or assigned-to-me. Cases are higher-level groupings of related alerts.",
+      "List security cases (incidents). Filter by status, severity, or assignee. Cases are higher-level groupings of related alerts.",
     inputSchema: zodToJsonSchema(ListCasesSchema),
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   schema: ListCasesSchema,
   async handle(ctx, args) {
-    const data = await ctx.client.get<CaseListResponse>("/api/v1/cases", {
+    // The endpoint pages by limit/offset and returns a bare array, with no
+    // total. A full page is the only signal that another one may exist.
+    const rows = await ctx.client.get<CaseResponse[]>("/api/v1/cases", {
       query: {
         status: args.status,
-        priority: args.priority,
-        assigned_to_me: args.assigned_to_me,
-        page: args.page,
-        page_size: args.page_size,
+        severity: args.severity,
+        assignee: args.assignee,
+        limit: args.page_size,
+        offset: (args.page - 1) * args.page_size,
       },
     });
+    const items = Array.isArray(rows) ? rows : [];
     return json({
-      total: data.total,
-      page: data.page,
-      page_size: data.page_size,
-      pages: data.pages,
-      items: data.items.map(summariseCase),
+      page: args.page,
+      page_size: args.page_size,
+      count: items.length,
+      has_more: items.length === args.page_size,
+      items: items.map(summariseCase),
     });
   },
 };
@@ -189,10 +186,9 @@ function summariseCase(c: CaseResponse): Record<string, unknown> {
     case_number: c.case_number,
     title: c.title,
     status: c.status,
-    priority: c.priority,
     severity: c.severity,
-    assigned_to_id: c.assigned_to_id,
-    alert_count: c.alert_ids.length,
+    assignee: c.assignee,
+    alert_count: (c.alert_ids ?? []).length,
     tags: c.tags,
     created_at: c.created_at,
     closed_at: c.closed_at,
