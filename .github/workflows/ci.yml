@@ -649,6 +649,20 @@ jobs:
         run: python3 scripts/check_connector_profiles.py --self-test
       - name: Connector profile drift gate
         run: python3 scripts/check_connector_profiles.py
+      # The syslog listener is the one input path an appliance can reach on
+      # its own: every other push route needs something in front of it that
+      # already speaks HTTP. This asserts it parses all four wire formats,
+      # is started by the service rather than merely compiled, is named by
+      # /readyz, takes its tenant from a minted token and from nothing a
+      # sender controls, and projects through templates that ship and can
+      # be minted. Self-test first, on the same tree: it injects one
+      # violation per rule — including each of the three Go syntaxes a
+      # tenant could leak through, because the first version of this gate
+      # knew only one of them and a runtime negative control walked past it.
+      - name: Syslog listener gate — self-test
+        run: python3 scripts/check_syslog_listener.py --self-test
+      - name: Syslog listener gate
+        run: python3 scripts/check_syslog_listener.py
       # Every connector above reads an API that answers a time window, so the
       # window bounds what a poll can return. The three cloud-native
       # collection paths do not: an SQS queue after an outage, a Pub/Sub

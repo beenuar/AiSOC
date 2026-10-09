@@ -84,6 +84,7 @@ const sidebars: SidebarsConfig = {
         "connectors/endpoint-decision-matrix",
         "connectors/api-coverage",
         "connectors/universal-capture",
+        "connectors/syslog-listener",
         "connectors/osquery-extensions",
         "connectors/abnormal_security",
         "connectors/ai-gateway",

@@ -3,7 +3,9 @@
 - **Status:** accepted
 - **Date:** 2026-06-28
 - **Decision-makers:** Beenu Arora (founder), AiSOC core team
-- **Plan reference:** [AiSOC missing pieces plan](../../plans/aisoc-missing-pieces/aisoc_missing_pieces_plan.md) §5.4; [README.md](../../README.md) "Try it live" section.
+- **See also:** [README.md](../../README.md). The ADR cited a "Try it live"
+  section there; the README has never carried one under that heading.
+- **Not followable:** this ADR was written against a missing-pieces plan that is not in this repository — `plans/aisoc-missing-pieces/` has never been committed — so the section numbers it cited cannot be looked up. The decision stands on its own text.
 
 ## Context
 
@@ -35,6 +37,20 @@ Concretely:
 ## Consequences
 
 ### Code / infra changes that land alongside this ADR
+
+:::caution What this list is
+A plan of intended changes, not a record of shipped ones. Four of the seven
+entries below are **not in the repository** and never were:
+`infra/fly/managed/tenants/demo.yaml`, `.github/workflows/demo-reseed.yml`,
+`services/api/app/demo/seed.py` and `docs/runbooks/demo-tenant-down.md`. The
+README callout named here was also never written under that heading — the
+README has no "Try it live" section. Read this as the decision's intent; check
+the tree before citing any path from it.
+
+The deterministic seeder that *does* exist is
+[`services/api/app/scripts/seed_demo.py`](../../services/api/app/scripts/seed_demo.py),
+reached with `make demo`.
+:::
 
 - `infra/fly/managed/tenants/demo.yaml` (new) — tenant manifest for the always-on demo.
 - `.github/workflows/demo-reseed.yml` (new) — nightly reseed.

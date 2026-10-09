@@ -411,6 +411,12 @@ SIDEBAR_PREAMBLE = (
     "connectors/endpoint-decision-matrix",
     "connectors/api-coverage",
     "connectors/universal-capture",
+    # A transport rather than a connector: the syslog listener in
+    # services/ingest serves every appliance that speaks RFC 5424, RFC 3164,
+    # CEF or LEEF, so there is no schema() for the generated list below to
+    # pick up and the page has to be named here or it drops out of
+    # navigation on the next regeneration.
+    "connectors/syslog-listener",
     # Not a connector, so the generated list below does not cover it.
     "connectors/osquery-extensions",
 )

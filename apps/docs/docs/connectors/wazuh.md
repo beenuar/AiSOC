@@ -45,7 +45,7 @@ separately under [agent capabilities](/docs/concepts/capabilities).
 
 - A reachable **Wazuh indexer** (default `https://wazuh.example.com:9200`).
 - A read-only **indexer user** with permission to search `wazuh-alerts-*`.
-  See the Wazuh docs for [creating indexer roles and users](https://documentation.wazuh.com/current/user-manual/wazuh-indexer/wazuh-indexer-rbac.html).
+  See the Wazuh docs for [creating indexer roles and users](https://documentation.wazuh.com/current/user-manual/user-administration/rbac.html).
 - Optional: the CA chain for the indexer's TLS certificate.
 
 ## Setup walkthrough

@@ -30,11 +30,12 @@ a page. Slow burn (10% in six hours) is a ticket — not an outage, but the
 shape that exhausts a month's budget without any single incident to point
 at.
 
-**Coverage is five of seventeen services**, because only five expose
-`/metrics`. Generating rules for the other twelve would produce alerts
+**Coverage is five of nineteen services**, because only five expose
+`/metrics`. Generating rules for the other fourteen would produce alerts
 that can never fire, and an alert that can never fire reads as coverage
 while providing none. The generator names the uncovered services on every
-run rather than quietly skipping them.
+run rather than quietly skipping them, and
+`scripts/audit_prometheus_targets.py` prints the current split.
 
 ## The four golden signals
 
@@ -61,20 +62,30 @@ A collector now ships: `docker compose --profile monitoring up` starts an OpenTe
 
 Tempo's retention in the dev stack is 24 hours. It is there so a developer can follow a trace, not to retain them.
 
-- Trace context does **not** yet propagate across the Kafka spine, because the producing
-  and consuming ends are the two uninstrumented services. HTTP hops between the
-  instrumented services (api ↔ agents) do propagate.
-- The Investigation Ledger records per-step model/tool attribution (see the
-  [model router](../concepts/model-router.md) and
-  [LLMOps](../concepts/llmops.md) docs), so the reasoning path inside the
-  `agents` span is itself replayable.
+- Trace context does **not** yet propagate across the Kafka spine. The reason
+  changed and is worth stating precisely, because this bullet used to give the
+  old one: both ends *are* instrumented now (see above). What is missing is
+  that `services/ingest`'s publisher writes no `traceparent` into the Kafka
+  message headers, and `services/fusion` — the service that consumes
+  `raw_events` — emits no spans at all, so there is nothing on either side of
+  the queue to join. HTTP hops between the instrumented services (api ↔ agents)
+  do propagate.
+- The Investigation Ledger records per-step model and tool attribution, so the
+  reasoning path inside the `agents` span is itself replayable. (This bullet
+  used to link a model-router and an LLMOps page; neither exists — `docs/concepts/`
+  is not a directory in this repository.)
 
 ## Metrics endpoints
 
-Each service exposes Prometheus metrics at `/metrics`; the scrape config lives
-in `infra/docker/prometheus.yml` and is gated (every `job_name` must point at a
-real, instrumented `hostname:port` — a CI check enforces this so a scrape job
-can't silently break).
+**Five of nineteen services expose `/metrics`** — `api`, `ingest`, `fusion`,
+`threatintel` and `agents`. The other fourteen emit nothing for Prometheus to
+scrape; `scripts/audit_prometheus_targets.py` names them on every run rather
+than letting the gap read as coverage.
+
+The scrape config lives in `infra/docker/prometheus.yml` and is gated: every
+`job_name` must point at a real, instrumented `hostname:port`, so a scrape job
+cannot silently break. The gate checks the config against the tree — it does
+not make an unscraped service scraped.
 
 ## Governance
 

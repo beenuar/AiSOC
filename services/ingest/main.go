@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 	"github.com/beenuar/aisoc/services/ingest/internal/publisher"
 	"github.com/beenuar/aisoc/services/ingest/internal/server"
+	"github.com/beenuar/aisoc/services/ingest/internal/syslog"
 	"github.com/beenuar/aisoc/services/ingest/internal/telemetry"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog"
@@ -296,6 +298,74 @@ func main() {
 		log.Info().Msg("graph_ws: disabled (AISOC_GRAPH_WS_ENABLED!=true)")
 	}
 
+	// Depth plan 4.2 — the syslog listener. Off unless the operator asks
+	// for it, because binding 514 needs a decision they have to make.
+	//
+	// Needs the same two things the inbox needs (a token store to resolve
+	// the tenant, a template registry to normalise) plus a publisher, and
+	// refuses to start rather than listening without them: a bound socket
+	// that drops everything is indistinguishable from a working one.
+	var syslogListener *syslog.Listener
+	if cfg.SyslogEnabled {
+		switch {
+		case tokenStore == nil:
+			log.Error().Msg("syslog: not started — DATABASE_DSN is unset, so the configured ingest token cannot be resolved to a tenant")
+		case cfg.SyslogToken == "":
+			log.Error().Msg("syslog: not started — AISOC_SYSLOG_TOKEN is unset, so there is no tenant to attribute messages to. " +
+				"Mint one with POST /api/v1/inbox/tokens using the 'syslog' template")
+		default:
+			registry := inbox.NewRegistry()
+			if err := registry.LoadEmbedded(); err != nil {
+				log.Error().Err(err).Msg("syslog: not started — embedded templates failed to load")
+				break
+			}
+			if err := registry.Load(cfg.InboxTemplatesDir); err != nil {
+				log.Warn().Err(err).Str("dir", cfg.InboxTemplatesDir).Msg("syslog: template overrides on disk could not be read")
+			}
+			sink, err := syslog.NewPublishingSink(tokenStore, registry, pub, cfg.SyslogToken)
+			if err != nil {
+				log.Error().Err(err).Msg("syslog: not started")
+				break
+			}
+			listener, err := syslog.New(syslog.Config{
+				UDPAddr:        cfg.SyslogUDPAddr,
+				TCPAddr:        cfg.SyslogTCPAddr,
+				BatchSize:      cfg.SyslogBatchSize,
+				FlushInterval:  time.Duration(cfg.SyslogFlushMs) * time.Millisecond,
+				MaxConnections: cfg.SyslogMaxConnections,
+			}, sink)
+			if err != nil {
+				// Not fatal: the HTTP ingest path is this service's
+				// primary job and must not refuse traffic because 514 was
+				// taken. Loud, though — the operator asked for a listener
+				// and does not have one.
+				log.Error().Err(err).Msg("syslog: listener disabled")
+				break
+			}
+			syslogListener = listener
+			udpAddr, tcpAddr := listener.Addrs()
+			// /readyz names this listener and its state. A receiver nobody
+			// is sending to and a receiver that failed to bind look the
+			// same from outside unless readiness says which.
+			h.RegisterSubscription("syslog", func() handler.SubscriptionStatus {
+				state := listener.Health()
+				bound := state.UDPBound || state.TCPBound
+				return handler.SubscriptionStatus{
+					Attached:     bound,
+					NotResolving: !bound,
+					Detail:       syslogDetail(state),
+				}
+			})
+			log.Info().
+				Str("udp", udpAddr).
+				Str("tcp", tcpAddr).
+				Int("batch_size", cfg.SyslogBatchSize).
+				Msg("syslog: listener accepting RFC 5424, RFC 3164, CEF and LEEF")
+		}
+	} else {
+		log.Info().Msg("syslog: disabled (AISOC_SYSLOG_ENABLED!=true)")
+	}
+
 	srv := server.New(cfg, h, inboxHandler, graphWSServer)
 
 	// Graceful shutdown
@@ -305,6 +375,18 @@ func main() {
 	if graphWSBroker != nil {
 		graphWSBroker.Start(ctx)
 		defer graphWSBroker.Stop()
+	}
+
+	if syslogListener != nil {
+		syslogListener.Start(ctx)
+		defer func() {
+			// Given its own short deadline rather than ctx: ctx is already
+			// cancelled by the time deferred shutdown runs, and a drain on
+			// a cancelled context publishes nothing.
+			drainCtx, drainCancel := context.WithTimeout(context.Background(), 5*time.Second)
+			syslogListener.Stop(drainCtx)
+			drainCancel()
+		}()
 	}
 
 	// Drain VulnMatches → Kafka in a background goroutine
@@ -351,4 +433,28 @@ var Version = "dev"
 func init() {
 	// Set version in health check
 	_ = fmt.Sprintf("aisoc-ingest/%s", Version)
+}
+
+// syslogDetail turns listener state into the one sentence /readyz shows.
+//
+// "attached" alone would be a lie of omission for a receiver: a syslog
+// listener is legitimately silent for hours, so the detail carries what it
+// has bound, what it has received and what it last failed on — which is
+// what separates "nothing is being sent" from "everything is being dropped".
+func syslogDetail(state syslog.State) string {
+	if !state.UDPBound && !state.TCPBound {
+		return "no transport bound"
+	}
+	bound := make([]string, 0, 2)
+	if state.UDPBound {
+		bound = append(bound, "udp "+state.UDPAddr)
+	}
+	if state.TCPBound {
+		bound = append(bound, "tcp "+state.TCPAddr)
+	}
+	detail := fmt.Sprintf("listening on %s; received %d, rejected %d", strings.Join(bound, ", "), state.Received, state.Rejected)
+	if state.LastError != "" {
+		detail += "; last error: " + state.LastError
+	}
+	return detail
 }

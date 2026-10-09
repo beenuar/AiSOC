@@ -57,7 +57,7 @@ connector / ingest API
         ├──────────► graph writer ──► Neo4j       (entity graph)
         │
         ▼
-    fusion  ──────── 2,603 executable detection rules, your tenant's tuning,
+    fusion  ──────── 2,529 executable detection rules, your tenant's tuning,
         │            correlation into alerts
         ▼
    Postgres ──────── the alert, the case, the audit chain
@@ -528,9 +528,10 @@ much of the product as the populated view.*
 
 ![The step palette](apps/web/public/screenshots/playbook-editor.png)
 
-*Twenty-one tiles from a twenty-two-member vocabulary. `approval` is withheld
-where the engine has no durable pause — a step that cannot suspend should not
-be offered.*
+*Captured when the vocabulary was twenty-two members and `approval` was
+withheld for having no durable pause — a step that cannot suspend should not
+be offered. The engine now declares twenty-five step types and `approval` is a
+durable pause, so the palette offers it; the screenshot is the earlier run.*
 
 ### The case lifecycle
 

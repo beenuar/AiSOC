@@ -72,6 +72,6 @@ Proposes the canonical phishing containment:
    IT lead first.
 3. Add `acme-paychecks.com` to the perimeter blocklist permanently,
    not just at the proxy.
-4. Open a brief learning case in [Threat Intel](https://docs.tryaisoc.com/console/threat-intel)
-   so the org's analysts know to look for similar typosquat patterns
-   over the next 30 days.
+4. Open a brief learning case from the console's **Threat Intelligence**
+   tab (`/threat-intel`) so the org's analysts know to look for similar
+   typosquat patterns over the next 30 days.

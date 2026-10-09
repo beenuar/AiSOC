@@ -16,6 +16,7 @@ and the gaps are collected in one table rather than left for you to find.
 - Index: [`docs/security/README.md`](docs/security/README.md).
 - Architecture and data flow: [`docs/security/architecture-and-data-flow.md`](docs/security/architecture-and-data-flow.md).
 - Data handling by deployment mode: [`docs/security/data-handling.md`](docs/security/data-handling.md).
+- Access governance (attribute conditions, time-boxed elevation, workload identities): [`docs/security/access-governance.md`](docs/security/access-governance.md).
 - Security questionnaire, with the gap list: [`docs/security/questionnaire.md`](docs/security/questionnaire.md).
 - Sub-processors: [`docs/security/subprocessors.md`](docs/security/subprocessors.md).
 

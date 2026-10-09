@@ -38,7 +38,7 @@
 - **Custom:** Right-column visual is a hand-built SVG of the four-agent topology rendered with framer-motion `<motion.path>` (motion spec `agent-beam`). Eyebrow uses `<Eyebrow />` chip with `bg-brand-900/40 text-brand-300 border-brand-500/20`.
 - **Anatomy:** `Hero` → `HeroCopy` (eyebrow, H1, sub-head, CTAs, social-proof), `HeroVisual` (SVG topology + Border Beam), `HeroBackground` (Spotlight + AnimatedGridPattern).
 - **States:** Visual right at `lg+`, stacked at `<lg`; auto-pauses motion at `<md`. Hover primary CTA shimmer slow-loops; secondary CTA border `surface-border → brand-500`. Reduced-motion: H1 instant; mesh static; Border Beam → 1 px static `brand-500/30`.
-- **Failure:** Spotlight fails → inline `radial-gradient`. Mesh fails → flat `bg-surface-base`. SVG fails → `<img src="/og.png" />` poster.
+- **Failure:** Spotlight fails → inline `radial-gradient`. Mesh fails → flat `bg-surface-base`. SVG fails → `<img src="/og-image.png" />` poster.
 
 ---
 
@@ -97,7 +97,7 @@
 - **Primitives:**
   - Aceternity **Glowing Effect** (`/components/glowing-effect`) — wraps each card border. `glow={true}`, `proximity={64}`, `inactiveZone={0.4}`.
   - Aceternity **Bento Grid** — used loosely (flat 2 × 2, equal heights, no skew).
-  - MagicUI **Number Ticker** — stat lines. P1 `value={EXECUTABLE_DETECTION_COUNT}` (from `apps/web/src/data/corpusStats.ts`, currently 2603 — do not hard-code it; the literal `6998` sat here while the corpus moved), P2 `value={17}`, P3 `value={4}`, P4 `value={6}`.
+  - MagicUI **Number Ticker** — stat lines. P1 `value={EXECUTABLE_DETECTION_COUNT}` (from `apps/web/src/data/corpusStats.ts`, currently 2511 — do not hard-code it; the literal `6998` sat here while the corpus moved, and `2603` sat here after that), P2 `value={17}`, P3 `value={4}`, P4 `value={6}`.
 - **Custom:** 24 × 24 brand glyphs (`open-source`, `graph`, `agentic`, `deploy-anywhere`). Active borders: P2 → `landing.gradient.pillars`, P3 → `landing.accent.ember`, P1 / P4 → `brand-500/30`.
 - **Anatomy:** `Pillars` → `PillarsHeading`, `PillarsGrid` (4 × `PillarCard`), each → `PillarIcon`, `PillarTitle`, `PillarBody`, `PillarStat`, `PillarLink`.
 - **States:** Default `landing.shadow.1`, `surface-border`. Hover → Glowing Effect on; lift `-2 px`. Focus → existing `:focus-visible` 2 px `brand-500` ring. <768 stacks. Reduced-motion → Glowing `disabled={true}`; lift instant.

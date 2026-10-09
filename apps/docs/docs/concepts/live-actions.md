@@ -21,9 +21,28 @@ to be in scope, the live action interface inverts that contract:
   `LiveActionExecutor` against a `(vendor_id, capability)` pair and instantly
   appear in discovery, dispatch, and the dry-run sandbox.
 
-The result is one entry point — `POST /api/v1/live-actions/dispatch` — that
-the agent layer can plan against without learning the legacy `ActionType`
-enum or guessing which vendor a credential belongs to.
+The result is one dispatch contract the agent layer can plan against without
+learning the legacy `ActionType` enum or guessing which vendor a credential
+belongs to.
+
+:::caution Where `/dispatch` actually lives
+`POST /api/v1/live-actions/dispatch` is served by the **actions service**
+(`services/actions/app/api/live_actions_router.py`) on the internal network.
+The public API deliberately does **not** proxy it: `services/api`'s
+`/live-actions` router exposes `GET ""`, `GET /by-capability/{capability}`,
+`GET /by-vendor/{vendor_id}` and `POST /dry-run` only, and its handler says so
+in as many words — *"Only `/dry-run` is proxied, never `/dispatch`"* — because
+`/dry-run` forces `dry_run=true` server-side and a client therefore cannot
+talk its way into a live vendor call through it.
+
+Callers reach governed execution through
+[`POST /api/v1/playbook-steps/dispatch`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/playbook_steps.py),
+one step per request, each graded against its own capability contract.
+
+This page used to call `/api/v1/live-actions/dispatch` "one entry point" for
+the agent layer, which read as a public route. It is not one, and that was the
+more dangerous direction for a doc to be wrong in.
+:::
 
 ---
 
@@ -35,7 +54,7 @@ enum or guessing which vendor a credential belongs to.
 | Add a custom integration via a plugin | **Live actions** |
 | Show a "preview before executing" experience to a human | **Live actions** (dry-run) |
 | Continue using existing playbooks with `action_type: ISOLATE_HOST` | **Legacy `/api/v1/actions`** |
-| Execute with rollback / approvals / audit-chain enforcement today | **Legacy `/api/v1/actions`** (live actions inherits this in v1.1) |
+| Execute with approvals and governance | **Either.** Live actions no longer defer this: `dispatcher.py` evaluates the capability contract and the approval matrix before any executor runs, so a verb declaring `approval: analyst` comes back `pending_approval` on this path too. This row used to say live actions would "inherit this in v1.1". |
 
 The two APIs coexist. Live actions delegate to the same legacy executors
 under the hood, so behaviour (simulation mode, parameter validation,
@@ -60,11 +79,17 @@ model fits the caller.
     "cs_base_url": "https://api.crowdstrike.com"
   },
   "case_id": "…",                // optional, links result to a case
-  "tenant_id": "…",              // optional, tenant scope
-  "requested_by": "alice@org",   // optional, audit trail
   "dry_run": false                // optional, defaults to false
 }
 ```
+
+**`tenant_id` and `requested_by` are not yours to set.** The API fills the
+tenant from the authenticated session and overwrites whatever the body
+carried; the actor is the authenticated principal, not a free-text field. A
+caller-settable tenant is a cross-tenant read with extra steps, and a
+caller-settable actor is an unsigned audit row. This block listed both as
+optional request fields, which is the shape that has produced real advisories
+in this repository.
 
 `target` is intentionally a free-form string so each capability decides its
 own shape: a hostname for `isolate_host`, a CIDR for `block_ip`, a username
@@ -155,10 +180,11 @@ are present, the adapter strips them before delegating, guaranteeing the
 back-end vendor is never contacted. The returned result will always have
 `status="simulated"` for adapters that wrap the legacy executors.
 
-The same effect is available on the main dispatch endpoint by setting
-`dry_run: true` in the request body, but the dedicated `/dry-run` endpoint
-makes it easier to wire up "Preview action" buttons in UIs that should
-*never* be allowed to execute live.
+The actions service's own `/dispatch` honours `dry_run: true` in the body, but
+that route is internal (see the note at the top). From the public API,
+`/dry-run` is the only live-actions write path there is — which is what makes
+it safe to wire a "Preview action" button to, since nothing a client sends can
+turn it into an execution.
 
 ---
 

@@ -35,7 +35,7 @@ AiSOC is an MIT-licensed agentic Security Operations Center that fuses raw
 events into incidents, runs four named agents — Detect, Triage, Hunt, and
 Respond — against them, and records every prompt, tool call, and rationale
 to a replayable Investigation Ledger. It ships with 84 click-and-connect
-data sources, 2,603 executable detection rules, 62 playbook packs, and a public
+data sources, 2,511 executable detection rules, 62 playbook packs, and a public
 benchmark harness that gates every PR. You can self-host the whole stack
 in five minutes, take it air-gapped on a flag, or join the managed
 waitlist at `tryaisoc.com` — same code in every direction.
@@ -195,13 +195,13 @@ Ranked. Five total. Each one cites the shipped feature behind it.
   connector classes spanning EDR / SIEM / cloud / IAM / SaaS / VCS /
   network. Each one renders a schema-driven form, encrypts secrets via
   `CredentialVault`, and starts polling on a per-instance schedule. The
-  marketplace ships 7,155 items (6,991 detections on disk, 87 playbooks
+  marketplace ships 7,158 items (6,991 detections on disk, 87 playbooks
   across 62 packs, 77 plugins) per `marketplace/index.json`.
 - **Repo evidence.** `services/connectors/app/connectors/`,
   `apps/docs/docs/operations/credentials.md`,
   `packages/plugin-sdk-py/`, `packages/plugin-sdk-go/`,
   `packages/plugin-sdk-ts/`, `marketplace/index.json`.
-- **Metric to display.** 84 connectors live, 9 categories, 7,155
+- **Metric to display.** 87 connectors live, 9 categories, 7,158
   marketplace items. Render these from the generated constants rather than
   retyping them: `CONNECTOR_COUNT` in `apps/web/src/data/connectorCount.ts`,
   and `MARKETPLACE_ITEM_COUNT` / `EXECUTABLE_DETECTION_COUNT` in
@@ -237,7 +237,7 @@ number is MIT-licensed and reproducible from a fresh clone.
 **Defence.** The agent orchestrator is ~600 lines of LangGraph in
 `services/agents/app/orchestrator/`. The detection corpus is YAML under
 `detections/` (6,991 rules on disk across cloud, endpoint, identity,
-network, application, and data-exfil, of which 2,603 are executable). The benchmark dataset and harness are in
+network, application, and data-exfil, of which 2,511 are executable). The benchmark dataset and harness are in
 `services/agents/tests/eval_data/` and `scripts/run_evals.py`. Anyone can
 run `python3 scripts/run_evals.py` and reproduce every number on the
 benchmark page in roughly 35 ms. There is no private fork, no
@@ -423,7 +423,7 @@ section tracking.
 - **Persona:** Manager primary.
 - **Conversion behaviour:** Click through to the marketplace; encourage
   SDK contribution.
-- **Content blocks:** H2 ("84 connectors, 2,603 executable detections, 62
+- **Content blocks:** H2 ("87 connectors, 2,511 executable detections, 62
   playbook packs") · category chips (EDR, SIEM, Cloud, IAM, SaaS, VCS,
   Network, NDR, AI) ·
   marquee or grid of connector logos · "Build your own in 50 lines" code
@@ -890,7 +890,7 @@ Condensed teardown lives at `docs/design/landing-page-references.md`.
 | LLM input contract (fail-closed)       | `services/agents/.../llm_input_contract.py` (T2.3)                                           | CISO                | V1, P3              | pillars (P3)                  | Shipped (T2.3 wip) |
 | Pre-fetched ContextBundle              | `services/agents/.../context_bundle.py` (T2.1)                                               | Manager             | V1                  | features-hunt                 | Shipped (T2.1 wip) |
 | 84 click-and-connect connectors        | `services/connectors/app/connectors/__init__.py`                                             | Analyst, manager    | V4                  | connectors, features-operate  | Shipped       |
-| Marketplace (7,155 items)              | `marketplace/index.json` · `scripts/build_marketplace.py`                                    | Detection engineer  | V4                  | connectors                    | Shipped       |
+| Marketplace (7,158 items)              | `marketplace/index.json` · `scripts/build_marketplace.py`                                    | Detection engineer  | V4                  | connectors                    | Shipped       |
 | Credential vault (Fernet + HMAC)       | `services/api/app/services/vault.py` · `apps/docs/docs/operations/credentials.md`            | CISO                | V4, P3              | deploy, pillars (P3)          | Shipped       |
 | Plugin SDKs (Python, TypeScript, Go)   | `packages/plugin-sdk-py/` · `packages/plugin-sdk-ts/` · `packages/plugin-sdk-go/`            | Detection engineer  | V4                  | features-operate              | Shipped       |
 | MCP server (19 tools)                  | `services/mcp/`                                                                              | Detection engineer  | V4                  | features-operate              | Shipped       |

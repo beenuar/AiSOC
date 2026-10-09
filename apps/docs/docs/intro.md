@@ -39,7 +39,10 @@ the rule-engine `eval()` RCE is gone, tenant isolation on `/hunts` and
 `AISOC_CORS_ORIGINS=*` in production, playbook outbound traffic goes
 through an [SSRF guard](./operations/security), plugin OCI installs verify
 signed manifests and pin image digests, audit logs are hash-chained with
-sanitized `actor_ip`, and Python CodeQL alerts on `main` are zero — see
+sanitized `actor_ip`, and open CodeQL alerts on `main` are zero across all
+three analysed languages — Python, JavaScript/TypeScript and Go, not Python
+alone — at every severity including `note`, enforced by
+`scripts/check_codeql_alerts.py`. See
 the [security operations page](./operations/security#static-analysis-codeql)
 for the full list.
 
@@ -65,7 +68,7 @@ for the full list.
 - **UEBA** — per-user Welford online baseline, Z-score anomaly scoring, and Kafka-integrated anomaly publishing.
 - **Honeytokens** — HMAC-SHA256 signed deceptive credentials (URL, file, AWS key, email) with first-touch webhook alerting.
 - **Purple Team** — Atomic Red Team YAML parser + Caldera executor, ATT&CK coverage heatmap, tabletop sessions.
-- **Detection engineering** — **2,603 executable rules of a 6,991-rule library** (833 native plus 1,770 translated from SigmaHQ; the remainder is imported from Splunk Security Content, Chronicle and MITRE CAR and kept for provenance and coverage mapping, since this repository has no evaluator for those query languages). The two figures always travel together, because a library figure on its own reads as coverage. Executable means the rule was replayed through its real connector and the real engine and [watched to fire](detections/coverage.md) — not that it detects an attack. Rules run over OpenSearch + ClickHouse, with YARA, KQL / EQL and a community catalog offering one-click install.
+- **Detection engineering** — **2,511 executable rules of a 6,991-rule library** (833 native plus 1,770 translated from SigmaHQ; the remainder is imported from Splunk Security Content, Chronicle and MITRE CAR and kept for provenance and coverage mapping, since this repository has no evaluator for those query languages). The two figures always travel together, because a library figure on its own reads as coverage. Executable means the rule was replayed through its real connector and the real engine and [watched to fire](detections/coverage.md) — not that it detects an attack. Rules run over OpenSearch + ClickHouse, with YARA, KQL / EQL and a community catalog offering one-click install.
 - **Detection-as-Code (DAC)** — propose, review, eval-gate, and promote detection rules via `/api/v1/detection-proposals`. Every proposal carries an eval result; candidates that regress MITRE accuracy are blocked from promotion.
 - **Detection confidence** — each fused alert carries a `high / medium / low` confidence label and an ordered evidence chain. The label is derived from weighted factors, not manually assigned.
 - **Detection drift monitoring** — scheduled ATT&CK coverage snapshots enable "delta vs. last week" tracking on the MITRE heatmap.
