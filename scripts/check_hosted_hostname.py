@@ -194,7 +194,11 @@ ALLOWED: dict[str, tuple[int, str]] = {
     # rewritten, so the history still says what it said.
     "CHANGELOG.md": (23, _HISTORY),
     "RELEASES.md": (4, _HISTORY),
-    "AGENTS.md": (6, _HISTORY),
+    # AGENTS.md held six: it was a session log that published the
+    # commercial hostname, and it is now contributor guidance that
+    # mentions no deployment but this project's own. The entry goes
+    # with them, because a stale exemption claims a reader checked
+    # something that is no longer there.
     "docs/decisions/0004-live-demo-strategy.md": (5, _HISTORY),
     "docs/decisions/0003-mssp-pricing-shape.md": (2, _HISTORY),
     "services/api/app/db/database.py": (1, _HISTORY),
