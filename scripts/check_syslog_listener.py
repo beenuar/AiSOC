@@ -112,7 +112,12 @@ def _mintable_ids(root: Path) -> set[str]:
     except SyntaxError:
         return set()
     for node in ast.walk(tree):
-        targets = list(node.targets) if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
         for target in targets:
             if isinstance(target, ast.Name) and target.id == "ALLOWED_TEMPLATE_IDS" and isinstance(node.value, ast.Tuple):
                 return {e.value for e in node.value.elts if isinstance(e, ast.Constant) and isinstance(e.value, str)}
@@ -249,7 +254,9 @@ def _self_test() -> int:
             elif kind == "UNWIRED" and main_go.is_file():
                 main_go.write_text(main_go.read_text(encoding="utf-8").replace("syslog.New(", "syslogDisabled("), encoding="utf-8")
             elif kind == "UNSTARTED" and main_go.is_file():
-                main_go.write_text(main_go.read_text(encoding="utf-8").replace("syslogListener.Start(ctx)", "_ = syslogListener"), encoding="utf-8")
+                main_go.write_text(
+                    main_go.read_text(encoding="utf-8").replace("syslogListener.Start(ctx)", "_ = syslogListener"), encoding="utf-8"
+                )
             elif kind == "UNPROBED" and main_go.is_file():
                 main_go.write_text(
                     main_go.read_text(encoding="utf-8").replace('h.RegisterSubscription("syslog"', 'noop("syslog"'),

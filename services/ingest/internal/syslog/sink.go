@@ -34,10 +34,10 @@ type TemplateSource interface {
 // device would be a configuration no vendor's documentation describes.
 const RequiredTemplateID = "syslog"
 
-//: Which OCSF template each parsed format is projected through. CEF and
-//: LEEF carry vendor, product and severity of their own, so projecting them
-//: through the plain syslog template would throw that away and file an
-//: ArcSight finding as an anonymous log line.
+// : Which OCSF template each parsed format is projected through. CEF and
+// : LEEF carry vendor, product and severity of their own, so projecting them
+// : through the plain syslog template would throw that away and file an
+// : ArcSight finding as an anonymous log line.
 var templateForFormat = map[Format]string{
 	FormatRFC5424:      "syslog",
 	FormatRFC3164:      "syslog",

@@ -246,9 +246,9 @@ func Load() (*Config, error) {
 		SyslogBatchSize:      mustGetEnvInt("AISOC_SYSLOG_BATCH_SIZE", 500),
 		SyslogFlushMs:        mustGetEnvInt("AISOC_SYSLOG_FLUSH_MS", 2000),
 		SyslogMaxConnections: mustGetEnvInt("AISOC_SYSLOG_MAX_CONNECTIONS", 256),
-		InboxEnabled:      getEnv("INBOX_ENABLED", "true") == "true",
-		InboxTemplatesDir: getEnv("INBOX_TEMPLATES_DIR", "/app/templates"),
-		InboxMaxBodyBytes: int64(mustGetEnvInt("INBOX_MAX_BODY_BYTES", 10*1024*1024)),
+		InboxEnabled:         getEnv("INBOX_ENABLED", "true") == "true",
+		InboxTemplatesDir:    getEnv("INBOX_TEMPLATES_DIR", "/app/templates"),
+		InboxMaxBodyBytes:    int64(mustGetEnvInt("INBOX_MAX_BODY_BYTES", 10*1024*1024)),
 		// Defaults sized to be invisible to a well-behaved vendor and
 		// firmly bounding to a runaway one: 50 req/s sustained with a
 		// 200 burst, and 5k events/s with a 20k burst (one large batch

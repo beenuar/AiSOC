@@ -60,9 +60,9 @@ var ErrEmpty = errors.New("empty syslog line")
 // a connection's buffer.
 const MaxLineBytes = 64 * 1024
 
-//: The eight syslog severities, lowest number = most severe. Mapped onto
-//: AiSOC's five tiers by the template's severity_map; kept here as the
-//: vendor-native value so nothing downstream has to re-derive it.
+// : The eight syslog severities, lowest number = most severe. Mapped onto
+// : AiSOC's five tiers by the template's severity_map; kept here as the
+// : vendor-native value so nothing downstream has to re-derive it.
 var severityNames = [8]string{"emerg", "alert", "crit", "err", "warning", "notice", "info", "debug"}
 
 var facilityNames = [24]string{
