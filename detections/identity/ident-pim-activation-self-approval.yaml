@@ -18,7 +18,10 @@ detection:
 false_positives:
 - Documented break-glass procedure
 playbook: tpl-privilege-escalation
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): compares the approver with the requester.
+  The requester is emitted as `actor`; no identity source in this tree emits the approver, so a self-approval
+  cannot be distinguished from an approval.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

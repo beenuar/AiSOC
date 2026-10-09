@@ -19,7 +19,10 @@ detection:
 false_positives:
 - Authorised red-team or penetration test
 playbook: tpl-credential-access
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): compares the workstation named in the logon
+  with the address it came from. Windows 4624 carries both as `WorkstationName` and `IpAddress`; neither
+  is lifted as a top-level field, so neither side of the comparison resolves.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

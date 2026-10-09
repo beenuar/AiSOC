@@ -19,7 +19,10 @@ detection:
 false_positives:
 - New maintainer onboarding
 playbook: tpl-supply-chain
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): wants the publisher account''s age at the
+  registry. The first-seen store knows when this deployment first saw the account, which is a different
+  number: substituting it would fire on every publisher a quiet tenant has not seen before.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

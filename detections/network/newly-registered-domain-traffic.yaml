@@ -18,7 +18,10 @@ detection:
 false_positives:
 - Marketing campaigns and event-specific landing pages
 playbook: tpl-c2
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): wants a domain''s registration age, which
+  comes from RDAP or WHOIS. Nothing in this tree queries either, and answering it from when this deployment
+  first saw the domain would fire on most of the internet.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

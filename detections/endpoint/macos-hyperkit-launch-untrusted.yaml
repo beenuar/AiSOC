@@ -15,7 +15,7 @@ detection:
   condition: |
     event_type == "exec"
     AND process_path CONTAINS "/hyperkit"
-    AND process_path_not STARTSWITH_ANY ["/Applications/", "/usr/local/bin/"]
+    AND process_path NOT STARTSWITH_ANY ["/Applications/", "/usr/local/bin/"]
 false_positives:
 - Custom virtualisation tooling
 playbook: tpl-execution

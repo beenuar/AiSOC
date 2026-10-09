@@ -80,6 +80,11 @@ class TenantOverlay:
     #: Field name to the values this tenant has declared fine. Feeds the
     #: `<x>_in_allowlist` booleans 15 rules read and nothing computed.
     allowlists: dict[str, list[str]] = field(default_factory=dict)
+    #: External ids of this tenant's privileged principals, lower-cased.
+    #: Feeds the `*_priv` / `*_is_admin` booleans 18 rules read.
+    privileged_principals: frozenset[str] = frozenset()
+    #: External ids of this tenant's privileged roles, lower-cased.
+    privileged_roles: frozenset[str] = frozenset()
     version: str = ""
     loaded_at: float = 0.0
 
@@ -87,6 +92,11 @@ class TenantOverlay:
         if not self.allowlists:
             return {}
         return allowlist_fields(self.allowlists, event)
+
+    def derived_identity_fields(self, event: dict[str, Any]) -> dict[str, bool]:
+        if not self.privileged_principals and not self.privileged_roles:
+            return {}
+        return identity_fields(self.privileged_principals, self.privileged_roles, event)
 
     def suppresses(self, rule_id: str, event: dict[str, Any]) -> str | None:
         """Why this rule must not fire for this tenant, or None.
@@ -160,8 +170,19 @@ def _version_of(rows: list[dict[str, Any]]) -> str:
     return hashlib.sha256(canonical.encode()).hexdigest()[:16]
 
 
-def build_overlay(tenant_id: str, rows: list[dict[str, Any]], *, now: float | None = None) -> TenantOverlay:
+def build_overlay(
+    tenant_id: str,
+    rows: list[dict[str, Any]],
+    *,
+    identities: list[dict[str, Any]] | None = None,
+    now: float | None = None,
+) -> TenantOverlay:
     """Turn `detection_rules` rows into an overlay.
+
+    `identities` carries this tenant's privileged principals and roles from
+    `identity_nodes`, which is a different table with a different lifecycle,
+    so it is a separate argument rather than more rows: a tenant may have
+    tuned nothing and imported a directory, or the reverse.
 
     `now` is injectable because the reload interval is a behaviour worth
     testing, and a cache whose clock cannot be controlled can only be
@@ -219,11 +240,21 @@ def build_overlay(tenant_id: str, rows: list[dict[str, Any]], *, now: float | No
                 values = [str(v) for v in value] if isinstance(value, list) else [str(value)]
                 allowlists.setdefault(str(key), []).extend(values)
 
+    principals: set[str] = set()
+    roles: set[str] = set()
+    for row in identities or ():
+        external_id = str(row.get("external_id") or "").strip().lower()
+        if not external_id:
+            continue
+        (roles if str(row.get("node_type") or "") == "role" else principals).add(external_id)
+
     return TenantOverlay(
         tenant_id=tenant_id,
         overrides=overrides,
         allowlists=allowlists,
-        version=_version_of(rows),
+        privileged_principals=frozenset(principals),
+        privileged_roles=frozenset(roles),
+        version=_version_of([*rows, *(identities or ())]),
         loaded_at=now if now is not None else time.monotonic(),
     )
 
@@ -278,6 +309,55 @@ def allowlist_fields(allowlists: dict[str, list[str]], event: dict[str, Any]) ->
     return out
 
 
+#: `<boolean the rules read>` → the event fields that name its subject, in
+#: the order they are trusted, and which privileged set answers for it.
+#:
+#: Depth plan 3.3. 18 rules read one of these booleans and nothing computed
+#: any of them, so each rule read `None` on that clause and could never fire.
+#: They are answered from `identity_nodes.privilege_tier`, the column that
+#: migration 018 created for exactly this question.
+#:
+#: Four more booleans in the same family are **not** here, and that is the
+#: honest half: `scope_priv`, `act_as_user_priv`, `gpo_link_priv` and
+#: `account_is_dc` have no subject field any source emits and no inventory
+#: to answer from. Guessing a subject would produce a boolean that is
+#: confidently wrong rather than absent.
+IDENTITY_FIELDS: dict[str, tuple[tuple[str, ...], str]] = {
+    "user_priv": (("user", "user_name", "actor_email", "actor", "user_arn"), "principals"),
+    "target_user_priv": (("target_user", "target"), "principals"),
+    "role_priv": (("role",), "roles"),
+    # The actor's *role* is not on the event, and a principal's privilege
+    # tier is derived from the roles it holds, so the two questions have one
+    # answer. Recorded rather than silently equated.
+    "actor_role_priv": (("actor_email", "actor", "user"), "principals"),
+    "actor_is_admin": (("actor_email", "actor", "user"), "principals"),
+}
+
+
+def identity_fields(principals: frozenset[str], roles: frozenset[str], event: dict[str, Any]) -> dict[str, bool]:
+    """The `*_priv` booleans this event's subjects produce.
+
+    An unknown subject yields **no key at all**, never `False`. A tenant
+    that has imported no identities gets no keys, so a rule reading
+    `user_priv: true` stays silent instead of being told the account is not
+    privileged — which is a different and much more confident statement than
+    "we do not know".
+    """
+    out: dict[str, bool] = {}
+    sets = {"principals": principals, "roles": roles}
+    for boolean, (candidates, which) in IDENTITY_FIELDS.items():
+        known = sets[which]
+        if not known:
+            continue
+        for candidate in candidates:
+            value = event.get(candidate)
+            if value is None or value == "":
+                continue
+            out[boolean] = str(value).strip().lower() in known
+            break
+    return out
+
+
 #: An overlay with nothing in it. Returned for a tenant that has tuned
 #: nothing, which is the common case and must cost nothing.
 EMPTY = TenantOverlay(tenant_id="", overrides={}, version="empty")
@@ -305,7 +385,9 @@ class OverlayCache:
         if current is not None and (clock - current.loaded_at) < self._reload:
             return current
 
-        rows = await self._fetch(tenant_id)
+        fetched = await self._fetch(tenant_id)
+        rows = fetched[0] if fetched is not None else None
+        identities = fetched[1] if fetched is not None else None
         if rows is None:
             if current is not None:
                 logger.warning(
@@ -316,7 +398,7 @@ class OverlayCache:
                 return current
             return EMPTY
 
-        overlay = build_overlay(tenant_id, rows, now=clock)
+        overlay = build_overlay(tenant_id, rows, identities=identities, now=clock)
         if current is not None and current.version != overlay.version:
             logger.info(
                 "tenant_overlay.changed",
@@ -328,8 +410,8 @@ class OverlayCache:
         self._cache[tenant_id] = overlay
         return overlay
 
-    async def _fetch(self, tenant_id: str) -> list[dict[str, Any]] | None:
-        """Rows, or None when they could not be read.
+    async def _fetch(self, tenant_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]] | None:
+        """(tuning rows, privileged identities), or None when unreadable.
 
         None and an empty list mean different things: no tuning, versus no
         answer. Collapsing them is what would drop a tenant's suppressions
@@ -363,10 +445,25 @@ class OverlayCache:
                     """,
                     tenant_id,
                 )
+                # Depth plan 3.3. `privilege_tier` is 0=standard, 1=elevated,
+                # 2=admin, 3=super-admin (migration 018). "Privileged" is the
+                # admin tiers: treating `elevated` as privileged would put
+                # most of a directory in the set and make every `*_priv` rule
+                # fire on ordinary work.
+                identities = await conn.fetch(
+                    """
+                    SELECT node_type, external_id
+                      FROM identity_nodes
+                     WHERE tenant_id = $1::uuid
+                       AND is_active
+                       AND privilege_tier >= 2
+                    """,
+                    tenant_id,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.warning("tenant_overlay.fetch_failed", tenant_id=tenant_id, error=str(exc))
             return None
-        return [dict(r) for r in rows]
+        return [dict(r) for r in rows], [dict(r) for r in identities]
 
     def invalidate(self, tenant_id: str) -> None:
         """Force the next read to refetch. For an explicit console save."""

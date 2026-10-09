@@ -103,6 +103,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The published executable figure falls 2,603 → 2,529 because 74 rules that
   could not fire stopped being counted as executable; the windowed corpus is
   now published as its own figure beside it rather than going uncounted.
+- **Per-tenant identity privilege and a first-seen store, so the rules that
+  read them can fire.** 18 rules matched on a `*_priv` or `*_is_admin`
+  boolean and nothing computed any of them, so each read `None` on that
+  clause and could never fire. They now resolve from
+  `identity_nodes.privilege_tier`, per tenant and hot-reloaded alongside the
+  existing tuning overlay — one tenant's administrators are not another's,
+  and an unknown subject contributes **no key** rather than `False`, because
+  `False` asserts the account is ordinary and would be wrong on every
+  deployment that has imported no directory. A per-tenant first-seen store
+  (`services/fusion/app/services/first_seen.py`) answers
+  `<attr>_seen_before` and `session_age_hours` from Redis and closes two
+  more. 18 rules that still cannot fire are retired with an individual
+  reason in `scripts/enrichment_decisions.py`, and
+  `scripts/check_enrichment_decisions.py` refuses to let a rule whose fields
+  *are* resolvable be retired — deleting a rule and fixing one move the
+  ratchet by the same amount, and that gate is what makes them different.
+  `MAX_UNREACHABLE` falls 119 → 2; the two that remain need the behavioural
+  baseline of a later item.
+- **Two matcher operators three shipped rules were already using.**
+  `not_startswith_any` and `not_endswith` had never existed, so
+  `path_not_startswith_any` was read as a field name and the three rules
+  using it could not fire — while the reachability gate, whose operator list
+  had drifted from the matcher's in *both* directions, stripped a suffix
+  nothing implemented and reported them reachable. The same drift in the
+  other direction had five rules counted as unreachable for a `neq` the
+  matcher gained and the gate did not. Both lists are now compared in both
+  directions by a test.
 - **Ordered and unordered sequences in the windowed engine, and a Sigma
   correlation importer that feeds it.** A threshold cannot express an
   ordering, and the ordering is usually the detection: "fifty failed logons"

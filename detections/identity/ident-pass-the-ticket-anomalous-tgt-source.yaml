@@ -19,7 +19,10 @@ detection:
 false_positives:
 - NAT / proxy environment
 playbook: tpl-lateral-movement
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): compares the address a Kerberos ticket was
+  issued to with the address using it. That needs two events joined on the ticket, which is a correlation,
+  and neither address is emitted today.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'
