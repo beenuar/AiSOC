@@ -201,6 +201,45 @@ def verify_chain_breaks(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return breaks
 
 
+def verify_chain_tail(rows: list[dict[str, Any]], head: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Compare the newest chained row with the stored chain head.
+
+    :func:`verify_chain_breaks` checks the links *between* rows, so deleting
+    the newest rows leaves a chain that replays cleanly: every surviving link
+    is still valid. ``audit_chain_head`` remembers where the chain ended
+    (``next_index``, ``head_hash``), which is what makes truncation visible.
+
+    Read the head **before** the rows. An append that lands between the two
+    reads only makes the newest row newer than the head, which is not a
+    break; a deleted tail leaves the newest row short of it, which is.
+
+    Returns ``None`` when the tail matches, else a break dict with ``reason``
+    and ``missing`` (rows the head says exist and the table does not have).
+    """
+    if not head or head.get("next_index") is None:
+        return None
+    head_next = int(head["next_index"])
+    indexed = [r for r in rows if r.get("chain_index") is not None and r.get("entry_hash")]
+    newest = max(indexed, key=lambda r: int(r["chain_index"])) if indexed else None
+    newest_next = int(newest["chain_index"]) + 1 if newest else 0
+    if newest_next >= head_next:
+        if newest_next == head_next and newest is not None and head.get("head_hash") not in (None, newest.get("entry_hash")):
+            return {
+                "reason": "chain head hash does not match the newest row",
+                "missing": 0,
+                "chain_index": newest_next - 1,
+            }
+        return None
+    return {
+        "reason": (
+            f"chain head expects next_index {head_next} but the newest row is "
+            f"chain_index {newest_next - 1}: {head_next - newest_next} row(s) missing from the tail"
+        ),
+        "missing": head_next - newest_next,
+        "chain_index": newest_next - 1,
+    }
+
+
 def verify_chain(rows: list[dict[str, Any]]) -> tuple[bool, int | None, str | None]:
     """Replay ``rows`` (oldest → newest, same tenant) and verify the chain.
 
