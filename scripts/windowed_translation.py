@@ -65,14 +65,22 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 __all__ = [
+    "AGGREGATE",
     "DECISIONS",
+    "MULTI_DISTINCT",
+    "NOT_WINDOWED",
+    "OPERAND_NOT_EMITTED",
+    "RARITY",
+    "REFUSAL_KINDS",
     "Covered",
     "Refusal",
+    "ShapeError",
     "Translation",
     "WindowShape",
     "decided_keys",
     "derive",
     "parse_shape",
+    "retirement_reason",
     "translated_rules",
 ]
 
@@ -409,11 +417,6 @@ _NAME_WINDOWS: tuple[tuple[str, int], ...] = (
 
 #: Operator suffixes a counting clause may carry, longest first.
 _BOUNDS: tuple[str, ...] = ("gte", "gt", "lte", "lt")
-
-#: Names a counter uses for an entity, mapped to nothing here on purpose: the
-#: entity always comes from the decision table, because the alias a rule author
-#: wrote ("principal", "src") is not necessarily a field any source emits.
-_ENTITY_IN_NAME = re.compile(r"_per_(?P<entity>[a-z0-9]+)$")
 
 #: Matches the counter half of a clause, mirroring the "windowed evaluator"
 #: family in `scripts/check_detection_fields.py`. Kept as its own copy rather
