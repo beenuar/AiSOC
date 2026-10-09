@@ -14,6 +14,38 @@ the negative control showing that reverting it fails again.
 - **Plan captured at:** `90ea2fd`. Figures in the plan body are hints at that
   commit; Phase 0.2 below re-derives each one and the tree wins.
 
+## Reconciliation, 2026-10-09
+
+Eleven items had merged to `main` and every one still read `[ ]` here. The
+tracker is the mutable half of a locked plan, so a tick that lags the tree
+makes it describe a repository that no longer exists -- the same failure the
+plan exists to catch, one level up.
+
+Reconciled against the tree rather than against the pull requests: each item
+below was confirmed by the artefact it was supposed to produce being present
+on `main` (the corpus file, the OCSF decision table, the event catalogue
+directory, the scorecard fields, the notify arms, the report scheduler, the
+step bounds, the access-conditions routes, the security pack), not by a merged
+title. Each carries the reproduce, change and negative control the legend
+requires in its own pull request body.
+
+| Item | Landed in | Confirmed by |
+| --- | --- | --- |
+| 1.1 | #1205 | `services/agents/tests/eval_data/verdict/verdict_corpus_v1.json` |
+| 1.2 | #1191 | nine scorecard fields in `aisoc_benchmark/replay.py` |
+| 1.3 | #1197 | `scripts/check_verdict_corpus.py`, `prompting/tool_results.py` |
+| 2.1 | #1195 | `internal/normalizer/ocsf_classes.go` |
+| 2.2 | #1204 | `scripts/check_activity_projection.py` |
+| 2.3 | #1209 | `schemas/event_catalog/` |
+| 5.1 | #1203 | `live_actions/notify_arms.py` |
+| 5.2 | #1211 | `app/workers/report_scheduler.py` |
+| 5.3 | #1207 | `app/playbook/bounds.py` |
+| 8.2 | #1206 | `endpoints/access_conditions.py` |
+| 8.3 | #1210 | `docs/security/` |
+
+Not started: phases 3, 4, 6, 7, 9 and the whole of 10, plus 1.4--1.6 and
+2.4--2.7. Those remain `[ ]` and are not claimed here.
+
 ## Migration and ADR numbers claimed
 
 Phases run in parallel lanes, so a number is claimed here **before** the file
@@ -248,20 +280,20 @@ invented fields on the first run of the gate.
 
 ## Phase 1: Verdict quality you can publish
 
-- [ ] **1.1** Balanced, labelled verdict corpus
-- [ ] **1.2** Scorecard: balanced accuracy, MCC, per-class precision/recall,
+- [x] **1.1** Balanced, labelled verdict corpus
+- [x] **1.2** Scorecard: balanced accuracy, MCC, per-class precision/recall,
   Wilson interval, false negatives, auto-close precision, escalation rate,
   time to verdict
-- [ ] **1.3** Close `fake_tool_output` structurally (≤ 0.10 tuned and held-out)
+- [x] **1.3** Close `fake_tool_output` structurally (≤ 0.10 tuned and held-out)
 - [ ] **1.4** A 7--8B local model in the matrix, chosen by score
 - [ ] **1.5** `make replay-eval` design-partner kit
 - [ ] **1.6** Published "Verdict quality" table with a `--check` drift gate
 
 ## Phase 2: A semantic layer and live posture
 
-- [ ] **2.1** OCSF classes beyond five
-- [ ] **2.2** Activity projection on every event
-- [ ] **2.3** Event classification catalogue
+- [x] **2.1** OCSF classes beyond five
+- [x] **2.2** Activity projection on every event
+- [x] **2.3** Event classification catalogue
 - [ ] **2.4** Sessions per principal
 - [ ] **2.5** `__posture_snapshot__` collectors (AWS, Azure, GCP, Workspace, GitHub)
 - [ ] **2.6** Use the posture everywhere
@@ -274,6 +306,7 @@ invented fields on the first run of the gate.
 - [x] **3.2** Ordered sequences and Sigma correlations — the windowed engine
   stages ordered and unordered sequences; all four translatable Sigma
   correlation types compile. See D7 and D8.
+- [ ] **3.2** Ordered sequences and Sigma correlations
 - [ ] **3.3** Enrichment inputs (parity 5.5)
 - [ ] **3.4** Behavioural baselines in CORE
 - [ ] **3.5** Threat-and-anomaly condition rules
@@ -290,9 +323,9 @@ invented fields on the first run of the gate.
 
 ## Phase 5: Response that finishes
 
-- [ ] **5.1** Steps that act (parity 5.3)
-- [ ] **5.2** Delivery (parity 5.7)
-- [ ] **5.3** `wait`, `parallel`, `loop` with idempotency keys
+- [x] **5.1** Steps that act (parity 5.3)
+- [x] **5.2** Delivery (parity 5.7)
+- [x] **5.3** `wait`, `parallel`, `loop` with idempotency keys
 - [ ] **5.4** Stateful user and manager verification
 - [ ] **5.5** Executor arms 74 → at least 150
 - [ ] **5.6** Plain-language playbooks
@@ -315,8 +348,8 @@ invented fields on the first run of the gate.
 ## Phase 8: Enterprise gates
 
 - [ ] **8.1** Identity and administration
-- [ ] **8.2** ABAC, elevation and workload identities
-- [ ] **8.3** Buyer security pack
+- [x] **8.2** ABAC, elevation and workload identities
+- [x] **8.3** Buyer security pack
 
 ## Phase 9: Analyst surfaces
 
