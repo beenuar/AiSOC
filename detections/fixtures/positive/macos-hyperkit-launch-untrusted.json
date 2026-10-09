@@ -1,5 +1,4 @@
 {
   "event_type": "exec",
-  "process_path": "prefix-/hyperkit-suffix",
-  "process_path_not": "/Applications/-tail"
+  "process_path": "/hyperkit"
 }

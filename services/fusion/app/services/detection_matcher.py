@@ -25,10 +25,12 @@ from typing import Any
 OPERATORS: list[tuple[str, str, str]] = sorted(
     [
         ("_pattern_match_any", "pattern_match_any", "PATTERN_MATCH_ANY"),
+        ("_not_startswith_any", "not_startswith_any", "NOT STARTSWITH_ANY"),
         ("_not_endswith_any", "not_endswith_any", "NOT ENDSWITH_ANY"),
         ("_not_contains_any", "not_contains_any", "NOT CONTAINS_ANY"),
         ("_pattern_match", "pattern_match", "PATTERN_MATCH"),
         ("_not_startswith", "not_startswith", "NOT STARTSWITH"),
+        ("_not_endswith", "not_endswith", "NOT ENDSWITH"),
         ("_startswith_any", "startswith_any", "STARTSWITH_ANY"),
         ("_endswith_any", "endswith_any", "ENDSWITH_ANY"),
         ("_contains_any", "contains_any", "CONTAINS_ANY"),
@@ -198,6 +200,25 @@ def _check(field: str, op: str, expected: Any, event: dict[str, Any]) -> bool:
         if not isinstance(expected, list) or not isinstance(actual, str):
             return False
         return not any(actual.endswith(str(s)) for s in expected)
+
+    # Three shipped rules used `not_startswith_any` and it had never been an
+    # operator, so `path_not_startswith_any` was read as a field name. The
+    # reachability gate hid that by stripping a suffix the matcher did not
+    # know, so all three were reported reachable and could not fire.
+    #
+    # A missing field returns False, exactly as the negations beside it do: a
+    # negation that flips to True on an absent field fires on every event
+    # that happens not to carry it, which is the failure already recorded for
+    # the Sigma import.
+    if op == "not_startswith_any":
+        if not isinstance(expected, list) or not isinstance(actual, str):
+            return False
+        return not any(actual.startswith(str(s)) for s in expected)
+
+    if op == "not_endswith":
+        if not isinstance(actual, str):
+            return False
+        return not actual.endswith(str(expected))
 
     if op == "not_contains_any":
         if not isinstance(expected, list):

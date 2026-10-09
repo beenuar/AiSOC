@@ -84,7 +84,20 @@ NORMALIZER = ROOT / "services" / "ingest" / "internal" / "normalizer" / "normali
 # `scripts/check_windowed_translation.py`). Two of the 74 carried a second
 # clause as well, which is why the identity-enrichment family moved from 24
 # to 22 and the comparison family from 8 to 7.
-MAX_UNREACHABLE = 45
+#
+# 45 before depth plan 3.3, which closed the rest in four steps and left two:
+#   * five rules were never unreachable — this gate's operator list had not
+#     been given `neq` when the matcher was, so `approver_role_neq` was read
+#     as a field name rather than as `approver_role` with `!=`;
+#   * 18 rules now resolve their `*_priv` booleans from the tenant's own
+#     directory import (`tenant_overlay.IDENTITY_FIELDS`);
+#   * 2 resolve from the per-tenant first-seen store (`first_seen.py`);
+#   * 18 are retired with a reason in `scripts/enrichment_decisions.py`,
+#     gated by `scripts/check_enrichment_decisions.py`, which refuses to let
+#     a rule whose fields *are* resolvable be retired to move this number.
+#
+# The two that remain both need the behavioural baseline of depth plan 3.4.
+MAX_UNREACHABLE = 2
 
 #: Fields that no telemetry carries because they are computed, not observed:
 #: sliding-window counters, allowlist membership, privilege flags, and
@@ -127,7 +140,15 @@ _DERIVED_FIELD_PATTERN = re.compile(
 #: Operator suffixes the matcher strips to recover the field name. Order
 #: matters: longer suffixes must be tried first so `not_contains_any` is not
 #: shortened to `contains_any`. Mirrors `OPERATORS` in
-#: `services/fusion/app/services/detection_matcher.py`.
+#: `services/fusion/app/services/detection_matcher.py`, and
+#: `services/fusion/tests/test_detection_matcher_parity.py` asserts the two
+#: lists agree in **both** directions.
+#:
+#: They did not. `neq` was added to the matcher and not here, so five rules
+#: whose clauses the engine reads correctly as `<field>` + `!=` were reported
+#: by this gate as naming a field called `<field>_neq` — unreachable,
+#: ratcheted, and fine all along. A list that mirrors another and is checked
+#: in one direction only drifts in exactly the direction things change.
 _OPERATOR_SUFFIXES = (
     "not_contains_any",
     "not_startswith_any",
@@ -147,6 +168,7 @@ _OPERATOR_SUFFIXES = (
     "not_in",
     "contains",
     "match",
+    "neq",
     "gte",
     "lte",
     "in",
@@ -211,6 +233,45 @@ def _rule_fields(match_when: dict) -> set[str]:
 #: breaks.
 _DERIVED_TIME_FIELDS = frozenset({"is_business_hours", "is_after_hours", "is_weekend"})
 
+#: Booleans the **tenant overlay** computes, from that tenant's own directory
+#: import (`identity_nodes.privilege_tier`). Depth plan 3.3.
+#:
+#: Named here rather than pattern-matched on `_priv$`, because four booleans
+#: in the same family are deliberately *not* computed — `scope_priv`,
+#: `act_as_user_priv`, `gpo_link_priv` and `account_is_dc` have no subject
+#: field any source emits. A pattern would have swept those in and reported
+#: four rules reachable that are not.
+#:
+#: `services/fusion/tests/test_tenant_tuning_overlay.py` asserts this set and
+#: `tenant_overlay.IDENTITY_FIELDS` agree in both directions, so the list
+#: cannot drift the way the operator list below did.
+_TENANT_DERIVED_FIELDS = frozenset(
+    {
+        "user_priv",
+        "target_user_priv",
+        "role_priv",
+        "actor_role_priv",
+        "actor_is_admin",
+    }
+)
+
+#: Booleans and ages the **first-seen store** computes
+#: (`services/fusion/app/services/first_seen.py`). Depth plan 3.3.
+#:
+#: Only observation-shaped subjects are here. `domain_age_days`,
+#: `key_age_days` and the other ages-of-a-thing are not, and will not be:
+#: answering "how old is this domain" with "when did we first see it" would
+#: fire a newly-registered-domain rule on most of the internet.
+#: `services/fusion/tests/test_first_seen.py` asserts this set and the
+#: store's own tables agree in both directions.
+_FIRST_SEEN_DERIVED_FIELDS = frozenset(
+    {
+        "publisher_ip_seen_before",
+        "device_fingerprint_seen_before",
+        "session_age_hours",
+    }
+)
+
 #: `<left>_eq_<right>` / `<left>_neq_<right>`, resolved by comparing two
 #: fields of the same event. Reachable only when *both* sides are in the
 #: namespace — a comparison against a field nothing emits is still dead, and
@@ -221,7 +282,7 @@ _DERIVED_COMPARISON_RE = re.compile(r"^(?P<left>.+?)_(?:eq|neq)_(?P<right>.+)$")
 
 def _is_derivable(field: str, namespace: set[str]) -> bool:
     """True when the engine can compute this field from what it already has."""
-    if field in _DERIVED_TIME_FIELDS:
+    if field in _DERIVED_TIME_FIELDS or field in _TENANT_DERIVED_FIELDS or field in _FIRST_SEEN_DERIVED_FIELDS:
         return True
     match = _DERIVED_COMPARISON_RE.match(field)
     if not match:

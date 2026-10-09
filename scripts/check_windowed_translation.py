@@ -73,10 +73,11 @@ _MIN_REASON_CHARS = 60
 #: reads the stateless ruleset only, so until now a windowed rule could name
 #: anything.
 #:
-#: The two standing entries both read `role_priv`, which arrives with the
-#: identity enrichment of depth plan 3.3. Lower this in the PR that builds it;
-#: never raise it to make a red build green.
-MAX_UNREACHABLE_WINDOWED = 2
+#: Two standing entries read `role_priv` when this was written. Depth plan
+#: 3.3 built that enrichment, so the ceiling came down with it. Never raise
+#: it to make a red build green: a windowed rule naming a computed field
+#: counts nothing forever.
+MAX_UNREACHABLE_WINDOWED = 0
 
 
 def _load_sibling(name: str) -> Any:

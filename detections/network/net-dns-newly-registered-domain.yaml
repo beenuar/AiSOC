@@ -18,7 +18,9 @@ detection:
 false_positives:
 - Brand-new SaaS launch (rare; verify business need)
 playbook: tpl-command-and-control
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): wants a domain''s registration age from RDAP
+  or WHOIS, which nothing here queries. Same gap as the proxy-side rule beside it.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

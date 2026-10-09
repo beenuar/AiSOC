@@ -10,7 +10,7 @@ sidebar_position: 2
 
 # Detection Coverage
 
-Generated: `2026-10-09T03:35:19Z`
+Generated: `2026-10-09T04:33:12Z`
 
 This page is a **curated selection**, not the size of the corpus.
 It picks the highest-scoring rules per threat family from the set
@@ -27,9 +27,9 @@ Sigma compiler began translating rules where they sat: rules under
 
 ## Headline numbers
 
-- **Curated detections**: `490` (target: ≥ 300)
-- **Executable rules considered**: `2529` (quality floor: 0.55)
-- **Unique MITRE techniques covered**: `136`
+- **Curated detections**: `489` (target: ≥ 300)
+- **Executable rules considered**: `2511` (quality floor: 0.55)
+- **Unique MITRE techniques covered**: `137`
 
 ## Coverage by buyer family
 
@@ -41,30 +41,30 @@ Sigma compiler began translating rules where they sat: rules under
 | **Data Exfiltration** | 44 | ≥ 25 | ✅ |
 | **Cloud** | 100 | ≥ 25 | ✅ |
 | **Identity** | 100 | ≥ 25 | ✅ |
-| **Supply Chain** | 41 | ≥ 25 | ✅ |
+| **Supply Chain** | 40 | ≥ 25 | ✅ |
 | **Kubernetes / Containers** | 69 | ≥ 25 | ✅ |
 
 ## Distribution
 
 ### By tier
 
-- `imported`: 160
-- `native`: 330
+- `imported`: 163
+- `native`: 326
 
 ### By severity
 
-- `critical`: 100
-- `high`: 266
+- `critical`: 99
+- `high`: 264
 - `low`: 16
-- `medium`: 108
+- `medium`: 110
 
 ### By category
 
-- `application`: 31
-- `cloud`: 150
+- `application`: 29
+- `cloud`: 152
 - `data-exfil`: 13
-- `endpoint`: 218
-- `identity`: 69
+- `endpoint`: 219
+- `identity`: 67
 - `network`: 9
 
 ## How to audit

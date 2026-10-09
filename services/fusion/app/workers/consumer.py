@@ -7,6 +7,7 @@ results back to Kafka, and persists non-duplicate alerts to Postgres.
 import asyncio
 import contextlib
 import json
+from typing import Any
 
 import structlog
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
@@ -55,6 +56,7 @@ class FusionWorker:
         lake: LakeWriter | None = None,
         detector: DetectionEngine | None = None,
         windowed_detector: WindowedDetectionEngine | None = None,
+        first_seen: Any | None = None,
         ueba_cache: UebaSignalCache | None = None,
         overlays: OverlayCache | None = None,
     ) -> None:
@@ -63,6 +65,7 @@ class FusionWorker:
         self._lake = lake
         self._detector = detector
         self._windowed = windowed_detector
+        self._first_seen = first_seen
         self._ueba_cache = ueba_cache
         #: Per-tenant detection tuning (parity 5.4). Optional, so a
         #: deployment that passes nothing behaves exactly as before.
@@ -302,7 +305,7 @@ class FusionWorker:
             # event. Each firing rule becomes a RawAlert routed through fusion,
             # so telemetry that isn't a vendor-asserted finding still alerts.
             if self._detector is not None:
-                for hit in self._detector.evaluate(payload, overlay):
+                for hit in await self._detector.evaluate_async(payload, overlay, self._first_seen):
                     det_alert = self._detector.build_alert(payload, hit)
                     if det_alert is not None:
                         _METRICS["detected"] += 1

@@ -140,15 +140,29 @@ class TestTheSeverityFloor:
 
 
 class _Conn:
-    def __init__(self, rows, fail=False) -> None:  # noqa: ANN001
+    """A connection that answers each query with that query's own rows.
+
+    It used to return the same rows whatever was asked, which was fine while
+    one reload issued one query and became a double more capable than a real
+    connection as soon as a second table was read: the detection-rule rows
+    would have been handed back as identity rows too. Routing on the table
+    name keeps `fetches` meaning "reloads" and keeps the double honest.
+    """
+
+    def __init__(self, rows, fail=False, identities=None) -> None:  # noqa: ANN001
         self.rows = rows
+        self.identities = identities or []
         self.fail = fail
         self.fetches = 0
+        self.identity_fetches = 0
 
-    async def fetch(self, sql, *args):  # noqa: ANN001, ARG002
-        self.fetches += 1
+    async def fetch(self, sql, *args):  # noqa: ANN001
         if self.fail:
             raise RuntimeError("database down")
+        if "identity_nodes" in sql:
+            self.identity_fetches += 1
+            return list(self.identities)
+        self.fetches += 1
         return [r for r in self.rows if str(r.get("_tenant", args[0])) == str(args[0])]
 
 

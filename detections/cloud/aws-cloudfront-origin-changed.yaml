@@ -19,7 +19,9 @@ detection:
 false_positives:
 - Approved migration
 playbook: tpl-impact
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): wants a distribution''s creation date, which
+  is configuration state rather than an event, and arrives with the AWS posture snapshot (depth plan 2.5).'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'
