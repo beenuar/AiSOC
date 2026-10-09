@@ -124,6 +124,17 @@ jobs:
       - name: Prove the Sigma-correlation gate is not vacuous
         run: python3 scripts/check_sigma_correlations.py --self-test
 
+      # Depth plan 3.3 built two enrichment inputs and retired what still
+      # could not fire. Deleting a rule and fixing a rule move the
+      # unreachable ratchet by the same amount, so this makes them
+      # different: every retired rule names a real spec and a reason, and a
+      # rule whose fields the platform *can* now resolve may not be retired.
+      - name: Verify every rule that cannot fire carries a reason
+        run: python3 scripts/check_enrichment_decisions.py --check
+
+      - name: Prove the enrichment-decision gate is not vacuous
+        run: python3 scripts/check_enrichment_decisions.py --self-test
+
       # Recompiles every imported Sigma rule AND re-proves it: each shipped
       # rule is replayed, as a vendor-shaped event, through its connector's
       # real normalize() and the real engine. A rule that stops firing — because

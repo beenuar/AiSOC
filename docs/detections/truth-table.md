@@ -20,8 +20,8 @@ lever that reaches the engine is adding a spec and re-running
 | metric | count |
 |--------|------:|
 | rules on disk (total) | 6991 |
-| **executable (loaded by the engine)** | **2529** |
-| non-executable (provenance/coverage only) | 4462 |
+| **executable (loaded by the engine)** | **2511** |
+| non-executable (provenance/coverage only) | 4480 |
 | — of which: enabled, but no compiled spec | 0 |
 | windowed rules in `windowed_ruleset.json` | 72 |
 
@@ -55,7 +55,7 @@ were hand-authored in the upstream format to give it one.
 | car (imported) | 99 | 0 | 0 |
 | chronicle (imported) | 877 | 0 | 0 |
 | community | 1 | 0 | 0 |
-| native | 877 | 759 | 0 |
+| native | 877 | 741 | 0 |
 | sigma (imported) | 3132 | 1770 | 0 |
 | splunk (imported) | 2005 | 0 | 0 |
 
@@ -63,14 +63,14 @@ were hand-authored in the upstream format to give it one.
 
 | reason | count |
 |--------|------:|
-| `enabled: false` | 249 |
+| `enabled: false` | 267 |
 | under `_quarantine/` (untranslated on import) | 4213 |
 
 ## How to read the README claim
 
 The imported corpus is large (6991 rules on disk) and valuable as a
 provenance-tracked ATT&CK-mapped library, but the number that matters
-operationally is **2529 executable rules** — the ones the engine
+operationally is **2511 executable rules** — the ones the engine
 loads and fires against live telemetry. The README and marketplace must cite
 the executable figure when describing detection *coverage*, and may cite the
 on-disk figure only when explicitly describing the imported *library*.

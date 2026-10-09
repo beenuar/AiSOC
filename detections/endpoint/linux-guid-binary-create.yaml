@@ -15,7 +15,7 @@ detection:
   condition: |
     syscall == "fchmod"
     AND mode_octal CONTAINS "2"
-    AND path_not STARTSWITH_ANY ["/usr/bin", "/usr/sbin", "/bin", "/sbin"]
+    AND path NOT STARTSWITH_ANY ["/usr/bin", "/usr/sbin", "/bin", "/sbin"]
 false_positives:
 - Approved deploy
 playbook: tpl-privilege-escalation

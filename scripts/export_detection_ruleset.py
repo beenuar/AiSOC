@@ -41,7 +41,7 @@ OUT = ROOT / "services" / "fusion" / "app" / "data" / "detection_ruleset.json"
 def _build() -> list[dict]:
     from detection_specs_index import all_specs  # noqa: PLC0415
     from generate_detections import load_id_lock  # noqa: PLC0415
-    from windowed_translation import DECISIONS  # noqa: PLC0415
+    from rule_retirement import retired  # noqa: PLC0415
 
     # The id comes from detections/rule-ids.lock.json, the same lookup
     # generate_detections.py uses for the YAML projection. This used to be
@@ -56,21 +56,22 @@ def _build() -> list[dict]:
     # anywhere but the end shifts every id after it, so an alert's rule id
     # would not survive a release.
     id_lock = load_id_lock()
+    retirements = retired()
     rules: list[dict] = []
     for category, spec in all_specs():
         match_when = spec.get("match_when")
         if not match_when:
             continue
         slug = spec["slug"]
-        # A rule whose clauses name a sliding-window counter cannot fire here:
-        # the stateless matcher sees one event, so `fail_count` and
-        # `events_per_minute` read None on the first clause. Shipping it in
-        # this artefact counted it as executable and it never was.
-        # `scripts/windowed_translation.py` records, per rule, whether it
-        # became a `wd-*` rule or was refused with a reason;
-        # `check_windowed_translation.py` enforces that nothing is simply
+        # A rule that cannot fire must not ship in this artefact, because
+        # membership of it is what "executable" means and what the published
+        # total counts. Two tables record why a rule was removed —
+        # `windowed_translation.py` for the sliding-window family and
+        # `enrichment_decisions.py` for the enrichment ones — and
+        # `rule_retirement.py` is the union, so neither caller can read one
+        # and miss the other. Their gates enforce that nothing is simply
         # dropped.
-        if f"{category}/{slug}" in DECISIONS:
+        if f"{category}/{slug}" in retirements:
             continue
         rule_id = id_lock.get(f"{category}/{slug}")
         if rule_id is None:

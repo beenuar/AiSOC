@@ -246,6 +246,67 @@ Instead, every selector field, `group-by` and `distinct_by` is checked
 against the emitted-field namespace with **no ceiling**, which caught three
 invented fields on the first run of the gate.
 
+### D9 -- Five of the 45 "unreachable" rules were never unreachable
+
+`scripts/check_detection_fields.py` carries its own copy of the matcher's
+operator suffixes, under a comment saying it mirrors
+`detection_matcher.OPERATORS`. It did not. `neq` had been added to the
+matcher and not to the gate, so `approver_role_neq: "codeowner"` — which the
+engine reads correctly as `approver_role` with `!=` — was reported as a rule
+naming a field called `approver_role_neq`. Five rules were counted against
+the ratchet for a defect that had already been fixed.
+
+The same comparison in the other direction found a worse one: the gate
+listed `not_startswith_any` and `not_endswith`, which the **matcher** did not
+implement. Three shipped rules use `path_not_startswith_any`, so the matcher
+read the whole string as a field name and all three could never fire — while
+the gate, stripping a suffix nothing implemented, reported them reachable.
+Both operators are now implemented in the vendored matcher and the canonical
+one, the fixture synthesiser knows them, and
+`test_the_gate_and_the_matcher_agree_on_every_operator` compares the two
+lists in both directions.
+
+### D10 -- 18 rules are retired rather than fixed, and why each one is
+
+The plan says of one family: "build them where cheap, otherwise quarantine
+with a reason". Applied to all three families, that leaves 18 rules that need
+work belonging to another item, recorded individually in
+`scripts/enrichment_decisions.py`:
+
+| kind | n | needs |
+|---|---|---|
+| `needs-connector-field` | 9 | a field the vendor has and no connector surfaces — depth plan 2.2 |
+| `needs-external-source` | 6 | a registry, a credential report or a factor record — 2.5 and beyond |
+| `needs-inventory` | 3 | an inventory this platform does not hold (DC machine accounts, privileged OAuth scopes) |
+
+`scripts/check_enrichment_decisions.py` is what stops this being a way to
+move the ratchet: it fails if a retired rule's fields are all resolvable.
+Proved by retiring a working rule and watching it fail.
+
+The line that mattered most was refusing a plausible substitute.
+`domain_age_days` wants a domain's registration age from a registry; the
+first-seen store could have answered "when this deployment first saw it" and
+the number would have looked right in a diff. It would also have fired the
+rule on most of the internet. Five such age-of-a-thing fields are named in a
+test that forbids the first-seen store from ever growing them.
+
+### D11 -- Identity privilege reads a table a tenant must populate
+
+The `*_priv` booleans resolve from `identity_nodes.privilege_tier >= 2`, the
+column migration 018 created for the question. The table's only writer is
+`POST /api/v1/identity-graph/nodes`, so a tenant that has imported no
+directory gets **no key at all** and those 18 rules stay silent — they are
+reachable "when the tenant has identity data", the same standard this gate
+already applies to a vendor-payload field. That is weaker than "reachable on
+any deployment" and is stated rather than glossed. Depth plan 2.5's posture
+collectors are what will populate it automatically.
+
+Four booleans in the same family are deliberately **not** computed —
+`scope_priv`, `act_as_user_priv`, `gpo_link_priv` and `account_is_dc` — and
+are among the 18 above. Each has no subject field any source emits, and
+guessing a subject would produce a boolean that is confidently wrong rather
+than absent.
+
 ## Phase 1: Verdict quality you can publish
 
 - [ ] **1.1** Balanced, labelled verdict corpus
@@ -274,7 +335,9 @@ invented fields on the first run of the gate.
 - [x] **3.2** Ordered sequences and Sigma correlations — the windowed engine
   stages ordered and unordered sequences; all four translatable Sigma
   correlation types compile. See D7 and D8.
-- [ ] **3.3** Enrichment inputs (parity 5.5)
+- [x] **3.3** Enrichment inputs (parity 5.5) — identity privilege and a
+  per-tenant first-seen store built; 18 rules retired with a reason.
+  `MAX_UNREACHABLE` 45 → 2. See D9–D11.
 - [ ] **3.4** Behavioural baselines in CORE
 - [ ] **3.5** Threat-and-anomaly condition rules
 - [ ] **3.6** 395 → at least 800 cloud, identity, SaaS and code conditions
@@ -339,4 +402,6 @@ invented fields on the first run of the gate.
 | 2026-10-07 | 0.1 | This file created at base commit `1b8bc2d4`. |
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |
+| 2026-10-09 | 3.3 | Identity privilege (18 rules) and a per-tenant first-seen store (2) built; 5 rules were never unreachable (gate operator drift, D9); 18 retired with a reason (D10). `MAX_UNREACHABLE` 45 → 2, the two remaining both needing the 3.4 baseline. Two matcher operators three shipped rules already used were implemented. |
+| 2026-10-09 | 3.2 | Ordered and unordered sequences in the windowed engine; all four translatable Sigma correlation types compile, seven refusal reasons recorded. No upstream correlation rule exists in this tree to import (D8), so the corpus is first-party and labelled as such. |
 | 2026-10-09 | 3.1 | All 74 decided. 50 translated into `wd-*` rules derived from each original's own clauses and replayed through the real engine (162 assertions); 24 refused with a reason across five kinds. `MAX_UNREACHABLE` 119 → 45, published executable 2,603 → 2,529, windowed 18 → 68. Three findings recorded as D4–D6 below. |

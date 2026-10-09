@@ -169,7 +169,28 @@ class DetectionEngine:
         # Fall back to the OCSF top level (some connectors emit flat OCSF).
         return ocsf if isinstance(ocsf, dict) else {}
 
-    def evaluate(self, message: dict[str, Any], overlay: Any | None = None) -> list[DetectionHit]:
+    async def evaluate_async(
+        self, message: dict[str, Any], overlay: Any | None = None, first_seen: Any | None = None
+    ) -> list[DetectionHit]:
+        """`evaluate`, plus the first-seen enrichment, which needs Redis.
+
+        A second entry point rather than making `evaluate` async: the
+        synchronous one has callers throughout the tests and the replay
+        harness, and turning it async would be a wide change for an
+        enrichment two rules read. The two share everything below the
+        extra pass.
+        """
+        extra: dict[str, Any] = {}
+        if first_seen is not None:
+            ocsf = message.get("ocsf_event")
+            tenant = str(message.get("tenant_id") or (ocsf or {}).get("tenant_uid") or "")
+            if tenant and isinstance(ocsf, dict):
+                extra = await first_seen.derived_fields(tenant, self._raw_fields(ocsf))
+        return self.evaluate(message, overlay, _extra_fields=extra)
+
+    def evaluate(
+        self, message: dict[str, Any], overlay: Any | None = None, *, _extra_fields: dict[str, Any] | None = None
+    ) -> list[DetectionHit]:
         """Return every rule that fires on this normalized-event message.
 
         `overlay` is the tenant's tuning (parity 5.4). Without it this
@@ -206,6 +227,21 @@ class DetectionEngine:
             derived = overlay.derived_allowlist_fields(fields)
             if derived:
                 fields = {**fields, **derived}
+            # Depth plan 3.3. 18 rules read a `*_priv` / `*_is_admin`
+            # boolean that nothing computed, so each read None on that
+            # clause and could never fire. Per tenant for the same reason
+            # the allowlist is: one tenant's administrators are not
+            # another's, and an unknown subject contributes no key rather
+            # than `False`.
+            privileged = overlay.derived_identity_fields(fields)
+            if privileged:
+                fields = {**fields, **privileged}
+
+        # Depth plan 3.3. Resolved by the caller because it needs Redis and
+        # this method is synchronous; passed in rather than fetched here so
+        # one event costs one round trip whatever the corpus reads.
+        if _extra_fields:
+            fields = {**fields, **_extra_fields}
 
         hits: list[DetectionHit] = []
         for rule in self._candidates(""):

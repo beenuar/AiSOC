@@ -19,7 +19,10 @@ detection:
 false_positives:
 - Approved IaaS automation
 playbook: tpl-credential-access
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): asks whether the impersonated user is privileged.
+  The privilege lookup now exists; the impersonated user is not emitted by any source, so there is no
+  subject to look up.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

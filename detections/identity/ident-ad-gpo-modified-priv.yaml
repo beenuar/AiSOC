@@ -18,7 +18,9 @@ detection:
 false_positives:
 - Approved GPO refactor
 playbook: tpl-defense-evasion
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-inventory): asks whether a modified GPO is linked to a privileged
+  scope. Neither the GPO link nor a list of privileged scopes exists here.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

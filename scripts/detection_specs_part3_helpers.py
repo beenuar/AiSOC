@@ -37,10 +37,12 @@ _OP_SUFFIXES: tuple[tuple[str, str], ...] = tuple(
             # that field, so the rule matched itself and nothing else.
             ("_neq", "neq"),
             ("_pattern_match_any", "pattern_match_any"),
+            ("_not_startswith_any", "not_startswith_any"),
             ("_not_endswith_any", "not_endswith_any"),
             ("_not_contains_any", "not_contains_any"),
             ("_pattern_match", "pattern_match"),
             ("_not_startswith", "not_startswith"),
+            ("_not_endswith", "not_endswith"),
             ("_startswith_any", "startswith_any"),
             ("_endswith_any", "endswith_any"),
             ("_contains_any", "contains_any"),
@@ -125,6 +127,10 @@ def _pos_for(op: str, expected: Any) -> Any:
     if op == "not_contains_any":
         return _SENTINEL_STR
     if op == "not_startswith":
+        return _SENTINEL_STR
+    if op == "not_startswith_any":
+        return _SENTINEL_STR
+    if op == "not_endswith":
         return _SENTINEL_STR
     if op == "has_any":
         if isinstance(expected, list) and expected:
@@ -244,6 +250,12 @@ def _neg_for(op: str, expected: Any, field: str | None = None) -> Any:
         return _SENTINEL_STR
     if op == "not_startswith":
         return f"{expected}-tail"
+    if op == "not_startswith_any":
+        if isinstance(expected, list) and expected:
+            return f"{expected[0]}-tail"
+        return _SENTINEL_STR
+    if op == "not_endswith":
+        return f"head{expected}"
     if op == "has_any":
         return [_SENTINEL_STR]
     if op == "match" or op == "pattern_match":
