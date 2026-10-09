@@ -5743,11 +5743,40 @@ export interface AutonomyActionPolicy {
   last_updated_at?: string | null;
   last_updated_by?: string | null;
   last_reason?: string | null;
+  /**
+   * Whether this verb reaches a vendor without a human, resolved by the API
+   * from the autonomy tier and the capability contract — the control that
+   * actually gates execution. Optional so an older API blanks the posture
+   * rather than letting the console infer one from the thresholds, which is
+   * the defect this field exists to retire.
+   */
+  effective_auto_execute?: boolean;
+  /** The same question at the top of the tier ladder. */
+  auto_executes_at_any_tier?: boolean;
+  /** Capability it resolves to in the action registry, null when none does. */
+  capability?: string | null;
+  executable?: boolean;
+  effective_tier?: string;
+  effective_reason?: string;
+}
+
+/** The control that gates execution, as reported by the API. */
+export interface AutonomyEffective {
+  tier: string;
+  tier_label: string;
+  tier_source: string;
+  max_automatic_impact: string | null;
+  auto_executing_actions: string[];
+  high_blast_auto_executing: string[];
+  unimplemented_actions: string[];
+  thresholds_are_advisory: boolean;
+  advisory_note: string;
 }
 
 export interface AutonomyPolicyResponse {
   tenant_id: string;
   actions: AutonomyActionPolicy[];
+  effective?: AutonomyEffective;
 }
 
 export interface AutonomyThresholdUpdate {

@@ -55,6 +55,7 @@ from app.services.tenant_policy import TenantPolicy, resolve_tenant_policy
 from app.services.verification import PostActionVerifier, VerificationOutcome
 
 from . import registry
+from .approval_rules import EARNED_TIER_CEILING_LABEL, TIER_ORDER, tier_from_env_value
 from .capability_contracts import CAPABILITY_CONTRACTS
 from .contract import ActionImpact, ApprovalRequirement, Reversal
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
@@ -64,7 +65,11 @@ from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
 #: agreement can make a HIGH-blast containment unattended. `force_auto`, which
 #: is a human writing down a decision about one verb rather than an inference
 #: from agreement, still goes to L4.
-EARNED_TIER_CEILING = MaturityTier.L3_REMEDIATE
+#:
+#: Read from `approval_rules` rather than written here, because the console
+#: has to apply the same ceiling when it tells an operator which verbs run
+#: unattended, and it reaches that module through the vendored copy.
+EARNED_TIER_CEILING = MaturityTier(TIER_ORDER.index(EARNED_TIER_CEILING_LABEL))
 
 logger = structlog.get_logger(__name__)
 
@@ -77,15 +82,17 @@ def configured_tier() -> MaturityTier:
     Accepts ``L2`` / ``L2_CONTAIN`` / ``2``. Per-tenant tier scoping arrives
     with the autonomy-scoping UI (Phase C3); until then one conservative
     deployment default keeps copilot the out-of-the-box posture.
+
+    The parsing itself lives in ``approval_rules`` because the console has to
+    name the tier in force on its autonomy page, and a second reader of the
+    same variable answering differently is how that page came to announce a
+    posture the dispatcher does not implement.
     """
-    raw = os.environ.get(_TIER_ENV, "").strip().upper()
-    if not raw:
-        return MaturityTier.L1_NOTIFY
-    for tier in MaturityTier:
-        if raw in {tier.name, tier.name.split("_")[0], str(tier.value)}:
-            return tier
-    logger.warning("live_action.bad_tier_env", value=raw)
-    return MaturityTier.L1_NOTIFY
+    raw = os.environ.get(_TIER_ENV, "")
+    tier, recognised = tier_from_env_value(raw)
+    if not recognised:
+        logger.warning("live_action.bad_tier_env", value=raw.strip().upper())
+    return MaturityTier(TIER_ORDER.index(tier))
 
 
 def _action_type_for(request: LiveActionRequest, executor: object) -> ActionType | None:

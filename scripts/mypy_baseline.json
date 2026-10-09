@@ -318,6 +318,9 @@
     }
   },
   "services/api": {
+    "app/_vendor/action_contracts/capability_contracts.py": {
+      "attr-defined": 7
+    },
     "app/_vendor/ssrf_guard.py": {
       "attr-defined": 6,
       "union-attr": 1
