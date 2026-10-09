@@ -128,7 +128,7 @@ Every flag has an environment-variable equivalent. The CLI flag wins when both a
 
 | Flag | Env var | Default | Notes |
 |---|---|---|---|
-| `--aisoc-url` | `AISOC_URL` | `http://localhost:8081` | Base URL of the AiSOC API. |
+| `--aisoc-url` | `AISOC_URL` | `http://localhost:8000` | Base URL of the AiSOC API. |
 | `--api-key` | `AISOC_API_KEY` | _(none)_ | API key (`aisoc_pat_…`) or JWT. Required for non-public endpoints. |
 | `--timeout` | `AISOC_TIMEOUT_MS` | `20000` | Per-request timeout in ms. |
 | `--verbose` | `AISOC_MCP_VERBOSE=1` | off | Lifecycle logs to stderr. Stdout stays JSON-RPC clean. |
