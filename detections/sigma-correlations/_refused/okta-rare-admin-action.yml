@@ -1,0 +1,31 @@
+title: Okta administrative action
+name: okta-admin-action
+id: aisoc-corr-base-okta-admin-action
+status: experimental
+description: One Okta administrative API call.
+logsource:
+  product: okta
+  service: okta
+detection:
+  selection:
+    eventType: user.account.privilege.grant
+  condition: selection
+---
+title: An account performing unusually few administrative actions
+id: aisoc-corr-okta-rare-admin-action
+status: experimental
+description: >-
+  Kept as a refusal, not as a rule. A `lt` condition fires when little
+  happened, which needs a store of what is normal for that account rather than
+  a counter over a window.
+level: low
+category: identity
+correlation:
+  type: event_count
+  rules:
+    - okta-admin-action
+  group-by:
+    - actor_email
+  timespan: 1h
+  condition:
+    lt: 5

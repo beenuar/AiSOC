@@ -1,0 +1,35 @@
+title: AWS API call
+name: aws-api-call
+id: aisoc-corr-base-aws-api-call
+status: experimental
+description: Any CloudTrail management-plane call. Meaningless alone; the correlation counts distinct regions.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    cloud_platform: aws
+  condition: selection
+---
+title: One principal acting across an unusual number of AWS regions
+id: aisoc-corr-aws-principal-region-fanout
+status: experimental
+description: >-
+  Six or more distinct regions touched by one principal inside fifteen minutes.
+  Distinct regions rather than call volume: an estate uses two or three
+  regions, and a principal sweeping the rest is the shape of enumeration or of
+  resource hijacking looking for quota.
+level: medium
+category: cloud
+tags:
+  - attack.t1580
+correlation:
+  type: value_count
+  rules:
+    - aws-api-call
+  group-by:
+    - user_arn
+  field: awsRegion
+  timespan: 15m
+  condition:
+    gt: 5

@@ -1,0 +1,30 @@
+{
+  "paths": [
+    {
+      "contentLength": "0",
+      "etag": "0x8DC0000000000A1",
+      "group": "$superuser",
+      "isDirectory": "true",
+      "lastModified": "Thu, 08 Oct 2026 11:00:00 GMT",
+      "name": "contoso-ns/aisoc-hub/0/2026/10/08/11",
+      "owner": "$superuser",
+      "permissions": "rw-r-----"
+    },
+    {
+      "contentLength": "0",
+      "etag": "0x8DC0000000000B2",
+      "lastModified": "Thu, 08 Oct 2026 11:05:00 GMT",
+      "name": "contoso-ns/aisoc-hub/0/2026/10/08/11/05/00.avro",
+      "owner": "$superuser",
+      "permissions": "rw-r-----"
+    },
+    {
+      "contentLength": "1643",
+      "etag": "0x8DC0000000000C3",
+      "lastModified": "Thu, 08 Oct 2026 11:25:00 GMT",
+      "name": "contoso-ns/aisoc-hub/0/2026/10/08/11/25/00.avro",
+      "owner": "$superuser",
+      "permissions": "rw-r-----"
+    }
+  ]
+}

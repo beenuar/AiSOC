@@ -1,0 +1,45 @@
+title: Entra directory role assigned
+name: azure-directory-role-assigned
+id: aisoc-corr-base-azure-role-assigned
+status: experimental
+description: One Entra directory role assignment.
+logsource:
+  product: azure
+  service: auditlogs
+detection:
+  selection:
+    operationName: Add member to role
+  condition: selection
+---
+title: Azure resource lock deleted
+name: azure-resource-lock-deleted
+id: aisoc-corr-base-azure-lock-deleted
+status: experimental
+description: One Azure management lock removal.
+logsource:
+  product: azure
+  service: activitylogs
+detection:
+  selection:
+    operationName: Microsoft.Authorization/locks/delete
+  condition: selection
+---
+title: One actor both assigned a directory role and removed a resource lock
+id: aisoc-corr-azure-role-grant-and-lock-removal
+status: experimental
+description: >-
+  Two administrative actions by the same actor inside thirty minutes, in either
+  order. Each is legitimate on its own and neither is rare; together they are
+  the shape of an actor clearing the way before changing something protected.
+level: medium
+category: cloud
+tags:
+  - attack.t1098
+correlation:
+  type: temporal
+  rules:
+    - azure-directory-role-assigned
+    - azure-resource-lock-deleted
+  group-by:
+    - actor
+  timespan: 30m

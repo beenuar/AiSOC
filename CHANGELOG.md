@@ -73,6 +73,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   received and what it last failed on. A receiver is legitimately silent for
   hours, so a listener that failed to bind and one nobody is sending to are
   indistinguishable unless readiness says which.
+- **Cloud telemetry collected the way an estate actually emits it.** Every
+  cloud connector before this read an API that answers a time window, which
+  is the small-account shape: `cloudtrail:LookupEvents` is capped at two
+  transactions per second per region per account, returns management events
+  only, and never carries data events or VPC flow logs at all. Three
+  connectors read the queue- and object-backed paths the hyperscalers
+  designed for continuous export instead — `aws_cloudtrail_s3` (an
+  organisation trail on S3 announced over SQS, carrying management events,
+  data events and VPC flow logs for every member account), `gcp_pubsub` (a
+  pull subscription on a Cloud Logging sink) and `azure_event_hubs` (Entra
+  sign-in logs, Entra audit logs and the Activity log through an Event Hub's
+  Capture output). The older three stay: a single account with no trail, no
+  sink and no Event Hubs namespace should not have to build one.
+
+  A queue is not a time window, so two properties are declared rather than
+  implied. Each connector resumes from a cursor, because a queue collector
+  that restarts and reads from "now" loses everything delivered while it was
+  down and one that reads from the beginning replays the bucket, and both
+  are silent. And each declares a bounded `collection_budget` carrying the
+  sentence that says where the overflow goes — a bound that *drops* the
+  remainder looks identical in code to one that leaves it on the queue, and
+  only one of them is backpressure. Acknowledgement always follows the read:
+  an SQS message is deleted after its object's events are out, a Pub/Sub
+  batch is acknowledged after its entries are in hand, and a test proves the
+  ordering by failing the build step rather than by describing it.
+  `scripts/check_cloud_native_collection.py` holds all of it, with a
+  self-test that injects one violation per rule.
+
+  Stated plainly: no vendor account is reachable from CI, so every payload
+  under test is recorded or synthesised. The Azure capture fixture in
+  particular was built from the Avro specification rather than taken from a
+  running Event Hub, and the Data Lake Gen2 listing path has never been
+  exercised against a real storage account. The claim row says so.
 
 - **The 74 detection rules that needed a sliding window now have one, or a
   recorded reason why they cannot.** Each named a counter no source emits —
@@ -99,6 +132,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The published executable figure falls 2,603 → 2,529 because 74 rules that
   could not fire stopped being counted as executable; the windowed corpus is
   now published as its own figure beside it rather than going uncounted.
+- **Ordered and unordered sequences in the windowed engine, and a Sigma
+  correlation importer that feeds it.** A threshold cannot express an
+  ordering, and the ordering is usually the detection: "fifty failed logons"
+  is an attempt, "a failed logon then a success for the same account" is a
+  compromise. `SequenceRule` stages two or more selectors for one entity
+  inside one window, ordered by **event time** rather than arrival — almost
+  every connector here polls, so a batch arrives in the vendor's order and
+  the event that starts a sequence routinely lands after the one that
+  finishes it. One event advances at most one stage, which a per-event token
+  enforces rather than a timestamp comparison, because two distinct events
+  routinely share a second. `ordered: false` gives Sigma's unordered
+  `temporal` semantics from the same rule type.
+  `scripts/sigma_correlation.py` compiles `event_count`, `value_count`,
+  `temporal` and `temporal_ordered` documents into those forms and **refuses
+  rather than approximates** the rest: a `lt`/`lte` condition is a rarity
+  signal needing a baseline, a multi-field `group-by` has no single entity,
+  `aliases` need field mapping the engine does not have. The importer had
+  never been written and the imported corpus contains no correlation
+  document, so the two gaps hid each other; the rules under
+  `detections/sigma-correlations/` are hand-authored in the upstream format
+  to give it a corpus and are labelled first-party content rather than
+  imported coverage. `scripts/check_sigma_correlations.py` fails a
+  correlation whose selector or `group-by` names a field nothing emits, with
+  no ceiling.
 - **Attribute conditions, time-boxed elevation and workload identities, all
   inside the one permission path.** The placement is the item, not a detail:
   conditions are applied by `CurrentUser.require_permission` after whichever

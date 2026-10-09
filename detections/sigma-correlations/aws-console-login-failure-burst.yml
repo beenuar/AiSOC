@@ -1,0 +1,35 @@
+title: AWS IAM access key created
+name: aws-iam-create-access-key
+id: aisoc-corr-base-aws-iam-create-access-key
+status: experimental
+description: One IAM CreateAccessKey call. Routine during onboarding; the correlation below is the detection.
+logsource:
+  product: aws
+  service: cloudtrail
+detection:
+  selection:
+    eventSource: iam.amazonaws.com
+    eventName: CreateAccessKey
+  condition: selection
+---
+title: One principal minted several AWS access keys in a burst
+id: aisoc-corr-aws-access-key-minting-burst
+status: experimental
+description: >-
+  Six or more IAM access keys created by the same principal inside ten minutes.
+  Key creation is legitimate and common, so the detection is the rate: an
+  onboarding script creates one key per user, and a principal creating several
+  in minutes is either a misconfigured loop or persistence being established.
+level: high
+category: cloud
+tags:
+  - attack.t1098.001
+correlation:
+  type: event_count
+  rules:
+    - aws-iam-create-access-key
+  group-by:
+    - user_arn
+  timespan: 10m
+  condition:
+    gt: 5

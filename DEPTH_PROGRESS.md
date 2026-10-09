@@ -232,6 +232,52 @@ one engine that could not fire them to another. Both passes are now applied in
 `evaluate()`, which takes the overlay the consumer had already resolved for
 the stateless engine.
 
+### D7 -- There is no "existing watermark" in fusion to order sequences by
+
+Item 3.2 says to order sequences "by event time with the existing
+watermark". No watermark exists anywhere in the detection path: the only two
+in the tree belong to `services/actions`' shadow-reconcile router and the
+dead-letter replay, which are unrelated subsystems. Rather than invent one or
+quietly order by arrival, the engine orders strictly by event time and
+declares its own bound,
+`SEQUENCE_REORDER_TOLERANCE_SECONDS = 300`, for how late an event may arrive
+and still be stitched into a sequence. The bound is stated in the module
+rather than inherited from something that does not exist.
+
+Ordering by arrival would have been the easy implementation and is wrong
+here: almost every connector in this tree **polls**, so a batch arrives in
+the vendor's order and the event that starts a sequence routinely lands after
+the one that finishes it. `test_a_batch_delivered_out_of_arrival_order_still_fires`
+is the regression test for that, and reverting the event-time read makes it
+and two others fail.
+
+### D8 -- No upstream Sigma correlation rule exists in this tree to import
+
+`detections/sigma-imports/` holds 3,132 rule documents and **not one carries
+a `correlation:` block**, so the missing importer and the missing corpus hid
+each other: there was nothing for an importer to have failed on. There is
+also no fetcher for the upstream corpus (`scripts/` has `compile_sigma_ruleset.py`,
+`sigma_compiler.py` and `sigma_proof_event.py`, none of which downloads
+anything).
+
+So the importer is built and exercised against **first-party** correlation
+documents hand-authored in the upstream format under
+`detections/sigma-correlations/`, four accepted and two refused. The figure
+they contribute is first-party content and is labelled that way in the truth
+table and in the corpus README; it is not imported coverage. Vendoring the
+upstream correlation corpus needs a fetcher and a licence review, and is not
+attempted here.
+
+One standard is weaker here than for the stateless Sigma imports, and stays
+weaker: those are replayed through the real connector `normalize()` by an
+out-of-process worker, and these are replayed through the real **windowed
+engine** only. The connector step is not applied, because importing
+`services/connectors` into a fusion test process shadows fusion's own `app`
+package — the documented reason `compile_sigma_ruleset.py` uses a subprocess.
+Instead, every selector field, `group-by` and `distinct_by` is checked
+against the emitted-field namespace with **no ceiling**, which caught three
+invented fields on the first run of the gate.
+
 ## Phase 1: Verdict quality you can publish
 
 - [x] **1.1** Balanced, labelled verdict corpus
@@ -257,6 +303,9 @@ the stateless engine.
 
 - [x] **3.1** Translate the 74 windowed `det-*` rules — 50 translated, 24
   refused with a reason. `MAX_UNREACHABLE` 119 → 45.
+- [x] **3.2** Ordered sequences and Sigma correlations — the windowed engine
+  stages ordered and unordered sequences; all four translatable Sigma
+  correlation types compile. See D7 and D8.
 - [ ] **3.2** Ordered sequences and Sigma correlations
 - [ ] **3.3** Enrichment inputs (parity 5.5)
 - [ ] **3.4** Behavioural baselines in CORE
@@ -278,6 +327,19 @@ the stateless engine.
   rather than left to be inferred: an OTLP logs receiver, a Kafka input for
   customer topics, and a TAXII 2.1 server over the tenant IOC store. Each
   reproduces trivially — nothing in the tree implements any of them.
+- [x] **4.1** Cloud-native collection (S3+SQS org trail, Pub/Sub, Event Hubs).
+  Three connectors (`aws_cloudtrail_s3`, `gcp_pubsub`, `azure_event_hubs`),
+  each resumable and each declaring a bounded `collection_budget` that says
+  where the overflow goes. Gated by
+  `scripts/check_cloud_native_collection.py` (self-test: one injected
+  violation per rule, plus a refusal on both an absent and an empty tree),
+  wired into `ci.yml :: python-lint`. 83 new tests, connectors suite 1014 ->
+  1098. **One verification gap, stated rather than buried:** no Azure
+  subscription is reachable from here, so the Event Hubs capture fixture was
+  synthesised from the Avro specification rather than recorded from a live
+  hub, and the Data Lake Gen2 listing path has never run against a real
+  storage account. The claim row is `PARTIAL` for exactly that reason.
+- [ ] **4.2** Standard inputs (syslog, OTLP, Kafka, TAXII 2.1)
 - [ ] **4.3** Retention the tenant chooses
 - [ ] **4.4** Throughput (parity 6.9) and a cloud-hardware run
 - [ ] **4.5** Deployment completeness (parity 6.8)
@@ -334,4 +396,5 @@ the stateless engine.
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
 | 2026-10-09 | 4.2 | Reproduced: `check_syslog_listener.py` against `origin/main` reported "no Go sources under services/ingest/internal/syslog", and the only syslog path was `POST /v1/inbox/cef`, which needs a forwarder that already speaks HTTP. Implemented `services/ingest/internal/syslog` (UDP + TCP, both RFC 6587 framings, four wire formats, token-derived tenant, batched publish, `/readyz` subscription). Five negative controls recorded in the PR; one of them found a hole in the new gate itself, which reported OK while the tenant came from `msg.Hostname` through a struct field — the detector now knows all three Go syntaxes and the self-test exercises each. Writing the tests also found a shutdown deadlock: `Stop` waited on goroutines watching a context the caller had not cancelled yet. Ingest suite green, `internal/syslog` 33 cases. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |
+| 2026-10-09 | 4.1 | Reproduced: `check_cloud_native_collection.py` on the unmodified tree reported all three collection paths absent. Implemented `aws_cloudtrail_s3` (SQS-notified S3 objects; management events, data events and VPC flow logs; delete-after-emit), `gcp_pubsub` (REST pull on a log-sink subscription; ack-after-read) and `azure_event_hubs` (Capture blobs over the Data Lake Gen2 JSON API, with a focused Avro OCF reader). Negative controls recorded in the PR: deleting the SQS message before the object is read, acknowledging the Pub/Sub batch before it is built, ignoring the Avro union branch index, and ignoring the flow-log header line each fail a named test, and all were restored. Connectors suite 1014 -> 1098 passed. |
 | 2026-10-09 | 3.1 | All 74 decided. 50 translated into `wd-*` rules derived from each original's own clauses and replayed through the real engine (162 assertions); 24 refused with a reason across five kinds. `MAX_UNREACHABLE` 119 → 45, published executable 2,603 → 2,529, windowed 18 → 68. Three findings recorded as D4–D6 below. |

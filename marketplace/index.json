@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-09T00:36:36Z",
+  "generated": "2026-10-09T03:35:13Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,29 +20,29 @@
     }
   ],
   "stats": {
-    "total": 7155,
+    "total": 7158,
     "playbooks": 87,
     "playbook_packs": 62,
     "detections": 6991,
-    "plugins": 77,
-    "verified": 1034,
+    "plugins": 80,
+    "verified": 1037,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1034
+      "stable": 1037
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
       "stable": 877
     },
-    "executable": 2693,
+    "executable": 2696,
     "quarantined": 4462,
     "executable_detections": 2529,
     "reference_only_detections": 4462,
-    "not_a_detection": 164
+    "not_a_detection": 167
   },
   "mitre_coverage": {
     "unique_techniques": 389,
@@ -237602,6 +237602,34 @@
       "sha256": "0708ead966c294912d2e897af9fb4d46f49539231730b95f96ff80812c960de5"
     },
     {
+      "id": "aws-cloudtrail-s3",
+      "type": "plugin",
+      "name": "AWS CloudTrail (S3 + SQS)",
+      "description": "CloudTrail organisation trail delivered to S3 and announced on SQS. Reads management events, data events and VPC flow logs for every member account from one queue. The queue is the cursor, so nothing is lost across a restart, and each poll is bounded so a backlog drains over several polls instead of flooding ingest in one pass. Use this instead of the LookupEvents connector for anything larger than a single account.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "aws",
+        "cloudtrail",
+        "s3",
+        "sqs",
+        "vpc-flow-logs",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/aws_cloudtrail_s3.py",
+      "min_aisoc_version": "17.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/aws-cloudtrail-s3/plugin.yaml",
+      "sha256": "3bbc0dd1af4ac24986fb368d0c6223e1990f6a35a768b33b7eb604ee0d5a69a9"
+    },
+    {
       "id": "aws-guardduty",
       "type": "plugin",
       "name": "AWS GuardDuty Connector",
@@ -237727,6 +237755,33 @@
       "tier": "stable",
       "path": "plugins/azure-entra/plugin.yaml",
       "sha256": "33e77f0603f49a52ab042819189ebe5c9260ddb241c0b2ab10903794e2d63e37"
+    },
+    {
+      "id": "azure-event-hubs",
+      "type": "plugin",
+      "name": "Azure Event Hubs (Capture)",
+      "description": "Entra sign-in logs, Entra audit logs and the Azure Activity log streamed to an Event Hub by a diagnostic setting and captured to a storage account. One configuration covers a whole tenant at the rate it actually produces events, with no Graph throttle. Latency is the Capture window the operator chooses (one to fifteen minutes), so keep the Entra connector alongside it if a high-signal subset needs to be faster.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "azure",
+        "entra",
+        "event-hubs",
+        "activity-log",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/azure_event_hubs.py",
+      "min_aisoc_version": "17.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/azure-event-hubs/plugin.yaml",
+      "sha256": "985bb360b3ecb9cb252c48a84b321d85dfb454e9ac4483ef62353a0373d8fd10"
     },
     {
       "id": "box",
@@ -238221,6 +238276,33 @@
       "tier": "stable",
       "path": "plugins/gcp-cloud-audit/plugin.yaml",
       "sha256": "2fc3ae5041c6566ab3c9d7dc8ab7551b7d38f7cb2dc67834b2f6a26591b53382"
+    },
+    {
+      "id": "gcp-pubsub",
+      "type": "plugin",
+      "name": "GCP Pub/Sub (log sink)",
+      "description": "Google Cloud logs streamed through a Cloud Logging sink onto a Pub/Sub subscription. Carries whatever the sink's filter selects - audit, Data Access, VPC flow, firewall, GKE - for a whole organisation, at the rate the estate produces it rather than at the rate the Logging read API allows. The subscription is the cursor: messages are acknowledged only after their entries have been read.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "gcp",
+        "pubsub",
+        "log-sink",
+        "audit",
+        "connector"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/gcp_pubsub.py",
+      "min_aisoc_version": "17.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/gcp-pubsub/plugin.yaml",
+      "sha256": "a85821c3575f1383d34e0e1ec095bdaea9a1d128bda039a62b24c1f9c93990ec"
     },
     {
       "id": "gcp-scc",

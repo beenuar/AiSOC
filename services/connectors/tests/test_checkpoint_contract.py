@@ -142,6 +142,16 @@ class TestAdoptionIsCountedNotAssumed:
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),
         "azure_activity": (("eventTimestamp",), ("eventDataId", "id")),
+        # Depth plan 4.1. These three read a queue or an object store rather
+        # than a time-windowed API, so the cursor is doing a different job:
+        # the queue already guarantees nothing is lost, and the cursor exists
+        # to drop the duplicate that at-least-once delivery guarantees will
+        # eventually arrive. All three therefore carry a synthetic
+        # `record_id` built from the object or message identity, which is
+        # what makes it stable across a re-read.
+        "aws_cloudtrail_s3": (("event_time",), ("record_id",)),
+        "gcp_pubsub": (("event_time",), ("record_id",)),
+        "azure_event_hubs": (("event_time",), ("record_id",)),
     }
 
     def test_the_adopters_are_exactly_the_ones_recorded(self) -> None:

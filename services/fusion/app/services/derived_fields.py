@@ -50,7 +50,14 @@ DEFAULT_BUSINESS_END_HOUR = 18
 _TIME_FIELDS = ("event_time", "timestamp", "time", "@timestamp", "ingest_time")
 
 
-def _parse_time(event: dict[str, Any]) -> datetime | None:
+def parse_event_time(event: dict[str, Any]) -> datetime | None:
+    """When the event happened, from the first timestamp field it carries.
+
+    Public because the windowed engine orders sequences by event time and
+    must read it the same way this module does. Two independent readers of
+    "when did this happen" is how a rule comes to mean one thing to the
+    stateless engine and another to the windowed one.
+    """
     for field in _TIME_FIELDS:
         raw = event.get(field)
         if raw is None:
@@ -119,7 +126,7 @@ def time_of_day_fields(
     Returns nothing when the event carries no parseable timestamp, for the
     same reason as above: an unknown time is not "outside business hours".
     """
-    when = _parse_time(event)
+    when = parse_event_time(event)
     if when is None:
         return {}
 

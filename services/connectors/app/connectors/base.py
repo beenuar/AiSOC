@@ -308,6 +308,44 @@ class OAuthHints:
 
 
 @dataclass(frozen=True)
+class CollectionBudget:
+    """What one poll of a queue- or object-backed source is allowed to take.
+
+    Depth plan 4.1. Every connector before these three pulled from an API
+    that answers a time window, so the volume a poll could return was bounded
+    by the window. A queue is not: an SQS queue after a six-hour outage, a
+    Pub/Sub subscription with seven days of retention or an Event Hubs
+    partition at its retention edge each hold as much as the estate produced
+    in that time, and a poll written as "drain it" turns the recovery into an
+    out-of-memory kill, or a flood through ingest that costs more than the
+    outage did.
+
+    So the bound is declared rather than implied, and the declaration carries
+    the sentence saying where the remainder goes. That field is not
+    decoration: a bound that *drops* the overflow has exactly the same shape
+    in code as one that leaves it for the next poll, and only one of them is
+    backpressure — the other is silent data loss. Writing down which it is
+    makes the reviewer's question answerable from the declaration.
+    """
+
+    #: Queue receives / object listings / partition reads per poll.
+    max_batches_per_poll: int
+    #: Normalized events per poll, across every batch. The two bounds are
+    #: independent because one object can hold a hundred thousand records:
+    #: bounding batches alone bounds nothing.
+    max_events_per_poll: int
+    #: Why the overflow is safe — which durable thing still holds it, and
+    #: what makes the next poll see it again.
+    backlog_stays_on_the_queue: str
+
+    def __post_init__(self) -> None:
+        if self.max_batches_per_poll <= 0 or self.max_events_per_poll <= 0:
+            raise ValueError("a collection budget with a non-positive bound is not a bound")
+        if not self.backlog_stays_on_the_queue.strip():
+            raise ValueError("a bounded poll must say where the remainder goes; an unexplained bound reads as data loss")
+
+
+@dataclass(frozen=True)
 class ConnectorSchema:
     """Self-describing schema for a connector.
 
@@ -481,6 +519,12 @@ class BaseConnector(ABC):
     #: Field carrying a stable per-row identifier, used to break ties within
     #: the same timestamp. Required alongside ``checkpoint_time_field``.
     checkpoint_id_field: tuple[str, ...] = ()
+
+    #: Per-poll bound for a queue- or object-backed source (depth plan 4.1).
+    #: ``None`` for the API-polling connectors, where the time window is the
+    #: bound. See :class:`CollectionBudget` for why the declaration carries a
+    #: sentence rather than only two numbers.
+    collection_budget: CollectionBudget | None = None
 
     #: Staged by :meth:`apply_checkpoint`, read by the scheduler after ingest
     #: accepts the batch. Declared here so it has one type rather than being

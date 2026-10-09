@@ -56,10 +56,10 @@ Read more: https://beenuar.github.io/AiSOC/docs/architecture
 
 ## Connectors
 
-84 first-party connectors ship in the repository, by category:
+87 first-party connectors ship in the repository, by category:
 
 - `ai`: 1
-- `cloud`: 15
+- `cloud`: 18
 - `edr`: 10
 - `iam`: 7
 - `ndr`: 2
