@@ -189,6 +189,72 @@
   },
   {
     "capabilities": [
+      "pull_audit",
+      "pull_logs"
+    ],
+    "category": "cloud",
+    "connector_id": "aws_cloudtrail_s3",
+    "connector_name": "AWS CloudTrail (S3 + SQS)",
+    "description": "AWS CloudTrail organisation trail delivered to S3 and announced on SQS. Reads management events, data events and VPC flow logs for every member account from one queue, with the queue as the cursor so nothing is lost across a restart.",
+    "docs_url": "/docs/connectors/aws-cloudtrail-s3",
+    "fields": [
+      {
+        "default": "us-east-1",
+        "label": "AWS Region",
+        "name": "region",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "The queue your trail bucket's event notification publishes to. Either S3 \u2192 SQS directly, or S3 \u2192 SNS \u2192 SQS; both envelopes are read.",
+        "label": "SQS queue URL",
+        "name": "queue_url",
+        "placeholder": "https://sqs.us-east-1.amazonaws.com/123456789012/aisoc-cloudtrail",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Leave blank to use the runtime IAM role / instance profile.",
+        "label": "Access Key ID",
+        "name": "access_key",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Required only when supplying a static access key above.",
+        "label": "Secret Access Key",
+        "name": "secret_key",
+        "required": false,
+        "type": "secret"
+      },
+      {
+        "default": true,
+        "help_text": "S3 / Lambda / DynamoDB data events. These answer 'what did they read', and are the highest-volume thing in the trail \u2014 most land at info severity.",
+        "label": "Include data events",
+        "name": "include_data_events",
+        "required": false,
+        "type": "boolean"
+      },
+      {
+        "default": true,
+        "help_text": "VPC flow logs published to the same bucket (key prefix .../vpcflowlogs/...).",
+        "label": "Include VPC flow logs",
+        "name": "include_flow_logs",
+        "required": false,
+        "type": "boolean"
+      },
+      {
+        "default": 300,
+        "help_text": "How long a received message is hidden from other consumers. Must comfortably exceed one poll, or an object is re-announced while this poll is still reading it.",
+        "label": "Receive visibility timeout (seconds)",
+        "name": "visibility_timeout_seconds",
+        "required": false,
+        "type": "number"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts"
     ],
     "category": "cloud",
@@ -437,6 +503,70 @@
         "https://graph.microsoft.com/Directory.Read.All"
       ],
       "supported_in_hosted": true,
+      "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pull_logs"
+    ],
+    "category": "cloud",
+    "connector_id": "azure_event_hubs",
+    "connector_name": "Azure Event Hubs (Capture)",
+    "description": "Entra sign-in logs, Entra audit logs and the Azure Activity log streamed to an Event Hub by a diagnostic setting and captured to a storage account. One configuration covers a whole tenant at the rate it actually produces events, with no Graph throttle.",
+    "docs_url": "/docs/connectors/azure-event-hubs",
+    "fields": [
+      {
+        "label": "Entra tenant ID",
+        "name": "tenant_id",
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Application (client) ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Client secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "help_text": "The storage account the Event Hub's Capture writes to (the account name alone, not a URL).",
+        "label": "Capture storage account name",
+        "name": "storage_account",
+        "placeholder": "contosologs",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "The blob container Capture is configured to write into.",
+        "label": "Capture container / filesystem",
+        "name": "container",
+        "placeholder": "insights-logs",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "default": "",
+        "help_text": "Optional. Narrow to one namespace or hub, e.g. 'contoso-ns/aisoc-hub'. Leave blank to read the whole container.",
+        "label": "Path prefix",
+        "name": "prefix",
+        "required": false,
+        "type": "string"
+      }
+    ],
+    "oauth": {
+      "authorize_url": "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+      "scopes": [
+        "https://storage.azure.com/.default"
+      ],
+      "supported_in_hosted": false,
       "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     }
   },
@@ -1441,6 +1571,57 @@
     "oauth": {
       "scopes": [
         "https://www.googleapis.com/auth/logging.read"
+      ],
+      "supported_in_hosted": false,
+      "token_url": "https://oauth2.googleapis.com/token"
+    }
+  },
+  {
+    "capabilities": [
+      "pull_audit",
+      "pull_logs"
+    ],
+    "category": "cloud",
+    "connector_id": "gcp_pubsub",
+    "connector_name": "GCP Pub/Sub (log sink)",
+    "description": "Google Cloud logs streamed through a Cloud Logging sink onto a Pub/Sub subscription. Carries whatever the sink's filter selects \u2014 audit, Data Access, VPC flow, firewall, GKE \u2014 for a whole organisation, with the subscription as the cursor.",
+    "docs_url": "/docs/connectors/gcp-pubsub",
+    "fields": [
+      {
+        "help_text": "The project the Pub/Sub subscription lives in, which may differ from the projects the sink reads.",
+        "label": "Project ID (of the subscription)",
+        "name": "project_id",
+        "placeholder": "my-logging-project",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "A pull subscription on the topic your log sink publishes to. Push subscriptions are not read by this connector.",
+        "label": "Subscription ID",
+        "name": "subscription_id",
+        "placeholder": "aisoc-log-sink-sub",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Needs roles/pubsub.subscriber on the subscription. Paste the entire key file; it is encrypted at rest by the credential vault.",
+        "label": "Service account JSON key",
+        "name": "service_account_json",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": 120,
+        "help_text": "Recorded for the setup guide and compared against the subscription at test time. A deadline shorter than one poll redelivers messages this connector is still reading.",
+        "label": "Acknowledgement deadline (seconds)",
+        "name": "ack_deadline_seconds",
+        "required": false,
+        "type": "number"
+      }
+    ],
+    "oauth": {
+      "scopes": [
+        "https://www.googleapis.com/auth/pubsub"
       ],
       "supported_in_hosted": false,
       "token_url": "https://oauth2.googleapis.com/token"

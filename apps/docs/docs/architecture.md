@@ -61,7 +61,7 @@ curl -X POST http://localhost:8081/v1/ingest/batch \
 polls a vendor API on a schedule, decrypts that tenant's stored credentials
 through the vault at poll time, and forwards the result to the same ingest
 endpoint. It is a `full`-profile service; CORE accepts pushes instead. The
-registry is **now 84 connectors** — that figure is generated from
+registry is **now 87 connectors** — that figure is generated from
 `services/connectors/app/connectors/__init__.py` by
 [`scripts/generate_connector_count.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/generate_connector_count.py),
 which fails CI if this sentence disagrees with the tree.

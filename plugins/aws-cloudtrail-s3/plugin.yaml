@@ -1,0 +1,28 @@
+id: aws-cloudtrail-s3
+name: AWS CloudTrail (S3 + SQS)
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  CloudTrail organisation trail delivered to S3 and announced on SQS. Reads
+  management events, data events and VPC flow logs for every member account
+  from one queue. The queue is the cursor, so nothing is lost across a
+  restart, and each poll is bounded so a backlog drains over several polls
+  instead of flooding ingest in one pass. Use this instead of the
+  LookupEvents connector for anything larger than a single account.
+author: AiSOC Core Team
+tags: [cloud, aws, cloudtrail, s3, sqs, vpc-flow-logs, connector]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/aws_cloudtrail_s3.py
+license: MIT
+min_aisoc_version: "17.0.0"
+config_schema:
+  type: object
+  required: [region, queue_url]
+  properties:
+    region: {type: string, default: us-east-1, description: AWS region the queue lives in.}
+    queue_url: {type: string, description: SQS queue URL the trail bucket notifies (S3 to SQS, or S3 to SNS to SQS).}
+    access_key: {type: string, description: Leave blank to use the runtime IAM role or instance profile.}
+    secret_key: {type: string, secret: true, description: Required only with a static access key.}
+    include_data_events: {type: boolean, default: true, description: S3, Lambda and DynamoDB data events.}
+    include_flow_logs: {type: boolean, default: true, description: VPC flow logs published to the same bucket.}
+    visibility_timeout_seconds: {type: number, default: 300, description: Must comfortably exceed one poll.}

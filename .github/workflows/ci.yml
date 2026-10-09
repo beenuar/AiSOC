@@ -649,6 +649,20 @@ jobs:
         run: python3 scripts/check_connector_profiles.py --self-test
       - name: Connector profile drift gate
         run: python3 scripts/check_connector_profiles.py
+      # Every connector above reads an API that answers a time window, so the
+      # window bounds what a poll can return. The three cloud-native
+      # collection paths do not: an SQS queue after an outage, a Pub/Sub
+      # subscription with seven days of retention and a capture container
+      # each hold as much as the estate produced in that time. This asserts
+      # all three exist, resume from a cursor, declare a bounded per-poll
+      # budget that says where the remainder goes, and ship vendor-shaped
+      # fixtures, a setup guide and a marketplace manifest. Parsed with ast,
+      # so it needs no service venv. Self-test first, on the same tree: it
+      # injects one violation per rule and requires each to be caught.
+      - name: Cloud-native collection gate — self-test
+        run: python3 scripts/check_cloud_native_collection.py --self-test
+      - name: Cloud-native collection gate
+        run: python3 scripts/check_cloud_native_collection.py
       # One layer in from the name: the profile gate asks whether a connector
       # reaches a normalization path, this asks which OCSF class it reaches
       # when it gets there. The class uid divided by a thousand is the

@@ -21,12 +21,14 @@ from app.connectors.ai_gateway import AIGatewayConnector
 from app.connectors.auditd import AuditdConnector
 from app.connectors.auth0 import Auth0Connector
 from app.connectors.aws_cloudtrail import AWSCloudTrailConnector
+from app.connectors.aws_cloudtrail_s3 import AWSCloudTrailS3Connector
 from app.connectors.aws_guardduty import AWSGuardDutyConnector
 from app.connectors.aws_security_hub import AWSSecurityHubConnector
 from app.connectors.aws_vpc_flow import AWSVPCFlowLogsConnector
 from app.connectors.azure_activity import AzureActivityConnector
 from app.connectors.azure_defender import AzureDefenderConnector
 from app.connectors.azure_entra import AzureEntraConnector
+from app.connectors.azure_event_hubs import AzureEventHubsConnector
 from app.connectors.base import BaseConnector, ConnectorSchema, Field, OAuthHints
 from app.connectors.box import BoxConnector
 from app.connectors.carbon_black import CarbonBlackConnector
@@ -50,6 +52,7 @@ from app.connectors.exabeam import ExabeamConnector
 from app.connectors.falco import FalcoConnector
 from app.connectors.fleetdm import FleetDMConnector
 from app.connectors.gcp_cloud_audit import GCPCloudAuditConnector
+from app.connectors.gcp_pubsub import GCPPubSubConnector
 from app.connectors.gcp_scc import GCPSCCConnector
 from app.connectors.github import GitHubConnector
 from app.connectors.gitlab import GitLabConnector
@@ -110,6 +113,7 @@ if TYPE_CHECKING:
 # Keep alphabetised by connector_id for predictable diffs.
 _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     AWSCloudTrailConnector,
+    AWSCloudTrailS3Connector,
     AWSGuardDutyConnector,
     AWSSecurityHubConnector,
     AWSVPCFlowLogsConnector,
@@ -119,6 +123,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     AzureActivityConnector,
     AzureDefenderConnector,
     AzureEntraConnector,
+    AzureEventHubsConnector,
     BoxConnector,
     CarbonBlackConnector,
     ChronicleConnector,
@@ -141,6 +146,7 @@ _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
     FalcoConnector,
     FleetDMConnector,
     GCPCloudAuditConnector,
+    GCPPubSubConnector,
     GCPSCCConnector,
     GitHubConnector,
     GitLabConnector,
