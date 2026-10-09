@@ -205,6 +205,19 @@ export async function runServer(cfg: ServerConfig, log: Logger): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
+ * structuredContent must be a JSON object (MCP spec), and the SDK client
+ * rejects the whole result otherwise. `typeof [] === "object"`, so the old
+ * guard let arrays through and every tool returning a list
+ * (aisoc_list_investigations) failed with "-32602 Invalid tools/call result".
+ * Arrays still reach the host in full as the fenced JSON text content.
+ */
+function asStructuredContent(data: unknown): Record<string, unknown> | undefined {
+  return typeof data === "object" && data !== null && !Array.isArray(data)
+    ? (data as Record<string, unknown>)
+    : undefined;
+}
+
+/**
  * Convert a `ToolResult` into the MCP `CallToolResult` shape. JSON results
  * become a fenced JSON code block so MCP hosts that render Markdown still
  * show structured data; text results pass through verbatim. We also include
@@ -220,19 +233,12 @@ function toSuccessResult(result: ToolResult): {
     const text = renderJson(result.data);
     return {
       content: [{ type: "text", text }],
-      structuredContent:
-        // Only surface as structuredContent if it's an object, per spec.
-        typeof result.data === "object" && result.data !== null
-          ? (result.data as Record<string, unknown>)
-          : undefined,
+      structuredContent: asStructuredContent(result.data),
     };
   }
   return {
     content: [{ type: "text", text: result.text }],
-    structuredContent:
-      typeof result.data === "object" && result.data !== null
-        ? (result.data as Record<string, unknown>)
-        : undefined,
+    structuredContent: asStructuredContent(result.data),
   };
 }
 
