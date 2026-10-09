@@ -13,6 +13,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | 84 connectors | README L116, L168 | `ci.yml :: python-lint` (`generate_connector_count.py --check`) | core | GATED (count) | - |
 | Connectors: schema-driven config + vault-encrypted secrets | README L168 | `ci.yml` connectors matrix (`test_schemas.py` + `test_conformance.py` — secret-shaped fields must be `type=secret`); vault tests + `test_live_vendor_smoke.py` (Phase D3 — mock-server drives each connector's real HTTP client + normalize) | core | GATED | - |
 | Connectors: live Test connection | README L168 | `ci.yml` connectors matrix (`test_conformance.py` — every connector implements the async `test_connection` contract) + `connector_conformance.py --check` published matrix + `test_live_vendor_smoke.py` (Phase D3 — mock-server conformance: `test_connection()` + paginated `fetch_alerts()` HTTP path exercised against realistic vendor payloads) | core | GATED | - |
+| An appliance that speaks only syslog reaches AiSOC without a forwarder in front of it, in RFC 5424, RFC 3164, CEF or LEEF | `apps/docs/docs/connectors/syslog-listener.md`; depth plan 4.2 | `ci.yml :: python-lint` (`check_syslog_listener.py --self-test` then the gate: all four formats are *assigned* rather than merely named, `main.go` both constructs and starts the listener, `/readyz` names the subscription, the sink reads the tenant from the resolved token, and the three templates it projects through ship and are mintable. The self-test injects one violation per rule including **each of the three Go syntaxes a tenant could leak through**, because the first version of this gate knew only one and a runtime negative control that moved the tenant onto `msg.Hostname` through a struct field walked past it reporting OK) + `ci.yml` go job (`internal/syslog` — 33 cases over wire samples taken from the formats' own specifications: an escaped `]` inside structured data, a colon in prose that is not a tag, a CEF value containing spaces, an escaped pipe in a CEF header, LEEF 2.0's redefinable delimiter including its hex form, both RFC 6587 framings, a message beginning with a digit that is not a length prefix, an implausible octet count, the connection cap, and a failed publish that is counted rather than silent) | core | GATED | - |
 | Investigation Ledger stores every step | README L61, L169 | `ci.yml :: Python — Lint & Type-check` (`check_ledger_replay_contract.py` — response model ↔ console type, client requests ↔ router decorators, and `seq` ordering/uniqueness, each in both directions) + `ci.yml :: Python — Tests` (`test_investigation_replay.py`, 37 cases over `/replay`, `/events`, `/explain`; removing `ORDER BY seq` fails five of them) | core | GATED | — |
 | Public eval harness gates every PR | README L62, L77 | `ci.yml :: p1-eval` | core | GATED (but suites are self-consistency; see reality report) | Phase 4 |
 | Alert-reduction is a real measurement | README / benchmark page | `ci.yml :: python-test` (fusion) runs `test_alert_reduction_real.py`, which groups a 1 000-alert stream with `RawAlert.correlation_key()` — the method `Correlator` actually calls — and bounds the ratio on both sides, because a floor alone is satisfied by a key that collapses everything into one incident | core | GATED | the legacy suite's 75.3% stays published for continuity and is labelled as not describing this product; the measurement is still a synthetic workload, as the benchmark page states |
@@ -309,8 +310,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- Total: 298
-- GATED: 297
+- Total: 299
+- GATED: 298
 - PARTIAL: 1
 - NO GATE: 0
 

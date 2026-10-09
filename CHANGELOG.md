@@ -44,6 +44,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An appliance that speaks only syslog can now reach AiSOC on its own.**
+  The one syslog path that existed, `POST /v1/inbox/cef`, requires something
+  in front of it that already speaks HTTP — so the firewall, the proxy, the
+  legacy IDS and the printer still could not reach AiSOC, only a forwarder
+  could. `services/ingest` now accepts syslog over UDP and TCP and reads all
+  four wire formats the long tail speaks: RFC 5424, RFC 3164, CEF and LEEF.
+
+  The tenant comes from a minted ingest token in the service's own
+  configuration and from nowhere else. Syslog carries no authenticated
+  principal and no header, so anything read off the wire is
+  sender-controlled: a tenant taken from a hostname or a structured-data
+  parameter would be a cross-tenant write requiring no attacker effort at
+  all. One listener therefore serves one tenant, which the setup guide says
+  rather than leaving it to be discovered.
+
+  A line matching none of the four formats is kept as an unstructured
+  message with its text intact, never reported as a structured record with
+  invented fields — a mis-split line puts half the message in the hostname
+  column and an analyst reading that record sees a host that does not
+  exist. Plain syslog lands at OCSF class 1007 in category 1 rather than at
+  2001: category 2 is promoted unconditionally, and filing a firewall's
+  routine daemon chatter as a Security Finding would turn every line into an
+  alert. CEF and LEEF do land at 2001, because a device emitting one of
+  those has already decided the line is a security event.
+
+  `/readyz` names the listener, what it bound, how many messages it has
+  received and what it last failed on. A receiver is legitimately silent for
+  hours, so a listener that failed to bind and one nobody is sending to are
+  indistinguishable unless readiness says which.
+
 - **Attribute conditions, time-boxed elevation and workload identities, all
   inside the one permission path.** The placement is the item, not a detail:
   conditions are applied by `CurrentUser.require_permission` after whichever

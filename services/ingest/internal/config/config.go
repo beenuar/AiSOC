@@ -69,6 +69,25 @@ type Config struct {
 	VulnKafkaTopic    string // topic for VULNERABILITY_MATCH events
 	NvdAPIKey         string // optional NVD API key for higher rate limits
 
+	// Depth plan 4.2 — the syslog listener.
+	//
+	// Off by default: binding a port that nothing sends to is harmless but
+	// misleading, and 514 in particular needs either a capability or a
+	// published container port, which an operator has to decide.
+	//
+	// SyslogToken is a minted ingest token, and it is the *only* place the
+	// tenant can come from. Syslog carries no authenticated principal and
+	// no header, so anything read off the wire is sender-controlled — a
+	// tenant taken from a syslog field would be a cross-tenant write with
+	// no attacker effort at all. One listener therefore serves one tenant.
+	SyslogEnabled        bool
+	SyslogUDPAddr        string
+	SyslogTCPAddr        string
+	SyslogToken          string
+	SyslogBatchSize      int
+	SyslogFlushMs        int
+	SyslogMaxConnections int
+
 	// Workstream 6 — universal capture push paths.
 	// InboxEnabled toggles the /v1/inbox/* routes. Off by default in
 	// development if no DATABASE_DSN is set, since the inbox store needs
@@ -220,6 +239,13 @@ func Load() (*Config, error) {
 		NvdAPIKey:         getEnv("NVD_API_KEY", ""),
 
 		// Universal capture (Workstream 6).
+		SyslogEnabled:        getEnv("AISOC_SYSLOG_ENABLED", "false") == "true",
+		SyslogUDPAddr:        getEnv("AISOC_SYSLOG_UDP_ADDR", "0.0.0.0:5514"),
+		SyslogTCPAddr:        getEnv("AISOC_SYSLOG_TCP_ADDR", "0.0.0.0:5514"),
+		SyslogToken:          getEnv("AISOC_SYSLOG_TOKEN", ""),
+		SyslogBatchSize:      mustGetEnvInt("AISOC_SYSLOG_BATCH_SIZE", 500),
+		SyslogFlushMs:        mustGetEnvInt("AISOC_SYSLOG_FLUSH_MS", 2000),
+		SyslogMaxConnections: mustGetEnvInt("AISOC_SYSLOG_MAX_CONNECTIONS", 256),
 		InboxEnabled:      getEnv("INBOX_ENABLED", "true") == "true",
 		InboxTemplatesDir: getEnv("INBOX_TEMPLATES_DIR", "/app/templates"),
 		InboxMaxBodyBytes: int64(mustGetEnvInt("INBOX_MAX_BODY_BYTES", 10*1024*1024)),

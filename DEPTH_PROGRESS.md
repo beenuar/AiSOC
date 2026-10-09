@@ -196,7 +196,17 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 ## Phase 4: Collection and scale
 
 - [ ] **4.1** Cloud-native collection (S3+SQS org trail, Pub/Sub, Event Hubs)
-- [ ] **4.2** Standard inputs (syslog, OTLP, Kafka, TAXII 2.1)
+- [~] **4.2** Standard inputs (syslog, OTLP, Kafka, TAXII 2.1). **One of
+  four bullets closed.** The syslog listener is done: `services/ingest`
+  accepts UDP and TCP and reads RFC 5424, RFC 3164, CEF and LEEF, with the
+  tenant taken from a minted token because syslog carries nothing a sender
+  does not control. Gated by `scripts/check_syslog_listener.py` (self-test:
+  one injected violation per rule, including each of the three Go syntaxes
+  a tenant could leak through) wired into `ci.yml :: python-lint`. 33 new
+  Go tests. **Three bullets are open and were not attempted**, named here
+  rather than left to be inferred: an OTLP logs receiver, a Kafka input for
+  customer topics, and a TAXII 2.1 server over the tenant IOC store. Each
+  reproduces trivially — nothing in the tree implements any of them.
 - [ ] **4.3** Retention the tenant chooses
 - [ ] **4.4** Throughput (parity 6.9) and a cloud-hardware run
 - [ ] **4.5** Deployment completeness (parity 6.8)
@@ -251,4 +261,5 @@ candidates, which need no key and *can* be measured here; the hosted rows stay
 |---|---|---|
 | 2026-10-07 | 0.1 | This file created at base commit `1b8bc2d4`. |
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
+| 2026-10-09 | 4.2 | Reproduced: `check_syslog_listener.py` against `origin/main` reported "no Go sources under services/ingest/internal/syslog", and the only syslog path was `POST /v1/inbox/cef`, which needs a forwarder that already speaks HTTP. Implemented `services/ingest/internal/syslog` (UDP + TCP, both RFC 6587 framings, four wire formats, token-derived tenant, batched publish, `/readyz` subscription). Five negative controls recorded in the PR; one of them found a hole in the new gate itself, which reported OK while the tenant came from `msg.Hostname` through a struct field — the detector now knows all three Go syntaxes and the self-test exercises each. Writing the tests also found a shutdown deadlock: `Stop` waited on goroutines watching a context the caller had not cancelled yet. Ingest suite green, `internal/syslog` 33 cases. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |
