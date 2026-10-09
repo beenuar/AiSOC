@@ -15,7 +15,7 @@ The companion page [Credentials & secrets](./credentials) covers connector-crede
 | Control | Mechanism | Scope |
 |---|---|---|
 | **User auth** | Local password (bcrypt), OIDC, SAML 2.0, JWT access + refresh tokens | All web/API traffic |
-| **MFA** | WebAuthn / passkeys (Responder PWA), TOTP for analyst accounts | Per-user |
+| **MFA** | WebAuthn / passkeys (Responder PWA), TOTP with recovery codes (console) | Per-user; enforcement is per-tenant |
 | **API auth** | Scoped API keys (`aisoc_<48-hex>`, SHA-256 stored), JWT bearer tokens | Programmatic clients |
 | **Authorization** | Role-Based Access Control (8 built-in roles, fine-grained permissions) | Every endpoint |
 | **Tenant isolation** | Postgres Row-Level Security with `app.current_tenant_id` session variable | Every tenant-partitioned table |
@@ -80,12 +80,20 @@ RLS apply identically however a user signed in.
 Two MFA paths are available:
 
 - **WebAuthn / passkeys** — implemented in [`services/api/app/api/v1/endpoints/passkeys.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/passkeys.py). Required for the [Responder PWA](../intro) (`/responder/*` route). Passkey-only login means there is no password fallback for on-call responders — you authenticate with the device, biometric, or hardware key the user registered.
-- **TOTP**, with backup codes and per-role enforcement, is **planned and not
-  implemented**. No TOTP enrolment, verification or backup-code path exists in
-  the tree. Restored by parity 4.2.
+- **TOTP with recovery codes** — implemented in
+  [`services/api/app/api/v1/endpoints/mfa.py`](https://github.com/beenuar/AiSOC/blob/main/services/api/app/api/v1/endpoints/mfa.py)
+  over RFC 6238, with the standard's own published vectors as the test
+  fixtures. Enrol at **Settings → Two-factor auth**; a correct password for an
+  enrolled account answers **202** with a short-lived `mfa_token` instead of a
+  session. The secret is vault-encrypted and recovery codes are stored as
+  SHA-256 hashes. See [Two-factor authentication](./console-mfa.md).
 
-Passkeys are enforced for the Responder PWA. **Per-role MFA enforcement for the
-console is not implemented**; it arrives with parity 4.2.
+Passkeys are enforced for the Responder PWA. Console TOTP is enforced
+**per tenant** — `PUT /api/v1/auth/mfa/policy` with `{"require_totp": true}`,
+which challenges unenrolled members to enrol at next sign-in rather than
+locking them out. **Per-role enforcement does not exist**: the policy is one
+boolean per tenant, so a tenant cannot require a second factor of its
+administrators alone.
 
 ### API keys
 
@@ -660,9 +668,11 @@ GitHub CodeQL (`.github/workflows/codeql.yml`) analyses `javascript-typescript`,
 `scripts/check_codeql_alerts.py --self-test` injects an alert at each severity plus every shape of vacuous pass — no analysis, a dropped language, a frozen analysis, mixed `codeql-action` pins, a PR-only trigger — and requires the gate to catch each one. CI runs that self-test immediately before the gate itself, on the same tree.
 
 :::warning This invariant was stated for four months before anything enforced it
-This section used to read "the Python alert count on `main` is zero, and we treat that as a CI gate — a new alert breaks the security workflow". No mechanism existed. `codeql.yml` uploads SARIF, and `github/codeql-action/analyze` does not fail a build on findings; `main` has no branch protection, so "Code scanning results" was not a required check either; and `security.yml`'s only hard job is the claim-to-gate matrix. Nothing in the repository queried the code-scanning API.
+This section used to read "the Python alert count on `main` is zero, and we treat that as a CI gate — a new alert breaks the security workflow". No mechanism existed. `codeql.yml` uploads SARIF, and `github/codeql-action/analyze` does not fail a build on findings; `main` **was unprotected at the time**, so "Code scanning results" was not a required check either; and `security.yml`'s only hard job is the claim-to-gate matrix. Nothing in the repository queried the code-scanning API. (`main` is branch-protected now — a pull request plus a set of required status checks — so read that clause as the state then, not now. Count the contexts with `gh api repos/beenuar/AiSOC/branches/main/protection/required_status_checks/contexts` rather than quoting a number here, because the set moves.)
 
-It was found the way these things are always found: two alerts — [#893](https://github.com/beenuar/AiSOC/security/code-scanning/893) (`py/unused-global-variable`) and [#896](https://github.com/beenuar/AiSOC/security/code-scanning/896) (`py/print-during-import`), both `note` — sat open on `main` while this page said the count was zero. The scan itself was healthy and current; the enforcement was imaginary. The sentence above now describes a job that exists, and the gate's self-test is what keeps it that way.
+It was found the way these things are always found: two `note` alerts — **#893** (`py/unused-global-variable`) and **#896** (`py/print-during-import`) — sat open on `main` while this page said the count was zero. The scan itself was healthy and current; the enforcement was imaginary. The sentence above now describes a job that exists, and the gate's self-test is what keeps it that way.
+
+The alert numbers are given without links on purpose: a code-scanning alert page needs write access on the repository, so a link to one answers **404** for an ordinary reader of this page. With that access they are at `/security/code-scanning/893` and `/896`; both now read `fixed`.
 :::
 
 Two patterns are worth documenting because they came up repeatedly during the sweep that drove the alert count to zero:

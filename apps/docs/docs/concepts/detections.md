@@ -27,7 +27,7 @@ coverage page all do now, and it is why they agree.
 
 :::
 
-The library holds **6,991 ATT&CK-mapped rules on disk, of which 2,603 are
+The library holds **6,991 ATT&CK-mapped rules on disk, of which 2,511 are
 executable** — the count the detection engine actually loads. Those two numbers
 travel together everywhere, because a library figure presented on its own reads
 as coverage and is not.
@@ -223,7 +223,7 @@ the rule, so a typical green CI run looks like:
 ```
 Validated 6991 rules — 6991 passed, 0 failed, 44 fixture warnings
   Tiers: community=1, imported=6113, native=877
-  Executable (loaded by the engine): 2603; not loaded: 4388
+  Executable (loaded by the engine): 2511; not loaded: 4480
 ```
 
 The executable figure is read out of the compiled ruleset, which is the same

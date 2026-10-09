@@ -20,13 +20,33 @@ state in Redis so it survives a fusion restart and works across replicas.
 
 ## What it detects today
 
-| Rule | Window | Keyed on | Fires when |
-|------|--------|----------|------------|
-| Brute force | 5 min | user + source | Repeated auth failures against one account |
-| Password spray | 15 min | source | Failures across many distinct accounts from one source |
-| Port scan | 5 min | source | Connections to many distinct ports on one target |
-| Impossible travel | 12 h | user | Successful auths from geographically incompatible sources |
-| Data staging | 1 h | host | Unusual volume of file reads before an outbound transfer |
+**72 rules**, in `services/fusion/app/data/windowed_ruleset.json`. That file is
+the authority; the breakdown below is re-derivable from it and nothing else
+restates the list, because a hand-maintained table of rule names is the thing
+that goes stale first. This section used to name five — the original hardcoded
+set, long after the corpus had grown past it.
+
+| Category | Rules | Examples |
+|---|---:|---|
+| Identity | 27 | MFA fatigue (repeated push denials for one account), many distinct source IPs authenticating one account |
+| Cloud | 20 | Access-key minting bursts, one principal across many regions, role grant followed by lock removal |
+| Network | 11 | Connection fan-out from one source |
+| Application | 6 | An AI agent repeatedly denied a tool call, or calling an unusual number of distinct models |
+| Endpoint | 5 | Process-spawn bursts keyed on image or parent image |
+| Data exfil | 3 | Read volume against one host ahead of an outbound transfer |
+
+Windows run from **60 seconds to 24 hours**, and a rule is keyed on whichever
+entity its question is about — `actor`, `src_ip`, `user`, `user_arn`,
+`agent_id`, `hostname`, a Windows `SubjectUserName`, a Kubernetes `k8s_user`
+and others.
+
+68 of the 72 carry a `wd-` prefix: they were derived from stateless `det-*`
+rules that named a threshold the stateless engine cannot compute, and each was
+replayed through the real windowed engine and watched to fire. That translation
+is also why the published *stateless* executable figure went **down** — those
+rules had been counted as executable while being unable to fire. The remaining
+four are `aisoc-corr-*`, compiled from Sigma correlation rules under
+`detections/sigma-correlations/`.
 
 ## Why it is a separate engine
 
@@ -62,9 +82,11 @@ the connector nested it or not.
 - **Windows are per tenant.** A shared source address seen by two tenants
   accumulates two independent counters, which is correct — one tenant's
   threshold is not evidence about another's.
-- **Eviction is by window, not by count.** A rule with a 12-hour window and a
-  high-cardinality key (impossible travel is keyed on user) holds more state
-  than a 5-minute one. That is the dimension to watch if Redis memory grows.
+- **Eviction is by window, not by count.** The longest window in the corpus is
+  24 hours (`wd-ident-ad-machine-account-quota-abuse`, keyed on user) and the
+  shortest is 60 seconds; a long window over a high-cardinality key holds far
+  more state than a short one. That is the dimension to watch if Redis memory
+  grows.
 
 ## Adding a rule
 

@@ -1,86 +1,185 @@
-## Learned User Preferences
+# Working in this repository
 
-- Always track progress locally (e.g. in a TODO/PROGRESS file) so work can be resumed after IDE crashes or restarts.
-- Complete all planned tasks without stopping mid-way; work through the full list until done.
-- Do not name competitor products anywhere in code, comments, docs, plan files, or marketing copy. Where a competitor is the benchmark for a comparison, refer to it neutrally (e.g. "the reference AI-SOC platform") and keep the analytical content. Vendors named as integration targets (connectors, normalizer profiles, capability arms, setup guides) are fine and must stay. The canonical name list and the allow-listed integration paths live in `scripts/competitor_names.toml`, enforced by `scripts/check_competitor_names.py`.
-- Before pushing to GitHub, ensure no secrets, API keys, tokens, or sensitive data are present in any public repo files.
-- Host codebase on GitHub once fully built out; keep documentation in sync.
-- Never edit plan files directly — implement the plan as specified without modifying the plan document itself.
-- After every significant change, push code and update documentation on GitHub immediately — don't wait to be asked.
-- Benchmark data and documentation must be transparent about what is synthetic vs. real; never present fabricated metrics as actual measured performance.
-- When the task is clear, act autonomously — don't ask unnecessary clarifying questions.
-- Standing repo-maintenance loop is the default when no other task is queued: review open PRs at the canonical repo, resolve CI/conflicts, merge them, close issues those PRs resolved, and keep `main` green.
-- After any deploy to `tryaisoc.com`, do an end-to-end customer-journey review that covers the full **authenticated** app (registration → login → connector setup → live ingest/triage → billing), not just landing → dashboard: click through every interactive element and fix dead buttons, broken flows, and empty/errored views before declaring done. The user repeatedly reports broken authenticated features post-deploy and demands being "1000% sure" nothing is broken before any handover.
-- The authenticated product must run on **real, live** connector-ingested data and genuine LLM triage — never mock/demo/baseline-fallback or empty data presented as working. When a user connects a connector, the platform must automatically and continuously (near-real-time) pull and analyze that data for triage without the user having to ask; stubbed features, empty dashboards, and silent mock-data fallbacks are treated as bugs.
-- When asked "what else can we improve?" / "what are the missing pieces?" / "make this world-class", produce a concrete competitive gap analysis vs. leading commercial AI-SOC products and implement the gaps — don't just answer in prose.
+AiSOC is an open-source, AI-assisted Security Operations Center: telemetry comes
+in from your own security tools, gets normalized, matched against a detection
+corpus, correlated into alerts, triaged by an agent, and acted on through
+governed response verbs. It runs on your own infrastructure — cloud or
+on-premises — under the MIT license.
 
-## Learned Workspace Facts
+This file is for anyone changing the code, human or AI. It is the short version;
+each section points at the thing that is authoritative. If this file and the
+tree disagree, **the tree is right and this file is a bug**.
 
-- Project: AiSOC — open-source, AI-powered Security Operations Center maintained by the AiSOC community under the MIT license.
-- **Single source of truth (as of 2026-06-27):** `https://github.com/beenuar/AiSOC` is the only canonical repo. The previous private staging repo `beenuar/AISOC-Cyble` was archived (read-only, `archived: true`) and its full history was merged into this monorepo under `plans/cyble-aisoc/` via `git subtree add --prefix=plans/cyble-aisoc` ([PR #324](https://github.com/beenuar/AiSOC/pull/324)). The archive notice (`DEPRECATED.md`) was subsequently subtree-pulled into `plans/cyble-aisoc/DEPRECATED.md` ([PR #325](https://github.com/beenuar/AiSOC/pull/325)).
-- **Spec + historical prototype location:** the north-star design doc lives at `plans/cyble-aisoc/cyble-aisoc-plan.md`; the historical FastAPI/static prototype + early architecture notes + 12-month roadmap live under `plans/cyble-aisoc/{platform,architecture,roadmap}/`. Treat that subtree as historical reference only — the canonical deployable code is at the monorepo root (`services/`, `apps/`, `infra/`, `packages/`).
-- **CodeQL scoping:** `.github/workflows/codeql.yml` carries `paths-ignore: 'plans/cyble-aisoc/**'` so prototype findings don't appear as actionable security alerts. The same `paths-ignore` is documented inline in the workflow.
-- Monorepo managed with pnpm (pnpm@8.15.1) and Turborepo; workspaces defined in `apps/*` and `packages/*`.
-- Apps: `apps/web` (Next.js frontend), `apps/docs` (documentation site).
-- Backend services in `services/`: `api` (FastAPI/Python 3.11), `agents`, `alert-fusion`, `connectors`, `demo-producer`, `enrichment`, `fusion`, `ingest`, `realtime`, `threatintel`, `ocsf`.
-- API service stack: FastAPI, Uvicorn, SQLAlchemy (async), asyncpg (PostgreSQL), Alembic (migrations), Redis, PyJWT (JWT), Pydantic v2.
-- Packages: `packages/types` (shared TypeScript types), `packages/ui`, `packages/sdk-go`, `packages/sdk-py`, `packages/sdk-ts`, `packages/plugin-sdk-go`, `packages/plugin-sdk-py`.
-- Docker Compose used for local dev: `infra/compose/` is the canonical home for all non-root compose files (`docker-compose.dev.yml`, `docker-compose.demo.yml`, `docker-compose.airgap.yml`); only the slim `docker-compose.yml` remains at repo root. Build contexts inside the moved files use `../../services/<name>` (two levels up). Terraform in `infra/terraform/` for infrastructure.
-- CI uses GitHub Actions (`.github/workflows/`); includes workflows for OpenAPI checks, CI, docs deployment, marketplace sync, and detection validation.
-- Detection rules stored in `detections/` (YAML format, categorized by cloud/endpoint/identity/network/application).
-- Marketplace plugin index at `marketplace/index.json`, synced to `apps/web/public/marketplace/` via `pnpm marketplace:sync`.
-- Connector platform conventions:
-  - Connectors live under `services/connectors/app/connectors/<name>.py`. Each subclasses `BaseConnector` and declares a `schema()` classmethod returning a `ConnectorSchema(name, label, description, category, fields, oauth, default_poll_interval_seconds)`. Categories are `edr | siem | cloud | iam | saas | vcs | network`.
-  - Discovery is registry-based — add the class to `_CONNECTOR_CLASSES` in `services/connectors/app/connectors/__init__.py` (no other wiring required).
-  - Sensitive `auth_config` fields are marked `secret=True` in the schema and encrypted at the application layer using `CredentialVault` (Fernet AES-128-CBC + HMAC-SHA256). Key in `AISOC_CREDENTIAL_KEY`; rotation supported via `MultiFernet` + `AISOC_CREDENTIAL_KEY_ROTATION_FROM`. Vault token format is `vault:v1:<base64>`.
-  - The API service (`services/api`) holds the encrypt/decrypt keypair authority; `services/connectors` ships a vendored read-path `decrypt_dict()` so the scheduler can decrypt at poll time without owning the write path.
-  - Polling runs in-process inside `services/connectors` via APScheduler (`ConnectorScheduler`). One job per enabled instance, 5-min default cadence, overridable per-instance via `connector_config.poll_interval_seconds`. The scheduler reloads jobs every 30s. Disable in tests with `AISOC_CONNECTORS_DISABLE_SCHEDULER=1`.
-  - Normalized events flow through `IngestClient` (`services/connectors/app/ingest_client.py`) to `services/ingest`'s `/v1/ingest/batch` endpoint with an `X-Tenant-ID` header.
-  - Severity ladder is exactly five tiers: `info | low | medium | high | critical` (v1.5+). Vendor-native ladders that publish a distinct `critical` (Azure 5-tier, GCP SCC 5-tier, GitHub `critical`, ServiceNow priority 1, AWS GuardDuty ≥8.0, AuditD identity-destruction events, K8s `cluster-admin` bindings, Tailscale tailnet lockdown failures) MUST map to `critical` in their `normalize()` and NOT be collapsed into `high`. Confidence (`alert.confidence`, int 0–100 with band `low | medium | high`) is independent of severity and is emitted by `services/fusion` `ConfidenceScorer`.
-  - Every connector ships a marketplace manifest at `plugins/<connector-id>/plugin.yaml` mirroring its `schema()`. Run `pnpm marketplace:sync` after adding one.
-  - Per-connector setup walkthroughs live under `apps/docs/docs/connectors/<connector-id>.md` and are indexed by `apps/docs/sidebars.ts` under the `Connectors` category. The vault threat model + rotation procedure live in `apps/docs/docs/operations/credentials.md`.
-- **Alerts / Investigation Rail (v1.5):** `/alerts` is a two-pane workbench with `InvestigationRail.tsx` on the right. `GET /api/v1/alerts/{id}` returns an envelope (narrative, related entities with `pivotPath`, six-event mini-timeline, `recommended_actions`). Fusion writes deterministic correlation copy at fuse time (`services/fusion/app/services/narrative.py`); API uses `alert_rail.py`, `narrative_projection.py`, and vendored `app/_vendor/narrative.py` (keep in sync via `scripts/sync_vendored_narrative.py`). User doc: `apps/docs/docs/console/investigation-rail.md`.
-- v1.4 eval harness conventions:
-  - Synthetic dataset is fixed at 200 incidents (`services/agents/tests/eval_data/synthetic_incidents.json`) plus an aligned synthetic telemetry corpus (`synthetic_telemetry.jsonl`). Three of the four metrics (`alert_reduction`, `investigation_completeness`, `response_quality`) are substrate self-consistency gates, not agent accuracy scores; only `mitre_accuracy` measures the live agent. The benchmark page (`apps/docs/docs/benchmark.md`) explains which is which.
-  - PRs touching the agent, orchestrator graph, prompts, tools, RAG corpus, or detection content must re-grade against the harness and include before/after deltas in the PR body if any axis regresses.
-- Project website at `tryaisoc.com`; domain registered through Cloudflare. `tryaisoc.com/signup` is deprecated — the public entry point is `tryaisoc.com/dashboard` (interactive demo). Marketing-site signup CTAs should redirect there, not to a separate signup form.
-- Production hosting on Fly.io (region `iad`) with two apps: `aisoc-demo-web` (Next.js, serves `tryaisoc.com`) and `aisoc-demo-api` (FastAPI, also exposed at `api.tryaisoc.com`). The web app proxies `/api/v1/*` to `aisoc-demo-api.internal:8000`. Each service has its own `fly.toml`; deploys use the `fly` CLI with per-session tokens supplied by the user and rotated out-of-band. `services/api/app/scripts/run_migrations.py` retries `asyncpg.connect` with exponential backoff (6 attempts) to ride out Fly Postgres autostop / boot-race transients during the migration `release_command`.
-- v1.0 buyer-value plan (`aisoc_v1.0_—_buyer-value_plan_c8116970.plan.md`) is fully implemented (all WS-A through WS-H workstreams completed as of May 2026). Key additions:
-  - WS-A: Demo seed script at `services/api/app/scripts/seed_demo.py` — 15 realistic incidents, one-click Render deploy (`render.yaml` + README badge).
-  - WS-C: 25 named parameterised playbooks (WS-C1), playbook gallery with eval gate (WS-C2/C3).
-  - WS-D: Auto-summary at investigation close with PDF export (WS-D2), replayable investigation timeline (WS-D3), rate-limit + real-test hardening (WS-D1).
-  - WS-F: Light/dark theme persisted in user profile (WS-F1), WCAG AA axe-core CI gate (WS-F2), saved views on Alerts/Cases/Playbooks + drag-drop dashboard widgets (WS-F3), visual SOAR studio (undo/redo, edge validation, schema-driven forms — WS-F4), empty-state polish + v1.1 deferred badges (WS-F5).
-  - WS-G: Slack Bolt service at `services/slack-bot/` with `/aisoc` ChatOps commands (WS-G1); executive digest with auto-generated PDF + weekly scheduler in `services/api/app/services/digest_pdf.py` and `services/api/app/api/v1/endpoints/reports.py` (WS-G2).
-  - WS-H: LLM cost dashboard (`services/api/app/services/cost_dashboard.py` + `apps/web/src/app/(admin)/costs/page.tsx` — WS-H1); BYOK per-tenant LLM credentials vault-encrypted via `CredentialVault`, model `TenantLlmCredential`, settings UI in `apps/web/src/components/settings/SettingsView.tsx` (WS-H2); compliance audit export CSV + HTML bundles at `services/api/app/services/audit_export.py` (WS-H3); air-gapped / local-LLM mode via Ollama/LiteLLM overlay + zero-external-call demo seed (WS-H4).
-  - Threat actor attribution engine v0 at `services/threatintel/` (rebased, hardened, open as PR #43).
-- **v8.0 wave-1 (tagged as `v7.5.0` on 2026-06-29):** Architectural foundation for the v8.0 line shipped as the `v7.5.0` release. `VERSION` is `7.5.0` (also reflected in `apps/web/package.json`); wave-2 work accumulates under `[Unreleased]` in `CHANGELOG.md` until the next tag. Tracking doc: `docs/roadmap/v8-progress.md`. Key shipped pieces:
-  - **Graph at ingest (T1.1).** `services/ingest/internal/graph/` writes a Neo4j entity graph (`User`, `Asset`, `Process`, `IP`, `Domain`, `Alert`, 17 node labels / 14 edge types total) inline with Kafka consumption. Batched UNWIND upserts + fire-and-forget retry queue keep the ingest latency budget unchanged. Schema doc: `apps/docs/docs/architecture/graph-schema.md`. Anchor post: `apps/web/content/blog/graph-at-ingest.mdx`.
-  - **Four-agent rebrand (T2.1).** `DetectAgent`, `TriageAgent`, `HuntAgent`, `RespondAgent` in `services/agents/app/agents/`. Back-compat aliases preserve existing imports. Each owns one funnel stage; funnel KPI doc at `apps/docs/docs/console/funnel-kpis.md`.
-  - **`/hunt` natural-language surface (T2.2).** `apps/web/src/app/(app)/hunt/` + `services/api/app/api/v1/endpoints/saved_hunts.py`. NL prompt → ES|QL / SPL / KQL template (HuntAgent never writes raw queries). Saved hunts have `pivotPath` deep-links into the Investigation Rail.
-  - **Sixteen first-party connectors.** Wave-1 fully tested: `tines`, `torq`, `falco`, `pagerduty`, `opsgenie`, `confluence_audit`. Wave-2 with full fixtures + tests: `cloudflare_zt`, `sysdig`, `vault`, `snowflake`. Six more `[wip]` in `docs/roadmap/v8-progress.md`. All five severity tiers preserved end-to-end.
-  - **L0–L4 automation maturity model.** `apps/docs/docs/concepts/automation-maturity.md` + `apps/web/content/papers/l0-l4-automation-maturity.md` (PDF rendered via `pnpm docs:build`). Ladder: L0 manual → L4 fully autonomous closure with human sign-off.
-  - **Public weekly benchmark scoreboard.** `apps/docs/docs/benchmark-scoreboard.mdx` reads `apps/docs/static/data/scoreboard.json`, refreshed by `.github/workflows/wet-eval.yml` (weekly). Existing eval-harness transparency rules apply (synthetic vs real labelled explicitly).
-- **Security wave shipped before v8.0 cut (PRs #116–#128, May 2026):** Twelve critical/high CVE-class fixes. Patterns to remember:
-  - Rule engine no longer uses `eval()` / `compile()` on user input — conditions are parsed into a whitelisted AST in `services/api/app/services/rules_engine.py`.
-  - Tenant isolation is enforced at the **query layer** (filter by `tenant_id` in `WHERE`), not via RLS alone, on `/hunts` and `/cases` endpoints. RLS remains as defence-in-depth.
-  - CORS: shared `cors.py` is vendored byte-identical into every Python service. It refuses to start when `AISOC_CORS_ORIGINS` contains `*` while credentials are enabled and `AISOC_ENV=production`. TypeScript guard for `services/realtime` enforces the same rule.
-  - Playbook outbound traffic: every `http_request` / `notify` step goes through `services/agents/app/playbook/ssrf_guard.py` — scheme allow-list, hostname resolution + IP allow-list, cloud-metadata block list that applies even when private IPs are explicitly allowed.
-  - Plugin manager OCI installs verify signed manifests against an allow-list and pin image digests at install time, re-verifying on every load.
-  - Dev-mode: one canonical `AISOC_DEV_MODE` env var replaces the per-service patchwork of `DEV_MODE` / `SKIP_AUTH` / `AISOC_DEMO_MODE` flags. `tests/test_security_defaults.py` is a CI gate that asserts no dev-mode shortcut is reachable when the flag is unset.
-  - LLM input contract: untrusted enrichment (threat-intel feeds, user-submitted content) runs through `services/api/app/services/llm_safety.py` (boundary markers, control-character stripping, length cap) before any prompt concatenation.
-- **Static analysis hygiene (CodeQL):** the invariant is **zero open CodeQL alerts on `main` at every severity, `note` included**, enforced by `.github/workflows/codeql-alert-gate.yml` running `scripts/check_codeql_alerts.py`. That gate did not exist until 2026-09-24 even though the docs had claimed one since 2026-05-15 — `analyze` does not fail a build on findings, `main` has no branch protection, and nothing queried the code-scanning API — so two `note` alerts sat open under a documented count of zero. Dismissed alerts are excluded (audited escape hatch, ~20 accepted-risk `py/request-without-cert-validation`) but counted in the gate's output; Scorecard SARIF is out of scope. The gate also fails on an unanalysed ref, a missing language, an analysis >10 days old, or one from a different commit than the run's. Two patterns drove the original cleanup:
-  - **`py/log-injection` — sanitise inline at the call site.** The taint tracker doesn't follow `_log_safe(value)` through function boundaries reliably, but it does recognise an inline `str(value).replace("\r", "").replace("\n", " ")[:N]` chain. Canonical example: `services/api/app/api/v1/endpoints/waitlist.py`. Even `uuid.UUID`-typed values are sanitised explicitly so the property is visible to both CodeQL and future readers.
-  - **`py/import-and-import-from` — pick one import style per module.** Tests that monkey-patch module-level constants should use `pytest.MonkeyPatch.setattr(module, "_NAME", value)` (with the standard from-import form), not `import app.foo as foo_module` _and_ a from-import for the same names.
-  - **`py/request-without-cert-validation` — accepted-risk for on-prem appliance clients.** The Splunk / FortiGate / PAN-OS / osctrl / FleetDM / MISP clients default to `verify=True` and only disable TLS verification on an explicit operator opt-in (required for self-signed / internal-CA appliances), so these ~20 alerts are dismissed `won't fix` with a comment recommending CA-bundle pinning as the future alternative. Related one-liners from the Jul-2026 pass: a count var named `secret*` trips the alert heuristic (rename to e.g. `vaulted`); `py/ineffectual-statement` on Protocol/abstract `...` bodies → use a docstring body; `py/empty-except` → add an explanatory comment. Zero open alerts re-confirmed on `main` (Jul 2026), now across Python + Go (`go vet` / `go build`).
-  - Docs anchor: `apps/docs/docs/operations/security.md#static-analysis-codeql`.
-- **UEBA env-var convention (PR #135, first community contribution, closes Issue #134):** `services/ueba/app/core/config.py` uses Pydantic `BaseSettings` with `populate_by_name=True` and `Field(default=..., validation_alias=AliasChoices("UNPREFIXED", "UEBA_PREFIXED"))` per field. Both forms work; unprefixed wins when both are set. `services/ueba/alembic/env.py` follows the same rule: `os.environ.get("DATABASE_URL") or os.environ.get("UEBA_DATABASE_URL", default)`. Same pattern as `services/fusion/app/core/config.py`. Test coverage: `services/ueba/tests/test_config.py` asserts four cases (unprefixed-only / prefixed-only / both-with-unprefixed-winning / default-fallback). Doc anchor: `apps/docs/docs/deployment/env-vars.md#ueba-service-servicesueba`.
-- **Release flow is tag-driven (CHANGELOG-extraction).** `.github/workflows/release.yml` watches for `v*` tags, extracts the matching `[X.Y.Z]` section from `CHANGELOG.md` (Keep-a-Changelog format) via an awk script, then publishes via `softprops/action-gh-release` and pushes 12 service images to GHCR with the version tag. To cut a release: (1) promote `[Unreleased]` → `[X.Y.Z]` in `CHANGELOG.md` (leaving a fresh empty `[Unreleased]`), (2) bump `VERSION` and `apps/web/package.json`, (3) refresh the README version badge / headline / roadmap entry, (4) commit `chore(release): vX.Y.Z`, (5) `git tag vX.Y.Z && git push --tags`. Do NOT create the GitHub release manually — the workflow does it. v7.5.0 (2026-06-29) is the canonical reference example.
-- **Marketing shell is unified.** `apps/web/src/app/(marketing)/layout.tsx` renders the canonical `StickyNav` + `apps/web/src/components/landing/sections/Footer` ONCE for every marketing subpage; subpages must NOT re-import or re-render their own nav/footer. Standalone pages outside the route group (`not-found.tsx`, `why-open-source/page.tsx`, `benchmark/page.tsx`) import the shell directly. The deprecated `LandingNav` and `landing/Footer` were deleted. `StickyNav` anchor links use absolute paths (`/#solution`, `/#pillars`) so they work on subpages too. JSX whitespace pitfall (PR #337): when an interpolation like `{CONNECTOR_COUNT}` and adjacent text wrap to separate source lines, React injects `<!-- -->` comment markers and DROPS the leading whitespace — always use an explicit `{' '}` between expression and following text. The connector-count source of truth is `apps/web/src/lib/connector-count.ts` (`CONNECTOR_COUNT`); `scripts/generate_connector_count.py --check` is a CI gate that asserts the README contains the `**N click-and-connect data connectors**` phrase.
-- **`packages/aisoc-sandbox` — offline 30-second on-ramp.** Standalone simulator wrapping the agent graph with in-memory SQLite + deterministic LLM mode, designed so `pip install aisoc-sandbox && aisoc-sandbox demo` completes in <30 s with zero external deps. Ships five bundled scenarios (lateral-movement + four added in PR #368). Distinct from the full production LangGraph stack — keep it lightweight on purpose. Tested via `packages/aisoc-sandbox/tests/`.
-- **README + onramp CI gates.** `README.md` is capped at ≤250 lines (current target after PR #368 was 1,102 → 234). Heavy content lives in `RELEASES.md`, `ROADMAP.md`, `docs/architecture/overview.md`, and the docs portal. `.github/workflows/onramp-gates.yml` enforces four gates on every PR: (1) every CLI command shown in README either runs in CI or is explicitly marked "coming in v8.0", (2) `demo/hero.gif` + screencast assets exist on `main`, (3) README line count ≤250, (4) `aisoc-sandbox demo` cold-start. The matching local script lets contributors run the same checks. Advertised packages (`@aisoc/mcp`, `@aisoc/sdk`, `@aisoc/plugin-sdk`, `aisoc-cli`, `aisoc-sdk`, `aisoc-plugin-sdk`) are NOT yet published — README and docs use monorepo-local invocations and flag future commands as "coming in v8.0".
-- **Devcontainer prebuilt image.** `.devcontainer/devcontainer.json` prefers `ghcr.io/beenuar/aisoc-devcontainer:latest` (with local Dockerfile fallback). `.github/workflows/devcontainer-build.yml` publishes multi-arch (amd64+arm64) on changes to the Dockerfile; `.github/workflows/devcontainer-coldstart.yml` is `workflow_run`-triggered against the freshly-published `:latest` and probes the toolchain (image pull ≤60 s, `uv`/`ruff`/`docker compose`/etc. on PATH). Two durable gotchas the Dockerfile encodes: (a) `docker-compose-plugin` is NOT in Debian Bookworm's default apt repo — install Compose v2 by direct curl of the official binary into `/usr/local/lib/docker/cli-plugins/docker-compose` (pinned to v2.29.7); (b) `pipx`-installed tools land in `/root/.local/bin` which is invisible to the container's non-root `node` user — install `uv` and `ruff` system-wide into `/usr/local/bin` instead. Docs anchor: `apps/docs/docs/development/devcontainer.md`.
-- **World-class hardening program (12-phase, from Jul 2026) + claim-to-gate governance.** A staged program drives the repo toward production readiness; phase status is tracked in `ROADMAP.md` + a local `PROGRESS.md`, and the program forbids stub implementations, fake/circular gates, and simulated results presented as functional. Its backbone is `CLAIM_TO_GATE_MATRIX.md` — a permanent CI artifact mapping every product claim → the CI gate that proves it (each row is `GATED` / `PARTIAL` / `NO GATE`). A checker script enforces a **ratchet**: CI fails if the `NO GATE` count exceeds a committed baseline (`MAX_NO_GATE`, currently 3; `--max-no-gate` configurable). `.github/workflows/security.yml` runs the matrix ratchet as the **sole hard gate**, plus gitleaks / semgrep / trivy / checkov / tfsec in **observe mode** (`continue-on-error`, SARIF upload via `github/codeql-action`); `.gitleaksignore` is the curated secret allowlist and Trivy is installed as a pinned binary via a `run:` step (marketplace action versions were unreliable). Phase 1 also shipped a per-run nonce `PromptInjectionGuard` (ties detections to ledger flags + L0 demotion) and memory-poisoning-resistant override provenance (author / confidence / trust_weight; `apply_redisposition` gated by a confirmation token).
-- **Detection corpus honesty.** `detections/` carries ~6,975 rules on disk, but only ~939 are **executable** today (861 native + 77 Sigma-imported + 1 community); the remainder are quarantined/disabled. A truth-table documents the executable-vs-quarantined split. Keep these counts honest — never present quarantined/aspirational rules as executable (same synthetic-vs-real transparency rule as the eval harness).
-- **Stateful stores + per-store tenant isolation.** Beyond Postgres/Redis the platform runs Kafka (Redpanda-compatible in CI: KRaft, no ZooKeeper), ClickHouse (event lake, table `aisoc.raw_events`), Neo4j (entity graph), and Qdrant (vector store in `services/threatintel` via `QdrantStore`, for IOC/actor embeddings). This complements the query-layer Postgres isolation on `/hunts` + `/cases`: ClickHouse scopes via `lake_sql.rewrite_for_tenant()` injecting a `tenant_id` predicate into user SQL; Neo4j via a `tenant_id` node-property filter; Redis via a `tenant:{tid}:` key-prefix; Kafka via the `X-Tenant-ID` header / `tenant_id` envelope with per-tenant downstream filtering; Qdrant via `tenant_id` in point payloads + a mandatory query filter (public feed intel is intentionally global, so scoping targets tenant-private data). Offline assertions live in `tests/isolation/`; a CI live-container replay seeds two tenants and asserts cross-tenant reads never leak (skips gracefully when containers are absent).
-- **Production event-flow spine + response posture.** The CI-gated production path is: Connectors → `services/ingest` (OCSF normalize) → Kafka `raw_events` → `services/fusion` (promote + fuse) → Postgres alerts + `services/realtime` WS; the fusion consumer validates event schema and routes poison events to a dead-letter queue (they were previously dropped silently). Default response/autonomy posture is **copilot / dry-run** (human approval required); SOAR executors return `simulated` results unless real vendor credentials are plumbed. Populating the ClickHouse lake and running the detection corpus against the live stream are tracked roadmap items (a lake-writer / detect worker), so live-stream detection may not be wired in a given checkout — verify before assuming it runs.
-- **Standing repo-maintenance loop — Dependabot + CodeQL gotchas.** The canonical repo carries frequent Dependabot PRs touching both `poetry.lock` (Python services) and `pnpm-lock.yaml` (JS workspaces); merging lockfile PRs one-by-one re-conflicts the siblings, so consolidate them into a few **re-locked batch PRs** (regenerate the locks locally, verify exact target versions, merge once) instead of dozens of serial rebases. CodeQL requires `codeql-action` `init` / `autobuild` / `analyze` to all run on the **same** version — when Dependabot splits a `codeql-action` bump across separate PRs the CodeQL gate fails, so combine all legs of that bump into one PR.
+## Get it running
+
+```bash
+make up        # CORE profile: 16 long-running services, ~8 GB memory, ~20 GB disk
+make doctor    # what is up, what is not, and what to do about it
+make smoke     # the golden pipeline, eight stages, end to end
+```
+
+`make up` generates real secrets into `.env`, creates an administrator and
+prints its password once. There is no step where you hand-edit a compose file.
+`make up-full` adds the rest (21 services, ~12 GB) and switches on the lake
+writer and the entity graph.
+
+A first run shows real data with no credentials configured: the CISA Known
+Exploited Vulnerabilities catalogue is a genuine public feed that needs no API
+key, and a small local model does the triage.
+
+## The shape of the system
+
+One event's journey, which is the thing worth understanding first:
+
+```
+connector  →  services/ingest  →  Kafka raw_events  →  services/fusion  →  Postgres alerts
+  polls a      normalizes to       the spine            archives to the       + services/realtime
+  vendor       OCSF, projects                           lake, matches         pushes to the console
+  API          actor/action/                            detections,           ↓
+               resource/location                        correlates,        services/agents
+                                                        promotes           triages with an LLM
+                                                                              ↓
+                                                                        services/actions
+                                                                        executes a governed verb
+```
+
+Each hop is a service in `services/`. The stores are Postgres (operational),
+ClickHouse (the event lake), Neo4j (the entity graph), Qdrant (vectors), Redis
+and Kafka.
+
+Fuller treatment: [`docs/architecture/README.md`](docs/architecture/README.md)
+and the [architecture page](https://beenuar.github.io/AiSOC/docs/architecture)
+on the docs site.
+
+## Where things live
+
+| Path | What is in it |
+| --- | --- |
+| `services/` | The backend services above, one directory each |
+| `apps/web` | The Next.js console |
+| `apps/docs` | The documentation site |
+| `packages/` | Published SDKs, the benchmark harness, the offline sandbox |
+| `detections/` | **Generated** detection YAML — see the warning below |
+| `schemas/event_catalog/` | Vendor event types mapped to a normalized action and a sensitivity |
+| `plugins/` | One marketplace manifest per connector |
+| `scripts/` | The CI gates. Most are runnable alone and most have `--self-test` |
+| `infra/` | Compose overlays, Terraform, Grafana dashboards |
+| `plans/` | Locked planning documents. **Do not edit these.** |
+
+## Conventions that are easy to guess wrong
+
+- **`detections/*.yaml` is generated output.** The engine loads
+  `services/fusion/app/data/detection_ruleset.json`, compiled from Python spec
+  modules. Editing the YAML changes nothing that runs.
+- **The severity ladder is exactly five tiers** — `info | low | medium | high |
+  critical`. A vendor that publishes a distinct `critical` must map to
+  `critical`, never be collapsed into `high`. Confidence is a separate 0–100
+  integer and is not severity.
+- **A connector's normalized envelope nests the vendor payload under
+  `raw_event`**, not `raw`. Twenty-six connectors once used `raw`, missed the
+  canonical-envelope check, and were silently misattributed and never promoted.
+- **A new connector needs one registration**, in `_CONNECTOR_CLASSES` in
+  `services/connectors/app/connectors/__init__.py`. Everything else is
+  discovery.
+- **The tenant is never a parameter a caller or a model can set.** It comes from
+  the authenticated principal, or for service-to-service calls from a header.
+  Three gates enforce this.
+- **Secrets in connector config are vault-encrypted** at the application layer;
+  `services/api` owns the write path.
+
+## Figures, and how to re-derive them
+
+Never copy a number out of prose — it goes stale silently and several have. Each
+of these regenerates:
+
+| Figure | Current | Command |
+| --- | --- | --- |
+| Executable detection rules | 2,511 of 6,991 on disk | `python3 scripts/generate_corpus_stats.py --check` |
+| Rules that cannot fire | 2 | `python3 scripts/check_detection_fields.py` |
+| Connectors | 87 | `python3 scripts/generate_connector_count.py --check` |
+| Services per profile | CORE 16, full 21 | `python3 scripts/check_profile_service_counts.py` |
+| Claims with a gate behind them | 299 rows | `python3 scripts/check_claim_gate_matrix.py` |
+
+"Executable" means the rule was replayed through its real connector and the real
+engine and watched to fire. It is **not** a claim that the rule detects an
+attack, and that distinction is deliberate.
+
+## How a change gets accepted
+
+`main` is protected: a pull request plus a set of required status checks. The
+checks are not decoration — most of them exist because something shipped broken
+in exactly the way they now prevent.
+
+Before you push:
+
+```bash
+ruff check services/ scripts/ tests/ tools/ && ruff format --check .
+python3 scripts/check_mypy_baseline.py
+```
+
+`ruff` is pinned (`>=0.16.8,<0.17`) and the version *is* the behaviour — a
+different one reformats files CI never asked for. Install the pin into a
+throwaway virtualenv rather than using whatever is on your PATH. Build a
+per-service environment from that service's own locked set with
+`python3 scripts/service_requirements.py <service> --locked`, and do not install
+anything else into it: adding one package has already moved a dependency off the
+lock and changed a generated artefact.
+
+### The bar for a fix
+
+Three things, in order, and the middle one is not the hard part:
+
+1. **A test that fails on the current tree for the stated reason** — through the
+   real transport, the real app with its real dependencies, and a real database.
+2. The fix.
+3. **A negative control**: revert the fix, watch the test fail again.
+
+A passing test on a function nothing calls is indistinguishable from a working
+feature. This repository has found that shape dozens of times, which is why
+`scripts/check_module_reachability.py` exists.
+
+## Rules that are not negotiable
+
+- **No attribution to any tool, AI assistant, editor or vendor for the work** —
+  not in code, comments, documentation, commit messages, trailers or pull
+  request bodies. `scripts/check_attribution.py` enforces it.
+- **No competitor product named** outside an integration surface. Where one is
+  the benchmark for a comparison, refer to it neutrally and keep the analysis.
+  `scripts/check_competitor_names.py` enforces it;
+  `scripts/competitor_names.toml` holds the integration allow-list.
+- **Never present fabricated data as real.** Seeded or sample data is gated
+  behind demo mode; everywhere else shows an honest empty, zero or error state.
+  A measurement nobody took reads "not measured", never `0`.
+- **Never raise a scanner ceiling to make a scan pass.** Find the finding and
+  fix it.
+- **Do not edit anything under `plans/`.**
+- **Fetch every URL before you commit it** and require a 200. A link that 404s
+  is worse than no link: delete it and rewrite the sentence.
+
+## If you are an AI agent
+
+Everything above applies. Four things specific to you:
+
+- **Read before you assert.** Several claims in this repository were wrong in
+  both directions at different times — recorded as present when absent, then as
+  absent after they had been written. Check the file is on disk *and* read past
+  its rationale; a module docstring often opens by describing the problem it
+  fixed, which is not a description of the current state.
+- **Prefer testing the path over the function.** The most productive defect
+  class here is a test double more capable than the real thing: a fake store
+  that answers any query, a mock that bypasses the transport.
+- **Say what you could not verify.** "I could not check X, and here is why" is
+  worth more than an implied pass.
+- **Nothing in this repository can make a third-party AI tool reach for AiSOC
+  by default.** That comes from publishing the packages and listing the MCP
+  server in a registry, which is tracked work, not a documentation change.
+
+Machine-readable summaries live at
+[`llms.txt`](https://beenuar.github.io/AiSOC/llms.txt) and
+[`llms-full.txt`](https://beenuar.github.io/AiSOC/llms-full.txt). Both are
+generated by `scripts/generate_llms_txt.py` — change the generator, never the
+output.
+
+## Credits
+
+AiSOC's development is funded and supported by [Cyble](https://www.cyble.com).

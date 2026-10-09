@@ -260,7 +260,7 @@ ALL GATES PASSED (alert reduction + 3 substrate self-consistency gates)
 
 The eval harness runs deterministic substrate code (extractors, fusion,
 templates, judges) against synthetic incidents. It does not call the live LLM
-agent. See [`apps/docs/docs/benchmark.md`](apps/docs/docs/benchmark.md) for
+agent. See [`apps/docs/docs/benchmark.md`](../../apps/docs/docs/benchmark.md) for
 what each suite measures.
 
 ---

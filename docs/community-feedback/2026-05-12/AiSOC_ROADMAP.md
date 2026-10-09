@@ -224,5 +224,7 @@ re-prioritization.
 - **Stable feedback IDs:** [`AiSOC_Community_Feedback_Synthesis.md`](./AiSOC_Community_Feedback_Synthesis.md)
 - **Implementation tickets:** [`AiSOC_Proposed_Issues.md`](./AiSOC_Proposed_Issues.md)
 - **Historical roadmap:** [`/ROADMAP.md`](../../../ROADMAP.md)
-- **Active progress tracker:** [`/PROGRESS.md`](../../../PROGRESS.md)
+- **Active progress tracker:** [`/DEPTH_PROGRESS.md`](../../../DEPTH_PROGRESS.md).
+  This entry named `/PROGRESS.md`, which is gitignored and has never been in
+  the repository.
 - **Contributor invariants & eval gates:** [`/AGENTS.md`](../../../AGENTS.md)

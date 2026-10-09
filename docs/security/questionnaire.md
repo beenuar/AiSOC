@@ -64,10 +64,16 @@ or WebAuthn passkeys
 tokens expire in 30 minutes and refresh tokens in 7 days by default.
 
 **Is multi-factor authentication enforced?**
-**Not today.** WebAuthn passkeys exist and work, which is a passwordless
-*sign-in* factor rather than an enforced second factor, and there is no
-policy that requires MFA per role or per tenant. This is a gap, listed
-[below](#the-gap-list).
+**Per tenant, yes; per role, no.** The console carries a TOTP second factor
+with recovery codes
+([`mfa.py`](../../services/api/app/api/v1/endpoints/mfa.py)), and
+`PUT /api/v1/auth/mfa/policy` with `{"require_totp": true}` requires it of
+every member of the tenant — unenrolled members are challenged to enrol at
+their next sign-in rather than locked out. WebAuthn passkeys remain the
+factor for the responder PWA. What does **not** exist is a policy that
+requires a second factor of *some* roles and not others: the policy row is
+`aisoc_tenant_mfa_policy`, one boolean per tenant. That narrower gap is
+listed [below](#the-gap-list).
 
 **How is authorization decided?**
 One path. `CurrentUser.require_permission` in
@@ -101,12 +107,28 @@ Most, and the rest are counted rather than hidden.
 only fall. Its own docstring calls the number "not a target, a debt balance".
 
 **Is there just-in-time privileged access?**
-**No.** A role is held permanently or not at all, so an analyst who needs a
-permission once either holds it every day or waits for somebody who does.
-Migration `087_enterprise_iam.sql` created a `privilege_grants` table for
-exactly this and **nothing reads it**, which is worse than the table not
-existing: a row written into it confers nothing while reading as though it
-does. Listed as a gap [below](#the-gap-list).
+**Yes.** A time-boxed grant in `privilege_grants` adds a permission to a
+principal for a stated window and expires on its own.
+[`abac.py`](../../services/api/app/security/abac.py) resolves grants into
+the effective permission set and
+[`deps.py`](../../services/api/app/api/v1/deps.py) reads them on the one
+permission path, so a grant is a real authorization change rather than a
+row nothing consults.
+
+The same module evaluates **attribute conditions** that narrow a
+permission — by source address, by time of day, by a value on the request.
+Conditions can only turn an allow into a deny: a condition that could
+*grant* would be a second authorization system reaching its own answer,
+and the two would disagree on the day it mattered. The operator set is
+closed and total rather than an expression language, for the reason this
+repository already removed an evaluator from the rule engine once.
+
+[Access governance](access-governance.md) states the limits of both,
+including the one condition operator the write surface refuses and why.
+
+This answer previously read "**No** … nothing reads it", which was true of
+migration `087_enterprise_iam.sql` when the table was created and stopped
+being true when the readers landed.
 
 **How do services authenticate to each other?**
 With a shared service token, and **the tenant is a mandatory header verified
@@ -118,8 +140,13 @@ read that treated absent as "no filter".
 The weakness of one shared token is real and worth stating: it cannot be
 attributed to a particular service, cannot be scoped so the ingest pipeline
 carries less authority than the agents worker, and cannot be rotated without
-restarting everything at once. A `workload_identities` table exists for that
-and, like `privilege_grants`, has no reader. Both are in the gap list.
+restarting everything at once. **A per-service credential now exists** —
+`workload_identities` is issued and verified by
+[`workload_identity.py`](../../services/api/app/services/workload_identity.py)
+behind `/api/v1/workload-identities`, so a service can hold its own scoped,
+individually rotatable credential. The shared token remains the default a
+stock deployment boots with, and moving a deployment off it is a migration
+you perform rather than something that has happened to you.
 
 This area had a worse defect that is fixed: the API once posted to the
 connectors service with **no `Authorization` header at all** from two modules,
@@ -342,10 +369,7 @@ Each is a real absence, not a caveat.
 
 | Gap | State today | Where it is recorded |
 |---|---|---|
-| **Enforced MFA** | Passkeys exist as a sign-in factor; no per-role or per-tenant enforcement policy | This page |
-| **Just-in-time elevation** | `privilege_grants` exists as schema with no reader; a row in it confers nothing | This page |
-| **Attribute conditions on a permission** | `permission_conditions` exists as schema with no reader; a row in it denies nothing | This page |
-| **Per-service internal credentials** | `workload_identities` exists as schema with no reader; the one shared token is unattributable, unscopable and effectively unrotatable | This page |
+| **Per-role MFA enforcement** | TOTP with recovery codes and *per-tenant* enforcement ship; the policy is one boolean per tenant, so a tenant cannot require a second factor of its admins alone | This page |
 | **SOC 2 / ISO 27001** | Not commissioned; "controls aligned to" framing held by convention | [ADR-0002](../decisions/0002-compliance-claims.md) |
 | **The gate ADR-0002 claims guards that framing** | `scripts/audit_compliance_claims.py` does not exist and no workflow references it | [`REALITY_REPORT.md`](../audit/REALITY_REPORT.md) |
 | **Penetration test** | Not commissioned; 16 published advisories instead | [`SECURITY.md`](../../SECURITY.md) |

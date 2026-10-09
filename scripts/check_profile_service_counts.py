@@ -72,6 +72,11 @@ CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
     # compose file supporting neither. Registered rather than merely
     # corrected: an unregistered figure is one nobody notices going stale,
     # which is how all three got there.
+    # The contributor guide at the repository root. Both figures are in its
+    # opening "get it running" block, which is the first thing a reader runs,
+    # so a stale one there is wrong before anything else can be.
+    ("AGENTS.md", "core", r"CORE profile: (\d+) long-running services"),
+    ("AGENTS.md", "prod:full", r"adds the rest \((\d+) services"),
     ("install.sh", "core", r"Starting the (\d+)-service CORE stack"),
     ("apps/docs/docs/deployment/walkthrough.mdx", "core", r"starts the (\d+) CORE services"),
     ("Makefile", "core", r"`missing` on all (\d+) first-party services"),

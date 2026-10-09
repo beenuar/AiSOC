@@ -366,6 +366,7 @@ than absent.
   refused with a reason. `MAX_UNREACHABLE` 119 → 45.
 - [x] **3.2** Ordered sequences and Sigma correlations — the windowed engine
   stages ordered and unordered sequences; all four translatable Sigma
+  correlation types compile. Windowed corpus 68 → 72. See D7 and D8.
   correlation types compile. See D7 and D8.
 - [x] **3.3** Enrichment inputs (parity 5.5) — identity privilege and a
   per-tenant first-seen store built; 18 rules retired with a reason.
@@ -379,6 +380,18 @@ than absent.
 
 ## Phase 4: Collection and scale
 
+- [ ] **4.1** Cloud-native collection (S3+SQS org trail, Pub/Sub, Event Hubs)
+- [~] **4.2** Standard inputs (syslog, OTLP, Kafka, TAXII 2.1). **One of
+  four bullets closed.** The syslog listener is done: `services/ingest`
+  accepts UDP and TCP and reads RFC 5424, RFC 3164, CEF and LEEF, with the
+  tenant taken from a minted token because syslog carries nothing a sender
+  does not control. Gated by `scripts/check_syslog_listener.py` (self-test:
+  one injected violation per rule, including each of the three Go syntaxes
+  a tenant could leak through) wired into `ci.yml :: python-lint`. 33 new
+  Go tests. **Three bullets are open and were not attempted**, named here
+  rather than left to be inferred: an OTLP logs receiver, a Kafka input for
+  customer topics, and a TAXII 2.1 server over the tenant IOC store. Each
+  reproduces trivially — nothing in the tree implements any of them.
 - [x] **4.1** Cloud-native collection (S3+SQS org trail, Pub/Sub, Event Hubs).
   Three connectors (`aws_cloudtrail_s3`, `gcp_pubsub`, `azure_event_hubs`),
   each resumable and each declaring a bounded `collection_budget` that says
@@ -471,6 +484,7 @@ than absent.
 | 2026-10-07 | 0.1 | This file created at base commit `1b8bc2d4`. |
 | 2026-10-07 | 0.2 | Every figure re-derived. Two matched exactly (detections, unreachable families); executor arms measured 74 against a captured 73; the cloud/identity/SaaS/code figure measured 395 against a captured 461 on a grouping the plan does not pin, recorded above. Two measurement caveats found: executable and quarantined overlap by 1,724 rules, and the "69% Windows" figure does not reproduce from the index. |
 | 2026-10-09 | 4.3 | Reproduced: `check_retention_window.py` on the unmodified tree reported six problems — the lake deleting at 90 days against a 3,650-day cap, no `MODIFY TTL` migration, tiering deleting at 90, and the purge worker calling neither `alerts_under_legal_hold` nor `may_purge` and reporting nothing withheld. Fixed all but the cold-query bullet. Four negative controls recorded in the PR, including the positive control: a purge stuck closed withholds every tenant and fails four of the eight hold tests, which is the only thing that separates a working control from commendable caution. One pre-existing test (`test_storage_tiering.py`) pinned the 90-day tiering DELETE and now reads the shared constant; `test_retention_worker.py`'s session double could not answer the new holds query, so the worker failed closed and five of its cases failed — the double was taught the query rather than the fail-closed behaviour relaxed. |
+| 2026-10-09 | 4.2 | Reproduced: `check_syslog_listener.py` against `origin/main` reported "no Go sources under services/ingest/internal/syslog", and the only syslog path was `POST /v1/inbox/cef`, which needs a forwarder that already speaks HTTP. Implemented `services/ingest/internal/syslog` (UDP + TCP, both RFC 6587 framings, four wire formats, token-derived tenant, batched publish, `/readyz` subscription). Five negative controls recorded in the PR; one of them found a hole in the new gate itself, which reported OK while the tenant came from `msg.Hostname` through a struct field — the detector now knows all three Go syntaxes and the self-test exercises each. Writing the tests also found a shutdown deadlock: `Stop` waited on goroutines watching a context the caller had not cancelled yet. Ingest suite green, `internal/syslog` 33 cases. |
 | 2026-10-07 | 0.3 | `make up` and `make smoke` (10/10) pass. Injection suite and load-harness baselines committed. `make up-full` deferred (D2) and hosted model rows blocked (D3). Fixing D1 was a precondition for the load-harness baseline. |
 | 2026-10-09 | 3.3 | Identity privilege (18 rules) and a per-tenant first-seen store (2) built; 5 rules were never unreachable (gate operator drift, D9); 18 retired with a reason (D10). `MAX_UNREACHABLE` 45 → 2, the two remaining both needing the 3.4 baseline. Two matcher operators three shipped rules already used were implemented. |
 | 2026-10-09 | 3.2 | Ordered and unordered sequences in the windowed engine; all four translatable Sigma correlation types compile, seven refusal reasons recorded. No upstream correlation rule exists in this tree to import (D8), so the corpus is first-party and labelled as such. |

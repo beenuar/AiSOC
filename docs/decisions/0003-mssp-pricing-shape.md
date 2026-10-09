@@ -3,7 +3,7 @@
 - **Status:** accepted
 - **Date:** 2026-06-28
 - **Decision-makers:** Beenu Arora (founder), AiSOC core team
-- **Plan reference:** [AiSOC missing pieces plan](../../plans/aisoc-missing-pieces/aisoc_missing_pieces_plan.md) §5.3
+- **Not followable:** this ADR was written against a missing-pieces plan that is not in this repository — `plans/aisoc-missing-pieces/` has never been committed — so the section numbers it cited cannot be looked up. The decision stands on its own text.
 
 ## Context
 

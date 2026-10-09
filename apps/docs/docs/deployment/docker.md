@@ -277,7 +277,7 @@ other services gate demo behaviour at runtime through `AISOC_DEMO_MODE`.
 
 ### Image provenance
 
-Each image is signed with [Cosign](https://docs.sigstore.dev/cosign/overview/)
+Each image is signed with [Cosign](https://docs.sigstore.dev/cosign/signing/overview/)
 using keyless OIDC signatures issued through GitHub Actions. Verify any
 release artifact before deploying it into a sensitive environment:
 

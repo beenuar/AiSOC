@@ -76,6 +76,15 @@ ALLOWED_TEMPLATE_IDS: tuple[str, ...] = (
     "cloudflare-logpush",
     # Universal-capture sidecars
     "cef-syslog",
+    # Depth plan 4.2 — the syslog listener in services/ingest. One token
+    # covers all four wire formats: a single appliance commonly emits
+    # RFC 3164 for its daemons and CEF for its security events, and making
+    # the operator mint two tokens and run two ports for one device would
+    # be a configuration no vendor documents. The listener picks the
+    # template per message; `leef-syslog` is reachable through it and is
+    # mintable in its own right for a forwarder that posts over HTTP.
+    "syslog",
+    "leef-syslog",
     "splunk-hec",
     "email-forwarded",
     # AI estate. Both templates shipped with the feature and both are what
@@ -290,6 +299,20 @@ _TEMPLATE_CATALOG: dict[str, dict[str, str]] = {
     "cef-syslog": {
         "label": "Syslog / CEF",
         "description": "ArcSight Common Event Format over HTTPS.",
+        "category": "siem",
+    },
+    "syslog": {
+        "label": "Syslog (RFC 5424 / RFC 3164)",
+        "description": (
+            "Mint this for the syslog listener in the ingest service, which accepts UDP and TCP on a port you "
+            "choose and reads RFC 5424, RFC 3164, CEF and LEEF. The token is where the tenant comes from: syslog "
+            "carries no header and no authenticated principal, so one listener serves one tenant."
+        ),
+        "category": "siem",
+    },
+    "leef-syslog": {
+        "label": "Syslog / LEEF",
+        "description": "IBM QRadar Log Event Extended Format, over the syslog listener or posted over HTTPS.",
         "category": "siem",
     },
     "splunk-hec": {

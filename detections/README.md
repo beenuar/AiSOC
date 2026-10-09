@@ -11,7 +11,7 @@ the AiSOC engine can do with them out of the box.
 | Quarantined | `detections/<source>-imports/_quarantine/<category>/` | where the importer put it; see below | YAML schema + provenance + a populated `quarantine_reason` |
 | Community | `detections/community/<category>/`        | disabled by default | YAML schema; provenance encouraged                |
 
-The library holds **6,991 rules on disk, of which 2,603 execute** — 833 native
+The library holds **6,991 rules on disk, of which 2,529 execute** — 833 native
 and 1,770 imported Sigma rules translated into the engine's `match_when` by
 [`scripts/compile_sigma_ruleset.py`](../scripts/compile_sigma_ruleset.py).
 Recount rather than quoting these: they move, and
@@ -252,7 +252,7 @@ rules the engine loads, so a green CI run looks like:
 ```
 Validated 6991 rules — 6991 passed, 0 failed, 44 fixture warnings
   Tiers: community=1, imported=6113, native=877
-  Executable (loaded by the engine): 2603; not loaded: 4388
+  Executable (loaded by the engine): 2529; not loaded: 4462
 ```
 
 The executable figure is read from the compiled ruleset, the same artefact
@@ -302,7 +302,9 @@ detections/
 └── community/                        # third-party / contributed rules
 ```
 
-`detections/playbooks/` is the one directory here that holds no rules. Its 25
-files are response playbooks — `trigger:` and `steps:`, no `detection:` block.
-They are the entire difference between the 7,016 YAML files under this tree and
-the 6,991 rules every count in this repository publishes.
+Two directories here hold no rules. `detections/playbooks/` has 25 response
+playbooks — `trigger:` and `steps:`, no `detection:` block — and
+`detections/sigma-correlations/` has 6 multi-document Sigma correlation files
+that compile into the windowed ruleset rather than the stateless one. They are
+the entire difference between the 7,022 YAML files under this tree and the
+6,991 rules every count in this repository publishes.

@@ -14,7 +14,7 @@ defend had been published for months. The connector catalogue went the same
 way — 35 of 84 had no documentation, and the sidebar listed 34 pages against
 96 files, so most of what existed could not be found.
 
-The detection figure is 2,603 now, and how it moved is the part worth keeping.
+The detection figure is 2,511 now, and how it moved is the part worth keeping.
 It was not closed by writing rules. Someone asked why the existing ones could
 not fire and found a single cause — Windows events nest their payload one
 level below the namespace the matcher reads, so the two most-used fields in
@@ -23,6 +23,13 @@ fire through the real connector and the real engine*, with a gate that reverts
 the fix and requires those rules to go silent. A count that is gated on
 evidence can be raised honestly; a count that is gated on a flag can only be
 edited.
+
+It has since gone **down**, from 2,603, and that direction matters more than
+the rise. 74 rules that depended on a windowed evaluator were counted as
+executable while being unable to fire; 50 were translated into windowed rules
+and 24 were refused with a reason, and the published figure fell by the
+difference. A count derived from evidence moves both ways — recount it with
+`scripts/generate_corpus_stats.py` rather than quoting this paragraph.
 
 Both recovered by making the artifact derived and the count gated. A
 strategy library aiming at a hundred entries, and an action registry aiming
