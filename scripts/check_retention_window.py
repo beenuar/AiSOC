@@ -115,7 +115,12 @@ def _constant(source: str, name: str) -> int | None:
     except SyntaxError:
         return None
     for node in ast.walk(tree):
-        targets = list(node.targets) if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        else:
+            continue
         for target in targets:
             if isinstance(target, ast.Name) and target.id == name and isinstance(node.value, ast.Constant):
                 value = node.value.value
