@@ -1036,6 +1036,14 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     # (i.e. multiple raw events fused into a single alert). Single-event
     # alerts are excluded so the ratio stays meaningful when one detection
     # rule fires repeatedly.
+    #
+    # The predicate was always right and was unsatisfiable until issue #1244:
+    # the only pipeline writer appended one id *before* the insert, and a
+    # deduplicated event's insert is filtered out by the sink's
+    # `WHERE NOT EXISTS`, so no row could ever reach two. The tile read 0 by
+    # construction on a pipeline that was deduplicating the whole time.
+    # `AlertSink._record_deduplicated_event` is what feeds this now; a zero
+    # here means no event deduplicated in the window, not that nobody looked.
     correlation_instances = (
         await db.scalar(
             select(func.count()).where(

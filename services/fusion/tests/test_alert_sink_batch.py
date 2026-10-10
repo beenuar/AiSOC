@@ -11,6 +11,8 @@ is pinned here is the contract rather than the speed.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from app.services.alert_sink import PersistOutcome
 
@@ -56,9 +58,18 @@ class TestTheArgumentTupleHasOneDefinition:
         into a narrative without anything failing."""
         from app.services.alert_sink import _INSERT_SQL
 
-        placeholders = {int(tok[1:]) for tok in _INSERT_SQL.split() if tok.startswith("$") and tok[1:].isdigit()}
+        # Matched with a regex rather than by splitting on whitespace: almost
+        # every placeholder in this statement carries a cast or a trailing
+        # comma (`$9::jsonb,`), so the whitespace form only ever saw the two
+        # bare ones and the width assertion below was nearly vacuous.
+        placeholders = {int(n) for n in re.findall(r"\$(\d+)", _INSERT_SQL)}
         assert placeholders, "no positional placeholders found; this test is checking nothing"
         assert max(placeholders) >= 20, "the insert shrank unexpectedly — re-check _insert_args"
+        # No gaps: asyncpg binds positionally, so a skipped number means every
+        # argument after it lands in the wrong column.
+        assert placeholders == set(range(1, max(placeholders) + 1)), (
+            f"placeholder numbering has holes: {sorted(set(range(1, max(placeholders) + 1)) - placeholders)}"
+        )
 
 
 @pytest.mark.asyncio

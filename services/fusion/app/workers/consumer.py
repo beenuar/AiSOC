@@ -304,6 +304,17 @@ class FusionWorker:
             # Phase A2 — run the executable detection corpus against the live
             # event. Each firing rule becomes a RawAlert routed through fusion,
             # so telemetry that isn't a vendor-asserted finding still alerts.
+            #
+            # One event firing N rules produces N alert rows, deliberately
+            # (issue #1244 reported one Sysmon event becoming five or six).
+            # Each row names the rule that fired, carries that rule's severity
+            # and category, and is dispositioned on its own: collapsing them
+            # would mean picking one rule's verdict to stand for the others,
+            # and an analyst who closes "suspicious PowerShell" has not
+            # thereby closed "LSASS access". `Correlator.correlate` already
+            # groups them into one incident on
+            # {tenant}:{entity}:{tactic} for the console, which is where the
+            # N-into-1 view belongs.
             if self._detector is not None:
                 for hit in await self._detector.evaluate_async(payload, overlay, self._first_seen):
                     det_alert = self._detector.build_alert(payload, hit)
