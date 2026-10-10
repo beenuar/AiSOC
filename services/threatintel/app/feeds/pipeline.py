@@ -54,11 +54,14 @@ class ThreatIntelPipeline:
         self,
         iocs: list[dict[str, Any]],
         source: str,
-    ) -> dict[str, int]:
+    ) -> dict[str, Any]:
         """
         Ingest a batch of normalized IOCs.
 
-        Returns a stats dict with counts for new, duplicate, and indexed items.
+        Returns counts for ``total`` / ``new`` / ``duplicate`` / ``indexed``,
+        plus a ``sinks`` map naming what each store took. A sink reports
+        ``None`` when it could not be reached, which is a different fact
+        from storing nothing — see the comment at the write site.
         """
         if not iocs:
             return {"total": 0, "new": 0, "duplicate": 0}
@@ -94,21 +97,48 @@ class ThreatIntelPipeline:
         # exception from it aborted the batch before Qdrant — the CORE store,
         # and the one the console reads through — was written at all. A feed
         # that can reach one of its sinks should write to that one.
-        indexed = 0
+        # `indexed` was the OpenSearch return value and nothing else, so on
+        # CORE — where OpenSearch is not in the profile — a batch of 1,739
+        # KEV entries that landed correctly in Qdrant reported `indexed: 0`
+        # (issue #1278). A zero beside a successful write is the shape this
+        # project treats as worse than a missing number: it reads as a
+        # measurement, and it is the number an operator checks to decide
+        # whether the feed works.
+        #
+        # Each sink now reports itself, and `None` means "this store was not
+        # reachable" rather than "it stored nothing".
+        sinks: dict[str, int | None] = {}
+
         try:
-            indexed = await self._os.bulk_index_iocs(new_iocs)
+            sinks["opensearch"] = await self._os.bulk_index_iocs(new_iocs)
         except Exception as exc:
+            sinks["opensearch"] = None
             logger.warning("OpenSearch IOC index failed", error=str(exc))
 
         try:
             await self._qdrant.upsert_iocs(new_iocs)
+            sinks["qdrant"] = len(new_iocs)
         except Exception as exc:
+            sinks["qdrant"] = None
             logger.warning("Qdrant IOC upsert failed", error=str(exc))
 
         try:
             await self._neo4j.upsert_iocs(new_iocs)
+            sinks["neo4j"] = len(new_iocs)
         except Exception as exc:
+            sinks["neo4j"] = None
             logger.warning("Neo4j IOC upsert failed", error=str(exc))
+
+        stored = max((count for count in sinks.values() if count is not None), default=0)
+        unavailable = sorted(name for name, count in sinks.items() if count is None)
+        logger.info(
+            "IOC batch stored",
+            source=source,
+            new=len(new_iocs),
+            stored=stored,
+            sinks=dict(sinks),
+            unavailable=unavailable or None,
+        )
 
         # --- Emit Kafka events ---
         if self._kafka:
@@ -118,7 +148,11 @@ class ThreatIntelPipeline:
             "total": len(iocs),
             "new": len(new_iocs),
             "duplicate": duplicates,
-            "indexed": indexed,
+            # Kept, but it now means "stored in at least one sink" rather
+            # than "stored in OpenSearch". `sinks` carries the detail, and a
+            # `None` there is an unreachable store, not an empty one.
+            "indexed": stored,
+            "sinks": sinks,
         }
 
     async def ingest_actors(

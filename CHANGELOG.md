@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Seven shipped Okta identity rules can fire for the first time** (#1279).
+  Okta carries its result inside an `outcome` *object*, and
+  `OktaConnector.normalize()` read `outcome["result"]` only to pick a
+  severity before discarding it. The detection engine flattens `raw_event`
+  exactly one level, so the matcher saw `outcome` as
+  `{"result": "FAILURE", ...}` and compared a dict to the string
+  `"FAILURE"` — `wd-brute-force-login` and `wd-okta-password-spray` could
+  never match a failed Okta login, and four native identity rules clausing
+  on `SUCCESS` were equally unreachable. That is why a default install
+  reads as having no identity detections rather than unreachable ones.
+  Fixed in the connector, following the Windows `CommandLine`/`Image`
+  precedent: the matcher and both engines are byte-identical, so the blast
+  radius is one connector and is provable by replay. The vendor object is
+  still preserved verbatim under `raw_event`.
+
+- **A threat-intel batch that stored correctly no longer reports zero**
+  (#1278). `ingest_iocs` returned `indexed`, which was the OpenSearch
+  bulk-index count and nothing else. OpenSearch is a `full`-profile store
+  and `threatintel` runs in CORE, so on a stock install the call raises,
+  `indexed` keeps its `0` initialiser, and the Qdrant write on the next
+  line succeeds — printing `indexed: 0` for ~1,700 CISA KEV entries that
+  landed fine. Each sink now reports itself and `None` means "unreachable"
+  rather than "stored nothing". Two false claims in the tree are corrected
+  alongside: `ioc_match.py` asserted CORE's KEV feed fills
+  `threat_intel_iocs` (it has no Postgres leg at all), and
+  `vuln_promotion_sql.py` named a "093 KEV seed worker" that does not
+  exist. `/threat-intel/iocs` and `/feeds` now state which store they read,
+  so an empty response is distinguishable from a broken feed.
 ## [18.0.0] - 2026-10-09
 
 ### BREAKING

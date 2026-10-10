@@ -29,10 +29,16 @@ MARK_OVERDUE_SQL = """
 #: aggregates pick the worst-case representation; the per-CVE grouping is
 #: why 1 CVE on 4 hosts is one alert instead of four.
 #:
-#: KEV join note: ``threat_intel_iocs`` is live-empty on this stack, so
-#: the EXISTS clause contributes nothing today — it is the seam the 093
-#: KEV seed worker feeds when it lands. ``is_exploited`` is the exploited
-#: signal that works right now.
+#: KEV join note: ``threat_intel_iocs`` is empty unless a tenant posts to
+#: it, so the EXISTS clause contributes nothing on a stock install. It is
+#: the seam a tenant's own IOC submissions feed.
+#:
+#: This used to name "the 093 KEV seed worker" as pending. There is no such
+#: worker and migration 093 is `093_role_label_and_repair.sql` — naming a
+#: planned thing as if it were in flight is how a reader concludes the gap
+#: is already owned (issue #1278). CORE's CISA KEV feed writes to Qdrant,
+#: not to this table. ``is_exploited`` is the exploited signal that works
+#: right now.
 PROMOTE_CANDIDATES_SQL = """
     SELECT v.cve_id,
            MAX(v.cvss_score)                        AS cvss_score,

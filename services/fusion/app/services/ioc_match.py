@@ -13,9 +13,17 @@ indicator on every alert, which is the first thing the capability review
 found: the default install gives the agent almost nothing to reason with.
 
 The tenant's own IOC store is different. `threat_intel_iocs` lives in the
-same Postgres every CORE service already connects to, and CORE ships a real
-CISA KEV feed, so there is genuinely something to match against on a first
-run. Reading it directly needs no extra service.
+same Postgres every CORE service already connects to, so reading it
+directly needs no extra service.
+
+It is, however, **empty unless a tenant posts to it**. This paragraph used
+to claim CORE's CISA KEV feed fills it, and that was never true (issue
+#1278): the feed writes to OpenSearch, Qdrant and Neo4j and has no
+Postgres leg at all, which is why `/threat-intel/indicators` serves 1,739
+KEV entries from Qdrant while `/threat-intel/iocs` returns `[]` on the
+same stack. The only writer of this table is `POST /threat-intel/iocs`.
+So a first run matches nothing here, and that is an accurate empty rather
+than a broken feed.
 
 Expiry and decay
 ----------------

@@ -149,6 +149,26 @@ class OktaConnector(BaseConnector):
             "actor": actor.get("displayName"),
             "actor_email": actor.get("alternateId"),
             "event_type": raw.get("eventType"),
+            # Okta carries the result inside an `outcome` *object*. `result`
+            # was read here only to pick a severity and then thrown away,
+            # which made every identity rule that matches on it unreachable
+            # (issue #1279).
+            #
+            # The detection engine flattens `raw_event` one level, so the
+            # matcher saw `outcome` as the dict `{"result": "FAILURE",
+            # "reason": ...}` and compared it to the string `"FAILURE"`.
+            # Seven shipped Okta rules clause on that value — the two
+            # windowed brute-force/password-spray rules on `FAILURE`, four
+            # native identity rules on `SUCCESS` — so none of them could
+            # ever fire, which is why a default install looks as though it
+            # has no identity detections rather than unreachable ones.
+            #
+            # Hoisted here rather than taught to the engine, following the
+            # Windows `CommandLine`/`Image` fix: the matcher and both
+            # engines stay byte-identical, so the blast radius is one
+            # connector and is provable by replay.
+            "outcome": result,
+            "outcome_reason": outcome.get("reason"),
             "raw_event": raw,
             "created_at": raw.get("published"),
         }

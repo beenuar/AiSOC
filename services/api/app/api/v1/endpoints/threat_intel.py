@@ -243,6 +243,16 @@ async def list_iocs(
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
 ) -> list[ThreatIntelIOC]:
+    """**This tenant's own** IOCs, from Postgres `threat_intel_iocs`.
+
+    Not the platform's feed intelligence, and the distinction is the whole
+    content of issue #1278: this route and `/indicators` sit next to each
+    other and read different stores. `/indicators` serves the CISA KEV
+    catalogue out of Qdrant — about 1,700 entries on a stock CORE install.
+    This table is written **only** by `POST /threat-intel/iocs`, so it is
+    empty until somebody submits to it, and an empty response here is not
+    evidence that the KEV feed failed.
+    """
     q = select(ThreatIntelIOC).where(ThreatIntelIOC.tenant_id == current_user.tenant_id)
     if ioc_type:
         q = q.where(ThreatIntelIOC.ioc_type == ioc_type)
@@ -337,6 +347,18 @@ async def list_feeds(
     current_user: Annotated[AuthUser, Depends(require_permission("threat_intel:read"))],
     db: AsyncSession = Depends(get_db),
 ) -> list[ThreatIntelFeed]:
+    """**Feeds this tenant has registered**, from Postgres `threat_intel_feeds`.
+
+    Written only by `POST /threat-intel/feeds`, so it is empty until an
+    operator adds one. It deliberately does **not** list the platform's
+    built-in feeds: the CISA KEV poller is an in-process job in
+    `services/threatintel` and owns no row here, which is why a stock CORE
+    install sees `[]` here while `/indicators` serves the catalogue that
+    poller fetched (issue #1278). Listing the built-in poller here would
+    mean synthesising an id and a `tenant_id` for a row that does not
+    exist, which is the fabrication pattern this project has paid for
+    before; `/indicators` is where its output is observable.
+    """
     result = await db.execute(
         select(ThreatIntelFeed).where(ThreatIntelFeed.tenant_id == current_user.tenant_id).order_by(ThreatIntelFeed.name)
     )
