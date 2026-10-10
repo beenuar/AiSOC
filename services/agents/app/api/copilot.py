@@ -8,14 +8,14 @@ Endpoints (all under ``/api/v1/copilot``):
     POST /chat                      — one-shot chat (creates / continues conv.)
     POST /chat/stream               — streaming NDJSON variant
 
-Falls back to synthetic deterministic replies when ``OPENAI_API_KEY`` is
-unset so the demo path never breaks.
+When no model answers, the reply says so and names which of the two
+reasons applies — nothing is configured, or what is configured did not
+return. It does not describe the tenant's data, because nothing read it.
 """
 
 from __future__ import annotations
 
 import asyncio
-import itertools
 import json
 import uuid
 from collections.abc import AsyncIterator
@@ -71,6 +71,11 @@ class CopilotChatResponse(BaseModel):
     #: The console must label a ``template`` reply rather than presenting it as
     #: analysis of the user's environment.
     source: Literal["llm", "template"] = "llm"
+    #: Why no model answered, when ``source`` is ``template``. Additive
+    #: rather than a third ``source`` value, so existing clients branching
+    #: on ``template`` keep working while a new one can tell "nothing is
+    #: configured" from "what is configured did not answer" (issue #1275).
+    template_reason: Literal["no_model_configured", "model_call_failed"] | None = None
     notice: str | None = None
     #: Which factual claims in `reply` cite a record, and which cite
     #: nothing (parity 3.6). The console renders the label beside the
@@ -113,39 +118,49 @@ def _tenant_of(principal: TenantPrincipal) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
 
 
-_SYNTHETIC_REPLIES = [
-    (
-        "I've analysed the alert context. The activity matches T1078 (Valid Accounts) combined"
-        " with T1021.002 (SMB/Windows Admin Shares) lateral movement. Recommend isolating the"
-        " host and reviewing recent authentication logs."
-    ),
-    (
-        "Based on the indicators, this looks like credential-access activity. The parent process"
-        " chain suggests a LOLBin pattern. Consider adding a detection rule for this specific"
-        " chain."
-    ),
-    (
-        "The entity risk score is elevated due to multiple failed authentications followed by a"
-        " successful login from an unusual geolocation. I recommend triggering a step-up MFA"
-        " challenge."
-    ),
-    (
-        "Correlation across the last 24 hours shows this IP was seen in 3 other alerts. The MITRE"
-        " mapping points to T1110 (Brute Force). Blocking the IP at the perimeter is the fastest"
-        " remediation."
-    ),
-    (
-        "I've reviewed the case timeline. The attacker dwell time appears short (< 2 hours),"
-        " suggesting this may be an automated credential-stuffing campaign rather than a targeted"
-        " intrusion."
-    ),
-]
-
-_reply_cycle = itertools.cycle(_SYNTHETIC_REPLIES)
+#: Why no model answered. These are two different operator problems and
+#: the old code could not tell them apart (issue #1275).
+NO_MODEL = "no_model_configured"
+CALL_FAILED = "model_call_failed"
 
 
-def _synthetic_reply(user_msg: str) -> str:
-    return next(_reply_cycle)
+def _fallback_reply(reason: str, *, model: str | None = None, detail: str | None = None) -> str:
+    """What to say when no model answered.
+
+    This used to return one of five rotating paragraphs asserting findings
+    about an estate it had never seen — "this IP was seen in 3 other
+    alerts", "the attacker dwell time appears short (< 2 hours)", "multiple
+    failed authentications followed by a successful login from an unusual
+    geolocation". None of it was computed from anything. The reporter hit
+    exactly that: a ransomware alert described back to them as
+    "credential-access activity ... LOLBin pattern", because the function
+    ignored its argument and returned the next item in the cycle.
+
+    A canned paragraph that reads like analysis is worse than no answer,
+    and the console appending a disclaimer underneath does not fix the
+    body. So the reply is now the explanation, and it makes no claim about
+    the tenant's data.
+    """
+    if reason == NO_MODEL:
+        return (
+            "I can't answer this: no language model is configured for this deployment.\n\n"
+            "Nothing about your alerts, cases or detections was looked at, so treat this as "
+            "an unanswered question rather than a finding.\n\n"
+            "To enable the copilot, configure a model — either a hosted provider key or the "
+            "bundled local model — and ask again."
+        )
+
+    named = f" ({model})" if model else ""
+    because = f"\n\nThe call reported: {detail}" if detail else ""
+    return (
+        f"I can't answer this: the configured model{named} did not return a reply.{because}\n\n"
+        "Nothing about your alerts, cases or detections was looked at, so treat this as an "
+        "unanswered question rather than a finding.\n\n"
+        "This is a model or gateway problem, not a missing credential — a model is configured. "
+        "On a CPU-only deployment the usual cause is contention with the auto-triage backlog, "
+        "which holds the same local model. Retrying usually works; if it does not, check the "
+        "model service's own logs."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -157,17 +172,48 @@ def _title_from_message(msg: str) -> str:
     return msg[:60] + ("…" if len(msg) > 60 else "")
 
 
+def _notice_for(reason: str | None) -> str | None:
+    """The one-line banner the console puts above a template reply.
+
+    One string served both fallback conditions and ended "Configure an LLM
+    key to get a real investigation". On a deployment running the bundled
+    local model that sentence names a credential the deployment does not
+    use, so an operator whose model had merely timed out was sent to fix
+    something that was not broken.
+    """
+    if reason == NO_MODEL:
+        return "No language model is configured, so nothing answered this question. This is not analysis of your environment."
+    if reason == CALL_FAILED:
+        return (
+            "A model is configured but the call did not return, so nothing answered this "
+            "question. This is not analysis of your environment, and it is not a missing "
+            "API key."
+        )
+    return None
+
+
 async def _get_openai_reply(
     conversation: dict[str, Any],
     user_message: str,
-) -> tuple[str, str]:
-    """Return ``(reply_text, source)`` where source is ``llm`` or ``template``.
+) -> tuple[str, str, str | None]:
+    """Return ``(reply_text, source, reason)``.
+
+    ``source`` is ``llm`` or ``template``; ``reason`` is ``None`` on the
+    model path and otherwise names *why* no model answered.
 
     The caller must surface ``template`` to the user. This function silently
     returned a canned paragraph as a normal 200 whenever the key was missing or
     any exception fired, so an analyst read "this IP was seen in 3 other
     alerts" as real analysis of their environment. The frontend had an honest
     fallback of its own that never fired, because the backend reported success.
+
+    The two fallback conditions are now distinguished (issue #1275). They
+    used to collapse into one message telling the operator to configure an
+    API key — advice that is simply wrong when a local model is configured
+    and timed out, which is the common case on CPU. This repository has the
+    same lesson recorded from the RBA banner that named fusion while fusion
+    was healthy: a diagnostic pointing at the wrong subsystem sends someone
+    to fix something that is not broken, and is worse than a vague one.
     """
     from app.llm.factory import resolve_api_key, resolve_model_alias
 
@@ -176,7 +222,7 @@ async def _get_openai_reply(
     # goes to the bundled gateway the bearer has to be the gateway's master key.
     api_key = resolve_api_key(model) or ""
     if not api_key:
-        return _synthetic_reply(user_message), "template"
+        return _fallback_reply(NO_MODEL), "template", NO_MODEL
 
     try:
         from app.llm.contract import safe_chat_completions_request
@@ -204,10 +250,14 @@ async def _get_openai_reply(
             url=chat_completions_url(model),
             max_tokens=512,
         )
-        return body["choices"][0]["message"]["content"], "llm"
+        return body["choices"][0]["message"]["content"], "llm", None
     except Exception as exc:
-        logger.warning("copilot.openai_error", error=str(exc))
-        return _synthetic_reply(user_message), "template"
+        # `str(exc)` is empty for several httpx timeout classes, which is
+        # how the report ended up with `copilot.openai_error` carrying no
+        # message at all. The class name always says something.
+        detail = str(exc).strip() or type(exc).__name__
+        logger.warning("copilot.openai_error", error=detail, model=model)
+        return _fallback_reply(CALL_FAILED, model=model, detail=detail), "template", CALL_FAILED
 
 
 # ---------------------------------------------------------------------------
@@ -266,7 +316,7 @@ async def chat(
     }
 
     history = {"messages": [*(existing.messages if existing else []), user_msg]}
-    reply_text, reply_source = await _get_openai_reply(history, req.message)
+    reply_text, reply_source, reply_reason = await _get_openai_reply(history, req.message)
 
     assistant_msg: dict[str, Any] = {
         "id": str(uuid.uuid4()),
@@ -295,14 +345,9 @@ async def chat(
         conversationId=stored.id,
         reply=CopilotMessage(**assistant_msg),
         source=reply_source,
+        template_reason=reply_reason,
         grounding=grounding,
-        notice=(
-            "This reply came from a built-in template, not a language model. "
-            "It is generic guidance and is not analysis of your environment. "
-            "Configure an LLM key to get a real investigation."
-            if reply_source == "template"
-            else None
-        ),
+        notice=_notice_for(reply_reason),
     )
 
 
@@ -328,7 +373,7 @@ async def chat_stream(
     }
     history = {"messages": [*(existing.messages if existing else []), user_msg]}
 
-    reply_text, reply_source = await _get_openai_reply(history, req.message)
+    reply_text, reply_source, reply_reason = await _get_openai_reply(history, req.message)
     msg_id = str(uuid.uuid4())
     assistant_msg: dict[str, Any] = {
         "id": msg_id,
@@ -354,7 +399,18 @@ async def chat_stream(
     async def _stream() -> AsyncIterator[bytes]:
         # Provenance first: a consumer must be able to label the answer before
         # it starts rendering tokens, not after.
-        yield (json.dumps({"source": reply_source, "delta": "", "done": False}) + "\n").encode()
+        yield (
+            json.dumps(
+                {
+                    "source": reply_source,
+                    "template_reason": reply_reason,
+                    "notice": _notice_for(reply_reason),
+                    "delta": "",
+                    "done": False,
+                }
+            )
+            + "\n"
+        ).encode()
         words = reply_text.split(" ")
         for i, word in enumerate(words):
             chunk = word + (" " if i < len(words) - 1 else "")

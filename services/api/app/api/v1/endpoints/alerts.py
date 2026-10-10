@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
 
@@ -210,8 +210,26 @@ class AlertListResponse(BaseModel):
     pages: int
 
 
+#: Fields this endpoint cannot apply, mapped to the route that can.
+#:
+#: Each key is a real ``Alert`` column, which is why they arrive here and
+#: why dropping them silently was expensive: the caller is asking for
+#: something the platform does support, just not through this verb.
+_ALERT_UPDATE_ELSEWHERE = {
+    "disposition": "POST /api/v1/feedback/alert-override",
+    "corrected_verdict": "POST /api/v1/feedback/alert-override",
+    "verdict": "POST /api/v1/feedback/alert-override",
+    "severity": "POST /api/v1/alerts/{alert_id}/escalate",
+    "snoozed_until": "POST /api/v1/alerts/{alert_id}/snooze",
+}
+
+
 class AlertUpdateRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    #: ``extra="forbid"``, because the default is ``ignore`` and this is a
+    #: write endpoint. An ignored field on a read is a tolerated unknown;
+    #: on a write it is a 200 reporting a change that did not happen, and
+    #: nothing in the response body distinguishes the two.
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     status: str | None = None
     priority: int | None = None
@@ -220,6 +238,29 @@ class AlertUpdateRequest(BaseModel):
     # canonical field name and that alias.
     assigned_to_id: uuid.UUID | None = Field(default=None, alias="assignee")
     case_id: uuid.UUID | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _name_the_route_that_applies_it(cls, data: Any) -> Any:
+        """Refuse an unapplicable field by name, and say where it does apply.
+
+        ``extra="forbid"`` alone answers "Extra inputs are not permitted",
+        which tells an operator their call was wrong without telling them
+        what is right. Three of these fields have a route that works.
+        """
+        if not isinstance(data, dict):
+            return data
+
+        accepted = {"status", "priority", "tags", "assigned_to_id", "assignee", "case_id"}
+        unknown = [str(key) for key in data if str(key) not in accepted]
+        if not unknown:
+            return data
+
+        parts = []
+        for key in sorted(unknown):
+            route = _ALERT_UPDATE_ELSEWHERE.get(key)
+            parts.append(f"{key} (use {route})" if route else key)
+        raise ValueError(f"PATCH /alerts cannot apply: {', '.join(parts)}. It accepts only: {', '.join(sorted(accepted))}.")
 
 
 class AlertStatsResponse(BaseModel):

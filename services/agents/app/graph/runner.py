@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 from dataclasses import dataclass
 
 import structlog
@@ -97,6 +98,12 @@ async def _run(
     seq = seq_start
     timed_out = False
     budget_reason: str | None = None
+    # Wall clock for the step about to be streamed. Every `graph_step` row
+    # carried `duration_ms: 0` because the argument was simply never passed
+    # (issue #1276), so the ledger reported that each node of an escalation
+    # took no time — a confident zero for a measurement nobody made, which
+    # is the shape this project treats as worse than an absent one.
+    step_started = time.monotonic()
     try:
         async with asyncio.timeout(budget.max_seconds):
             async for step in graph.astream(state_dict):
@@ -106,6 +113,9 @@ async def _run(
                     seq += 1
                     if isinstance(out, dict):
                         merged.update(out)
+                    now = time.monotonic()
+                    elapsed_ms = round((now - step_started) * 1000)
+                    step_started = now
                     if tenant_uuid is not None:
                         await ledger_module.record_event(
                             run_id=state.run_id,
@@ -115,6 +125,7 @@ async def _run(
                             agent=str(node),
                             summary=f"graph node '{node}' completed",
                             payload={"node": str(node)},
+                            duration_ms=elapsed_ms,
                         )
 
                 # Checked **inside** the loop, once per streamed step, after

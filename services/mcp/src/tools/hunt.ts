@@ -23,6 +23,21 @@
  *
  * **It is read-only.** A hunt searches; it does not act. The annotation
  * says so and no write path exists here.
+ *
+ * **It takes no tenant.** It used to declare
+ * `tenant_id: z.string().uuid()` and forward it in the body (issue
+ * #1274). Two things were wrong with that, and the smaller one is what
+ * got noticed: zod 4's `.uuid()` enforces RFC 4122 version and variant
+ * bits, which the tenant every default install is bootstrapped into
+ * (`00000000-0000-0000-0000-000000000001`) does not set — so the tool
+ * could not be called at all on a stock deployment.
+ *
+ * The larger one is that a tenant supplied by a *model* is not a
+ * boundary. `AgentHuntRequest` declares only `hypothesis`, so pydantic
+ * was silently dropping the field: the isolation was an accident of
+ * schema strictness rather than a decision. Relaxing the validator to
+ * `z.guid()` would have made the bad input pass and left that in place.
+ * The tenant comes from the credential, here as everywhere else.
  */
 import { z } from "zod";
 
@@ -46,7 +61,6 @@ const RunHuntSchema = z
       .describe(
         "What you suspect, in plain language. For example: 'a service account signed in from a country it has never used before'.",
       ),
-    tenant_id: z.string().uuid().describe("The tenant whose recorded events to search."),
   })
   .strict();
 
@@ -69,7 +83,6 @@ export const runHuntTool: ToolDefinition<typeof RunHuntSchema> = {
   async handle(ctx, args) {
     const reply = await ctx.client.post<HuntReply>("/api/v1/agents/hunt", {
       hypothesis: args.hypothesis,
-      tenant_id: args.tenant_id,
     });
 
     const matches = reply.matches ?? [];

@@ -1566,6 +1566,30 @@ export interface AlertFilters {
   tenantId?: string;
 }
 
+/**
+ * The five fields `PATCH /api/v1/alerts/{id}` can actually apply.
+ *
+ * This was `Partial<Alert>`, which let the console send any of the row's
+ * ~40 columns. The server ignored everything outside this set and still
+ * answered 200, so `{ disposition }` or `{ severity }` compiled, ran and
+ * changed nothing (issue #1280). The server now refuses them; narrowing
+ * the type here makes the rejected call fail to compile instead, and
+ * `AlertUpdateRequest` on the Python side is the one definition this
+ * mirrors.
+ *
+ * Severity goes through `POST /alerts/{id}/escalate`, a disposition
+ * through `POST /feedback/alert-override`, and a snooze through
+ * `POST /alerts/{id}/snooze`.
+ */
+export interface AlertUpdate {
+  status?: AlertStatus;
+  priority?: number;
+  tags?: string[];
+  /** `null` releases the alert back to the pool. */
+  assignee?: string | null;
+  case_id?: string | null;
+}
+
 export const alertsApi = {
   list: async (filters: AlertFilters = {}) => {
     const raw = await request<{
@@ -1606,7 +1630,7 @@ export const alertsApi = {
     return normalizeAlert(raw);
   },
 
-  update: async (id: string, data: Partial<Alert>) => {
+  update: async (id: string, data: AlertUpdate) => {
     const raw = await request<unknown>(`/api/v1/alerts/${id}`, {
       method: 'PATCH',
       body: JSON.stringify(data),

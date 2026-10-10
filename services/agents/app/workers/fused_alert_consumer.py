@@ -1289,6 +1289,10 @@ class FusedAlertTriageWorker:
             # only inside a findings string.
             groundedness=state.groundedness,
             ungrounded=(state.groundedness is not None and state.groundedness < _groundedness_floor()),
+            # The prompt and response behind the verdict (issue #1276).
+            # Empty on the deterministic path, which is the honest value
+            # there — no model was asked, so there is nothing to replay.
+            llm_exchanges=list(state.llm_exchanges),
         )
 
     @staticmethod

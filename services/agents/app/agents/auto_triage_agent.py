@@ -432,14 +432,31 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         # constructing outside would have failed the whole graph run over a
         # configuration problem the deterministic path handles fine.
         llm = make_chat_model("triage", temperature=0.0, max_tokens=512, json_output=True)
+        system_prompt = prompt_text("triage.system") + "\n\n" + system_rule(nonce)
         response = await safe_ainvoke(
             llm,
             [
-                SystemMessage(content=prompt_text("triage.system") + "\n\n" + system_rule(nonce)),
+                SystemMessage(content=system_prompt),
                 HumanMessage(content=alert_context),
             ],
         )
         raw_text = response.content
+        # Recorded before parsing, so a verdict that fails to parse still
+        # leaves behind what the model was asked and what it said. The
+        # ledger carries this onto the run (issue #1276): auto-triage is
+        # the path that handles every fused alert, and it was the one
+        # path whose decisions could not be replayed.
+        state.record_llm_exchange(
+            agent="auto_triage",
+            purpose="triage.classify",
+            model=getattr(llm, "model_name", None) or getattr(llm, "model", None),
+            prompt=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": alert_context},
+            ],
+            response=str(raw_text),
+            duration_ms=round((time.monotonic() - t0) * 1000),
+        )
         result = _parse_llm_response(raw_text)
     except Exception as exc:
         # Issue #571: do NOT swallow + return a null-verdict RUNNING state.

@@ -45,9 +45,13 @@ class TestCopilotProvenance:
     @pytest.mark.asyncio
     async def test_no_api_key_is_reported_as_template(self, monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
-        text, source = await copilot_mod._get_openai_reply({"messages": []}, "what happened?")
+        text, source, reason = await copilot_mod._get_openai_reply({"messages": []}, "what happened?")
         assert source == "template"
         assert text, "the fallback should still say something useful"
+        # The reason is carried alongside the source (issue #1275): "nothing
+        # is configured" and "what is configured did not answer" used to be
+        # the same answer, and only one of them is fixed by a credential.
+        assert reason == copilot_mod.NO_MODEL
 
     @pytest.mark.asyncio
     async def test_llm_failure_is_reported_as_template(self, monkeypatch: pytest.MonkeyPatch):
@@ -58,8 +62,9 @@ class TestCopilotProvenance:
             raise RuntimeError("provider unreachable")
 
         monkeypatch.setattr("app.llm.contract.safe_chat_completions_request", _boom, raising=False)
-        _text, source = await copilot_mod._get_openai_reply({"messages": []}, "hello")
+        _text, source, reason = await copilot_mod._get_openai_reply({"messages": []}, "hello")
         assert source == "template"
+        assert reason == copilot_mod.CALL_FAILED
 
     def test_response_model_defaults_to_llm_but_can_carry_template(self):
         """The field must exist on the wire, not just in the handler."""

@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **`PATCH /api/v1/alerts/{id}` now refuses a field it cannot apply.** The
+  request model set no `extra=`, so pydantic v2's default `extra="ignore"`
+  dropped anything outside `status`, `priority`, `tags`, `assignee` and
+  `case_id` and still answered **200** with the unchanged row — a success
+  response for a write that did not happen (#1280). The dropped fields were
+  not nonsense: `disposition`, `severity`, `confidence` and `snoozed_until`
+  are all real `alerts` columns and three of them are writable elsewhere,
+  which is why callers sent them. A caller closing an alert with a
+  disposition got a 200 and no disposition.
+
+  The endpoint now answers **422**, naming the field *and* the route that
+  does apply it — `POST /feedback/alert-override` for a disposition,
+  `POST /alerts/{id}/escalate` for severity, `POST /alerts/{id}/snooze` for
+  a snooze. The accepted surface is unchanged, including the `assignee`
+  alias the queue releases alerts with; only previously-ignored fields are
+  affected. The published spec gains `additionalProperties: false` on
+  `AlertUpdateRequest`, and `alertsApi.update` in the console is typed to
+  the five fields rather than `Partial<Alert>`, so a rejected call now fails
+  to compile instead of failing at runtime.
+
+### Fixed
+
+- **The copilot stopped inventing investigations, and stopped blaming a
+  missing API key for a model that timed out** (#1275). The template
+  fallback returned one of five rotating paragraphs asserting findings
+  about an estate it had never read — "this IP was seen in 3 other alerts",
+  "the attacker dwell time appears short (< 2 hours)" — and ignored the
+  question entirely, so a ransomware alert came back described as
+  "credential-access activity ... LOLBin pattern". That text is gone. The
+  two fallback conditions are also now distinguished: "no model is
+  configured" and "the configured model did not answer" used to produce one
+  message ending "Configure an LLM key", which is the wrong instruction on a
+  deployment running the bundled local model, where the usual cause is
+  contention with the auto-triage backlog. `CopilotChatResponse` carries an
+  additive `template_reason`; `source` is unchanged.
+- **Auto-triage records the prompt behind its verdict** (#1276). The path
+  that handles every fused alert wrote a verdict and nothing to check it
+  against: its hardcoded `INSERT` named neither `input_hash` nor
+  `output_hash`, `duration_ms` was the literal `0`, and no prompt was kept
+  anywhere — so the most common AI decision in the platform was the one that
+  could not be replayed, while `aisoc_explain_step` is documented as
+  returning "the prompt, response, and tools used". The model call is now a
+  `llm_call` event at seq 0 carrying both hashes and its measured duration,
+  with the literal prompt and response attached to the verdict event as
+  artifacts, which is what `/investigations/{run}/explain` inlines.
+  `graph_step` rows carry a measured duration instead of a hardcoded zero.
+- **The MCP `aisoc_run_hunt` tool works on a default install** (#1274). It
+  declared `tenant_id: z.string().uuid()`, and zod 4 enforces RFC 4122
+  version and variant bits that `00000000-0000-0000-0000-000000000001` —
+  the tenant every `make up` creates — does not set, so the tool was
+  uncallable on a stock deployment. The parameter is removed rather than
+  loosened: the tenant comes from the authenticated principal, and the API
+  handler was already dropping the field, so the isolation had been an
+  accident of schema strictness rather than a control.
+
 ## [18.0.0] - 2026-10-09
 
 ### BREAKING

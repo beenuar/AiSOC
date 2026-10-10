@@ -20850,6 +20850,7 @@ components:
             format: uuid
           - type: 'null'
           title: Case Id
+      additionalProperties: false
       type: object
       title: AlertUpdateRequest
     ApiKeyOut:

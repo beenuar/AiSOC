@@ -4,12 +4,22 @@ Agent state models for LangGraph workflows.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import datetime
 from enum import Enum
 from typing import Any
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
+
+#: Ceiling on the literal prompt / response kept beside a hash. Matches
+#: `InvestigatorState`'s, so the two paths truncate at the same point.
+_LLM_LITERAL_LIMIT = 8000
+
+
+def _stable_hash(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
 class AgentTask(str, Enum):
@@ -169,6 +179,19 @@ class InvestigationState(BaseModel):
     # pivoted five times. This is what the depth gate grades.
     investigation_depth: dict[str, Any] | None = None
 
+    # The literal model calls this run made, in order (issue #1276).
+    #
+    # The auto-triage ledger recorded a verdict and nothing a reader could
+    # check it against: no prompt, and `input_hash`/`output_hash` null on
+    # every step. A verdict with no recorded prompt cannot be replayed, and
+    # replay is what `aisoc_explain_step` is documented to provide.
+    #
+    # The convention is the manual path's, not a second one: the hash is
+    # over the full text and is always present, while the literal copy is
+    # truncated, because these payloads carry customer data. Written by
+    # `record_llm_exchange`; read by `ledger.persist_auto_triage`.
+    llm_exchanges: list[dict[str, Any]] = Field(default_factory=list)
+
     # Metadata
     iteration_count: int = 0
     max_iterations: int = 10
@@ -179,6 +202,43 @@ class InvestigationState(BaseModel):
 
     def add_finding(self, finding: str) -> None:
         self.findings.append(finding)
+
+    def record_llm_exchange(
+        self,
+        *,
+        agent: str,
+        purpose: str,
+        model: str | None,
+        prompt: str | list[dict[str, Any]],
+        response: str,
+        duration_ms: int,
+    ) -> dict[str, Any]:
+        """Record one model call so the verdict it produced can be replayed.
+
+        Mirrors ``InvestigatorState.log_llm_prompt`` /
+        ``log_llm_response`` on the manual path: a SHA-256 over the full
+        text always, a truncated literal for a human reader. The two
+        differ only in shape — the manual path appends two audit entries,
+        this one records a single call with both of its hashes, because
+        the ledger row it becomes carries ``input_hash`` and
+        ``output_hash`` on the same event.
+        """
+        prompt_text = prompt if isinstance(prompt, str) else json.dumps(prompt, sort_keys=True, default=str)
+        exchange = {
+            "agent": agent,
+            "purpose": purpose,
+            "model": model,
+            "prompt": prompt_text[:_LLM_LITERAL_LIMIT],
+            "prompt_truncated": len(prompt_text) > _LLM_LITERAL_LIMIT,
+            "response": response[:_LLM_LITERAL_LIMIT],
+            "response_truncated": len(response) > _LLM_LITERAL_LIMIT,
+            "input_hash": _stable_hash(prompt_text),
+            "output_hash": _stable_hash(response),
+            "duration_ms": int(duration_ms),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+        self.llm_exchanges.append(exchange)
+        return exchange
 
     def to_dict(self) -> dict:
         return self.model_dump(mode="json")
