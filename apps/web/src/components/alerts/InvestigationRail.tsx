@@ -312,7 +312,10 @@ function RailHeader({
           <>
             <span>·</span>
             <span className="font-mono text-gray-400">
-              risk {Math.round(alert.riskScore)}
+              {/* `normalizeAlert` already resolves this to a 0-100 integer.
+                  The rounding here used to be the only thing standing between
+                  a raw 0.85 and the page, and it printed "risk 1". */}
+              risk {alert.riskScore}
             </span>
           </>
         )}

@@ -14,7 +14,12 @@ import {
 
 // Alerts carry an extra `info` severity that cases don't model; fold it into
 // the lowest case severity so promotion never sends an invalid value.
-function alertSeverityToCaseSeverity(severity: Alert['severity']): CaseSeverity {
+//
+// Exported because `AlertDetailView` promotes an alert too, down a different
+// path. It used to send no severity at all, so the server default applied and
+// a critical alert opened a medium case; both call sites now resolve the
+// severity here so they cannot drift.
+export function alertSeverityToCaseSeverity(severity: Alert['severity']): CaseSeverity {
   return severity === 'info' ? 'low' : severity;
 }
 

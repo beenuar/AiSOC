@@ -1252,7 +1252,9 @@ export interface Alert {
   source: string;
   sourceRef?: string;
   tenantId: string;
-  riskScore: number;
+  /** Normalised 0-100 integer. Absent when nothing scored the alert — do not
+   *  render a `0` in its place, that is a measurement nobody made. */
+  riskScore?: number;
   mitreAttack?: MitreAttack[];
   iocs?: AlertIOC[];
   rawEvent?: Record<string, unknown>;
@@ -1480,14 +1482,33 @@ function normalizeAlert(raw: unknown): Alert {
     });
   }
 
-  // ``risk_score`` legacy fallback: fusion sometimes only ships
-  // ``confidence`` (0-100) and not the older ``risk_score``. Prefer
-  // the explicit field, fall back to confidence as a soft signal.
+  // Risk has the same two-scales-one-field problem confidence had above, and
+  // it resolved across three keys: `risk_score ?? ai_score ?? confidence ?? 0`.
+  // `risk_score` and `ai_score` are [0,1] floats (fusion documents the first
+  // as "0-1, vendor-provided"; `metrics.py` buckets the second "across
+  // [0, 1]"), while `confidence` is the canonical 0-100 integer. The live
+  // path is `ai_score` — the `alerts` table has no `risk_score` column — so a
+  // real alert scoring 0.85 reached the console as 0.85, and the two surfaces
+  // reading it disagreed: the rail printed `Math.round(0.85)` as "risk 1"
+  // while the detail view printed "0.85".
+  //
+  // Normalised here, once, to the canonical 0-100 integer, with the scale
+  // decided by the *key*: a genuine confidence of 1 is indistinguishable from
+  // a model score of 1.0 by value alone. The camelCase `riskScore` is this
+  // function's own output name, so it is already on the 0-100 scale and is
+  // passed through — re-normalising an alert must not multiply it again.
+  //
+  // The `?? 0` that used to close the chain is gone too: an alert carrying
+  // none of these keys is unscored, and "nobody scored this" is not "scored
+  // zero risk". The rail already guards on `typeof riskScore === 'number'` to
+  // omit the chip, and the default made that guard unreachable.
+  const unitScaleRisk =
+    pickNum('risk_score', 'risk_score') ?? pickNum('ai_score', 'aiScore');
+  const alreadyNormalisedRisk = pickNum('riskScore', 'riskScore');
   const riskScore =
-    pickNum('risk_score', 'riskScore') ??
-    pickNum('ai_score', 'aiScore') ??
-    pickNum('confidence', 'confidence') ??
-    0;
+    unitScaleRisk !== undefined
+      ? Math.round(unitScaleRisk * 100)
+      : (alreadyNormalisedRisk ?? canonicalConfidence);
 
   return {
     id: String(r.id ?? ''),
@@ -1551,6 +1572,52 @@ export interface AlertsResponse {
   total: number;
   page: number;
   pageSize: number;
+  /** Absent when the server did not send them — see `AlertFacets`. */
+  facets?: AlertFacets;
+}
+
+/**
+ * Counts over the whole filtered result set, from `AlertListResponse.facets`.
+ *
+ * The stat strip used to derive these in the browser from the loaded page, so
+ * they were capped at `pageSize` and sat beside a server-side `total` in the
+ * hundreds. The server computes them off the same `WHERE` clause as `total`.
+ *
+ * A missing key inside `bySeverity` / `byStatus` means the server counted and
+ * found none. The whole object being absent means the server told us nothing,
+ * which is a different thing and must not render as a zero.
+ */
+export interface AlertFacets {
+  bySeverity: Record<string, number>;
+  byStatus: Record<string, number>;
+  /** Uses the API's shared unresolved vocabulary (`new | triaging | in_progress`). */
+  unresolved: number;
+}
+
+function countMap(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object') return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter(
+      (entry): entry is [string, number] => typeof entry[1] === 'number',
+    ),
+  );
+}
+
+/**
+ * Reads `AlertListResponse.facets`, or returns `undefined` when the server
+ * sent none. Returning an empty-but-present object here would be the same
+ * mistake as a `?? 0`: the strip could not tell "no criticals" from "nobody
+ * counted".
+ */
+function normalizeAlertFacets(raw: unknown): AlertFacets | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  const unresolved = r.unresolved;
+  return {
+    bySeverity: countMap(r.by_severity ?? r.bySeverity),
+    byStatus: countMap(r.by_status ?? r.byStatus),
+    unresolved: typeof unresolved === 'number' ? unresolved : 0,
+  };
 }
 
 export interface AlertFilters {
@@ -1575,6 +1642,7 @@ export const alertsApi = {
       page?: number;
       page_size?: number;
       pageSize?: number;
+      facets?: unknown;
     }>('/api/v1/alerts', {
       params: filters as Record<string, string>,
     });
@@ -1598,6 +1666,7 @@ export const alertsApi = {
           : typeof raw.page_size === 'number'
             ? raw.page_size
             : 50,
+      facets: normalizeAlertFacets(raw.facets),
     } satisfies AlertsResponse;
   },
 

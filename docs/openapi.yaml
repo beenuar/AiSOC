@@ -20198,6 +20198,39 @@ components:
         \ from the case timeline and the audit log.\n* ``recommended_actions`` — normalised\
         \ structured actions from\n  the ResponderAgent (or the legacy list-of-strings\
         \ shape)."
+    AlertFacetCounts:
+      properties:
+        by_severity:
+          additionalProperties:
+            type: integer
+          type: object
+          title: By Severity
+        by_status:
+          additionalProperties:
+            type: integer
+          type: object
+          title: By Status
+        unresolved:
+          type: integer
+          title: Unresolved
+          default: 0
+      type: object
+      title: AlertFacetCounts
+      description: 'Counts over the whole filtered result set, not the returned page.
+
+
+        The console''s Critical / High / Unresolved tiles used to be
+
+        `alerts.filter(...)` over the 25 rows it had loaded, rendered beside a
+
+        server-side `total` in the hundreds — so the tiles were arithmetically
+
+        capped at the page size and changed when the analyst paged.
+
+
+        Computed from the same `WHERE` clause as `total` rather than over the
+
+        whole tenant, so all four numbers on that strip describe one set of rows.'
     AlertLinkCreate:
       properties:
         alert_id:
@@ -20277,6 +20310,8 @@ components:
         pages:
           type: integer
           title: Pages
+        facets:
+          $ref: '#/components/schemas/AlertFacetCounts'
       type: object
       required:
       - items

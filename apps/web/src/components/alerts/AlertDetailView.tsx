@@ -20,7 +20,7 @@ import { format } from 'date-fns';
 import { clsx } from 'clsx';
 import { ContextualActions } from '@/components/copilot/ContextualActions';
 import { ExplainDrawer } from '@/components/alerts/ExplainDrawer';
-import { CreateCaseModal } from '@/components/alerts/CreateCaseModal';
+import { CreateCaseModal, alertSeverityToCaseSeverity } from '@/components/alerts/CreateCaseModal';
 import { demoFallback } from '@/lib/demoFallback';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -363,7 +363,15 @@ function LedgerEvidenceChain({ runId }: { runId: string }) {
 
 // ─── AI Investigation Panel ───────────────────────────────────────────────────
 
-function AIInvestigation({ alertId, alertTitle }: { alertId: string; alertTitle?: string }) {
+function AIInvestigation({
+  alertId,
+  alertTitle,
+  alertSeverity,
+}: {
+  alertId: string;
+  alertTitle?: string;
+  alertSeverity?: Alert['severity'];
+}) {
   const router = useRouter();
   const [isRunning, setIsRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -393,6 +401,10 @@ function AIInvestigation({ alertId, alertTitle }: { alertId: string; alertTitle?
         title: alertTitle ? `Investigation — ${alertTitle}` : `Investigation — alert ${alertId}`,
         description: alertTitle ? `Opened from alert: ${alertTitle}` : `Opened from alert ${alertId}`,
         alertIds: [alertId],
+        // Omitting this let the server default to `medium`, so a critical
+        // alert opened a medium case. The same mapping the promotion modal
+        // uses, because cases have no `info` tier.
+        severity: alertSeverity ? alertSeverityToCaseSeverity(alertSeverity) : undefined,
       });
       // A note about *why*, not a substitute for the evidence. The API
       // prepends this to what it assembled rather than using it instead.
@@ -847,7 +859,11 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
                 score={alert.confidenceScore}
               />
             )}
-            <span className="text-xs text-gray-500">Risk Score: <span className="text-white font-bold">{alert.riskScore}</span></span>
+            {/* Omitted rather than shown as 0 when nothing scored the alert —
+                the same honesty the rail's chip already applied. */}
+            {typeof alert.riskScore === 'number' && (
+              <span className="text-xs text-gray-500">Risk Score: <span className="text-white font-bold">{alert.riskScore}</span></span>
+            )}
           </div>
           <h1 className="text-lg font-semibold text-gray-100">{alert.title}</h1>
           <p className="text-sm text-gray-500 mt-1" suppressHydrationWarning>{alert.source} · {format(new Date(alert.createdAt), 'MMM d, yyyy HH:mm:ss')}</p>
@@ -1015,7 +1031,11 @@ export function AlertDetailView({ alertId }: { alertId: string }) {
           {/* Right column - 1/3 */}
           <div className="space-y-4">
             <Section title="AI Investigation">
-              <AIInvestigation alertId={alertId} alertTitle={alert?.title} />
+              <AIInvestigation
+                alertId={alertId}
+                alertTitle={alert?.title}
+                alertSeverity={alert?.severity}
+              />
             </Section>
 
             <Section title="Verdict & feedback">

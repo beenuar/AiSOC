@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
 import Link from 'next/link';
-import { alertsApi, type Alert, type AlertFilters, type ConfidenceLabel } from '@/lib/api';
+import { alertsApi, type Alert, type AlertFacets, type AlertFilters, type ConfidenceLabel } from '@/lib/api';
 import { clsx } from 'clsx';
 import { formatDistanceToNow } from 'date-fns';
 import { EntityRiskQueue } from './EntityRiskQueue';
@@ -90,6 +90,30 @@ const MOCK_ALERTS: Alert[] = Array.from({ length: 25 }, (_, i): Alert => {
     confidenceScore: Math.round(confScore * 100),
   };
 });
+
+/**
+ * The aggregate the API would return for a set of alerts.
+ *
+ * Only reachable through `demoFallback`, where `MOCK_ALERTS` is the entire
+ * result set rather than a page of one — so this is the same question the
+ * server answers, not the page-derived count the stat strip used to show.
+ */
+function demoFacets(rows: Alert[]): AlertFacets {
+  const bySeverity: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  for (const row of rows) {
+    bySeverity[row.severity] = (bySeverity[row.severity] ?? 0) + 1;
+    byStatus[row.status] = (byStatus[row.status] ?? 0) + 1;
+  }
+  // Mirrors `app/services/alert_status.py`: anything not explicitly finished
+  // is still someone's problem.
+  const RESOLVED = new Set(['resolved', 'closed']);
+  return {
+    bySeverity,
+    byStatus,
+    unresolved: rows.filter((r) => !RESOLVED.has(r.status)).length,
+  };
+}
 
 // Wave 1 — Detection confidence chip rendered inline in the alert grid so an
 // analyst can spot low-confidence alerts at a glance without clicking through.
@@ -275,6 +299,11 @@ export function AlertsView() {
         total: MOCK_ALERTS.length,
         page: 1,
         pageSize: 25,
+        // In the hosted demo the mock set *is* the whole result set — there
+        // is no server behind it — so counting it here is the same aggregate
+        // the API computes, not a page-derived figure. `demoFallback` keeps
+        // the whole object out of a real deployment.
+        facets: demoFacets(MOCK_ALERTS),
       }),
       refreshInterval: 30000,
     }
@@ -287,9 +316,11 @@ export function AlertsView() {
   const alerts = data?.alerts || [];
   const total = data?.total || 0;
 
-  const critCount = alerts.filter((a) => a.severity === 'critical').length;
-  const highCount = alerts.filter((a) => a.severity === 'high').length;
-  const newCount = alerts.filter((a) => a.status === 'new').length;
+  // These used to be `alerts.filter(...)` over `data.alerts`, which is one
+  // page of `pageSize` rows, rendered beside a server-side `total` in the
+  // hundreds — so the tiles were capped at 25 and moved when the analyst
+  // paged. `facets` is the same aggregate the server computes for `total`.
+  const facets = data?.facets;
 
   return (
     <div className="space-y-4">
@@ -359,9 +390,7 @@ export function AlertsView() {
         <AlertsTable
           alerts={alerts}
           total={total}
-          critCount={critCount}
-          highCount={highCount}
-          newCount={newCount}
+          facets={facets}
           filters={filters}
           isLoading={isLoading}
           error={error}
@@ -377,9 +406,7 @@ export function AlertsView() {
 function AlertsTable({
   alerts,
   total,
-  critCount,
-  highCount,
-  newCount,
+  facets,
   filters,
   isLoading,
   error,
@@ -387,9 +414,7 @@ function AlertsTable({
 }: {
   alerts: Alert[];
   total: number;
-  critCount: number;
-  highCount: number;
-  newCount: number;
+  facets?: AlertFacets;
   filters: AlertFilters;
   isLoading: boolean;
   error: unknown;
@@ -404,12 +429,16 @@ function AlertsTable({
   return (
     <div className="space-y-4">
       {/* Stats strip (full width) */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-4 gap-3" role="group" aria-label="Alert counts">
         {[
           { label: 'Total', value: total, color: 'text-gray-200' },
-          { label: 'Critical', value: critCount, color: 'text-red-400' },
-          { label: 'High', value: highCount, color: 'text-orange-400' },
-          { label: 'Unresolved', value: newCount, color: 'text-purple-400' },
+          // A key the server omitted from the map means it counted and found
+          // none, so `?? 0` is a real zero. No facets at all means nobody
+          // counted, and the em-dash says so rather than publishing the
+          // page-derived figure that was the original defect.
+          { label: 'Critical', value: facets ? (facets.bySeverity.critical ?? 0) : '—', color: 'text-red-400' },
+          { label: 'High', value: facets ? (facets.bySeverity.high ?? 0) : '—', color: 'text-orange-400' },
+          { label: 'Unresolved', value: facets ? facets.unresolved : '—', color: 'text-purple-400' },
         ].map((stat) => (
           <div key={stat.label} className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
             <p className="text-xs text-gray-500">{stat.label}</p>

@@ -22,6 +22,7 @@ from app.services.alert_queue import (
     build_queue,
     claim_alert,
 )
+from app.services.alert_status import is_unresolved
 from app.services.alert_rail import (
     MiniTimelineEvent,
     RecommendedAction,
@@ -194,12 +195,32 @@ class AlertSnoozeRequest(BaseModel):
     reason: str | None = None
 
 
+class AlertFacetCounts(BaseModel):
+    """Counts over the whole filtered result set, not the returned page.
+
+    The console's Critical / High / Unresolved tiles used to be
+    `alerts.filter(...)` over the 25 rows it had loaded, rendered beside a
+    server-side `total` in the hundreds — so the tiles were arithmetically
+    capped at the page size and changed when the analyst paged.
+
+    Computed from the same `WHERE` clause as `total` rather than over the
+    whole tenant, so all four numbers on that strip describe one set of rows.
+    """
+
+    by_severity: dict[str, int] = Field(default_factory=dict)
+    by_status: dict[str, int] = Field(default_factory=dict)
+    #: Resolved through `app.services.alert_status`, not by counting `new` —
+    #: `triaging` and `in_progress` are outstanding work too.
+    unresolved: int = 0
+
+
 class AlertListResponse(BaseModel):
     items: list[AlertResponse]
     total: int
     page: int
     page_size: int
     pages: int
+    facets: AlertFacetCounts = Field(default_factory=AlertFacetCounts)
 
 
 class AlertUpdateRequest(BaseModel):
@@ -677,6 +698,28 @@ async def submit_alert(
     return AlertResponse.model_validate(alert)
 
 
+async def _alert_facets(db: Any, filters: list[Any]) -> AlertFacetCounts:
+    """Severity / status breakdown of every row the filters select.
+
+    Two `GROUP BY`s rather than one query per tile: the console renders four
+    numbers off this and a per-tile round-trip would make them individually
+    stale. `unresolved` is derived from the status breakdown through the
+    shared `alert_status` vocabulary so it cannot drift from the four other
+    sites that already carry the rule.
+    """
+    sev_rows = (await db.execute(select(Alert.severity, func.count()).where(and_(*filters)).group_by(Alert.severity))).all()
+    status_rows = (await db.execute(select(Alert.status, func.count()).where(and_(*filters)).group_by(Alert.status))).all()
+
+    by_severity = {row[0]: row[1] for row in sev_rows if row[0]}
+    by_status = {row[0]: row[1] for row in status_rows if row[0]}
+
+    return AlertFacetCounts(
+        by_severity=by_severity,
+        by_status=by_status,
+        unresolved=sum(count for state, count in by_status.items() if is_unresolved(state)),
+    )
+
+
 @router.get("", response_model=AlertListResponse)
 async def list_alerts(
     current_user: Annotated[AuthUser, Depends(require_permission("alerts:read"))],
@@ -725,6 +768,11 @@ async def list_alerts(
     count_result = await db.execute(select(func.count()).select_from(Alert).where(and_(*filters)))
     total = count_result.scalar_one()
 
+    # Facets over the *same* filters as `total`, so the console's stat strip
+    # describes one set of rows. It used to derive those tiles from the loaded
+    # page, which capped them at `page_size`.
+    facets = await _alert_facets(db, filters)
+
     # Fetch
     offset = (page - 1) * page_size
     result = await db.execute(select(Alert).where(and_(*filters)).order_by(Alert.created_at.desc()).offset(offset).limit(page_size))
@@ -736,6 +784,7 @@ async def list_alerts(
         page=page,
         page_size=page_size,
         pages=(total + page_size - 1) // page_size,
+        facets=facets,
     )
 
 
