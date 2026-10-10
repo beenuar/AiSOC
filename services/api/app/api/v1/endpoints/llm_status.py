@@ -66,6 +66,7 @@ from app.core.airgap import is_host_allowed_for_airgap
 from app.core.config import settings
 from app.models.llm_credential import TenantLlmCredential
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services import llm_health
 from app.services.llm_runtime import probe as probe_runtime
 from app.services.model_aliases import gateway_url, is_gateway_alias, resolve_api_key
 
@@ -253,6 +254,14 @@ def _compute_status(
         "effective_path": effective_path,
         "policy_note": policy_note,
         "source": source,
+        # Everything above describes *configuration*: which provider this pod
+        # would call and whether the policy would let it. Whether the provider
+        # answers is a different question, and nothing here used to ask it — so
+        # a deployment timing out on every call rendered the emerald Live pill
+        # (issue #1241). These three come from the outcomes of the calls the
+        # product already made; see app/services/llm_health.py for why they are
+        # not a probe, not a latency figure, and why `unknown` is a real answer.
+        **llm_health.snapshot(),
     }
 
 

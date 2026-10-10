@@ -244,10 +244,14 @@ thing for a tenant seeing ten alerts a day and one seeing ten thousand.
 
 * **SOC operations dashboard**: the "Agreement with analysts" panel, with the
   breakdowns by alert class and by source.
-* **Settings, Autonomy guardrails**: the scorecard shows the configured posture
+* **Settings, Autonomy guardrails**: the scorecard shows the posture in force
   and the measured track record on one card, because the question they answer
   together is the only one worth asking, which is whether the posture is
-  justified.
+  justified. The posture comes from the autonomy tier and each action's
+  capability contract — the two things that decide whether a verb reaches a
+  vendor. The per-action confidence thresholds on the same page are advisory
+  and the page says so: nothing in the response path reads
+  `aisoc_autonomy_thresholds` today.
 * **`GET /api/v1/autonomy-policy/agreement`**: the same figures, with
   breakdowns by alert class, rule, source and model.
 

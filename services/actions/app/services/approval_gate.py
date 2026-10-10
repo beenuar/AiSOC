@@ -45,13 +45,15 @@ import structlog
 from app.live_actions.capability_contracts import contract_for_action_type
 from app.live_actions.contract import ApprovalRequirement
 from app.models.action import ActionRequest, ActionStatus, BlastRadius
-from app.services.approval_matrix import evaluate_contract
+from app.services.approval_matrix import DEFAULT_TIER, evaluate_contract
 
 logger = structlog.get_logger()
 
-#: Conservative default when no tenant policy can be read. Mirrors
-#: ``dispatcher.configured_tier``: L1 notifies, it does not act.
-_DEFAULT_TIER = "L1"
+#: Conservative default when no tenant policy can be read. Not a local
+#: literal: ``dispatcher.configured_tier``, this gate and the console's
+#: autonomy page all have to name the same tier, and three copies of "L1" is
+#: three chances for one of them to move.
+_DEFAULT_TIER = DEFAULT_TIER
 
 
 def _tier_label(tier: object) -> str:

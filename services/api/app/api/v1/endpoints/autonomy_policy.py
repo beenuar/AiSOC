@@ -12,6 +12,25 @@ This module manages the **DB tenant overrides** layer. Reads return the
 *effective* policy after merging defaults + DB so the admin UI can show a
 single coherent view; writes only persist to the DB layer.
 
+Those thresholds are not the control that gates execution, and the response
+says so
+=============================================================================
+
+``aisoc_autonomy_thresholds`` is read by
+``services/agents/app/policy/guardrails.py`` and by nothing on a production
+path — ``services/agents/app/closure/policy.py`` records that in its own
+words. A response verb reaches a vendor through ``services/actions``, which
+grades it on the tenant's L0–L4 maturity tier and the verb's capability
+contract.
+
+The console had no way to tell the difference and inferred one: an ``auto``
+threshold below 1.0 meant the action auto-executed. All nineteen shipped
+defaults are below 1.0, so a stock install announced
+"Autopilot — 7 high-blast actions auto-execute" while its dispatcher, at the
+default L1, queued every one of them for a human. Every read therefore now
+carries an ``effective`` block and per-action verdicts resolved from the real
+control by ``app/services/autonomy_effective.py``.
+
 All endpoints are tenant-scoped and require ``settings:read`` /
 ``settings:write`` permissions (typically held only by the ``tenant_admin``
 role — see ``services/api/app/core/security.py``).
@@ -31,6 +50,12 @@ from starlette.convertors import Convertor, register_url_convertor
 from app._vendor.autonomy_evidence_rules import PromotionThresholds
 from app.api.v1.deps import AuthUser, DBSession
 from app.db.rls import TenantDBSession
+from app.services.autonomy_effective import (
+    ActionAutonomy,
+    EffectiveTier,
+    grade_action,
+    resolve_effective_tier,
+)
 from app.services.autonomy_grants import (
     GrantScopeError,
     list_grants,
@@ -201,10 +226,53 @@ class ActionPolicy(BaseModel):
     last_updated_by: str | None = None
     last_reason: str | None = None
 
+    # ── What actually happens to this verb, as opposed to what the
+    # thresholds above describe. See `app/services/autonomy_effective.py`.
+    #: The capability it resolves to in the action registry, or null when no
+    #: executor is registered under this name. `delete_object` is the one
+    #: that matters: it is critical-blast in the table above, it is not an
+    #: `ActionType`, it has no contract and no executor, and the page used to
+    #: count it among the verbs running unattended.
+    capability: str | None = None
+    executable: bool = False
+    #: Whether this verb reaches a vendor without a human on this deployment.
+    effective_auto_execute: bool = False
+    #: The same question at L4. False here means no tier, no `force_auto`
+    #: override and no earned grant can make it unattended, because a
+    #: contract floor may be raised and never lowered.
+    auto_executes_at_any_tier: bool = False
+    #: The ceiling applied to this verb, which an override or an earned grant
+    #: can raise above the tenant's own tier.
+    effective_tier: str
+    effective_reason: str
+
+
+class EffectiveAutonomy(BaseModel):
+    """The control that actually gates execution, as the console must show it."""
+
+    tier: str
+    tier_label: str
+    #: `tenant_policy`, `environment`, or `unreadable_policy_floor`.
+    tier_source: str
+    #: Highest impact this tier executes without an analyst; null at L0.
+    max_automatic_impact: str | None
+    auto_executing_actions: list[str]
+    high_blast_auto_executing: list[str]
+    #: Verbs in the table below with no registered executor.
+    unimplemented_actions: list[str]
+    #: Always true today, and stated rather than implied: nothing in the
+    #: dispatch path reads `aisoc_autonomy_thresholds`. The only reader is
+    #: `services/agents/app/policy/guardrails.py`, which no production path
+    #: imports. Leaving the page silent about that is what let a column of
+    #: editable sliders read as a live control.
+    thresholds_are_advisory: bool
+    advisory_note: str
+
 
 class AutonomyPolicyResponse(BaseModel):
     tenant_id: str
     actions: list[ActionPolicy]
+    effective: EffectiveAutonomy
 
 
 class ThresholdUpdateRequest(BaseModel):
@@ -310,6 +378,28 @@ def _row_to_triple(row: dict) -> ThresholdTriple:
 # ---------------------------------------------------------------------------
 
 
+#: Blast radii a CISO is asking about when they ask whether the SOC acts on
+#: its own. Mirrors the set the console used to flip its posture badge on.
+_HIGH_BLAST = frozenset({"high", "critical"})
+
+_ADVISORY_NOTE = (
+    "These thresholds are advisory: nothing in the response path reads them yet. "
+    "What gates execution is the autonomy tier below plus each action's capability contract."
+)
+
+
+def _autonomy_fields(verdict: ActionAutonomy) -> dict[str, object]:
+    """The effective-posture half of an ``ActionPolicy``, built once."""
+    return {
+        "capability": verdict.capability,
+        "executable": verdict.executable,
+        "effective_auto_execute": verdict.auto_executes,
+        "auto_executes_at_any_tier": verdict.auto_executes_at_any_tier,
+        "effective_tier": verdict.tier,
+        "effective_reason": verdict.reason,
+    }
+
+
 @router.get("", response_model=AutonomyPolicyResponse)
 async def get_autonomy_policy(
     user: AuthUser,
@@ -320,16 +410,26 @@ async def get_autonomy_policy(
     For each known action we surface the merged thresholds (defaults + DB
     overrides), the hard-coded defaults, and an ``overridden`` flag the UI
     uses to render a "modified from default" badge.
+
+    Every action also carries whether it would *actually* execute without a
+    human, resolved from the tenant's maturity tier and the verb's capability
+    contract by ``app/services/autonomy_effective.py``. The thresholds and
+    that answer are different facts, and the console previously derived the
+    second from the first: a threshold below 1.0 was read as "auto-executes",
+    which on stock defaults made nineteen of nineteen actions autonomous and
+    put an Autopilot badge on a deployment that queues all of them.
     """
     await user.require_permission_db("settings:read", db)
 
     overrides = await _fetch_overrides(db, str(user.tenant_id))
+    effective: EffectiveTier = await resolve_effective_tier(db, str(user.tenant_id))
 
     actions: list[ActionPolicy] = []
     seen: set[str] = set()
     for action in _DEFAULTS:
         seen.add(action)
         defaults = _default_triple(action)
+        autonomy = _autonomy_fields(grade_action(action, effective))
         row = overrides.get(action)
         if row is not None:
             thresholds = _row_to_triple(row)
@@ -344,6 +444,7 @@ async def get_autonomy_policy(
                     last_updated_at=row["updated_at"].isoformat() if row.get("updated_at") else None,
                     last_updated_by=row.get("updated_by"),
                     last_reason=row.get("reason"),
+                    **autonomy,
                 )
             )
         else:
@@ -354,6 +455,7 @@ async def get_autonomy_policy(
                     thresholds=defaults,
                     default_thresholds=defaults,
                     overridden=False,
+                    **autonomy,
                 )
             )
 
@@ -374,11 +476,26 @@ async def get_autonomy_policy(
                 last_updated_at=row["updated_at"].isoformat() if row.get("updated_at") else None,
                 last_updated_by=row.get("updated_by"),
                 last_reason=row.get("reason"),
+                **_autonomy_fields(grade_action(action, effective)),
             )
         )
 
     actions.sort(key=lambda a: (a.blast_radius, a.action))
-    return AutonomyPolicyResponse(tenant_id=str(user.tenant_id), actions=actions)
+    return AutonomyPolicyResponse(
+        tenant_id=str(user.tenant_id),
+        actions=actions,
+        effective=EffectiveAutonomy(
+            tier=effective.tier,
+            tier_label=effective.label,
+            tier_source=effective.source,
+            max_automatic_impact=effective.max_automatic_impact,
+            auto_executing_actions=[a.action for a in actions if a.effective_auto_execute],
+            high_blast_auto_executing=[a.action for a in actions if a.effective_auto_execute and a.blast_radius in _HIGH_BLAST],
+            unimplemented_actions=[a.action for a in actions if not a.executable],
+            thresholds_are_advisory=True,
+            advisory_note=_ADVISORY_NOTE,
+        ),
+    )
 
 
 @router.put("/{action:autonomy_action}", response_model=ThresholdUpdateResponse)

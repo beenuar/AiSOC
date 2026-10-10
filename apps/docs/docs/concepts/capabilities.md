@@ -39,7 +39,7 @@ verdict the AI produces is measurable, configurable, and learnable from.
 |---|---|---|
 | **Three-tier memory** | `services/agents/app/memory/` | Session (in-process LRU) + working (Redis, 24h TTL) + institutional (Postgres, permanent) tiers; pgvector-ready schema |
 | **Calibrated confidence** | every agent output | Each verdict carries `confidence` (0–1) + `confidence_basis` (list of factors); Brier-score gate in CI eval harness |
-| **Autonomy guardrails** | `/api/v1/autonomy-policy` | Per-action `auto / review / escalate / reject` thresholds in YAML; tenant-specific overrides via DB; admin UI in **Settings → Autonomy Policy** |
+| **Autonomy guardrails** | `/api/v1/autonomy-policy` | Per-action `auto / review / escalate / reject` thresholds in YAML; tenant-specific overrides via DB; admin UI in **Settings → Autonomy Policy**. The response also carries the posture actually in force — the resolved L0–L4 tier and, per action, whether it would reach a vendor without a human — because the thresholds are advisory and no dispatch path reads them |
 | **SOC metrics dashboard** | `/api/v1/metrics/soc` | MTTD / MTTR / MTTC / FPR / escalation rate / ATT&CK heatmap / confidence calibration over time; auto-refresh every 60s |
 | **Analyst-override feedback loop** | `/api/v1/feedback` | When an analyst corrects a verdict: persists `disposition`, writes the lesson to `aisoc_institutional_memory`, and surfaces *retroactive candidates* — past alerts in the same tenant matching the same coarse signature that would now flip disposition; bulk-apply with one click |
 | **Investigation cost telemetry** | `services/agents/app/core/cost_telemetry.py` | Tokens / model / $ / latency per run; aggregate in metrics dashboard |

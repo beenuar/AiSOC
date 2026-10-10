@@ -57,11 +57,35 @@ from app.api.v1.endpoints.alerts import (
     claim_alert_endpoint as claim_alert_route,
 )
 from app.models.alert import Alert
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 # ────────────────────────────────────────────────────────────────────────────
 # Fixtures / helpers
 # ────────────────────────────────────────────────────────────────────────────
+
+
+def _http_request(query_string: bytes = b"") -> Request:
+    """The ASGI request the routing layer would have built.
+
+    ``list_alerts`` and ``update_alert`` take one: the first reads
+    ``query_params`` to tell an explicit ``page_size`` from the default, the
+    second hands it to ``emit_audit`` for source-IP attribution and for the
+    mark that stops ``AuditMiddleware`` writing a second row.
+    """
+    return Request(
+        {
+            "type": "http",
+            "method": "PATCH",
+            "path": "/api/v1/alerts",
+            "root_path": "",
+            "scheme": "http",
+            "query_string": query_string,
+            "headers": [],
+            "client": ("127.0.0.1", 50000),
+            "server": ("testserver", 80),
+            "state": {},
+        }
+    )
 
 
 def _user(tenant_id: uuid.UUID | None = None) -> CurrentUser:
@@ -263,6 +287,7 @@ def _assert_tenant_scoped(executed: list[tuple[str, dict[str, Any]]], tenant_id:
 _LIST_ALERTS_DEFAULTS: dict[str, Any] = {
     "page": 1,
     "page_size": 25,
+    "limit": None,
     "severity": None,
     "status": None,
     "category": None,
@@ -293,7 +318,7 @@ async def test_list_alerts_scopes_by_tenant() -> None:
             [_alert(user.tenant_id), _alert(user.tenant_id), _alert(user.tenant_id)],
         ]
     )
-    response = await list_alerts(current_user=user, db=db, **_LIST_ALERTS_DEFAULTS)
+    response = await list_alerts(current_user=user, db=db, http_request=_http_request(), **_LIST_ALERTS_DEFAULTS)
     assert response.total == 3
     assert len(response.items) == 3
     assert response.facets.by_severity == {"critical": 2, "high": 1}
@@ -314,7 +339,7 @@ async def test_list_alerts_with_filters_keeps_tenant_scope() -> None:
         "min_confidence": 70,
         "confidence_label": "high",
     }
-    await list_alerts(current_user=user, db=db, **kwargs)
+    await list_alerts(current_user=user, db=db, http_request=_http_request(), **kwargs)
     _assert_tenant_scoped(db.executed, user.tenant_id)
     # Every alerts statement should mention tenant_id (count + select).
     alerts_stmts = [(sql, params) for sql, params in db.executed if "alerts" in re.sub(r"\s+", " ", sql).lower()]
@@ -331,7 +356,7 @@ async def test_list_alerts_rejects_invalid_confidence_label() -> None:
     db = _mk_db([])
     kwargs = {**_LIST_ALERTS_DEFAULTS, "confidence_label": "urgent"}
     with pytest.raises(HTTPException) as exc:
-        await list_alerts(current_user=user, db=db, **kwargs)
+        await list_alerts(current_user=user, db=db, http_request=_http_request(), **kwargs)
     assert exc.value.status_code == 400
 
 
@@ -436,6 +461,7 @@ async def test_update_alert_cross_tenant_returns_404() -> None:
             request=AlertUpdateRequest(status="closed"),
             current_user=tenant_a,
             db=db,
+            http_request=_http_request(),
         )
     assert exc.value.status_code == 404
     # Critical: no UPDATE statement should have run.
@@ -454,6 +480,7 @@ async def test_update_alert_same_tenant_scopes_select() -> None:
         request=AlertUpdateRequest(status="resolved", tags=["triaged"]),
         current_user=user,
         db=db,
+        http_request=_http_request(),
     )
     assert resp.id == alert.id
     # The SELECT must be tenant-scoped. The UPDATE-by-id WHERE clause
