@@ -1655,6 +1655,14 @@ function LlmCard({
   const providerLabel = PROVIDER_LABEL[llm.provider] ?? llm.provider;
   const isFallback = llm.effective_path === 'fallback';
   const blockedByAirgap = llm.airgap_enabled && !llm.airgap_compliant;
+  // `effective_path` is configuration: it answers "would a call be attempted",
+  // not "did one come back". Deciding the pill from it alone is why a
+  // deployment timing out on every call rendered emerald Live (issue #1241).
+  //
+  // Fallback still wins: on the deterministic path no call is attempted, so
+  // there is no provider outcome to report and "Degraded" would blame a
+  // provider that was never asked.
+  const isDegraded = !isFallback && llm.recent_health === 'degraded';
 
   return (
     <section
@@ -1678,6 +1686,8 @@ function LlmCard({
           )}
           {isFallback ? (
             <StatusPill tone="amber" label="Fallback path" />
+          ) : isDegraded ? (
+            <StatusPill tone="red" label="Degraded" />
           ) : (
             <StatusPill tone="emerald" label="Live" />
           )}
@@ -1712,8 +1722,29 @@ function LlmCard({
         </div>
       ) : null}
 
+      {isDegraded ? (
+        <div
+          role="alert"
+          className="mt-4 rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200"
+        >
+          <p className="font-semibold text-red-100">
+            The provider is configured but recent calls are failing.
+          </p>
+          <p className="mt-1">{llm.recent_note}</p>
+        </div>
+      ) : null}
+
       <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <KeyValue label="Provider">{providerLabel}</KeyValue>
+        {/* Shown whenever the alert block above is not already carrying it, so
+            the evidence behind the badge is visible in every state — including
+            `unknown`. A panel that shows a badge and hides what it rests on is
+            how "Live" came to mean "configured" without anyone noticing. */}
+        {isDegraded ? null : (
+          <KeyValue label="Recent calls">
+            <span className="text-xs text-gray-300">{llm.recent_note}</span>
+          </KeyValue>
+        )}
         <KeyValue label="Model">
           {llm.model ? (
             <code className="font-mono text-xs text-gray-100">{llm.model}</code>

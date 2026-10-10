@@ -238,6 +238,14 @@ RATCHET: dict[str, str] = {
         "iterate, and a tenant missing from that list would have approvals that never "
         "expire, which is the silent hang the sweep exists to prevent"
     ),
+    "services/agents/app/investigator/ledger.py::fail_stale_runs::investigation_runs": (
+        "the stale-run reaper, the same shape as the approval and webhook sweeps below: a run is "
+        "abandoned when the process that owned it is gone, so there is no caller and no tenant to "
+        "filter by, and a per-tenant pass needs a list of tenants whose omissions are runs that "
+        "render as 'running' forever. Admitted by the second arm of the policy in "
+        "008_investigation_ledger.sql (`OR current_tenant_id() IS NULL`); the function says so, so a "
+        "future policy that drops that arm turns this into a visible no-op rather than a silent one"
+    ),
     "services/api/app/services/outbound_webhooks.py::due_deliveries::OutboundDelivery": (
         "the outbound-webhook retry sweep, the same shape as the approval and wait sweeps above: a "
         "per-tenant pass needs a list of tenants, and a tenant missing from it has events that are "
@@ -428,7 +436,7 @@ RATCHET: dict[str, str] = {
 # ceiling with a spare slot in it and the list held 41. The ceiling now
 # equals the list, so the next unscoped statement has to be argued for
 # rather than absorbed — which is what this number is for.
-MAX_RATCHET = 43
+MAX_RATCHET = 44
 
 
 # ---------------------------------------------------------------------------

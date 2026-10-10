@@ -124,15 +124,21 @@ export function AutonomyPolicyPanel() {
     <div>
       <PanelHeader
         title="Autonomy guardrails"
-        description="Per-action confidence thresholds. The agent uses these to decide whether to act silently, queue for analyst review, page on-call, or refuse."
+        description="Per-action confidence thresholds, and the autonomy tier that decides what actually runs without a human."
       />
 
       <div className="space-y-5 px-6 py-5">
         {/* Phase C3 — autopilot/copilot posture + scorecard (defaults to
             copilot). Rendered once the policy loads so the CISO sees the
-            whole-SOC autonomy posture before drilling into per-action rows. */}
+            whole-SOC autonomy posture before drilling into per-action rows.
+            `effective` is what the badge is computed from; see the card. */}
         {!isLoading && !error && actions.length > 0 ? (
-          <AutonomyScorecard actions={actions} agreement={agreement} grants={grantList?.grants} />
+          <AutonomyScorecard
+            actions={actions}
+            agreement={agreement}
+            grants={grantList?.grants}
+            effective={data?.effective}
+          />
         ) : null}
 
         {/* Legend */}
@@ -154,7 +160,18 @@ export function AutonomyPolicyPanel() {
               <Pill tone="red">&lt; escalation</Pill> agent refuses
             </li>
           </ul>
-          <p className="mt-3 text-[11px] text-gray-500">
+          {/* Said here as well as on the card, because this is the block that
+              explains the sliders and a reader who stops at it would otherwise
+              leave believing the thresholds govern a vendor call. */}
+          <p className="mt-3 text-[11px] text-amber-300/80">
+            These thresholds are advisory. Nothing in the response path reads{' '}
+            <code className="font-mono text-amber-200/80">
+              aisoc_autonomy_thresholds
+            </code>{' '}
+            today — whether a verb reaches a vendor unattended is decided by the
+            autonomy tier above and by the action&apos;s own capability contract.
+          </p>
+          <p className="mt-2 text-[11px] text-gray-500">
             Defaults are loaded from{' '}
             <code className="font-mono text-gray-400">
               services/agents/config/autonomy_policy.yaml
@@ -162,8 +179,8 @@ export function AutonomyPolicyPanel() {
             . Tenant overrides written here are stored in{' '}
             <code className="font-mono text-gray-400">
               aisoc_autonomy_thresholds
-            </code>{' '}
-            and read on the next investigation.
+            </code>
+            .
           </p>
         </div>
 
@@ -282,6 +299,24 @@ function ActionRow({
     </span>
   );
 
+  // A verb with no executor is not a verb with a cautious threshold. Rendering
+  // a critical-blast name like `delete_object` beside a slider implies the
+  // platform can do it and is choosing not to; nothing in the tree can.
+  const runtimeTag =
+    action.executable === false ? (
+      <span className="rounded-full bg-gray-500/10 px-2 py-0.5 text-[11px] font-medium text-gray-400 ring-1 ring-gray-500/30">
+        no executor
+      </span>
+    ) : action.effective_auto_execute ? (
+      <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-300 ring-1 ring-amber-500/30">
+        runs unattended
+      </span>
+    ) : action.executable ? (
+      <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 ring-1 ring-emerald-500/30">
+        human approves
+      </span>
+    ) : null;
+
   return (
     <li className="rounded-lg border border-gray-800 bg-gray-950/40 p-4 transition-colors hover:border-gray-700">
       <div className="flex flex-col gap-1 border-b border-gray-800 pb-3 sm:flex-row sm:items-start sm:justify-between">
@@ -299,7 +334,11 @@ function ActionRow({
               blast: {action.blast_radius}
             </span>
             {overrideTag}
+            {runtimeTag}
           </div>
+          {action.effective_reason ? (
+            <p className="mt-1 text-[11px] text-gray-500">{action.effective_reason}</p>
+          ) : null}
           {action.last_updated_at ? (
             <p className="mt-1 text-[11px] text-gray-500">
               Last updated{' '}

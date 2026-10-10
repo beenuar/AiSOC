@@ -5,15 +5,35 @@
  *
  * Sits atop the per-action guardrail editor (`AutonomyPolicy.tsx`) and answers
  * the question a CISO actually asks: "how autonomous is my SOC right now, and
- * where does a human still sign off?" It computes an honest posture from the
- * *configured* per-action policy (not fabricated runtime stats):
+ * where does a human still sign off?"
  *
  *   - **Posture** — Copilot (the safe default: high/critical-blast actions
- *     always require a human) vs Autopilot (at least one high-blast action is
- *     configured to auto-execute). Data-class scoping is expressed through the
- *     per-action blast radius, so the scorecard groups by blast radius.
- *   - **Distribution** — how many actions auto-execute, queue for review, or
- *     always gate on a human, bucketed by blast radius.
+ *     always require a human) vs Autopilot (at least one high-blast action
+ *     really does reach a vendor unattended). Data-class scoping is expressed
+ *     through the per-action blast radius, so the scorecard groups by it.
+ *   - **Distribution** — how many actions auto-execute, how many have no
+ *     executor behind them at all, bucketed by blast radius.
+ *
+ * Where "auto-executes" comes from, and where it used to come from
+ * ----------------------------------------------------------------
+ * It is `effective_auto_execute`, which the API resolves from the autonomy
+ * tier in force and the action's capability contract — the two things that
+ * actually decide whether `services/actions` dispatches or queues.
+ *
+ * This card used to decide for itself, from the confidence threshold beside
+ * each row: `thresholds.auto < 1` meant "some confidence level lets the agent
+ * act", therefore auto-executing. Every one of the nineteen shipped defaults
+ * is below 1.0 and seven are high- or critical-blast, so a freshly installed
+ * deployment opened this page on **"Autopilot · 7 high-blast actions
+ * auto-execute"** — while its dispatcher, at the default L1 tier, queued all
+ * seven for human approval. The thresholds are read by no production path at
+ * all, so the number was not merely stale; it described a mechanism that was
+ * not running. A security product telling an operator their estate is
+ * unattended when it is not is the kind of wrong that gets acted on.
+ *
+ * An absent `effective_auto_execute` counts as **not** auto-executing. The
+ * failure to avoid is announcing autonomy that is not there, and inferring it
+ * from whatever else is on the row is how that happened the first time.
  *
  * The compute is a pure function so it's unit-tested directly; the component is
  * a thin presentational shell.
@@ -36,6 +56,7 @@ import type {
   AgreementResponse,
   AutonomyActionPolicy,
   AutonomyBlastRadius,
+  AutonomyEffective,
   AutonomyGrant,
 } from '@/lib/api';
 
@@ -45,20 +66,31 @@ export interface AutonomyScorecardData {
   posture: AutonomyPosture;
   total: number;
   overridden: number;
-  /** Actions whose `auto` threshold is reachable (auto-execute is configured). */
+  /** Actions that really do reach a vendor without a human. */
   autoExecuting: number;
-  /** High/critical blast actions configured to auto-execute (the autopilot signal). */
+  /** High/critical blast actions that do (the autopilot signal). */
   highBlastAuto: number;
+  /** Actions with no executor registered behind the verb at all. */
+  unimplemented: number;
+  /**
+   * High/critical-blast actions that no autonomy tier could ever run
+   * unattended. When this accounts for all of them, the copilot claim is a
+   * property of the contracts rather than of today's tier setting, and the
+   * card is allowed to say so.
+   */
+  highBlastNeverAuto: number;
+  highBlastTotal: number;
   byBlast: Record<AutonomyBlastRadius, number>;
 }
 
 const HIGH_BLAST: ReadonlySet<AutonomyBlastRadius> = new Set(['high', 'critical']);
 
-// An action "auto-executes" when its `auto` threshold is below 1.0 — i.e. some
-// confidence level lets the agent act without a human. auto == 1.0 means
-// "never auto" (always at least review), the safe copilot setting.
+// The API resolves this from the autonomy tier and the capability contract.
+// Absent means "we were not told", which is rendered as not auto-executing:
+// the alternative is guessing, and guessing from the threshold beside it is
+// what made this card announce an autopilot posture no deployment held.
 function autoExecutes(a: AutonomyActionPolicy): boolean {
-  return a.thresholds.auto < 1;
+  return a.effective_auto_execute === true;
 }
 
 export function computeScorecard(actions: AutonomyActionPolicy[]): AutonomyScorecardData {
@@ -74,24 +106,34 @@ export function computeScorecard(actions: AutonomyActionPolicy[]): AutonomyScore
   let overridden = 0;
   let autoExecuting = 0;
   let highBlastAuto = 0;
+  let unimplemented = 0;
+  let highBlastNeverAuto = 0;
+  let highBlastTotal = 0;
 
   for (const a of actions) {
     byBlast[a.blast_radius] = (byBlast[a.blast_radius] ?? 0) + 1;
     if (a.overridden) overridden += 1;
+    if (a.executable === false) unimplemented += 1;
+    const high = HIGH_BLAST.has(a.blast_radius);
+    if (high) highBlastTotal += 1;
     if (autoExecutes(a)) {
       autoExecuting += 1;
-      if (HIGH_BLAST.has(a.blast_radius)) highBlastAuto += 1;
+      if (high) highBlastAuto += 1;
     }
+    if (high && a.auto_executes_at_any_tier === false) highBlastNeverAuto += 1;
   }
 
   return {
-    // Copilot is the default; only a high/critical-blast action configured to
-    // auto-execute flips the posture to autopilot.
+    // Copilot is the default; only a high/critical-blast action that actually
+    // executes without a human flips the posture to autopilot.
     posture: highBlastAuto > 0 ? 'autopilot' : 'copilot',
     total: actions.length,
     overridden,
     autoExecuting,
     highBlastAuto,
+    unimplemented,
+    highBlastNeverAuto,
+    highBlastTotal,
     byBlast,
   };
 }
@@ -149,14 +191,31 @@ export function summariseTrackRecord(agreement: AgreementResponse | null | undef
   };
 }
 
+/** The sentence beside the posture badge. */
+export function postureSummary(card: AutonomyScorecardData): string {
+  if (card.posture === 'autopilot') {
+    return `${card.highBlastAuto} high-blast action${card.highBlastAuto === 1 ? '' : 's'} auto-execute — review carefully.`;
+  }
+  // Two different claims, and conflating them is how this card went wrong
+  // before. "No tier ever runs these unattended" is a property of the
+  // contracts and survives a tier change; "nothing does today" is a reading of
+  // the current setting and does not.
+  if (card.highBlastTotal > 0 && card.highBlastNeverAuto === card.highBlastTotal) {
+    return 'High- and critical-blast actions always require a human — no autonomy tier executes them unattended.';
+  }
+  return 'Nothing here reaches a vendor without a human at the current autonomy tier.';
+}
+
 export function AutonomyScorecard({
   actions,
   agreement,
   grants,
+  effective,
 }: {
   actions: AutonomyActionPolicy[];
   agreement?: AgreementResponse | null;
   grants?: AutonomyGrant[];
+  effective?: AutonomyEffective | null;
 }) {
   const card = computeScorecard(actions);
   const isCopilot = card.posture === 'copilot';
@@ -182,19 +241,20 @@ export function AutonomyScorecard({
             >
               {isCopilot ? 'Copilot' : 'Autopilot'}
             </span>
-            <span className="text-xs text-gray-400">
-              {isCopilot
-                ? 'High- and critical-blast actions always require a human.'
-                : `${card.highBlastAuto} high-blast action${card.highBlastAuto === 1 ? '' : 's'} auto-execute — review carefully.`}
-            </span>
+            <span className="text-xs text-gray-400">{postureSummary(card)}</span>
           </div>
         </div>
         <dl className="flex gap-4 text-right">
           <Stat label="Actions" value={card.total} />
           <Stat label="Auto-exec" value={card.autoExecuting} />
+          {card.unimplemented > 0 ? (
+            <Stat label="No executor" value={card.unimplemented} hint="advisory only" />
+          ) : null}
           <Stat label="Overridden" value={card.overridden} />
         </dl>
       </div>
+
+      <EffectiveControl effective={effective} />
 
       <div className="mt-4 flex flex-wrap gap-2" aria-label="Actions by blast radius">
         {(Object.entries(card.byBlast) as [AutonomyBlastRadius, number][])
@@ -211,6 +271,48 @@ export function AutonomyScorecard({
 
       <TrackRecord record={record} />
       <EarnedAutonomy grants={grants ?? []} />
+    </div>
+  );
+}
+
+/** Where the posture above comes from: the tier, and what it may execute.
+ *
+ * Named on the card rather than left to the per-action rows because the badge
+ * is the thing an operator reads and leaves with, and "Copilot" without the
+ * tier beside it is a claim with no stated basis — which is exactly how a
+ * posture derived from the wrong table went unchallenged.
+ */
+const TIER_SOURCE_LABEL: Record<string, string> = {
+  tenant_policy: 'set for this tenant',
+  environment: 'deployment default',
+  unreadable_policy_floor: 'policy unreadable — held at the conservative floor',
+};
+
+function EffectiveControl({ effective }: { effective?: AutonomyEffective | null }) {
+  if (!effective) return null;
+  const source = TIER_SOURCE_LABEL[effective.tier_source] ?? effective.tier_source;
+
+  return (
+    <div className="mt-3 rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+      <p className="text-[11px] uppercase tracking-wide text-gray-500">What gates execution</p>
+      <p className="mt-1 text-xs text-gray-300">
+        Autonomy tier{' '}
+        <span className="font-mono text-gray-100">{effective.tier_label}</span>{' '}
+        <span className="text-gray-500">({source})</span>.{' '}
+        {effective.max_automatic_impact === null
+          ? 'This tier executes nothing without a human, not even a read.'
+          : `Without a human it executes up to ${effective.max_automatic_impact.replace('_', ' ')} impact, and only where the action's own contract allows it.`}
+      </p>
+      {effective.thresholds_are_advisory ? (
+        <p className="mt-2 text-[11px] text-amber-300/80">{effective.advisory_note}</p>
+      ) : null}
+      {effective.unimplemented_actions.length > 0 ? (
+        <p className="mt-2 text-[11px] text-gray-500">
+          No executor is registered for{' '}
+          <span className="font-mono">{effective.unimplemented_actions.join(', ')}</span>. Thresholds
+          for these change nothing.
+        </p>
+      ) : null}
     </div>
   );
 }

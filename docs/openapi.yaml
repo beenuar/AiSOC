@@ -607,7 +607,12 @@ paths:
 
         match either filter — that''s intentional; analysts who care about
 
-        confidence should only see alerts that actually carry the signal.'
+        confidence should only see alerts that actually carry the signal.
+
+
+        `limit` is an accepted spelling of `page_size`. Supplying both with
+
+        different values is a 400.'
       operationId: list_alerts_api_v1_alerts_get
       security:
       - HTTPBearer: []
@@ -629,6 +634,20 @@ paths:
           minimum: 1
           default: 25
           title: Page Size
+      - name: limit
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: integer
+            maximum: 200
+            minimum: 1
+          - type: 'null'
+          description: Alias for `page_size`, bounded identically. Supplying both
+            with different values is a 400.
+          title: Limit
+        description: Alias for `page_size`, bounded identically. Supplying both with
+          different values is a 400.
       - name: severity
         in: query
         required: false
@@ -833,7 +852,12 @@ paths:
       tags:
       - alerts
       summary: Update Alert
-      description: Update alert status, priority, tags, assignment, or case link.
+      description: 'Update alert status, priority, tags, assignment, or case link.
+
+
+        Emits an `alerts:update` audit event carrying a before/after payload for
+
+        the fields this call changed.'
       operationId: update_alert_api_v1_alerts__alert_id__patch
       security:
       - HTTPBearer: []
@@ -14163,7 +14187,22 @@ paths:
 
         overrides), the hard-coded defaults, and an ``overridden`` flag the UI
 
-        uses to render a "modified from default" badge.'
+        uses to render a "modified from default" badge.
+
+
+        Every action also carries whether it would *actually* execute without a
+
+        human, resolved from the tenant''s maturity tier and the verb''s capability
+
+        contract by ``app/services/autonomy_effective.py``. The thresholds and
+
+        that answer are different facts, and the console previously derived the
+
+        second from the first: a threshold below 1.0 was read as "auto-executes",
+
+        which on stock defaults made nineteen of nineteen actions autonomous and
+
+        put an Autopilot badge on a deployment that queues all of them.'
       operationId: get_autonomy_policy_api_v1_autonomy_policy_get
       responses:
         '200':
@@ -19560,6 +19599,29 @@ components:
           - type: string
           - type: 'null'
           title: Last Reason
+        capability:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Capability
+        executable:
+          type: boolean
+          title: Executable
+          default: false
+        effective_auto_execute:
+          type: boolean
+          title: Effective Auto Execute
+          default: false
+        auto_executes_at_any_tier:
+          type: boolean
+          title: Auto Executes At Any Tier
+          default: false
+        effective_tier:
+          type: string
+          title: Effective Tier
+        effective_reason:
+          type: string
+          title: Effective Reason
       type: object
       required:
       - action
@@ -19567,6 +19629,8 @@ components:
       - thresholds
       - default_thresholds
       - overridden
+      - effective_tier
+      - effective_reason
       title: ActionPolicy
     AddAlertsRequest:
       properties:
@@ -21771,10 +21835,13 @@ components:
             $ref: '#/components/schemas/ActionPolicy'
           type: array
           title: Actions
+        effective:
+          $ref: '#/components/schemas/EffectiveAutonomy'
       type: object
       required:
       - tenant_id
       - actions
+      - effective
       title: AutonomyPolicyResponse
     AvailableTools:
       properties:
@@ -25103,6 +25170,57 @@ components:
       - valid_from
       - created_at
       title: EdgeOut
+    EffectiveAutonomy:
+      properties:
+        tier:
+          type: string
+          title: Tier
+        tier_label:
+          type: string
+          title: Tier Label
+        tier_source:
+          type: string
+          title: Tier Source
+        max_automatic_impact:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Max Automatic Impact
+        auto_executing_actions:
+          items:
+            type: string
+          type: array
+          title: Auto Executing Actions
+        high_blast_auto_executing:
+          items:
+            type: string
+          type: array
+          title: High Blast Auto Executing
+        unimplemented_actions:
+          items:
+            type: string
+          type: array
+          title: Unimplemented Actions
+        thresholds_are_advisory:
+          type: boolean
+          title: Thresholds Are Advisory
+        advisory_note:
+          type: string
+          title: Advisory Note
+      type: object
+      required:
+      - tier
+      - tier_label
+      - tier_source
+      - max_automatic_impact
+      - auto_executing_actions
+      - high_blast_auto_executing
+      - unimplemented_actions
+      - thresholds_are_advisory
+      - advisory_note
+      title: EffectiveAutonomy
+      description: The control that actually gates execution, as the console must
+        show it.
     EffectiveRuleCountOut:
       properties:
         total:

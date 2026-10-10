@@ -64,6 +64,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   handler was already dropping the field, so the isolation had been an
   accident of schema strictness rather than a control.
 
+### Fixed
+
+- **The autonomy settings page announced an autopilot posture no deployment
+  has** ([#1243](https://github.com/beenuar/AiSOC/issues/1243)). On a fresh
+  install, Settings → Autonomy guardrails rendered **"Autopilot · 7 high-blast
+  actions auto-execute"** with ACTIONS 19 / AUTO-EXEC 19. None of it was true,
+  and the two halves of why are worth separating.
+
+  *It was a display defect, not a posture defect.* The console decided an
+  action auto-executed from the confidence threshold beside it —
+  `thresholds.auto < 1` in `AutonomyScorecard.tsx` — and the highest threshold
+  in the shipped table is `0.95`, so all nineteen qualified and the seven
+  high- and critical-blast rows flipped the badge. What actually gates a
+  response verb is the tenant's L0–L4 maturity tier and the verb's capability
+  contract, both in `services/actions`. The deployment default is **L1**,
+  which auto-executes nothing above a read, and every containment verb
+  declares `analyst` approval — so the dispatcher queued all seven, exactly as
+  `README.md` says it does. A security product telling an operator their
+  estate is unattended when it is not is the defect, whichever direction the
+  error runs.
+
+  *The table the page edits has no production reader.* `aisoc_autonomy_thresholds`
+  is read by `services/agents/app/policy/guardrails.py`, which nothing on a
+  production path imports. The page now says so, rather than leaving a column
+  of editable sliders to imply otherwise.
+
+  `GET /api/v1/autonomy-policy` now returns an `effective` block (the resolved
+  tier, where it came from, what it may execute without a human, and which
+  verbs actually do) plus a per-action verdict. Those verdicts come from
+  `evaluate_contract` — the same function both dispatch doors call — reached
+  through a byte-identical mirror at
+  `services/api/app/_vendor/action_contracts/`, with
+  `scripts/sync_vendored_action_contracts.py --check` wired into CI. A second
+  implementation would drift, and the drift is the bug.
+
+  Three smaller things fall out of it. `delete_object` is rendered as **no
+  executor** rather than as a critical-blast verb running unattended: it is not
+  an `ActionType`, has no capability contract and has no executor anywhere in
+  the tree — it was a string in two threshold tables. The card now names the
+  tier the badge was derived from, so the claim has a stated basis. And an
+  absent verdict counts as *not* auto-executing, because inferring one from
+  whatever else is on the row is how this happened the first time.
+
 ## [18.0.0] - 2026-10-09
 
 ### BREAKING

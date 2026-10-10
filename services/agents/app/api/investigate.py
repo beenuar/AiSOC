@@ -26,7 +26,8 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, WebSocke
 from fastapi.responses import HTMLResponse, PlainTextResponse
 from pydantic import BaseModel
 
-from app.investigator import InvestigatorOrchestrator
+from app.graph.runner import default_budget
+from app.investigator import InvestigatorOrchestrator, ledger
 from app.orchestrator.router import RouterOrchestrator
 from app.security.tenant_scope import (
     TENANT_HEADER,
@@ -211,6 +212,53 @@ async def _emit_event(run_id: str, tenant_id: str, event: dict[str, Any]) -> Non
 # Background task: runs investigation and streams steps to realtime service
 # ---------------------------------------------------------------------------
 
+#: Statuses that mean this run is over. The console's ``CaseWorkspace.tsx``
+#: branches on ``idle``/``starting``/``running``/``failed``/``completed`` and the
+#: WebSocket tail below breaks on ``completed``/``failed``, so a run that ends in
+#: any other word is a run no surface can finish rendering. A timed-out run is
+#: therefore ``failed`` carrying the reason, not a fifth vocabulary entry.
+_TERMINAL_STATUSES = frozenset({"completed", "failed"})
+
+
+async def _fail_run(run_id: str, run_uuid: UUID, tenant_ref: str, reason: str) -> None:
+    """Close a run as ``failed`` in **both** places a consumer reads it.
+
+    The console polls ``GET /api/v1/investigations/{run_id}``, which serves the
+    process dict; the Investigation Ledger renders the ``investigation_runs``
+    row. Writing one and not the other swaps a spinner that never resolves for
+    a ledger entry that never ends, which is the same defect wearing the other
+    surface.
+
+    Never downgrades a run that already finished: a ``done`` event followed by
+    a slow generator teardown must not be relabelled a failure.
+    """
+    entry = _runs.get(run_id)
+    if entry is not None:
+        if entry.get("status") in _TERMINAL_STATUSES:
+            return
+        entry.update(
+            {
+                "status": "failed",
+                "error": reason,
+                "completed_at": datetime.utcnow().isoformat(),
+            }
+        )
+
+    # Best-effort, exactly like every other ledger write: no database
+    # configured is not an error, and a failed bookkeeping write must not
+    # replace the reason the run ended with a reason it did not.
+    try:
+        tenant_uuid = await ledger.resolve_tenant(tenant_ref)
+        if tenant_uuid is not None:
+            await ledger.complete_run(
+                run_id=run_uuid,
+                tenant_id=tenant_uuid,
+                status="failed",
+                error=reason,
+            )
+    except Exception as exc:  # noqa: BLE001 — bookkeeping never masks the outcome
+        logger.warning("investigation.ledger_close_failed", run_id=run_id, error=str(exc))
+
 
 async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> None:
     audit_log: list[dict[str, Any]] = []
@@ -220,67 +268,97 @@ async def _run_and_store(run_id: str, case_id: str, req: InvestigateRequest) -> 
         run_uuid = UUID(run_id)
     except (ValueError, TypeError):
         run_uuid = uuid4()
+
+    # The same wall-clock budget the auto-triage path runs under — read at call
+    # time from ``AISOC_INVESTIGATION_MAX_SECONDS`` rather than restated here,
+    # because two constants describing one deadline is how the shorter one wins
+    # silently. Without it this path had none at all: `ChatOpenAI` is built with
+    # no timeout, so a merely-slow model raises nothing and the run stays
+    # `running` for the life of the process (issue #1242).
+    max_seconds = default_budget().max_seconds
+    deadline = asyncio.timeout(max_seconds)
     try:
-        # Use the streaming orchestrator so we can emit events progressively.
-        # ``_investigate_stream`` picks investigator vs. router at call time
-        # based on ``AISOC_INVESTIGATE_USE_ROUTER``.
-        async for event in _investigate_stream(
-            case_id=case_id,
-            alert_summary=req.alert_summary,
-            raw_alert=req.raw_alert,
-            tenant_id=req.tenant_id,
-            run_id=run_uuid,
-        ):
-            if event.get("type") == "step":
-                audit_log.append(event)
-                # Update the in-memory run so pollers see progress
-                _runs[run_id]["audit_log"] = audit_log
-                # Broadcast to realtime → WebSocket clients
-                await _emit_event(run_id, req.tenant_id, event)
+        async with deadline:
+            # Use the streaming orchestrator so we can emit events progressively.
+            # ``_investigate_stream`` picks investigator vs. router at call time
+            # based on ``AISOC_INVESTIGATE_USE_ROUTER``.
+            async for event in _investigate_stream(
+                case_id=case_id,
+                alert_summary=req.alert_summary,
+                raw_alert=req.raw_alert,
+                tenant_id=req.tenant_id,
+                run_id=run_uuid,
+            ):
+                if event.get("type") == "step":
+                    audit_log.append(event)
+                    # Update the in-memory run so pollers see progress
+                    _runs[run_id]["audit_log"] = audit_log
+                    # Broadcast to realtime → WebSocket clients
+                    await _emit_event(run_id, req.tenant_id, event)
 
-            elif event.get("type") == "done":
-                state_data = event.get("state", {})
-                _runs[run_id].update(
-                    {
-                        "status": "completed",
-                        "report_md": state_data.get("report_md", ""),
-                        "report_html": state_data.get("report_html", ""),
-                        "audit_log": audit_log,
-                        "recon": state_data.get("recon", {}),
-                        "forensic": state_data.get("forensic", {}),
-                        "responder": state_data.get("responder", {}),
-                        "completed_at": datetime.utcnow().isoformat(),
-                        "error": None,
-                    }
-                )
-                await _emit_event(
-                    run_id,
-                    req.tenant_id,
-                    {
-                        "kind": "completed",
-                        "agent": "orchestrator",
-                        "summary": "Investigation completed",
-                        "data": {"status": "completed"},
-                    },
-                )
+                elif event.get("type") == "done":
+                    state_data = event.get("state", {})
+                    _runs[run_id].update(
+                        {
+                            "status": "completed",
+                            "report_md": state_data.get("report_md", ""),
+                            "report_html": state_data.get("report_html", ""),
+                            "audit_log": audit_log,
+                            "recon": state_data.get("recon", {}),
+                            "forensic": state_data.get("forensic", {}),
+                            "responder": state_data.get("responder", {}),
+                            "completed_at": datetime.utcnow().isoformat(),
+                            "error": None,
+                        }
+                    )
+                    await _emit_event(
+                        run_id,
+                        req.tenant_id,
+                        {
+                            "kind": "completed",
+                            "agent": "orchestrator",
+                            "summary": "Investigation completed",
+                            "data": {"status": "completed"},
+                        },
+                    )
 
-            elif event.get("type") == "error":
-                err_msg = event.get("error", "Unknown error")
-                _runs[run_id].update({"status": "failed", "error": err_msg})
-                await _emit_event(
-                    run_id,
-                    req.tenant_id,
-                    {
-                        "kind": "error",
-                        "agent": "orchestrator",
-                        "summary": err_msg,
-                        "data": {"status": "failed"},
-                    },
-                )
+                elif event.get("type") == "error":
+                    err_msg = event.get("error", "Unknown error")
+                    _runs[run_id].update({"status": "failed", "error": err_msg})
+                    await _emit_event(
+                        run_id,
+                        req.tenant_id,
+                        {
+                            "kind": "error",
+                            "agent": "orchestrator",
+                            "summary": err_msg,
+                            "data": {"status": "failed"},
+                        },
+                    )
+
+    except TimeoutError as exc:
+        # `asyncio.timeout` converts the cancellation it issued into
+        # `TimeoutError`; an inner `TimeoutError` (an httpx read timeout, say)
+        # arrives here too and is *not* the budget. `expired()` tells them
+        # apart, so the operator-facing reason names the thing that actually
+        # ran out.
+        if deadline.expired():
+            reason = (
+                f"Investigation exceeded its wall-clock budget of {max_seconds}s and was stopped. "
+                "Raise AISOC_INVESTIGATION_MAX_SECONDS if the configured model needs longer."
+            )
+            logger.warning("investigation.budget_timeout", run_id=run_id, max_seconds=max_seconds)
+        else:
+            reason = str(exc) or "Investigation timed out"
+            logger.error("investigation_bg_task timed out", run_id=run_id, error=reason)
+        await _fail_run(run_id, run_uuid, req.tenant_id, reason)
 
     except Exception as exc:  # noqa: BLE001
         logger.error("investigation_bg_task failed", run_id=run_id, error=str(exc))
-        _runs[run_id].update({"status": "failed", "error": str(exc)})
+        # Through the same helper as the deadline: an exception escaping the
+        # stream means the orchestrator's own `except` arm did not run, so
+        # nothing else is going to close the ledger row either.
+        await _fail_run(run_id, run_uuid, req.tenant_id, str(exc))
 
 
 # ---------------------------------------------------------------------------
