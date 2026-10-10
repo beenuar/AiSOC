@@ -386,7 +386,7 @@ async def update_rule_compat(
     rule = (await db.execute(stmt)).scalar_one_or_none()
 
     if rule is None:
-        builtin = builtin_by_uuid(rule_id)
+        builtin = builtin_by_uuid(rule_id, current_user.tenant_id)
         if builtin is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -1134,7 +1134,7 @@ async def bulk_toggle_rules(
     for rid, raw in parsed.items():
         if rid in owned:
             continue
-        builtin = builtin_by_uuid(rid)
+        builtin = builtin_by_uuid(rid, current_user.tenant_id)
         if builtin is None:
             skipped.append(raw)
             continue

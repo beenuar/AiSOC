@@ -39,16 +39,24 @@ Identity
 A compiled rule's id is a string (``det-cloud-063``,
 ``sigmahq-sigma-002bdb95-…``, ``wd-port-scan``) and both response models type
 ``id`` as a UUID. Rather than widen the published contract, each rule gets a
-deterministic UUIDv5 of its compiled id. Three properties follow, and all
-three are needed:
+deterministic UUIDv5 — **of the tenant and the compiled id together**. Three
+properties follow, and all three are needed:
 
-* the same rule has the same id on every deployment and across restarts, so a
-  console deep link and a saved view keep working;
+* the same rule has the same id for the same tenant on every deployment and
+  across restarts, so a console deep link and a saved view keep working;
 * the id does not change when the tenant first tunes the rule, because the
   materialised row is inserted under exactly that UUID;
 * the compiled id survives in ``provenance->>'source_id'``, which is the key
   ``services/fusion/app/services/tenant_overlay.py`` already reads. Inventing
   any other key is what would create a third source of truth.
+
+The tenant is in the hash because ``detection_rules.id`` is a primary key and
+the row is per tenant. A rule id derived from the compiled id alone collides
+the moment a second tenant tunes the same built-in: the insert would find the
+first tenant's row, return it, and the second tenant's change would silently
+land on nothing while their console rendered somebody else's state. Caught by
+``scripts/check_tenant_query_predicates.py``, which is exactly the shape of
+finding that gate exists for.
 
 What is deliberately absent
 ---------------------------
@@ -64,6 +72,7 @@ from __future__ import annotations
 import json
 import threading
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
@@ -100,7 +109,6 @@ class BuiltinRule:
     """One rule the detection engine loads, as the catalogue sees it."""
 
     source_id: str
-    uuid: uuid.UUID
     name: str
     severity: str
     category: str
@@ -161,9 +169,14 @@ class Catalogue:
     #: smaller total as though it were the whole corpus.
     missing: tuple[str, ...]
 
-    @property
-    def by_uuid(self) -> dict[uuid.UUID, BuiltinRule]:
-        return {rule.uuid: rule for rule in self.rules}
+    def by_uuid(self, tenant_id: uuid.UUID | str) -> dict[uuid.UUID, BuiltinRule]:
+        """Console id to rule, for one tenant.
+
+        Memoised per tenant below rather than computed here: the whole map is
+        2,586 UUIDv5 digests, which is cheap once and wasteful on every
+        request.
+        """
+        return _index_for(self, str(tenant_id))
 
 
 class BuiltinCatalogueUnavailable(RuntimeError):
@@ -176,9 +189,9 @@ class BuiltinCatalogueUnavailable(RuntimeError):
     """
 
 
-def uuid_for(source_id: str) -> uuid.UUID:
-    """The stable console id for a compiled rule id."""
-    return uuid.uuid5(RULE_ID_NAMESPACE, source_id)
+def uuid_for(source_id: str, tenant_id: uuid.UUID | str) -> uuid.UUID:
+    """This tenant's stable console id for a compiled rule id."""
+    return uuid.uuid5(RULE_ID_NAMESPACE, f"{tenant_id}:{source_id}")
 
 
 #: Artefact name → (kind of the rules inside, whether fusion's own directory
@@ -250,7 +263,6 @@ def _build(name: str, path: Path) -> list[BuiltinRule]:
         rules.append(
             BuiltinRule(
                 source_id=source_id,
-                uuid=uuid_for(source_id),
                 name=str(spec.get("name") or source_id),
                 severity=str(spec.get("severity") or "medium"),
                 category=str(spec.get("category") or "uncategorised"),
@@ -319,19 +331,43 @@ def builtin_catalogue() -> Catalogue:
         return catalogue
 
 
+#: ``(id(catalogue), tenant)`` → console-id index. Keyed on the catalogue
+#: object so a reloaded corpus cannot be answered from a stale index, and
+#: bounded so a long-lived process serving many tenants does not accumulate
+#: one map per tenant forever.
+_indexes: OrderedDict[tuple[int, str], dict[uuid.UUID, BuiltinRule]] = OrderedDict()
+_INDEX_LIMIT = 32
+
+
+def _index_for(catalogue: Catalogue, tenant_id: str) -> dict[uuid.UUID, BuiltinRule]:
+    key = (id(catalogue), tenant_id)
+    with _cache_lock:
+        cached = _indexes.get(key)
+        if cached is not None:
+            _indexes.move_to_end(key)
+            return cached
+        index = {uuid_for(rule.source_id, tenant_id): rule for rule in catalogue.rules}
+        _indexes[key] = index
+        while len(_indexes) > _INDEX_LIMIT:
+            _indexes.popitem(last=False)
+        return index
+
+
 def builtin_rules() -> tuple[BuiltinRule, ...]:
     return builtin_catalogue().rules
 
 
-def builtin_by_uuid(rule_id: uuid.UUID) -> BuiltinRule | None:
+def builtin_by_uuid(rule_id: uuid.UUID, tenant_id: uuid.UUID | str) -> BuiltinRule | None:
+    """The rule this tenant knows by that console id, if any.
+
+    The tenant is required rather than optional: an id resolved without it
+    would be the same id for every tenant, which is the collision that made
+    one tenant's tuning land on another tenant's row.
+    """
     try:
-        return builtin_catalogue().by_uuid.get(rule_id)
+        return builtin_catalogue().by_uuid(tenant_id).get(rule_id)
     except BuiltinCatalogueUnavailable:
         return None
-
-
-def builtin_by_source_id(source_id: str) -> BuiltinRule | None:
-    return builtin_by_uuid(uuid_for(source_id))
 
 
 def reset_cache() -> None:
@@ -339,3 +375,4 @@ def reset_cache() -> None:
     with _cache_lock:
         _cache["key"] = None
         _cache["catalogue"] = None
+        _indexes.clear()

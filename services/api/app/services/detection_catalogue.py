@@ -48,6 +48,7 @@ from app.services.builtin_rules import (
     BuiltinCatalogueUnavailable,
     BuiltinRule,
     builtin_catalogue,
+    uuid_for,
 )
 
 #: Placeholder confidence for a rule nobody has scored. It travels with
@@ -164,7 +165,7 @@ def row_view(row: DetectionRule) -> RuleView:
     )
 
 
-def builtin_view(rule: BuiltinRule, *, installed_at: datetime) -> RuleView:
+def builtin_view(rule: BuiltinRule, *, tenant_id: uuid.UUID, installed_at: datetime) -> RuleView:
     """Project a compiled rule into the shape both response models read.
 
     ``installed_at`` is the artefact's modification time — when *this*
@@ -175,7 +176,7 @@ def builtin_view(rule: BuiltinRule, *, installed_at: datetime) -> RuleView:
     console labels it accordingly.
     """
     return RuleView(
-        id=rule.uuid,
+        id=uuid_for(rule.source_id, tenant_id),
         tenant_id=None,
         name=rule.name,
         description=rule.description,
@@ -310,7 +311,7 @@ async def catalogue_page(
                 # already in `views`; adding the compiled projection beside it
                 # would list the same rule twice with contradictory statuses.
                 continue
-            views.append(builtin_view(rule, installed_at=installed_at))
+            views.append(builtin_view(rule, tenant_id=tenant_id, installed_at=installed_at))
 
     if not filters.include_builtin:
         views = [v for v in views if not v.is_builtin]
@@ -346,10 +347,10 @@ async def resolve_rule(db: AsyncSession, tenant_id: uuid.UUID, rule_id: uuid.UUI
         catalogue = builtin_catalogue()
     except BuiltinCatalogueUnavailable:
         return None
-    rule = catalogue.by_uuid.get(rule_id)
+    rule = catalogue.by_uuid(tenant_id).get(rule_id)
     if rule is None:
         return None
-    return builtin_view(rule, installed_at=_installed_at(catalogue.sources))
+    return builtin_view(rule, tenant_id=tenant_id, installed_at=_installed_at(catalogue.sources))
 
 
 async def materialise_builtin(
@@ -362,19 +363,29 @@ async def materialise_builtin(
 ) -> DetectionRule:
     """The tenant's row for a built-in, created on first write.
 
-    Inserted under ``rule.uuid`` so the id the console already rendered keeps
-    working, and carrying ``provenance.source_id`` so fusion's overlay query
-    finds it. ``author`` is written because the overlay reports *who* silenced
-    a rule when it explains a match that did not fire — "no alert" with no
-    explanation is indistinguishable from a rule that simply did not match.
+    Inserted under this tenant's console id for the rule, so the id the page
+    already rendered keeps working, and carrying ``provenance.source_id`` so
+    fusion's overlay query finds it. ``author`` is written because the overlay
+    reports *who* silenced a rule when it explains a match that did not fire —
+    "no alert" with no explanation is indistinguishable from a rule that
+    simply did not match.
+
+    The id is derived from the tenant as well as the rule. Two tenants tuning
+    the same built-in need two rows, and ``detection_rules.id`` is a primary
+    key: a shared id would mean the second tenant's insert finds the first
+    tenant's row, their change lands on nothing, and their console renders
+    somebody else's state.
     """
-    existing = (await db.execute(select(DetectionRule).where(DetectionRule.id == rule.uuid))).scalar_one_or_none()
+    rule_id = uuid_for(rule.source_id, tenant_id)
+    existing = (
+        await db.execute(select(DetectionRule).where(DetectionRule.id == rule_id, DetectionRule.tenant_id == tenant_id))
+    ).scalar_one_or_none()
     if existing is not None:
         return existing
 
     now = datetime.now(UTC)
     row = DetectionRule(
-        id=rule.uuid,
+        id=rule_id,
         tenant_id=tenant_id,
         name=rule.name,
         description=rule.description,

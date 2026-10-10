@@ -164,6 +164,13 @@ def _payloads() -> dict[str, bytes]:
             raise SyncError(f"{path.relative_to(REPO)} is empty")
         out[name] = body
     out[GENERATED] = _serialise_generated(python_resident_window_rules()).encode("utf-8")
+    # The writer and the check read this one function, and this is where the
+    # two stay in step. A check that verifies fewer places than the writer
+    # writes is one that certifies the case it cannot see — which is how the
+    # marketplace index shipped missing from the API image for every release
+    # after the endpoint was written.
+    if tuple(out) != WRITES:
+        raise SyncError(f"the artefact set drifted from WRITES: built {tuple(out)}, declared {WRITES}")
     return out
 
 

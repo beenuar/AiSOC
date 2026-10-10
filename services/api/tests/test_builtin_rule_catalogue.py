@@ -213,6 +213,14 @@ def _fusion_loaded_ids() -> dict[str, list[str]] | None:
     return json.loads(out.stdout.strip().splitlines()[-1])
 
 
+def _target(source_id: str) -> tuple[Any, uuid.UUID]:
+    """A compiled rule and the console id ``TENANT`` knows it by."""
+    from app.services.builtin_rules import builtin_rules, uuid_for
+
+    rule = next(r for r in builtin_rules() if r.source_id == source_id)
+    return rule, uuid_for(source_id, TENANT)
+
+
 def _fusion_build_overlay():
     """fusion's real `build_overlay`, loaded by path.
 
@@ -297,12 +305,20 @@ class TestTheCatalogueIsTheLoadedCorpus:
             f"catalogue is missing {sorted(fusion_ids - catalogue_ids)[:5]} and invents {sorted(catalogue_ids - fusion_ids)[:5]}"
         )
 
-    def test_ids_are_stable_across_processes(self) -> None:
-        """The console's deep links and a tenant's tuning rows both key on this."""
+    def test_ids_are_stable_and_per_tenant(self) -> None:
+        """Deep links and tuning rows key on this, and so does a primary key.
+
+        Stable for one tenant across processes, and *different* between two.
+        `detection_rules.id` is a primary key and the row is per tenant: a
+        shared id means the second tenant to tune a built-in writes onto the
+        first tenant's row. CI found that before this assertion existed.
+        """
         from app.services.builtin_rules import builtin_rules, uuid_for
 
+        other = uuid.UUID("cccccccc-0000-0000-0000-00000000c173")
         for rule in builtin_rules()[:50]:
-            assert rule.uuid == uuid_for(rule.source_id)
+            assert uuid_for(rule.source_id, TENANT) == uuid_for(rule.source_id, TENANT)
+            assert uuid_for(rule.source_id, TENANT) != uuid_for(rule.source_id, other)
 
 
 # ── the two read surfaces the issue names ────────────────────────────────────
@@ -362,15 +378,13 @@ class TestTheConsoleReadsTheLoadedCorpus:
 
 class TestDisablingABuiltInReachesTheEngine:
     async def test_the_stored_row_is_what_fusion_reads(self, client, session) -> None:
-        from app.services.builtin_rules import builtin_rules
+        target, target_id = _target("det-application-001")
 
-        target = next(r for r in builtin_rules() if r.source_id == "det-application-001")
-
-        response = await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": False})
+        response = await client.patch(f"/api/v1/detection/rules/{target_id}", json={"enabled": False})
         assert response.status_code == 200, response.text
         assert response.json()["enabled"] is False
 
-        row = (await session.execute(select(DetectionRule).where(DetectionRule.id == target.uuid))).scalar_one()
+        row = (await session.execute(select(DetectionRule).where(DetectionRule.id == target_id))).scalar_one()
         assert row.tenant_id == TENANT, "a tuning row must belong to the tenant that made it, never to the platform"
         assert row.status != "active"
         assert row.provenance.get("source_id") == target.source_id, (
@@ -393,22 +407,18 @@ class TestDisablingABuiltInReachesTheEngine:
         assert overlay.suppresses(target.source_id, {}) is not None, "fusion would keep firing the rule the console shows as disabled"
 
     async def test_a_second_toggle_reuses_the_same_row(self, client, session) -> None:
-        from app.services.builtin_rules import builtin_rules
-
-        target = next(r for r in builtin_rules() if r.source_id == "det-application-002")
+        target, target_id = _target("det-application-002")
         for enabled in (False, True, False):
-            assert (await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": enabled})).status_code == 200
+            assert (await client.patch(f"/api/v1/detection/rules/{target_id}", json={"enabled": enabled})).status_code == 200
 
-        rows: list[Any] = list((await session.execute(select(DetectionRule).where(DetectionRule.id == target.uuid))).scalars().all())
+        rows: list[Any] = list((await session.execute(select(DetectionRule).where(DetectionRule.id == target_id))).scalars().all())
         assert len(rows) == 1
         assert rows[0].status == "inactive"
 
     async def test_the_library_still_reports_one_entry_for_a_tuned_rule(self, client) -> None:
         """A stored row beside its compiled twin would list the rule twice."""
-        from app.services.builtin_rules import builtin_rules
-
-        target = next(r for r in builtin_rules() if r.source_id == "det-application-003")
-        await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": False})
+        target, target_id = _target("det-application-003")
+        await client.patch(f"/api/v1/detection/rules/{target_id}", json={"enabled": False})
 
         whole = (await client.get("/api/v1/detection/rules", params={"limit": 1})).json()
         assert whole["total"] == FUSION_LOADED_TOTAL, "tuning a rule must not grow the library"
@@ -420,7 +430,7 @@ class TestDisablingABuiltInReachesTheEngine:
         assert matches[0]["tuned"] is True
 
     async def test_bulk_toggle_no_longer_skips_every_rule_in_the_product(self, client) -> None:
-        from app.services.builtin_rules import builtin_rules
+        from app.services.builtin_rules import builtin_rules, uuid_for
 
         targets = [r for r in builtin_rules() if r.ruleset == "windowed_builtin_rules.json"]
         assert targets, "the Python-resident windowed rules are the ones a brute-force queue is loudest about"
@@ -428,33 +438,58 @@ class TestDisablingABuiltInReachesTheEngine:
         body = (
             await client.post(
                 "/api/v1/detection/rules/bulk-toggle",
-                json={"ruleIds": [str(r.uuid) for r in targets], "enabled": False},
+                json={"ruleIds": [str(uuid_for(r.source_id, TENANT)) for r in targets], "enabled": False},
             )
         ).json()
         assert body["updated"] == len(targets)
         assert body["skipped"] == []
 
-    async def test_a_second_tenant_is_not_affected(self, client, session_factory) -> None:
-        """The corpus is shared; the decision is not."""
-        from app.services.builtin_rules import builtin_rules
+    async def test_two_tenants_tuning_one_rule_get_two_rows(self, session_factory) -> None:
+        """The corpus is shared; the decision is not, and the row is a primary key.
 
-        target = next(r for r in builtin_rules() if r.source_id == "det-application-005")
-        await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": False})
+        Found by `scripts/check_tenant_query_predicates.py` on the first CI
+        run of this change. The console id was derived from the compiled rule
+        id alone, so the second tenant to disable a built-in resolved the
+        *first* tenant's row: their change landed on nothing and their page
+        rendered somebody else's state. The id carries the tenant now, and
+        this is the assertion that keeps it there.
+        """
+        from app.services.builtin_rules import uuid_for
+
+        other_tenant = uuid.UUID("cccccccc-0000-0000-0000-00000000c173")
+        mine = uuid_for("det-application-005", TENANT)
+        theirs = uuid_for("det-application-005", other_tenant)
+        assert mine != theirs
+
+        async def _db():
+            async with session_factory() as db:
+                try:
+                    yield db
+                    await db.commit()
+                except Exception:
+                    await db.rollback()
+                    raise
+
+        for tenant, rule_id, enabled in ((TENANT, mine, False), (other_tenant, theirs, True)):
+            app = FastAPI()
+            app.include_router(compat_router, prefix="/api/v1")
+            app.dependency_overrides[get_db] = _db
+            app.dependency_overrides[get_current_user] = lambda t=tenant: CurrentUser(
+                user_id=ACTOR, tenant_id=t, role="admin", email=f"analyst@{t}.example.com"
+            )
+            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://rules.test") as http:
+                response = await http.patch(f"/api/v1/detection/rules/{rule_id}", json={"enabled": enabled})
+                assert response.status_code == 200, response.text
 
         async with session_factory() as db:
-            row = (await db.execute(select(DetectionRule).where(DetectionRule.id == target.uuid))).scalar_one()
-            assert row.tenant_id == TENANT
-
-        overlay_module = _fusion_build_overlay()
-        other = overlay_module.build_overlay(str(uuid.uuid4()), [])
-        assert other.suppresses(target.source_id, {}) is None
+            rows = list((await db.execute(select(DetectionRule))).scalars().all())
+        tuned = {r.tenant_id: r.status for r in rows if (r.provenance or {}).get("source_id") == "det-application-005"}
+        assert tuned == {TENANT: "inactive", other_tenant: "active"}
 
     async def test_the_compiled_logic_is_not_editable(self, client) -> None:
         """Storing an edit the engine will not run is the inverse of #1273."""
-        from app.services.builtin_rules import builtin_rules
-
-        target = next(r for r in builtin_rules() if r.source_id == "det-application-004")
-        response = await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"body": "{}"})
+        target, target_id = _target("det-application-004")
+        response = await client.patch(f"/api/v1/detection/rules/{target_id}", json={"body": "{}"})
         assert response.status_code == 409
         assert "compiled corpus" in response.json()["detail"]
 
