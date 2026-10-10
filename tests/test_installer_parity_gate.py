@@ -42,7 +42,15 @@ DEMO_HANDOFF = "pnpm aisoc:demo"
 
 def _read(path: Path) -> str:
     assert path.is_file(), f"{path.relative_to(REPO)} is missing"
-    return path.read_text(encoding="utf-8")
+    # utf-8-sig, not utf-8: install.ps1 is committed **with** a BOM on
+    # purpose, because Windows PowerShell 5.1 parses a BOM-less script as
+    # ANSI and mangles every non-ASCII character in it. Read as plain utf-8
+    # the BOM survives as a leading \ufeff, so the first line is
+    # "\ufeff<#" rather than "<#", `_code_lines` never enters the block
+    # comment, and the whole header is scanned as if it were code — which
+    # made this gate report that the installer *executes* the demo stack
+    # while reading a comment saying it does not.
+    return path.read_text(encoding="utf-8-sig")
 
 
 def _code_lines(text: str) -> list[str]:

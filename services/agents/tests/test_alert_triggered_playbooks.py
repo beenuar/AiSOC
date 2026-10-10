@@ -209,14 +209,28 @@ class TestTheWiring:
         assert "alert_trigger.run_for_alert(" in source, "no playbook can start from an alert, which is the defect 5.1 exists to fix"
 
     def test_it_runs_after_triage_not_before(self) -> None:
-        """A playbook's conditions read the verdict and the confidence."""
+        """A playbook's conditions read the verdict and the confidence.
+
+        Located inside `triage` by AST rather than by `str.index` over the
+        whole module. The substring form pinned whichever occurrence came
+        first in the file, so adding *any* helper above `triage` that also
+        reads `state.verdict` moved the anchor into the helper and failed a
+        correctly-ordered worker — which is what a fail-closed LLM-error
+        guard did. The property under test is the order of these statements
+        within the function that runs them, so that is what this reads.
+        """
+        import ast
         import pathlib
 
-        source = pathlib.Path(__file__).resolve().parents[1].joinpath("app/workers/fused_alert_consumer.py").read_text()
-        trigger_at = source.index("alert_trigger.run_for_alert(")
-        verdict_at = source.index("verdict = state.verdict")
-        assert trigger_at < verdict_at
-        assert source.index("tokens = tracker.total_tokens") < trigger_at
+        path = pathlib.Path(__file__).resolve().parents[1].joinpath("app/workers/fused_alert_consumer.py")
+        tree = ast.parse(path.read_text())
+        triage = next(n for n in ast.walk(tree) if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)) and n.name == "triage")
+        body = "\n".join(path.read_text().splitlines()[triage.lineno - 1 : triage.end_lineno])
+
+        trigger_at = body.index("alert_trigger.run_for_alert(")
+        verdict_at = body.index("verdict = state.verdict")
+        assert trigger_at < verdict_at, "the playbook trigger must run before the verdict is read back"
+        assert body.index("tokens = tracker.total_tokens") < trigger_at
 
 
 class TestTheTriggerEventMatchesTheCorpus:

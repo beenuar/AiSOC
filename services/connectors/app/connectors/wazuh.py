@@ -81,6 +81,41 @@ _SEVERITY_BANDS: tuple[tuple[int, str], ...] = (
 )
 
 
+#: Rule groups the Wazuh vulnerability-detector stamps on its CVE scan
+#: events. A hit in one of these groups is *inventory state* ("host X runs
+#: a package with CVE-Y"), not an incident. docs/cve-patch-policy.md routes
+#: them to ``asset_vulnerabilities`` with a patch due date instead of the
+#: alert queue — a full re-scan of four agents produced ~3,900 alert rows in
+#: one hour on the live stack, which no analyst can triage and which buried
+#: every real detection that landed in the same window.
+_VULN_RULE_GROUPS: tuple[str, ...] = ("vulnerability-detector", "vulnerability")
+
+
+def is_vulnerability_source(source: dict[str, Any]) -> bool:
+    """True if an indexer ``_source`` document is a vulnerability-detector event.
+
+    Two structural markers, in order of authority:
+
+    * ``rule.groups`` contains the detector group — the canonical stamp the
+      stock ``ossec-github``/vulnerability-detection ruleset puts on every
+      scan event.
+    * ``data.vulnerability`` is an object — the payload shape the detector
+      itself writes, which custom rule packs keep even when they re-home the
+      event under a different rule.
+
+    Deliberately *not* a CVE mention in the description: legitimate
+    exploit-attempt detections cite CVEs in their rule descriptions too, and
+    swallowing one of those would hide a real incident. Fail open toward the
+    alert queue, which is where visible-but-noisy beats invisible.
+    """
+    rule = source.get("rule") or {}
+    groups = rule.get("groups")
+    if isinstance(groups, list) and any(g in _VULN_RULE_GROUPS for g in groups):
+        return True
+    data = source.get("data")
+    return isinstance(data, dict) and isinstance(data.get("vulnerability"), dict)
+
+
 def _severity_from_level(level: int | float | str | None) -> str:
     """Map a Wazuh rule level (0-15) to an AiSOC severity tier.
 
@@ -97,6 +132,29 @@ def _severity_from_level(level: int | float | str | None) -> str:
         if lvl >= threshold:
             return label
     return "info"
+
+
+#: Wazuh detector severity strings → AiSOC tiers. The detector uses the
+#: NVD adjectival ladder ("Low", "Medium", "High", "Critical") plus the
+#: odd vendor variants; anything unrecognised conservatively maps to
+#: ``medium`` so an unknown label still lands above ``info`` in the
+#: inventory without screaming critical.
+_DETECTOR_SEVERITY_MAP: dict[str, str] = {
+    "critical": "critical",
+    "severe": "critical",  # Wazuh's own word for the top band
+    "high": "high",
+    "medium": "medium",
+    "moderate": "medium",
+    "low": "low",
+    "negligible": "info",
+    "none": "info",
+    "informational": "info",
+}
+
+
+def _severity_from_detector(severity: str | None) -> str:
+    text = (severity or "").strip().lower()
+    return _DETECTOR_SEVERITY_MAP.get(text, "medium")
 
 
 class WazuhConnector(BaseConnector):
@@ -119,6 +177,7 @@ class WazuhConnector(BaseConnector):
         # response actions belong in a future kinetic plugin.
         return (
             Capability.PULL_ALERTS,
+            Capability.PULL_VULNERABILITIES,
             Capability.QUERY_LOGS,
             Capability.SEARCH_SIEM,
             Capability.PIVOT_HOST,
@@ -183,6 +242,25 @@ class WazuhConnector(BaseConnector):
                     default=True,
                     help_text=("Disable only for self-signed lab clusters. Production deployments must install the CA chain."),
                 ),
+                Field(
+                    "vuln_mode",
+                    "select",
+                    "Vulnerability Events",
+                    required=False,
+                    default="inventory",
+                    help_text=(
+                        "Where vulnerability-detector events go. 'inventory' "
+                        "(default) routes them to the asset vulnerability "
+                        "inventory with patch-window due dates per "
+                        "docs/cve-patch-policy.md; only CVSS>9, KEV, or "
+                        "overdue findings raise alerts. 'alerts' keeps the "
+                        "legacy behaviour of one alert per scan finding."
+                    ),
+                    options=[
+                        {"value": "inventory", "label": "Inventory + patch windows (recommended)"},
+                        {"value": "alerts", "label": "Alert per finding (legacy)"},
+                    ],
+                ),
             ],
         )
 
@@ -194,6 +272,7 @@ class WazuhConnector(BaseConnector):
         index_pattern: str = "wazuh-alerts-*",
         min_rule_level: int = 7,
         verify_tls: bool = True,
+        vuln_mode: str = "inventory",
     ):
         # Strip trailing slash so URL composition is predictable.
         self._base_url = indexer_url.rstrip("/")
@@ -205,6 +284,13 @@ class WazuhConnector(BaseConnector):
         except (TypeError, ValueError):
             self._min_rule_level = 7
         self._verify_tls = bool(verify_tls)
+        # "inventory" (default): detector events become asset_vulnerabilities
+        # rows, not alerts. "alerts": legacy behaviour, detector events flow
+        # into the alert stream as they always did. Anything unrecognised
+        # collapses to the legacy mode — the operator asked for it by
+        # setting a value we don't honour, and silently switching an
+        # established pipeline is worse than not switching it.
+        self._vuln_mode = vuln_mode if vuln_mode in ("inventory", "alerts") else "alerts"
 
     # ---- helpers ------------------------------------------------------
 
@@ -255,8 +341,16 @@ class WazuhConnector(BaseConnector):
         Pagination is bounded to 1000 hits per poll because anything
         larger means the operator should drop the polling interval, not
         chase a single huge batch.
+
+        In ``vuln_mode=inventory`` (the default) vulnerability-detector hits
+        are excluded here and returned by
+        :meth:`fetch_vulnerability_findings` instead. Excluding at the
+        source — not via a downstream filter rule — is deliberate: the
+        scheduler's ``filter_rules`` are tenant-controlled and evaluated
+        after normalization, so dropping here is the only place the two
+        streams provably cannot both claim the same event.
         """
-        query = {
+        query: dict[str, Any] = {
             "size": 1000,
             "sort": [{"@timestamp": {"order": "asc"}}],
             "query": {
@@ -275,7 +369,89 @@ class WazuhConnector(BaseConnector):
                 }
             },
         }
+        if self._vuln_mode == "inventory":
+            # Annotated at the literal rather than indexed through `object`:
+            # without it mypy infers the nested dict's values as `object`,
+            # which is not indexable, and the chained subscript below is
+            # unchecked.
+            query["query"]["bool"]["must_not"] = [
+                {"terms": {"rule.groups": list(_VULN_RULE_GROUPS)}},
+            ]
 
+        hits = await self._search(query)
+        if self._vuln_mode != "inventory":
+            return [self.normalize(hit) for hit in hits if isinstance(hit, dict)]
+        # belt-and-braces: the must_not above misses custom rule packs that
+        # re-home detector events under a different group, so re-check the
+        # document shape itself before anything reaches the alert stream.
+        return [self.normalize(hit) for hit in hits if isinstance(hit, dict) and not is_vulnerability_source(hit.get("_source") or {})]
+
+    async def fetch_vulnerability_findings(self, since_seconds: int = 3600) -> list[dict[str, Any]]:
+        """Pull recent vulnerability-detector events as inventory findings.
+
+        Called by the scheduler's vulnerability-sync gate (it detects this
+        method's presence), which feeds :func:`app.vulnerabilities.sync_findings`
+        → ``asset_vulnerabilities``. One finding per (CVE, host) as the
+        detector reported it; the sync side keys inventory by
+        ``(tenant, asset, cve, source)`` so repeat scans touch ``last_found``
+        instead of multiplying rows.
+
+        The window is wider than the alert poll (1h vs 5min) and bounded by
+        the same 1000-hit page: the detector's own scan interval is hourly,
+        so a narrow window would drop findings between polls if the
+        connector was down, and re-scans are idempotent anyway.
+
+        In ``vuln_mode=alerts`` this returns nothing: that mode puts
+        detector events in the alert stream (legacy behaviour), and the
+        scheduler gate below would otherwise double-write every finding —
+        once as an alert, once as inventory.
+        """
+        if self._vuln_mode != "inventory":
+            return []
+        query = {
+            "size": 1000,
+            "sort": [{"@timestamp": {"order": "asc"}}],
+            "query": {
+                "bool": {
+                    "must": [
+                        {
+                            "range": {
+                                "@timestamp": {
+                                    "gte": f"now-{max(int(since_seconds), 0)}s",
+                                    "lte": "now",
+                                }
+                            }
+                        },
+                        {"term": {"rule.groups": "vulnerability-detector"}},
+                    ]
+                }
+            },
+        }
+
+        hits = await self._search(query)
+        findings: list[dict[str, Any]] = []
+        for hit in hits:
+            if not isinstance(hit, dict):
+                continue
+            finding = self.normalize_vulnerability(hit)
+            if finding is not None:
+                findings.append(finding)
+        logger.info(
+            "wazuh.vulnerability_findings",
+            fetched=len(hits),
+            findings=len(findings),
+            window_seconds=since_seconds,
+        )
+        return findings
+
+    async def _search(self, query: dict[str, Any]) -> list[dict[str, Any]]:
+        """POST an OpenSearch DSL query at the alert index; return raw hits.
+
+        Shared by both fetch paths so auth, error handling and the
+        never-raise contract live once: a failed search returns ``[]`` and
+        logs, because the scheduler's failure recorder must see a fetch
+        return, not an exception escaping into the poll loop.
+        """
         try:
             async with httpx.AsyncClient(timeout=30.0, verify=self._verify_tls) as client:
                 resp = await client.post(
@@ -301,8 +477,55 @@ class WazuhConnector(BaseConnector):
             logger.warning("wazuh.search_returned_non_json")
             return []
 
-        hits = (payload.get("hits") or {}).get("hits") or []
-        return [self.normalize(hit) for hit in hits if isinstance(hit, dict)]
+        return (payload.get("hits") or {}).get("hits") or []
+
+    def normalize_vulnerability(self, hit: dict[str, Any]) -> dict[str, Any] | None:
+        """Project a detector hit into the ``sync_findings`` finding shape.
+
+        Returns ``None`` for events without a CVE or a host — the same two
+        fields ``sync_findings`` would skip on — so they are counted here
+        rather than silently dropped downstream.
+        """
+        source = hit.get("_source") or {}
+        data = source.get("data") or {}
+        vuln = data.get("vulnerability") or {}
+        agent = source.get("agent") or {}
+
+        cve = str(vuln.get("cve") or data.get("cve") or "").strip().upper()
+        hostname = agent.get("name") or agent.get("ip")
+        if not cve.startswith("CVE-") or not hostname:
+            return None
+
+        cvss = vuln.get("cvss") or {}
+        # Wazuh nests v3 under cvss.cvss3 and v2 under cvss.cvss (yes,
+        # literally the key "cvss" inside "cvss"). Prefer v3 base score.
+        cvss3 = cvss.get("cvss3") or {}
+        cvss2 = cvss.get("cvss") or {}
+        score = cvss3.get("base_score")
+        if score is None:
+            score = cvss2.get("base_score")
+        try:
+            score = float(score) if score is not None else None
+        except (TypeError, ValueError):
+            score = None
+
+        return {
+            "cve_id": cve,
+            "hostname": hostname,
+            "ip_address": agent.get("ip"),
+            # The detector's own severity ("Severe", "High", ...) is
+            # free-form; sync_findings re-derives nothing, so collapse the
+            # Wazuh text onto our five tiers conservatively.
+            "severity": _severity_from_detector(vuln.get("severity")),
+            "cvss_score": score,
+            "title": (source.get("rule") or {}).get("description") or cve,
+            "source": "wazuh",
+            "external_id": hit.get("_id"),
+            # KEV: the detector reports what it knowsvia the rule hit —
+            # is_exploited stays False here and is owned by the KEV worker
+            # (retro_hunt/kev_exposure.py), which flips it from the CISA
+            # feed. The connector must not invent exploited status.
+        }
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         """Project a Wazuh indexer hit into the AiSOC canonical alert shape.

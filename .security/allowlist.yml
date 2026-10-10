@@ -191,8 +191,24 @@ ceilings:
     # disabled). That is exactly one `error` finding, and both the error
     # and total counts dropped by exactly one on this branch, so the delta
     # is the removed call and not the scanner. Lowering locks it in.
-    total: 103
-    error: 38
+    #
+    # 103/38 -> 105/40. Two `avoid-sqlalchemy-text` findings, both on
+    # `services/api/app/services/alert_bulk_close.py`, where the bulk-close
+    # snapshot interpolates a backup *table name* into `text()`.
+    #
+    # Counted rather than suppressed, per the note above: a ceiling counts a
+    # finding, a suppression hides it. And the finding is real as a pattern
+    # even though it is not exploitable here — a table name cannot be a bind
+    # parameter in SQL, so interpolation is the only way to name one. The
+    # value is generated as `uuid.uuid4().hex` and then re-checked against an
+    # anchored `_BACKUP_TABLE_RE` that admits nothing but
+    # `aisoc_bulk_close_backup.bulk_close_backup_<32 hex>`, with a raise if it
+    # does not match, so no caller-supplied string reaches the statement.
+    #
+    # If the snapshot is ever reshaped to write into one fixed table keyed by
+    # a run id, both findings go away and this ceiling should come back down.
+    total: 105
+    error: 40
     measured_with: "1.86.0"
   checkov:
     failed: 219

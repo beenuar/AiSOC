@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     AiSOC — Uninstaller for Windows.
 

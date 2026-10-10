@@ -999,6 +999,46 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/alerts/bulk-close:
+    post:
+      tags:
+      - alerts
+      summary: Bulk Close Alerts Endpoint
+      description: "Close many alerts in one call, with a preflight guard and a snapshot.\n\
+        \n* Pass ``alert_ids`` for an explicit set, or filters\n  (``statuses``/``severities``/``categories``/``connector_types``/\n\
+        \  ``older_than``) for a class of alerts. A filter without ``older_than``\n\
+        \  only matches still-open rows.\n* **Dry-run for free:** the first call with\
+        \ a ``max_count`` below the\n  real match count returns ``409`` carrying ``matched_count``\
+        \ — raise\n  ``max_count`` past it to execute. Nothing is written on the 409.\n\
+        * Every affected row is snapshotted into a dedicated backup table\n  (returned\
+        \ in the body) before the UPDATE commits.\n* One audit entry covers the batch\
+        \ (with the backup table name so the\n  restore target is recorded next to\
+        \ the action).\n\nTypical noise sweep::\n\n    POST /api/v1/alerts/bulk-close\n\
+        \    {\"categories\": [\"malware\", \"vulnerability\"],\n     \"severities\"\
+        : [\"low\", \"informational\"],\n     \"older_than\": \"2026-10-05T00:00:00Z\"\
+        ,\n     \"max_count\": 5000, \"comment\": \"quarterly noise sweep\"}"
+      operationId: bulk_close_alerts_endpoint_api_v1_alerts_bulk_close_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AlertBulkCloseRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlertBulkCloseResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/alerts/{alert_id}/explain:
     post:
       tags:
@@ -20019,6 +20059,100 @@ components:
       - threat_intel_age_hours
       - checks
       title: AirgapStatus
+    AlertBulkCloseRequest:
+      properties:
+        alert_ids:
+          anyOf:
+          - items:
+              type: string
+              format: uuid
+            type: array
+            maxItems: 10000
+          - type: 'null'
+          title: Alert Ids
+        statuses:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 10
+          - type: 'null'
+          title: Statuses
+        severities:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 10
+          - type: 'null'
+          title: Severities
+        categories:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 20
+          - type: 'null'
+          title: Categories
+        connector_types:
+          anyOf:
+          - items:
+              type: string
+            type: array
+            maxItems: 20
+          - type: 'null'
+          title: Connector Types
+        older_than:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Older Than
+        close_status:
+          type: string
+          enum:
+          - resolved
+          - false_positive
+          - closed
+          title: Close Status
+          default: resolved
+        max_count:
+          type: integer
+          maximum: 10000.0
+          minimum: 1.0
+          title: Max Count
+          default: 500
+        comment:
+          anyOf:
+          - type: string
+            maxLength: 500
+          - type: 'null'
+          title: Comment
+      additionalProperties: false
+      type: object
+      title: AlertBulkCloseRequest
+      description: Ids or filters — never neither, never a wildcard.
+    AlertBulkCloseResponse:
+      properties:
+        matched_count:
+          type: integer
+          title: Matched Count
+        closed_count:
+          type: integer
+          title: Closed Count
+        close_status:
+          type: string
+          title: Close Status
+        backup_table:
+          type: string
+          title: Backup Table
+      type: object
+      required:
+      - matched_count
+      - closed_count
+      - close_status
+      - backup_table
+      title: AlertBulkCloseResponse
     AlertDetailResponse:
       properties:
         id:

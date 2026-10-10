@@ -35,7 +35,21 @@ Hosts are `claude`, `cursor`, `continue`, and `cody`. Restart the assistant afte
 
 The installer is idempotent — re-running with the same arguments is a no-op, and re-running with a new URL or key updates the entry in place. It refuses to overwrite a config file it cannot parse rather than clobbering hand-edits.
 
-> **Where does `--api-key` come from?** AiSOC console → Settings → API Keys → "New personal access token". Grant `alerts:read`, `cases:read`, `detections:read`, and `cases:investigate` only if you want the agent to be able to start investigations from chat. The token is tenant-scoped and revocable.
+> **Where does `--api-key` come from?** AiSOC console → Settings → API Keys → "New personal access token". Grant `alerts:read`, `cases:read` and `rules:read` for the core read tools, and `cases:write` only if you want the agent to be able to start investigations from chat. The token is tenant-scoped and revocable.
+
+The scope each tool needs, as the API enforces it:
+
+| Tools | Scope |
+|---|---|
+| `aisoc_list_alerts`, `aisoc_get_alert`, `aisoc_get_triage_verdict` | `alerts:read` |
+| `aisoc_list_cases`, `aisoc_get_case`, `aisoc_list_investigations`, `aisoc_get_investigation`, `aisoc_replay_decision`, `aisoc_explain_step` | `cases:read` |
+| `aisoc_query_detections`, `aisoc_get_detection_rule` | `rules:read` |
+| `aisoc_list_replay_reports`, `aisoc_get_replay_report` | `reports:read` |
+| `aisoc_list_actions` | `actions:read` |
+| `aisoc_preview_action` | `actions:execute` (dry-run only) |
+| `aisoc_lake_query` | `lake:query` |
+| `aisoc_lake_schema` | `lake:read_schema` |
+| `aisoc_run_investigation` | `cases:write` |
 
 ### Which launcher gets written
 
@@ -128,7 +142,7 @@ Every flag has an environment-variable equivalent. The CLI flag wins when both a
 
 | Flag | Env var | Default | Notes |
 |---|---|---|---|
-| `--aisoc-url` | `AISOC_URL` | `http://localhost:8081` | Base URL of the AiSOC API. |
+| `--aisoc-url` | `AISOC_URL` | `http://localhost:8000` | Base URL of the AiSOC API. |
 | `--api-key` | `AISOC_API_KEY` | _(none)_ | API key (`aisoc_pat_…`) or JWT. Required for non-public endpoints. |
 | `--timeout` | `AISOC_TIMEOUT_MS` | `20000` | Per-request timeout in ms. |
 | `--verbose` | `AISOC_MCP_VERBOSE=1` | off | Lifecycle logs to stderr. Stdout stays JSON-RPC clean. |
@@ -163,7 +177,7 @@ The host launches us over stdio. Stdout carries JSON-RPC frames only; logs go to
 ## Security notes
 
 - **Your API key never leaves the machine** running this server. It is read from the environment or from the host's local config file (written mode `0600`) and used to sign requests to your own AiSOC instance.
-- **Read-only unless the key says otherwise.** `aisoc_run_investigation` requires `cases:investigate`; every other tool needs only read scopes.
+- **Read-only unless the key says otherwise.** `aisoc_run_investigation` requires `cases:write`; `aisoc_preview_action` requires `actions:execute` but only ever calls the dry-run; every other tool needs only read scopes.
 - **Audit trail — read this before relying on it.** The API's `audit_middleware` records only mutating methods carrying a valid JWT, so the ten read tools (`aisoc_list_*`, `aisoc_get_*`, `aisoc_lake_query`) produce **no server-side audit row**, and what it does record is an HTTP path rather than a tool name. Per-tool attribution comes instead from this server's own `mcp.tool_call` records: tool name, calling key's subject, argument *keys* (never values), latency, and outcome. Set `AISOC_MCP_TELEMETRY_URL` to an AiSOC inbox token using the `ai-runtime` template to collect them. Unset, nothing is emitted. `AISOC_MCP_AGENT_ID` names this server in the AI-estate inventory.
 - **Outbound destinations** are your `AISOC_URL`, plus `AISOC_MCP_TELEMETRY_URL` when you configure one, plus the npm registry on `npx` cold-start if you launch that way.
 

@@ -91,7 +91,7 @@ describe("resolveConfig", () => {
 
   it("falls back to the default URL when nothing is set", () => {
     const cfg = resolveConfig(parseArgs([]), baseEnv);
-    expect(cfg.aisocUrl).toBe("http://localhost:8081");
+    expect(cfg.aisocUrl).toBe("http://localhost:8000");
     expect(cfg.apiKey).toBeUndefined();
     expect(cfg.timeoutMs).toBe(20_000);
     expect(cfg.verbose).toBe(false);

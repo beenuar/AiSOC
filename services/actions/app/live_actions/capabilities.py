@@ -35,6 +35,7 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "pull_file",
         "pull_logs",
         "pull_pcap",
+        "pull_vulnerabilities",
         # QUERY
         "query_logs",
         "query_processes",

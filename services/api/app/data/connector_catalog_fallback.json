@@ -3525,6 +3525,7 @@
   {
     "capabilities": [
       "pull_alerts",
+      "pull_vulnerabilities",
       "query_logs",
       "search_siem",
       "pivot_host"
@@ -3579,6 +3580,24 @@
         "name": "verify_tls",
         "required": false,
         "type": "boolean"
+      },
+      {
+        "default": "inventory",
+        "help_text": "Where vulnerability-detector events go. 'inventory' (default) routes them to the asset vulnerability inventory with patch-window due dates per docs/cve-patch-policy.md; only CVSS>9, KEV, or overdue findings raise alerts. 'alerts' keeps the legacy behaviour of one alert per scan finding.",
+        "label": "Vulnerability Events",
+        "name": "vuln_mode",
+        "options": [
+          {
+            "label": "Inventory + patch windows (recommended)",
+            "value": "inventory"
+          },
+          {
+            "label": "Alert per finding (legacy)",
+            "value": "alerts"
+          }
+        ],
+        "required": false,
+        "type": "select"
       }
     ]
   },

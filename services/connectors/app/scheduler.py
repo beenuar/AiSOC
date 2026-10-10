@@ -49,6 +49,7 @@ Design rationale
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import uuid
@@ -76,6 +77,13 @@ from app.pipeline import (
     diff_fingerprints,
 )
 from app.security.credential_vault import CredentialVault, CredentialVaultError, get_vault
+from app.vuln_promotion_sql import (
+    MARK_OVERDUE_SQL,
+    MARK_PROMOTED_SQL,
+    PROMOTE_CANDIDATES_SQL,
+    RESOLVE_REMEDIATED_SQL,
+    UPSERT_ALERT_SQL,
+)
 
 logger = logging.getLogger("aisoc.connectors.scheduler")
 
@@ -83,6 +91,12 @@ logger = logging.getLogger("aisoc.connectors.scheduler")
 # instances. Tuned to balance UI-perceived latency against DB load — at
 # 60s with N connectors, we issue 1 SELECT/min regardless of N.
 _DEFAULT_RELOAD_INTERVAL_S = 60.0
+
+#: Hours between patch-window promotion sweeps. Six hours means an
+#: overdue-vs-due transition is visible to analysts within half a working
+#: day without hammering the inventory table; the windows themselves are
+#: weekly, so this is generous.
+_PROMOTION_INTERVAL_S = 6 * 3600.0
 
 # Default poll cadence per connector instance when ``connector_config``
 # doesn't override it. Five minutes is the standard SOC poll interval and
@@ -202,6 +216,19 @@ class ConnectorScheduler:
             "interval",
             seconds=self._reload_interval_s,
             id="_reload_loop",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+        # Patch-window promotion (docs/cve-patch-policy.md rule 5): the ONLY
+        # path from asset_vulnerabilities back into the alert queue. Every
+        # 6h it flips due-tracked rows to overdue and raises one grouped
+        # alert per CVE that is overdue, CVSS>9, KEV, or exploited.
+        self._scheduler.add_job(
+            self._promote_overdue_findings,
+            "interval",
+            seconds=_PROMOTION_INTERVAL_S,
+            id="_vuln_promotion_loop",
             replace_existing=True,
             max_instances=1,
             coalesce=True,
@@ -838,6 +865,107 @@ class ConnectorScheduler:
                 target.id,
                 target.connector_type,
             )
+
+    async def _promote_overdue_findings(self) -> None:
+        """Patch-window promotion sweep (docs/cve-patch-policy.md rule 5).
+
+        The single sanctioned path from ``asset_vulnerabilities`` back into
+        ``alerts``. Per enabled tenant, in one transaction:
+
+        1. flip ``tracked`` rows past their due date to ``overdue``;
+        2. auto-resolve promoted alerts whose CVE vanished from the open
+           inventory (patch day done);
+        3. select the candidate CVEs — overdue, CVSS>9, exploited, or
+           KEV-listed — grouped per CVE with host roll-up;
+        4. upsert one alert per CVE keyed by ``vuln-promo:<cve>`` so the
+           partial unique index makes re-promotion a touch, not a duplicate
+           (this is the "1 CVE on 4 hosts is 1 alert" rule).
+
+        Never raises: a failed sweep logs and waits for the next tick; a
+        promotion bug must not take the connector poll loop with it.
+        """
+        if self._engine is None:
+            return
+        from sqlalchemy import text
+
+        try:
+            async with self._engine.connect() as conn:
+                tenants = (await conn.execute(text("SELECT DISTINCT tenant_id FROM connectors WHERE is_enabled"))).scalars().all()
+        except Exception:  # pragma: no cover
+            logger.exception("connector.scheduler.promotion_tenant_enum_failed")
+            return
+
+        for tenant_id in tenants:
+            try:
+                async with self._engine.begin() as conn:
+                    # The connector role reads with current_tenant_id() NULL;
+                    # bind it per statement so the RLS policies on
+                    # asset_vulnerabilities / alerts apply to this tenant.
+                    await conn.execute(
+                        text("SELECT set_config('aisoc.tenant_id', :tid, true)"),
+                        {"tid": str(tenant_id)},
+                    )
+                    overdue = (await conn.execute(text(MARK_OVERDUE_SQL), {"tenant_id": tenant_id})).rowcount
+                    resolved = (await conn.execute(text(RESOLVE_REMEDIATED_SQL), {"tenant_id": tenant_id})).rowcount
+                    candidates = (await conn.execute(text(PROMOTE_CANDIDATES_SQL), {"tenant_id": tenant_id})).fetchall()
+
+                    promoted = 0
+                    for row in candidates:
+                        cve = str(row.cve_id)
+                        score = float(row.cvss_score) if row.cvss_score is not None else None
+                        sev = "critical" if (score is not None and score >= 9.0) or row.is_exploited else "high"
+                        hosts = row.affected_hosts or []
+                        why = []
+                        if row.patch_due_date is not None:
+                            why.append(f"patch window closed {row.patch_due_date}")
+                        if score is not None and score > 9:
+                            why.append(f"CVSS {score}")
+                        if row.is_exploited:
+                            why.append("actively exploited")
+                        await conn.execute(
+                            text(UPSERT_ALERT_SQL),
+                            {
+                                "tenant_id": tenant_id,
+                                "title": f"{cve} overdue / urgent on {row.host_count} host(s)",
+                                "description": (
+                                    f"{cve} is open on {row.host_count} asset(s) and meets the "
+                                    f"patch-policy exception path: {'; '.join(why) or 'KEV-listed'}. "
+                                    f"Hosts: {', '.join(str(h) for h in hosts[:20])}"
+                                ),
+                                "severity": sev,
+                                "affected_hosts": json.dumps(hosts),
+                                "tags": json.dumps(["patch-window", "vulnerability", cve.lower()]),
+                                "idempotency_key": f"vuln-promo:{cve.lower()}",
+                                "connector_id": None,
+                                "raw_event": json.dumps(
+                                    {
+                                        "cve": cve,
+                                        "cvss_score": score,
+                                        "is_exploited": bool(row.is_exploited),
+                                        "patch_due_date": str(row.patch_due_date),
+                                        "host_count": row.host_count,
+                                        "affected_hosts": hosts,
+                                    }
+                                ),
+                            },
+                        )
+                        await conn.execute(
+                            text(MARK_PROMOTED_SQL),
+                            {"tenant_id": tenant_id, "cve_id": cve.lower()},
+                        )
+                        promoted += 1
+
+                if overdue or promoted or resolved:
+                    logger.info(
+                        "connector.scheduler.vuln_promotion tenant=%s marked_overdue=%d alerts_promoted=%d alerts_resolved=%d",
+                        tenant_id,
+                        overdue,
+                        promoted,
+                        resolved,
+                    )
+            except Exception:
+                # One tenant's failure must not stop the others' sweep.
+                logger.exception("connector.scheduler.vuln_promotion_failed tenant=%s", tenant_id)
 
     async def _record_failure(self, connector_id: uuid.UUID) -> None:
         if self._engine is None:  # pragma: no cover

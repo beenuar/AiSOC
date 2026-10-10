@@ -48,6 +48,7 @@ from app.models.alert import AlertSeverity, RawAlert
 from app.services.derived_fields import enrich, requested_derived_fields
 from app.services.detection_matcher import matches
 from app.services.provenance import extract_provenance
+from app.services.raw_data import decode_raw_data
 
 logger = structlog.get_logger()
 
@@ -157,15 +158,9 @@ class DetectionEngine:
     @staticmethod
     def _decode_raw_data(ocsf: dict[str, Any]) -> dict[str, Any]:
         """The connector's normalized dict, or the OCSF top level as fallback."""
-        raw = ocsf.get("raw_data")
-        if isinstance(raw, str) and raw.strip():
-            try:
-                parsed = json.loads(raw)
-                if isinstance(parsed, dict):
-                    return parsed
-            except (ValueError, TypeError):
-                # Malformed raw_data JSON — fall through to the OCSF top level below.
-                pass
+        decoded = decode_raw_data(ocsf)
+        if decoded is not None:
+            return decoded
         # Fall back to the OCSF top level (some connectors emit flat OCSF).
         return ocsf if isinstance(ocsf, dict) else {}
 

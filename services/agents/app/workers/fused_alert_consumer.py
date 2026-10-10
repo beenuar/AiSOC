@@ -102,6 +102,7 @@ _METRICS = {
     "outcome_written": 0,
     "outcome_suppressed": 0,
     "ungrounded_demoted": 0,
+    "llm_failed_held_for_review": 0,
     "persist_retries": 0,
     "dead_lettered": 0,
     "approvals_raised": 0,
@@ -285,6 +286,36 @@ def build_state(message: dict[str, Any]) -> InvestigationState | None:
         raw_alert=raw_alert,
         status=AgentStatus.PENDING,
     )
+
+
+# Severities a failed model call may not close. The deterministic scorer is a
+# fallback for when the model is unreachable, and on a laptop CPU or a gateway
+# with the wrong base URL that is every call. Observed: a critical
+# "ransomware canary files encrypted" alert, vssadmin deleting shadow copies,
+# came back `likely_benign` from the fallback after the LLM timed out.
+_FAIL_CLOSED_SEVERITIES = frozenset({"critical", "high"})
+
+
+def _hold_severe_for_review_after_llm_failure(state: InvestigationState) -> InvestigationState:
+    """Fail closed: an LLM error is never the reason a severe alert closes.
+
+    Only auto-closeable verdicts on high or critical alerts change, and only on
+    the path where the model was asked and failed. A deployment that runs
+    deterministic triage on purpose keeps today's behaviour.
+    """
+    severity = str((state.raw_alert or {}).get("severity") or "").strip().lower()
+    if severity not in _FAIL_CLOSED_SEVERITIES:
+        return state
+    verdict = state.verdict
+    if normalize_disposition(str(verdict or ""), default=NEEDS_REVIEW) not in AUTO_CLOSEABLE_DISPOSITIONS:
+        return state
+    state.add_finding(
+        f"LLM triage failed, so the deterministic verdict '{verdict}' on a {severity}-severity "
+        "alert is held for review instead of closing it."
+    )
+    state.verdict = NEEDS_REVIEW
+    _METRICS["llm_failed_held_for_review"] += 1
+    return state
 
 
 class FusedAlertTriageWorker:
@@ -1143,7 +1174,7 @@ class FusedAlertTriageWorker:
             logger.warning("auto_triage_worker.llm_failed_fallback", error=str(exc))
             state = await run_triage(state)
             _METRICS["deterministic"] += 1
-            return state, "deterministic"
+            return _hold_severe_for_review_after_llm_failure(state), "deterministic"
 
     def _apply_groundedness_gate(
         self,
