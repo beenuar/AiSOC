@@ -16000,6 +16000,22 @@ paths:
       tags:
       - threat-intel
       summary: List Iocs
+      description: '**This tenant''s own** IOCs, from Postgres `threat_intel_iocs`.
+
+
+        Not the platform''s feed intelligence, and the distinction is the whole
+
+        content of issue #1278: this route and `/indicators` sit next to each
+
+        other and read different stores. `/indicators` serves the CISA KEV
+
+        catalogue out of Qdrant — about 1,700 entries on a stock CORE install.
+
+        This table is written **only** by `POST /threat-intel/iocs`, so it is
+
+        empty until somebody submits to it, and an empty response here is not
+
+        evidence that the KEV feed failed.'
       operationId: list_iocs_api_v1_threat_intel_iocs_get
       security:
       - HTTPBearer: []
@@ -16219,6 +16235,26 @@ paths:
       tags:
       - threat-intel
       summary: List Feeds
+      description: '**Feeds this tenant has registered**, from Postgres `threat_intel_feeds`.
+
+
+        Written only by `POST /threat-intel/feeds`, so it is empty until an
+
+        operator adds one. It deliberately does **not** list the platform''s
+
+        built-in feeds: the CISA KEV poller is an in-process job in
+
+        `services/threatintel` and owns no row here, which is why a stock CORE
+
+        install sees `[]` here while `/indicators` serves the catalogue that
+
+        poller fetched (issue #1278). Listing the built-in poller here would
+
+        mean synthesising an id and a `tenant_id` for a row that does not
+
+        exist, which is the fabrication pattern this project has paid for
+
+        before; `/indicators` is where its output is observable.'
       operationId: list_feeds_api_v1_threat_intel_feeds_get
       responses:
         '200':
