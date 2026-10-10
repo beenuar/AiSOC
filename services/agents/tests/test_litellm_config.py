@@ -87,3 +87,61 @@ def test_model_pins_roles_match_gateway_aliases_exactly():
     # Ties the code's logical roles to the gateway config: every pinned role has
     # an ``aisoc-<role>`` alias in the config, and vice versa — no drift either way.
     assert {f"aisoc-{role}" for role in all_roles()} == EXPECTED_ALIASES
+
+
+# ---------------------------------------------------------------------------
+# Per-request timeout (issue #1241)
+# ---------------------------------------------------------------------------
+
+TIMEOUT_ENV_VAR = "AISOC_LITELLM_REQUEST_TIMEOUT"
+COMPOSE_PATH = REPO_ROOT / "docker-compose.yml"
+
+
+def test_request_timeout_is_operator_adjustable_without_editing_this_file():
+    """60s was a bare literal in a file every other value reads from the env.
+
+    The bundled 3B model on CPU-only inference can exceed it, and every call
+    then times out while Settings still reports the provider Live. Raising it
+    must not require editing a mounted config and rebuilding.
+    """
+    timeout = _load().get("litellm_settings", {}).get("request_timeout")
+    assert timeout is not None, "request_timeout must be declared — without it the gateway's own 6000s default applies"
+    assert str(timeout) == f"os.environ/{TIMEOUT_ENV_VAR}", (
+        f"request_timeout is {timeout!r}; an operator cannot change that without editing this file"
+    )
+
+
+def test_compose_supplies_a_default_for_the_timeout_variable():
+    """The default is load-bearing, not cosmetic.
+
+    LiteLLM resolves ``os.environ/...`` with ``get_secret``, which returns
+    ``None`` for an unset variable and assigns that straight onto
+    ``litellm.request_timeout``. Measured against
+    ``ghcr.io/berriai/litellm:main-stable``, a gateway in that state answers
+    200 on ``/health/liveliness`` and fails *every* completion with
+    ``float() argument must be a string or a real number, not 'NoneType'`` —
+    a healthy-looking gateway serving nothing, which is the shape of the defect
+    this knob exists to fix. So the variable must always have a value on the
+    supported path.
+    """
+    compose = COMPOSE_PATH.read_text(encoding="utf-8")
+    assert f"{TIMEOUT_ENV_VAR}: ${{{TIMEOUT_ENV_VAR}:-" in compose, (
+        f"docker-compose.yml must pass {TIMEOUT_ENV_VAR} to the litellm service with a `:-` default; "
+        "without one an unset variable silently breaks every completion"
+    )
+
+
+def test_num_retries_stays_a_literal():
+    """Not every setting can be env-driven, and this one must not be.
+
+    LiteLLM hands ``router_settings`` to ``Router.__init__`` with no type
+    coercion, and the retry path evaluates ``num_retries > 0`` — which raises
+    ``TypeError`` against the string an ``os.environ/...`` reference resolves
+    to, at exactly the moment a retry is needed. Pinned so a later "make
+    everything configurable" pass cannot quietly break failover.
+    """
+    num_retries = _load().get("router_settings", {}).get("num_retries")
+    assert isinstance(num_retries, int), (
+        f"num_retries must stay an int literal, got {num_retries!r}: "
+        "LiteLLM does not coerce router_settings and `num_retries > 0` raises on a string"
+    )

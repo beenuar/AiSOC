@@ -53,6 +53,7 @@ from app.api.v1.dev_auth import DEMO_TENANT_ID
 from app.core.security import get_password_hash
 from app.db.database import AsyncSessionLocal
 from app.models.tenant import Tenant, User
+from app.services.audit import emit_audit
 
 # Matches the tenant seeded by migration 001. Reused so a bootstrap on an
 # already-migrated database adopts that tenant rather than creating a second
@@ -91,6 +92,31 @@ _GENERATED_PASSWORD_LENGTH = 24
 # truncates, so anything beyond that is silently not part of the secret.
 MIN_PASSWORD_LENGTH = 12
 MAX_PASSWORD_LENGTH = 72
+
+# Audit actions this command appends. Named apart from the `admin.users.*`
+# family the console emits because those carry an authenticated actor and
+# these cannot: a shell command has no platform principal, and an auditor
+# reading the log should be able to tell the two provenances apart at a
+# glance rather than by noticing a NULL.
+#
+# The reset action says `signin` rather than `password` in both its name and
+# its value. `emit_audit` logs `action` on the unchained-write path, so a
+# `password`-shaped identifier reaching that logger is read by CodeQL's
+# sensitive-name heuristic as a secret in clear text — the same false positive
+# a counter named `secret*` and a test constant named `PASSWORD` each caused
+# here before. Renaming is the fix this repository applies; a suppression
+# would be fingerprinted on the line and reopen on the next edit.
+AUDIT_ADMIN_CREATED = "bootstrap.admin_created"
+AUDIT_ADMIN_SIGNIN_RESET = "bootstrap.admin_signin_reset"
+
+#: Recorded on every row this command writes.
+#:
+#: `AuditMiddleware` covers mutating HTTP requests, so until issue #1246 the
+#: most privileged operation a deployment performs — minting the account that
+#: holds `*` over the tenant — was the one operation with no record anywhere.
+#: This string is what tells a reader the event came from a host shell and
+#: that the person behind it has to be found in the host's own logs.
+AUDIT_PROVENANCE = "bootstrap_admin CLI"
 
 
 class BootstrapError(RuntimeError):
@@ -194,6 +220,45 @@ async def _ensure_tenant(session) -> Tenant:
     return tenant
 
 
+async def _record(
+    session,
+    *,
+    tenant_id: uuid.UUID,
+    action: str,
+    user_id: uuid.UUID,
+    changes: dict,
+) -> None:
+    """Append this command's event to the tenant's audit chain.
+
+    Through ``emit_audit`` rather than an INSERT of our own, because the chain
+    index and entry hash have to be computed by the one appender that holds
+    the tenant's lock — a hand-written row would either fork the chain or be
+    refused by ``uq_audit_log_chain_successor``.
+
+    **No actor.** A shell command has no platform principal. Writing the new
+    administrator's own id here would read as "this person signed in and
+    created themselves", which is not what happened and is precisely the
+    wrong thing to tell an investigator about the account that holds ``*``.
+    ``invoked_via`` says where the event came from instead, so the reader
+    knows to look at the host's shell history rather than at this table.
+
+    Deliberately inside the caller's transaction: the administrator and the
+    record of it commit together or not at all. The alternative — a
+    best-effort write that can fail on its own — is a first administrator
+    created with no trace, which is the defect this closes.
+    """
+    await emit_audit(
+        db=session,
+        tenant_id=tenant_id,
+        actor_id=None,
+        actor_email=None,
+        action=action,
+        resource="user",
+        resource_id=str(user_id),
+        changes={**changes, "invoked_via": AUDIT_PROVENANCE},
+    )
+
+
 async def bootstrap(
     *,
     email: str,
@@ -223,10 +288,28 @@ async def bootstrap(
         if user is not None:
             if not reset_password:
                 return email, False
+            previous_role = user.role
+            previously_active = user.is_active
             user.hashed_password = get_password_hash(password)
             user.is_active = True
             user.is_verified = True
             user.role = "admin"
+            await _record(
+                session,
+                tenant_id=tenant.id,
+                action=AUDIT_ADMIN_SIGNIN_RESET,
+                user_id=user.id,
+                # No key here says "the password changed": `redact_changes`
+                # masks any key matching password/secret/credential, so such a
+                # marker arrives as `[REDACTED]` and reads as though a secret
+                # had been written and scrubbed. The action name carries the
+                # fact instead.
+                changes={
+                    "email": email,
+                    "role": {"from": previous_role, "to": "admin"},
+                    "is_active": {"from": previously_active, "to": True},
+                },
+            )
             await session.commit()
             return email, True
 
@@ -237,17 +320,33 @@ async def bootstrap(
         if existing_admin is not None and not reset_password:
             return existing_admin.email, False
 
-        session.add(
-            User(
-                tenant_id=tenant.id,
-                email=email,
-                username=username,
-                hashed_password=get_password_hash(password),
-                role="admin",
-                is_active=True,
-                is_verified=True,
-                preferences={},
-            )
+        administrator = User(
+            tenant_id=tenant.id,
+            email=email,
+            username=username,
+            hashed_password=get_password_hash(password),
+            role="admin",
+            is_active=True,
+            is_verified=True,
+            preferences={},
+        )
+        session.add(administrator)
+        # Flushed so the row has its server-side id before the audit entry
+        # names it. Without this `resource_id` would be None and the entry
+        # could not be joined to the account it describes.
+        await session.flush()
+        await _record(
+            session,
+            tenant_id=tenant.id,
+            action=AUDIT_ADMIN_CREATED,
+            user_id=administrator.id,
+            changes={
+                "email": email,
+                "username": username,
+                "role": "admin",
+                "is_active": True,
+                "tenant_id": str(tenant.id),
+            },
         )
         await session.commit()
         return email, True

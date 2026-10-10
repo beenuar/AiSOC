@@ -34,6 +34,7 @@ __all__ = ["score_agent_quality"]
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
 from app.investigator import ledger as investigation_ledger
+from app.investigator import run_reaper as investigation_run_reaper
 from app.llm.factory import preflight_llm
 from app.playbook import PlaybookStore
 from app.playbook import sweeper as playbook_sweeper
@@ -148,6 +149,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as exc:  # noqa: BLE001 — never block API startup
         logger.warning("playbook_sweeper.start_failed", error=str(exc))
 
+    # Issue #1242 — close investigation runs orphaned by a process that died.
+    # The wall-clock deadline on the manual path only ends a run whose process
+    # is still alive; the run store is a module dict, so a restart leaves the
+    # `investigation_runs` row at 'running' with nothing left to finish it.
+    app.state.investigation_reaper_task = None
+    try:
+        investigation_run_reaper.start(app)
+    except Exception as exc:  # noqa: BLE001 — never block API startup
+        logger.warning("investigation_run_reaper.start_failed", error=str(exc))
+
     # Phase 2.6 — flip /readyz to 200 once startup work is done.
     app.state.mark_ready()
 
@@ -167,6 +178,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     if getattr(app.state, "playbook_sweeper_task", None) is not None:
         app.state.playbook_sweeper_task.cancel()
+
+    if getattr(app.state, "investigation_reaper_task", None) is not None:
+        app.state.investigation_reaper_task.cancel()
 
     # Stop the hunt scheduler before draining DB pools so in-flight runs
     # can flush their writes.

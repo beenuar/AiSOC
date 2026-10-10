@@ -408,6 +408,78 @@ async def complete_run(
         )
 
 
+async def fail_stale_runs(
+    *,
+    older_than_seconds: float,
+    reason: str,
+    limit: int = 500,
+) -> list[uuid.UUID]:
+    """Close ``investigation_runs`` rows abandoned by a process that is gone.
+
+    The wall-clock deadline in :func:`app.api.investigate._run_and_store` ends
+    a run whose process is still alive. A restart, an OOM kill or an ordinary
+    rollout leaves the row at ``'running'`` with nothing left to finish it:
+    the in-memory run store is gone, so no poller, no WebSocket tail and no
+    exception handler will ever write a terminal status. The Investigation
+    Ledger then renders a run that never ends.
+
+    Safe on several replicas and safe to re-run: the predicate is part of the
+    ``UPDATE``, so two reapers racing the same row close it once and the loser
+    simply matches nothing.
+
+    Safe against reaping a *live* run only because the deadline exists — a run
+    cannot legitimately outlast its own budget any more, so ``older_than_seconds``
+    is set well beyond it (see :mod:`app.investigator.run_reaper`). Shortening
+    that margin without the deadline in place would cancel healthy work.
+
+    No RLS context is set: this is a cross-tenant maintenance sweep, and
+    migration ``008_investigation_ledger.sql`` writes the policy as
+    ``USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)``,
+    whose second arm is what admits it. Named here because a future policy that
+    drops that arm would turn this into a silent no-op rather than an error.
+
+    Returns the ids closed (empty when there was nothing to do, no database is
+    configured, or the sweep failed — the caller logs and retries).
+    """
+    pool = await get_pool()
+    if pool is None:
+        return []
+
+    try:
+        async with pool.acquire() as conn:
+            rows = await conn.fetch(
+                """
+                UPDATE investigation_runs
+                   SET status = 'failed',
+                       error = COALESCE(NULLIF(error, ''), $2),
+                       completed_at = now()
+                 WHERE id IN (
+                     SELECT id
+                       FROM investigation_runs
+                      WHERE status = 'running'
+                        AND started_at < now() - make_interval(secs => $1::double precision)
+                      ORDER BY started_at
+                      LIMIT $3
+                 )
+                RETURNING id
+                """,
+                float(older_than_seconds),
+                reason,
+                int(limit),
+            )
+        closed = [row["id"] for row in rows]
+        if closed:
+            logger.warning(
+                "ledger.stale_runs_closed",
+                count=len(closed),
+                older_than_seconds=older_than_seconds,
+            )
+        return closed
+    except Exception as exc:  # noqa: BLE001 — the caller backs off and retries
+        logger.warning("ledger.fail_stale_runs_failed", error=str(exc))
+        return []
+
+
 def _coerce_uuid(value: Any) -> uuid.UUID | None:
     try:
         return uuid.UUID(str(value))

@@ -147,7 +147,34 @@ litellm_settings:
   require_auth_for_metrics_endpoint: false
   # Never wait forever on a stalled provider — fall through to AiSOC's own
   # deterministic path instead of hanging the alert drawer.
-  request_timeout: 60
+  #
+  # This read `request_timeout: 60`, the one bare literal in a file where every
+  # other value resolves from the environment, so raising it meant editing a
+  # mounted file and rebuilding. 60s is not a universal number: the bundled 3B
+  # model doing CPU-only inference on a long generation can exceed it, and
+  # every call then times out while the Settings panel still reports the
+  # provider Live (issue #1241). The default is unchanged — the knob is new.
+  #
+  # Measured against `ghcr.io/berriai/litellm:main-stable`, because two
+  # plausible-looking alternatives do not work:
+  #
+  #  * LiteLLM's own `REQUEST_TIMEOUT` environment variable is read and
+  #    float-coerced in `litellm/constants.py`, but it does **not** reach the
+  #    proxy's router path: a gateway started with `REQUEST_TIMEOUT=5` and no
+  #    key here was still waiting on a blackholed provider after 200s.
+  #  * This key *does* reach it. `get_secret` resolves `os.environ/...` to a
+  #    string (it coerces only booleans), LiteLLM assigns that straight onto
+  #    `litellm.request_timeout`, and the value lands: with the variable at 3,
+  #    the gateway answered 408 with `timeout value=3.0, time taken=3.0`.
+  #
+  # The variable must therefore be SET. `get_secret` returns None for an unset
+  # one, and a gateway in that state answers 200 on `/health/liveliness` while
+  # failing every completion with `float() argument must be a string or a real
+  # number, not 'NoneType'`. `docker-compose.yml` supplies the default, and
+  # `test_litellm_config.py` fails if that default is ever removed — the config
+  # is already hard-dependent on its environment in the same way (with
+  # `AISOC_LLM_MODEL_FAST` unset this file does not start at all).
+  request_timeout: os.environ/AISOC_LITELLM_REQUEST_TIMEOUT
 
 # ── Router: retries + cross-model fallbacks ───────────────────────────────────
 # model_pins.py documents that "the LiteLLM gateway owns any model-level
@@ -157,6 +184,13 @@ litellm_settings:
 router_settings:
   # Retry a transient failure (rate limit / 5xx / timeout) on the same alias
   # before falling back.
+  #
+  # A literal on purpose, and not environment-driven like the timeout above.
+  # LiteLLM hands `router_settings` straight to `Router.__init__` with no type
+  # coercion (`router_params[k] = v`), and the retry path evaluates
+  # `num_retries > 0`, which raises `TypeError` against a string at precisely
+  # the moment a retry is needed. The knob that matters for slow hardware is
+  # the timeout, and that one is environment-driven.
   num_retries: 2
   # Cross-model failover: if an alias's primary model keeps failing, route the
   # request to an adjacent/cheaper alias so quality degrades gracefully instead
