@@ -1,0 +1,8 @@
+# Shell scripts run inside Linux containers. A CRLF checkout (Git for Windows
+# defaults to core.autocrlf=true) makes postgres initdb fail with
+# "env: can't execute 'bash\r'" and exit 127.
+*.sh text eol=lf
+Makefile text eol=lf
+# Windows PowerShell 5.1 parses BOM-less scripts as ANSI; keep these UTF-8 with
+# a BOM (committed that way) and CRLF on checkout.
+*.ps1 text eol=crlf

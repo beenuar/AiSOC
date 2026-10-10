@@ -625,7 +625,11 @@ WINDOWS_RULES: list[dict] = [
         mitre=["t1003.001"],
         product="windows",
         service="sysmon",
-        when={"event_id": 1, "process_name_endswith": "procdump.exe", "process_command_line_contains_any": ["lsass", "-ma lsass"]},
+        when={
+            "event_id": 1,
+            "process_name_endswith_any": ["procdump.exe", "procdump64.exe", "procdump64a.exe"],
+            "process_command_line_contains_any": ["lsass", "-ma lsass"],
+        },
         fp=[FP_FORENSIC, "Microsoft support memory capture"],
         playbook="tpl-credential-access",
     ),

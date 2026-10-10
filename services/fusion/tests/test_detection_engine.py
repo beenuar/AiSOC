@@ -120,3 +120,29 @@ def test_falls_back_to_ocsf_when_no_raw_data():
 def test_real_ruleset_loads_and_is_nonempty():
     eng = DetectionEngine()
     assert eng.rule_count > 500  # the exported corpus (~817)
+
+
+# ProcDump ships a 64-bit binary, procdump64.exe, that is the default on x64
+# Windows, and an ARM64 one, procdump64a.exe. The curated rule matched only
+# procdump.exe, so `procdump64.exe -ma lsass.exe` fired imported Sigma rules
+# at "high" but never this critical one.
+import pytest  # noqa: E402
+
+
+@pytest.mark.parametrize("binary", ["procdump.exe", "procdump64.exe", "procdump64a.exe"])
+def test_procdump_lsass_rule_fires_for_every_procdump_binary(binary):
+    eng = DetectionEngine()
+    msg = _msg(
+        {"event_id": 1, "process_name": binary, "process_command_line": f"{binary} -accepteula -ma lsass.exe C:\\t\\l.dmp"},
+        product="sysmon",
+    )
+    assert any(h.rule_id == "det-endpoint-091" for h in eng.evaluate(msg))
+
+
+def test_procdump_rule_ignores_a_dump_of_another_process():
+    eng = DetectionEngine()
+    msg = _msg(
+        {"event_id": 1, "process_name": "procdump64.exe", "process_command_line": "procdump64.exe -ma notepad.exe"},
+        product="sysmon",
+    )
+    assert all(h.rule_id != "det-endpoint-091" for h in eng.evaluate(msg))

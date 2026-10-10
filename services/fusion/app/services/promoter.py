@@ -46,6 +46,7 @@ import structlog
 
 from app.models.alert import AlertSeverity, RawAlert
 from app.services.provenance import extract_provenance, product_label
+from app.services.raw_data import decode_raw_data
 
 logger = structlog.get_logger()
 
@@ -141,11 +142,17 @@ def _description(ocsf: dict[str, Any]) -> str:
 
     The raw payload is not lost: it stays on the alert's `raw_event`, which is
     what the investigation surfaces read.
+
+    Issue #1244: that vendor-description branch used to be guarded by
+    `isinstance(raw, dict)` while ingest writes `raw_data` as the JSON string
+    `json.Marshal(raw.Payload)` produces, so on the production path it was
+    unreachable and every supplied description was discarded. `decode_raw_data`
+    is the decoder the detection engine already used for the same value.
     """
-    raw = ocsf.get("raw_data")
-    if isinstance(raw, dict):
+    payload = decode_raw_data(ocsf)
+    if payload is not None:
         for key in ("description", "message", "summary", "detail", "reason"):
-            value = raw.get(key)
+            value = payload.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()[:2000]
     finding_desc = _get_nested(ocsf, "finding", "desc")
@@ -369,11 +376,22 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
     tactics, techniques = _mitre(ocsf)
     connector_id, connector_type, class_uid = extract_provenance(message, ocsf)
 
+    title = _title(ocsf)
+    description = _description(ocsf)
+    # The last resort in `_description` is `ocsf["message"]`, which is the
+    # first key `_title` reads, so a vendor that supplied only a title used to
+    # get that one sentence rendered twice — once as the alert heading and
+    # again as its body. Nothing is lost by leaving the slot empty: the
+    # console falls back to the raw event, and an empty description is the
+    # honest statement that the vendor wrote no prose.
+    if description == title:
+        description = ""
+
     return RawAlert(
         tenant_id=tenant_id,
         source=_source(ocsf),
-        title=_title(ocsf),
-        description=_description(ocsf),
+        title=title,
+        description=description,
         severity=severity,
         src_ip=_get_nested(ocsf, "src_endpoint", "ip"),
         dst_ip=_get_nested(ocsf, "dst_endpoint", "ip"),

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -210,9 +211,15 @@ var connectorProfiles = map[string]connectorProfile{
 		classUID:  2001,
 		className: "Security Finding",
 		fieldMap: map[string]string{
-			"UpdatedAt":      "time",
-			"Title":          "message",
-			"Description":    "raw_data",
+			"UpdatedAt": "time",
+			"Title":     "message",
+			// Not `raw_data`: Normalize overwrites that slot unconditionally
+			// with the serialized payload a few dozen lines after the field
+			// map runs, so the Description was mapped and then discarded
+			// every time (issue #1244). `finding.desc` is where every other
+			// profile puts a vendor description and is what the fusion
+			// promoter reads.
+			"Description":    "finding.desc",
 			"Severity.Label": "severity",
 		},
 		severityMap: map[string]int{
@@ -536,6 +543,15 @@ var _canonicalAliases = []struct {
 	// to the vendor profiles without giving them a second mechanism.
 	{"message", []string{"title"}},
 	{"finding.uid", []string{"external_id"}},
+	// Issue #1244. Nothing mapped a top-level `description` onto any OCSF
+	// slot outside the handful of profiles that name it, so a pushed event
+	// carrying both a title and a description arrived with only the title —
+	// and the fusion promoter, finding no description anywhere, fell back to
+	// `message`, which is the title. The alert then showed one sentence
+	// twice. `finding.desc` is the destination the profiles that *do* map it
+	// already use (aisoc_sample, ai_guardrail, email_inbox, cloudtrail), and
+	// it is the first slot promoter._description reads after the payload.
+	{"finding.desc", []string{"description"}},
 }
 
 // connectorTypeAliases maps a connector identifier the connectors service
@@ -892,24 +908,40 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 		ocsf["raw_data"] = string(rawBytes)
 	}
 
-	// ATT&CK technique enrichment
-	if attck.Loaded() {
-		if techIDs := extractTechniqueIDs(raw.Payload); len(techIDs) > 0 {
-			var enriched []map[string]interface{}
-			for _, tid := range techIDs {
-				if tech := attck.Lookup(tid); tech != nil {
-					enriched = append(enriched, map[string]interface{}{
-						"technique_id":   tech.ID,
-						"technique_name": tech.Name,
-						"tactic_ids":     tech.TacticIDs,
-						"tactic_names":   tech.TacticNames,
-						"url":            tech.URL,
-					})
-				}
+	// ATT&CK technique enrichment.
+	//
+	// The whole block used to sit behind `attck.Loaded()` and each id behind
+	// `attck.Lookup(tid) != nil`, so a deployment that cannot reach
+	// raw.githubusercontent.com — air-gapped, egress-filtered, or simply
+	// offline at boot — published `mitre_techniques: []` on every event
+	// forever, whatever the vendor sent (issue #1244).
+	//
+	// A well-formed id is now carried either way. What the corpus adds is the
+	// technique name, its tactics and its URL; what the vendor asserted is
+	// the id, and dropping the vendor's assertion because we could not look
+	// it up loses information we were handed. `verified` says which is which
+	// so a reader is never told an unconfirmed id was confirmed.
+	if techIDs := extractTechniqueIDs(raw.Payload); len(techIDs) > 0 {
+		var enriched []map[string]interface{}
+		for _, tid := range techIDs {
+			if tech := attck.Lookup(tid); tech != nil {
+				enriched = append(enriched, map[string]interface{}{
+					"technique_id":   tech.ID,
+					"technique_name": tech.Name,
+					"tactic_ids":     tech.TacticIDs,
+					"tactic_names":   tech.TacticNames,
+					"url":            tech.URL,
+					"verified":       true,
+				})
+				continue
 			}
-			if len(enriched) > 0 {
-				ocsf["mitre_attck"] = enriched
-			}
+			enriched = append(enriched, map[string]interface{}{
+				"technique_id": tid,
+				"verified":     false,
+			})
+		}
+		if len(enriched) > 0 {
+			ocsf["mitre_attck"] = enriched
 		}
 	}
 
@@ -959,9 +991,17 @@ func extractTechniqueIDs(payload map[string]interface{}) []string {
 	seen := map[string]struct{}{}
 	var results []string
 
+	// `techniques` and `technique` are the bare forms a pushed payload uses
+	// (issue #1244: a CrowdStrike-shaped event sending
+	// `techniques: ["T1003.001"]` produced `mitre_techniques: []`). The list
+	// was all prefixed or suffixed spellings and had no entry for the plain
+	// noun, singular or plural.
+	//
+	// `tactic_id` is kept for the payload that files a technique under it,
+	// but a genuine tactic id no longer survives normalizeTechniqueID.
 	candidateKeys := []string{
 		"technique_id", "mitre_technique", "attck_technique", "tactic_id",
-		"mitre_techniques", "attack_technique",
+		"mitre_techniques", "attack_technique", "techniques", "technique",
 	}
 	for _, key := range candidateKeys {
 		val, ok := payload[key]
@@ -992,15 +1032,22 @@ func extractTechniqueIDs(payload map[string]interface{}) []string {
 	return results
 }
 
+// techniqueIDRe is the exact ATT&CK technique shape: T followed by four
+// digits, optionally a three-digit sub-technique.
+//
+// The check used to be a length range ("leading T, 5–7 characters before the
+// dot"), which also accepted `TA0006` — a *tactic* id — and `T10591`. That
+// was harmless only because every id then had to survive attck.Lookup, which
+// has no entry for either, so the loose ones were filtered downstream. Since
+// issue #1244 a well-formed id is carried even when the corpus cannot confirm
+// it, so the shape check is now the only filter and has to be exact.
+var techniqueIDRe = regexp.MustCompile(`^T\d{4}(?:\.\d{3})?$`)
+
 // normalizeTechniqueID extracts a clean ATT&CK technique ID from a string.
 func normalizeTechniqueID(s string) string {
 	s = strings.TrimSpace(strings.ToUpper(s))
-	// Accept T1234 or T1234.001
-	if len(s) >= 5 && s[0] == 'T' {
-		parts := strings.SplitN(s, ".", 2)
-		if len(parts[0]) >= 5 && len(parts[0]) <= 7 {
-			return s
-		}
+	if techniqueIDRe.MatchString(s) {
+		return s
 	}
 	return ""
 }

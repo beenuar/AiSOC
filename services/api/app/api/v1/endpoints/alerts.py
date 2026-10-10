@@ -7,7 +7,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -15,6 +15,13 @@ from sqlalchemy.exc import IntegrityError
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.db.rls import TenantDBSession
 from app.models.alert import Alert
+from app.services.alert_bulk_close import (
+    DEFAULT_MAX_COUNT,
+    MAX_BULK_CLOSE_LIMIT,
+    BulkCloseEmpty,
+    BulkCloseOverMatch,
+    bulk_close_alerts,
+)
 from app.services.alert_queue import (
     AlertAlreadyClaimedError,
     AlertNotFoundError,
@@ -28,6 +35,7 @@ from app.services.alert_rail import (
     RelatedEntity,
     build_rail_envelope,
 )
+from app.services.audit import emit_audit
 from app.services.event_sanitiser import (
     SubmitPayloadTooLarge,
     sanitise_event_batch,
@@ -1061,3 +1069,114 @@ async def snooze_alert(
     await db.refresh(alert)
 
     return AlertResponse.model_validate(alert)
+
+
+class AlertBulkCloseRequest(BaseModel):
+    """Ids or filters — never neither, never a wildcard."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    alert_ids: list[uuid.UUID] | None = Field(default=None, max_length=MAX_BULK_CLOSE_LIMIT)
+    statuses: list[str] | None = Field(default=None, max_length=10)
+    severities: list[str] | None = Field(default=None, max_length=10)
+    categories: list[str] | None = Field(default=None, max_length=20)
+    connector_types: list[str] | None = Field(default=None, max_length=20)
+    older_than: datetime | None = None
+    close_status: Literal["resolved", "false_positive", "closed"] = "resolved"
+    max_count: int = Field(default=DEFAULT_MAX_COUNT, ge=1, le=MAX_BULK_CLOSE_LIMIT)
+    comment: str | None = Field(default=None, max_length=500)
+
+
+class AlertBulkCloseResponse(BaseModel):
+    matched_count: int
+    closed_count: int
+    close_status: str
+    backup_table: str
+
+
+@router.post("/bulk-close", response_model=AlertBulkCloseResponse)
+async def bulk_close_alerts_endpoint(
+    payload: AlertBulkCloseRequest,
+    request: Request,
+    current_user: Annotated[AuthUser, Depends(require_permission("alerts:write"))],
+    db: DBSession,
+) -> AlertBulkCloseResponse:
+    """Close many alerts in one call, with a preflight guard and a snapshot.
+
+    * Pass ``alert_ids`` for an explicit set, or filters
+      (``statuses``/``severities``/``categories``/``connector_types``/
+      ``older_than``) for a class of alerts. A filter without ``older_than``
+      only matches still-open rows.
+    * **Dry-run for free:** the first call with a ``max_count`` below the
+      real match count returns ``409`` carrying ``matched_count`` — raise
+      ``max_count`` past it to execute. Nothing is written on the 409.
+    * Every affected row is snapshotted into a dedicated backup table
+      (returned in the body) before the UPDATE commits.
+    * One audit entry covers the batch (with the backup table name so the
+      restore target is recorded next to the action).
+
+    Typical noise sweep::
+
+        POST /api/v1/alerts/bulk-close
+        {"categories": ["malware", "vulnerability"],
+         "severities": ["low", "informational"],
+         "older_than": "2026-10-05T00:00:00Z",
+         "max_count": 5000, "comment": "quarterly noise sweep"}
+    """
+    if not payload.alert_ids and not (
+        payload.statuses or payload.severities or payload.categories or payload.connector_types or payload.older_than
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="provide alert_ids or at least one filter (statuses/severities/categories/connector_types/older_than)",
+        )
+
+    try:
+        outcome = await bulk_close_alerts(
+            db,
+            tenant_id=current_user.tenant_id,
+            actor_id=current_user.user_id,
+            close_status=payload.close_status,
+            alert_ids=payload.alert_ids,
+            statuses=payload.statuses,
+            severities=payload.severities,
+            categories=payload.categories,
+            connector_types=payload.connector_types,
+            older_than=payload.older_than,
+            max_count=payload.max_count,
+            comment=payload.comment,
+        )
+    except BulkCloseOverMatch as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error": "over_match",
+                "matched_count": exc.matched,
+                "max_count": exc.max_count,
+                "hint": "raise max_count above matched_count to confirm, or tighten the filter",
+            },
+        ) from exc
+    except BulkCloseEmpty as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="no alerts matched the given ids/filter") from exc
+
+    await emit_audit(
+        db=db,
+        tenant_id=current_user.tenant_id,
+        actor_id=current_user.user_id,
+        actor_email=getattr(current_user, "email", None),
+        action="alerts:bulk_close",
+        resource="alert",
+        changes={
+            "close_status": outcome["close_status"],
+            "closed_count": outcome["closed_count"],
+            "filters": payload.model_dump(exclude_none=True, exclude={"alert_ids"}),
+            "id_count": len(payload.alert_ids or []),
+            "comment": payload.comment,
+            "backup_table": outcome["backup_table"],
+        },
+        request=request,
+        api_key_prefix=getattr(current_user, "api_key_prefix", None),
+    )
+    await db.commit()
+
+    return AlertBulkCloseResponse(**outcome)

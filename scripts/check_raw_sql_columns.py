@@ -240,6 +240,15 @@ PARSER_ARTEFACTS: dict[tuple[str, str], str] = {
         "services/actions/app/live_actions/builtins.py",
         "the",
     ): "Prose in the module docstring, not a statement. The word follows `SELECT` in an English sentence.",
+    (
+        "services/api/app/services/alert_bulk_close.py",
+        "a",
+    ): (
+        "`CREATE TABLE {backup_table} AS SELECT * FROM ({compiled}) AS snapshot_rows`. Both "
+        "placeholders are unresolved in source — the table name is a uuid4 hex and the inner "
+        "SELECT is compiled by SQLAlchemy at call time — so what reaches the parser is a "
+        "fragment and it reads the remains as a one-letter alias. There is no table named `a`."
+    ),
 }
 
 #: Tables a statement names that no migration creates and that are not foreign
@@ -271,6 +280,18 @@ DYNAMIC_SQL: dict[tuple[str, str], str] = {
         "The ClickHouse lake's own migration ledger: the table is `MIGRATION_TABLE` "
         "('aisoc._migrations'), interpolated, and this module creates it. Same reason as "
         "`aisoc_schema_migrations` above, one store over."
+    ),
+    (
+        "services/api/app/services/alert_bulk_close.py",
+        "alerts",
+    ): (
+        "The bulk-close undo snapshot. Two statements, both assembled at runtime and "
+        "neither comparable to a migration: the UPDATE's SET clause is built from whichever "
+        "filters the request supplied, and the CREATE TABLE AS names a per-operation backup "
+        "table whose name is a uuid4 hex, wrapping a SELECT that SQLAlchemy compiles. There "
+        "is no column list in the source to compare, and the backup table is created by this "
+        "function rather than by a migration -- which is the point of it. The columns it can "
+        "touch are literals in this module, which is the read a human has to do."
     ),
     (
         "services/api/app/api/v1/endpoints/cases.py",

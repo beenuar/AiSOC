@@ -51,6 +51,15 @@ const PURPLE_TEAM_HOST = process.env.PURPLE_TEAM_URL || 'http://localhost:8006';
 
 const nextConfig = {
   reactStrictMode: true,
+  // The rewrites below proxy the console to agents, fusion and the rest, and
+  // Next's proxy gives up after 30 s by default. Copilot's own model budget
+  // is also 30 s (safe_chat_completions_request), after which it answers
+  // with a labelled template, so on a slow model the proxy always cut the
+  // connection first: "socket hang up" and a bare 500 instead of the honest
+  // fallback. Long agent calls (investigations, hunts) hit the same wall.
+  experimental: {
+    proxyTimeout: Number(process.env.AISOC_PROXY_TIMEOUT_MS) || 120_000,
+  },
   transpilePackages: ['@aisoc/ui', '@aisoc/types', '@aisoc/report-card'],
   // pnpm monorepo: anchor Turbopack at the repository root so it can resolve
   // the hoisted `next` package via apps/web/node_modules/next (symlink into

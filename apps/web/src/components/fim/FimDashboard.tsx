@@ -67,10 +67,13 @@ export function FimDashboard() {
   const [pathPrefix, setPathPrefix] = useState('');
   const [since, setSince] = useState('24h');
 
-  const sinceISO = sinceToISO(since);
+  // The SWR keys carry the relative window ('24h'), never the absolute
+  // timestamp: sinceToISO reads the clock, so a key built from it changed on
+  // every render and refetched on every render. The timestamp is computed
+  // inside each fetcher instead, at the moment the request goes out.
 
   // Events feed
-  const eventsKey = ['fim-events', page, action, pathPrefix, sinceISO];
+  const eventsKey = ['fim-events', page, action, pathPrefix, since];
   const {
     data: eventsData,
     error: eventsError,
@@ -83,25 +86,26 @@ export function FimDashboard() {
         page_size: PAGE_SIZE,
         action: action || undefined,
         path_prefix: pathPrefix || undefined,
-        since: sinceISO,
+        since: sinceToISO(since),
       }),
     {
-      onError: () => toast.error('Failed to load FIM events'),
+      // A fixed id collapses repeat failures into one toast.
+      onError: () => toast.error('Failed to load FIM events', { id: 'fim-events-error' }),
       refreshInterval: 30_000,
     },
   );
 
   // Summary cards
-  const summaryKey = ['fim-summary', sinceISO];
+  const summaryKey = ['fim-summary', since];
   const {
     data: summaryData,
     error: summaryError,
     isLoading: summaryLoading,
   } = useSWR<FimSummary>(
     summaryKey,
-    () => getFimSummary({ since: sinceISO }),
+    () => getFimSummary({ since: sinceToISO(since) }),
     {
-      onError: () => toast.error('Failed to load FIM summary'),
+      onError: () => toast.error('Failed to load FIM summary', { id: 'fim-summary-error' }),
       refreshInterval: 60_000,
     },
   );

@@ -67,6 +67,13 @@ VALID_SCOPES: frozenset[str] = frozenset(
         "actions:read",
         "lake:query",
         "hunts:read",
+        # The other two permissions the agent-tool surface enforces. The MCP
+        # server authenticates with a key, so without these aisoc_lake_schema
+        # (GET /lake/schema) and aisoc_preview_action (the dry-run, which
+        # `actions:execute` gates; live containment still needs an approver)
+        # were reachable only with "*".
+        "lake:read_schema",
+        "actions:execute",
         # Depth 8.2. Mintable so a tenant can automate its own access
         # governance — an on-call rotation approving elevations from a
         # script, a change-management job adding a condition for a

@@ -86,7 +86,7 @@ from app.core.config import settings
 from app.db.rls import TenantDBSession
 from app.models.alert import Alert
 from app.models.connector import Connector
-from app.services.audit_hash import verify_chain_breaks
+from app.services.audit_hash import verify_chain_breaks, verify_chain_tail
 from app.services.connector_freshness import compute_freshness
 from app.services.dlq_replay_gateway import DlqReplayRequest, DlqReplayResponse, run_replay
 from app.services.fleet_health import assess_fleet
@@ -689,6 +689,19 @@ async def get_audit_chain_health(
         .one()
     )
 
+    # The head is read before the rows so a concurrent append cannot look
+    # like truncation (see verify_chain_tail).
+    head = (
+        (
+            await db.execute(
+                text("SELECT head_hash, next_index, updated_at FROM audit_chain_head WHERE tenant_id = :tid"),
+                {"tid": user.tenant_id},
+            )
+        )
+        .mappings()
+        .one_or_none()
+    )
+
     # Ordered by `chain_index` first, which is the order the serialized
     # appender actually chained in. `(created_at, id)` is the fallback for
     # epoch-1 rows, which have no index — and is precisely the ambiguity
@@ -716,21 +729,11 @@ async def get_audit_chain_health(
     )
     replay = [dict(r) for r in reversed(rows)]
     breaks = verify_chain_breaks(replay)
-    intact = not breaks
+    tail_break = verify_chain_tail(replay, dict(head) if head else None)
+    intact = not breaks and tail_break is None
     bad_index = int(breaks[0]["index"]) if breaks else None
-    reason = str(breaks[0]["reason"]) if breaks else None
+    reason = str(breaks[0]["reason"]) if breaks else (tail_break["reason"] if tail_break else None)
     epoch2_breaks = [b for b in breaks if (b.get("chain_epoch") or 1) >= 2]
-
-    head = (
-        (
-            await db.execute(
-                text("SELECT head_hash, next_index, updated_at FROM audit_chain_head WHERE tenant_id = :tid"),
-                {"tid": user.tenant_id},
-            )
-        )
-        .mappings()
-        .one_or_none()
-    )
 
     unchained = int(counts["unchained"] or 0)
     return {
@@ -750,6 +753,11 @@ async def get_audit_chain_health(
         "oldest_unchained_at": counts["oldest_unchained"].isoformat() if counts["oldest_unchained"] else None,
         "newest_unchained_at": counts["newest_unchained"].isoformat() if counts["newest_unchained"] else None,
         "replay_window": len(replay),
+        # Deleting the newest rows leaves every remaining link valid; only the
+        # stored head shows the chain used to be longer.
+        "tail_intact": tail_break is None,
+        "tail_reason": tail_break["reason"] if tail_break else None,
+        "tail_missing_rows": tail_break["missing"] if tail_break else 0,
         # `replay_intact` covers the whole window including history. It can be
         # false forever on a deployment that forked before migration 074, and
         # that is the honest answer — those rows were not re-chained, because

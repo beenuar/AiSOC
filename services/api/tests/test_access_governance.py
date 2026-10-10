@@ -350,6 +350,15 @@ class TestTheTwoVocabulariesAgree:
         ):
             assert permission in VALID_SCOPES, f"{permission} can only be reached by a wildcard key"
 
+    def test_every_agent_tool_permission_is_mintable_into_a_key(self) -> None:
+        """The MCP server authenticates with an API key. `aisoc_lake_schema`
+        (GET /lake/schema, `lake:read_schema`) and `aisoc_preview_action`
+        (POST /live-actions/dry-run, `actions:execute`) answered 403 to any
+        key short of `*`, because neither permission could be minted."""
+        for permission in ("lake:query", "lake:read_schema", "actions:read", "actions:execute", "hunts:read"):
+            assert permission in VALID_SCOPES, f"{permission} can only be reached by a wildcard key"
+            assert permission in ROLE_PERMISSIONS["tenant_admin"], f"{permission} is mintable but held by no admin"
+
     def test_a_non_wildcard_role_can_request_and_approve_an_elevation(self) -> None:
         """Otherwise the feature is reachable only by principals who do not
         need it, which is how `hunts:read` ended up held by nobody."""

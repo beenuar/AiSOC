@@ -21,7 +21,9 @@
  */
 import { readFileSync } from "node:fs";
 
-const DEFAULT_AISOC_URL = "http://localhost:8081";
+// The API, which docker-compose.yml publishes on 8000. 8081 is the ingest
+// worker, which answers every tool call with "404 page not found".
+const DEFAULT_AISOC_URL = "http://localhost:8000";
 const DEFAULT_TIMEOUT_MS = 20_000;
 
 export interface ServerConfig {

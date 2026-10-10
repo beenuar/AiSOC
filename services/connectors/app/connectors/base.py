@@ -70,6 +70,12 @@ class Capability(str, Enum):
     PULL_AUDIT = "pull_audit"
     PULL_PCAP = "pull_pcap"
     PULL_FILE = "pull_file"
+    #: Pull *vulnerability findings* (per-asset CVE state) rather than the
+    #: alert stream. Connectors declaring it must expose
+    #: ``fetch_vulnerability_findings()``, which the scheduler materialises
+    #: into ``asset_vulnerabilities`` (docs/cve-patch-policy.md): scanner
+    #: findings are inventory rows with patch windows, not console alerts.
+    PULL_VULNERABILITIES = "pull_vulnerabilities"
 
     # QUERY — ad-hoc search across the source's index.
     QUERY_LOGS = "query_logs"

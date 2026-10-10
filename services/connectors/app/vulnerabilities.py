@@ -33,6 +33,7 @@ we first see this" is the question an exposure window is asked.
 
 from __future__ import annotations
 
+import pathlib
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -84,11 +85,14 @@ _INSERT_VULN = text(
     """
     INSERT INTO asset_vulnerabilities
         (id, tenant_id, asset_id, cve_id, title, description, severity,
-         is_exploited, source, external_id, first_found, last_found,
-         metadata, created_at)
+         cvss_score, is_exploited, source, external_id, first_found,
+         last_found, metadata, created_at,
+         environment, patch_due_date, patch_status)
     VALUES (:id, CAST(:tenant_id AS uuid), CAST(:asset_id AS uuid), :cve_id,
-            :title, :description, :severity, false, :source, :external_id,
-            :now, :now, CAST(:metadata AS jsonb), :now)
+            :title, :description, :severity,
+            :cvss_score, false, :source, :external_id,
+            :now, :now, CAST(:metadata AS jsonb), :now,
+            :environment, :patch_due_date, 'tracked')
     """
 )
 
@@ -202,6 +206,41 @@ async def sync_findings(
                 await conn.execute(_TOUCH_VULN, {**params, "id": str(existing[0]), "tenant_id": tenant})
                 touched += 1
             else:
+                # Patch-window policy (docs/cve-patch-policy.md): the due
+                # date is minted here, once, from the moment the finding
+                # first enters inventory — never recomputed by a re-poll
+                # (the touch path deliberately omits it). Environment comes
+                # from the hostname classifier; unknown hosts are PROD.
+                try:
+                    from app.patch_calendar import classify_environment, patch_due_for
+                except ModuleNotFoundError:  # pragma: no cover - import-shape only
+                    # The isolation harness loads this module by path under a
+                    # private name (both services package as ), so the
+                    # sibling package is not on sys.modules here. Load the
+                    # calendar off disk the same way the harness does.
+                    import importlib.util
+                    import sys
+
+                    _pc = pathlib.Path(__file__).with_name("patch_calendar.py")
+                    _spec = importlib.util.spec_from_file_location("aisoc_patch_calendar", _pc)
+                    # `spec_from_file_location` returns None when the path is
+                    # not importable, and a spec can carry no loader. Both are
+                    # unreachable for a file this package ships, but a bare
+                    # `exec_module` on either would raise AttributeError
+                    # several frames from the cause — so say what went wrong.
+                    if _spec is None or _spec.loader is None:
+                        # `from None`: this is a fresh condition, not a
+                        # re-raise of the ImportError that put us in this
+                        # branch, and chaining the two would suggest the
+                        # import error caused it.
+                        raise RuntimeError(f"patch calendar is not importable from {_pc}") from None
+                    _mod = importlib.util.module_from_spec(_spec)
+                    sys.modules[_spec.name] = _mod
+                    _spec.loader.exec_module(_mod)
+                    classify_environment = _mod.classify_environment
+                    patch_due_for = _mod.patch_due_for
+
+                environment = classify_environment(hostname)
                 await conn.execute(
                     _INSERT_VULN,
                     {
@@ -211,9 +250,12 @@ async def sync_findings(
                         "asset_id": str(asset_id),
                         "cve_id": cve,
                         "description": finding.get("title"),
+                        "cvss_score": finding.get("cvss_score"),
                         "source": source,
-                        "external_id": str(finding.get("plugin_id") or "") or None,
+                        "external_id": str(finding.get("plugin_id") or finding.get("external_id") or "") or None,
                         "metadata": json.dumps({"plugin_id": finding.get("plugin_id")}),
+                        "environment": environment,
+                        "patch_due_date": patch_due_for(stamp, environment),
                     },
                 )
                 inserted += 1

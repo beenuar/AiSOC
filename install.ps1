@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     AiSOC — One-Click Installer for Windows.
 
@@ -758,7 +758,20 @@ $script:CorePortSpecs = @(
 # stack must not be reported as a conflict with itself.
 function Get-ComposePublishedPort {
     param([Parameter(Mandatory)][string]$Service, [Parameter(Mandatory)][int]$ContainerPort)
-    $mapped = & docker compose port $Service $ContainerPort 2>$null | Select-Object -Last 1
+    # Under $ErrorActionPreference = 'Stop', Windows PowerShell 5.1 turns a
+    # native command's stderr into a terminating error even with 2>$null, so
+    # "service "postgres" is not running" on a first install killed the
+    # installer before anything had started. Not running is the answer here.
+    $mapped = $null
+    $previous = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = 'Continue'
+        $mapped = & docker compose port $Service $ContainerPort 2>$null | Select-Object -Last 1
+    } catch {
+        return $null
+    } finally {
+        $ErrorActionPreference = $previous
+    }
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($mapped)) { return $null }
     $tail = ("$mapped" -split ':')[-1]
     $parsed = 0
