@@ -64,6 +64,12 @@ jobs:
       # which `aisoc_app` can do. Tenant isolation is not what is under test
       # here; `isolation-live.yml` and `audit-forgery-live.yml` own that and
       # both connect as the restricted role.
+      #
+      # All three suites read `DATABASE_MIGRATION_URL` and fall back to this
+      # one, so the owner is what they actually use; this variable is set
+      # because `app.core.config` chose the name, which is the case the
+      # marker below exists for.
+      # aisoc-db-role: owner — the bootstrap proof issues CREATE/DROP DATABASE and the suites seed across tenants; no runtime DSN is set here
       DATABASE_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
       DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
       PGPASSWORD: aisoc_ci_only
