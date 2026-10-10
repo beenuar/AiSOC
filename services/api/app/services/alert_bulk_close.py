@@ -238,16 +238,24 @@ async def bulk_close_alerts(
     # Every interpolated value is neutralised or validated: tenant/actor are
     # server-side UUIDs, close_status is membership-checked against
     # CLOSE_STATUSES, backup_table is regex-validated above, comment is free
-    # text and goes through _safe_log_text (CodeQL py/log-injection).
+    # text (CodeQL py/log-injection).
+    #
+    # _safe_log_text still runs — it strips ANSI escapes and NUL bytes, which
+    # the chain below does not — but CodeQL's taint tracker does not follow a
+    # value across a function boundary, so on its own it left two
+    # py/log-injection alerts open on main, and an alert on main reds every
+    # open pull request. The visible `.replace().replace()[:n]` chain is the
+    # form the query recognises. Both apply: the helper keeps the stronger
+    # property, the chain makes it legible to the analysis.
     logger.info(
         "alerts.bulk_close tenant=%s actor=%s matched=%d closed=%d target=%s backup=%s comment=%s",
         tenant_id,
         actor_id,
         matched,
         closed,
-        close_status,
+        str(close_status).replace("\r", "").replace("\n", " ")[:64],
         backup_table,
-        _safe_log_text(comment),
+        _safe_log_text(comment).replace("\r", "").replace("\n", " ")[:256],
     )
 
     return {
