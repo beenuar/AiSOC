@@ -434,6 +434,21 @@ class TestDisablingABuiltInReachesTheEngine:
         assert body["updated"] == len(targets)
         assert body["skipped"] == []
 
+    async def test_a_second_tenant_is_not_affected(self, client, session_factory) -> None:
+        """The corpus is shared; the decision is not."""
+        from app.services.builtin_rules import builtin_rules
+
+        target = next(r for r in builtin_rules() if r.source_id == "det-application-005")
+        await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": False})
+
+        async with session_factory() as db:
+            row = (await db.execute(select(DetectionRule).where(DetectionRule.id == target.uuid))).scalar_one()
+            assert row.tenant_id == TENANT
+
+        overlay_module = _fusion_build_overlay()
+        other = overlay_module.build_overlay(str(uuid.uuid4()), [])
+        assert other.suppresses(target.source_id, {}) is None
+
     async def test_the_compiled_logic_is_not_editable(self, client) -> None:
         """Storing an edit the engine will not run is the inverse of #1273."""
         from app.services.builtin_rules import builtin_rules
@@ -442,3 +457,83 @@ class TestDisablingABuiltInReachesTheEngine:
         response = await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"body": "{}"})
         assert response.status_code == 409
         assert "compiled corpus" in response.json()["detail"]
+
+
+# ── negative control: the surface must fail loudly, not quietly ──────────────
+
+
+class TestAnUnreadableCorpusIsNotAnEmptyOne:
+    """`0` and "cannot see the file" are different answers.
+
+    The first is what #1273 reported, and it is the more damaging of the two:
+    an operator reading "No detection rules yet" concludes their coverage is
+    zero and stops. So the resolver raises rather than returning an empty
+    tuple, and both the catalogue and the console route carry the reason.
+    """
+
+    @pytest.fixture
+    def nowhere(self, tmp_path, monkeypatch):
+        from app.services import builtin_rules as module
+
+        monkeypatch.setattr(module, "_PACKAGED_DIR", tmp_path / "packaged")
+        monkeypatch.setattr(module, "_FUSION_DIR", tmp_path / "fusion")
+        module.reset_cache()
+        yield
+        module.reset_cache()
+
+    def test_the_catalogue_refuses_rather_than_returning_nothing(self, nowhere) -> None:
+        from app.services.builtin_rules import BuiltinCatalogueUnavailable, builtin_catalogue
+
+        with pytest.raises(BuiltinCatalogueUnavailable) as raised:
+            builtin_catalogue()
+        assert "detection_ruleset.json" in str(raised.value), "the error has to name what it looked for"
+        assert "sync_packaged_detection_rulesets" in str(raised.value), "and what to run"
+
+    async def test_the_console_route_reports_the_failure(self, client, nowhere) -> None:
+        body = (await client.get("/api/v1/detection/rules")).json()
+        assert body["total"] == 0
+        assert body["builtinTotal"] == 0
+        assert body["catalogError"], "an empty list with no error reads as 'you have no detection rules'"
+        assert "detection_ruleset.json" in body["catalogError"]
+
+    async def test_a_partial_read_is_reported_as_partial(self, tmp_path, monkeypatch, client) -> None:
+        """Three artefacts of four is a short library, not a smaller one."""
+        from app.services import builtin_rules as module
+
+        packaged = tmp_path / "packaged"
+        packaged.mkdir()
+        for name in ("detection_ruleset.json", "windowed_ruleset.json", "windowed_builtin_rules.json"):
+            (packaged / name).write_bytes((PACKAGED / name).read_bytes())
+
+        monkeypatch.setattr(module, "_PACKAGED_DIR", packaged)
+        monkeypatch.setattr(module, "_FUSION_DIR", tmp_path / "fusion")
+        module.reset_cache()
+        try:
+            body = (await client.get("/api/v1/detection/rules")).json()
+            assert body["catalogError"] is None
+            assert body["missingArtefacts"] == ["detection_ruleset_imported.json"]
+            assert body["builtinTotal"] == FUSION_LOADED_TOTAL - ARTEFACTS["detection_ruleset_imported.json"]
+        finally:
+            module.reset_cache()
+
+
+class TestThePackagedCopyAnswersOnItsOwn:
+    """The container case, where `services/fusion/` does not exist at all.
+
+    A source checkout has both copies and the resolver prefers fusion's, so
+    every other test here could pass over a packaged copy that was never
+    read. This one removes the preferred path, which is what the image does.
+    """
+
+    def test_the_corpus_resolves_with_no_fusion_tree(self, tmp_path, monkeypatch) -> None:
+        from app.services import builtin_rules as module
+
+        monkeypatch.setattr(module, "_FUSION_DIR", tmp_path / "no-such-fusion-tree")
+        module.reset_cache()
+        try:
+            catalogue = module.builtin_catalogue()
+            assert len(catalogue.rules) == FUSION_LOADED_TOTAL
+            assert catalogue.missing == ()
+            assert all(str(PACKAGED) in source for source in catalogue.sources)
+        finally:
+            module.reset_cache()
