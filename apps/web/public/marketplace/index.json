@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-09T04:33:06Z",
+  "generated": "2026-10-10T01:22:53Z",
   "categories": [
     {
       "id": "playbooks",
@@ -41304,7 +41304,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/endpoint/win-procdump-lsass.yaml",
-      "sha256": "f9ce8c1905639e2ff6d9bf888ebdb43d4ce90002da394b87970ebd8c6c1f48ed"
+      "sha256": "74a2adaebcfc8c6c1998621e2e2b93abfc12ece6d578b75695b1573c880b2ee0"
     },
     {
       "id": "det-endpoint-092",
