@@ -154,6 +154,11 @@ class TestTheWorkerPathActuallyCallsIt:
         try:
             await ata.run_auto_triage(state)
         except Exception:
+            # Swallowed on purpose: the subject here is what the agent
+            # *recorded* before the unparseable reply took it down, asserted
+            # below. Whether it raises or falls back is a different question
+            # and a different test; letting either outcome through keeps this
+            # one from failing for a reason it is not about.
             pass
 
         assert state.llm_exchanges, "nothing recorded for the call that failed to parse"
@@ -208,11 +213,15 @@ class TestTheLedgerWritesIt:
         async def _resolve(_conn: Any, _ref: str) -> Any:
             return tenant
 
-        original_pool = ledger_module.get_pool
-        original_resolve = ledger_module._resolve_tenant_id
-        ledger_module.get_pool = _pool  # type: ignore[assignment]
-        ledger_module._resolve_tenant_id = _resolve  # type: ignore[assignment]
-        try:
+        # Through `MonkeyPatch` rather than a hand-rolled save/assign/restore.
+        # Assigning the module attribute directly is a rebind CodeQL can see,
+        # and it makes `py/import-of-mutable-attribute` fire on
+        # `test_ledger_tenant.py`, which imports `_resolve_tenant_id` by value
+        # and would therefore keep the original — a real hazard, just not one
+        # this test was trying to create.
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(ledger_module, "get_pool", _pool)
+            mp.setattr(ledger_module, "_resolve_tenant_id", _resolve)
             await ledger_module.persist_auto_triage(
                 run_id=uuid4(),
                 alert_id=str(uuid4()),
@@ -225,9 +234,6 @@ class TestTheLedgerWritesIt:
                 rationale="because",
                 llm_exchanges=exchanges,
             )
-        finally:
-            ledger_module.get_pool = original_pool  # type: ignore[assignment]
-            ledger_module._resolve_tenant_id = original_resolve  # type: ignore[assignment]
         return executed
 
     @pytest.mark.asyncio
