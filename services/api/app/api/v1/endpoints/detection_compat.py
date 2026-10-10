@@ -25,18 +25,33 @@ from __future__ import annotations
 import json
 import uuid
 from collections import Counter, defaultdict
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.detection_rule import DetectionRule
+from app.services.builtin_rules import builtin_by_uuid
+from app.services.detection_catalogue import (
+    CatalogueFilters,
+    RuleView,
+    catalogue_page,
+    materialise_builtin,
+    resolve_rule,
+)
 from app.services.rule_engine import execute_rule
 
 router = APIRouter(prefix="/detection", tags=["detection_rules"])
+
+#: A rule from either store. The analytics helpers below read attributes that
+#: a stored row and a compiled-catalogue projection both carry, and they have
+#: to read both: scoping them to ORM rows is what made the MITRE heatmap draw
+#: an empty grid over a library of 2,586 mapped rules.
+RuleLike = DetectionRule | RuleView
 
 
 # ─── Frontend wire models ────────────────────────────────────────────────────
@@ -58,11 +73,42 @@ class FrontendDetectionRule(BaseModel):
     updatedAt: str
     lastTriggeredAt: str | None = None
     hitCount: int = 0
+    #: True when the fusion detection engine loads this rule from the compiled
+    #: corpus. A tenant's own rule is not loaded by the engine, so disabling
+    #: the two means different things and the console says which is which.
+    isBuiltin: bool = False
+    #: The engine's own rule id (``det-cloud-063``), for a built-in. This is
+    #: the id that appears on an alert, so it is what an analyst searches for.
+    sourceId: str | None = None
+    #: Whether this tenant has stored a decision about the rule. A built-in
+    #: with no decision is running at the corpus default.
+    tuned: bool = False
+    #: ``createdAt``/``updatedAt`` on a built-in are the timestamp of the
+    #: compiled artefact this deployment carries, not an authoring date. Flagged
+    #: so the console can label them rather than imply a history it does not have.
+    timestampsFromArtefact: bool = False
 
 
 class ListResponse(BaseModel):
     rules: list[FrontendDetectionRule]
+    #: Rules matching the request's filters. Not the number returned — the
+    #: library is 2,586 rules on a default install and the page is bounded.
     total: int
+    #: The whole library before filters, split by origin. The header states
+    #: library size; ``total`` states the size of the result.
+    builtinTotal: int = 0
+    customTotal: int = 0
+    returned: int = 0
+    offset: int = 0
+    limit: int = 0
+    #: Set when the compiled corpus could not be read at all. The console
+    #: renders this as a failure, never as "no rules exist" — telling an
+    #: operator their coverage is zero when the file is simply unreachable is
+    #: the defect this whole surface was reported for.
+    catalogError: str | None = None
+    #: Artefacts that resolved nowhere while others did, so a partial read
+    #: reports as partial rather than as a smaller library.
+    missingArtefacts: list[str] = Field(default_factory=list)
 
 
 class CreateBody(BaseModel):
@@ -110,13 +156,25 @@ class TestResponse(BaseModel):
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 
-def _to_frontend(rule: DetectionRule) -> FrontendDetectionRule:
-    """Map ORM row → frontend shape."""
+def _to_frontend(rule: DetectionRule | RuleView) -> FrontendDetectionRule:
+    """Map an ORM row **or** a compiled-catalogue view → frontend shape.
+
+    One function for both on purpose: a built-in and a tenant rule that
+    rendered through two mappers would eventually disagree about the same
+    rule, which is the shape #1273 reported (the page printed 2,511 in one
+    tile and "No detection rules yet" in another, from two sources).
+    """
     mitre: list[str] = []
     if rule.mitre_techniques:
         mitre.extend(str(t) for t in rule.mitre_techniques)
     if rule.mitre_tactics:
         mitre.extend(str(t) for t in rule.mitre_tactics)
+
+    source_id = getattr(rule, "source_id", None)
+    if source_id is None:
+        provenance = getattr(rule, "provenance", None)
+        if isinstance(provenance, dict):
+            source_id = provenance.get("source_id") or None
 
     return FrontendDetectionRule(
         id=str(rule.id),
@@ -132,6 +190,10 @@ def _to_frontend(rule: DetectionRule) -> FrontendDetectionRule:
         updatedAt=rule.updated_at.isoformat() if rule.updated_at else datetime.now(UTC).isoformat(),
         lastTriggeredAt=rule.last_triggered.isoformat() if rule.last_triggered else None,
         hitCount=rule.total_hits or 0,
+        isBuiltin=bool(rule.is_builtin),
+        sourceId=str(source_id) if source_id else None,
+        tuned=bool(getattr(rule, "tuned", True)),
+        timestampsFromArtefact=bool(rule.is_builtin) and not bool(getattr(rule, "tuned", True)),
     )
 
 
@@ -177,6 +239,26 @@ def _parse_sample_events(sample: str | None) -> list[dict[str, Any]]:
     return events or [{}]
 
 
+#: Fields of a built-in that this route must not pretend to change. The
+#: engine reads the compiled artefact, so storing an edited body would show
+#: the operator a rule the engine is not running — the exact class of defect
+#: #1273 reported, inverted.
+_BUILTIN_IMMUTABLE = ("body", "language", "mitre")
+
+
+def _refuse_uneditable_builtin_fields(body: UpdateBody) -> None:
+    offered = [name for name in _BUILTIN_IMMUTABLE if getattr(body, name, None) is not None]
+    if offered:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"{', '.join(offered)} cannot be changed on a built-in rule: the detection engine loads it from the "
+                "compiled corpus, so the edit would be stored and never applied. Disable it and author your own, or "
+                "tune it with a suppression or a severity floor."
+            ),
+        )
+
+
 # ─── Routes ──────────────────────────────────────────────────────────────────
 
 
@@ -184,23 +266,50 @@ def _parse_sample_events(sample: str | None) -> list[dict[str, Any]]:
 async def list_rules_compat(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
     db: DBSession,
+    search: str | None = Query(default=None, max_length=200),
+    severity: str | None = Query(default=None),
+    category: str | None = Query(default=None),
+    mitre: str | None = Query(default=None, description="MITRE ATT&CK technique id, e.g. T1059.001"),
+    enabled: bool | None = Query(default=None),
+    source: Literal["all", "builtin", "custom"] = Query(default="all"),
+    limit: int = Query(default=100, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
 ) -> ListResponse:
-    """List detection rules visible to the current tenant (built-ins + tenant-owned)."""
-    tid = current_user.tenant_id
-    stmt = (
-        select(DetectionRule)
-        .where(
-            or_(
-                DetectionRule.tenant_id == tid,
-                and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
-            )
-        )
-        .order_by(DetectionRule.name)
+    """The tenant's effective rule library: the compiled corpus plus its tuning.
+
+    This used to read ``detection_rules`` alone and therefore answered with an
+    empty list on every install, while fusion loaded and fired 2,586 rules
+    (#1273). The filters and the page bound are not cosmetic: the whole
+    library serialised is several megabytes, so an unbounded list would have
+    traded an empty page for an unusable one.
+    """
+    page = await catalogue_page(
+        db,
+        current_user.tenant_id,
+        filters=CatalogueFilters(
+            search=search,
+            severity=severity,
+            category=category,
+            mitre=mitre,
+            enabled=enabled,
+            include_builtin=source in ("all", "builtin"),
+            include_custom=source in ("all", "custom"),
+        ),
+        limit=limit,
+        offset=offset,
     )
-    result = await db.execute(stmt)
-    rules = result.scalars().all()
-    items = [_to_frontend(r) for r in rules]
-    return ListResponse(rules=items, total=len(items))
+    items = [_to_frontend(view) for view in page.rules]
+    return ListResponse(
+        rules=items,
+        total=page.total,
+        builtinTotal=page.builtin_total,
+        customTotal=page.custom_total,
+        returned=len(items),
+        offset=offset,
+        limit=limit,
+        catalogError=page.catalogue_error,
+        missingArtefacts=page.missing_artefacts,
+    )
 
 
 @router.post("/rules", response_model=FrontendDetectionRule, status_code=status.HTTP_201_CREATED)
@@ -237,18 +346,17 @@ async def get_rule_compat(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
     db: DBSession,
 ) -> FrontendDetectionRule:
-    """Fetch a single rule by ID in the frontend shape."""
-    stmt = select(DetectionRule).where(
-        DetectionRule.id == rule_id,
-        or_(
-            DetectionRule.tenant_id == current_user.tenant_id,
-            DetectionRule.tenant_id.is_(None),
-        ),
-    )
-    rule = (await db.execute(stmt)).scalar_one_or_none()
-    if rule is None:
+    """Fetch a single rule by ID in the frontend shape.
+
+    Resolves a stored row first and the compiled catalogue second, so a
+    built-in's detail page opens without a row having to exist for it. The
+    read never creates one: a GET that materialised would put 2,586 rows per
+    tenant in a table meant to hold decisions.
+    """
+    view = await resolve_rule(db, current_user.tenant_id, rule_id)
+    if view is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
-    return _to_frontend(rule)
+    return _to_frontend(view)
 
 
 @router.patch("/rules/{rule_id}", response_model=FrontendDetectionRule)
@@ -258,17 +366,42 @@ async def update_rule_compat(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
     db: DBSession,
 ) -> FrontendDetectionRule:
-    """Update a tenant-owned rule using the frontend shape."""
+    """Update a tenant-owned rule, or record a tuning decision on a built-in.
+
+    A built-in has no row until this point. The first write creates one under
+    the rule's own id, carrying ``provenance.source_id`` — the key fusion's
+    tenant overlay joins on — so disabling a rule in the console stops the
+    engine firing it rather than setting a flag nothing reads. Before #1273
+    this route answered 404 for every rule the engine was actually running.
+
+    The compiled logic itself is not editable here: ``rule_body``,
+    ``language`` and ``mitre`` are refused on a built-in rather than silently
+    stored, because the engine loads the artefact and would ignore the edit
+    while the console displayed it as applied.
+    """
     stmt = select(DetectionRule).where(
         DetectionRule.id == rule_id,
         DetectionRule.tenant_id == current_user.tenant_id,
     )
     rule = (await db.execute(stmt)).scalar_one_or_none()
+
     if rule is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Rule not found or cannot be modified",
+        builtin = builtin_by_uuid(rule_id)
+        if builtin is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rule not found or cannot be modified",
+            )
+        _refuse_uneditable_builtin_fields(body)
+        rule = await materialise_builtin(
+            db,
+            builtin,
+            tenant_id=current_user.tenant_id,
+            actor_id=current_user.user_id,
+            actor_email=current_user.email,
         )
+    elif rule.is_builtin and (rule.provenance or {}).get("source_id"):
+        _refuse_uneditable_builtin_fields(body)
 
     updates: dict[str, Any] = {}
     if body.name is not None:
@@ -287,6 +420,8 @@ async def update_rule_compat(
         updates["mitre_techniques"] = list(body.mitre)
     if body.enabled is not None:
         updates["status"] = "active" if body.enabled else "inactive"
+    if updates:
+        updates["author"] = current_user.email or str(current_user.user_id)
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)
@@ -473,6 +608,12 @@ class DriftSummary(BaseModel):
     highFpRate: int
     lowConfidence: int
     stale: int
+    #: Rules the drift heuristics cannot judge. Every heuristic here reads a
+    #: column that only operator review and the rule IDE write — confidence,
+    #: FP rate, last trigger — and the compiled corpus records none of them.
+    #: Scoring 2,586 built-ins at a placeholder confidence of 0 would fill the
+    #: inbox with "low confidence, stale" for every rule in the product.
+    unscored: int = 0
 
 
 class DriftResponse(BaseModel):
@@ -531,6 +672,11 @@ class ConfidenceSummary(BaseModel):
     avgConfidenceActive: float
     medianConfidence: int
     lowConfidence: int  # rules below ``DRIFT_LOW_CONFIDENCE_THRESHOLD``
+    #: Rules excluded from every figure above because no confidence has ever
+    #: been recorded for them. Published rather than dropped: a mean over 3
+    #: rules beside a library of 2,586 is a different claim from a mean over
+    #: 2,589, and the reader cannot tell which they are looking at otherwise.
+    unscored: int = 0
 
 
 class ConfidenceResponse(BaseModel):
@@ -553,7 +699,7 @@ DRIFT_LOW_CONFIDENCE_THRESHOLD = 40
 DRIFT_STALE_DAYS = 30
 
 
-def _primary_tactic(rule: DetectionRule) -> str | None:
+def _primary_tactic(rule: RuleLike) -> str | None:
     """Pick a single tactic to plot a rule's techniques against.
 
     A rule can map to multiple tactics (e.g. T1059 spans Execution and
@@ -568,7 +714,7 @@ def _primary_tactic(rule: DetectionRule) -> str | None:
     return str(first) if first else None
 
 
-def _build_coverage(rules: list[DetectionRule], *, now: datetime | None = None) -> CoverageResponse:
+def _build_coverage(rules: Sequence[RuleLike], *, now: datetime | None = None) -> CoverageResponse:
     """Compute MITRE ATT&CK coverage from a list of rules.
 
     Rules without any technique mapping are still counted in the totals so
@@ -632,8 +778,20 @@ def _build_coverage(rules: list[DetectionRule], *, now: datetime | None = None) 
     )
 
 
+def _scoreable(rule: RuleLike) -> bool:
+    """Whether any confidence or hit history has ever been recorded here.
+
+    A compiled built-in carries none — the artefacts record a rule's logic,
+    severity and ATT&CK mapping and nothing operational — so it is excluded
+    from the two panels that average those columns rather than counted at the
+    placeholder. ``confidence_measured`` defaults True, so an ORM row from any
+    other path keeps its existing treatment.
+    """
+    return bool(getattr(rule, "confidence_measured", True))
+
+
 def _build_drift(
-    rules: list[DetectionRule],
+    rules: Sequence[RuleLike],
     *,
     now: datetime | None = None,
     fp_threshold: float = DRIFT_FP_RATE_THRESHOLD,
@@ -660,7 +818,10 @@ def _build_drift(
     entries: list[DriftEntry] = []
     counts: Counter[str] = Counter()
 
+    unscored = sum(1 for rule in rules if not _scoreable(rule))
     for rule in rules:
+        if not _scoreable(rule):
+            continue
         issues: list[str] = []
 
         if rule.fp_rate is not None and rule.fp_rate >= fp_threshold:
@@ -725,6 +886,7 @@ def _build_drift(
             highFpRate=counts["highFpRate"],
             lowConfidence=counts["lowConfidence"],
             stale=counts["stale"],
+            unscored=unscored,
         ),
         generatedAt=now.isoformat(),
     )
@@ -743,7 +905,7 @@ _CONFIDENCE_BUCKETS: tuple[tuple[str, int, int], ...] = (
 
 
 def _build_confidence(
-    rules: list[DetectionRule],
+    rules: Sequence[RuleLike],
     *,
     now: datetime | None = None,
     top_n: int = 5,
@@ -765,6 +927,13 @@ def _build_confidence(
 
     now = now or datetime.now(UTC)
 
+    # Every figure below is an average or a histogram of `confidence`. A
+    # compiled built-in has no confidence recorded anywhere, so including it
+    # at the placeholder would publish a distribution shaped by the
+    # placeholder rather than by the library.
+    unscored = sum(1 for rule in rules if not _scoreable(rule))
+    rules = [rule for rule in rules if _scoreable(rule)]
+
     total = len(rules)
     if total == 0:
         empty_buckets = [ConfidenceBucket(label=lbl, floor=lo, ceil=hi, count=0, activeCount=0) for lbl, lo, hi in _CONFIDENCE_BUCKETS]
@@ -776,6 +945,7 @@ def _build_confidence(
                 avgConfidenceActive=0.0,
                 medianConfidence=0,
                 lowConfidence=0,
+                unscored=unscored,
             ),
             buckets=empty_buckets,
             tactics=[],
@@ -846,7 +1016,7 @@ def _build_confidence(
     # Worst-first so the UI doesn't have to re-sort.
     tactics.sort(key=lambda t: (t.avgConfidence, t.tactic))
 
-    def _entry(rule: DetectionRule) -> ConfidenceRuleEntry:
+    def _entry(rule: RuleLike) -> ConfidenceRuleEntry:
         return ConfidenceRuleEntry(
             ruleId=str(rule.id),
             name=rule.name,
@@ -871,6 +1041,7 @@ def _build_confidence(
             avgConfidenceActive=round(avg_active, 2),
             medianConfidence=int(median),
             lowConfidence=low_count,
+            unscored=unscored,
         ),
         buckets=buckets,
         tactics=tactics,
@@ -906,16 +1077,15 @@ async def get_detection_coverage(
     Distinct from ``/api/v1/graph/mitre/coverage`` which derives coverage
     from *alerts* — this one is what an analyst opens before a tuning
     sprint to answer "which techniques is my rule library blind to?".
+
+    Reads the whole effective library, built-ins included. It previously read
+    the ``detection_rules`` table alone and therefore drew an empty heatmap
+    over a product shipping ATT&CK mappings for 2,586 loaded rules — the
+    strongest possible version of the "blind to everything" answer, and
+    wrong.
     """
-    tid = current_user.tenant_id
-    stmt = select(DetectionRule).where(
-        or_(
-            DetectionRule.tenant_id == tid,
-            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
-        )
-    )
-    rules = (await db.execute(stmt)).scalars().all()
-    return _build_coverage(list(rules))
+    page = await catalogue_page(db, current_user.tenant_id)
+    return _build_coverage(page.rules)
 
 
 @router.post("/rules/bulk-toggle", response_model=BulkToggleResponse)
@@ -924,11 +1094,17 @@ async def bulk_toggle_rules(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
     db: DBSession,
 ) -> BulkToggleResponse:
-    """Enable or disable many tenant-owned rules in one round-trip.
+    """Enable or disable many rules in one round-trip, built-ins included.
 
-    Built-in / cross-tenant rules are silently skipped (returned in
-    ``skipped``) so an MSSP analyst toggling a whole category from the UI
-    doesn't get a 403 just because one of the rules is platform-provided.
+    Built-ins used to be "silently skipped", which on a default install meant
+    every rule in the library was skipped: there were no other rules. A
+    built-in now materialises a tenant tuning row on first toggle, exactly as
+    the single-rule PATCH does, so selecting a noisy category and turning it
+    off reaches the engine.
+
+    Ids that match nothing at all are still reported in ``skipped``, because
+    an operator who selected forty rules and had one quietly dropped would
+    have no way to find out which.
     """
     requested = body.ruleIds or []
     if not requested:
@@ -948,28 +1124,37 @@ async def bulk_toggle_rules(
 
     target_status = "active" if body.enabled else "inactive"
 
-    # Look up which of the requested IDs are actually tenant-owned. Built-in
-    # rules (tenant_id IS NULL) and other-tenant rules get pushed onto
-    # ``skipped`` rather than mutated.
     stmt = select(DetectionRule.id).where(
         DetectionRule.id.in_(parsed.keys()),
         DetectionRule.tenant_id == current_user.tenant_id,
     )
-    owned_ids: list[uuid.UUID] = list((await db.execute(stmt)).scalars().all())
-    owned_set = set(owned_ids)
+    owned: set[uuid.UUID] = set((await db.execute(stmt)).scalars().all())
 
-    for rid in parsed.keys():
-        if rid not in owned_set:
-            skipped.append(parsed[rid])
+    actor = current_user.email or str(current_user.user_id)
+    for rid, raw in parsed.items():
+        if rid in owned:
+            continue
+        builtin = builtin_by_uuid(rid)
+        if builtin is None:
+            skipped.append(raw)
+            continue
+        await materialise_builtin(
+            db,
+            builtin,
+            tenant_id=current_user.tenant_id,
+            actor_id=current_user.user_id,
+            actor_email=actor,
+        )
+        owned.add(rid)
 
-    if not owned_ids:
+    if not owned:
         return BulkToggleResponse(updated=0, skipped=skipped)
 
     now = datetime.now(UTC)
-    await db.execute(update(DetectionRule).where(DetectionRule.id.in_(owned_ids)).values(status=target_status, updated_at=now))
+    await db.execute(update(DetectionRule).where(DetectionRule.id.in_(owned)).values(status=target_status, updated_at=now, author=actor))
     await db.commit()
 
-    return BulkToggleResponse(updated=len(owned_ids), skipped=skipped)
+    return BulkToggleResponse(updated=len(owned), skipped=skipped)
 
 
 @router.get("/drift", response_model=DriftResponse)
@@ -983,16 +1168,12 @@ async def get_detection_drift(
     recent triggers despite being enabled). The UI renders this as a tab
     on the Detections page so analysts have a single queue to work
     instead of paginating the full library hunting for noise.
+
+    Built-ins are counted in ``summary.unscored`` rather than judged: none of
+    the three heuristics has an input for them.
     """
-    tid = current_user.tenant_id
-    stmt = select(DetectionRule).where(
-        or_(
-            DetectionRule.tenant_id == tid,
-            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
-        )
-    )
-    rules = (await db.execute(stmt)).scalars().all()
-    return _build_drift(list(rules))
+    page = await catalogue_page(db, current_user.tenant_id)
+    return _build_drift(page.rules)
 
 
 @router.get("/confidence", response_model=ConfidenceResponse)
@@ -1010,13 +1191,11 @@ async def get_detection_confidence(
     No history table is needed — this view derives its trend signal from
     the current confidence/FP-rate columns set by the rule engine and
     operator review on every match.
+
+    Rules with no recorded confidence are reported as ``summary.unscored``
+    and left out of every average, so the histogram describes the rules an
+    operator has actually scored rather than being flattened by a library of
+    placeholders.
     """
-    tid = current_user.tenant_id
-    stmt = select(DetectionRule).where(
-        or_(
-            DetectionRule.tenant_id == tid,
-            and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
-        )
-    )
-    rules = (await db.execute(stmt)).scalars().all()
-    return _build_confidence(list(rules))
+    page = await catalogue_page(db, current_user.tenant_id)
+    return _build_confidence(page.rules)

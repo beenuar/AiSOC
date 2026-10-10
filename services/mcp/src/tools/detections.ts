@@ -1,11 +1,13 @@
 /**
  * Detection-content tools.
  *
- * The plan calls for a single `aisoc_query_detections(query)` tool. The
- * actual API surfaces filters by category and rule_language but no
- * server-side free-text search, so we implement search client-side over
- * a sane page size — that keeps the agent UX honest ("query for 'AWS
- * IAM'") while we wait for FTS to land in the API.
+ * `aisoc_query_detections` filters server-side. It used to over-fetch the
+ * whole library and filter in this process, which was safe only because the
+ * route it reads answered with an empty list on every deployment — nothing
+ * wrote a built-in rule into the table it queried (#1273). It now returns
+ * the 2,586-rule compiled corpus the detection engine actually runs, so the
+ * search term, severity and technique go to the API and the page bound is
+ * the tool's own limit.
  *
  * We also expose `aisoc_get_detection_rule` so an agent that finds a
  * rule by query can deep-dive into its body, MITRE mappings, and FP
@@ -38,6 +40,14 @@ interface DetectionRuleResponse {
   version: number;
   created_at: string;
   updated_at: string;
+  /** The detection engine's own rule id, for a compiled built-in. */
+  source_id?: string | null;
+  /** False when `confidence` is a placeholder rather than a measurement. */
+  confidence_measured?: boolean;
+  /** Whether the tenant has stored any decision about this rule. */
+  tuned?: boolean;
+  /** `aisoc-engine` when fusion loads and evaluates the rule. */
+  engine?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -64,9 +74,11 @@ const QueryDetectionsSchema = z
       .optional()
       .describe("Restrict to a single detection category."),
     rule_language: z
-      .enum(["sigma", "yara", "kql", "eql"])
+      .enum(["sigma", "yara", "kql", "eql", "aisoc-match"])
       .optional()
-      .describe("Restrict by rule language."),
+      .describe(
+        "Restrict by rule language. `aisoc-match` is the compiled spec the fusion detection engine loads and evaluates.",
+      ),
     severity: z
       .enum(["critical", "high", "medium", "low", "info"])
       .optional()
@@ -101,53 +113,29 @@ export const queryDetectionsTool: ToolDefinition<typeof QueryDetectionsSchema> =
   },
   schema: QueryDetectionsSchema,
   async handle(ctx, args) {
+    // Every filter goes to the API. Pulling the library down to filter here
+    // would be a multi-megabyte transfer per call, and a limit applied after
+    // the fetch does nothing about that.
     const data = await ctx.client.get<DetectionRuleResponse[]>("/api/v1/rules", {
       query: {
         category: args.category,
         rule_language: args.rule_language,
         include_builtin: args.include_builtin,
+        search: args.query,
+        severity: args.severity,
+        mitre: args.mitre_technique,
+        // One over the limit, so "there is more" is observed rather than
+        // inferred from the page being exactly full.
+        limit: args.limit + 1,
       },
     });
 
-    // Apply the client-side filters the API doesn't support. We accept
-    // the over-fetch because typical tenants have hundreds — not millions
-    // — of rules, and querying server-side would require a back-end change
-    // that's out of scope for this skill.
-    let filtered = data;
-    if (args.severity) {
-      filtered = filtered.filter((r) => r.severity === args.severity);
-    }
-    if (args.mitre_technique) {
-      const want = args.mitre_technique.toUpperCase();
-      filtered = filtered.filter((r) =>
-        r.mitre_techniques.some((t) => t.toUpperCase() === want),
-      );
-    }
-    if (args.query) {
-      const needle = args.query.toLowerCase();
-      filtered = filtered.filter((r) =>
-        [
-          r.name,
-          r.description ?? "",
-          r.tags.join(" "),
-          r.mitre_techniques.join(" "),
-          r.mitre_tactics.join(" "),
-          r.category,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(needle),
-      );
-    }
-
-    const totalUnfiltered = data.length;
-    const totalMatched = filtered.length;
-    const items = filtered.slice(0, args.limit).map(summariseRule);
+    const truncated = data.length > args.limit;
+    const items = data.slice(0, args.limit).map(summariseRule);
 
     return json({
-      total_unfiltered: totalUnfiltered,
-      total_matched: totalMatched,
-      truncated: totalMatched > items.length,
+      total_matched: truncated ? `${args.limit}+` : data.length,
+      truncated,
       items,
     });
   },
@@ -185,7 +173,7 @@ export const getDetectionRuleTool: ToolDefinition<typeof GetDetectionRuleSchema>
 // ---------------------------------------------------------------------------
 
 function summariseRule(r: DetectionRuleResponse): Record<string, unknown> {
-  return {
+  const summary: Record<string, unknown> = {
     id: r.id,
     name: r.name,
     description: r.description,
@@ -193,12 +181,26 @@ function summariseRule(r: DetectionRuleResponse): Record<string, unknown> {
     category: r.category,
     severity: r.severity,
     status: r.status,
-    confidence: r.confidence,
     mitre_tactics: r.mitre_tactics,
     mitre_techniques: r.mitre_techniques,
-    total_hits: r.total_hits,
-    fp_rate: r.fp_rate,
     is_builtin: r.is_builtin,
     tags: r.tags,
   };
+  // The engine's own rule id — what an alert's `rule_id` carries — so an
+  // agent can join a finding back to the rule that produced it.
+  if (r.source_id) summary.source_id = r.source_id;
+
+  // Confidence, hit count and FP rate are only reported when somebody
+  // recorded them. A compiled rule carries none, and handing a model a
+  // placeholder `confidence: 0` invites it to describe the whole library as
+  // untrustworthy on the strength of a field nobody filled in.
+  if (r.confidence_measured !== false) {
+    summary.confidence = r.confidence;
+    summary.total_hits = r.total_hits;
+    summary.fp_rate = r.fp_rate;
+  } else {
+    summary.confidence = null;
+    summary.measurements = "none recorded for this rule";
+  }
+  return summary;
 }

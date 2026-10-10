@@ -114,10 +114,23 @@ export function DriftInbox() {
   }
 
   if (!data || data.entries.length === 0) {
+    // Every heuristic here reads confidence, false-positive rate or last
+    // trigger, and the compiled corpus records none of them. Reporting a
+    // clean inbox over a library nothing could be judged against would be a
+    // verdict rather than an absence of one.
+    const unscored = data?.summary.unscored ?? 0;
     return (
       <EmptyState
-        title="No rules need attention"
-        description="Every active rule is firing on schedule with healthy confidence and a tolerable false-positive rate. Drop back into the rule list to author new coverage."
+        title={
+          unscored > 0
+            ? 'Nothing here can be judged yet'
+            : 'No rules need attention'
+        }
+        description={
+          unscored > 0
+            ? `Every scored rule is healthy. ${unscored.toLocaleString()} rules loaded by the detection engine carry no confidence, false-positive rate or trigger history, so drift cannot be assessed for them — this is not a clean bill of health for those rules.`
+            : 'Every active rule is firing on schedule with healthy confidence and a tolerable false-positive rate. Drop back into the rule list to author new coverage.'
+        }
       />
     );
   }

@@ -43,6 +43,14 @@ class DetectionRule(Base):
     is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)  # Platform-provided vs custom
     version: Mapped[int] = mapped_column(Integer, default=1)
 
+    # Who last changed the rule. The column has existed since
+    # ``001_init.sql`` and was mapped by nothing, so the API could not write
+    # it — while ``services/fusion/app/services/tenant_overlay.py`` reads it on
+    # every reload to explain *who* silenced a rule when it reports a match
+    # that was suppressed. An unattributed suppression is indistinguishable
+    # from a rule that simply did not match.
+    author: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     # Provenance for imported rules (Sigma bulk import, etc.).
     # Empty dict for native rules; populated for anything that came in
     # through ``app.services.detections.sigma_import``. See migration

@@ -56,6 +56,7 @@ const sidebars: SidebarsConfig = {
         "console/getting-started",
         "console/funnel-kpis",
         "console/queue",
+        "console/rule-library",
         "console/rule-tuning",
         "console/investigation-rail",
         "console/public-replay",

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
@@ -120,6 +120,7 @@ const LANG_LABEL: Record<DetectionLanguage, string> = {
   eql: 'EQL',
   lucene: 'Lucene',
   regex: 'Regex',
+  'aisoc-match': 'Engine',
 };
 
 const LANG_BADGE: Record<DetectionLanguage, string> = {
@@ -129,6 +130,7 @@ const LANG_BADGE: Record<DetectionLanguage, string> = {
   eql: 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
   lucene: 'bg-cyan-500/10 text-cyan-300 ring-cyan-500/30',
   regex: 'bg-pink-500/10 text-pink-300 ring-pink-500/30',
+  'aisoc-match': 'bg-slate-500/10 text-slate-300 ring-slate-500/30',
 };
 
 const SEVERITY_BADGE: Record<string, string> = {
@@ -171,11 +173,49 @@ const TABS: { id: DetectionsTab; label: string; description: string }[] = [
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+//: One page of rules. The library is 2,586 entries on a default install, so
+//: the list is paged and every filter runs on the server — rendering the
+//: whole corpus would trade an empty page for an unusable one.
+const PAGE_SIZE = 50;
+
 export function DetectionsView() {
+  const [tab, setTab] = useState<DetectionsTab>('rules');
+  const [search, setSearch] = useState('');
+  const [language, setLanguage] = useState<DetectionLanguage | 'all'>('all');
+  const [enabledFilter, setEnabledFilter] = useState<'all' | 'on' | 'off'>(
+    'all',
+  );
+  const [page, setPage] = useState(0);
+
+  // Typing a character per request would put one round-trip per keystroke
+  // against a 2,586-rule search.
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  // Any filter change invalidates the page offset: page 4 of a 2,586-rule
+  // list is page 0 of a six-rule one.
+  useEffect(() => {
+    setPage(0);
+  }, [debouncedSearch, language, enabledFilter]);
+
+  const query = useMemo(
+    () => ({
+      search: debouncedSearch || undefined,
+      enabled:
+        enabledFilter === 'all' ? undefined : enabledFilter === 'on',
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+    }),
+    [debouncedSearch, enabledFilter, page],
+  );
+
   const { data, error, isLoading, mutate } = useSWR(
-    'detection:rules',
-    () => detectionApi.list(),
-    { revalidateOnFocus: false, shouldRetryOnError: false },
+    ['detection:rules', query, language],
+    () => detectionApi.list(query),
+    { revalidateOnFocus: false, shouldRetryOnError: false, keepPreviousData: true },
   );
 
   // Only the hosted demo substitutes sample rules on error. Elsewhere a
@@ -190,36 +230,31 @@ export function DetectionsView() {
     [data, useFallback],
   );
 
-  const [tab, setTab] = useState<DetectionsTab>('rules');
-  const [search, setSearch] = useState('');
-  const [language, setLanguage] = useState<DetectionLanguage | 'all'>('all');
-  const [enabledFilter, setEnabledFilter] = useState<'all' | 'on' | 'off'>(
-    'all',
-  );
-
   // Selection state for bulk operations. We keep it as a Set so we can
   // do O(1) `has()` checks while rendering each rule card.
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkPending, setBulkPending] = useState(false);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rules.filter((r) => {
-      if (language !== 'all' && r.language !== language) return false;
-      if (enabledFilter === 'on' && !r.enabled) return false;
-      if (enabledFilter === 'off' && r.enabled) return false;
-      if (!q) return true;
-      const hay = [
-        r.name,
-        r.description ?? '',
-        ...(r.tags ?? []),
-        ...(r.mitre ?? []),
-      ]
-        .join(' ')
-        .toLowerCase();
-      return hay.includes(q);
-    });
-  }, [rules, search, language, enabledFilter]);
+  // The server applies search and enabled-state; the language control is the
+  // only filter left on the client, because it is a display choice over a
+  // page rather than a query.
+  const filtered = useMemo(
+    () =>
+      language === 'all'
+        ? rules
+        : rules.filter((r) => r.language === language),
+    [rules, language],
+  );
+
+  // Totals. `total` counts what matched the filters; `libraryTotal` counts
+  // the library. Both are stated because they answer different questions and
+  // the page previously answered neither — it showed "No detection rules
+  // yet" beside a tile crediting the project with 2,511.
+  const matchedTotal = data?.total ?? filtered.length;
+  const libraryTotal = (data?.builtinTotal ?? 0) + (data?.customTotal ?? 0);
+  const pageCount = Math.max(1, Math.ceil(matchedTotal / PAGE_SIZE));
+  const catalogError = data?.catalogError ?? null;
+  const missingArtefacts = data?.missingArtefacts ?? [];
 
   // ─── Selection helpers ─────────────────────────────────────────────────────
 
@@ -330,15 +365,12 @@ export function DetectionsView() {
       if (updatedCount > 0) {
         toast.success(
           `${updatedCount} rule${updatedCount === 1 ? '' : 's'} ${enabled ? 'enabled' : 'disabled'}` +
-            (skippedCount > 0
-              ? ` — ${skippedCount} built-in or unknown skipped`
-              : ''),
+            (skippedCount > 0 ? ` — ${skippedCount} not found` : ''),
         );
       } else if (skippedCount > 0) {
-        toast(
-          `No rules updated — ${skippedCount} were built-in or unknown.`,
-          { icon: 'ℹ️' },
-        );
+        toast(`No rules updated — ${skippedCount} were not found.`, {
+          icon: 'ℹ️',
+        });
       }
       clearSelection();
       mutate();
@@ -458,6 +490,7 @@ export function DetectionsView() {
               className="rounded-md border border-gray-800 bg-gray-950 px-3 py-2 text-sm text-gray-300 outline-none focus:border-blue-500/60"
             >
               <option value="all">All languages</option>
+              <option value="aisoc-match">Engine (compiled)</option>
               <option value="sigma">Sigma</option>
               <option value="yara">YARA</option>
               <option value="kql">KQL</option>
@@ -525,6 +558,37 @@ export function DetectionsView() {
             </div>
           )}
 
+          {/* What the library holds, and what the filters matched. Two
+              different questions: the page used to answer neither, printing
+              "No detection rules yet" beside a tile crediting 2,511 rules. */}
+          {!isLoading && !error && (
+            <p className="px-1 text-xs text-gray-500">
+              {matchedTotal.toLocaleString()} matching
+              {libraryTotal > 0 && (
+                <>
+                  {' '}
+                  of {libraryTotal.toLocaleString()} in the library —{' '}
+                  {(data?.builtinTotal ?? 0).toLocaleString()} loaded by the
+                  detection engine,{' '}
+                  {(data?.customTotal ?? 0).toLocaleString()} authored here
+                </>
+              )}
+            </p>
+          )}
+
+          {/* A partial read is reported as partial. Publishing the smaller
+              total as if it were the whole corpus is the same mistake in a
+              quieter costume. */}
+          {missingArtefacts.length > 0 && (
+            <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-2 text-xs text-amber-200">
+              Part of the compiled corpus is missing from this deployment (
+              {missingArtefacts.join(', ')}), so the library below is
+              incomplete. Rebuild the API image from a tree where{' '}
+              <code>scripts/sync_packaged_detection_rulesets.py --check</code>{' '}
+              passes.
+            </div>
+          )}
+
           {/* Body */}
           {isLoading ? (
             <div className="space-y-3">
@@ -532,6 +596,14 @@ export function DetectionsView() {
                 <Skeleton key={i} className="h-24 w-full" />
               ))}
             </div>
+          ) : catalogError ? (
+            // The engine's rules exist; this deployment cannot read them.
+            // Saying "no rules" here would repeat the defect the surface was
+            // reported for, in the one case where it is most misleading.
+            <EmptyState
+              title="The built-in rule library could not be read"
+              description={`The detection engine still loads and fires these rules — this service cannot see the compiled corpus to list them. ${catalogError}`}
+            />
           ) : error && !useFallback ? (
             // "No detection rules yet" on a failed read tells an operator
             // their coverage is zero and invites them to author one. The
@@ -542,30 +614,21 @@ export function DetectionsView() {
               description="The detection service did not answer. This is not a report that no rules exist."
             />
           ) : filtered.length === 0 ? (
-            rules.length === 0 ? (
+            libraryTotal === 0 ? (
+              // Only reachable when the library really is empty: the compiled
+              // corpus read fine and held nothing, and the tenant has authored
+              // nothing. A default install ships 2,586 engine rules, so this
+              // now means what it says.
               <EmptyState
                 title="No detection rules yet"
-                description="Author your first detection in Sigma, KQL, or EQL — or import the AiSOC starter pack to bootstrap coverage across the MITRE ATT&CK matrix."
+                description="This deployment carries no compiled detection corpus and no rules have been authored here. Write one in Sigma, KQL, or EQL to start building coverage."
                 action={
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Link
-                      href="/detection/new"
-                      className="rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
-                    >
-                      Create a rule
-                    </Link>
-                    <button
-                      type="button"
-                      disabled
-                      title="Starter pack import is planned for v1.1"
-                      className="rounded-md border border-gray-700 px-4 py-2 text-sm text-gray-500 cursor-not-allowed select-none"
-                    >
-                      Import starter pack
-                    </button>
-                    <span className="text-xs font-medium rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 px-2 py-0.5">
-                      Planned for v1.1
-                    </span>
-                  </div>
+                  <Link
+                    href="/detection/new"
+                    className="rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-600"
+                  >
+                    Create a rule
+                  </Link>
                 }
               />
             ) : (
@@ -620,6 +683,35 @@ export function DetectionsView() {
                   </li>
                 ))}
               </ul>
+
+              {pageCount > 1 && (
+                <nav
+                  className="flex items-center justify-between gap-3 px-1 text-xs text-gray-400"
+                  aria-label="Rule library pages"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    disabled={page === 0}
+                    className="rounded-md border border-gray-800 px-3 py-1.5 text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <span>
+                    Page {page + 1} of {pageCount.toLocaleString()}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPage((p) => Math.min(pageCount - 1, p + 1))
+                    }
+                    disabled={page >= pageCount - 1}
+                    className="rounded-md border border-gray-800 px-3 py-1.5 text-gray-300 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </nav>
+              )}
             </>
           )}
 
@@ -721,7 +813,24 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
                 {rule.severity}
               </span>
             )}
+            {rule.isBuiltin && (
+              <span
+                title="Loaded and evaluated by the detection engine. Disabling it here stops the engine firing it for this tenant."
+                className="rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-300 ring-1 ring-sky-500/30"
+              >
+                Built-in
+              </span>
+            )}
           </div>
+
+          {rule.sourceId && (
+            // The id an alert carries. An analyst reading "detection:
+            // det-cloud-063" off an alert searches for exactly this string,
+            // so it belongs on the card rather than one click deeper.
+            <p className="mt-1 font-mono text-[11px] text-gray-500">
+              {rule.sourceId}
+            </p>
+          )}
 
           {rule.description && (
             <p className="mt-1 text-sm text-gray-400 line-clamp-2">
@@ -752,16 +861,23 @@ function RuleCard({ rule, selected, onSelect, onToggle }: RuleCardProps) {
         {/* Right meta + toggle */}
         <div className="flex flex-col items-end gap-2">
           <div className="text-right text-xs text-gray-500">
-            <div>
-              <span className="font-mono text-gray-300">
-                {rule.hitCount ?? 0}
-              </span>{' '}
-              hits
-            </div>
+            {!rule.isBuiltin && (
+              <div>
+                <span className="font-mono text-gray-300">
+                  {rule.hitCount ?? 0}
+                </span>{' '}
+                hits
+              </div>
+            )}
             <div className="mt-0.5" suppressHydrationWarning>
               {rule.lastTriggeredAt
                 ? `last fired ${formatDistanceToNow(new Date(rule.lastTriggeredAt), { addSuffix: true })}`
-                : 'no recent hits'}
+                : rule.isBuiltin
+                  ? // The engine writes alerts, not a hit counter on this
+                    // table, so "no recent hits" would be a measurement
+                    // nobody took rather than an observation.
+                    'hits not counted here'
+                  : 'no recent hits'}
             </div>
           </div>
           <Toggle enabled={rule.enabled} onChange={onToggle} />

@@ -39,14 +39,19 @@ import json
 import subprocess
 import sys
 import uuid
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import pytest
 import pytest_asyncio
-from app.db.database import Base
+from app.api.v1.deps import CurrentUser, get_current_user
+from app.api.v1.endpoints.detection_compat import router as compat_router
+from app.api.v1.endpoints.detection_rules import router as rules_router
+from app.db.database import Base, get_db
 from app.models.detection_rule import DetectionRule
+from app.models.mssp import MSSPRuleOverride, MSSPRulePackAssignment, MSSPRulePackRule
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -94,24 +99,56 @@ def _uuid_sqlite(_type_, _compiler_, **_kw_):
     return "CHAR(36)"
 
 
-@dataclass
-class _Caller:
-    """The authenticated principal, with the attributes the routes read."""
-
-    tenant_id: uuid.UUID = TENANT
-    user_id: uuid.UUID = ACTOR
-    email: str = "analyst@example.com"
+def _caller() -> CurrentUser:
+    """A real principal, so `require_permission` runs rather than being bypassed."""
+    return CurrentUser(user_id=ACTOR, tenant_id=TENANT, role="admin", email="analyst@example.com")
 
 
 @pytest_asyncio.fixture
-async def session():
+async def session_factory():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all, tables=[DetectionRule.__table__])
-    maker = async_sessionmaker(engine, expire_on_commit=False)
-    async with maker() as s:
-        yield s
+        await conn.run_sync(
+            Base.metadata.create_all,
+            tables=[DetectionRule.__table__, MSSPRuleOverride.__table__, MSSPRulePackAssignment.__table__, MSSPRulePackRule.__table__],
+        )
+    yield async_sessionmaker(engine, expire_on_commit=False)
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def session(session_factory):
+    async with session_factory() as s:
+        yield s
+
+
+@pytest_asyncio.fixture
+async def client(session_factory):
+    """The real routers behind a real ASGI app.
+
+    Calling a handler as a function leaves every `Query(...)` default
+    unresolved, so a filter reads a `Query` object instead of its value and
+    the test grades a code path the server never takes. It cost one round
+    here: `source in ("all", "builtin")` was False against the sentinel and
+    the list came back empty for a reason production does not have.
+    """
+    app = FastAPI()
+    app.include_router(compat_router, prefix="/api/v1")
+    app.include_router(rules_router, prefix="/api/v1")
+
+    async def _override_db():
+        async with session_factory() as db:
+            try:
+                yield db
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
+
+    app.dependency_overrides[get_db] = _override_db
+    app.dependency_overrides[get_current_user] = _caller
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://rules.test") as http:
+        yield http
 
 
 def _artefact_ids(path: Path) -> set[str]:
@@ -184,10 +221,15 @@ def _fusion_build_overlay():
     without the package-name collision. Loading the real function is the whole
     point: a local re-implementation of the overlay would agree with itself.
     """
+    name = "fusion_tenant_overlay_under_test"
     path = REPO / "services" / "fusion" / "app" / "services" / "tenant_overlay.py"
-    spec = importlib.util.spec_from_file_location("fusion_tenant_overlay_under_test", path)
+    spec = importlib.util.spec_from_file_location(name, path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    # Registered before execution: the module uses `from __future__ import
+    # annotations`, so `@dataclass` resolves its string annotations through
+    # `sys.modules[cls.__module__]` and raises on a module that is not there.
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -247,6 +289,7 @@ class TestTheCatalogueIsTheLoadedCorpus:
         loaded = _fusion_loaded_ids()
         if loaded is None:
             pytest.skip("fusion's runtime dependencies are not installed in this interpreter; counts above still graded")
+        assert loaded is not None
 
         fusion_ids = set(loaded["stateless"]) | set(loaded["windowed"]) | set(loaded["sequence"])
         catalogue_ids = {rule.source_id for rule in builtin_rules()}
@@ -266,38 +309,66 @@ class TestTheCatalogueIsTheLoadedCorpus:
 
 
 class TestTheConsoleReadsTheLoadedCorpus:
-    async def test_detection_rules_reports_the_real_total(self, session) -> None:
-        from app.api.v1.endpoints.detection_compat import list_rules_compat
+    async def test_detection_rules_reports_the_real_total(self, client) -> None:
+        body = (await client.get("/api/v1/detection/rules")).json()
+        assert body["total"] == FUSION_LOADED_TOTAL
+        assert body["builtinTotal"] == FUSION_LOADED_TOTAL
+        assert body["rules"], "the page renders from `rules`; a true total over an empty page is still an empty page"
+        assert body["catalogError"] is None
+        assert body["missingArtefacts"] == []
 
-        response = await list_rules_compat(current_user=_Caller(), db=session)
-        assert response.total == FUSION_LOADED_TOTAL
-        assert response.rules, "the page renders from `rules`; a true total over an empty page is still an empty page"
+    async def test_the_page_is_bounded_and_the_total_is_not(self, client) -> None:
+        """2,586 rules serialised is several MB; the header count must still be true."""
+        body = (await client.get("/api/v1/detection/rules", params={"limit": 25})).json()
+        assert len(body["rules"]) == 25
+        assert body["returned"] == 25
+        assert body["total"] == FUSION_LOADED_TOTAL
 
-    async def test_canonical_rules_route_reports_the_real_total(self, session) -> None:
-        from app.api.v1.endpoints.detection_rules import list_rules
+    async def test_filters_run_server_side(self, client) -> None:
+        body = (await client.get("/api/v1/detection/rules", params={"search": "SQL Injection", "limit": 5})).json()
+        assert 0 < body["total"] < FUSION_LOADED_TOTAL
+        assert all("sql injection" in r["name"].lower() or "sql injection" in (r["description"] or "").lower() for r in body["rules"])
 
-        rules = await list_rules(current_user=_Caller(), db=session, limit=5)
+    async def test_canonical_rules_route_returns_built_ins(self, client) -> None:
+        response = await client.get("/api/v1/rules", params={"limit": 5})
+        assert response.status_code == 200
+        rules = response.json()
         assert len(rules) == 5
-        assert all(r.is_builtin for r in rules)
+        assert all(r["is_builtin"] for r in rules)
+        assert all(r["source_id"] for r in rules)
+        assert all(r["engine"] == "aisoc-engine" for r in rules)
+        assert response.headers["X-Total-Count"] == str(FUSION_LOADED_TOTAL)
+
+    async def test_an_unscored_rule_says_so_instead_of_reporting_a_confidence(self, client) -> None:
+        rules = (await client.get("/api/v1/rules", params={"limit": 5})).json()
+        assert all(r["confidence_measured"] is False for r in rules)
+
+        confidence = (await client.get("/api/v1/detection/confidence")).json()
+        assert confidence["summary"]["unscored"] == FUSION_LOADED_TOTAL
+        assert confidence["summary"]["totalRules"] == 0, "a mean over placeholders is a number nobody measured"
+
+        drift = (await client.get("/api/v1/detection/drift")).json()
+        assert drift["summary"]["unscored"] == FUSION_LOADED_TOTAL
+        assert drift["entries"] == []
+
+    async def test_coverage_is_drawn_from_the_loaded_corpus(self, client) -> None:
+        coverage = (await client.get("/api/v1/detection/coverage")).json()
+        assert coverage["summary"]["totalRules"] == FUSION_LOADED_TOTAL
+        assert coverage["summary"]["coveredTechniques"] > 100
 
 
 # ── acting on a built-in, end to end into the engine ─────────────────────────
 
 
 class TestDisablingABuiltInReachesTheEngine:
-    async def test_the_stored_row_is_what_fusion_reads(self, session) -> None:
-        from app.api.v1.endpoints.detection_compat import UpdateBody, update_rule_compat
+    async def test_the_stored_row_is_what_fusion_reads(self, client, session) -> None:
         from app.services.builtin_rules import builtin_rules
 
         target = next(r for r in builtin_rules() if r.source_id == "det-application-001")
 
-        updated = await update_rule_compat(
-            rule_id=target.uuid,
-            body=UpdateBody(enabled=False),
-            current_user=_Caller(),
-            db=session,
-        )
-        assert updated.enabled is False
+        response = await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": False})
+        assert response.status_code == 200, response.text
+        assert response.json()["enabled"] is False
 
         row = (await session.execute(select(DetectionRule).where(DetectionRule.id == target.uuid))).scalar_one()
         assert row.tenant_id == TENANT, "a tuning row must belong to the tenant that made it, never to the platform"
@@ -321,15 +392,53 @@ class TestDisablingABuiltInReachesTheEngine:
         )
         assert overlay.suppresses(target.source_id, {}) is not None, "fusion would keep firing the rule the console shows as disabled"
 
-    async def test_a_second_toggle_reuses_the_same_row(self, session) -> None:
-        from app.api.v1.endpoints.detection_compat import UpdateBody, update_rule_compat
+    async def test_a_second_toggle_reuses_the_same_row(self, client, session) -> None:
         from app.services.builtin_rules import builtin_rules
 
         target = next(r for r in builtin_rules() if r.source_id == "det-application-002")
-        caller = _Caller()
         for enabled in (False, True, False):
-            await update_rule_compat(rule_id=target.uuid, body=UpdateBody(enabled=enabled), current_user=caller, db=session)
+            assert (await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": enabled})).status_code == 200
 
         rows: list[Any] = list((await session.execute(select(DetectionRule).where(DetectionRule.id == target.uuid))).scalars().all())
         assert len(rows) == 1
         assert rows[0].status == "inactive"
+
+    async def test_the_library_still_reports_one_entry_for_a_tuned_rule(self, client) -> None:
+        """A stored row beside its compiled twin would list the rule twice."""
+        from app.services.builtin_rules import builtin_rules
+
+        target = next(r for r in builtin_rules() if r.source_id == "det-application-003")
+        await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"enabled": False})
+
+        whole = (await client.get("/api/v1/detection/rules", params={"limit": 1})).json()
+        assert whole["total"] == FUSION_LOADED_TOTAL, "tuning a rule must not grow the library"
+
+        body = (await client.get("/api/v1/detection/rules", params={"search": target.name, "limit": 50})).json()
+        matches = [r for r in body["rules"] if r["sourceId"] == target.source_id]
+        assert len(matches) == 1
+        assert matches[0]["enabled"] is False
+        assert matches[0]["tuned"] is True
+
+    async def test_bulk_toggle_no_longer_skips_every_rule_in_the_product(self, client) -> None:
+        from app.services.builtin_rules import builtin_rules
+
+        targets = [r for r in builtin_rules() if r.ruleset == "windowed_builtin_rules.json"]
+        assert targets, "the Python-resident windowed rules are the ones a brute-force queue is loudest about"
+
+        body = (
+            await client.post(
+                "/api/v1/detection/rules/bulk-toggle",
+                json={"ruleIds": [str(r.uuid) for r in targets], "enabled": False},
+            )
+        ).json()
+        assert body["updated"] == len(targets)
+        assert body["skipped"] == []
+
+    async def test_the_compiled_logic_is_not_editable(self, client) -> None:
+        """Storing an edit the engine will not run is the inverse of #1273."""
+        from app.services.builtin_rules import builtin_rules
+
+        target = next(r for r in builtin_rules() if r.source_id == "det-application-004")
+        response = await client.patch(f"/api/v1/detection/rules/{target.uuid}", json={"body": "{}"})
+        assert response.status_code == 409
+        assert "compiled corpus" in response.json()["detail"]

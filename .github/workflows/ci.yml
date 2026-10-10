@@ -956,6 +956,17 @@ jobs:
         run: |
           python3 scripts/sync_vendored_playbook_packs.py --self-test
           python3 scripts/sync_vendored_playbook_packs.py --check
+      # The same defect, one service over. The fusion engine loads 2,586
+      # detection rules from four artefacts and the console's rule-management
+      # surface could see none of them (#1273), because the API image is built
+      # from `services/api` and `services/fusion/app/data/` is outside that
+      # context. Packaged copies live inside it; this holds them identical to
+      # what the engine runs, in both directions, so the catalogue can never
+      # list a rule the engine does not load.
+      - name: The API image ships the compiled detection corpus
+        run: |
+          python3 scripts/sync_packaged_detection_rulesets.py --self-test
+          python3 scripts/sync_packaged_detection_rulesets.py --check
       - name: Every Stable capability has earned the label
         run: |
           python3 scripts/check_maturity_table.py --self-test

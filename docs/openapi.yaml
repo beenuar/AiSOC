@@ -3213,14 +3213,27 @@ paths:
       tags:
       - detection_rules
       summary: List Rules
-      description: 'List detection rules for the tenant.
+      description: 'List the tenant''s effective detection rules.
 
 
-        Returns the tenant''s own rules, plus optionally platform-wide built-in
+        Three sources, merged: the compiled corpus the fusion engine loads, the
 
-        rules and rules sourced from MSSP-assigned rule packs (with excluded
+        tenant''s own rules, and rules from MSSP-assigned packs (with excluded
 
-        overrides removed).'
+        overrides removed). Before #1273 only the last two were read, and since
+
+        nothing in production has ever written a built-in row, a default install
+
+        answered with an empty list while the engine ran 2,586 rules.
+
+
+        ``X-Total-Count`` carries the number matching the filters, which is not
+
+        the number returned: the response stays a bare array so existing callers
+
+        are unaffected, and the page bound exists because serialising the whole
+
+        library is several megabytes.'
       operationId: list_rules_api_v1_rules_get
       security:
       - HTTPBearer: []
@@ -3255,6 +3268,54 @@ paths:
           type: boolean
           default: true
           title: Include Packs
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          description: Case-insensitive match on name, id, category, tags and techniques.
+          title: Search
+        description: Case-insensitive match on name, id, category, tags and techniques.
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+      - name: mitre
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: MITRE ATT&CK technique id, e.g. T1059.001
+          title: Mitre
+        description: MITRE ATT&CK technique id, e.g. T1059.001
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 2000
+          minimum: 1
+          description: Maximum rules returned. The full library is several MB.
+          default: 200
+          title: Limit
+        description: Maximum rules returned. The full library is several MB.
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response
@@ -3303,7 +3364,8 @@ paths:
       tags:
       - detection_rules
       summary: Get Rule
-      description: Get a detection rule by ID.
+      description: Get a detection rule by ID, stored row first and compiled corpus
+        second.
       operationId: get_rule_api_v1_rules__rule_id__get
       security:
       - HTTPBearer: []
@@ -3332,7 +3394,20 @@ paths:
       tags:
       - detection_rules
       summary: Update Rule
-      description: Update a detection rule (only tenant-owned rules).
+      description: 'Update a tenant-owned rule, or record a tuning decision on a built-in.
+
+
+        A built-in materialises its tenant row on first write, under the rule''s
+
+        own id and carrying ``provenance.source_id`` — the key fusion''s tenant
+
+        overlay joins on — so a status change here reaches the engine within one
+
+        overlay reload. ``rule_body`` is refused on a built-in: the engine loads
+
+        the compiled artefact, so a stored edit would be displayed as applied and
+
+        never run.'
       operationId: update_rule_api_v1_rules__rule_id__patch
       security:
       - HTTPBearer: []
@@ -3506,9 +3581,94 @@ paths:
       tags:
       - detection_rules
       summary: List Rules Compat
-      description: List detection rules visible to the current tenant (built-ins +
-        tenant-owned).
+      description: 'The tenant''s effective rule library: the compiled corpus plus
+        its tuning.
+
+
+        This used to read ``detection_rules`` alone and therefore answered with an
+
+        empty list on every install, while fusion loaded and fired 2,586 rules
+
+        (#1273). The filters and the page bound are not cosmetic: the whole
+
+        library serialised is several megabytes, so an unbounded list would have
+
+        traded an empty page for an unusable one.'
       operationId: list_rules_compat_api_v1_detection_rules_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: search
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            maxLength: 200
+          - type: 'null'
+          title: Search
+      - name: severity
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Severity
+      - name: category
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Category
+      - name: mitre
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: MITRE ATT&CK technique id, e.g. T1059.001
+          title: Mitre
+        description: MITRE ATT&CK technique id, e.g. T1059.001
+      - name: enabled
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: boolean
+          - type: 'null'
+          title: Enabled
+      - name: source
+        in: query
+        required: false
+        schema:
+          enum:
+          - all
+          - builtin
+          - custom
+          type: string
+          default: all
+          title: Source
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 100
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
       responses:
         '200':
           description: Successful Response
@@ -3516,20 +3676,26 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ListResponse'
-      security:
-      - HTTPBearer: []
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
     post:
       tags:
       - detection_rules
       summary: Create Rule Compat
       description: Create a tenant-owned detection rule using the frontend shape.
       operationId: create_rule_compat_api_v1_detection_rules_post
+      security:
+      - HTTPBearer: []
       requestBody:
+        required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateBody'
-        required: true
       responses:
         '201':
           description: Successful Response
@@ -3543,14 +3709,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
-      security:
-      - HTTPBearer: []
   /api/v1/detection/rules/{rule_id}:
     get:
       tags:
       - detection_rules
       summary: Get Rule Compat
-      description: Fetch a single rule by ID in the frontend shape.
+      description: 'Fetch a single rule by ID in the frontend shape.
+
+
+        Resolves a stored row first and the compiled catalogue second, so a
+
+        built-in''s detail page opens without a row having to exist for it. The
+
+        read never creates one: a GET that materialised would put 2,586 rows per
+
+        tenant in a table meant to hold decisions.'
       operationId: get_rule_compat_api_v1_detection_rules__rule_id__get
       security:
       - HTTPBearer: []
@@ -3579,7 +3752,27 @@ paths:
       tags:
       - detection_rules
       summary: Update Rule Compat
-      description: Update a tenant-owned rule using the frontend shape.
+      description: 'Update a tenant-owned rule, or record a tuning decision on a built-in.
+
+
+        A built-in has no row until this point. The first write creates one under
+
+        the rule''s own id, carrying ``provenance.source_id`` — the key fusion''s
+
+        tenant overlay joins on — so disabling a rule in the console stops the
+
+        engine firing it rather than setting a flag nothing reads. Before #1273
+
+        this route answered 404 for every rule the engine was actually running.
+
+
+        The compiled logic itself is not editable here: ``rule_body``,
+
+        ``language`` and ``mitre`` are refused on a built-in rather than silently
+
+        stored, because the engine loads the artefact and would ignore the edit
+
+        while the console displayed it as applied.'
       operationId: update_rule_compat_api_v1_detection_rules__rule_id__patch
       security:
       - HTTPBearer: []
@@ -3682,7 +3875,18 @@ paths:
 
         from *alerts* — this one is what an analyst opens before a tuning
 
-        sprint to answer "which techniques is my rule library blind to?".'
+        sprint to answer "which techniques is my rule library blind to?".
+
+
+        Reads the whole effective library, built-ins included. It previously read
+
+        the ``detection_rules`` table alone and therefore drew an empty heatmap
+
+        over a product shipping ATT&CK mappings for 2,586 loaded rules — the
+
+        strongest possible version of the "blind to everything" answer, and
+
+        wrong.'
       operationId: get_detection_coverage_api_v1_detection_coverage_get
       responses:
         '200':
@@ -3698,14 +3902,25 @@ paths:
       tags:
       - detection_rules
       summary: Bulk Toggle Rules
-      description: 'Enable or disable many tenant-owned rules in one round-trip.
+      description: 'Enable or disable many rules in one round-trip, built-ins included.
 
 
-        Built-in / cross-tenant rules are silently skipped (returned in
+        Built-ins used to be "silently skipped", which on a default install meant
 
-        ``skipped``) so an MSSP analyst toggling a whole category from the UI
+        every rule in the library was skipped: there were no other rules. A
 
-        doesn''t get a 403 just because one of the rules is platform-provided.'
+        built-in now materialises a tenant tuning row on first toggle, exactly as
+
+        the single-rule PATCH does, so selecting a noisy category and turning it
+
+        off reaches the engine.
+
+
+        Ids that match nothing at all are still reported in ``skipped``, because
+
+        an operator who selected forty rules and had one quietly dropped would
+
+        have no way to find out which.'
       operationId: bulk_toggle_rules_api_v1_detection_rules_bulk_toggle_post
       requestBody:
         content:
@@ -3742,7 +3957,12 @@ paths:
 
         on the Detections page so analysts have a single queue to work
 
-        instead of paginating the full library hunting for noise.'
+        instead of paginating the full library hunting for noise.
+
+
+        Built-ins are counted in ``summary.unscored`` rather than judged: none of
+
+        the three heuristics has an input for them.'
       operationId: get_detection_drift_api_v1_detection_drift_get
       responses:
         '200':
@@ -3774,7 +3994,16 @@ paths:
 
         the current confidence/FP-rate columns set by the rule engine and
 
-        operator review on every match.'
+        operator review on every match.
+
+
+        Rules with no recorded confidence are reported as ``summary.unscored``
+
+        and left out of every average, so the histogram describes the rules an
+
+        operator has actually scored rather than being flattened by a library of
+
+        placeholders.'
       operationId: get_detection_confidence_api_v1_detection_confidence_get
       responses:
         '200':
@@ -23093,6 +23322,10 @@ components:
         lowConfidence:
           type: integer
           title: Lowconfidence
+        unscored:
+          type: integer
+          title: Unscored
+          default: 0
       type: object
       required:
       - totalRules
@@ -24855,6 +25088,23 @@ components:
           type: string
           format: date-time
           title: Updated At
+        source_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Source Id
+        confidence_measured:
+          type: boolean
+          title: Confidence Measured
+          default: true
+        tuned:
+          type: boolean
+          title: Tuned
+          default: true
+        engine:
+          type: string
+          title: Engine
+          default: custom
       type: object
       required:
       - id
@@ -24878,6 +25128,21 @@ components:
       - created_at
       - updated_at
       title: DetectionRuleResponse
+      description: "A rule in the tenant's effective library.\n\nFour fields exist\
+        \ to keep a compiled built-in legible without inventing\ndata the compiled\
+        \ corpus does not hold:\n\n``source_id``\n    The engine's own rule id — ``det-cloud-063``,\n\
+        \    ``sigmahq-sigma-002bdb95-…`` — which is what an alert carries and\n \
+        \   therefore what an analyst searches for. ``None`` for a tenant's own\n\
+        \    rule, which the engine does not load.\n``confidence_measured``\n    ``False``\
+        \ when ``confidence`` is a placeholder rather than a\n    measurement. The\
+        \ compiled artefacts record a rule's logic, severity\n    and ATT&CK mapping\
+        \ and nothing operational, so an untuned built-in\n    has no confidence,\
+        \ no FP rate and no trigger history. The two panels\n    that average those\
+        \ columns exclude such rules and publish the count.\n``tuned``\n    Whether\
+        \ this tenant has stored any decision about the rule.\n``engine``\n    ``aisoc-engine``\
+        \ when fusion loads and evaluates this rule,\n    ``custom`` when it does\
+        \ not. Disabling the two means different\n    things and a reader has to be\
+        \ able to tell them apart."
     DisableRequest:
       properties:
         code:
@@ -25078,6 +25343,10 @@ components:
         stale:
           type: integer
           title: Stale
+        unscored:
+          type: integer
+          title: Unscored
+          default: 0
       type: object
       required:
       - total
@@ -26821,6 +27090,23 @@ components:
           type: integer
           title: Hitcount
           default: 0
+        isBuiltin:
+          type: boolean
+          title: Isbuiltin
+          default: false
+        sourceId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Sourceid
+        tuned:
+          type: boolean
+          title: Tuned
+          default: false
+        timestampsFromArtefact:
+          type: boolean
+          title: Timestampsfromartefact
+          default: false
       type: object
       required:
       - id
@@ -28748,6 +29034,36 @@ components:
         total:
           type: integer
           title: Total
+        builtinTotal:
+          type: integer
+          title: Builtintotal
+          default: 0
+        customTotal:
+          type: integer
+          title: Customtotal
+          default: 0
+        returned:
+          type: integer
+          title: Returned
+          default: 0
+        offset:
+          type: integer
+          title: Offset
+          default: 0
+        limit:
+          type: integer
+          title: Limit
+          default: 0
+        catalogError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Catalogerror
+        missingArtefacts:
+          items:
+            type: string
+          type: array
+          title: Missingartefacts
       type: object
       required:
       - rules

@@ -94,6 +94,14 @@ jobs:
       - name: Verify exported windowed ruleset is current
         run: python3 scripts/export_windowed_ruleset.py --check
 
+      # Re-exporting any of the three artefacts above without re-syncing the
+      # copy inside the API's Docker build context would leave the rule
+      # catalogue describing a corpus the engine no longer runs. Wired here as
+      # well as in ci.yml because this is the workflow a corpus change
+      # triggers.
+      - name: Verify the API's packaged copy of the corpus is current
+        run: python3 scripts/sync_packaged_detection_rulesets.py --check
+
       # 74 rules named a sliding-window counter no source emits, so each read
       # None on its first clause and could never fire while still counting
       # toward the published executable total. Every one is now either

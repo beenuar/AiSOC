@@ -4,13 +4,21 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import and_, or_, select, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.detection_rule import DetectionRule
 from app.services.backtest import backtest_rule, fetch_lake_events
+from app.services.builtin_rules import builtin_by_uuid
+from app.services.detection_catalogue import (
+    CatalogueFilters,
+    catalogue_page,
+    materialise_builtin,
+    resolve_rule,
+    row_view,
+)
 from app.services.mssp_rule_resolver import resolve_effective_rules
 from app.services.rule_engine import execute_rule, run_hunt
 
@@ -37,6 +45,30 @@ class BacktestResponse(BaseModel):
 
 
 class DetectionRuleResponse(BaseModel):
+    """A rule in the tenant's effective library.
+
+    Four fields exist to keep a compiled built-in legible without inventing
+    data the compiled corpus does not hold:
+
+    ``source_id``
+        The engine's own rule id — ``det-cloud-063``,
+        ``sigmahq-sigma-002bdb95-…`` — which is what an alert carries and
+        therefore what an analyst searches for. ``None`` for a tenant's own
+        rule, which the engine does not load.
+    ``confidence_measured``
+        ``False`` when ``confidence`` is a placeholder rather than a
+        measurement. The compiled artefacts record a rule's logic, severity
+        and ATT&CK mapping and nothing operational, so an untuned built-in
+        has no confidence, no FP rate and no trigger history. The two panels
+        that average those columns exclude such rules and publish the count.
+    ``tuned``
+        Whether this tenant has stored any decision about the rule.
+    ``engine``
+        ``aisoc-engine`` when fusion loads and evaluates this rule,
+        ``custom`` when it does not. Disabling the two means different
+        things and a reader has to be able to tell them apart.
+    """
+
     id: uuid.UUID
     tenant_id: uuid.UUID | None
     name: str
@@ -57,6 +89,10 @@ class DetectionRuleResponse(BaseModel):
     version: int
     created_at: datetime
     updated_at: datetime
+    source_id: str | None = None
+    confidence_measured: bool = True
+    tuned: bool = True
+    engine: str = "custom"
 
     model_config = {"from_attributes": True}
 
@@ -88,16 +124,31 @@ class UpdateRuleRequest(BaseModel):
 async def list_rules(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
     db: DBSession,
+    response: Response = None,  # type: ignore[assignment]  # FastAPI injects; default keeps direct calls testable
     category: str | None = Query(default=None),
     rule_language: str | None = Query(default=None),
     include_builtin: bool = Query(default=True),
     include_packs: bool = Query(default=True),
+    search: str | None = Query(
+        default=None, max_length=200, description="Case-insensitive match on name, id, category, tags and techniques."
+    ),
+    severity: str | None = Query(default=None),
+    mitre: str | None = Query(default=None, description="MITRE ATT&CK technique id, e.g. T1059.001"),
+    limit: int = Query(default=200, ge=1, le=2000, description="Maximum rules returned. The full library is several MB."),
+    offset: int = Query(default=0, ge=0),
 ) -> list[DetectionRuleResponse]:
-    """List detection rules for the tenant.
+    """List the tenant's effective detection rules.
 
-    Returns the tenant's own rules, plus optionally platform-wide built-in
-    rules and rules sourced from MSSP-assigned rule packs (with excluded
-    overrides removed).
+    Three sources, merged: the compiled corpus the fusion engine loads, the
+    tenant's own rules, and rules from MSSP-assigned packs (with excluded
+    overrides removed). Before #1273 only the last two were read, and since
+    nothing in production has ever written a built-in row, a default install
+    answered with an empty list while the engine ran 2,586 rules.
+
+    ``X-Total-Count`` carries the number matching the filters, which is not
+    the number returned: the response stays a bare array so existing callers
+    are unaffected, and the page bound exists because serialising the whole
+    library is several megabytes.
     """
     from app.models.mssp import (
         MSSPRuleOverride,
@@ -107,16 +158,7 @@ async def list_rules(
 
     tid = current_user.tenant_id
 
-    conditions = [DetectionRule.tenant_id == tid]
-
-    if include_builtin:
-        conditions = [
-            or_(
-                DetectionRule.tenant_id == tid,
-                and_(DetectionRule.tenant_id.is_(None), DetectionRule.is_builtin.is_(True)),
-            )
-        ]
-
+    pack_ids: set[uuid.UUID] = set()
     if include_packs:
         pack_rule_ids = (
             select(MSSPRulePackRule.rule_id)
@@ -126,24 +168,48 @@ async def list_rules(
                 MSSPRulePackAssignment.enabled.is_(True),
             )
         )
-        conditions = [
-            or_(
-                *conditions,
-                DetectionRule.id.in_(pack_rule_ids),
+        pack_ids = set((await db.execute(pack_rule_ids)).scalars().all())
+
+    excluded = set(
+        (
+            await db.execute(
+                select(MSSPRuleOverride.rule_id).where(
+                    MSSPRuleOverride.child_tenant_id == tid,
+                    MSSPRuleOverride.action == "exclude",
+                )
             )
-        ]
+        )
+        .scalars()
+        .all()
+    )
 
-    excluded_ids = select(MSSPRuleOverride.rule_id).where(MSSPRuleOverride.child_tenant_id == tid, MSSPRuleOverride.action == "exclude")
-    filters = [and_(*conditions), DetectionRule.id.notin_(excluded_ids)]
+    page = await catalogue_page(
+        db,
+        tid,
+        filters=CatalogueFilters(
+            search=search,
+            severity=severity,
+            category=category,
+            rule_language=rule_language,
+            mitre=mitre,
+            include_builtin=include_builtin,
+        ),
+    )
 
-    if category:
-        filters.append(DetectionRule.category == category)
-    if rule_language:
-        filters.append(DetectionRule.rule_language == rule_language)
+    views = [v for v in page.rules if v.id not in excluded]
+    if pack_ids:
+        # A pack rule belongs to the parent tenant, so it is outside the
+        # catalogue's own tenant scope and is fetched by id.
+        pack_rows = (await db.execute(select(DetectionRule).where(DetectionRule.id.in_(pack_ids - excluded)))).scalars().all()
+        known = {v.id for v in views}
+        views.extend(row_view(row) for row in pack_rows if row.id not in known)
+        views.sort(key=lambda v: (v.is_builtin, v.name.lower(), str(v.id)))
 
-    result = await db.execute(select(DetectionRule).where(and_(*filters)).order_by(DetectionRule.name))
-    rules = result.scalars().all()
-    return [DetectionRuleResponse.model_validate(r) for r in rules]
+    if response is not None:
+        response.headers["X-Total-Count"] = str(len(views))
+
+    window = views[offset : offset + limit]
+    return [DetectionRuleResponse.model_validate(v) for v in window]
 
 
 @router.post("", response_model=DetectionRuleResponse, status_code=status.HTTP_201_CREATED)
@@ -179,20 +245,11 @@ async def get_rule(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
     db: DBSession,
 ) -> DetectionRuleResponse:
-    """Get a detection rule by ID."""
-    result = await db.execute(
-        select(DetectionRule).where(
-            DetectionRule.id == rule_id,
-            or_(
-                DetectionRule.tenant_id == current_user.tenant_id,
-                DetectionRule.tenant_id.is_(None),
-            ),
-        )
-    )
-    rule = result.scalar_one_or_none()
-    if rule is None:
+    """Get a detection rule by ID, stored row first and compiled corpus second."""
+    view = await resolve_rule(db, current_user.tenant_id, rule_id)
+    if view is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
-    return DetectionRuleResponse.model_validate(rule)
+    return DetectionRuleResponse.model_validate(view)
 
 
 @router.patch("/{rule_id}", response_model=DetectionRuleResponse)
@@ -202,7 +259,15 @@ async def update_rule(
     current_user: Annotated[AuthUser, Depends(require_permission("rules:write"))],
     db: DBSession,
 ) -> DetectionRuleResponse:
-    """Update a detection rule (only tenant-owned rules)."""
+    """Update a tenant-owned rule, or record a tuning decision on a built-in.
+
+    A built-in materialises its tenant row on first write, under the rule's
+    own id and carrying ``provenance.source_id`` — the key fusion's tenant
+    overlay joins on — so a status change here reaches the engine within one
+    overlay reload. ``rule_body`` is refused on a built-in: the engine loads
+    the compiled artefact, so a stored edit would be displayed as applied and
+    never run.
+    """
     result = await db.execute(
         select(DetectionRule).where(
             DetectionRule.id == rule_id,
@@ -211,9 +276,26 @@ async def update_rule(
     )
     rule = result.scalar_one_or_none()
     if rule is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Rule not found or cannot be modified",
+        builtin = builtin_by_uuid(rule_id)
+        if builtin is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Rule not found or cannot be modified",
+            )
+        if request.rule_body is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "rule_body cannot be changed on a built-in rule: the detection engine loads it from the compiled "
+                    "corpus, so the edit would be stored and never applied."
+                ),
+            )
+        rule = await materialise_builtin(
+            db,
+            builtin,
+            tenant_id=current_user.tenant_id,
+            actor_id=current_user.user_id,
+            actor_email=current_user.email,
         )
 
     updates: dict = {}
@@ -221,6 +303,8 @@ async def update_rule(
         val = getattr(request, field, None)
         if val is not None:
             updates[field] = val
+    if updates:
+        updates["author"] = current_user.email or str(current_user.user_id)
 
     if updates:
         updates["updated_at"] = datetime.now(UTC)

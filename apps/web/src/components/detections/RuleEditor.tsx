@@ -28,7 +28,15 @@ const MonacoEditor = dynamic(() => import('@monaco-editor/react'), {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const LANGS: { id: DetectionLanguage; label: string; monaco: string }[] = [
+/**
+ * The languages this editor can author in. `aisoc-match` is deliberately not
+ * one: it is the compiled `match_when` spec the detection engine loads from
+ * its artefact, so there is no starter body to offer and nothing here can
+ * change it.
+ */
+type AuthorableLanguage = Exclude<DetectionLanguage, 'aisoc-match'>;
+
+const LANGS: { id: AuthorableLanguage; label: string; monaco: string }[] = [
   { id: 'sigma', label: 'Sigma', monaco: 'yaml' },
   { id: 'yara', label: 'YARA', monaco: 'plaintext' },
   { id: 'kql', label: 'KQL', monaco: 'sql' },
@@ -39,7 +47,7 @@ const LANGS: { id: DetectionLanguage; label: string; monaco: string }[] = [
 
 const SEVERITIES: AlertSeverity[] = ['low', 'medium', 'high', 'critical'];
 
-const SAMPLE_BODIES: Record<DetectionLanguage, string> = {
+const SAMPLE_BODIES: Record<AuthorableLanguage, string> = {
   sigma: `title: My new detection
 id: aisoc-rule-new
 status: experimental
@@ -189,6 +197,14 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
     [language],
   );
 
+  // A built-in's logic is compiled into the artefact the detection engine
+  // loads, so the editor must not offer to change it: a stored edit would be
+  // displayed as applied and never run — the inverse of the defect that made
+  // this library invisible in the first place. Status, severity, description
+  // and tags remain editable, and those are what tuning a built-in means.
+  const isBuiltin = Boolean(data?.isBuiltin);
+  const logicIsReadOnly = mode === 'edit' && isBuiltin;
+
   // Loading state for edit
   if (mode === 'edit' && isLoading) {
     return (
@@ -219,7 +235,7 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
 
   // ─── Handlers ──────────────────────────────────────────────────────────────
 
-  const handleLanguageChange = (next: DetectionLanguage) => {
+  const handleLanguageChange = (next: AuthorableLanguage) => {
     // If body still matches the previous sample, swap to new sample
     if (Object.values(SAMPLE_BODIES).includes(body)) {
       setBody(SAMPLE_BODIES[next]);
@@ -323,12 +339,15 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
     const payload: Partial<DetectionRule> = {
       name: name.trim(),
       description: description.trim() || undefined,
-      language,
-      body,
       enabled,
       severity,
       tags: tags.length ? tags : undefined,
-      mitre: mitre.length ? mitre : undefined,
+      // The compiled logic, its language and its ATT&CK mapping come from the
+      // artefact the engine loads. Sending them for a built-in is refused by
+      // the API rather than stored, so the editor does not offer them.
+      ...(logicIsReadOnly
+        ? {}
+        : { language, body, mitre: mitre.length ? mitre : undefined }),
     };
 
     try {
@@ -495,7 +514,7 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
         </div>
 
         <div className="flex items-center gap-2">
-          {mode === 'edit' && (
+          {mode === 'edit' && !isBuiltin && (
             <button
               onClick={handleDelete}
               className="rounded-md border border-red-500/30 bg-red-500/5 px-3 py-1.5 text-sm text-red-300 transition-colors hover:bg-red-500/10"
@@ -717,22 +736,45 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
             />
           )}
 
+          {logicIsReadOnly && (
+            <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 px-4 py-3 text-xs text-sky-100">
+              <p className="font-medium">
+                Built-in rule
+                {data?.sourceId ? (
+                  <span className="ml-2 font-mono text-sky-300">
+                    {data.sourceId}
+                  </span>
+                ) : null}
+              </p>
+              <p className="mt-1 text-sky-200/80">
+                The detection engine loads this rule&rsquo;s logic from the
+                compiled corpus, so the body below is read-only — an edit here
+                would be stored and never run. Disabling it, or changing its
+                severity, applies to this tenant and reaches the engine on its
+                next overlay reload.
+              </p>
+            </div>
+          )}
+
           {/* Editor */}
           <div className="overflow-hidden rounded-lg border border-gray-800 bg-[#0d1117]">
             <div className="flex items-center justify-between border-b border-gray-800 px-3 py-2 text-xs text-gray-500">
               <span>
-                {LANGS.find((l) => l.id === language)?.label} • detection logic
+                {LANGS.find((l) => l.id === language)?.label ?? 'Engine'} •
+                detection logic
+                {logicIsReadOnly ? ' (read-only)' : ''}
               </span>
               <span>{body.split('\n').length} lines</span>
             </div>
             <div className="h-[520px]">
               <MonacoEditor
-                language={monacoLang}
+                language={logicIsReadOnly ? 'json' : monacoLang}
                 value={body}
                 onChange={(val) => setBody(val ?? '')}
                 theme="vs-dark"
                 options={{
                   minimap: { enabled: false },
+                  readOnly: logicIsReadOnly,
                   fontSize: 13,
                   fontFamily:
                     'JetBrains Mono, ui-monospace, SFMono-Regular, Menlo, monospace',
@@ -745,8 +787,15 @@ export function RuleEditor({ mode, ruleId }: RuleEditorProps) {
             </div>
           </div>
 
-          {/* Test runner */}
-          <div className="rounded-lg border border-gray-800 bg-gray-900/40">
+          {/* Test runner. Hidden for a built-in: the ad-hoc runner executes
+              Sigma/KQL/EQL/YARA/Lucene/regex, and the engine's compiled
+              `match_when` is none of those — the button would answer
+              "Unsupported rule language" on every click, which is a dead
+              control wearing a working one's clothes. */}
+          <div
+            className="rounded-lg border border-gray-800 bg-gray-900/40"
+            hidden={logicIsReadOnly}
+          >
             <div className="flex items-center justify-between border-b border-gray-800 px-4 py-2.5">
               <div>
                 <h3 className="text-sm font-semibold text-gray-200">

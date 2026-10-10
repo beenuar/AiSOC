@@ -4649,7 +4649,13 @@ export type DetectionLanguage =
   | 'kql'
   | 'eql'
   | 'lucene'
-  | 'regex';
+  | 'regex'
+  /**
+   * The compiled ``match_when`` spec the fusion detection engine evaluates.
+   * Deliberately not one of the six the rule IDE can execute: the body is
+   * read-only and the engine, not the API, is what runs it.
+   */
+  | 'aisoc-match';
 
 export interface DetectionRule {
   id: string;
@@ -4665,6 +4671,54 @@ export interface DetectionRule {
   updatedAt: string;
   lastTriggeredAt?: string;
   hitCount?: number;
+  /**
+   * True when the fusion detection engine loads this rule from the compiled
+   * corpus and evaluates it against live telemetry. A tenant's own rule is
+   * not loaded by the engine, so "disabled" means different things for the
+   * two and the card says which.
+   */
+  isBuiltin?: boolean;
+  /** The engine's rule id (``det-cloud-063``) — what an alert carries. */
+  sourceId?: string | null;
+  /** Whether this tenant has stored any decision about the rule. */
+  tuned?: boolean;
+  /**
+   * ``createdAt``/``updatedAt`` on an untuned built-in are the timestamp of
+   * the compiled artefact this deployment ships, not an authoring date.
+   */
+  timestampsFromArtefact?: boolean;
+}
+
+export interface DetectionRuleListResult {
+  rules: DetectionRule[];
+  /** Rules matching the request's filters — not the number returned. */
+  total: number;
+  /** The library before filters, split by origin. */
+  builtinTotal: number;
+  customTotal: number;
+  returned: number;
+  offset: number;
+  limit: number;
+  /**
+   * Set when the compiled corpus could not be read at all. Rendered as a
+   * failure, never as "no rules exist": telling an operator their coverage
+   * is zero when a file is merely unreachable is the defect this surface was
+   * reported for.
+   */
+  catalogError: string | null;
+  /** Artefacts that resolved nowhere while others did. */
+  missingArtefacts: string[];
+}
+
+export interface DetectionRuleListParams {
+  search?: string;
+  severity?: string;
+  category?: string;
+  mitre?: string;
+  enabled?: boolean;
+  source?: 'all' | 'builtin' | 'custom';
+  limit?: number;
+  offset?: number;
 }
 
 // ─── Detection management UI (WS-B3) ─────────────────────────────────────────
@@ -4717,6 +4771,13 @@ export interface DetectionDriftSummary {
   highFpRate: number;
   lowConfidence: number;
   stale: number;
+  /**
+   * Rules the drift heuristics cannot judge. Every one of them reads a
+   * column only operator review and the rule IDE write, and the compiled
+   * corpus records none, so built-ins are counted here rather than filed as
+   * "low confidence, stale".
+   */
+  unscored?: number;
 }
 
 export interface DetectionDrift {
@@ -4769,6 +4830,12 @@ export interface ConfidenceSummary {
   medianConfidence: number;
   /** Rules below the drift low-confidence threshold (server side: 60). */
   lowConfidence: number;
+  /**
+   * Rules excluded from every figure above because no confidence has ever
+   * been recorded for them. Rendered beside the averages so a mean over
+   * three rules is not read as a mean over the whole library.
+   */
+  unscored?: number;
 }
 
 export interface DetectionConfidence {
@@ -4792,10 +4859,24 @@ export interface DetectionBacktestResult {
 }
 
 export const detectionApi = {
-  list: () =>
-    request<{ rules: DetectionRule[]; total: number }>(
-      '/api/v1/detection/rules',
-    ),
+  /**
+   * The tenant's effective rule library: the compiled corpus the engine runs
+   * plus whatever this tenant has tuned. Filters and paging are server-side
+   * because the library is 2,586 rules on a default install and serialising
+   * all of it is several megabytes.
+   */
+  list: (params: DetectionRuleListParams = {}) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== null && value !== '') {
+        query.set(key, String(value));
+      }
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return request<DetectionRuleListResult>(
+      `/api/v1/detection/rules${suffix}`,
+    );
+  },
 
   get: (id: string) => request<DetectionRule>(`/api/v1/detection/rules/${id}`),
 

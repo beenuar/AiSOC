@@ -50,6 +50,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   absent verdict counts as *not* auto-executing, because inferring one from
   whatever else is on the row is how this happened the first time.
 
+- **Rule management showed 0 rules while the detection engine ran 2,586 of
+  them** ([#1273](https://github.com/beenuar/AiSOC/issues/1273)). `/detection`
+  rendered "No detection rules yet", `GET /api/v1/rules` answered `[]`,
+  `GET /api/v1/detection/rules` answered `{"rules":[],"total":0}` and the MCP
+  tool `aisoc_query_detections` returned nothing — on a stack that was loading
+  741 + 1,770 stateless rules, 73 windowed rules and 2 sequence rules and
+  firing them at the operator. Every one of those readers queries the Postgres
+  `detection_rules` table, and **nothing in production has ever written a
+  built-in row into it**; `tenant_id` is `NOT NULL` in every migration since
+  `001_init.sql`, so the platform-wide row they look for cannot be inserted at
+  all. The rules that were alerting could not be viewed, disabled or tuned.
+
+  Two halves, and fixing either alone leaves the surface broken:
+
+  - **Packaging.** The compiled artefacts live under
+    `services/fusion/app/data/`, and the API image is built with
+    `services/api` as its Docker context — so no handler could read them in a
+    container however it was written. This is the defect discussion #374
+    reported for `marketplace/index.json`, and it takes the same fix:
+    `scripts/sync_packaged_detection_rulesets.py` writes byte-identical copies
+    into `services/api/app/data/detections/` and `--check` holds them
+    identical in both directions, wired into `ci.yml` and
+    `validate-detections.yml`. Three windowed rules are declared in fusion's
+    Python rather than in any artefact — which is why the engine runs 73
+    windowed rules against a file holding 72 — and are exported alongside by
+    reading the declaration with `ast`, so the published corpus counts are
+    untouched.
+  - **Reading and acting.** `app/services/builtin_rules.py` resolves the
+    corpus and `app/services/detection_catalogue.py` merges it with the
+    tenant's stored tuning, which is what both list routes, both detail
+    routes and `/detection/coverage` now read. Built-ins are **not** seeded
+    into Postgres: the artefact stays the single source of truth for what
+    runs. A built-in materialises a tenant row on first write, under a
+    deterministic UUIDv5 of its engine id and carrying
+    `provenance.source_id` — the key `services/fusion/.../tenant_overlay.py`
+    already joins on — so disabling a rule in the console stops the engine
+    firing it within one 30-second overlay reload. Bulk toggle no longer
+    "silently skips built-ins", which on a default install meant skipping
+    every rule in the product.
+
+  Three honesty consequences, each tested: a built-in's compiled body is
+  read-only and the API refuses an edit to it with 409 rather than storing a
+  change the engine will not run; `confidence`, false-positive rate and hit
+  history are absent from the artefacts, so they travel with
+  `confidence_measured: false` and the Confidence and Drift panels report
+  `summary.unscored` instead of averaging a placeholder across 2,586 rules;
+  and an unreadable corpus renders as a failure naming the paths, never as
+  "no detection rules yet".
+
+  Measured before and after on the same tree: `GET /api/v1/detection/rules`
+  `total` 0 → 2,586, equal to the union of ids returned by fusion's own
+  `_load_ruleset()`, `load_window_rules()` and `load_sequence_rules()` run in
+  a subprocess.
+
+### Added
+
+- `services/api/app/models/detection_rule.py` maps the `author` column, which
+  has existed since `001_init.sql` and was mapped by nothing — while fusion's
+  tenant overlay reads it on every reload to say *who* silenced a rule when it
+  explains a suppressed match.
+- `DetectionRuleResponse` gains `source_id`, `confidence_measured`, `tuned`
+  and `engine`; `FrontendDetectionRule` gains `isBuiltin`, `sourceId`,
+  `tuned` and `timestampsFromArtefact`; `DriftSummary` and `ConfidenceSummary`
+  gain `unscored`. All additive.
+- `GET /api/v1/rules` and `GET /api/v1/detection/rules` take `search`,
+  `severity`, `mitre`, `limit` and `offset` (plus `category`, `enabled` and
+  `source` on the latter). The canonical route stays a bare array and reports
+  the matching count in `X-Total-Count`. A page bound exists because the whole
+  library serialised is several megabytes.
+- `apps/docs/docs/console/rule-library.md`.
+
 ## [18.0.0] - 2026-10-09
 
 ### BREAKING

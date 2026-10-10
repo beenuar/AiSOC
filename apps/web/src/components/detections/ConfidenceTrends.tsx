@@ -121,10 +121,19 @@ export function ConfidenceTrends() {
   }
 
   if (!data || data.summary.totalRules === 0) {
+    // `unscored` is the library the engine runs. Those rules exist and fire;
+    // the compiled corpus simply records no confidence for them, so every
+    // average here would be shaped by a placeholder rather than measured.
+    // "No rules yet" over 2,586 running rules is the wrong sentence.
+    const unscored = data?.summary.unscored ?? 0;
     return (
       <EmptyState
-        title="No rules yet"
-        description="Once you author or import a few detection rules, this view tracks how confident the library is per MITRE tactic and surfaces the weakest rules to tune first."
+        title={unscored > 0 ? 'No rule has been scored yet' : 'No rules yet'}
+        description={
+          unscored > 0
+            ? `${unscored.toLocaleString()} rules are loaded by the detection engine and none carries a confidence score — the compiled corpus records a rule's logic, severity and ATT&CK mapping and nothing operational. Set a confidence on a rule, or author your own, and it appears here.`
+            : 'Once you author or import a few detection rules, this view tracks how confident the library is per MITRE tactic and surfaces the weakest rules to tune first.'
+        }
       />
     );
   }
