@@ -147,3 +147,18 @@ describe('alertsApi.list facets', () => {
     });
   });
 });
+
+/**
+ * `sort` is how the console avoids a flood burying a critical. The API
+ * defaults to `newest` for its SDK clients, so the console has to ask.
+ */
+describe('alertsApi.list ordering', () => {
+  it('sends the sort the caller asked for', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({ items: [], total: 0, page: 1, page_size: 25 }));
+
+    await alertsApi.list({ page: 1, pageSize: 25, sort: 'priority' });
+
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain('sort=priority');
+  });
+});

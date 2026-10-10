@@ -284,7 +284,15 @@ function AlertRow({
 // ─── Main View ────────────────────────────────────────────────────────────────
 
 export function AlertsView() {
-  const [filters, setFilters] = useState<AlertFilters>({ page: 1, pageSize: 25 });
+  // `sort: 'priority'` because the API defaults to reverse-chronological for
+  // its SDK clients, and in a console that is the wrong default: a noisy
+  // low-severity source emitting faster than an analyst pages pushes a
+  // critical off page one and keeps it there.
+  const [filters, setFilters] = useState<AlertFilters>({
+    page: 1,
+    pageSize: 25,
+    sort: 'priority',
+  });
   // Default to the entity-centric queue — that's the whole point of Wave 1's
   // RBA work. Analysts can flip back to the raw alert grid for legacy
   // workflows or when triaging a specific alert ID.

@@ -189,7 +189,9 @@ describe('DashboardView — no fabricated data outside demo mode', () => {
     // Fabricated ones do not.
     expectNoFabrication(FABRICATED_SOURCE_NAMES);
     expect(screen.getByText(/No sources connected/i)).toBeTruthy();
-    expect(screen.getByText(/No technique coverage yet/i)).toBeTruthy();
+    // The panel ranks tactics. It used to say "technique", borrowing the unit
+    // the SOC Performance coverage row measures — see MitrePanelWording.
+    expect(screen.getByText(/No tactic coverage yet/i)).toBeTruthy();
   });
 
   it('publishes no trend delta it cannot source from the API', () => {

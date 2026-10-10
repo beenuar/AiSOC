@@ -21,14 +21,15 @@ from app.services.alert_queue import (
     QueueResponse,
     build_queue,
     claim_alert,
+    severity_rank_expr,
 )
-from app.services.alert_status import is_unresolved
 from app.services.alert_rail import (
     MiniTimelineEvent,
     RecommendedAction,
     RelatedEntity,
     build_rail_envelope,
 )
+from app.services.alert_status import is_unresolved
 from app.services.event_sanitiser import (
     SubmitPayloadTooLarge,
     sanitise_event_batch,
@@ -733,6 +734,7 @@ async def list_alerts(
     search: str | None = Query(default=None),
     min_confidence: int | None = Query(default=None, ge=0, le=100),
     confidence_label: str | None = Query(default=None),
+    sort: Literal["newest", "priority"] = Query(default="newest"),
 ) -> AlertListResponse:
     """List alerts for the current tenant with filtering and pagination.
 
@@ -741,6 +743,15 @@ async def list_alerts(
     that pre-date the confidence column will have NULL and therefore won't
     match either filter — that's intentional; analysts who care about
     confidence should only see alerts that actually carry the signal.
+
+    `sort` is `newest` (created_at descending) or `priority` (severity
+    descending, then created_at descending). It defaults to `newest`: this
+    endpoint has generated SDK clients and "page one is the newest rows" is
+    part of what they were built against, so changing the order silently
+    would alter what every existing caller reads *without* altering the
+    schema — which `openapi-breaking.yml` cannot detect. The console asks for
+    `priority`, because a noisy low-severity source emitting faster than an
+    analyst pages pushes a critical off page one and keeps it there.
     """
     filters = [Alert.tenant_id == current_user.tenant_id]
 
@@ -764,6 +775,18 @@ async def list_alerts(
             )
         filters.append(Alert.confidence_label == confidence_label)
 
+    if sort not in ("newest", "priority"):
+        # `Literal` makes FastAPI answer 422 before the handler runs, and
+        # publishes the enum so an SDK generator knows the allowed values.
+        # This guard covers the direct-call path, where `Literal` is not
+        # enforced: the branch below treats anything that is not "priority"
+        # as "newest", and silently serving an order the caller did not ask
+        # for is how a typo becomes a buried critical.
+        #
+        # Literal 400 because the local `status` parameter shadows
+        # `fastapi.status`, same as above.
+        raise HTTPException(status_code=400, detail="sort must be one of: newest, priority")
+
     # Count
     count_result = await db.execute(select(func.count()).select_from(Alert).where(and_(*filters)))
     total = count_result.scalar_one()
@@ -773,9 +796,14 @@ async def list_alerts(
     # page, which capped them at `page_size`.
     facets = await _alert_facets(db, filters)
 
-    # Fetch
+    # Fetch. `created_at` is always the final key so the order is total and
+    # paging cannot repeat or skip a row.
+    order_by = [Alert.created_at.desc()]
+    if sort == "priority":
+        order_by.insert(0, severity_rank_expr().asc())
+
     offset = (page - 1) * page_size
-    result = await db.execute(select(Alert).where(and_(*filters)).order_by(Alert.created_at.desc()).offset(offset).limit(page_size))
+    result = await db.execute(select(Alert).where(and_(*filters)).order_by(*order_by).offset(offset).limit(page_size))
     alerts = result.scalars().all()
 
     return AlertListResponse(

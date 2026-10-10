@@ -162,7 +162,12 @@ export function EfficiencyReport({
           />
           <BarRow
             label="MITRE coverage"
-            description="Tactic + technique IDs surfaced by your alerts"
+            // `_mitre_covered` counts distinct *techniques*, and unions the
+            // tenant's alerts with every enabled detection rule. The old
+            // text named tactics as well and credited alerts alone, so this
+            // figure looked like it should agree with the tactics panel on
+            // the overview — a different unit over a different population.
+            description="Distinct technique IDs on your alerts or enabled rules"
             value={
               data.mitre_coverage.total > 0
                 ? data.mitre_coverage.covered / data.mitre_coverage.total

@@ -454,6 +454,25 @@ function useDashboardLayout() {
   return { order, dragState: dragState.current, handleDragStart, handleDragOver, handleDrop };
 }
 
+/**
+ * How many of a tenant's sources are actually connected.
+ *
+ * This counted `status === 'active'` alone. `active` is a connector *health*
+ * value the poller writes, and the two cases it gets wrong both show up as a
+ * tile reading 0 above a panel listing real sources: a webhook or batch-ingest
+ * source has no poller and so no health, and a connector whose last poll
+ * errored can still be receiving events.
+ *
+ * Delivering counts, healthy counts, and a dead integration that has sent
+ * nothing does not — otherwise the tile silently becomes a count of
+ * configured integrations, which answers a different question.
+ */
+export function countConnectedSources(
+  sources: DashboardMetrics['sources'],
+): number {
+  return sources.filter((s) => s.status === 'active' || s.count > 0).length;
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
@@ -533,7 +552,7 @@ export function DashboardView() {
 
   const sources = metrics?.sources ?? [];
   const topMitre = metrics?.topMitre ?? [];
-  const activeSourceCount = sources.filter((s) => s.status === 'active').length;
+  const activeSourceCount = countConnectedSources(sources);
 
   const periodLabel = TIME_WINDOW_SHORT_LABEL[timeWindow] ?? '';
   const trendTimeFmt =
@@ -712,8 +731,16 @@ export function DashboardView() {
               error={metricsError}
               pending={metricsPending}
               onRetry={retryMetrics}
-              emptyTitle="No technique coverage yet"
-              emptyDescription="Tactics rank by alert count once detections start firing."
+              // This panel ranks *tactics*, and said "technique" — the unit
+              // the SOC Performance coverage row measures. Two panels using
+              // each other's vocabulary is why they read as contradicting.
+              //
+              // The old description also promised tactics would appear "once
+              // detections start firing", which is not true: the detection
+              // engine writes `mitre_techniques` and never `mitre_tactics`,
+              // so a tenant whose rules fire all day still sees this empty.
+              emptyTitle="No tactic coverage yet"
+              emptyDescription="Ranks ATT&CK tactics by alert count. Alerts tagged only with technique IDs are counted under MITRE coverage in SOC Performance instead."
             />
           )}
         </div>

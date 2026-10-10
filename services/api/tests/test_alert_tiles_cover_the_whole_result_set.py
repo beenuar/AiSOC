@@ -77,21 +77,14 @@ async def db():
 async def _reset(session) -> None:
     await session.rollback()
     for tenant in (TENANT, OTHER_TENANT):
-        await session.execute(
-            text("DELETE FROM alerts WHERE tenant_id = CAST(:t AS uuid)"), {"t": str(tenant)}
-        )
-        await session.execute(
-            text("DELETE FROM tenants WHERE id = CAST(:t AS uuid)"), {"t": str(tenant)}
-        )
+        await session.execute(text("DELETE FROM alerts WHERE tenant_id = CAST(:t AS uuid)"), {"t": str(tenant)})
+        await session.execute(text("DELETE FROM tenants WHERE id = CAST(:t AS uuid)"), {"t": str(tenant)})
     await session.commit()
 
 
 async def _seed(session, tenant: uuid.UUID, slug: str, pairs: list[tuple[str, str]]) -> None:
     await session.execute(
-        text(
-            "INSERT INTO tenants (id, name, slug) VALUES (CAST(:t AS uuid), :n, :s)"
-            " ON CONFLICT (id) DO NOTHING"
-        ),
+        text("INSERT INTO tenants (id, name, slug) VALUES (CAST(:t AS uuid), :n, :s) ON CONFLICT (id) DO NOTHING"),
         {"t": str(tenant), "n": f"Facet {slug}", "s": slug},
     )
     for severity, status in pairs:
@@ -143,6 +136,7 @@ async def _list(db, tenant: uuid.UUID, **overrides):
         "search": None,
         "min_confidence": None,
         "confidence_label": None,
+        "sort": "newest",
         **overrides,
     }
     return await list_alerts(current_user=_principal(tenant), db=db, **kwargs)
@@ -150,9 +144,7 @@ async def _list(db, tenant: uuid.UUID, **overrides):
 
 # A queue far larger than one page, so a page-local count cannot accidentally
 # equal the real one: 30 criticals against a `page_size` of 25.
-BIG_QUEUE: list[tuple[str, str]] = (
-    [("critical", "new")] * 30 + [("high", "triaging")] * 8 + [("low", "resolved")] * 4
-)
+BIG_QUEUE: list[tuple[str, str]] = [("critical", "new")] * 30 + [("high", "triaging")] * 8 + [("low", "resolved")] * 4
 
 
 @pytest.mark.asyncio
@@ -165,8 +157,7 @@ class TestTheTilesAreNotCappedByThePage:
 
         assert len(page.items) == 25, "fixture no longer exceeds one page"
         assert page.facets.by_severity.get("critical") == 30, (
-            f"the critical tile reads {page.facets.by_severity.get('critical')} — "
-            "it is counting the loaded page, not the result set"
+            f"the critical tile reads {page.facets.by_severity.get('critical')} — it is counting the loaded page, not the result set"
         )
 
     async def test_the_facets_do_not_move_when_the_analyst_pages(self, db) -> None:
@@ -257,8 +248,6 @@ class TestTheContractCarriesTheFacets:
         """Five hand-written copies of one rule drift one at a time."""
         from pathlib import Path
 
-        source = (
-            Path(__file__).resolve().parents[1] / "app" / "api" / "v1" / "endpoints" / "alerts.py"
-        ).read_text(encoding="utf-8")
+        source = (Path(__file__).resolve().parents[1] / "app" / "api" / "v1" / "endpoints" / "alerts.py").read_text(encoding="utf-8")
 
         assert "alert_status" in source, "alerts.py does not import the shared status definition"

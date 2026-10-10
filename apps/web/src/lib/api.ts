@@ -1631,6 +1631,13 @@ export interface AlertFilters {
   page?: number;
   pageSize?: number;
   tenantId?: string;
+  /**
+   * `newest` (created_at descending) or `priority` (severity first, then
+   * created_at). The API defaults to `newest` to keep its published contract;
+   * the console asks for `priority` so a noisy low-severity source cannot
+   * push a critical off page one.
+   */
+  sort?: 'newest' | 'priority';
 }
 
 export const alertsApi = {

@@ -43,6 +43,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from dataclasses import dataclass
@@ -54,6 +55,7 @@ from gate_toolkit import repo_root, self_test_main  # noqa: E402
 
 CHANGELOG = Path("CHANGELOG.md")
 VERSION_FILE = Path("VERSION")
+WEB_PACKAGE = Path("apps/web/package.json")
 POLICY = Path("apps/docs/docs/operations/release-policy.md")
 
 #: The release from which "a major bump carries a BREAKING section" is
@@ -107,6 +109,42 @@ def parse_sections(text: str) -> list[Section]:
             )
         )
     return sections
+
+
+def version_surface_findings(version_text: str, package_json_text: str) -> list[str]:
+    """``VERSION`` and ``apps/web/package.json`` must agree, always.
+
+    Unlike the CHANGELOG comparison below, this one has no legitimate
+    intermediate state. The console footer renders ``packageJson.version``
+    while every other published surface derives from ``VERSION``, so the one
+    number a signed-in operator can actually see came from a file no gate
+    read. A release that bumped one and not the other shipped a console
+    reporting the previous version to the people most likely to quote it in
+    a bug report.
+
+    Both inputs are strings so the self-test can inject the mismatch rather
+    than assert the live tree has never had one.
+    """
+    declared = version_text.strip()
+    if not declared:
+        return [f"{VERSION_FILE} is empty, so no surface has a version to agree with"]
+
+    try:
+        package = json.loads(package_json_text)
+    except json.JSONDecodeError as exc:
+        return [f"{WEB_PACKAGE} is not valid JSON ({exc.msg}), so its version cannot be read"]
+
+    web_version = package.get("version")
+    if not isinstance(web_version, str) or not web_version:
+        return [f"{WEB_PACKAGE} declares no version, so the console footer has nothing to render"]
+
+    if web_version != declared:
+        return [
+            f"{VERSION_FILE} reads {declared} and {WEB_PACKAGE} reads {web_version}. The console footer "
+            "renders the package version, so a signed-in operator would be told the wrong release. "
+            "Bump both in the same commit"
+        ]
+    return []
 
 
 def unreleased_body(text: str) -> str:
@@ -269,8 +307,15 @@ def main(argv: list[str] | None = None) -> int:
     # A VERSION that disagrees with the newest section means the tag the
     # release workflow extracts notes for is not the version the tree claims.
     version_file = root / VERSION_FILE
+    web_package = root / WEB_PACKAGE
     if version_file.is_file():
         declared = version_file.read_text(encoding="utf-8").strip()
+
+        # A finding, not a note: these two have no intermediate state the way
+        # VERSION and CHANGELOG do.
+        if web_package.is_file():
+            problems.extend(version_surface_findings(declared, web_package.read_text(encoding="utf-8")))
+
         newest = parse_sections(text)[0].version if released else ""
         if declared and newest and declared != newest:
             notes.append(
@@ -366,6 +411,37 @@ def _self_test() -> int:
                 "next release must be a major" in n
                 for n in findings(clean.replace("## [Unreleased]\n\n### Added", "## [Unreleased]\n\n### BREAKING"), floor=floor)[1]
             ),
+        ),
+        # ── VERSION ↔ apps/web/package.json ────────────────────────────────
+        # Each arm injects the violation rather than asserting the live tree
+        # has never had one, same as the two above.
+        (
+            "VERSION agreeing with the web package version passes",
+            not version_surface_findings("18.0.0\n", '{"name": "@aisoc/web", "version": "18.0.0"}'),
+        ),
+        (
+            "ARM THREE: a web package left on the previous version fails",
+            any("console footer" in f for f in version_surface_findings("18.0.0\n", '{"version": "17.1.0"}')),
+        ),
+        (
+            "and it fires in the other direction too — the gate is not one-directional",
+            bool(version_surface_findings("17.1.0\n", '{"version": "18.0.0"}')),
+        ),
+        (
+            "a web package with no version is refused rather than treated as agreeing",
+            bool(version_surface_findings("18.0.0\n", '{"name": "@aisoc/web"}')),
+        ),
+        (
+            "an unparseable web package is refused rather than silently skipped",
+            any("not valid JSON" in f for f in version_surface_findings("18.0.0\n", "{oops")),
+        ),
+        (
+            "an empty VERSION is refused rather than matching everything",
+            bool(version_surface_findings("\n", '{"version": "18.0.0"}')),
+        ),
+        (
+            "trailing whitespace in VERSION is not a mismatch",
+            not version_surface_findings("18.0.0\n\n", '{"version": "18.0.0"}'),
         ),
     ]
 

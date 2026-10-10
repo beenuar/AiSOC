@@ -27,6 +27,10 @@ on:
       - "scripts/check_release_policy.py"
       - "CHANGELOG.md"
       - "VERSION"
+      # The console footer renders this file's version, and the release gate
+      # now holds the two in lockstep. Without it here, bumping only the
+      # package would not trigger the gate that exists to catch exactly that.
+      - "apps/web/package.json"
       - "apps/docs/docs/operations/release-policy.md"
       - ".github/workflows/governance.yml"
   pull_request:
@@ -45,6 +49,10 @@ on:
       - "scripts/check_release_policy.py"
       - "CHANGELOG.md"
       - "VERSION"
+      # The console footer renders this file's version, and the release gate
+      # now holds the two in lockstep. Without it here, bumping only the
+      # package would not trigger the gate that exists to catch exactly that.
+      - "apps/web/package.json"
       - "apps/docs/docs/operations/release-policy.md"
       - ".github/workflows/governance.yml"
   workflow_dispatch:

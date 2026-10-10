@@ -444,6 +444,23 @@ async def get_dashboard_metrics(
             )
         )
 
+    # `source_count_map` used to be built and then only ever *looked up*, so a
+    # tenant pushing events through `POST /v1/ingest/batch` or an inbox
+    # webhook — neither of which creates a connector instance — saw "Connected
+    # Sources 0" above an empty panel while hundreds of their alerts sat in
+    # the queue.
+    #
+    # Nothing is invented here: an entry exists only because alerts carrying
+    # that `connector_type` landed inside the selected window, which is the
+    # same evidence the count itself rests on. The status is `ingesting`
+    # rather than `active` because `active` is a health value the poller
+    # reports and nothing is polling these.
+    for connector_type, count in sorted(source_count_map.items()):
+        if connector_type in seen:
+            continue
+        seen.add(connector_type)
+        sources.append(SourceStat(name=connector_type, count=count, status="ingesting"))
+
     # ── Top MITRE tactics ─────────────────────────────────────────────────────
     # Python-side aggregation: avoids set-returning-function-in-SELECT pitfalls
     # across Postgres versions and gives identical results for our scale

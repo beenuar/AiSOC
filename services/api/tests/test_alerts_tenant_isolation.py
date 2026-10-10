@@ -270,6 +270,9 @@ _LIST_ALERTS_DEFAULTS: dict[str, Any] = {
     "search": None,
     "min_confidence": None,
     "confidence_label": None,
+    # `list_alerts` is called here as a plain function, so FastAPI's
+    # `Query(...)` defaults never apply and every parameter must be named.
+    "sort": "newest",
 }
 
 
@@ -277,11 +280,23 @@ _LIST_ALERTS_DEFAULTS: dict[str, Any] = {
 async def test_list_alerts_scopes_by_tenant() -> None:
     """Both the count and the SELECT for /alerts must filter on tenant_id."""
     user = _user()
-    # ``list_alerts`` runs two queries: count (scalar_one int) + select.
-    db = _mk_db([3, [_alert(user.tenant_id), _alert(user.tenant_id), _alert(user.tenant_id)]])
+    # ``list_alerts`` runs four queries: count (scalar_one int), the two
+    # facet GROUP BYs behind the console's stat strip (tuple lists), then the
+    # page itself. The facet queries matter here as much as the others —
+    # they are whole-result-set aggregates, which is exactly the shape that
+    # leaks across tenants if the predicate is dropped.
+    db = _mk_db(
+        [
+            3,
+            [("critical", 2), ("high", 1)],
+            [("new", 3)],
+            [_alert(user.tenant_id), _alert(user.tenant_id), _alert(user.tenant_id)],
+        ]
+    )
     response = await list_alerts(current_user=user, db=db, **_LIST_ALERTS_DEFAULTS)
     assert response.total == 3
     assert len(response.items) == 3
+    assert response.facets.by_severity == {"critical": 2, "high": 1}
     _assert_tenant_scoped(db.executed, user.tenant_id)
 
 
@@ -289,7 +304,7 @@ async def test_list_alerts_scopes_by_tenant() -> None:
 async def test_list_alerts_with_filters_keeps_tenant_scope() -> None:
     """Severity/status/category/min_confidence filters must not relax tenant scope."""
     user = _user()
-    db = _mk_db([0, []])
+    db = _mk_db([0, [], [], []])
     kwargs = {
         **_LIST_ALERTS_DEFAULTS,
         "severity": "critical",
@@ -303,7 +318,7 @@ async def test_list_alerts_with_filters_keeps_tenant_scope() -> None:
     _assert_tenant_scoped(db.executed, user.tenant_id)
     # Every alerts statement should mention tenant_id (count + select).
     alerts_stmts = [(sql, params) for sql, params in db.executed if "alerts" in re.sub(r"\s+", " ", sql).lower()]
-    assert len(alerts_stmts) >= 2, "expected count + select to both hit alerts"
+    assert len(alerts_stmts) >= 4, "expected count + two facet GROUP BYs + select to all hit alerts"
     for sql, _params in alerts_stmts:
         normalized = re.sub(r"\s+", " ", sql).lower()
         assert "tenant_id" in normalized, f"alerts statement missing tenant_id: {sql}"

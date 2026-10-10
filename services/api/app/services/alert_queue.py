@@ -208,6 +208,27 @@ async def load_sla_targets(
     return result
 
 
+def severity_rank_expr():
+    """SQL expression ordering severity most-urgent-first.
+
+    `alerts.severity` is a string column, so "critical before high" needs a
+    `CASE`. One definition because two surfaces now order by it — the
+    investigation queue's tiebreaker and `GET /alerts?sort=priority` — and a
+    second copy would drift the day a tier is added.
+
+    An unrecognised severity sorts last: it is not evidence of urgency, and
+    ranking it above `low` on a guess would put unknown rows in front of a
+    real analyst queue.
+    """
+    return case(
+        (Alert.severity == "critical", literal(0)),
+        (Alert.severity == "high", literal(1)),
+        (Alert.severity == "medium", literal(2)),
+        (Alert.severity == "low", literal(3)),
+        else_=literal(4),
+    )
+
+
 def sla_due_at_expression(targets: dict[str, int]):
     """SQL expression for the virtual ``sla_due_at`` column.
 
@@ -377,14 +398,7 @@ async def build_queue(
         else_=literal(1),
     )
 
-    # Severity rank for the tiebreaker: critical > high > medium > …
-    severity_rank = case(
-        (Alert.severity == "critical", literal(0)),
-        (Alert.severity == "high", literal(1)),
-        (Alert.severity == "medium", literal(2)),
-        (Alert.severity == "low", literal(3)),
-        else_=literal(4),
-    )
+    severity_rank = severity_rank_expr()
 
     if owner == "me":
         where_clause = mine_filter
