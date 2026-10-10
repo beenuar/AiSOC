@@ -66,6 +66,7 @@ from app._vendor.llm_contract_rules import (
 from app._vendor.llm_contract_rules import (
     validate_messages as validate_messages,
 )
+from app.services import llm_health
 
 # These names are re-exports: callers do
 # `from app.services.llm_safety import LLMContractViolation`, and the rules
@@ -110,6 +111,14 @@ async def safe_chat_completions_request(
     a call site can move between services without rewriting. ``client`` is
     accepted so callers that already hold a pooled ``AsyncClient`` — and tests
     — do not each construct one.
+
+    Every outcome from here is recorded in :mod:`app.services.llm_health`, which
+    is what lets ``GET /api/v1/llm/status`` say whether the provider is actually
+    answering instead of only which one is configured (issue #1241). This is the
+    one function the service's LLM call sites share, so recording here needs no
+    probe and no second mechanism. A contract violation is **not** recorded: it
+    raises above, before the network call, and is AiSOC refusing to send rather
+    than the provider failing to answer.
     """
     validated = LLMInputContract.validate(messages)
 
@@ -118,12 +127,20 @@ async def safe_chat_completions_request(
         headers.update(extra_headers)
     payload: dict[str, Any] = {"model": model, "messages": validated, **extra_body}
 
-    if client is not None:
-        response = await client.post(url, headers=headers, json=payload, timeout=timeout)
-        response.raise_for_status()
-        return dict(response.json())
-
-    async with httpx.AsyncClient(timeout=timeout) as owned:
-        response = await owned.post(url, headers=headers, json=payload)
-        response.raise_for_status()
-        return dict(response.json())
+    try:
+        if client is not None:
+            response = await client.post(url, headers=headers, json=payload, timeout=timeout)
+            response.raise_for_status()
+            result = dict(response.json())
+        else:
+            async with httpx.AsyncClient(timeout=timeout) as owned:
+                response = await owned.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = dict(response.json())
+    except Exception as exc:
+        # Re-raised unchanged — every caller's error handling is untouched. The
+        # class name only; a message can carry a URL with a key in it.
+        llm_health.record_failure(type(exc).__name__)
+        raise
+    llm_health.record_success()
+    return result

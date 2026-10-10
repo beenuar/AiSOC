@@ -6155,6 +6155,8 @@ export type LlmProvider =
 
 export type LlmEffectivePath = 'live' | 'fallback';
 
+export type LlmRecentHealth = 'healthy' | 'degraded' | 'unknown';
+
 export interface LlmStatus {
   /** Stable provider id classified from the configured base URL. */
   provider: LlmProvider;
@@ -6185,6 +6187,22 @@ export interface LlmStatus {
   effective_path: LlmEffectivePath;
   /** Operator-readable explanation of the current state. */
   policy_note: string;
+  /**
+   * Whether the provider is actually *answering*, from the outcomes of the
+   * calls this pod already made — not a probe, and not a latency figure.
+   *
+   * Everything above describes configuration, which is why a deployment
+   * timing out on every call used to render the emerald "Live" pill. Three
+   * states, and ``unknown`` is a real one: a pod that has observed no call
+   * has not earned a green badge.
+   */
+  recent_health: LlmRecentHealth;
+  /** Observed chat-completions calls in the recent window (this pod only). */
+  recent_calls: number;
+  /** How many of those failed. */
+  recent_failures: number;
+  /** Operator-readable summary of the window, including what to do about it. */
+  recent_note: string;
 }
 
 // ─── BYOK per-tenant LLM credentials (WS-H2) ────────────────────────────────

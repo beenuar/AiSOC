@@ -933,6 +933,20 @@ services:
       # config). Empty is fine — the local model answers instead.
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # How long the gateway waits on one generation before giving up, in
+      # seconds. 60 was a bare literal inside the mounted config, so a
+      # deployment whose model needs longer — CPU-only inference on a larger
+      # prompt is the case — timed out on every call and could only be fixed by
+      # editing a tracked file and restarting (issue #1241). The default is
+      # unchanged; the knob is new. Raise it with
+      # AISOC_LITELLM_REQUEST_TIMEOUT=300 in .env.
+      #
+      # The `:-60` default is load-bearing, not cosmetic: the gateway resolves
+      # this key with `get_secret`, which yields None for an unset variable,
+      # and a gateway in that state serves /health/liveliness 200 while failing
+      # every completion. `test_litellm_config.py` fails if the default is
+      # removed.
+      AISOC_LITELLM_REQUEST_TIMEOUT: ${AISOC_LITELLM_REQUEST_TIMEOUT:-60}
     ports:
       - "${AISOC_BIND_ADDR:-127.0.0.1}:4000:4000"
     healthcheck:
