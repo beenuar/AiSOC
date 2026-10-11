@@ -7035,6 +7035,244 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/memory/items:
+    post:
+      tags:
+      - semantic-memory
+      summary: Ingest Item
+      operationId: ingest_item_api_v1_memory_items_post
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryItemIn'
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryIngestResult'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    get:
+      tags:
+      - semantic-memory
+      summary: List Items
+      operationId: list_items_api_v1_memory_items_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: state
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: State
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MemoryItemOut'
+                title: Response List Items Api V1 Memory Items Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/memory/items/{item_id}:
+    delete:
+      tags:
+      - semantic-memory
+      summary: Retire Item
+      description: Retire, never hard-delete. 'What did the agent know' must stay
+        answerable.
+      operationId: retire_item_api_v1_memory_items__item_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Item Id
+      - name: reason
+        in: query
+        required: false
+        schema:
+          type: string
+          default: ''
+          title: Reason
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryItemOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/memory/recall:
+    post:
+      tags:
+      - semantic-memory
+      summary: Recall
+      description: 'Vector recall over this tenant''s memory. Every hit carries its
+        provenance.
+
+
+        Deliberately not permission-gated beyond authentication, on the same
+
+        reasoning ``POST /kb/query`` is left open and counted in
+
+        ``scripts/check_route_authz.py``''s ledger: searching the organisation''s
+
+        own runbooks and closed-case knowledge is something every role does
+
+        mid-incident, and the permission vocabulary has no term for it that is
+
+        not either universal or tenant-admin-only.'
+      operationId: recall_api_v1_memory_recall_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryRecallIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MemoryRecallHit'
+                type: array
+                title: Response Recall Api V1 Memory Recall Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/memory/conflicts:
+    get:
+      tags:
+      - semantic-memory
+      summary: List Conflicts
+      operationId: list_conflicts_api_v1_memory_conflicts_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/MemoryConflictOut'
+                type: array
+                title: Response List Conflicts Api V1 Memory Conflicts Get
+      security:
+      - HTTPBearer: []
+  /api/v1/memory/conflicts/{item_id}/resolve:
+    post:
+      tags:
+      - semantic-memory
+      summary: Resolve Conflict
+      description: Settle a conflict by naming which side survives. The other is retired.
+      operationId: resolve_conflict_api_v1_memory_conflicts__item_id__resolve_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: item_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Item Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MemoryConflictResolution'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MemoryConflictOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/memory/status:
+    get:
+      tags:
+      - semantic-memory
+      summary: Recall Status
+      description: 'Can this deployment recall at all, and over how much.
+
+
+        Every count here is computed from rows this request counted, not read
+
+        from a cached figure, and an unknown stays ``null`` rather than becoming
+
+        a confident zero.'
+      operationId: recall_status_api_v1_memory_status_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Recall Status Api V1 Memory Status Get
+      security:
+      - HTTPBearer: []
   /api/v1/tenant-skills:
     get:
       tags:
@@ -29750,6 +29988,269 @@ components:
       required:
       - user_id
       title: MemberUpsert
+    MemoryConflictOut:
+      properties:
+        left:
+          $ref: '#/components/schemas/MemoryItemOut'
+        right:
+          anyOf:
+          - $ref: '#/components/schemas/MemoryItemOut'
+          - type: 'null'
+      type: object
+      required:
+      - left
+      - right
+      title: MemoryConflictOut
+    MemoryConflictResolution:
+      properties:
+        keep:
+          type: string
+          title: Keep
+        note:
+          type: string
+          maxLength: 500
+          title: Note
+          default: ''
+      type: object
+      required:
+      - keep
+      title: MemoryConflictResolution
+    MemoryIngestResult:
+      properties:
+        item:
+          $ref: '#/components/schemas/MemoryItemOut'
+        outcome:
+          type: string
+          title: Outcome
+        indexed:
+          type: boolean
+          title: Indexed
+        index_error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Index Error
+      type: object
+      required:
+      - item
+      - outcome
+      - indexed
+      title: MemoryIngestResult
+    MemoryItemIn:
+      properties:
+        kind:
+          type: string
+          title: Kind
+          description: case | runbook | memory
+        subject:
+          type: string
+          maxLength: 400
+          minLength: 1
+          title: Subject
+        content:
+          type: string
+          maxLength: 200000
+          minLength: 1
+          title: Content
+        title:
+          type: string
+          maxLength: 400
+          title: Title
+          default: ''
+        source_ref:
+          type: string
+          maxLength: 400
+          title: Source Ref
+          default: ''
+        source:
+          type: string
+          maxLength: 60
+          title: Source
+          default: analyst
+        scope:
+          type: string
+          title: Scope
+          default: tenant
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+      type: object
+      required:
+      - kind
+      - subject
+      - content
+      title: MemoryItemIn
+    MemoryItemOut:
+      properties:
+        id:
+          type: string
+          title: Id
+        kind:
+          type: string
+          title: Kind
+        subject:
+          type: string
+          title: Subject
+        title:
+          type: string
+          title: Title
+        content:
+          type: string
+          title: Content
+        source_ref:
+          type: string
+          title: Source Ref
+        author:
+          type: string
+          title: Author
+        source:
+          type: string
+          title: Source
+        scope:
+          type: string
+          title: Scope
+        state:
+          type: string
+          title: State
+        state_reason:
+          type: string
+          title: State Reason
+        conflicts_with:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Conflicts With
+        expires_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Expires At
+        embedding_model:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Embedding Model
+        embedded_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Embedded At
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - id
+      - kind
+      - subject
+      - title
+      - content
+      - source_ref
+      - author
+      - source
+      - scope
+      - state
+      - state_reason
+      - conflicts_with
+      - expires_at
+      - embedding_model
+      - embedded_at
+      - created_at
+      - updated_at
+      title: MemoryItemOut
+    MemoryRecallChunk:
+      properties:
+        item_id:
+          type: string
+          format: uuid
+          title: Item Id
+        kind:
+          type: string
+          title: Kind
+        subject:
+          type: string
+          title: Subject
+        title:
+          type: string
+          title: Title
+        content:
+          type: string
+          title: Content
+        score:
+          type: number
+          title: Score
+        author:
+          type: string
+          title: Author
+        source:
+          type: string
+          title: Source
+      type: object
+      required:
+      - item_id
+      - kind
+      - subject
+      - title
+      - content
+      - score
+      - author
+      - source
+      title: MemoryRecallChunk
+      description: 'One semantically recalled memory item, with the provenance to
+        weigh it.
+
+
+        A separate type from ``KBChunk`` on purpose. These come from a different
+
+        store, by a different retrieval, with an author and a source attached,
+
+        and flattening them into the same list would let a reader take a
+
+        similarity hit for a full-text match.'
+    MemoryRecallHit:
+      properties:
+        item:
+          $ref: '#/components/schemas/MemoryItemOut'
+        score:
+          type: number
+          title: Score
+      type: object
+      required:
+      - item
+      - score
+      title: MemoryRecallHit
+    MemoryRecallIn:
+      properties:
+        query:
+          type: string
+          maxLength: 4000
+          minLength: 1
+          title: Query
+        kinds:
+          items:
+            type: string
+          type: array
+          title: Kinds
+        limit:
+          type: integer
+          maximum: 50.0
+          minimum: 1.0
+          title: Limit
+          default: 5
+      type: object
+      required:
+      - query
+      title: MemoryRecallIn
     MetricsOut:
       properties:
         tenant_id:
@@ -32457,6 +32958,12 @@ components:
           title: Synthesise
           description: Use LLM to synthesise an answer from retrieved chunks.
           default: true
+        recall_memory:
+          type: boolean
+          title: Recall Memory
+          description: Append semantically recalled memory items to the result. Never
+            reorders the full-text chunks. Off by default; see scripts/score_memory_recall.py.
+          default: false
       type: object
       required:
       - question
@@ -32481,6 +32988,16 @@ components:
             type: string
           type: array
           title: Sources
+        memory:
+          items:
+            $ref: '#/components/schemas/MemoryRecallChunk'
+          type: array
+          title: Memory
+        memory_unavailable:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Memory Unavailable
       type: object
       required:
       - question

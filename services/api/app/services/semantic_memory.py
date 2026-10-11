@@ -143,7 +143,7 @@ def embedding_backend() -> tuple[str, str, str | None] | None:
 
     * the LLM gateway this deployment already routes chat through, at
       ``/v1/embeddings`` -- which is LiteLLM in CORE and whatever an operator
-      pointed ``AISOC_LLM_BASE_URL`` at otherwise;
+      pointed ``OPENAI_BASE_URL`` or ``LLM_BASE_URL`` at otherwise;
     * Ollama at ``OLLAMA_BASE_URL``, which CORE also ships, for a deployment
       with no gateway key at all.
 
@@ -203,9 +203,9 @@ async def embed(texts: list[str], *, client: httpx.AsyncClient | None = None) ->
     backend = embedding_backend()
     if backend is None:
         raise EmbeddingsUnavailable(
-            "No embedding backend is configured. Set AISOC_LLM_BASE_URL (or run the bundled "
-            "gateway), or OLLAMA_BASE_URL. Semantic recall is unavailable until then; "
-            "full-text search still works."
+            "No embedding backend is configured. Set OPENAI_BASE_URL or LLM_BASE_URL (or run "
+            "the bundled gateway, which sets LLM_GATEWAY_URL), or OLLAMA_BASE_URL. Semantic "
+            "recall is unavailable until then; full-text search still works."
         )
     kind, url, api_key = backend
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}

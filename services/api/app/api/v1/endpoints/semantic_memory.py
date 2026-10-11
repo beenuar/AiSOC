@@ -397,9 +397,20 @@ async def recall(
         .all()
     )
     now = datetime.now(UTC)
+
     # Expiry is applied at read, not by a sweep: a worker being down must not
     # resurrect an expired claim.
-    live = [r for r in rows if r.expires_at is None or r.expires_at > now]
+    #
+    # `_aware` exists because the column is TIMESTAMPTZ on Postgres and
+    # returns an aware value, while some drivers hand back a naive one — and
+    # comparing the two raises `TypeError` inside the handler, which would
+    # turn an expired item from "withheld" into a 500 on the whole recall.
+    # Treating a naive timestamp as UTC is right here: every writer in this
+    # service stores UTC.
+    def _aware(value: datetime) -> datetime:
+        return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+    live = [r for r in rows if r.expires_at is None or _aware(r.expires_at) > now]
     live.sort(key=lambda r: scores.get(r.id, 0.0), reverse=True)
     return [MemoryRecallHit(item=_out(r), score=scores.get(r.id, 0.0)) for r in live]
 

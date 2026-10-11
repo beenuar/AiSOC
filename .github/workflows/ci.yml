@@ -701,6 +701,18 @@ jobs:
         run: python3 scripts/check_cloud_native_collection.py --self-test
       - name: Cloud-native collection gate
         run: python3 scripts/check_cloud_native_collection.py
+      # Depth 9.2. The probe set behind the recall measurement has to stay
+      # usable: every probe must name an item that is in the corpus, the
+      # probes must stay low-overlap with their answers (a probe written in
+      # the document's own words hands the lexical baseline a score it could
+      # not earn on a real question), and the baseline must still be a real
+      # retriever rather than a stub. The scorer itself runs too: with no
+      # embedding backend on a runner it prints "not measured" and exits 0,
+      # which is the honest row and also proves the refusal path works.
+      - name: Memory recall scorer — self-test
+        run: python3 scripts/score_memory_recall.py --self-test
+      - name: Memory recall scorer
+        run: python3 scripts/score_memory_recall.py
       # One layer in from the name: the profile gate asks whether a connector
       # reaches a normalization path, this asks which OCSF class it reaches
       # when it gets there. The class uid divided by a thousand is the
