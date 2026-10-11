@@ -177,8 +177,10 @@ a reachability finding for 1.4 rather than a claim edit.
 
 ## Phase 4: Enterprise identity and the operator console
 
-- [ ] **4.1** SSO end to end
-- [ ] **4.2** Console MFA
+- [~] **4.1** SSO end to end
+  - Closed under the fix pass as item 4.1, and **partial on purpose**. Two of the three reported defects did not reproduce — the console fragment consumer and the login-screen SSO entry both landed in v17.1.0 — and six tests now pin them. The third was real: `_saml_settings()` read its IdP trust anchor from `SAML_IDP_*` while the connection's own `metadata_url` / `metadata_xml` were read by nothing, so a correctly signed assertion came back `invalid_response`; fixed in `app/auth/saml_metadata.py`, driven end to end against real Postgres and a real signed assertion in `sso-live.yml`. It stays `[~]` because the containerised-IdP leg (`sso-live.yml :: keycloak-oidc`) has never been observed to pass, so the claim row is PARTIAL rather than GATED. A row resting on a job nobody has watched succeed is not gated.
+- [x] **4.2** Console MFA
+  - Closed under the fix pass as item 4.2. Reproduced first: ten of eleven assertions against the real login route and real Postgres failed with `{"detail":"Not Found"}` — the surface did not exist. Now TOTP pinned to RFC 6238's own vectors rather than to a round trip, ten single-use recovery codes, a vault-encrypted secret, a `last_used_step` high-water mark so a code cannot be replayed inside its own 30-second window, per-tenant enforcement with no backfill row, and audited enrolment, disable, recovery-code use, policy change and administrative reset. A correct password for an enrolled account answers **202** with a challenge rather than a session — 202 rather than a widened 200 body, because `access_token` is required and making it optional breaks every generated client. Migration `096`; 28 offline tests, 13 live, and a CI negative control that deletes the challenge branch and requires the suite to go red. Verified present on `main`: `endpoints/mfa.py` mounted in the v1 router, `MfaView.tsx` in the console, `test_console_mfa.py` and `tests/isolation/test_console_mfa_live.py`.
 - [ ] **4.3** Custom roles everywhere — ships as security S13
 - [ ] **4.4** Audit log for tenant admins
 - [ ] **4.5** Operator pages

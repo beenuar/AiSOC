@@ -146,10 +146,14 @@ conditional `numpy` pins collide into an unresolvable install. Parse with
 
 ## Wave 7: Close the books
 
-- [ ] **7.1** Re-run every claim row this pass touched
-- [ ] **7.2** Update `GAP_CLOSURE_PROGRESS.md` and `PARITY_PROGRESS.md`
-- [ ] **7.3** One `[Unreleased]` entry in `CHANGELOG.md`
-- [ ] **7.4** Final report in this file
+- [x] **7.1** Re-run every claim row this pass touched
+  - Matrix: **302 rows, 299 GATED, 3 PARTIAL, 0 NO GATE**, counted by `check_claim_gate_matrix.py` rather than read off the summary line. Every static gate the touched rows name was re-run green: the matrix ratchet, maturity table (and its self-test), README gates, profile service counts, mypy baseline, comment paths, merge markers, attribution across 13,372 tracked files, competitor names, SCIM contract, detection fields, perf results, the one-case-table check, CI install parity and dependency pins. No row was promoted to GATED by this pass without the gate existing first; the three PARTIAL rows stay PARTIAL, including SSO, whose containerised-IdP leg has never been observed to pass.
+- [x] **7.2** Update `GAP_CLOSURE_PROGRESS.md` and `PARITY_PROGRESS.md`
+  - Parity **4.2 Console MFA** flipped to `[x]`, verified against the tree rather than against this file: `endpoints/mfa.py` mounted in the v1 router, migration `096`, `MfaView.tsx` in the console, `test_console_mfa.py` offline and `tests/isolation/test_console_mfa_live.py` live. Parity **4.1 SSO end to end** flipped to `[~]`, not `[x]` — the SAML metadata defect is fixed and driven end to end against real Postgres with a real signed assertion, but the containerised-IdP leg has never been watched to pass, and a box resting on a job nobody has seen succeed is not done. Everything else in both files was left alone: the remaining open boxes belong to the depth and gap-closure programmes, which are still running, and flipping them here would claim another plan's work.
+- [x] **7.3** One `[Unreleased]` entry in `CHANGELOG.md`
+  - Two entries under `### Fixed`, in house style, no tag: the enterprise-identity pass (white-label, metering, SCIM, maturity evidence) and the gate-parser fix. Both name what reproduced, what was narrowed instead of built, and why.
+- [x] **7.4** Final report in this file
+  - See **Final report** at the end of this file.
 
 ## Maintainer-only (recorded, not attempted)
 
@@ -657,3 +661,83 @@ comment above it says the figure is "recorded so a future change that gives
 triage a tool shows up here as a number moving off zero", and a literal can
 never move. The fix derives the same zero from the ledger so it can change
 when the run does.
+
+## Final report
+
+**Where it landed: 40 of 48 items `[x]`, 2 `[~]`, 4 `[!]` maintainer-only.** The
+two still showing `[ ]` here — 4.3 white-label and 4.6 maturity evidence — are
+complete and flipped on the branch carrying their PR; they read open only in a
+worktree cut before it merged. Re-read this file on `main` rather than trusting
+that sentence.
+
+### What this pass was for
+
+It added no capability. It existed to repair what two other programmes had
+recorded as shipped and an audit found broken, which is why nearly every item
+begins with a reproduction rather than a design.
+
+### The pattern that recurred most
+
+**A mechanism existed, passed its tests, and nothing called it on the path that
+mattered.** `send_approval_email` had no caller at all, so the signed
+email-approval fallback was unreachable. The retro-hunt flag passed through no
+compose file, so a tenant could not turn the feature on. `find_matching()` had
+no production caller, so no playbook had ever run from an alert. A passing test
+on an uncalled function is indistinguishable from a working feature until
+somebody traces the call graph.
+
+**Its second half is worse and reachability analysis cannot see it: the code
+runs and the table it reads is one nothing writes.** `triages_model` counted a
+column the deterministic path also writes, so a deployment with no model
+reported 100% AI triage — and the figure looked plausible, which is why it
+survived four releases.
+
+### What the gates themselves got wrong
+
+Three gates were found grading something other than what they claimed.
+
+- `check_maturity_table` matched a row on a **prefix**, so one row covering
+  SCIM, white-label and metering satisfied the lookup with a single SCIM test
+  and the other two capabilities inherited a pass. It printed OK for four
+  releases.
+- `check_ci_install_parity` read the `tee` target in
+  `pytest … | tee /tmp/wl.txt` as a pytest **directory** argument, concluding a
+  job naming one file ran a whole service suite. Thirteen findings from one
+  `tee`.
+- `check_test_discovery` read a shell redirection as a test path.
+
+All three are the same shape: **a detector that knows one syntax of the
+language it parses.** Each fix ships with a self-test asserting both
+directions, because a parser fix that stops detecting is worse than the bug.
+
+### What was narrowed rather than built, and why
+
+Narrowing is in the plan as a legitimate outcome, and it was used twice, both
+times with the reason recorded beside the claim.
+
+- **The sign-in page is not branded.** Branding resolves from the caller's
+  credential and there is none yet on that page; nothing maps a hostname to an
+  organisation, because `organizations` has a slug and a name and no domain.
+  One name baked into the process would be wrong for every organisation on the
+  deployment except one, *while looking configured* — worse than the platform
+  name.
+- **`services/actions` reads only `product_name`.** The API resolver also
+  returns colours, a logo, support contacts and a footer; none has anywhere to
+  go in a Block Kit payload or a MessageCard, and resolving fields nobody
+  renders is how a second resolver starts drifting from the first.
+
+### What is left, and why it is not a gap
+
+Four items are `[!]` maintainer-only and were recorded rather than attempted:
+making the live jobs required checks under branch protection, funding provider
+keys so the weekly evaluation produces real numbers, a real multi-node cluster
+for the scale run, and accepting or overruling the closure default in the 1.4
+ADR. None is a code change.
+
+Two are `[~]`, and both are deliberate rather than unfinished. **3.9** installs
+from the lockfile and fails loudly but cannot *run* without a funded key (M2).
+**4.1** SSO is fixed and driven end to end against real Postgres with a real
+signed assertion, but its containerised-IdP leg has never been observed to
+pass, so the claim row is PARTIAL — a row resting on a job nobody has watched
+succeed is not gated, and relabelling it would make this file a liability
+instead of a control.

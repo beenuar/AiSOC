@@ -31,6 +31,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A fix pass closed the gap between what the enterprise-identity surfaces
+  claimed and what they did.** Six items, each reproduced before it was
+  fixed. **White-label** reached the surfaces the docs listed: both report
+  workers resolve branding (and neither could store an artefact on real
+  Postgres at all — a status-vocabulary mismatch the test double could not
+  show), `send_approval_email` gained the caller it had never had, and the
+  Slack and Teams prompts carry the tenant's product name through a
+  read-only lookup in `services/actions`. Two surfaces were **narrowed
+  rather than built**, with the reason recorded: the sign-in page resolves
+  branding from a credential it does not yet have, and nothing maps a
+  hostname to an organisation, so baking one name in would be wrong for
+  every organisation but one *while looking configured*.
+
+  **Usage metering** counts the path that answered rather than a column
+  both paths write — a deployment with no model had been reporting 100% AI
+  triage — and now classifies all four tiers the worker stamps, not just
+  the deterministic one, with an AST pin that fails on any tier no meter
+  classifies. **SCIM** gained PATCH, group membership and deprovisioning
+  against live Postgres through the real app, and the console
+  token-minting the documentation had promised.
+
+  **The maturity table's evidence was audited and the gate that graded it
+  was wrong.** One row covered three capabilities — SCIM, white-label and
+  metering — citing a single SCIM test, and the gate reported OK on it for
+  four releases, because it matches a row on a prefix and the first
+  capability's evidence was real. Three rows now, three live suites, and
+  metering's cited evidence had been wrong as well as missing: it runs on
+  ClickHouse, not Postgres. `bundles_several_capabilities()` refuses the
+  shape, distinguishing a list from a subordinate clause, with a self-test
+  asserting both directions.
+
+- **Two gates read the shell as if it were pytest's argument list.**
+  `check_ci_install_parity` treated the `tee` target in
+  `pytest … 2>&1 | tee /tmp/wl.txt` as a directory argument, concluding a
+  job that named one file ran a whole service suite and demanding its
+  entire dependency set — thirteen findings from one `tee`. Arguments now
+  stop at the first shell operator, with a redirection consuming its
+  target whether attached or detached. Proven in both directions: a
+  genuine `pytest tests/` still produces all thirteen findings.
+
 - **The copilot stopped inventing investigations, and stopped blaming a
   missing API key for a model that timed out** (#1275). The template
   fallback returned one of five rotating paragraphs asserting findings
