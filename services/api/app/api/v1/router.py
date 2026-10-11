@@ -86,6 +86,7 @@ from app.api.v1.endpoints import (
     saved_hunts,
     saved_views,
     scim_tokens,
+    semantic_memory,
     sla,
     sso_connections,
     stix_taxii,
@@ -162,6 +163,12 @@ api_router.include_router(plugins.router)
 api_router.include_router(community.router)
 api_router.include_router(marketplace.router)
 api_router.include_router(mcp_servers.router)
+# Depth 9.2 (parity 6.5): vector recall over past cases, runbooks and
+# institutional memory, every hit carrying an author, a source, a scope,
+# an expiry and a state. `knowledge_base` above is the full-text half and
+# stays: the two answer differently-shaped questions and the recall score
+# in `scripts/score_memory_recall.py` measures exactly that difference.
+api_router.include_router(semantic_memory.router)
 # Gap-closure Phase 6.1 and 6.2: tenant-authored investigation skills:
 # authored in YAML, validated against the tools this tenant's agent can
 # actually call, backtested through the Phase 1 replay with and without the
