@@ -84,7 +84,12 @@ CREATE TABLE IF NOT EXISTS aisoc_memory_items (
 
     title           TEXT        NOT NULL DEFAULT '',
     content         TEXT        NOT NULL,
-    content_hash    CHAR(64)    NOT NULL,
+    -- TEXT, not CHAR(64). `char_length` on a `bpchar` strips trailing
+    -- blanks, so the padding a CHAR(64) adds does not satisfy the length
+    -- check below -- the two would have been fighting each other, and the
+    -- type would have bought nothing the check does not already give.
+    content_hash    TEXT        NOT NULL
+                    CHECK (char_length(content_hash) = 64),
 
     -- ── Provenance ────────────────────────────────────────────────────────
     -- Who said it. An email, an API key prefix, or a worker's name.

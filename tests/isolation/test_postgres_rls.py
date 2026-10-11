@@ -135,6 +135,7 @@ def _literal_for(
     nonce: str,
     allowed: list[str] | None = None,
     max_len: int | None = None,
+    exact_len: int | None = None,
 ) -> str:
     """A syntactically valid value for a NOT NULL column with no default.
 
@@ -152,9 +153,20 @@ def _literal_for(
       ``identity_nodes.node_type`` and four others accept a fixed vocabulary.
     * ``max_len`` respects ``varchar(n)``; ``aisoc_attack_chains`` has a
       ``varchar(8)``.
+    * ``exact_len`` carries a ``char_length(col) = n`` check, which a hex
+      digest column has and which the short filler cannot satisfy. Taught
+      to the seeder rather than relaxed in the schema: a constraint
+      loosened so a prober can insert is a constraint that stops being one.
     """
     if allowed:
         return f"'{allowed[0]}'"
+    if exact_len is not None and data_type in ("character varying", "text", "character"):
+        # A column whose CHECK pins an exact length -- a hex digest, a
+        # country code -- cannot be seeded with the short filler below. The
+        # seeder is taught the constraint rather than the constraint being
+        # relaxed for the seeder's benefit, which is the direction that
+        # keeps the invariant.
+        return "'" + ("a" * exact_len) + "'"
     if data_type == "uuid":
         return f"'{uuid.uuid4()}'::uuid"
     if data_type in ("character varying", "text", "character"):
@@ -208,6 +220,35 @@ async def _protected_tables(conn) -> list[str]:
     return [r["t"] for r in rows]
 
 
+#: `char_length(col) = n`, with or without spaces. A column pinned to an
+#: exact length -- a hex digest, an ISO country code -- cannot be seeded with
+#: the short filler, and teaching the seeder is the direction that keeps the
+#: invariant; relaxing the schema so a prober can insert would make the
+#: constraint stop being one.
+_EXACT_LEN = re.compile(r"char_length\s*\(\s*\(?\s*[\w\".]+\s*\)?\s*\)\s*=\s*(\d+)")
+
+
+async def _check_exact_lengths(conn, table: str) -> dict[str, int]:
+    """column → the exact character length its CHECK constraint demands."""
+    rows = await conn.fetch(
+        """
+        SELECT a.attname AS col, pg_get_constraintdef(c.oid) AS def
+          FROM pg_constraint c
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+         WHERE c.contype = 'c'
+           AND c.conrelid = to_regclass('public.' || quote_ident($1))
+           AND array_length(c.conkey, 1) = 1
+        """,
+        table,
+    )
+    out: dict[str, int] = {}
+    for row in rows:
+        match = _EXACT_LEN.search(row["def"])
+        if match:
+            out[row["col"]] = int(match.group(1))
+    return out
+
+
 async def _check_vocabularies(conn, table: str) -> dict[str, list[str]]:
     """column → literals its CHECK constraint permits.
 
@@ -251,6 +292,7 @@ async def _seed_row(conn, table: str, tenant: uuid.UUID, enum_labels: dict[str, 
         table,
     )
     vocab = await _check_vocabularies(conn, table)
+    exact = await _check_exact_lengths(conn, table)
     tenant_type = await conn.fetchval(
         """
         SELECT format_type(a.atttypid, a.atttypmod)
@@ -272,6 +314,7 @@ async def _seed_row(conn, table: str, tenant: uuid.UUID, enum_labels: dict[str, 
             nonce=nonce,
             allowed=vocab.get(col["column_name"]),
             max_len=col["character_maximum_length"],
+            exact_len=exact.get(col["column_name"]),
         )
         if literal == "DEFAULT":
             continue

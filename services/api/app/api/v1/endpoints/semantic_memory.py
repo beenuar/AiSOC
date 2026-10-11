@@ -351,15 +351,17 @@ async def recall(
     body: MemoryRecallIn,
     db: TenantDBSession,
     current_user: AuthUser,
+    _: Annotated[None, Depends(require_permission("knowledge_base:read"))],
 ) -> list[MemoryRecallHit]:
     """Vector recall over this tenant's memory. Every hit carries its provenance.
 
-    Deliberately not permission-gated beyond authentication, on the same
-    reasoning ``POST /kb/query`` is left open and counted in
-    ``scripts/check_route_authz.py``'s ledger: searching the organisation's
-    own runbooks and closed-case knowledge is something every role does
-    mid-incident, and the permission vocabulary has no term for it that is
-    not either universal or tenant-admin-only.
+    ``knowledge_base:read`` is the right permission and it already exists:
+    ``POST /kb/query`` uses it for the full-text half of the same corpus,
+    and every role that triages holds it. Reusing it rather than minting a
+    ``memory:read`` keeps one answer to "may this principal search what the
+    organisation knows" — two permissions over one corpus is two answers
+    that can disagree, and the disagreement surfaces on the day somebody
+    narrows a role.
     """
     unknown = [k for k in body.kinds if k not in MEMORY_KINDS]
     if unknown:

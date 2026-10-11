@@ -7158,17 +7158,19 @@ paths:
         provenance.
 
 
-        Deliberately not permission-gated beyond authentication, on the same
+        ``knowledge_base:read`` is the right permission and it already exists:
 
-        reasoning ``POST /kb/query`` is left open and counted in
+        ``POST /kb/query`` uses it for the full-text half of the same corpus,
 
-        ``scripts/check_route_authz.py``''s ledger: searching the organisation''s
+        and every role that triages holds it. Reusing it rather than minting a
 
-        own runbooks and closed-case knowledge is something every role does
+        ``memory:read`` keeps one answer to "may this principal search what the
 
-        mid-incident, and the permission vocabulary has no term for it that is
+        organisation knows" — two permissions over one corpus is two answers
 
-        not either universal or tenant-admin-only.'
+        that can disagree, and the disagreement surfaces on the day somebody
+
+        narrows a role.'
       operationId: recall_api_v1_memory_recall_post
       requestBody:
         content:
