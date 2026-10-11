@@ -51,6 +51,7 @@ from sqlalchemy import select, text
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
 from app.services import case_orchestration, case_status, evidence_custody
+from app.services.semantic_memory import remember_closed_case
 from app.services.audit import emit_audit
 from app.services.branding.resolver import resolve_branding
 from app.services.case_fanout import (
@@ -831,6 +832,31 @@ async def update_case(
         raise HTTPException(status_code=503, detail="Database error") from exc
 
     response = _row_to_case(row)
+
+    # Depth 9.2. A closed case is the first of the three things parity 6.5
+    # names as semantic memory, and nothing else writes `kind='case'` -- so
+    # without this call that half of the store would be permanently empty on
+    # every deployment where nobody ingests by hand, which is the half of the
+    # "exists unwired" family that reachability analysis cannot see.
+    #
+    # After the commit and fail-soft on purpose: closing a case must not 503
+    # because a vector store is down. The row is written in its own
+    # transaction, and `/memory/status` reports how many rows are waiting to
+    # be embedded so a degraded store is visible rather than silent.
+    if body.status == "closed" and body.status != existing.status:
+        try:
+            await remember_closed_case(
+                db,
+                tenant_id=user.tenant_id,
+                case_id=cid,
+                title=response.title,
+                summary=response.description or "",
+                author=getattr(user, "email", "") or "",
+            )
+            await db.commit()
+        except Exception:  # noqa: BLE001 - see above; never fails the close
+            await db.rollback()
+            logger.warning("semantic memory: could not record closed case %s", cid, exc_info=True)
 
     # Workstream 8 — if the operator changed status, project the
     # transition onto every connector this case is already linked to.

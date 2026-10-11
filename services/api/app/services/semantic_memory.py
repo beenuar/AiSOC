@@ -51,6 +51,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -160,17 +161,35 @@ def embedding_backend() -> tuple[str, str, str | None] | None:
 
 
 def _fit(vector: list[float]) -> list[float]:
-    """Pad or truncate to the collection's dimension.
+    """Pad a short vector to the collection's dimension. Refuse to truncate.
 
-    A dimension mismatch is a hard Qdrant error, and a model that returns 768
-    where the collection wants 1536 is a real and common configuration. This
-    makes such a deployment work at a documented cost in recall quality,
-    rather than failing every search -- and ``embedding_model`` is recorded
-    per row so a later re-embed can find exactly these.
+    The two directions are not symmetric and treating them as one cost a
+    measurement. Padding with zeros is harmless under cosine: the appended
+    components contribute nothing to either the dot product or to a norm
+    computed over the same padded space, so a 768-dimension model ranks
+    exactly as it would in its own space.
+
+    Truncating is destructive. Cutting a 3072-component embedding to 1536
+    throws away half of what the model said, and the distances that survive
+    are not the model's distances. The first version of this function
+    truncated, and the recall score for ``llama3.2:3b`` came out at 0.167
+    against a 0.667 lexical baseline — a number that was measuring the
+    truncation, not the model. So an oversized vector is a refusal naming the
+    two dimensions, which is a configuration an operator can fix, rather than
+    a silently worse retriever they cannot see.
     """
     if len(vector) < EMBEDDING_DIM:
         return vector + [0.0] * (EMBEDDING_DIM - len(vector))
-    return vector[:EMBEDDING_DIM]
+    if len(vector) > EMBEDDING_DIM:
+        raise EmbeddingsUnavailable(
+            f"{DEFAULT_EMBEDDING_MODEL} returns {len(vector)}-dimension vectors and the "
+            f"{COLLECTION} collection holds {EMBEDDING_DIM}. Truncating would discard most of "
+            "what the model said and the resulting distances would not be the model's, so this "
+            "is refused. Choose an embedding model of at most "
+            f"{EMBEDDING_DIM} dimensions, or re-embed into a wider collection through "
+            "app/db/vector_migrations.py — a collection's dimension is immutable."
+        )
+    return vector
 
 
 async def embed(texts: list[str], *, client: httpx.AsyncClient | None = None) -> tuple[list[list[float]], str]:
@@ -392,6 +411,94 @@ async def search(
     finally:
         if owns:
             await http.aclose()
+
+
+async def remember_closed_case(
+    db: Any,
+    *,
+    tenant_id: uuid.UUID,
+    case_id: Any,
+    title: str,
+    summary: str,
+    author: str,
+) -> uuid.UUID | None:
+    """Write a closed case into memory. The automatic writer for ``kind='case'``.
+
+    This exists because of the half of the "exists unwired" family that
+    reachability analysis cannot see: a table every surface reads and no code
+    path writes. ``POST /memory/items`` alone would have left ``kind='case'``
+    permanently empty on every deployment where nobody ingests by hand, and
+    "past cases" is the first of the three things parity 6.5 names.
+
+    Fails soft and returns ``None``. Closing a case must not 503 because a
+    vector store is down; the row is written either way and
+    ``/memory/status`` reports how many rows are waiting to be embedded, so
+    the degradation is visible rather than silent.
+    """
+    from app.models.semantic_memory import MemoryItem  # noqa: PLC0415  (circular at module scope)
+
+    from sqlalchemy import select  # noqa: PLC0415
+
+    content = summary.strip()
+    if not content:
+        # A case closed with no narrative teaches nothing. Writing it would
+        # pad recall with rows whose content is a title, which is the kind of
+        # filler that makes a retrieval score look busy and answer worse.
+        return None
+
+    subject = f"case:{case_id}"
+    digest = content_hash(content)
+    existing = (
+        await db.execute(
+            select(MemoryItem).where(
+                MemoryItem.tenant_id == tenant_id,
+                MemoryItem.kind == "case",
+                MemoryItem.subject == subject,
+                MemoryItem.state == "in_use",
+            )
+        )
+    ).scalar_one_or_none()
+    if existing is not None and existing.content_hash == digest:
+        return existing.id
+    if existing is not None:
+        # A case reopened and re-closed with a different outcome supersedes
+        # its own earlier entry. Not a conflict: it is the same author
+        # correcting the same subject, which is the one case where
+        # last-write-wins is right.
+        existing.state = "not_in_use"
+        existing.state_reason = "superseded when the case was closed again"
+        await forget_item(existing.id)
+
+    row = MemoryItem(
+        tenant_id=tenant_id,
+        kind="case",
+        subject=subject,
+        source_ref=str(case_id),
+        title=title or subject,
+        content=content,
+        content_hash=digest,
+        author=author,
+        source="case_closure",
+        scope="tenant",
+        state="in_use",
+    )
+    db.add(row)
+    await db.flush()
+    try:
+        model = await index_item(
+            tenant_id=tenant_id,
+            item_id=row.id,
+            kind="case",
+            subject=subject,
+            title=row.title,
+            content=content,
+            state="in_use",
+        )
+        row.embedding_model = model
+        row.embedded_at = datetime.now(UTC)
+    except (EmbeddingsUnavailable, VectorStoreUnavailable) as exc:
+        logger.warning("semantic_memory: closed case %s stored but not embedded: %s", case_id, exc)
+    return row.id
 
 
 async def status(*, client: httpx.AsyncClient | None = None) -> dict[str, Any]:
