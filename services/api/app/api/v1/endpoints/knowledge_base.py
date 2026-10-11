@@ -48,15 +48,18 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.api.v1.endpoints.alert_writeback import service_token_valid
 from app.core.airgap import AirgapViolation, enforce_airgap_for_url
 from app.db.rls import set_rls_context
+from app.models.semantic_memory import MemoryItem
 from app.services.kb_chunking import chunk_text
 from app.services.llm_safety import LLMContractViolation, safe_chat_completions_request
 from app.services.model_aliases import chat_completions_url, resolve_api_key, resolve_model_alias
+from app.services.semantic_memory import EmbeddingsUnavailable, VectorStoreUnavailable
+from app.services.semantic_memory import search as memory_search
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +98,26 @@ class QueryRequest(BaseModel):
     doc_kinds: list[DocKind] = Field(default_factory=list)
     top_k: int = Field(5, ge=1, le=20)
     synthesise: bool = Field(True, description="Use LLM to synthesise an answer from retrieved chunks.")
+    #: Depth 9.2. Also recall semantically from `aisoc_memory_items` -- past
+    #: cases, runbooks and institutional memory -- and append the hits.
+    #:
+    #: Off by default, and that default is a measured decision rather than
+    #: caution. `scripts/score_memory_recall.py` grades both retrievers over
+    #: the same labelled probe set, and on the only embedding backend this
+    #: project can reach without a funded key (a small generative model
+    #: served by Ollama) semantic recall scored **worse** than the lexical
+    #: baseline: recall@1 0.333 against 0.667, MRR 0.465 against 0.708.
+    #: Putting it in front of the ranker by default would have made analyst
+    #: search worse on exactly the deployments that cannot pay for a hosted
+    #: embedding model. Re-run that script after configuring a real
+    #: embedding model and move this default when the number says to.
+    recall_memory: bool = Field(
+        False,
+        description=(
+            "Append semantically recalled memory items to the result. Never reorders the "
+            "full-text chunks. Off by default; see scripts/score_memory_recall.py."
+        ),
+    )
 
 
 class KBChunk(BaseModel):
@@ -105,11 +128,37 @@ class KBChunk(BaseModel):
     score: float | None = None
 
 
+class MemoryRecallChunk(BaseModel):
+    """One semantically recalled memory item, with the provenance to weigh it.
+
+    A separate type from ``KBChunk`` on purpose. These come from a different
+    store, by a different retrieval, with an author and a source attached,
+    and flattening them into the same list would let a reader take a
+    similarity hit for a full-text match.
+    """
+
+    item_id: uuid.UUID
+    kind: str
+    subject: str
+    title: str
+    content: str
+    score: float
+    author: str
+    source: str
+
+
 class QueryResponse(BaseModel):
     question: str
     chunks: list[KBChunk]
     answer: str | None  # None when synthesise=False or no LLM key
     sources: list[str]
+    #: Populated only when the caller asked for `recall_memory`.
+    memory: list[MemoryRecallChunk] = Field(default_factory=list)
+    #: Why `memory` is empty when it was asked for. ``None`` means it was
+    #: either not asked for or genuinely returned nothing -- which the caller
+    #: can tell apart because it knows what it asked. An empty list under a
+    #: silent failure is the honest-state defect this field exists to avoid.
+    memory_unavailable: str | None = None
 
 
 # ────────────────────────────────────────────────────────────────────────────
@@ -329,7 +378,58 @@ async def query_kb(
             answer = None
 
     sources = list(dict.fromkeys(c.title for c in chunks))
-    return QueryResponse(question=body.question, chunks=chunks, answer=answer, sources=sources)
+
+    # Depth 9.2. Strictly additive: the full-text chunks above are not
+    # reordered, filtered or replaced, so a caller that does not ask for this
+    # gets byte-identical behaviour.
+    memory: list[MemoryRecallChunk] = []
+    memory_unavailable: str | None = None
+    if body.recall_memory:
+        try:
+            hits = await memory_search(body.question, tenant_id=user.tenant_id, limit=body.top_k)
+            if hits:
+                scores = dict(hits)
+                rows = (
+                    (
+                        await db.execute(
+                            select(MemoryItem).where(
+                                MemoryItem.tenant_id == user.tenant_id,
+                                MemoryItem.id.in_(list(scores)),
+                                MemoryItem.state == "in_use",
+                            )
+                        )
+                    )
+                    .scalars()
+                    .all()
+                )
+                rows.sort(key=lambda r: scores.get(r.id, 0.0), reverse=True)
+                memory = [
+                    MemoryRecallChunk(
+                        item_id=r.id,
+                        kind=r.kind,
+                        subject=r.subject,
+                        title=r.title,
+                        content=r.content,
+                        score=scores.get(r.id, 0.0),
+                        author=r.author,
+                        source=r.source,
+                    )
+                    for r in rows
+                ]
+        except (EmbeddingsUnavailable, VectorStoreUnavailable) as exc:
+            # Say so. An empty list where the caller asked for recall reads as
+            # "nothing matched", which is a different fact from "I could not
+            # look", and the full-text half of the answer is still good.
+            memory_unavailable = str(exc)
+
+    return QueryResponse(
+        question=body.question,
+        chunks=chunks,
+        answer=answer,
+        sources=sources,
+        memory=memory,
+        memory_unavailable=memory_unavailable,
+    )
 
 
 # ────────────────────────────────────────────────────────────────────────────

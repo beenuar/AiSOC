@@ -171,7 +171,7 @@ async def semantic_rank_all(probes: list[dict[str, Any]], corpus: list[dict[str,
 
 
 def score(ranked: dict[str, list[str]], probes: list[dict[str, Any]]) -> dict[str, Any]:
-    hits = {k: 0 for k in AT_K}
+    hits = dict.fromkeys(AT_K, 0)
     reciprocal = 0.0
     misses: list[str] = []
     for probe in probes:
@@ -208,7 +208,14 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     root = repo_root()
-    data = load_probes(root)
+    try:
+        data = load_probes(root)
+    except (OSError, json.JSONDecodeError) as exc:
+        # An unreadable probe set is a refusal with a sentence, not a
+        # traceback: a scorer that cannot find its corpus must not look like
+        # a crashed scorer that might have measured something.
+        print(f"score_memory_recall: cannot read {PROBES_REL} ({exc}) — nothing to score", file=sys.stderr)
+        return 1
     corpus = data["corpus"]
     probes = data["probes"]
 
@@ -311,8 +318,14 @@ def _rule_self_test() -> list[tuple[str, bool]]:
     return [
         ("every probe names an item in the corpus", all(p["expected"] in by_id for p in probes)),
         ("a perfect ranking scores 1.0 at every k", all(perfect_score[f"recall_at_{k}"] == 1.0 for k in AT_K)),
-        ("an empty ranking scores 0.0, and names every miss", empty_score["mrr"] == 0.0 and len(empty_score["not_retrieved_at_all"]) == len(probes)),
-        ("the right answer in second place scores 0 at k=1 and 1 at k=3", second_score["recall_at_1"] == 0.0 and second_score["recall_at_3"] == 1.0),
+        (
+            "an empty ranking scores 0.0, and names every miss",
+            empty_score["mrr"] == 0.0 and len(empty_score["not_retrieved_at_all"]) == len(probes),
+        ),
+        (
+            "the right answer in second place scores 0 at k=1 and 1 at k=3",
+            second_score["recall_at_1"] == 0.0 and second_score["recall_at_3"] == 1.0,
+        ),
         ("MRR for a second-place answer is 0.5", abs(second_score["mrr"] - 0.5) < 1e-9),
         (
             "the probes really are low-overlap with their answers (mean < 0.40)",

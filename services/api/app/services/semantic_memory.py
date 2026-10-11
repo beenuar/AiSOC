@@ -220,9 +220,7 @@ async def embed(texts: list[str], *, client: httpx.AsyncClient | None = None) ->
             payload = res.json()
             rows = payload.get("data") or []
             if len(rows) != len(texts):
-                raise EmbeddingsUnavailable(
-                    f"The embedding backend returned {len(rows)} vector(s) for {len(texts)} input(s)."
-                )
+                raise EmbeddingsUnavailable(f"The embedding backend returned {len(rows)} vector(s) for {len(texts)} input(s).")
             return [_fit([float(x) for x in row["embedding"]]) for row in rows], DEFAULT_EMBEDDING_MODEL
         # Ollama embeds one prompt per call.
         vectors: list[list[float]] = []
@@ -435,9 +433,9 @@ async def remember_closed_case(
     ``/memory/status`` reports how many rows are waiting to be embedded, so
     the degradation is visible rather than silent.
     """
-    from app.models.semantic_memory import MemoryItem  # noqa: PLC0415  (circular at module scope)
-
     from sqlalchemy import select  # noqa: PLC0415
+
+    from app.models.semantic_memory import MemoryItem  # noqa: PLC0415  (circular at module scope)
 
     content = summary.strip()
     if not content:

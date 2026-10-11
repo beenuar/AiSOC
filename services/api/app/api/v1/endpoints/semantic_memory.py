@@ -292,12 +292,7 @@ async def list_items(
     state: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[MemoryItemOut]:
-    stmt = (
-        select(MemoryItem)
-        .where(MemoryItem.tenant_id == current_user.tenant_id)
-        .order_by(MemoryItem.updated_at.desc())
-        .limit(limit)
-    )
+    stmt = select(MemoryItem).where(MemoryItem.tenant_id == current_user.tenant_id).order_by(MemoryItem.updated_at.desc()).limit(limit)
     if kind:
         stmt = stmt.where(MemoryItem.kind == kind)
     if state:
@@ -387,7 +382,7 @@ async def recall(
     if not hits:
         return []
 
-    scores = {item_id: score for item_id, score in hits}
+    scores = dict(hits)
     rows = (
         (
             await db.execute(
@@ -555,13 +550,7 @@ async def recall_status(
     """
     out = await memory_status()
     rows = (
-        (
-            await db.execute(
-                select(MemoryItem.state, MemoryItem.embedding_model).where(
-                    MemoryItem.tenant_id == current_user.tenant_id
-                )
-            )
-        )
+        (await db.execute(select(MemoryItem.state, MemoryItem.embedding_model).where(MemoryItem.tenant_id == current_user.tenant_id)))
         .tuples()
         .all()
     )

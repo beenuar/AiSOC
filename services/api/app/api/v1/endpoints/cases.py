@@ -51,7 +51,6 @@ from sqlalchemy import select, text
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
 from app.services import case_orchestration, case_status, evidence_custody
-from app.services.semantic_memory import remember_closed_case
 from app.services.audit import emit_audit
 from app.services.branding.resolver import resolve_branding
 from app.services.case_fanout import (
@@ -63,6 +62,7 @@ from app.services.case_postmortem import build_case_postmortem
 from app.services.case_postmortem_html import render_case_postmortem_html
 from app.services.case_summary import build_case_summary
 from app.services.case_summary_html import render_case_summary_html
+from app.services.semantic_memory import remember_closed_case
 
 logger = logging.getLogger(__name__)
 
