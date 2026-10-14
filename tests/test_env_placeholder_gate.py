@@ -130,6 +130,8 @@ DELIBERATE_DEFAULTS: dict[str, str] = {
     "SPLUNK_PORT": "the Splunk management port",
     "SPLUNK_SCHEME": "a URL scheme",
     "SPLUNK_VERIFY_SSL": "a boolean, and the secure default",
+    "OPENCTI_VERIFY_SSL": "a boolean, and the secure default",
+    "OPENCTI_POLL_INTERVAL": "a duration in seconds, matching the other feed poll intervals",
     "AWS_REGION": "a region",
 }
 

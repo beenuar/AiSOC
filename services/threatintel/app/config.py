@@ -75,11 +75,13 @@ class Settings(BaseSettings):
     # OpenCTI
     OPENCTI_URL: str = ""
     OPENCTI_TOKEN: str = ""
+    OPENCTI_VERIFY_SSL: bool = True
 
     # Poll intervals (seconds)
     TAXII_POLL_INTERVAL: int = 900  # 15 min
     MISP_POLL_INTERVAL: int = 1800  # 30 min
     OTX_POLL_INTERVAL: int = 1800  # 30 min
+    OPENCTI_POLL_INTERVAL: int = 1800  # 30 min
     CISA_KEV_POLL_INTERVAL: int = 86400  # 24 h
     # Legacy alias
     CISA_POLL_INTERVAL: int = 86400

@@ -16,6 +16,7 @@ import structlog
 
 from app.clients.cisa_kev import CisaKevClient
 from app.clients.misp import MispClient
+from app.clients.opencti import OpenCtiClient
 from app.clients.otx import OtxClient
 from app.clients.taxii import TaxiiClient
 from app.parsers.stix import StixParser
@@ -143,3 +144,30 @@ async def handle_cisa_kev_feed(
 
     except Exception as exc:
         logger.error("CISA KEV feed handler failed", error=str(exc))
+
+
+# ─── OpenCTI Feed Handler ─────────────────────────────────────────────────────
+
+
+async def handle_opencti_feed(
+    client: OpenCtiClient,
+    pipeline: ThreatIntelPipeline,
+    since_hours: int = 24,
+) -> None:
+    """
+    Poll an OpenCTI platform for recent Indicators and extract IOCs.
+    """
+    logger.info("Polling OpenCTI feed", since_hours=since_hours)
+
+    try:
+        nodes = await client.get_recent_indicators(since_hours=since_hours)
+        all_iocs: list[dict[str, Any]] = []
+        for node in nodes:
+            all_iocs.extend(client.extract_iocs(node))
+
+        if all_iocs:
+            stats = await pipeline.ingest_iocs(all_iocs, source="opencti")
+            logger.info("OpenCTI IOCs ingested", **stats, indicator_count=len(nodes))
+
+    except Exception as exc:
+        logger.error("OpenCTI feed handler failed", error=str(exc))
