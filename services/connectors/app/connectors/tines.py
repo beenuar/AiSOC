@@ -272,10 +272,10 @@ class TinesConnector(BaseConnector):
     )
 
     # Tines case "record severity" — the worst severity of any record
-    # attached to the case — uses the vendor-native string ladder. We
-    # collapse to the AiSOC 4-tier ladder per the wave-1 mapping rule.
+    # attached to the case — maps onto AiSOC's five-tier ladder. Preserve
+    # the vendor's critical tier so active P1 cases are not downgraded.
     _CASE_SEVERITY_MAP = {
-        "critical": "high",
+        "critical": "critical",
         "error": "high",
         "high": "high",
         "warn": "low",

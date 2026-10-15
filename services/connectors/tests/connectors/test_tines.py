@@ -81,15 +81,28 @@ def test_normalize_roundtrip_audit_delete_medium(fixture):
 
 
 def test_normalize_roundtrip_case_open_critical(fixture):
-    case = fixture["cases"][0]  # critical, open → high (per wave-1 mapping)
+    case = fixture["cases"][0]
     case["_aisoc_stream"] = "case"
     connector = TinesConnector(_BASE, _TOKEN)
     out = connector.normalize(case)
-    assert out["severity"] == "high"
+    assert out["severity"] == "critical"
+    assert out["raw_event"]["record_severity"] == "critical"
     assert out["source"] == "tines"
     assert out["external_id"] == "tines-case-5001"
     assert out["actor_email"] == "soc-on-call@example.com"
     assert out["event_type"] == "tines.case.open"
+
+
+def test_normalize_case_closed_resolved_critical_is_info():
+    connector = TinesConnector(_BASE, _TOKEN)
+    case = {
+        "_aisoc_stream": "case",
+        "id": 1,
+        "status": "closed",
+        "resolution": "resolved",
+        "record_severity": "critical",
+    }
+    assert connector.normalize(case)["severity"] == "info"
 
 
 def test_normalize_roundtrip_case_closed_resolved_is_info(fixture):

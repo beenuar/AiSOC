@@ -48,7 +48,7 @@ Events are normalised with `source: tines`, `category: saas`.
 
 ## Severity mapping
 
-The Tines case `record_severity` and audit `operation_name` collapse into the AiSOC 4-tier ladder:
+The Tines case `record_severity` and audit `operation_name` map into AiSOC's five-tier severity ladder:
 
 | Source | Vendor value | AiSOC severity |
 |---|---|---|
@@ -58,7 +58,8 @@ The Tines case `record_severity` and audit `operation_name` collapse into the Ai
 | audit | other `*.deleted` / `*.destroyed` | `medium` |
 | audit | `*.failed` | `low` |
 | audit | all other operations | `info` |
-| case | `record_severity = critical / error / high` | `high` |
+| case | `record_severity = critical` | `critical` |
+| case | `record_severity = error / high` | `high` |
 | case | `record_severity = warn / warning` | `low` |
 | case | `record_severity = medium` | `medium` |
 | case | `record_severity = info / success / ok` | `info` |
