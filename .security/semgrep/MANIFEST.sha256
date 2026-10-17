@@ -1,0 +1,8 @@
+# Vendored semgrep rule packs — fetched 2026-10-17 from https://semgrep.dev/c/p/<name>.
+# Refresh deliberately with scripts/vendor_semgrep_packs.py, then re-measure the
+# ceilings and rules_sha256 in .security/allowlist.yml in the same change (issue #1099).
+83d7cde9157b3c79cc5cfaea26e7bd2ba9c740f2ba07635ad475b2585556c32d  security-audit.yaml
+5878942efc5da41d2124bbf32a627db594cc63c29c524737c36e54ba677270d1  owasp-top-ten.yaml
+10f171f2fa8e9892d868397dce987a84617c48fa67e04d911ebd01705e43c815  python.yaml
+967e551f37a9f27ce8b396ed121e5e127bf9ea60148e10589b794bd4ffe73395  typescript.yaml
+d773366e4e5658b0eb5224bd8f23ad74dbc87d42dda430ccbc582b96044b759d  react.yaml

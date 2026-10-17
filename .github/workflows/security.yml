@@ -146,6 +146,15 @@ jobs:
   # this tree. The gate compares the version the report declares against the
   # one the ceiling was measured with and fails if they differ, so a bump
   # here is an explicit re-measure rather than a silent one.
+  #
+  # The rules are pinned the same way (issue #1099). A pinned binary against
+  # registry packs fetched at scan time was half a pin — two runs on one
+  # branch measured 103/39 then 104/40 while the commits in between changed
+  # zero scanned files. The five packs are vendored under .security/semgrep/
+  # by scripts/vendor_semgrep_packs.py; the step below proves the files match
+  # their manifest, and the ratchet proves their combined digest is the one
+  # the ceiling's `rules_sha256` was measured with. Refreshing the packs is a
+  # deliberate re-measure, exactly like bumping the binary.
   semgrep:
     name: Semgrep (ratcheted)
     runs-on: ubuntu-latest
@@ -156,6 +165,13 @@ jobs:
           python-version: "3.11"
       - name: Install semgrep
         run: pip install --quiet semgrep==1.86.0
+      # Fails on a vendored pack that disagrees with its manifest — a
+      # hand-edit, a truncated fetch, a pack on disk the manifest never
+      # recorded. Network-free on purpose: comparing against the live
+      # registry would fail whenever upstream moves, which is exactly when
+      # the pin is doing its job.
+      - name: The vendored rule packs match their manifest
+        run: python3 scripts/vendor_semgrep_packs.py --check
       # `--error` is gone: it exits non-zero on any finding, which would make
       # the exit status carry the same information as the count and force
       # `continue-on-error` back onto the ratchet step below with it.
@@ -169,11 +185,11 @@ jobs:
         continue-on-error: true
         run: |
           semgrep --json --output semgrep.json --disable-version-check \
-            --config p/security-audit \
-            --config p/owasp-top-ten \
-            --config p/python \
-            --config p/typescript \
-            --config p/react \
+            --config .security/semgrep/security-audit.yaml \
+            --config .security/semgrep/owasp-top-ten.yaml \
+            --config .security/semgrep/python.yaml \
+            --config .security/semgrep/typescript.yaml \
+            --config .security/semgrep/react.yaml \
             --exclude plans/ \
             services/ apps/ packages/ scripts/
       # Blocking, and this is the step that makes the one above safe.

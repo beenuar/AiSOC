@@ -163,6 +163,35 @@ def test_a_ceiling_with_no_measured_with_does_not_demand_a_version():
     assert gate.check_report("tfsec", unversioned, {"total": 10, "error": 3}, None) == []
 
 
+# ── the rules-drift arm (issue #1099) ────────────────────────────────────────
+# The binary pin alone was half a pin: registry packs fetched at scan time
+# moved the count 103/39 -> 104/40 across two commits that changed zero
+# scanned files. A ceiling that declares `rules_sha256` is bound to the
+# vendored packs' combined digest, with the same could-not-establish
+# semantics the version arm learned from tfsec.
+
+_PINNED = {"total": 10, "error": 3, "measured_with": "1.86.0", "rules_sha256": "a" * 64}
+
+
+def test_matching_rules_digest_passes():
+    assert gate.check_report("semgrep", _PINNED, {"total": 10, "error": 3}, "1.86.0", rules_digest="a" * 64) == []
+
+
+def test_a_different_rules_digest_is_not_a_comparison():
+    problems = gate.check_report("semgrep", _PINNED, {"total": 10, "error": 3}, "1.86.0", rules_digest="b" * 64)
+    assert any("Counts move when rules move" in p and "vendor_semgrep_packs" in p for p in problems)
+
+
+def test_a_rules_digest_that_could_not_be_established_is_not_a_match():
+    problems = gate.check_report("semgrep", _PINNED, {"total": 10, "error": 3}, "1.86.0", rules_digest=None)
+    assert any("could not establish a digest" in p for p in problems), "a missing pack dir must fail, not skip the comparison"
+
+
+def test_a_ceiling_without_rules_sha256_demands_no_digest():
+    """Only a ceiling that pins rules needs a digest to compare against."""
+    assert gate.check_report("semgrep", CEILING, {"total": 10, "error": 3}, "1.86.0", rules_digest=None) == []
+
+
 def test_a_banner_is_accepted_and_the_bare_version_extracted():
     assert gate.normalise_version("v1.28.13") == "1.28.13"
     assert gate.normalise_version("tfsec version v1.28.13 (linux/amd64)") == "1.28.13"

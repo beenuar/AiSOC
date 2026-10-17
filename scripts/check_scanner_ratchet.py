@@ -130,6 +130,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from gate_toolkit import repo_root, self_test_if_requested
+from vendor_semgrep_packs import combined_digest
 
 self_test_if_requested(__file__)
 
@@ -382,7 +383,13 @@ def check_coverage(ceilings: dict[str, Any], invoked: set[str]) -> list[str]:
     return problems
 
 
-def check_report(tool: str, ceiling: dict[str, Any], counts: dict[str, int], version: str | None) -> list[str]:
+def check_report(
+    tool: str,
+    ceiling: dict[str, Any],
+    counts: dict[str, int],
+    version: str | None,
+    rules_digest: str | None = None,
+) -> list[str]:
     problems: list[str] = []
     buckets = {k: v for k, v in ceiling.items() if isinstance(v, int)}
     if not buckets:
@@ -399,6 +406,25 @@ def check_report(tool: str, ceiling: dict[str, Any], counts: dict[str, int], ver
         problems.append(
             f"{tool}: this run used {version}, the ceiling was measured with {measured_with}. "
             "Counts move when rules move — re-measure and update both, do not compare across versions."
+        )
+
+    # The other half of the pin (issue #1099): a ceiling is bound to the exact
+    # rules that produced it, not only the exact binary. Same arms as the
+    # version above, for the same reasons — and a digest the gate could not
+    # establish is not a digest that matches, which is the tfsec lesson one
+    # field over.
+    pinned_rules = str(ceiling.get("rules_sha256") or "")
+    if pinned_rules and not rules_digest:
+        problems.append(
+            f"{tool}: the ceiling is bound to rules_sha256 {pinned_rules[:12]} and this run could not "
+            "establish a digest for the rules it scanned with — the vendored pack directory is missing "
+            "or holds no packs. Rules the gate cannot establish are not rules that match."
+        )
+    elif pinned_rules and rules_digest and rules_digest != pinned_rules:
+        problems.append(
+            f"{tool}: this run scanned with rules digest {rules_digest[:12]}, the ceiling was measured "
+            f"with {pinned_rules[:12]}. Counts move when rules move — refresh deliberately with "
+            "scripts/vendor_semgrep_packs.py, re-measure, and update the ceilings and rules_sha256 together."
         )
 
     for bucket, limit in sorted(buckets.items()):
@@ -513,7 +539,18 @@ def main(argv: list[str] | None = None) -> int:
                 f"reports itself as {declared_version} — one of the two is not the scanner that ran"
             )
         version = reported_version or declared_version
-        problems += check_report(args.tool, ceiling, counts, version)
+        # Establish the rules digest only when the ceiling pins one, from the
+        # same resolved root the rest of this run reads — never from the
+        # manifest, which an edited pack could hide behind. Failure to
+        # establish is handed to check_report as None, where it fails the
+        # same arm an unknown version does.
+        rules_digest: str | None = None
+        if ceiling.get("rules_sha256"):
+            try:
+                rules_digest = combined_digest(root / ".security" / "semgrep")
+            except (SystemExit, OSError):
+                rules_digest = None
+        problems += check_report(args.tool, ceiling, counts, version, rules_digest=rules_digest)
         measured = ", ".join(f"{k}={v}" for k, v in sorted(counts.items()))
         scanned = f"{args.tool} {version or 'version unreported'}: {measured}"
 

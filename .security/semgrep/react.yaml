@@ -1,0 +1,563 @@
+rules:
+- id: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
+  message: Detection of dangerouslySetInnerHTML from non-constant definition. This
+    can inadvertently expose users to cross-site scripting (XSS) attacks if this comes
+    from user-provided input. If you have to use dangerouslySetInnerHTML, consider
+    using a sanitization library such as DOMPurify to sanitize your HTML.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://react.dev/reference/react-dom/components/common#dangerously-setting-the-inner-html
+    category: security
+    confidence: MEDIUM
+    technology:
+    - react
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - Cross-Site-Scripting (XSS)
+    source: https://semgrep.dev/r/typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
+    shortlink: https://sg.run/rAx6
+    semgrep.dev:
+      rule:
+        r_id: 9769
+        rv_id: 1263912
+        rule_id: x8UWvK
+        version_id: l4TJR0v
+        url: https://semgrep.dev/playground/r/l4TJR0v/typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
+        origin: community
+        path: typescript.react.security.audit.react-dangerouslysetinnerhtml.react-dangerouslysetinnerhtml
+  languages:
+  - typescript
+  - javascript
+  severity: WARNING
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          function ...({..., $X, ...}) { ... }
+      - pattern-inside: |
+          function ...(..., $X, ...) { ... }
+    - focus-metavariable: $X
+    - pattern-not-inside: |
+        $F. ... .$SANITIZEUNC(...)
+  pattern-sinks:
+  - patterns:
+    - focus-metavariable: $X
+    - pattern-either:
+      - pattern: |
+          {...,dangerouslySetInnerHTML: {__html: $X},...}
+      - pattern: |
+          <$Y ... dangerouslySetInnerHTML={{__html: $X}} />
+    - pattern-not: |
+        <$Y ... dangerouslySetInnerHTML={{__html: "..."}} />
+    - pattern-not: |
+        {...,dangerouslySetInnerHTML:{__html: "..."},...}
+    - metavariable-pattern:
+        patterns:
+        - pattern-not: |
+            {...}
+        metavariable: $X
+    - pattern-not: |
+        <... {__html: "..."} ...>
+    - pattern-not: |
+        <... {__html: `...`} ...>
+  pattern-sanitizers:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          import * as $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          import $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          $S = require("underscore.string")
+          ...
+    - pattern-either:
+      - pattern: $S.escapeHTML(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from "dompurify"
+          ...
+      - pattern-inside: |
+          import { ..., $S,... } from "dompurify"
+          ...
+      - pattern-inside: |
+          import * as $S from "dompurify"
+          ...
+      - pattern-inside: |
+          $S = require("dompurify")
+          ...
+      - pattern-inside: |
+          import $S from "isomorphic-dompurify"
+          ...
+      - pattern-inside: |
+          import * as $S from "isomorphic-dompurify"
+          ...
+      - pattern-inside: |
+          $S = require("isomorphic-dompurify")
+          ...
+    - pattern-either:
+      - patterns:
+        - pattern-inside: |
+            $VALUE = $S(...)
+            ...
+        - pattern: $VALUE.sanitize(...)
+      - patterns:
+        - pattern-inside: |
+            $VALUE = $S.sanitize
+            ...
+        - pattern: $S(...)
+      - pattern: $S.sanitize(...)
+      - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from 'xss';
+          ...
+      - pattern-inside: |
+          import * as $S from 'xss';
+          ...
+      - pattern-inside: |
+          $S = require("xss")
+          ...
+    - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from 'sanitize-html';
+          ...
+      - pattern-inside: |
+          import * as $S from "sanitize-html";
+          ...
+      - pattern-inside: |
+          $S = require("sanitize-html")
+          ...
+    - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          $S = new Remarkable()
+          ...
+    - pattern: $S.render(...)
+- id: typescript.react.security.audit.react-unsanitized-property.react-unsanitized-property
+  message: Detection of $HTML from non-constant definition. This can inadvertently
+    expose users to cross-site scripting (XSS) attacks if this comes from user-provided
+    input. If you have to use $HTML, consider using a sanitization library such as
+    DOMPurify to sanitize your HTML.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://react.dev/reference/react-dom/components/common#dangerously-setting-the-inner-html
+    category: security
+    confidence: MEDIUM
+    technology:
+    - react
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: MEDIUM
+    impact: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - Cross-Site-Scripting (XSS)
+    source: https://semgrep.dev/r/typescript.react.security.audit.react-unsanitized-property.react-unsanitized-property
+    shortlink: https://sg.run/70Zv
+    semgrep.dev:
+      rule:
+        r_id: 9782
+        rv_id: 1263917
+        rule_id: 3qUBl4
+        version_id: RGT0Lln
+        url: https://semgrep.dev/playground/r/RGT0Lln/typescript.react.security.audit.react-unsanitized-property.react-unsanitized-property
+        origin: community
+        path: typescript.react.security.audit.react-unsanitized-property.react-unsanitized-property
+  languages:
+  - typescript
+  - javascript
+  severity: WARNING
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          function ...({..., $X, ...}) { ... }
+      - pattern-inside: |
+          function ...(..., $X, ...) { ... }
+    - focus-metavariable: $X
+    - pattern-either:
+      - pattern: $X.$Y
+      - pattern: $X[...]
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          $BODY = $REACT.useRef(...)
+          ...
+      - pattern-inside: |
+          $BODY = useRef(...)
+          ...
+      - pattern-inside: |
+          $BODY = findDOMNode(...)
+          ...
+      - pattern-inside: |
+          $BODY = createRef(...)
+          ...
+      - pattern-inside: |
+          $BODY = $REACT.findDOMNode(...)
+          ...
+      - pattern-inside: |
+          $BODY = $REACT.createRef(...)
+          ...
+    - pattern-either:
+      - pattern: "$BODY. ... .$HTML = $SINK \n"
+      - pattern: "$BODY.$HTML = $SINK  \n"
+    - metavariable-regex:
+        metavariable: $HTML
+        regex: (innerHTML|outerHTML)
+    - focus-metavariable: $SINK
+  - patterns:
+    - pattern-either:
+      - pattern: ReactDOM.findDOMNode(...).$HTML = $SINK
+    - metavariable-regex:
+        metavariable: $HTML
+        regex: (innerHTML|outerHTML)
+    - focus-metavariable: $SINK
+  pattern-sanitizers:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          import * as $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          import $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          $S = require("underscore.string")
+          ...
+    - pattern-either:
+      - pattern: $S.escapeHTML(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from "dompurify"
+          ...
+      - pattern-inside: |
+          import { ..., $S,... } from "dompurify"
+          ...
+      - pattern-inside: |
+          import * as $S from "dompurify"
+          ...
+      - pattern-inside: |
+          $S = require("dompurify")
+          ...
+      - pattern-inside: |
+          import $S from "isomorphic-dompurify"
+          ...
+      - pattern-inside: |
+          import * as $S from "isomorphic-dompurify"
+          ...
+      - pattern-inside: |
+          $S = require("isomorphic-dompurify")
+          ...
+    - pattern-either:
+      - patterns:
+        - pattern-inside: |
+            $VALUE = $S(...)
+            ...
+        - pattern: $VALUE.sanitize(...)
+      - patterns:
+        - pattern-inside: |
+            $VALUE = $S.sanitize
+            ...
+        - pattern: $S(...)
+      - pattern: $S.sanitize(...)
+      - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from 'xss';
+          ...
+      - pattern-inside: |
+          import * as $S from 'xss';
+          ...
+      - pattern-inside: |
+          $S = require("xss")
+          ...
+    - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from 'sanitize-html';
+          ...
+      - pattern-inside: |
+          import * as $S from "sanitize-html";
+          ...
+      - pattern-inside: |
+          $S = require("sanitize-html")
+          ...
+    - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          $S = new Remarkable()
+          ...
+    - pattern: $S.render(...)
+- id: typescript.react.security.audit.react-unsanitized-method.react-unsanitized-method
+  message: Detection of $HTML from non-constant definition. This can inadvertently
+    expose users to cross-site scripting (XSS) attacks if this comes from user-provided
+    input. If you have to use $HTML, consider using a sanitization library such as
+    DOMPurify to sanitize your HTML.
+  metadata:
+    cwe:
+    - 'CWE-79: Improper Neutralization of Input During Web Page Generation (''Cross-site
+      Scripting'')'
+    owasp:
+    - A07:2017 - Cross-Site Scripting (XSS)
+    - A03:2021 - Injection
+    - A05:2025 - Injection
+    references:
+    - https://developer.mozilla.org/en-US/docs/Web/API/Document/writeln
+    - https://developer.mozilla.org/en-US/docs/Web/API/Document/write
+    - https://developer.mozilla.org/en-US/docs/Web/API/Element/insertAdjacentHTML
+    category: security
+    confidence: MEDIUM
+    technology:
+    - react
+    cwe2022-top25: true
+    cwe2021-top25: true
+    subcategory:
+    - vuln
+    likelihood: HIGH
+    impact: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - Cross-Site-Scripting (XSS)
+    source: https://semgrep.dev/r/typescript.react.security.audit.react-unsanitized-method.react-unsanitized-method
+    shortlink: https://sg.run/E5x8
+    semgrep.dev:
+      rule:
+        r_id: 9781
+        rv_id: 1263916
+        rule_id: QrU68w
+        version_id: GxTkeRl
+        url: https://semgrep.dev/playground/r/GxTkeRl/typescript.react.security.audit.react-unsanitized-method.react-unsanitized-method
+        origin: community
+        path: typescript.react.security.audit.react-unsanitized-method.react-unsanitized-method
+  languages:
+  - typescript
+  - javascript
+  severity: WARNING
+  mode: taint
+  pattern-sources:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          function ...({..., $X, ...}) { ... }
+      - pattern-inside: |
+          function ...(..., $X, ...) { ... }
+    - focus-metavariable: $X
+    - pattern-either:
+      - pattern: $X.$Y
+      - pattern: $X[...]
+  pattern-sinks:
+  - patterns:
+    - pattern-either:
+      - pattern: "this.window.document. ... .$HTML('...',$SINK) \n"
+      - pattern: "window.document. ... .$HTML('...',$SINK) \n"
+      - pattern: "document.$HTML($SINK)  \n"
+    - metavariable-regex:
+        metavariable: $HTML
+        regex: (writeln|write)
+    - focus-metavariable: $SINK
+  - patterns:
+    - pattern-either:
+      - pattern: "$PROP. ... .$HTML('...',$SINK) \n"
+    - metavariable-regex:
+        metavariable: $HTML
+        regex: (insertAdjacentHTML)
+    - focus-metavariable: $SINK
+  pattern-sanitizers:
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          import * as $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          import $S from "underscore.string"
+          ...
+      - pattern-inside: |
+          $S = require("underscore.string")
+          ...
+    - pattern-either:
+      - pattern: $S.escapeHTML(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from "dompurify"
+          ...
+      - pattern-inside: |
+          import { ..., $S,... } from "dompurify"
+          ...
+      - pattern-inside: |
+          import * as $S from "dompurify"
+          ...
+      - pattern-inside: |
+          $S = require("dompurify")
+          ...
+      - pattern-inside: |
+          import $S from "isomorphic-dompurify"
+          ...
+      - pattern-inside: |
+          import * as $S from "isomorphic-dompurify"
+          ...
+      - pattern-inside: |
+          $S = require("isomorphic-dompurify")
+          ...
+    - pattern-either:
+      - patterns:
+        - pattern-inside: |
+            $VALUE = $S(...)
+            ...
+        - pattern: $VALUE.sanitize(...)
+      - patterns:
+        - pattern-inside: |
+            $VALUE = $S.sanitize
+            ...
+        - pattern: $S(...)
+      - pattern: $S.sanitize(...)
+      - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from 'xss';
+          ...
+      - pattern-inside: |
+          import * as $S from 'xss';
+          ...
+      - pattern-inside: |
+          $S = require("xss")
+          ...
+    - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          import $S from 'sanitize-html';
+          ...
+      - pattern-inside: |
+          import * as $S from "sanitize-html";
+          ...
+      - pattern-inside: |
+          $S = require("sanitize-html")
+          ...
+    - pattern: $S(...)
+  - patterns:
+    - pattern-either:
+      - pattern-inside: |
+          $S = new Remarkable()
+          ...
+    - pattern: $S.render(...)
+- id: typescript.react.security.react-insecure-request.react-insecure-request
+  message: Unencrypted request over HTTP detected.
+  metadata:
+    vulnerability: Insecure Transport
+    owasp:
+    - A03:2017 - Sensitive Data Exposure
+    - A02:2021 - Cryptographic Failures
+    - A04:2025 - Cryptographic Failures
+    cwe:
+    - 'CWE-319: Cleartext Transmission of Sensitive Information'
+    references:
+    - https://www.npmjs.com/package/axios
+    category: security
+    technology:
+    - react
+    subcategory:
+    - vuln
+    likelihood: LOW
+    impact: MEDIUM
+    confidence: MEDIUM
+    license: Semgrep Rules License v1.0. For more details, visit semgrep.dev/legal/rules-license
+    vulnerability_class:
+    - Mishandled Sensitive Information
+    source: https://semgrep.dev/r/typescript.react.security.react-insecure-request.react-insecure-request
+    shortlink: https://sg.run/1n0b
+    semgrep.dev:
+      rule:
+        r_id: 9766
+        rv_id: 1263918
+        rule_id: NbUA3O
+        version_id: A8Tgd2p
+        url: https://semgrep.dev/playground/r/A8Tgd2p/typescript.react.security.react-insecure-request.react-insecure-request
+        origin: community
+        path: typescript.react.security.react-insecure-request.react-insecure-request
+  languages:
+  - typescript
+  - javascript
+  severity: ERROR
+  patterns:
+  - pattern-either:
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            import $AXIOS from 'axios';
+            ...
+            $AXIOS.$METHOD(...)
+        - pattern-inside: |
+            $AXIOS = require('axios');
+            ...
+            $AXIOS.$METHOD(...)
+      - pattern: $AXIOS.$VERB("$URL",...)
+      - metavariable-regex:
+          metavariable: $VERB
+          regex: ^(get|post|delete|head|patch|put|options)
+    - patterns:
+      - pattern-either:
+        - pattern-inside: |
+            import $AXIOS from 'axios';
+            ...
+            $AXIOS(...)
+        - pattern-inside: |
+            $AXIOS = require('axios');
+            ...
+            $AXIOS(...)
+      - pattern-either:
+        - pattern: '$AXIOS({url: "$URL"}, ...)'
+        - pattern: |
+            $OPTS = {url: "$URL"}
+            ...
+            $AXIOS($OPTS, ...)
+    - pattern: fetch("$URL", ...)
+  - metavariable-regex:
+      metavariable: $URL
+      regex: ^([Hh][Tt][Tt][Pp]:\/\/(?!localhost).*)

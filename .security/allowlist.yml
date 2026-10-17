@@ -231,9 +231,28 @@ ceilings:
     # ceiling: `text()` with every value bound, which three gates hold
     # (check_text_bind_casts, check_raw_sql_columns,
     # check_tenant_query_predicates). Counting it beats suppressing it.
+    # 110/44 -> 110/43, and the rules are no longer a moving target
+    # (issue #1099, closed by this change). The registry packs the scan
+    # fetched at run time are vendored under .security/semgrep/ and the
+    # ceiling is now bound to their combined digest via `rules_sha256`,
+    # verified by the ratchet the same way `measured_with` is — so from here
+    # a count can only move when this tree moves, or when someone refreshes
+    # the packs with scripts/vendor_semgrep_packs.py and re-measures both
+    # numbers in the same change. The ERROR count moving 44 -> 43 in the act
+    # of pinning is itself the closing exhibit: 44 was measured against the
+    # registry state of an earlier week, 43 against the vendored state of
+    # 2026-10-17, and nothing in services/ apps/ packages/ scripts/ changed
+    # between them.
+    #
+    # What this does NOT close: the scanner's own one-run-in-twenty +/-1,
+    # measured further down on identical rule sets and identical trees. That
+    # is the reason `Semgrep (ratcheted)` stays unrequired, and it is
+    # unchanged by pinning the rules; requiring the job still waits on that
+    # +/-1 being attributed and eliminated.
     total: 110
-    error: 44
+    error: 43
     measured_with: "1.86.0"
+    rules_sha256: "5af76658e7e28b96b1099d2c995d7c85b3b9a4f96795a39df3d02aa7d295cb99"
   checkov:
     # 219 -> 272 (the 2026-10-12 merge train). The chart stopped describing
     # seven services and started installing CORE (depth 4.5, #1326: three more
