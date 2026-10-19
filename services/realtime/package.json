@@ -17,7 +17,7 @@
     "express-rate-limit": "^8.7.1",
     "ioredis": "^6.0.0",
     "kafkajs": "^2.2.4",
-    "pino": "^10.3.1",
+    "pino": "^10.4.0",
     "web-push": "^3.6.7",
     "ws": "^8.22.0"
   },
