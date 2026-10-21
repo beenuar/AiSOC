@@ -63,7 +63,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@playwright/test": "^1.63.0",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^4.1.12",
     "autoprefixer": "^10.6.1",
     "axe-core": "^4.13.0",
     "eslint": "^9.39.0",
@@ -75,7 +75,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.3.4",
-    "vitest": "^4.1.11",
+    "vitest": "^4.1.12",
     "vitest-axe": "^0.1.0"
   }
 }
