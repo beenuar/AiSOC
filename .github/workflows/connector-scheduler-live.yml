@@ -40,20 +40,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
-        env:
-          POSTGRES_USER: aisoc
-          POSTGRES_PASSWORD: aisoc_ci_only
-          POSTGRES_DB: aisoc
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U aisoc"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
     env:
       # The runtime role, not the owner: a superuser ignores every RLS
       # policy even under FORCE ROW LEVEL SECURITY.
@@ -61,9 +47,16 @@ jobs:
       DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_ci_only@localhost:5432/aisoc
       PGPASSWORD: aisoc_ci_only
       AISOC_CONNECTORS_DISABLE_SCHEDULER: "0"
+      # This live proof owns its loopback vendor fixture. Keep the exception
+      # exact; AISOC_SSRF_ALLOW_PRIVATE intentionally cannot admit loopback.
+      AISOC_SSRF_ALLOW_HOSTS: 127.0.0.1
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
 
       - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
         with:

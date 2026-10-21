@@ -505,10 +505,16 @@ def _job_block(text: str, job: str) -> str | None:
 #: Ways a job can stand up real infrastructure. `docker run` is here
 #: because `isolation-live.yml` says in its own comment that it starts
 #: single-container stores that way deliberately — and leaving it out made
-#: this gate reject a job that starts a real Neo4j, which is the false
-#: negative that teaches people to work around a gate instead of trusting
-#: it.
-_CONTAINER_MARKERS = ("make up", "docker compose", "docker run")
+#: this gate reject a job that starts a real Neo4j. The local PostgreSQL
+#: action itself runs Docker after trying both official registries; following
+#: that reference keeps the gate from mistaking the shared startup path for
+#: an in-memory stand-in.
+_CONTAINER_MARKERS = (
+    "make up",
+    "docker compose",
+    "docker run",
+    "uses: ./.github/actions/start-postgres",
+)
 
 
 def declares_containers(workflow: str, job: str) -> bool:

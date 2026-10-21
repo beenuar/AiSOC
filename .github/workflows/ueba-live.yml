@@ -39,20 +39,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
-        env:
-          POSTGRES_USER: ueba
-          POSTGRES_PASSWORD: ueba_ci_only
-          POSTGRES_DB: ueba
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U ueba"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
     env:
       # Two roles, as the deployment ships them. `ueba` owns the schema and
       # runs the migrations; `aisoc_app` is the DML-only runtime role that
@@ -66,6 +52,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: ueba_ci_only
+          postgres_user: ueba
+          database: ueba
 
       - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
         with:

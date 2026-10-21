@@ -53,19 +53,6 @@ jobs:
     # sightings back under RLS. As the schema owner neither of the two
     # defects this E2E found would appear, so the suite runs as the
     # `aisoc_app` runtime role — the one a deployment uses.
-    services:
-      postgres:
-        image: public.ecr.aws/docker/library/postgres:16-alpine
-        env:
-          POSTGRES_USER: aisoc
-          POSTGRES_PASSWORD: aisoc_ci_only
-          POSTGRES_DB: aisoc
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U aisoc"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
 
     env:
       # The suite connects as the runtime role. The owner URL is only
@@ -82,6 +69,10 @@ jobs:
       ISOLATION_KAFKA_BROKERS: 127.0.0.1:9092
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
 
       - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
         with:

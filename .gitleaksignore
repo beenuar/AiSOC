@@ -148,7 +148,7 @@ services/api/tests/test_evidence_bundle.py:generic-api-key:26
 # Depth 4.2 (#1322): the TAXII live job's signing secret is a CI-only literal
 # that names itself as one; the workflow's Postgres and app both live and die
 # inside the job. Not a credential for anything reachable.
-.github/workflows/taxii-live.yml:generic-api-key:65
+.github/workflows/taxii-live.yml:generic-api-key:51
 
 # Rule-id lock entries: `"<slug>": "det-threat-anomaly-NNN"` pins a detection
 # rule's id so regeneration cannot renumber it. The scanner's key/value
