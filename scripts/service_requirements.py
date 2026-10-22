@@ -426,14 +426,14 @@ def self_test() -> int:
         pep621 = temp / "pep621.toml"
         pep621.write_text(
             '[project]\nname = "demo"\nversion = "0.1.0"\n'
-            'dependencies = [\n  "fastapi>=0.117,<0.144",\n  "sqlalchemy[asyncio]>=2.0.0",\n]\n\n'
+            'dependencies = [\n  "fastapi>=0.117,<0.147",\n  "sqlalchemy[asyncio]>=2.0.0",\n]\n\n'
             '[project.optional-dependencies]\ndev = ["pytest", "pytest-asyncio"]\n',
             encoding="utf-8",
         )
         expect(
             "PEP 621 dependencies are read",
             requirements(pep621),
-            ["fastapi>=0.117,<0.144", "pytest", "pytest-asyncio", "sqlalchemy[asyncio]>=2.0.0"],
+            ["fastapi>=0.117,<0.147", "pytest", "pytest-asyncio", "sqlalchemy[asyncio]>=2.0.0"],
         )
 
         empty = temp / "empty.toml"
@@ -453,7 +453,7 @@ def self_test() -> int:
         locked_dir = temp / "locked"
         locked_dir.mkdir()
         (locked_dir / "pyproject.toml").write_text(
-            '[tool.poetry]\nname = "demo"\nversion = "0.1.0"\n\n[tool.poetry.dependencies]\npython = "^3.11"\nfastapi = ">=0.117,<0.144"\n',
+            '[tool.poetry]\nname = "demo"\nversion = "0.1.0"\n\n[tool.poetry.dependencies]\npython = "^3.11"\nfastapi = ">=0.117,<0.147"\n',
             encoding="utf-8",
         )
         (locked_dir / "poetry.lock").write_text(
