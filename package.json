@@ -52,9 +52,9 @@
   },
   "devDependencies": {
     "@types/node": "^26.6.4",
-    "prettier": "^3.9.9",
+    "prettier": "^3.9.10",
     "tsx": "^4.23.15",
-    "turbo": "^2.11.4",
+    "turbo": "^2.11.9",
     "typescript": "^6.0.3"
   },
   "engines": {
@@ -70,7 +70,7 @@
       "ws": ">=8.21.0",
       "hono": ">=4.13.5",
       "@hono/node-server": ">=1.19.15 <2",
-      "@vitest/mocker": ">=4.1.11 <5",
+      "@vitest/mocker": ">=4.1.12 <5",
       "colord": ">=2.9.4",
       "joi": ">=17.13.6 <18",
       "qs": ">=6.16.0 <7",

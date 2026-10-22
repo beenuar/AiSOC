@@ -105,7 +105,7 @@
     "@types/node": "^20.11.5",
     "@types/vscode": "^1.80.0",
     "typescript": "^5.4.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   },
   "overrides": {
     "source-map-js": ">=1.2.2"

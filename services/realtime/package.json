@@ -28,7 +28,7 @@
     "@types/node": "^22.20.5",
     "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.2",
-    "eslint": "^10.12.0",
+    "eslint": "^10.13.0",
     "tsx": "^4.23.15",
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.71.2"
