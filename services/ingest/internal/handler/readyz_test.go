@@ -9,13 +9,28 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	"github.com/beenuar/aisoc/services/ingest/internal/graph"
+	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 )
+
+type readyPublisher struct{ err error }
+
+func (p readyPublisher) PublishBatch(context.Context, []*normalizer.NormalizedEvent) error {
+	return nil
+}
+func (p readyPublisher) Ready(context.Context) error { return p.err }
+
+type readyGraph struct{ err error }
+
+func (g readyGraph) WriteEvent(context.Context, *graph.Event) error { return nil }
+func (g readyGraph) Ready(context.Context) error                    { return g.err }
 
 func newReadyHandler() *Handler {
 	// pub is nil, so readiness short-circuits on the publisher before any
@@ -41,6 +56,19 @@ func callReadyz(t *testing.T, h *Handler) (*httptest.ResponseRecorder, map[strin
 	return rec, decodeBody(t, rec)
 }
 
+func TestReadyzGraphOutageIsReportedWithoutBlockingIngest(t *testing.T) {
+	h := New(nil, readyPublisher{}, &config.Config{})
+	h.SetGraphWriter(readyGraph{err: context.DeadlineExceeded})
+
+	rec, body := callReadyz(t, h)
+	if rec.Code != http.StatusOK || body["kafka"] != true || body["graph"] != false {
+		t.Fatalf("graph outage should degrade, not block ingest: code=%d body=%v", rec.Code, body)
+	}
+	if body["status"] != "ready_degraded" {
+		t.Fatalf("graph outage status = %v, want ready_degraded", body["status"])
+	}
+}
+
 func TestReadyzNamesAnAttachedSubscription(t *testing.T) {
 	h := newReadyHandler()
 	h.RegisterSubscription("graph_ws", func() SubscriptionStatus {
@@ -48,6 +76,12 @@ func TestReadyzNamesAnAttachedSubscription(t *testing.T) {
 	})
 
 	_, body := callReadyz(t, h)
+	if body["kafka"] != false {
+		t.Fatalf("missing/unavailable publisher reported kafka=%v, want false", body["kafka"])
+	}
+	if body["graph"] != false {
+		t.Fatalf("unconfigured graph reported graph=%v, want false", body["graph"])
+	}
 	subs, ok := body["subscriptions"].(map[string]any)
 	if !ok {
 		t.Fatalf("no subscriptions block in %v", body)

@@ -268,7 +268,7 @@ services:
     replicaCount: 2
     containerPort: 8085
     healthCheckPath: /health
-    readinessPath: /health
+    readinessPath: /readyz
     service:
       type: ClusterIP
       port: 80

@@ -149,6 +149,15 @@ readiness probe for `api`, `ingest`, `alert-fusion`, `agents` and `realtime`.
 It used to wire `/health` for both probes, and `/health` answers 200 while the
 process is alive whatever its consumer is doing.
 
+Readiness also reports per-service dependency keys: Fusion reports `database`,
+`lake_writer` and `kafka`; Agents and Actions report `database`; Ingest reports
+`kafka` and `graph`; Realtime reports `kafka`. A value of `false` names the
+unavailable dependency. Probes are bounded to 1.5 seconds. The ClickHouse lake
+and Neo4j graph are auxiliary projections: their loss is reported as degraded,
+but they do not remove the event pipeline from service. Postgres and the Kafka
+spine are required and fail readiness when unavailable. Realtime exposes the
+same Kafka report on `/readyz` (and keeps `/health` and `/healthz` compatible).
+
 A detached replica is therefore pulled out of service but **not** killed. That
 is deliberate: restarting on readiness failure turns a broker or schema fault
 into a restart loop that hides the cause. What the chart does instead is
