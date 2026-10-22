@@ -82,11 +82,19 @@ jobs:
 
             # The target must exist; a channel pointed at nothing is worse
             # than a channel in the wrong place.
+            #
+            # NOT `read -r code ctype < <(curl -w ...)`: curl's -w output
+            # carries no trailing newline, so `read` assigns both fields and
+            # still returns 1 at EOF — and under the step's `bash -e` that
+            # exited the whole script before its first line of output. The
+            # first dispatch of this workflow died exactly there, silently.
             tmp_target=$(mktemp)
-            read -r code ctype < <(curl -s -o "$tmp_target" \
+            hdr=$(curl -s -o "$tmp_target" \
               -w '%{http_code} %{content_type}' \
               -H "Authorization: Bearer ${tok}" -H "Accept: ${MEDIA}" \
-              "https://ghcr.io/v2/beenuar/${repo}/manifests/${VERSION}")
+              "https://ghcr.io/v2/beenuar/${repo}/manifests/${VERSION}" || echo "000 none")
+            code=${hdr%% *}
+            ctype=${hdr#* }
             if [ "$code" != "200" ]; then
               echo "::error::${repo}: ${VERSION} answered HTTP ${code}; stable left at '${before}'"
               failures=$((failures + 1))
