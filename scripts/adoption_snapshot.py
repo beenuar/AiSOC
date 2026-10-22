@@ -21,8 +21,13 @@ saying why. It is never recorded as zero, because "nobody downloaded it" and
 starts lying.
 
 Usage:
-    python3 scripts/adoption_snapshot.py --write     # update the committed snapshot
+    python3 scripts/adoption_snapshot.py --write     # update docs/adoption in the working tree
     python3 scripts/adoption_snapshot.py             # print JSON, change nothing
+
+The committed ledger lives on the unprotected `adoption-data` branch (#1445);
+the workflow overlays that branch's docs/adoption into the working tree before
+calling --write, so the history this script appends to is the branch's, and
+the result is committed back there — never to protected `main`.
 """
 
 from __future__ import annotations

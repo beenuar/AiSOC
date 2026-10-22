@@ -9,6 +9,18 @@ name: Adoption snapshot
 # and PyPI download counts — and commits a dated row. No collector to run, no
 # data asked of users, and a missing source is recorded as "not measured"
 # rather than zero.
+#
+# The row lands on the unprotected `adoption-data` branch, not on `main`
+# (#1445). `main` is branch-protected with no bypass actors, so the old
+# direct push failed with GH006 on every scheduled run since protection
+# landed — and the obvious alternative, a PR opened with GITHUB_TOKEN, sits
+# unmergeable forever because events created by that token never trigger the
+# `pull_request` workflows the ~28 required checks come from. Every escape
+# that keeps the data on `main` needs an owner-provisioned credential (PAT,
+# App, or a protection bypass that re-opens the hole protection closed).
+# A data branch needs none of that, and nothing on `main` ever consumed
+# `docs/adoption` programmatically — it is a ledger humans read, and the
+# ledger's own history lives inside snapshot.json either way.
 
 on:
   schedule:
@@ -35,6 +47,27 @@ jobs:
         with:
           python-version: '3.11'
 
+      # The ledger lives on `adoption-data`; the collector appends to whatever
+      # history it finds in the working tree, so the branch's state is
+      # overlaid first. A missing branch is the fresh-ledger state, not an
+      # error — the json carries its own history, so nothing is lost either
+      # way.
+      - name: Overlay the ledger from the data branch
+        run: |
+          set -euo pipefail
+          # The branch tip is carried in GITHUB_ENV, never read back from
+          # FETCH_HEAD in a later step: actions/checkout runs its own fetch,
+          # so FETCH_HEAD exists even when this branch does not, and a data
+          # commit parented on main's tip would render as a mass deletion.
+          if git fetch --depth 1 origin adoption-data; then
+            tip=$(git rev-parse FETCH_HEAD)
+            git checkout "$tip" -- docs/adoption
+            echo "ADOPTION_PARENT=$tip" >> "$GITHUB_ENV"
+            echo "overlaid docs/adoption from adoption-data (${tip})"
+          else
+            echo "::notice title=adoption::no adoption-data branch yet; starting a fresh ledger"
+          fi
+
       # GITHUB_TOKEN carries push access for this repo, which the traffic API
       # requires. Without it views/clones come back 403 and land as
       # "not measured".
@@ -43,7 +76,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 scripts/adoption_snapshot.py --write
 
-      - name: Commit if anything moved
+      # Commit to `adoption-data` without touching this checkout's branch:
+      # build a root tree holding ONLY docs/adoption (so the data branch can
+      # never be mistaken for a code branch), parent it on the branch tip, and
+      # fast-forward push. No force — month over month this is an append.
+      - name: Commit the row to the data branch
         run: |
           set -euo pipefail
           if git diff --quiet -- docs/adoption; then
@@ -53,5 +90,14 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/adoption
-          git commit -m "chore(adoption): monthly snapshot"
-          git push
+          full_tree=$(git write-tree)
+          adoption_tree=$(git rev-parse "${full_tree}:docs/adoption")
+          docs_tree=$(printf '040000 tree %s\tadoption\n' "$adoption_tree" | git mktree)
+          root_tree=$(printf '040000 tree %s\tdocs\n' "$docs_tree" | git mktree)
+          if [ -n "${ADOPTION_PARENT:-}" ]; then
+            commit=$(git commit-tree "$root_tree" -p "$ADOPTION_PARENT" -m "chore(adoption): monthly snapshot")
+          else
+            commit=$(git commit-tree "$root_tree" -m "chore(adoption): monthly snapshot")
+          fi
+          git push origin "${commit}:refs/heads/adoption-data"
+          echo "::notice title=adoption::Snapshot committed to adoption-data (${commit})."
