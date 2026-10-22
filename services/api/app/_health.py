@@ -112,6 +112,7 @@ _DEPENDENCIES_ATTR = "health_dependencies"
 
 async def _run_dependency(probe: Callable[[], Any]) -> tuple[bool, str | None]:
     """Run one dependency probe with a hard 1.5 second wall-clock budget."""
+
     async def invoke() -> Any:
         result = probe() if inspect.iscoroutinefunction(probe) else await asyncio.to_thread(probe)
         if inspect.isawaitable(result):
@@ -125,9 +126,7 @@ async def _run_dependency(probe: Callable[[], Any]) -> tuple[bool, str | None]:
         return False, type(exc).__name__
 
 
-def register_dependency(
-    app: FastAPI, name: str, probe: Callable[[], Any], *, required: bool = True
-) -> None:
+def register_dependency(app: FastAPI, name: str, probe: Callable[[], Any], *, required: bool = True) -> None:
     """Report a bounded dependency check under its stable top-level JSON key."""
     dependencies = getattr(app.state, _DEPENDENCIES_ATTR, None)
     if dependencies is None:  # pragma: no cover
@@ -205,12 +204,10 @@ def install_health_routes(app: FastAPI, *, service_name: str) -> tuple[Callable[
         status_code = 200
 
         detached = _probe_detached(probes) if state["ready"] else []
-        results = await asyncio.gather(
-            *(_run_dependency(probe) for probe, _required in dependencies.values())
-        )
+        results = await asyncio.gather(*(_run_dependency(probe) for probe, _required in dependencies.values()))
         dependency_errors: dict[str, str] = {}
         degraded = False
-        for (name, (_probe, required)), (healthy, detail) in zip(dependencies.items(), results):
+        for (name, (_probe, required)), (healthy, detail) in zip(dependencies.items(), results, strict=True):
             body[name] = healthy
             if not healthy:
                 degraded = True

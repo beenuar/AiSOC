@@ -3,10 +3,9 @@ from __future__ import annotations
 import asyncio
 import time
 
+from app._health import install_health_routes, register_dependency
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from app._health import install_health_routes, register_dependency
 
 
 def test_dependency_is_reported_before_startup_finishes() -> None:

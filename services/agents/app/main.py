@@ -225,7 +225,7 @@ async def _database_ready() -> bool:
         return False
     for prefix in ("postgresql+asyncpg://", "postgres+asyncpg://"):
         if dsn.startswith(prefix):
-            dsn = "postgresql://" + dsn[len(prefix):]
+            dsn = "postgresql://" + dsn[len(prefix) :]
             break
     conn = await asyncpg.connect(dsn, timeout=1.4)
     await conn.close()
