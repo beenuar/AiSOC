@@ -1,6 +1,6 @@
 {
   "axis": "groundedness",
-  "metric": "mean fraction of the concrete indicators the agent asserted (IPs, hashes, CVEs, MITRE techniques, domains) that appear in the evidence it was handed, over a deterministic prefix of services/agents/tests/eval_data/synthetic_incidents.json",
+  "metric": "mean fraction of the concrete indicators the agent asserted (IPs, hashes, CVEs, MITRE techniques, domains) that appear in the evidence it was handed, over a deterministic prefix of services/agents/tests/eval_data/synthetic_incidents.json. An incident whose investigation fails outright (raises, or returns status=failed) scores 0 with the reason recorded in the report's groundedness.zero_scored block, so the sample size always equals the dispatched prefix \u2014 dropping failures is survivor bias, and the shrunken sample fails this gate's own size requirement.",
   "model": "qwen2.5:0.5b",
   "served_by": "Ollama, locally. No hosted provider was involved in any run below and this floor describes none. A hosted model would need its own runs and its own floor.",
   "incidents": 10,
@@ -11,36 +11,64 @@
       "incidents": 10,
       "runs": 7,
       "where": "developer machine (Apple silicon, Ollama 0.30.7)",
-      "note": "identical to four decimal places across all seven; three were taken after the completion bound landed and returned the same value, so the bound truncates nothing the agents legitimately write"
+      "note": "identical to four decimal places across all seven; three were taken after the completion bound landed and returned the same value, so the bound truncates nothing the agents legitimately write [pre-fix harness: per-incident asyncio.run left langchain-openai's cached async HTTP client on a dead loop, so recon's model call failed on every incident after the first and ran heuristics; failed incidents were dropped from the sample]"
     },
     {
       "mean": 0.5821,
       "incidents": 10,
       "runs": 1,
       "where": "GitHub-hosted ubuntu-latest runner, live-agent-eval.yml run 36508200093",
-      "note": "62 LLM calls placed"
+      "note": "62 LLM calls placed [pre-fix harness: per-incident asyncio.run left langchain-openai's cached async HTTP client on a dead loop, so recon's model call failed on every incident after the first and ran heuristics; failed incidents were dropped from the sample]"
     },
     {
       "mean": 0.5329,
       "incidents": 10,
       "runs": 1,
       "where": "GitHub-hosted ubuntu-latest runner, live-agent-eval.yml run 36509668438",
-      "note": "62 LLM calls placed; the lowest run observed anywhere"
+      "note": "62 LLM calls placed; the lowest run observed anywhere [pre-fix harness: per-incident asyncio.run left langchain-openai's cached async HTTP client on a dead loop, so recon's model call failed on every incident after the first and ran heuristics; failed incidents were dropped from the sample]"
     },
     {
       "mean": 0.5933,
       "incidents": 10,
       "runs": 1,
       "where": "GitHub-hosted ubuntu-latest runner, live-agent-eval.yml run 36517390566 on main",
-      "note": "62 LLM calls placed; the first run of this workflow to complete with the floor asserted, and the highest observed"
+      "note": "62 LLM calls placed; the first run of this workflow to complete with the floor asserted, and the highest observed [pre-fix harness: per-incident asyncio.run left langchain-openai's cached async HTTP client on a dead loop, so recon's model call failed on every incident after the first and ran heuristics; failed incidents were dropped from the sample]"
     },
     {
       "mean": 0.5364,
       "incidents": 20,
       "runs": 16,
       "where": "developer machine, over the 20-incident prefix",
-      "note": "not the gated slice - recorded because sixteen identical runs show the measurement is a property of the prefix rather than of the run"
+      "note": "not the gated slice - recorded because sixteen identical runs show the measurement is a property of the prefix rather than of the run [pre-fix harness: per-incident asyncio.run left langchain-openai's cached async HTTP client on a dead loop, so recon's model call failed on every incident after the first and ran heuristics; failed incidents were dropped from the sample]"
+    },
+    {
+      "mean": 0.51,
+      "incidents": 10,
+      "runs": 1,
+      "where": "developer machine (Apple silicon, host Ollama), fixed harness",
+      "note": "74 LLM calls placed (vs 62 pre-fix: recon now consults the model in every incident); 0 zero-scored"
+    },
+    {
+      "mean": 0.445,
+      "incidents": 10,
+      "runs": 1,
+      "where": "developer machine (Apple silicon, containerized Ollama), fixed harness",
+      "note": "78 LLM calls placed; 1 zero-scored (ResponderPlan validation failure \u2014 the same family as the CI drop) participating as 0 in the mean"
+    },
+    {
+      "mean": 0.44,
+      "incidents": 10,
+      "runs": 1,
+      "where": "developer machine (Apple silicon, containerized Ollama), fixed harness",
+      "note": "78 LLM calls placed; 1 zero-scored, same family; the lowest fixed-harness run observed"
+    },
+    {
+      "mean": 0.5234,
+      "incidents": 10,
+      "runs": 2,
+      "where": "GitHub-hosted ubuntu-latest, live-agent-eval.yml runs of Oct 13 and Oct 20 (incl. 39390269883), re-expressed",
+      "note": "both runs reported the identical 0.5815 over 9 incidents after silently dropping one unparseable incident; 0.5815 x 9/10 = 0.5234 is the same measurement under zero-fill semantics, recorded as derived rather than re-run"
     }
   ],
-  "derivation": "The four agents decode greedily at temperature 0, and on one machine that makes the measurement a point mass: seven local runs over the 10-incident prefix returned 0.5561 to four decimal places, and sixteen over the 20-incident prefix returned 0.5364. It is not a point mass across machines. Three GitHub-runner runs of the same slice returned 0.5821, 0.5329 and 0.5933 - a spread of 0.0604 - because a quantised model decoding greedily on a different kernel diverges at the margins. The floor is set from that spread rather than from the local stability, which would have been the misleading number to use. 0.40 sits 0.1329 below the lowest run observed anywhere and about 2.2 times the observed cross-runner spread. It still fails anything a quarter worse than today. Raise it only with fresh runs recorded here; a floor above the lowest run it cites is refused by scripts/check_live_agent_floor.py, because that floor would red every run from the day it landed."
+  "derivation": "Two significant figures of history. The original floor was set from the pre-fix harness: seven local runs at 0.5561 and three GitHub-runner runs spread 0.5329-0.5933, with 0.40 chosen 0.1329 below the lowest. Those runs are kept above for provenance but they describe a harness with two defects fixed in the same change as this re-derivation (#1466): per-incident asyncio.run poisoned langchain-openai's cached async HTTP client, so recon ran its deterministic fallback on every incident after the first (llm_calls 62 vs 74-78 now), and an incident whose investigation failed was dropped, inflating the mean and shrinking the sample below what this gate requires. Under the fixed harness (one loop per run, failures scored 0 with reasons recorded) the observed means are 0.51, 0.445 and 0.44 locally and 0.5234 re-expressed from the two identical CI runs that motivated the fix. The floor stays 0.40: it sits below the lowest run cited anywhere (0.44), and the thinner margin is deliberate rather than accidental \u2014 one failed investigation costs the mean about 0.05 under zero-fill, so a run with three or more outright failures dips below the floor and reds the job, which is exactly the signal a reader should get from a model failing a third of its investigations. Raise or move it only with fresh runs recorded here; a floor above the lowest cited run is refused by scripts/check_live_agent_floor.py."
 }

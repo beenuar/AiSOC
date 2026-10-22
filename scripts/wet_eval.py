@@ -264,6 +264,14 @@ class WetEvalRecord:
     #: through to its deterministic path, which produces plausible records
     #: that no model wrote.
     llm_calls: int = 0
+    #: Set when the incident could not be investigated at all (the pipeline
+    #: raised, or returned status=failed) and its groundedness was therefore
+    #: scored as 0 with this reason recorded. Scoring the failure as 0 keeps
+    #: the sample size equal to the dispatched prefix; *dropping* it would be
+    #: survivor bias — the mean over the incidents that happened to survive
+    #: flatters the model, and the shrunken sample then fails the floor
+    #: checker's size requirement anyway (#1466).
+    zero_scored_reason: str | None = None
 
     @property
     def total_tokens(self) -> int:
@@ -460,37 +468,91 @@ def _live_records(
     # already set one (e.g. local dev with a personal key in the env).
     os.environ.setdefault("OPENAI_API_KEY", api_key)
 
-    for inc in incidents:
-        # Exactly what the agent is handed, and therefore exactly what
-        # groundedness scores its output against. The incident's
-        # ``expected_*`` keys are the answer sheet and are deliberately left
-        # out: an agent that names a technique the telemetry never showed has
-        # asserted an ungrounded indicator even when the technique is right.
-        alert_summary = f"{inc.get('title') or ''}\n\n{inc.get('description') or ''}".strip()
-        raw_alert = {
-            "severity": inc.get("severity"),
-            "telemetry": inc.get("telemetry") or [],
-            "evidence_keywords": inc.get("evidence_keywords") or [],
-        }
+    def _zero_scored(inc: dict[str, Any], *, reason: str, latency_s: float, llm_calls: int) -> WetEvalRecord:
+        """A failed investigation scored as 0, not dropped (#1466).
 
-        t0 = time.perf_counter()
-        try:
-            state = asyncio.run(
-                run_investigation(
+        Dropping it is survivor bias twice over: the mean over the incidents
+        that happened to survive flatters the model, and the shrunken sample
+        then fails ``check_live_agent_floor``'s size requirement anyway. The
+        two honest readings of "the agent could not investigate this" are a
+        groundedness of 0 with the reason recorded — nothing it asserted was
+        grounded, because it asserted nothing scoreable — and a sample size
+        that always equals the dispatched prefix.
+        """
+        return WetEvalRecord(
+            incident_id=str(inc.get("id") or ""),
+            template_id=str(inc.get("template_id") or ""),
+            family=family_for_template(str(inc.get("template_id") or "")),
+            severity=str(inc.get("severity") or "medium").lower(),
+            prompt_tokens=0,
+            completion_tokens=0,
+            latency_seconds=round(latency_s, 4),
+            usd=None,
+            mitre_correct=False,
+            groundedness=0.0,
+            hallucinated=[],
+            llm_calls=llm_calls,
+            zero_scored_reason=reason,
+        )
+
+    async def _dispatch_all() -> None:
+        # One event loop for the whole run, matching production, where the
+        # triage worker's loop lives as long as the process. Per-incident
+        # ``asyncio.run`` looked equivalent and was not: langchain-openai
+        # caches its default async httpx client across constructions (keyed
+        # on base_url + timeout), so incident 2's fresh loop inherited a
+        # pooled connection bound to incident 1's closed loop, and the first
+        # LLM call of every subsequent incident — recon, always — died with
+        # "Event loop is closed" and fell back to heuristics while the rest
+        # of the pipeline proceeded on the recycled client. The report then
+        # graded `mode: live` over investigations whose recon stage never
+        # consulted the model (#1466; reproduced locally, incident 1 recon
+        # 9.2s of real tokens, incident 2 recon failing in 9ms).
+        for inc in incidents:
+            # Exactly what the agent is handed, and therefore exactly what
+            # groundedness scores its output against. The incident's
+            # ``expected_*`` keys are the answer sheet and are deliberately left
+            # out: an agent that names a technique the telemetry never showed has
+            # asserted an ungrounded indicator even when the technique is right.
+            alert_summary = f"{inc.get('title') or ''}\n\n{inc.get('description') or ''}".strip()
+            raw_alert = {
+                "severity": inc.get("severity"),
+                "telemetry": inc.get("telemetry") or [],
+                "evidence_keywords": inc.get("evidence_keywords") or [],
+            }
+
+            t0 = time.perf_counter()
+            try:
+                state = await run_investigation(
                     case_id=str(inc.get("id") or ""),
                     alert_summary=alert_summary,
                     raw_alert=raw_alert,
                 )
-            )
-        except Exception as exc:  # pragma: no cover - defensive.
-            warnings.append(f"Live agent failed on incident {inc.get('id')}: {exc!r}; skipping.")
-            continue
-        latency_s = time.perf_counter() - t0
+            except Exception as exc:  # pragma: no cover - defensive.
+                reason = f"the investigation raised: {exc!r}"
+                warnings.append(f"Live agent failed on incident {inc.get('id')}: {exc!r}; scored as 0 groundedness.")
+                records.append(_zero_scored(inc, reason=reason, latency_s=time.perf_counter() - t0, llm_calls=0))
+                continue
+            latency_s = time.perf_counter() - t0
 
-        if str(getattr(state, "status", "")) == "failed":
-            warnings.append(f"Live agent returned status=failed on incident {inc.get('id')}: {getattr(state, 'error', None)!r}; skipping.")
-            continue
+            if str(getattr(state, "status", "")) == "failed":
+                error = getattr(state, "error", None)
+                reason = f"the investigation returned status=failed: {error!r}"
+                warnings.append(f"Live agent returned status=failed on incident {inc.get('id')}: {error!r}; scored as 0 groundedness.")
+                failed_calls = int((getattr(state, "cost_summary", None) or {}).get("call_count") or 0)
+                records.append(_zero_scored(inc, reason=reason, latency_s=latency_s, llm_calls=failed_calls))
+                continue
 
+            _score_live(inc, state, latency_s, alert_summary=alert_summary, raw_alert=raw_alert)
+
+    def _score_live(
+        inc: dict[str, Any],
+        state: Any,
+        latency_s: float,
+        *,
+        alert_summary: str,
+        raw_alert: dict[str, Any],
+    ) -> None:
         # Measured by the run's own CostTracker, which sums the provider's
         # reported usage across all four agents' calls. Only estimated when
         # the provider surfaced nothing at all.
@@ -534,6 +596,8 @@ def _live_records(
                 mitre_correct=mitre_correct,
             )
         )
+
+    asyncio.run(_dispatch_all())
     return records, warnings, False
 
 
@@ -623,9 +687,22 @@ def _groundedness_block(records: list[WetEvalRecord]) -> dict[str, Any]:
     for rec in with_hallucination:
         for indicator in rec.hallucinated:
             unsupported[indicator] = unsupported.get(indicator, 0) + 1
+    # Incidents the agent could not investigate at all, scored 0 rather than
+    # dropped (#1466): dropping them is survivor bias, and the reader of this
+    # block needs to see *that* a zero was a failure and *why*, or a mean
+    # pulled down by a crash is indistinguishable from a model that grounds
+    # poorly.
+    zero_scored = [r for r in records if r.zero_scored_reason]
+    block_zero: dict[str, Any] = {}
+    if zero_scored:
+        block_zero = {
+            "zero_scored_incidents": len(zero_scored),
+            "zero_scored": [{"incident": r.incident_id, "reason": r.zero_scored_reason} for r in zero_scored],
+        }
     return {
         "measured": True,
         "scored_incidents": len(scored),
+        **block_zero,
         # Beside the number, because a reader cannot otherwise tell the
         # model's output from the deterministic fallback's.
         "llm_calls_placed": sum(r.llm_calls for r in records),
