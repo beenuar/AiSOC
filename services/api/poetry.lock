@@ -3697,19 +3697,19 @@ files = [
 
 [[package]]
 name = "tenacity"
-version = "9.1.4"
+version = "9.2.1"
 description = "Retry code until it succeeds"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "tenacity-9.1.4-py3-none-any.whl", hash = "sha256:6095a360c919085f28c6527de529e76a06ad89b23659fa881ae0649b867a9d55"},
-    {file = "tenacity-9.1.4.tar.gz", hash = "sha256:adb31d4c263f2bd041081ab33b498309a57c77f9acf2db65aadf0898179cf93a"},
+    {file = "tenacity-9.2.1-py3-none-any.whl", hash = "sha256:9e56f17539296baab7beabb08b92f6ee3d7be92d8be72d763360677c2ad6580e"},
+    {file = "tenacity-9.2.1.tar.gz", hash = "sha256:a606b5c808d0cded4a359d5b9932d867ff2a6a6b64d37350260fd01bbdf83839"},
 ]
 
 [package.extras]
 doc = ["reno", "sphinx"]
-test = ["pytest", "tornado (>=4.5)", "typeguard"]
+test = ["pytest", "tornado (>=6.0)"]
 
 [[package]]
 name = "tinycss2"
