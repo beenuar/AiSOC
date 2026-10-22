@@ -6,7 +6,7 @@ from typing import Any
 import redis.asyncio as aioredis
 from fastapi import FastAPI
 
-from app._health import install_health_routes, register_subscription
+from app._health import install_health_routes, register_dependency, register_subscription
 from app.api.router import router, set_worker
 from app.core.config import settings
 from app.core.logging import configure_logging, logger
@@ -185,6 +185,7 @@ async def lifespan(app: FastAPI):
     worker_task = asyncio.create_task(worker.start())
     worker_task.add_done_callback(_log_worker_exit)
     register_subscription(app, "alerts+raw_events", lambda: worker.attached)
+    register_dependency(app, "kafka", lambda: worker.attached)
     app.state.worker_task = worker_task
     app.state.redis = redis_client
 
@@ -237,6 +238,43 @@ app = FastAPI(
 _mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-fusion")
 app.state.mark_ready = _mark_ready
 app.state.mark_not_ready = _mark_not_ready
+
+
+async def _postgres_ready() -> bool:
+    import asyncpg
+
+    dsn = settings.database_url
+    for prefix in ("postgresql+asyncpg://", "postgres+asyncpg://"):
+        if dsn.startswith(prefix):
+            dsn = "postgresql://" + dsn[len(prefix) :]
+            break
+    conn = await asyncpg.connect(dsn, timeout=1.4)
+    await conn.close()
+    return True
+
+
+def _clickhouse_ready() -> bool:
+    if not settings.lake_writer_enabled:
+        return False
+    from clickhouse_driver import Client
+
+    client = Client(
+        host=settings.clickhouse_host,
+        port=settings.clickhouse_port,
+        database=settings.clickhouse_database,
+        user=settings.clickhouse_user,
+        password=settings.clickhouse_password or "",
+        connect_timeout=0.7,
+        send_receive_timeout=0.7,
+    )
+    try:
+        return client.execute("SELECT 1", settings={"max_execution_time": 1}) == [(1,)]
+    finally:
+        client.disconnect()
+
+
+register_dependency(app, "database", _postgres_ready)
+register_dependency(app, "lake_writer", _clickhouse_ready, required=False)
 
 app.include_router(router)
 

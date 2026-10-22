@@ -7,7 +7,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app._health import install_health_routes, register_subscription
+from app._health import install_health_routes, register_dependency, register_subscription
 from app.api.contextual import router as contextual_router
 from app.api.copilot import router as copilot_router
 from app.api.explain import router as explain_router
@@ -215,6 +215,24 @@ app = FastAPI(
 _mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-agents")
 app.state.mark_ready = _mark_ready
 app.state.mark_not_ready = _mark_not_ready
+
+
+async def _database_ready() -> bool:
+    import asyncpg
+
+    dsn = os.getenv("DATABASE_URL", "").strip()
+    if not dsn:
+        return False
+    for prefix in ("postgresql+asyncpg://", "postgres+asyncpg://"):
+        if dsn.startswith(prefix):
+            dsn = "postgresql://" + dsn[len(prefix) :]
+            break
+    conn = await asyncpg.connect(dsn, timeout=1.4)
+    await conn.close()
+    return True
+
+
+register_dependency(app, "database", _database_ready)
 
 # CORS — the web console talks to this service directly (it does not go through
 # the Next.js rewrite layer for agent endpoints because we want to stream

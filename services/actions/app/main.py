@@ -18,10 +18,12 @@ without restarting the process.
 
 from __future__ import annotations
 
+import os
+
 import structlog
 from fastapi import FastAPI
 
-from app._health import install_health_routes
+from app._health import install_health_routes, register_dependency
 from app.api.live_actions_router import router as live_actions_router
 from app.api.replay_history_router import router as replay_history_router
 from app.api.router import router as legacy_router
@@ -46,6 +48,24 @@ app = FastAPI(
 _mark_ready, _mark_not_ready = install_health_routes(app, service_name="aisoc-actions")
 app.state.mark_ready = _mark_ready
 app.state.mark_not_ready = _mark_not_ready
+
+
+async def _database_ready() -> bool:
+    import asyncpg
+
+    dsn = (os.getenv("DATABASE_DSN") or os.getenv("DATABASE_URL") or "").strip()
+    if not dsn:
+        return False
+    for prefix in ("postgresql+asyncpg://", "postgres+asyncpg://"):
+        if dsn.startswith(prefix):
+            dsn = "postgresql://" + dsn[len(prefix) :]
+            break
+    conn = await asyncpg.connect(dsn, timeout=1.4)
+    await conn.close()
+    return True
+
+
+register_dependency(app, "database", _database_ready)
 
 app.include_router(legacy_router, prefix="/api/v1")
 app.include_router(live_actions_router, prefix="/api/v1")

@@ -94,6 +94,8 @@ gate that every service has one and wires it in.
 
 from __future__ import annotations
 
+import asyncio
+import inspect
 import json
 from collections.abc import Callable
 from typing import Any
@@ -105,6 +107,31 @@ from fastapi import FastAPI, Response
 #: module global because a module global is shared by every app in the
 #: process, which makes two test clients interfere.
 _STATE_ATTR = "health_subscriptions"
+_DEPENDENCIES_ATTR = "health_dependencies"
+
+
+async def _run_dependency(probe: Callable[[], Any]) -> tuple[bool, str | None]:
+    """Run one dependency probe with a hard 1.5 second wall-clock budget."""
+
+    async def invoke() -> Any:
+        result = probe() if inspect.iscoroutinefunction(probe) else await asyncio.to_thread(probe)
+        if inspect.isawaitable(result):
+            return await result
+        return result
+
+    try:
+        result = await asyncio.wait_for(invoke(), timeout=1.5)
+        return bool(result), None if result else "unavailable"
+    except Exception as exc:  # noqa: BLE001 — probes must not take down readiness
+        return False, type(exc).__name__
+
+
+def register_dependency(app: FastAPI, name: str, probe: Callable[[], Any], *, required: bool = True) -> None:
+    """Report a bounded dependency check under its stable top-level JSON key."""
+    dependencies = getattr(app.state, _DEPENDENCIES_ATTR, None)
+    if dependencies is None:  # pragma: no cover
+        raise RuntimeError("register_dependency requires install_health_routes(app) first")
+    dependencies[name] = (probe, required)
 
 
 def _probe_detached(probes: dict[str, Callable[[], bool]]) -> list[str]:
@@ -155,7 +182,9 @@ def install_health_routes(app: FastAPI, *, service_name: str) -> tuple[Callable[
     """
     state: dict[str, bool] = {"ready": False}
     probes: dict[str, Callable[[], bool]] = {}
+    dependencies: dict[str, tuple[Callable[[], Any], bool]] = {}
     setattr(app.state, _STATE_ATTR, probes)
+    setattr(app.state, _DEPENDENCIES_ATTR, dependencies)
 
     @app.get(
         "/livez",
@@ -174,15 +203,29 @@ def install_health_routes(app: FastAPI, *, service_name: str) -> tuple[Callable[
         body: dict[str, Any] = {"status": "ready", "service": service_name}
         status_code = 200
 
+        detached = _probe_detached(probes) if state["ready"] else []
+        results = await asyncio.gather(*(_run_dependency(probe) for probe, _required in dependencies.values()))
+        dependency_errors: dict[str, str] = {}
+        degraded = False
+        for (name, (_probe, required)), (healthy, detail) in zip(dependencies.items(), results, strict=True):
+            body[name] = healthy
+            if not healthy:
+                degraded = True
+                if detail:
+                    dependency_errors[name] = detail
+                if required:
+                    detached.append(name)
+        if dependency_errors:
+            body["dependency_errors"] = dependency_errors
         if not state["ready"]:
             body["status"] = "starting"
             status_code = 503
-        else:
-            detached = _probe_detached(probes)
-            if detached:
-                body["status"] = "degraded"
-                body["detached"] = detached
-                status_code = 503
+        elif detached:
+            body["status"] = "degraded"
+            body["detached"] = sorted(detached)
+            status_code = 503
+        elif degraded:
+            body["status"] = "ready_degraded"
 
         # Named subscriptions are reported either way, so a 200 says which
         # ones were checked rather than only that nothing was wrong. A probe
