@@ -54,7 +54,7 @@
     "@types/node": "^26.6.4",
     "prettier": "^3.9.9",
     "tsx": "^4.23.15",
-    "turbo": "^2.11.4",
+    "turbo": "^2.11.9",
     "typescript": "^6.0.3"
   },
   "engines": {
