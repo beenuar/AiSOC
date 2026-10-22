@@ -39,9 +39,11 @@ restart.
 from __future__ import annotations
 
 import argparse
+import http.server
 import json
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -297,6 +299,16 @@ _ALLOWED_PROBE_PREFIXES = ("http://127.0.0.1:", "http://localhost:", "https://12
 
 
 def _probe(url: str, timeout: float = 4.0) -> dict[str, Any] | None:
+    """Read a readiness body, *including* from an HTTP error response.
+
+    A block-store dependency failing readiness with a 503 **and a JSON body
+    naming why** is exactly the correct behaviour — the API answers 503 with
+    ``{"database": false, ...}`` while Postgres is down. ``urlopen`` raises on
+    any 4xx/5xx, so without reading ``HTTPError``'s body the grader scored
+    that correct behaviour as silence ("``database`` reads None"). Connection
+    refused, timeouts and non-JSON bodies still read as ``None``: those are
+    genuinely "nothing was said".
+    """
     if not url.startswith(_ALLOWED_PROBE_PREFIXES):
         raise ValueError(
             f"refusing to probe {url!r}: this harness only reads readiness endpoints on the "
@@ -305,8 +317,33 @@ def _probe(url: str, timeout: float = 4.0) -> dict[str, Any] | None:
     try:
         with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - prefix-checked above
             return dict(json.loads(response.read().decode("utf-8")))
+    except urllib.error.HTTPError as err:
+        try:
+            return dict(json.loads(err.read().decode("utf-8")))
+        except (ValueError, OSError):
+            return None
     except (urllib.error.URLError, TimeoutError, ValueError, OSError):
         return None
+
+
+def _responding(url: str, timeout: float = 4.0) -> bool:
+    """Is a dependent *serving its job*? Only a 2xx counts.
+
+    Deliberately stricter than :func:`_probe`: dependents are probed at their
+    readiness endpoints, where a 503 means "alive but cannot do my job" — for
+    a block store that is the required outcome, and counting it as responding
+    would grade the correct refusal as a finding.
+    """
+    if not url.startswith(_ALLOWED_PROBE_PREFIXES):
+        raise ValueError(
+            f"refusing to probe {url!r}: this harness only reads readiness endpoints on the "
+            f"local stack it is taking down, which must start with one of {_ALLOWED_PROBE_PREFIXES}"
+        )
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:  # noqa: S310 - prefix-checked above
+            return 200 <= response.status < 300
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        return False
 
 
 def _self_test() -> int:
@@ -397,8 +434,67 @@ def _self_test() -> int:
             print(f"  self-test [FAIL] {store.store} declares unknown behaviour {store.behaviour!r}")
             failures += 1
 
+    failures += _probe_self_test()
+
     print(f"store_outage: self-test {'OK' if not failures else 'FAILED'} — {len(STORES)} stores declared")
     return 1 if failures else 0
+
+
+def _probe_self_test() -> int:
+    """The probe split, against a real local HTTP server (stdlib, no containers).
+
+    The behaviours under test are the ones the live run depends on:
+
+    * ``_probe`` reads the JSON body of a **503** — a block store failing
+      readiness with a reason is correct behaviour, not silence.
+    * ``_responding`` refuses that same 503 — a dependent that is alive but
+      cannot do its job is not serving.
+    """
+
+    class _Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802 - stdlib handler contract
+            if self.path == "/ready-200":
+                body = json.dumps({"status": "ready", "database": True}).encode()
+                self.send_response(200)
+            elif self.path == "/ready-503":
+                body = json.dumps({"status": "not_ready", "database": False}).encode()
+                self.send_response(503)
+            else:
+                body = b"not json"
+                self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *_args: Any) -> None:  # keep the self-test quiet
+            return None
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), _Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    failures = 0
+    try:
+        cases = [
+            ("_probe reads a 200 body", _probe(f"{base}/ready-200") == {"status": "ready", "database": True}),
+            (
+                "_probe reads the JSON body of a 503 (a refusal with a reason is not silence)",
+                _probe(f"{base}/ready-503") == {"status": "not_ready", "database": False},
+            ),
+            ("_probe returns None for a non-JSON error body", _probe(f"{base}/ready-junk") is None),
+            ("_responding accepts a 200", _responding(f"{base}/ready-200") is True),
+            ("_responding refuses a 503 (alive but not doing its job is not serving)", _responding(f"{base}/ready-503") is False),
+            ("_responding refuses a dead socket", _responding("http://127.0.0.1:1/ready") is False),
+        ]
+        for name, ok in cases:
+            print(f"  self-test [{'ok' if ok else 'FAIL'}] {name}")
+            if not ok:
+                failures += 1
+    finally:
+        server.shutdown()
+        thread.join(timeout=5)
+    return failures
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -416,6 +512,13 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--store and --readiness-url are required unless --self-test")
 
     expectation = next(s for s in STORES if s.store == args.store)
+    if _resolve_container(expectation.container) is None:
+        print(
+            f"store_outage: container {expectation.container!r} is not running in this stack — "
+            "the store is probably behind a compose profile this job did not start "
+            "(clickhouse and neo4j live behind `--profile full`). Grading nothing is not a pass."
+        )
+        return 2
     if not _container_action(expectation.container, "stop"):
         print(f"store_outage: could not stop container {expectation.container!r} — docker unavailable?")
         return 2
@@ -426,7 +529,7 @@ def main(argv: list[str] | None = None) -> int:
         responding: dict[str, bool] = {}
         for pair in args.dependent_url:
             name, _, url = pair.partition("=")
-            responding[name] = _probe(url) is not None
+            responding[name] = _responding(url)
     finally:
         _container_action(expectation.container, "start")
 

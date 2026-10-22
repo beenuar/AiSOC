@@ -92,9 +92,68 @@ jobs:
     strategy:
       # One store's result must not cancel the others — the interesting
       # output is which of the six behave and which do not.
+      #
+      # Each leg names the readiness surface that OWNS the store and the
+      # dependents the expectation declares (#1446). The previous shape
+      # probed one API URL for all six stores and two fixed dependents, and
+      # every one of its findings was an artifact of that contract rather
+      # than a fact about a service: `/api/v1/health/ready` did not exist
+      # (404 → every key "reads None"), `/api/v1/health` did not exist
+      # either (404 → "api stopped serving" on every leg), the `ingest`
+      # URL pointed at the *enrichment* service's host port (8080; ingest
+      # publishes 8081), and the recovery poll re-read the same 404
+      # forever ("never reconnected"). clickhouse and neo4j are behind
+      # `--profile full`, so those legs graded a container that was never
+      # started and exited 2 blaming Docker.
+      #
+      # Dependent URLs point at readiness-class endpoints: a 503 there
+      # means "alive but cannot do my job", which `_responding` counts as
+      # not serving — the required outcome for a block store's dependents.
+      # Legs whose owning service does not yet export the store's key
+      # (fusion: lake_writer/kafka; ingest: kafka/graph) stay red with the
+      # finding naming that service — that red is the job of this
+      # workflow, and the follow-ups live on #1446.
       fail-fast: false
       matrix:
-        store: [clickhouse, neo4j, qdrant, redis, kafka, postgres]
+        include:
+          - store: postgres
+            profile: core
+            readiness_url: http://127.0.0.1:8000/api/v1/health/ready
+            dependent_urls: >-
+              api=http://127.0.0.1:8000/api/v1/health/ready
+              fusion=http://127.0.0.1:8003/health
+              agents=http://127.0.0.1:8001/health
+              actions=http://127.0.0.1:8002/health
+          - store: redis
+            profile: core
+            readiness_url: http://127.0.0.1:8000/api/v1/health/ready
+            dependent_urls: >-
+              api=http://127.0.0.1:8000/api/v1/health/ready
+              agents=http://127.0.0.1:8001/health
+          - store: qdrant
+            profile: core
+            readiness_url: http://127.0.0.1:8005/health
+            dependent_urls: >-
+              threatintel=http://127.0.0.1:8005/health
+          - store: kafka
+            profile: core
+            readiness_url: http://127.0.0.1:8081/health
+            dependent_urls: >-
+              ingest=http://127.0.0.1:8081/health
+              fusion=http://127.0.0.1:8003/health
+              realtime=http://127.0.0.1:8086/health
+          - store: clickhouse
+            profile: full
+            readiness_url: http://127.0.0.1:8003/health
+            dependent_urls: >-
+              fusion=http://127.0.0.1:8003/health
+              api=http://127.0.0.1:8000/api/v1/health/ready
+          - store: neo4j
+            profile: full
+            readiness_url: http://127.0.0.1:8081/health
+            dependent_urls: >-
+              ingest=http://127.0.0.1:8081/health
+              api=http://127.0.0.1:8000/api/v1/health/ready
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -112,24 +171,42 @@ jobs:
 
       - name: Bring the stack up
         id: boot
+        env:
+          PROFILE: ${{ matrix.profile }}
         run: |
           set -euo pipefail
-          docker compose up -d --wait --wait-timeout 300 || {
-            echo "::error::the stack did not come up; the outage below would grade nothing"
-            docker compose ps
-            exit 1
-          }
+          # The full profile is how clickhouse and neo4j exist at all: they
+          # are `--profile full` services, and the flags are what turn the
+          # lake writer and graph writer on in fusion and ingest. Grading a
+          # full-profile store on the core stack stops a container that was
+          # never started.
+          if [ "$PROFILE" = "full" ]; then
+            AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true \
+              docker compose --profile full up -d --wait --wait-timeout 300 || {
+                echo "::error::the stack did not come up; the outage below would grade nothing"
+                docker compose --profile full ps
+                exit 1
+              }
+          else
+            docker compose up -d --wait --wait-timeout 300 || {
+              echo "::error::the stack did not come up; the outage below would grade nothing"
+              docker compose ps
+              exit 1
+            }
+          fi
 
       - name: Take ${{ matrix.store }} down and grade what the services say
         env:
           STORE: ${{ matrix.store }}
+          READINESS_URL: ${{ matrix.readiness_url }}
+          DEPENDENT_URLS: ${{ matrix.dependent_urls }}
         run: |
           set -euo pipefail
-          python3 scripts/chaos/store_outage.py \
-            --store "$STORE" \
-            --readiness-url http://127.0.0.1:8000/api/v1/health/ready \
-            --dependent-url "api=http://127.0.0.1:8000/api/v1/health" \
-            --dependent-url "ingest=http://127.0.0.1:8080/health"
+          args=(--store "$STORE" --readiness-url "$READINESS_URL")
+          for pair in $DEPENDENT_URLS; do
+            args+=(--dependent-url "$pair")
+          done
+          python3 scripts/chaos/store_outage.py "${args[@]}"
 
       - name: Logs, on failure
         if: failure()

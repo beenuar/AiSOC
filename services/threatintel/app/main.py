@@ -10,6 +10,7 @@ AiSOC — open-source AI Security Operations Center (MIT License)
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from functools import partial
@@ -340,17 +341,37 @@ app.include_router(indicators_router)
 
 @app.get("/health")
 async def health() -> dict:
-    """Health and status endpoint."""
+    """Health and status endpoint, naming every dependency it checked.
+
+    ``vector_store`` is the Qdrant similarity leg (#1446): a **degrade**
+    dependency — IOC ingestion continues without it and enrichment responses
+    say the similarity leg was skipped — so its loss flips the key while the
+    status stays ``ok``. The chaos store-outage grader reads exactly this
+    key; before it existed, Qdrant being down was invisible here, which is
+    indistinguishable from a healthy idle store. Each probe is hard-capped
+    well inside the grader's 4-second read budget, because a probe that
+    waits out a full connect timeout turns "down and we say so" into "down
+    and we say nothing".
+    """
     try:
-        redis: aioredis.Redis = app.state.redis
-        await redis.ping()
+        async with asyncio.timeout(1.5):
+            redis: aioredis.Redis = app.state.redis
+            await redis.ping()
         redis_ok = True
     except Exception:
         redis_ok = False
 
+    try:
+        async with asyncio.timeout(1.5):
+            await app.state.qdrant_client.get_collections()
+        vector_ok = True
+    except Exception:
+        vector_ok = False
+
     return {
         "status": "ok",
         "redis": redis_ok,
+        "vector_store": vector_ok,
         "scheduler": app.state.scheduler._scheduler.running if hasattr(app.state, "scheduler") else False,
         "airgap": airgap_status(),
     }

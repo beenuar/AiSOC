@@ -10792,6 +10792,67 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/health:
+    get:
+      tags:
+      - health
+      summary: Health Liveness
+      description: 'Liveness: the process answers HTTP. Nothing else is claimed.
+
+
+        Deliberately touches no store — a liveness probe that fails when a
+
+        dependency is down invites the orchestrator to restart a healthy
+
+        process, which converts an outage into an outage plus a restart storm.
+
+        Whether the service can do its *job* is ``/ready``''s question.'
+      operationId: health_liveness_api_v1_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health Liveness Api V1 Health Get
+  /api/v1/health/ready:
+    get:
+      tags:
+      - health
+      summary: Health Ready
+      description: 'Readiness: can this service do its job, named per dependency.
+
+
+        ``database`` is **block**: the API is the system of record''s front door,
+
+        so without Postgres the status code goes 503 and a load balancer should
+
+        stop sending traffic here. The body still names every dependency —
+
+        failing *with the reason* is the whole point, and the chaos grader reads
+
+        the keys out of the 503 body.
+
+
+        ``cache`` is **degrade**: Redis is a cache and every read falls through
+
+        to its source, so its loss is reported (`cache: false`) while the status
+
+        stays 200 and the service keeps serving. Failing readiness over a cache
+
+        would pull the API out of the load balancer to fix a cache.'
+      operationId: health_ready_api_v1_health_ready_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Health Ready Api V1 Health Ready Get
   /api/v1/insights/soc:
     get:
       tags:

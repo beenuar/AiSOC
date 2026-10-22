@@ -73,16 +73,20 @@ rule in ``connector_freshness``.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
+from redis.asyncio import from_url as redis_from_url
 from sqlalchemy import and_, func, select, text
 
 from app.api.v1.deps import AuthUser, CurrentUser, DBSession, require_permission
 from app.api.v1.endpoints.metrics import PipelineHealth, PipelineStage
 from app.core.config import settings
+from app.db.database import engine
 from app.db.rls import TenantDBSession
 from app.models.alert import Alert
 from app.models.connector import Connector
@@ -1033,3 +1037,95 @@ async def replay_dead_letters(
     Defaults to a dry run. Pass `execute: true` once the preview is clean.
     """
     return await run_replay(db, tenant_id=user.tenant_id, requested_by=user.user_id, request=request)
+
+
+# ---------------------------------------------------------------------------
+# Liveness and readiness (#1446)
+# ---------------------------------------------------------------------------
+#
+# Both unauthenticated: an LB or probe has no credential, and the bodies
+# carry only booleans about the service's own dependencies.
+#
+# The split follows the consumer doctrine: *liveness* says the process is
+# serving HTTP (restarting it would not help anything), *readiness* says the
+# service can do its job right now and names each dependency it checked —
+# including the healthy ones, because a dependency that is gone while the
+# body omits it is indistinguishable from a healthy idle one. The chaos
+# store-outage grader (scripts/chaos/store_outage.py) reads exactly these
+# keys; until these routes existed it probed a 404 and every leg's first
+# finding was an artifact of that rather than a fact about the service.
+
+
+async def _database_reachable() -> bool:
+    """One ``SELECT 1`` through the real engine, hard-capped.
+
+    The cap matters more than it looks: the chaos grader reads readiness with
+    a 4-second budget *while a store is down*, so a probe that waits out a
+    full connect timeout turns "down and we say so" into "down and we say
+    nothing".
+    """
+    try:
+        async with asyncio.timeout(1.5):
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+        return True
+    except Exception:  # noqa: BLE001 — any failure is the answer, not an error
+        return False
+
+
+async def _cache_reachable() -> bool:
+    """One Redis PING, hard-capped, on a throwaway connection."""
+    client = None
+    try:
+        async with asyncio.timeout(1.5):
+            client = redis_from_url(
+                str(settings.REDIS_URL),
+                socket_connect_timeout=1.0,
+                socket_timeout=1.0,
+            )
+            return bool(await client.ping())
+    except Exception:  # noqa: BLE001
+        return False
+    finally:
+        if client is not None:
+            with contextlib.suppress(Exception):
+                await client.aclose()
+
+
+@router.get("")
+async def health_liveness() -> dict[str, Any]:
+    """Liveness: the process answers HTTP. Nothing else is claimed.
+
+    Deliberately touches no store — a liveness probe that fails when a
+    dependency is down invites the orchestrator to restart a healthy
+    process, which converts an outage into an outage plus a restart storm.
+    Whether the service can do its *job* is ``/ready``'s question.
+    """
+    return {"status": "alive", "service": "aisoc-api"}
+
+
+@router.get("/ready")
+async def health_ready(response: Response) -> dict[str, Any]:
+    """Readiness: can this service do its job, named per dependency.
+
+    ``database`` is **block**: the API is the system of record's front door,
+    so without Postgres the status code goes 503 and a load balancer should
+    stop sending traffic here. The body still names every dependency —
+    failing *with the reason* is the whole point, and the chaos grader reads
+    the keys out of the 503 body.
+
+    ``cache`` is **degrade**: Redis is a cache and every read falls through
+    to its source, so its loss is reported (`cache: false`) while the status
+    stays 200 and the service keeps serving. Failing readiness over a cache
+    would pull the API out of the load balancer to fix a cache.
+    """
+    database, cache = await asyncio.gather(_database_reachable(), _cache_reachable())
+    ready = database
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {
+        "status": "ready" if ready else "not_ready",
+        "service": "aisoc-api",
+        "database": database,
+        "cache": cache,
+    }
