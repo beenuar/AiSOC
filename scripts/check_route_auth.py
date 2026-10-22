@@ -98,6 +98,14 @@ PUBLIC_ROUTES: dict[str, str] = {
     "services/agents/app/api/router.py::health": "liveness probe returning a static status document",
     "services/agents/app/main.py::health": "liveness probe returning a static status document",
     "services/api/app/main.py::health_check": "liveness probe; the readiness detail behind it is already gated",
+    "services/api/app/api/v1/endpoints/health.py::health_liveness": (
+        "liveness probe (#1446): the process answers HTTP — touches no store, returns no tenant data, "
+        "and an LB or kubelet has no credential to offer"
+    ),
+    "services/api/app/api/v1/endpoints/health.py::health_ready": (
+        "readiness probe (#1446): booleans about the service's own dependencies, named per store so a "
+        "gone dependency is distinguishable from a healthy idle one; no tenant data and no caller input"
+    ),
     "services/connectors/app/api/router.py::health": "liveness probe, deliberately kept off the guarded connectors router",
     "services/fusion/app/api/router.py::health": "liveness probe returning a static status document",
     "services/honeytokens/app/main.py::health": "liveness probe returning a static status document",

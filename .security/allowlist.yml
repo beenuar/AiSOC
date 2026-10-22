@@ -255,7 +255,18 @@ ceilings:
     # is the reason `Semgrep (ratcheted)` stays unrequired, and it is
     # unchanged by pinning the rules; requiring the job still waits on that
     # +/-1 being attributed and eliminated.
-    total: 111
+    # 111 -> 112 (error unchanged at 44). A fifth and sixth
+    # `dynamic-urllib-use-detected`, both in scripts/chaos/store_outage.py
+    # (#1446), which probes the liveness/readiness routes the chaos legs
+    # grade. Net +1 against the ceiling: the rewrite replaced one flagged
+    # call and added one. Both call sites refuse any URL that does not start
+    # with the fixed localhost probe prefixes — the same shape as the four
+    # findings above — so the `file://` read the rule warns about is not
+    # reachable; the rule fires on any non-literal argument to `urlopen`.
+    # Counted rather than suppressed, per the note at the bottom of this
+    # file. Measured with semgrep 1.86.0 on the vendored packs
+    # (rules_sha256 below): 112 total / 44 error.
+    total: 112
     error: 44
     measured_with: "1.86.0"
     rules_sha256: "5af76658e7e28b96b1099d2c995d7c85b3b9a4f96795a39df3d02aa7d295cb99"
