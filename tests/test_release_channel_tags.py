@@ -198,3 +198,168 @@ class TestStableDoesNotCrossAMajorOnItsOwn:
         end = run_ladder(["v1.0.0", "v1.1.0"], stable_major="")
 
         assert end["stable"] == "v1.1.0"
+
+
+# ── The chart channel, graded on both version lines across a sequence ─────────
+#
+# #1440. The chart `stable` channel got the image rule keyed on the *chart's*
+# own major — and the chart's values default every unpinned image tag to
+# `Chart.AppVersion`, so chart 7.9.0 (not a chart major) carried the channel
+# onto app v20.0.0, a breaking application release, while every image `stable`
+# tag correctly stayed on v19. Same family as the v12/v13/v15 image crossings:
+# a channel is a property of history, and the history that matters here runs
+# along two version lines at once.
+#
+# These tests execute the workflow's own `chart-decide` block (pure shell over
+# facts the `chart-state` step reads from the registry) with ladders of
+# (chart version, app version) releases, carrying the channel's position
+# between releases exactly as the registry would.
+
+
+def _chart_decide_script() -> str:
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["chart-publish"]["steps"]
+    step = next((s for s in steps if s.get("id") == "chart-decide"), None)
+    assert step is not None, "release.yml no longer has a `chart-decide` step to check"
+    return step["run"]
+
+
+def run_chart_decide(
+    *,
+    chart_version: str,
+    channel_chart_version: str = "",
+    channel_app_major: str = "",
+    incoming_app_major: str = "",
+    promote_stable: bool = False,
+) -> bool:
+    """Execute the workflow's own decision block; True when the channel moves."""
+    script = _chart_decide_script()
+    with tempfile.TemporaryDirectory() as tmp:
+        output = Path(tmp) / "gh-output"
+        output.touch()
+        env = {
+            **os.environ,
+            "CHART_VERSION": chart_version,
+            "PROMOTE_STABLE": "true" if promote_stable else "false",
+            "CHANNEL_CHART_VERSION": channel_chart_version,
+            "CHANNEL_APP_MAJOR": channel_app_major,
+            "INCOMING_APP_MAJOR": incoming_app_major,
+            "GITHUB_OUTPUT": str(output),
+        }
+        done = subprocess.run(["bash", "-c", script], env=env, capture_output=True, text=True)
+        assert done.returncode == 0, f"the workflow's chart-decide block failed: {done.stderr}"
+        body = output.read_text(encoding="utf-8")
+    moves = [line.split("=", 1)[1] for line in body.splitlines() if line.startswith("move=")]
+    assert len(moves) == 1, f"chart-decide emitted {len(moves)} move= lines: {body!r}"
+    return moves[0] == "true"
+
+
+def _app_major(app_version: str) -> str:
+    bare = app_version.lstrip("v")
+    return bare.split(".")[0] if bare else ""
+
+
+def run_chart_ladder(
+    releases: list[tuple[str, str]],
+    *,
+    start: tuple[str, str] = ("", ""),
+    promote_at: set[str] | None = None,
+    unreadable_incoming: set[str] | None = None,
+) -> dict[str, str]:
+    """Replay (chart version, app version) releases, carrying channel state.
+
+    Returns where the channel ends up on both version lines — the property a
+    single-release assertion cannot observe.
+    """
+    promote_at = promote_at or set()
+    unreadable_incoming = unreadable_incoming or set()
+    channel_chart, channel_app = start
+    for chart_version, app_version in releases:
+        incoming = "" if chart_version in unreadable_incoming else _app_major(app_version)
+        if run_chart_decide(
+            chart_version=chart_version,
+            channel_chart_version=channel_chart,
+            channel_app_major=channel_app,
+            incoming_app_major=incoming,
+            promote_stable=chart_version in promote_at,
+        ):
+            channel_chart, channel_app = chart_version, _app_major(app_version)
+    return {"chart": channel_chart, "app_major": channel_app}
+
+
+class TestChartStableDoesNotCrossAnAppMajorOnItsOwn:
+    def test_the_v20_crossing_replayed_is_refused(self) -> None:
+        """The exact defect: chart 7.9.0 is no chart major and shares chart
+        major 7 with the channel, but its appVersion crosses v19 -> v20."""
+        end = run_chart_ladder([("7.8.0", "v19.0.0"), ("7.9.0", "v20.0.0")])
+
+        assert end["chart"] == "7.8.0", (
+            f"the channel moved to {end['chart']}, carrying `--version stable` operators across "
+            "an application major with nobody deciding — the #1440 crossing again"
+        )
+
+    def test_it_stays_put_for_the_whole_of_the_new_app_major(self) -> None:
+        end = run_chart_ladder(
+            [("7.8.0", "v19.0.0"), ("7.9.0", "v20.0.0"), ("7.9.1", "v20.0.1"), ("7.10.0", "v20.1.0")],
+        )
+
+        assert end["chart"] == "7.8.0"
+        assert end["app_major"] == "19"
+
+    def test_a_deliberate_promotion_moves_it_and_the_ladder_resumes(self) -> None:
+        """The negative control: a guard that froze the channel forever would
+        pass the two tests above and make the channel useless."""
+        end = run_chart_ladder(
+            [("7.8.0", "v19.0.0"), ("7.9.0", "v20.0.0"), ("7.10.0", "v20.1.0")],
+            promote_at={"7.9.0"},
+        )
+
+        assert end["chart"] == "7.10.0", "the channel did not resume inside the promoted app major"
+        assert end["app_major"] == "20"
+
+    def test_the_positive_control_a_same_major_release_still_moves_it(self) -> None:
+        """Stuck-closed reads as working caution; a healthy ladder must flow."""
+        end = run_chart_ladder([("7.8.0", "v19.0.0"), ("7.8.1", "v19.0.1"), ("7.9.0", "v19.1.0")])
+
+        assert end["chart"] == "7.9.0"
+
+    def test_a_chart_major_is_still_refused_on_its_own_line(self) -> None:
+        """The original chart-major guard survives the appVersion addition."""
+        end = run_chart_ladder([("7.8.0", "v19.0.0"), ("8.0.0", "v19.1.0")])
+
+        assert end["chart"] == "7.8.0"
+
+    def test_a_first_ever_release_takes_the_channel(self) -> None:
+        """No `stable` tag yet is the ordinary first-release state, not a
+        different major."""
+        end = run_chart_ladder([("1.0.0", "v1.0.0"), ("1.1.0", "v1.1.0")])
+
+        assert end["chart"] == "1.1.0"
+
+    def test_an_unreadable_incoming_app_version_fails_closed(self) -> None:
+        """Refusing is recoverable (the next release moves the channel); a
+        wrong crossing is not."""
+        end = run_chart_ladder(
+            [("7.8.0", "v19.0.0"), ("7.8.1", "v19.0.1")],
+            unreadable_incoming={"7.8.1"},
+        )
+
+        assert end["chart"] == "7.8.0"
+
+    def test_but_not_before_the_first_promotion(self) -> None:
+        """An empty *channel* app major is first-release state: an unreadable
+        incoming appVersion must not brick the very first promotion."""
+        end = run_chart_ladder([("1.1.0", "v1.1.0")], unreadable_incoming={"1.1.0"})
+
+        assert end["chart"] == "1.1.0"
+
+    def test_promotion_overrides_an_unreadable_incoming_app_version(self) -> None:
+        """`promote_stable` is the human saying move it — it outranks every
+        guard, including the fail-closed one."""
+        end = run_chart_ladder(
+            [("7.8.0", "v19.0.0"), ("7.9.0", "v20.0.0")],
+            promote_at={"7.9.0"},
+            unreadable_incoming={"7.9.0"},
+        )
+
+        assert end["chart"] == "7.9.0"

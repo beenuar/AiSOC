@@ -1219,11 +1219,20 @@ jobs:
       # image half was built, so `helm install` with no `--version` has always
       # resolved to whatever the registry hands back.
       #
-      # The rule is the image rule, keyed on the *chart's* own major rather than
-      # the application's: the break an operator is protected from here is a
-      # values-schema break, and the chart versions independently of
-      # `appVersion`. `helm push` cannot write a non-SemVer tag, so the channel
-      # is a byte-identical manifest retag through the registry API.
+      # TWO version lines guard the channel, not one. The chart's own major
+      # announces a values-schema break. But the chart's values default every
+      # unpinned image tag to `Chart.AppVersion`, so the channel also carries
+      # operators across *application* majors — which is how v20.0.0 (chart
+      # 7.9.0, not a chart major) moved chart `stable` onto a breaking app
+      # release while every image `stable` tag correctly stayed on v19 (#1440).
+      # A channel is a property of history, so both majors are read from where
+      # the channel IS (the registry), never from the release in hand.
+      #
+      # The work is split across three steps so the *decision* is a pure block
+      # tests/test_release_channel_tags.py executes with each ladder of
+      # releases — the same lift-the-exact-block pattern as `image-tags`,
+      # because a copy of the logic would agree with itself while the
+      # workflow drifted.
       #
       # NOT `docker buildx imagetools create`. That tool composes image
       # *indexes*: on v17.1.0, the first release to reach this far, it wrapped
@@ -1232,27 +1241,18 @@ jobs:
       # be handed, and the verify below correctly refused it ("resolves to
       # '<nothing>'"). A channel tag must serve the *same bytes* as the
       # version tag: GET the manifest, PUT it under `stable`, unchanged.
-      - name: Move the `stable` chart channel
-        id: chart-channel
+      - name: Read where the chart channel is
+        id: chart-state
         if: github.event_name == 'push'
         env:
           CHART_VERSION: ${{ steps.package.outputs.version }}
-          PROMOTE_STABLE: ${{ inputs.promote_stable }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -uo pipefail
-          CHART=oci://ghcr.io/beenuar/charts/aisoc
-          REF=ghcr.io/beenuar/charts/aisoc
           MEDIA="application/vnd.oci.image.manifest.v1+json"
           reg_token=$(curl -fsS -u "x:${GH_TOKEN}" \
             "https://ghcr.io/token?scope=repository:beenuar/charts/aisoc:pull,push&service=ghcr.io" \
             | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
-
-          incoming_major="${CHART_VERSION%%.*}"
-          is_major=false
-          case "$CHART_VERSION" in
-            *.0.0) is_major=true ;;
-          esac
 
           # Where the channel is now, read from the tag's OCI manifest.
           #
@@ -1272,9 +1272,59 @@ jobs:
                       "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" 2>/dev/null \
                       | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
                       2>/dev/null || true)
+
+          # A chart tag's appVersion, without pulling a tarball: the helm OCI
+          # *config blob* is Chart.yaml serialized as JSON, so it is manifest
+          # -> config.digest -> blob. Empty on any failure — the decide step
+          # owns the failure semantics, this step only reports facts.
+          app_major_of() {
+            local tag="$1" digest
+            digest=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                       "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${tag}" 2>/dev/null \
+                       | python3 -c 'import json,sys; print(json.load(sys.stdin)["config"]["digest"])' 2>/dev/null || true)
+            if [ -n "$digest" ]; then
+              curl -fsSL -H "Authorization: Bearer ${reg_token}" \
+                   "https://ghcr.io/v2/beenuar/charts/aisoc/blobs/${digest}" 2>/dev/null \
+                | python3 -c 'import json,sys; v=(json.load(sys.stdin).get("appVersion") or "").lstrip("v"); print(v.split(".")[0] if v and v.split(".")[0].isdigit() else "")' \
+                  2>/dev/null || true
+            fi
+          }
+
+          channel_app_major=""
+          if [ -n "$current" ]; then
+            channel_app_major=$(app_major_of stable)
+          fi
+          incoming_app_major=$(app_major_of "${CHART_VERSION}")
+
+          echo "channel: chart '${current:-<none>}', app major '${channel_app_major:-<none>}'; incoming: chart ${CHART_VERSION}, app major '${incoming_app_major:-<none>}'"
+          {
+            echo "channel_chart_version=${current}"
+            echo "channel_app_major=${channel_app_major}"
+            echo "incoming_app_major=${incoming_app_major}"
+          } >> "$GITHUB_OUTPUT"
+
+      # The decision, pure over the facts above so the ladder tests can run
+      # this exact block. Everything here is a string comparison; no network.
+      - name: Decide whether the chart channel moves
+        id: chart-decide
+        if: github.event_name == 'push'
+        env:
+          CHART_VERSION: ${{ steps.package.outputs.version }}
+          PROMOTE_STABLE: ${{ inputs.promote_stable }}
+          CHANNEL_CHART_VERSION: ${{ steps.chart-state.outputs.channel_chart_version }}
+          CHANNEL_APP_MAJOR: ${{ steps.chart-state.outputs.channel_app_major }}
+          INCOMING_APP_MAJOR: ${{ steps.chart-state.outputs.incoming_app_major }}
+        run: |
+          set -uo pipefail
+          incoming_major="${CHART_VERSION%%.*}"
+          is_major=false
+          case "$CHART_VERSION" in
+            *.0.0) is_major=true ;;
+          esac
+
           channel_major=""
-          case "$current" in
-            [0-9]*) channel_major="${current%%.*}" ;;
+          case "$CHANNEL_CHART_VERSION" in
+            [0-9]*) channel_major="${CHANNEL_CHART_VERSION%%.*}" ;;
           esac
 
           same_major=true
@@ -1282,38 +1332,71 @@ jobs:
             same_major=false
           fi
 
-          if { [ "$is_major" != "true" ] && [ "$same_major" = "true" ]; } || [ "${PROMOTE_STABLE}" = "true" ]; then
-            # GET the version tag's manifest and refuse to promote anything
-            # whose own annotation does not name CHART_VERSION — then PUT the
-            # identical bytes under `stable`.
-            curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
-              "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${CHART_VERSION}" -o /tmp/chart-manifest.json
-            source_version=$(python3 -c 'import json; print((json.load(open("/tmp/chart-manifest.json")).get("annotations") or {}).get("org.opencontainers.image.version",""))')
-            if [ "$source_version" != "$CHART_VERSION" ]; then
-              echo "::error title=Helm::the ${CHART_VERSION} tag's manifest names '${source_version:-<nothing>}'; refusing to promote it"
-              exit 1
+          # The appVersion guard (#1440). An empty *channel* app major is the
+          # ordinary first-release state and allows movement, exactly like the
+          # chart-major read above. An empty *incoming* app major while the
+          # channel names one is different: refusing is recoverable (the next
+          # release or a deliberate promotion moves the channel), a wrong
+          # crossing is not, so that direction fails closed.
+          app_same_major=true
+          reason=""
+          if [ -n "$CHANNEL_APP_MAJOR" ]; then
+            if [ -z "$INCOMING_APP_MAJOR" ]; then
+              app_same_major=false
+              reason="the incoming chart's appVersion could not be read"
+            elif [ "$CHANNEL_APP_MAJOR" != "$INCOMING_APP_MAJOR" ]; then
+              app_same_major=false
+              reason="appVersion crosses v${CHANNEL_APP_MAJOR} -> v${INCOMING_APP_MAJOR}"
             fi
-            curl -fsS -X PUT -H "Authorization: Bearer ${reg_token}" -H "Content-Type: ${MEDIA}" \
-              --data-binary @/tmp/chart-manifest.json \
-              "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" > /dev/null
-            # Read the tag back and require it to name the version we just
-            # pushed. `helm show chart --version stable` cannot do this for
-            # the reason above, and a promotion nobody verified is how a
-            # channel silently points at the wrong chart.
-            moved_to=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
-                         "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" 2>/dev/null \
-                         | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
-                         2>/dev/null || true)
-            if [ "$moved_to" != "$CHART_VERSION" ]; then
-              echo "::error title=Helm::stable was pushed but resolves to '${moved_to:-<nothing>}', not ${CHART_VERSION}"
-              exit 1
-            fi
-            echo "::notice title=Helm::stable chart channel now resolves to ${CHART_VERSION}"
-            echo "moved=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice title=Helm::stable chart channel left at ${current:-<none>}; chart ${CHART_VERSION} crosses a major. Dispatch with promote_stable: true to move it."
-            echo "moved=false" >> "$GITHUB_OUTPUT"
           fi
+
+          if { [ "$is_major" != "true" ] && [ "$same_major" = "true" ] && [ "$app_same_major" = "true" ]; } || [ "${PROMOTE_STABLE}" = "true" ]; then
+            echo "move=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Helm::stable chart channel left at ${CHANNEL_CHART_VERSION:-<none>}${reason:+ (${reason})}; dispatch chart-channel.yml (or release with promote_stable: true) to move it deliberately."
+            echo "move=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Move the `stable` chart channel
+        id: chart-channel
+        if: github.event_name == 'push' && steps.chart-decide.outputs.move == 'true'
+        env:
+          CHART_VERSION: ${{ steps.package.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          MEDIA="application/vnd.oci.image.manifest.v1+json"
+          reg_token=$(curl -fsS -u "x:${GH_TOKEN}" \
+            "https://ghcr.io/token?scope=repository:beenuar/charts/aisoc:pull,push&service=ghcr.io" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+
+          # GET the version tag's manifest and refuse to promote anything
+          # whose own annotation does not name CHART_VERSION — then PUT the
+          # identical bytes under `stable`.
+          curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+            "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${CHART_VERSION}" -o /tmp/chart-manifest.json
+          source_version=$(python3 -c 'import json; print((json.load(open("/tmp/chart-manifest.json")).get("annotations") or {}).get("org.opencontainers.image.version",""))')
+          if [ "$source_version" != "$CHART_VERSION" ]; then
+            echo "::error title=Helm::the ${CHART_VERSION} tag's manifest names '${source_version:-<nothing>}'; refusing to promote it"
+            exit 1
+          fi
+          curl -fsS -X PUT -H "Authorization: Bearer ${reg_token}" -H "Content-Type: ${MEDIA}" \
+            --data-binary @/tmp/chart-manifest.json \
+            "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" > /dev/null
+          # Read the tag back and require it to name the version we just
+          # pushed. `helm show chart --version stable` cannot do this for
+          # the reason above, and a promotion nobody verified is how a
+          # channel silently points at the wrong chart.
+          moved_to=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                       "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" 2>/dev/null \
+                       | python3 -c 'import json,sys; print((json.load(sys.stdin).get("annotations") or {}).get("org.opencontainers.image.version",""))' \
+                       2>/dev/null || true)
+          if [ "$moved_to" != "$CHART_VERSION" ]; then
+            echo "::error title=Helm::stable was pushed but resolves to '${moved_to:-<nothing>}', not ${CHART_VERSION}"
+            exit 1
+          fi
+          echo "::notice title=Helm::stable chart channel now resolves to ${CHART_VERSION}"
+          echo "moved=true" >> "$GITHUB_OUTPUT"
 
 
       - name: Explain a packaged-but-unpushed chart

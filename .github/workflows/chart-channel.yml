@@ -1,0 +1,87 @@
+# Move the chart `stable` channel to a named, already-published chart version.
+#
+# This is the deliberate-human-action tool the channel guard in release.yml
+# points at. Until it existed, the only way `stable` could ever move was a
+# release tag push — so when v20.0.0 (#1440) carried the channel across an
+# application major that the guard should have refused, there was no way to
+# repair the position short of cutting another release. Dispatching this
+# workflow IS the operator decision the guard protects: it moves the channel
+# to exactly the version named, in either direction, and says what it did.
+#
+# It never republishes a chart *version* — `helm push` overwrites silently and
+# an overwritten version tag is unrecoverable — it only re-points the mutable
+# channel tag at an existing version's manifest, byte-identical, the same way
+# release.yml promotes on an ordinary release.
+name: Chart channel
+
+on:
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: 'Published chart version to point `stable` at (e.g. 7.8.0). Must already exist in the registry.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  move:
+    name: Point `stable` at the named chart
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Retag `stable`, byte-identical, with before/after evidence
+        env:
+          CHART_VERSION: ${{ inputs.chart_version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          MEDIA="application/vnd.oci.image.manifest.v1+json"
+          reg_token=$(curl -fsS -u "x:${GH_TOKEN}" \
+            "https://ghcr.io/token?scope=repository:beenuar/charts/aisoc:pull,push&service=ghcr.io" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["token"])')
+
+          # chart tag -> "chartVersion (appVersion)", via the helm OCI config
+          # blob (Chart.yaml as JSON). Empty on a missing tag.
+          describe() {
+            local tag="$1" manifest digest
+            manifest=$(curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+                         "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${tag}" 2>/dev/null || true)
+            [ -n "$manifest" ] || return 0
+            digest=$(printf '%s' "$manifest" | python3 -c 'import json,sys; print(json.load(sys.stdin)["config"]["digest"])' 2>/dev/null || true)
+            [ -n "$digest" ] || return 0
+            curl -fsSL -H "Authorization: Bearer ${reg_token}" \
+                 "https://ghcr.io/v2/beenuar/charts/aisoc/blobs/${digest}" 2>/dev/null \
+              | python3 -c 'import json,sys; d=json.load(sys.stdin); print("{} (appVersion {})".format(d.get("version"), d.get("appVersion")))' \
+                2>/dev/null || true
+          }
+
+          before=$(describe stable)
+          target=$(describe "${CHART_VERSION}")
+          if [ -z "$target" ]; then
+            echo "::error title=Helm::chart version ${CHART_VERSION} does not exist in the registry; nothing to point the channel at"
+            exit 1
+          fi
+          echo "stable before: ${before:-<none>}; moving to: ${target}"
+
+          # The same promote dance release.yml performs: GET the version tag's
+          # manifest, refuse it if its own annotation names something else,
+          # PUT the identical bytes under `stable`, read it back.
+          curl -fsS -H "Authorization: Bearer ${reg_token}" -H "Accept: ${MEDIA}" \
+            "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/${CHART_VERSION}" -o /tmp/chart-manifest.json
+          source_version=$(python3 -c 'import json; print((json.load(open("/tmp/chart-manifest.json")).get("annotations") or {}).get("org.opencontainers.image.version",""))')
+          if [ "$source_version" != "$CHART_VERSION" ]; then
+            echo "::error title=Helm::the ${CHART_VERSION} tag's manifest names '${source_version:-<nothing>}'; refusing to move the channel onto it"
+            exit 1
+          fi
+          curl -fsS -X PUT -H "Authorization: Bearer ${reg_token}" -H "Content-Type: ${MEDIA}" \
+            --data-binary @/tmp/chart-manifest.json \
+            "https://ghcr.io/v2/beenuar/charts/aisoc/manifests/stable" > /dev/null
+          after=$(describe stable)
+          if [ "${after%% *}" != "$CHART_VERSION" ]; then
+            echo "::error title=Helm::stable was pushed but resolves to '${after:-<nothing>}', not ${CHART_VERSION}"
+            exit 1
+          fi
+          echo "::notice title=Helm::stable chart channel moved: ${before:-<none>} -> ${after}"
