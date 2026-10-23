@@ -58,6 +58,7 @@ from app.api.v1.endpoints import (
     lake,
     live_actions,
     llm_credentials,
+    llm_orcarouter,
     llm_status,
     marketplace,
     mcp_access,
@@ -371,6 +372,12 @@ api_router.include_router(llm_status.router)
 # Resolution order at request time is per-tenant row > env-var fallback
 # (see llm_status.py + agents/explain.py).
 api_router.include_router(llm_credentials.router)
+
+# OrcaRouter Cyber Inference — the second credential path for the same two
+# provider ids: OAuth 2.0 + PKCE (out-of-band) instead of a pasted key, plus
+# server-side model discovery for the settings selector. Both paths store a
+# normal OrcaRouter API key in tenant_llm_credentials via the credential vault.
+api_router.include_router(llm_orcarouter.router)
 
 # STIX/TAXII threat intelligence publishing (Tier 4)
 api_router.include_router(stix_taxii.router)

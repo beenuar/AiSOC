@@ -17,7 +17,7 @@
  * has a graceful demo fallback so the page always feels alive.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
@@ -40,6 +40,8 @@ import {
   type LlmProvider,
   type LlmStatus,
   type LlmWritableProvider,
+  type OrcaRouterCatalog,
+  type OrcaRouterConnectStart,
   type TenantUser,
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -1498,16 +1500,26 @@ function AppearancePanel() {
 // only ever returns ``has_api_key`` so the UI can show "set / not set". Mutations
 // are encrypted with ``CredentialVault`` server-side and audit-logged.
 
-const PROVIDER_LABEL: Record<LlmProvider, string> = {
+const PROVIDER_LABEL: Record<LlmProvider | LlmWritableProvider, string> = {
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   'azure-openai': 'Azure OpenAI',
+  orcarouter: 'OrcaRouter Cyber Inference — API key',
+  'orcarouter-oauth': 'OrcaRouter Cyber Inference — Sign in',
   'local-ollama': 'Local Ollama',
   'local-vllm': 'Local vLLM',
   'local-litellm': 'Local LiteLLM',
   custom: 'Custom endpoint',
   none: 'Not configured',
 };
+
+//: Links an operator needs before choosing a model. The cyber tier is a
+//: different catalog from the general one, and linking it here is what makes
+//: "which of these can I use?" answerable without leaving the panel.
+const ORCAROUTER_CYBER_URL = 'https://www.orcarouter.ai/cyber';
+const ORCAROUTER_CATALOG_URL = 'https://www.orcarouter.ai/models?tier=cyber';
+const ORCAROUTER_API_BASE = 'https://api.orcarouter.ai/v1';
+const ORCAROUTER_AUTH_BASE = 'https://www.orcarouter.ai';
 
 function DeploymentAIPanel() {
   const airgap = useSWR(
@@ -1821,11 +1833,18 @@ const WRITABLE_PROVIDERS: readonly LlmWritableProvider[] = [
   'openai',
   'anthropic',
   'azure-openai',
+  'orcarouter',
+  'orcarouter-oauth',
   'local-ollama',
   'local-vllm',
   'local-litellm',
   'custom',
 ] as const;
+
+const ORCAROUTER_PROVIDERS: ReadonlySet<LlmWritableProvider> = new Set([
+  'orcarouter',
+  'orcarouter-oauth',
+]);
 
 const PROVIDERS_REQUIRING_BASE_URL: ReadonlySet<LlmWritableProvider> = new Set([
   'local-ollama',
@@ -1834,10 +1853,13 @@ const PROVIDERS_REQUIRING_BASE_URL: ReadonlySet<LlmWritableProvider> = new Set([
   'custom',
 ]);
 
+// ``orcarouter-oauth`` is deliberately absent: its key arrives through the
+// connect flow, so the paste field would be a second, unaudited way in.
 const PROVIDERS_REQUIRING_API_KEY: ReadonlySet<LlmWritableProvider> = new Set([
   'openai',
   'anthropic',
   'azure-openai',
+  'orcarouter',
 ]);
 
 function providerHintFor(p: LlmWritableProvider): {
@@ -1894,6 +1916,219 @@ function extractApiDetail(err: unknown, fallback = 'Something went wrong.'): str
   return fallback;
 }
 
+// ─── OrcaRouter connect (OAuth 2.0 + PKCE, out-of-band) ─────────────────────
+
+/**
+ * "Connect with OrcaRouter" for a self-hosted install.
+ *
+ * Out-of-band on purpose: AiSOC's address differs per deployment and the API
+ * runs in a container, so there is no callback the operator's browser could
+ * reach. The consent screen shows a code and this panel takes it. The PKCE
+ * verifier never leaves the server, and the code is dropped from state when
+ * the page is hidden — it is credential-shaped for the ten minutes it lives.
+ */
+function OrcaRouterConnectPanel({
+  connected,
+  onConnected,
+}: {
+  connected: boolean;
+  onConnected: (credential: LlmCredentialView) => void;
+}) {
+  const [attempt, setAttempt] = useState<OrcaRouterConnectStart | null>(null);
+  const [code, setCode] = useState('');
+  const [phase, setPhase] = useState<'idle' | 'starting' | 'awaiting' | 'finishing'>(
+    'idle',
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [popupBlocked, setPopupBlocked] = useState(false);
+  // Every async reply checks this before touching state, so a cancel (or a
+  // pagehide) cannot be overwritten by a request that was already in flight.
+  const generation = useRef(0);
+
+  useEffect(() => {
+    const clear = () => {
+      generation.current += 1;
+      setAttempt(null);
+      setCode('');
+      setPhase('idle');
+      setPopupBlocked(false);
+    };
+    window.addEventListener('pagehide', clear);
+    return () => {
+      window.removeEventListener('pagehide', clear);
+      clear();
+    };
+  }, []);
+
+  const onStart = async () => {
+    const seq = ++generation.current;
+    setPhase('starting');
+    setError(null);
+    setPopupBlocked(false);
+    try {
+      const next = await deploymentApi.startOrcaRouterConnect();
+      if (seq !== generation.current) return;
+      setAttempt(next);
+      setPhase('awaiting');
+      try {
+        const opened = window.open(next.authorize_url, '_blank', 'noopener,noreferrer');
+        if (!opened) setPopupBlocked(true);
+      } catch {
+        setPopupBlocked(true);
+      }
+    } catch (err) {
+      if (seq !== generation.current) return;
+      setPhase('idle');
+      setError(extractApiDetail(err, 'Could not start the OrcaRouter sign-in.'));
+    }
+  };
+
+  const onFinish = async () => {
+    if (!attempt) return;
+    if (!code.trim()) {
+      setError('Paste the code shown on the OrcaRouter consent screen.');
+      return;
+    }
+    const seq = ++generation.current;
+    setPhase('finishing');
+    setError(null);
+    try {
+      const view = await deploymentApi.finishOrcaRouterConnect({
+        state: attempt.state,
+        code: code.trim(),
+      });
+      if (seq !== generation.current) return;
+      setAttempt(null);
+      setCode('');
+      setPhase('idle');
+      setPopupBlocked(false);
+      onConnected(view);
+      toast.success('OrcaRouter connected. Model list refreshed.');
+    } catch (err) {
+      if (seq !== generation.current) return;
+      setPhase('awaiting');
+      setError(extractApiDetail(err, 'Could not finish the OrcaRouter sign-in.'));
+    }
+  };
+
+  const onCancel = () => {
+    generation.current += 1;
+    setAttempt(null);
+    setCode('');
+    setPhase('idle');
+    setError(null);
+    setPopupBlocked(false);
+  };
+
+  return (
+    <section
+      className="rounded-lg border border-gray-800 bg-gray-950/40 p-4"
+      aria-label="OrcaRouter sign-in"
+    >
+      <header className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h4 className="text-xs font-semibold text-gray-200">
+            Connect with OrcaRouter
+          </h4>
+          <p className="mt-1 max-w-prose text-[11px] text-gray-500">
+            OAuth 2.0 + PKCE on {ORCAROUTER_AUTH_BASE}. Your password stays
+            with OrcaRouter; AiSOC receives a durable API key and stores it
+            vault-encrypted.
+          </p>
+        </div>
+        {connected && !attempt ? (
+          <StatusPill tone="emerald" label="Connected" />
+        ) : null}
+      </header>
+
+      {!attempt ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onStart}
+            disabled={phase === 'starting'}
+            className="rounded-md border border-blue-500/50 bg-blue-500/15 px-3 py-1.5 text-xs font-medium text-blue-200 hover:bg-blue-500/25 disabled:opacity-50"
+          >
+            {phase === 'starting'
+              ? 'Preparing…'
+              : connected
+              ? 'Reconnect OrcaRouter'
+              : 'Connect with OrcaRouter'}
+          </button>
+          <a
+            href={ORCAROUTER_CYBER_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-[11px] text-gray-400 underline hover:text-gray-200"
+          >
+            What is OrcaRouter Cyber Inference?
+          </a>
+        </div>
+      ) : (
+        <div className="mt-3 space-y-3">
+          <ol className="list-decimal space-y-2 pl-4 text-[11px] text-gray-400">
+            <li>
+              Open the consent screen
+              {popupBlocked ? ' (the pop-up was blocked):' : '.'}{' '}
+              <a
+                href={attempt.authorize_url}
+                target="_blank"
+                rel="noreferrer"
+                className="break-all text-blue-300 underline hover:text-blue-200"
+              >
+                {ORCAROUTER_AUTH_BASE}/auth
+              </a>
+            </li>
+            <li>Approve access for AiSOC, then copy the code it shows.</li>
+          </ol>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <input
+              type="text"
+              aria-label="OrcaRouter authorization code"
+              value={code}
+              onChange={e => setCode(e.target.value)}
+              placeholder="paste the code from the consent screen"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={phase === 'finishing'}
+              className={inputClass()}
+            />
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={onFinish}
+                disabled={phase === 'finishing'}
+                className="rounded-md bg-blue-500/80 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+              >
+                {phase === 'finishing' ? 'Connecting…' : 'Finish'}
+              </button>
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={phase === 'finishing'}
+                className="rounded-md border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-gray-800 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+          <p className="text-[11px] text-gray-500">
+            The request expires at{' '}
+            {format(new Date(attempt.expires_at), 'HH:mm')}; after that, start
+            again.
+          </p>
+        </div>
+      )}
+
+      {error ? (
+        <p className="mt-3 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2 text-xs text-red-200">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 // ─── Card: BYOK (write surface) ──────────────────────────────────────────────
 
 function BYOKCard({
@@ -1918,6 +2153,13 @@ function BYOKCard({
   const [apiKey, setApiKey] = useState('');
   const [enabled, setEnabled] = useState(true);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // OrcaRouter's model list comes from the server, never from free text.
+  const [catalog, setCatalog] = useState<OrcaRouterCatalog | null>(null);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
+  const [connectedNow, setConnectedNow] = useState(false);
+  const catalogSeq = useRef(0);
 
   // Reset form whenever we enter edit mode (or the underlying credential
   // moves while editing). Never preload the API key — it lives only in
@@ -1945,14 +2187,81 @@ function BYOKCard({
 
   const requiresBaseUrl = PROVIDERS_REQUIRING_BASE_URL.has(provider);
   const requiresApiKey = PROVIDERS_REQUIRING_API_KEY.has(provider);
+  const isOrcaRouter = ORCAROUTER_PROVIDERS.has(provider);
+  const isOrcaRouterOAuth = provider === 'orcarouter-oauth';
 
   // Only treat the existing key as "carry-over" when the user keeps the
   // same provider — switching providers must require a fresh key.
   const hasExistingKey = Boolean(
     credential?.has_api_key && credential?.provider === provider,
   );
+  // A key minted by the connect flow is on the server before the SWR row
+  // refreshes, so the save guard cannot rely on `has_existing_key` alone.
+  const orcaKeyAvailable = hasExistingKey || (isOrcaRouterOAuth && connectedNow);
+  const storedOrcaKey = Boolean(
+    credential?.has_api_key && ORCAROUTER_PROVIDERS.has(credential.provider),
+  );
 
   const providerHint = useMemo(() => providerHintFor(provider), [provider]);
+
+  const loadCatalog = useCallback(async (key?: string) => {
+    const seq = ++catalogSeq.current;
+    setCatalogLoading(true);
+    setCatalogError(null);
+    try {
+      const result = await deploymentApi.listOrcaRouterModels({
+        api_key: key?.trim() || undefined,
+      });
+      if (seq !== catalogSeq.current) return;
+      setCatalog(result);
+      // Keep a stored id that discovery did not return: it may be valid for
+      // this account even though it is not advertised to it.
+      setModel(prev => prev || result.default_model);
+    } catch (err) {
+      if (seq !== catalogSeq.current) return;
+      setCatalog(null);
+      setCatalogError(
+        extractApiDetail(err, 'Could not load the OrcaRouter model list.'),
+      );
+    } finally {
+      if (seq === catalogSeq.current) setCatalogLoading(false);
+    }
+  }, []);
+
+  // Load once the panel can authenticate: a typed key, a stored key, or a
+  // just-completed connect. Typing is debounced so each keystroke is not a
+  // request; the server holds the only real credential either way.
+  useEffect(() => {
+    if (!editing || !isOrcaRouter) return;
+    const typed = provider === 'orcarouter' ? apiKey.trim() : '';
+    if (!typed && !storedOrcaKey && !connectedNow) return;
+
+    const timer = setTimeout(() => {
+      void loadCatalog(typed || undefined);
+    }, typed ? 350 : 0);
+    return () => clearTimeout(timer);
+  }, [
+    editing,
+    isOrcaRouter,
+    provider,
+    apiKey,
+    storedOrcaKey,
+    connectedNow,
+    loadCatalog,
+  ]);
+
+  const onProviderChange = (next: LlmWritableProvider) => {
+    catalogSeq.current += 1;
+    setProvider(next);
+    // A model id is provider-specific; carrying it across a switch is how
+    // "gpt-4o-mini" ends up sent to OrcaRouter. Start clean.
+    setModel('');
+    setBaseUrl('');
+    setCatalog(null);
+    setCatalogError(null);
+    setCatalogLoading(false);
+    setFormError(null);
+  };
 
   const onSave = async () => {
     setFormError(null);
@@ -1964,14 +2273,34 @@ function BYOKCard({
       setFormError(`${PROVIDER_LABEL[provider]} requires an API key.`);
       return;
     }
+    if (isOrcaRouter) {
+      if (isOrcaRouterOAuth && !orcaKeyAvailable) {
+        setFormError('Connect your OrcaRouter account before saving.');
+        return;
+      }
+      if (!model.trim()) {
+        setFormError('Choose a model from the OrcaRouter catalog.');
+        return;
+      }
+    }
 
-    const payload: LlmCredentialUpsert = {
-      provider,
-      base_url: baseUrl.trim() ? baseUrl.trim() : null,
-      model: model.trim() ? model.trim() : null,
-      api_key: apiKey.trim() ? apiKey.trim() : null,
-      enabled,
-    };
+    const payload: LlmCredentialUpsert = isOrcaRouter
+      ? {
+          provider,
+          // Fixed by the provider. The server fills this in, so a tenant
+          // cannot redirect an OrcaRouter credential at another host.
+          base_url: null,
+          model: model.trim(),
+          api_key: isOrcaRouterOAuth ? null : apiKey.trim() || null,
+          enabled,
+        }
+      : {
+          provider,
+          base_url: baseUrl.trim() ? baseUrl.trim() : null,
+          model: model.trim() ? model.trim() : null,
+          api_key: apiKey.trim() ? apiKey.trim() : null,
+          enabled,
+        };
 
     setSubmitting(true);
     try {
@@ -1991,6 +2320,12 @@ function BYOKCard({
   };
 
   const onCancel = () => {
+    // Ignore a discovery request that is already in flight: its answer is for
+    // a form the operator just left.
+    catalogSeq.current += 1;
+    setCatalog(null);
+    setCatalogError(null);
+    setCatalogLoading(false);
     setEditing(false);
   };
 
@@ -2072,6 +2407,9 @@ function BYOKCard({
               ) : (
                 <StatusPill tone="gray" label="Disabled" />
               )}
+              {credential.needs_reauth ? (
+                <StatusPill tone="red" label="Re-authentication needed" />
+              ) : null}
             </div>
             <p className="mt-1 text-xs text-gray-500">
               Per-tenant override for this AiSOC workspace. The platform
@@ -2175,6 +2513,14 @@ function BYOKCard({
             </span>
           </KeyValue>
         </dl>
+        {credential.needs_reauth ? (
+          <p className="mt-4 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-200">
+            OrcaRouter rejected the stored key (401/403). The key is durable
+            and has no refresh grant, so choose{' '}
+            <span className="font-semibold">Edit</span> to reconnect or paste a
+            new one — nothing will rotate on its own.
+          </p>
+        ) : null}
         {confirmingDelete ? (
           <p className="mt-4 text-xs text-amber-300/80">
             Click <span className="font-semibold">Confirm remove</span> again
@@ -2232,11 +2578,72 @@ function BYOKCard({
           persistence and are never returned to the UI.
         </p>
       </header>
+      {isOrcaRouter ? (
+        <div className="mb-4 rounded-lg border border-gray-800 bg-gray-950/40 px-3 py-2 text-xs text-gray-400">
+          <span className="font-medium text-gray-200">
+            OrcaRouter Cyber Inference
+          </span>{' '}
+          routes this workspace&apos;s AI calls through{' '}
+          <a
+            href="https://www.orcarouter.ai"
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-300 underline hover:text-blue-200"
+          >
+            OrcaRouter
+          </a>{' '}
+          at <code className="font-mono text-[11px]">{ORCAROUTER_API_BASE}</code>{' '}
+          — one OpenAI-compatible endpoint for every model, with the cyber
+          tier called out separately.{' '}
+          <a
+            href={ORCAROUTER_CYBER_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-300 underline hover:text-blue-200"
+          >
+            Cyber inference
+          </a>{' '}
+          ·{' '}
+          <a
+            href={ORCAROUTER_CATALOG_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="text-blue-300 underline hover:text-blue-200"
+          >
+            Model catalog
+          </a>
+          <div className="mt-2 grid gap-1 border-t border-gray-800 pt-2 text-[11px] sm:grid-cols-2">
+            <div
+              className={clsx(
+                'rounded px-2 py-1',
+                provider === 'orcarouter'
+                  ? 'bg-blue-500/10 text-gray-200'
+                  : 'text-gray-500',
+              )}
+            >
+              <span className="font-medium">1 · API key</span> — paste an{' '}
+              <code className="font-mono">sk-orca-</code> key. Stored
+              vault-encrypted.
+            </div>
+            <div
+              className={clsx(
+                'rounded px-2 py-1',
+                provider === 'orcarouter-oauth'
+                  ? 'bg-blue-500/10 text-gray-200'
+                  : 'text-gray-500',
+              )}
+            >
+              <span className="font-medium">2 · Sign in</span> — OAuth 2.0 +
+              PKCE on www.orcarouter.ai; no password reaches AiSOC.
+            </div>
+          </div>
+        </div>
+      ) : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Provider">
           <select
             value={provider}
-            onChange={e => setProvider(e.target.value as LlmWritableProvider)}
+            onChange={e => onProviderChange(e.target.value as LlmWritableProvider)}
             disabled={submitting}
             className={inputClass()}
           >
@@ -2247,60 +2654,193 @@ function BYOKCard({
             ))}
           </select>
         </Field>
-        <Field
-          label="Model"
-          hint="Provider-specific identifier (e.g. 'gpt-4o-mini', 'llama3.1:8b'). Leave blank for provider default."
-        >
-          <input
-            type="text"
-            value={model}
-            onChange={e => setModel(e.target.value)}
-            placeholder="provider default"
-            disabled={submitting}
-            className={inputClass()}
-          />
-        </Field>
-        <Field
-          label={`Base URL${requiresBaseUrl ? ' *' : ''}`}
-          hint={
-            requiresBaseUrl
-              ? `Required. ${providerHint.baseUrlHint}`
-              : providerHint.baseUrlHint
-              ? `Optional override. ${providerHint.baseUrlHint}`
-              : 'Optional override. Leave blank to use the provider default.'
-          }
-        >
-          <input
-            type="url"
-            value={baseUrl}
-            onChange={e => setBaseUrl(e.target.value)}
-            placeholder={providerHint.baseUrlPlaceholder}
-            disabled={submitting}
-            className={inputClass()}
-          />
-        </Field>
-        <Field
-          label={`API key${requiresApiKey && !hasExistingKey ? ' *' : ''}`}
-          hint={
-            hasExistingKey
-              ? 'A key is already stored. Leave blank to keep it; type a new value to rotate.'
-              : requiresApiKey
-              ? 'Required for hosted SaaS providers. Vault-encrypted before storage.'
-              : 'Optional — most local providers do not require auth.'
-          }
-        >
-          <input
-            type="password"
-            autoComplete="new-password"
-            value={apiKey}
-            onChange={e => setApiKey(e.target.value)}
-            placeholder={
-              hasExistingKey ? '•••••••• (unchanged)' : 'paste your API key'
+        {isOrcaRouter ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-gray-300">Model</span>
+            <select
+              aria-label="Model"
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              disabled={submitting || catalogLoading || !catalog}
+              className={inputClass()}
+            >
+              {!model ? <option value="">Select a model…</option> : null}
+              {(() => {
+                const recommended = catalog?.recommended ?? [];
+                const seen = new Set(recommended.map(m => m.id));
+                const extras = (catalog?.data ?? []).filter(
+                  m => !seen.has(m.id),
+                );
+                const known = new Set([...seen, ...extras.map(m => m.id)]);
+                return (
+                  <>
+                    {model && !known.has(model) ? (
+                      <option value={model}>{model} (stored)</option>
+                    ) : null}
+                    {recommended.length > 0 ? (
+                      <optgroup label="Recommended">
+                        {recommended.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} — {m.id}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {extras.length > 0 ? (
+                      <optgroup
+                        label={
+                          catalog?.source === 'live'
+                            ? 'Available models'
+                            : 'Verified fallback models'
+                        }
+                      >
+                        {extras.map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.name}
+                            {m.name !== m.id ? ` — ${m.id}` : ''}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </>
+                );
+              })()}
+            </select>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px]">
+              {catalogLoading ? (
+                <span className="text-gray-500">Loading the model list…</span>
+              ) : null}
+              {!catalogLoading && catalog ? (
+                <span
+                  className={
+                    catalog.degraded ? 'text-amber-300' : 'text-gray-500'
+                  }
+                >
+                  {catalog.degraded
+                    ? `Live discovery failed — showing the verified fallback list. ${catalog.detail}`
+                    : `${catalog.data.length} chat-capable models from the live catalog.`}
+                </span>
+              ) : null}
+              {!catalogLoading && !catalog && !catalogError ? (
+                <span className="text-gray-500">
+                  {isOrcaRouterOAuth
+                    ? 'Sign in to load the model list.'
+                    : 'Paste a key to load the model list.'}
+                </span>
+              ) : null}
+              {catalogError ? (
+                <span className="text-amber-300">{catalogError}</span>
+              ) : null}
+              <button
+                type="button"
+                onClick={() =>
+                  void loadCatalog(
+                    provider === 'orcarouter'
+                      ? apiKey.trim() || undefined
+                      : undefined,
+                  )
+                }
+                disabled={catalogLoading || submitting}
+                className="underline hover:text-gray-200 disabled:opacity-50"
+              >
+                Refresh
+              </button>
+              <a
+                href={ORCAROUTER_CATALOG_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-gray-200"
+              >
+                Browse the full catalog
+              </a>
+            </div>
+          </div>
+        ) : (
+          <Field
+            label="Model"
+            hint="Provider-specific identifier (e.g. 'gpt-4o-mini', 'llama3.1:8b'). Leave blank for provider default."
+          >
+            <input
+              type="text"
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              placeholder="provider default"
+              disabled={submitting}
+              className={inputClass()}
+            />
+          </Field>
+        )}
+        {isOrcaRouter ? (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-gray-300">Endpoint</span>
+            <code className="w-full rounded-lg border border-gray-800 bg-gray-950/60 px-3 py-2 font-mono text-xs text-gray-300">
+              {ORCAROUTER_API_BASE}
+            </code>
+            <span className="text-xs text-gray-500">
+              Fixed. Inference runs on api.orcarouter.ai and authentication
+              on www.orcarouter.ai; neither is derived from the other, so
+              there is nothing to point elsewhere.
+            </span>
+          </div>
+        ) : (
+          <Field
+            label={`Base URL${requiresBaseUrl ? ' *' : ''}`}
+            hint={
+              requiresBaseUrl
+                ? `Required. ${providerHint.baseUrlHint}`
+                : providerHint.baseUrlHint
+                ? `Optional override. ${providerHint.baseUrlHint}`
+                : 'Optional override. Leave blank to use the provider default.'
             }
-            disabled={submitting}
-            className={inputClass()}
-          />
-        </Field>
+          >
+            <input
+              type="url"
+              value={baseUrl}
+              onChange={e => setBaseUrl(e.target.value)}
+              placeholder={providerHint.baseUrlPlaceholder}
+              disabled={submitting}
+              className={inputClass()}
+            />
+          </Field>
+        )}
+        {isOrcaRouterOAuth ? (
+          <div className="sm:col-span-2">
+            <OrcaRouterConnectPanel
+              connected={storedOrcaKey || connectedNow}
+              onConnected={() => {
+                setConnectedNow(true);
+                onChanged();
+                // The key is stored now, so discovery can run with it.
+                void loadCatalog();
+              }}
+            />
+          </div>
+        ) : (
+          <Field
+            label={`API key${requiresApiKey && !hasExistingKey ? ' *' : ''}`}
+            hint={
+              hasExistingKey
+                ? 'A key is already stored. Leave blank to keep it; type a new value to rotate.'
+                : requiresApiKey
+                ? isOrcaRouter
+                  ? 'Starts with sk-orca-. Vault-encrypted before storage.'
+                  : 'Required for hosted SaaS providers. Vault-encrypted before storage.'
+                : 'Optional — most local providers do not require auth.'
+            }
+          >
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              placeholder={
+                hasExistingKey ? '•••••••• (unchanged)' : 'paste your API key'
+              }
+              disabled={submitting}
+              className={inputClass()}
+            />
+          </Field>
+        )}
       </div>
       <div className="mt-4">
         <Toggle

@@ -144,6 +144,16 @@ export default defineConfig({
       use: {
         ...devices["Desktop Chrome"],
         viewport: { width: 1440, height: 900 },
+        // Containers that carry a system Chromium but no Playwright browser
+        // cache can point the run at that binary. Unset, Playwright's own
+        // download is used, which is what CI installs.
+        ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+          ? {
+              launchOptions: {
+                executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+              },
+            }
+          : {}),
       },
     },
     {

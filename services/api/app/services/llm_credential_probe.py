@@ -60,6 +60,11 @@ PROBE_TIMEOUT_SECONDS = 15.0
 _DEFAULT_BASE: dict[str, str] = {
     "openai": "https://api.openai.com/v1",
     "anthropic": "https://api.anthropic.com/v1",
+    # OrcaRouter Cyber Inference: both credential paths share one inference
+    # origin. The auth origin is not reachable from here and is never derived
+    # from this value.
+    "orcarouter": "https://api.orcarouter.ai/v1",
+    "orcarouter-oauth": "https://api.orcarouter.ai/v1",
 }
 
 #: A model has to be named to complete anything. These are the cheapest
@@ -73,6 +78,8 @@ _FALLBACK_MODEL: dict[str, str] = {
     "local-vllm": "default",
     "local-litellm": "aisoc-triage",
     "custom": "default",
+    "orcarouter": "orcarouter/auto",
+    "orcarouter-oauth": "orcarouter/auto",
 }
 
 
@@ -82,6 +89,11 @@ class ProbeResult:
     detail: str
     model: str | None = None
     latency_ms: int | None = None
+    #: HTTP status the provider answered with, when it answered. Callers use it
+    #: to tell "this credential is rejected" from "this model name is wrong",
+    #: and OrcaRouter uses 401/403 to enter a reauthentication state rather
+    #: than retrying a durable key that has been revoked.
+    status_code: int | None = None
 
 
 def _base_url_for(provider: str, base_url: str | None) -> str | None:
@@ -98,6 +110,7 @@ def _from_status(response: httpx.Response, model: str, latency_ms: int) -> Probe
             detail=f"The provider rejected the credential (HTTP {code}). Check the key.",
             model=model,
             latency_ms=latency_ms,
+            status_code=code,
         )
     if code == 404:
         return ProbeResult(
@@ -108,6 +121,7 @@ def _from_status(response: httpx.Response, model: str, latency_ms: int) -> Probe
             ),
             model=model,
             latency_ms=latency_ms,
+            status_code=code,
         )
     if code == 429:
         # Reached it, and authenticated enough to be counted against a quota,
@@ -117,6 +131,7 @@ def _from_status(response: httpx.Response, model: str, latency_ms: int) -> Probe
             detail="Reached the provider and was rate-limited, so the credential works.",
             model=model,
             latency_ms=latency_ms,
+            status_code=code,
         )
     body = (response.text or "")[:200].replace("\n", " ")
     return ProbeResult(
@@ -124,6 +139,7 @@ def _from_status(response: httpx.Response, model: str, latency_ms: int) -> Probe
         detail=f"The provider answered HTTP {code}: {body}",
         model=model,
         latency_ms=latency_ms,
+        status_code=code,
     )
 
 

@@ -19810,6 +19810,97 @@ paths:
                 $ref: '#/components/schemas/LlmCredentialTestResult'
       security:
       - HTTPBearer: []
+  /api/v1/llm/orcarouter/connect/start:
+    post:
+      tags:
+      - llm
+      summary: Begin an OrcaRouter sign-in (OAuth 2.0 + PKCE, out-of-band)
+      description: 'Mint a fresh verifier/state pair and return the consent URL.
+
+
+        The verifier stays in this process''s database row. The response carries
+
+        the state (which is public by design — it is a CSRF token echoed through
+
+        the browser) and never the verifier.'
+      operationId: start_orcarouter_connect_api_v1_llm_orcarouter_connect_start_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConnectStartResponse'
+      security:
+      - HTTPBearer: []
+  /api/v1/llm/orcarouter/connect/finish:
+    post:
+      tags:
+      - llm
+      summary: Redeem the code shown on the consent screen
+      description: 'Exchange the out-of-band code for a key and store it.
+
+
+        State is compared in constant time, the attempt is deleted before the code
+
+        is exchanged (single-use, so a replay cannot redeem a second key), and the
+
+        exchange goes to the auth origin only.'
+      operationId: finish_orcarouter_connect_api_v1_llm_orcarouter_connect_finish_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConnectFinishRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmCredentialView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/llm/orcarouter/models:
+    post:
+      tags:
+      - llm
+      summary: Model catalog for the OrcaRouter provider
+      description: 'Return the chat catalog from the inference origin.
+
+
+        Runs server-side with the tenant''s key. An unsaved key may be supplied for
+
+        pre-save discovery; it is used once and discarded.'
+      operationId: list_orcarouter_models_api_v1_llm_orcarouter_models_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelDiscoveryRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ModelCatalogView'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/threatintel/stix/indicators:
     get:
       tags:
@@ -26078,6 +26169,54 @@ components:
       required:
       - code
       title: ConfirmRequest
+    ConnectFinishRequest:
+      properties:
+        state:
+          type: string
+          maxLength: 256
+          minLength: 16
+          title: State
+        code:
+          type: string
+          maxLength: 1024
+          minLength: 4
+          title: Code
+      type: object
+      required:
+      - state
+      - code
+      title: ConnectFinishRequest
+    ConnectStartResponse:
+      properties:
+        authorize_url:
+          type: string
+          title: Authorize Url
+        state:
+          type: string
+          title: State
+        expires_at:
+          type: string
+          format: date-time
+          title: Expires At
+        expires_in_seconds:
+          type: integer
+          title: Expires In Seconds
+        provider:
+          type: string
+          title: Provider
+        flow:
+          type: string
+          const: pkce-oob
+          title: Flow
+      type: object
+      required:
+      - authorize_url
+      - state
+      - expires_at
+      - expires_in_seconds
+      - provider
+      - flow
+      title: ConnectStartResponse
     ConnectorHealthOut:
       properties:
         total:
@@ -32289,6 +32428,8 @@ components:
           - local-vllm
           - local-litellm
           - custom
+          - orcarouter
+          - orcarouter-oauth
           title: Provider
         base_url:
           anyOf:
@@ -32348,6 +32489,8 @@ components:
           - local-vllm
           - local-litellm
           - custom
+          - orcarouter
+          - orcarouter-oauth
           title: Provider
         base_url:
           anyOf:
@@ -32383,6 +32526,10 @@ components:
             format: date-time
           - type: 'null'
           title: Last Rotated At
+        needs_reauth:
+          type: boolean
+          title: Needs Reauth
+          default: false
       type: object
       required:
       - provider
@@ -33774,6 +33921,49 @@ components:
       - avg_latency_ms
       title: ModelBreakdown
       description: Spend / volume rolled up per model over the window.
+    ModelCatalogView:
+      properties:
+        object:
+          type: string
+          const: list
+          title: Object
+          default: list
+        data:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Data
+        source:
+          type: string
+          enum:
+          - live
+          - fallback
+          title: Source
+        degraded:
+          type: boolean
+          title: Degraded
+        detail:
+          type: string
+          title: Detail
+          default: ''
+        recommended:
+          items:
+            additionalProperties: true
+            type: object
+          type: array
+          title: Recommended
+          default: []
+        default_model:
+          type: string
+          title: Default Model
+          default: orcarouter/auto
+      type: object
+      required:
+      - data
+      - source
+      - degraded
+      title: ModelCatalogView
     ModelCostBreakdown:
       properties:
         model:
@@ -33832,6 +34022,31 @@ components:
         agents service). Lets operators audit which model drove spend on a
 
         given investigation.'
+    ModelDiscoveryRequest:
+      properties:
+        api_key:
+          anyOf:
+          - type: string
+            maxLength: 4096
+          - type: 'null'
+          title: Api Key
+        capability:
+          type: string
+          const: chat
+          title: Capability
+          default: chat
+      type: object
+      title: ModelDiscoveryRequest
+      description: 'Ask for the tenant''s catalog.
+
+
+        ``api_key`` lets the settings panel show a real dropdown before the key is
+
+        saved. It is optional: when omitted the stored (vault-encrypted) key is
+
+        used, which is the normal path. A key supplied here is used for one
+
+        request, never stored, and never echoed.'
     NLDetectionRequest:
       properties:
         description:

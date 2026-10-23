@@ -31,6 +31,7 @@ from app.models.mssp import (
     MSSPTenantNote,
 )
 from app.models.oauth import OAuthAppCredential, OAuthState
+from app.models.orcarouter_connect import OrcaRouterConnectState
 from app.models.organization import (
     Organization,
     OrganizationMember,
@@ -102,6 +103,7 @@ __all__ = [
     "OutboundWebhook",
     "TenantInboxToken",
     "TenantLlmCredential",
+    "OrcaRouterConnectState",
     "McpServer",
     "AiAsset",
     "PasskeyCredential",

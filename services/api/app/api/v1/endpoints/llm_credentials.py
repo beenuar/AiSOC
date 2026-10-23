@@ -49,6 +49,7 @@ Security rules
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Literal
 from urllib.parse import urlparse
@@ -60,6 +61,7 @@ from sqlalchemy import delete, select
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.models.llm_credential import TenantLlmCredential
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services import orcarouter
 from app.services.audit import emit_audit
 from app.services.llm_credential_probe import ProbeResult, probe_credential
 
@@ -81,6 +83,12 @@ LlmProvider = Literal[
     "local-vllm",
     "local-litellm",
     "custom",
+    # OrcaRouter Cyber Inference — two credential paths, one provider. The
+    # paste-a-key entry and the OAuth 2.0 + PKCE connect entry share an
+    # inference adapter, a base URL and a catalog; keeping the ids apart lets
+    # the settings panel say which path minted the stored key.
+    "orcarouter",
+    "orcarouter-oauth",
 ]
 
 # Providers that *require* a non-NULL ``base_url``. Hosted SaaS providers
@@ -92,7 +100,7 @@ _PROVIDERS_REQUIRING_BASE_URL: frozenset[str] = frozenset({"local-ollama", "loca
 # auth (Ollama default install, vLLM behind an internal LB) legitimately
 # have no key. ``custom`` is permissive — operators run all sorts of
 # proxies behind it (LiteLLM with org auth, internal API gateways, etc.).
-_PROVIDERS_REQUIRING_KEY: frozenset[str] = frozenset({"openai", "anthropic", "azure-openai"})
+_PROVIDERS_REQUIRING_KEY: frozenset[str] = frozenset({"openai", "anthropic", "azure-openai", "orcarouter", "orcarouter-oauth"})
 
 
 # --------------------------------------------------------------- request / response models
@@ -161,6 +169,10 @@ class LlmCredentialView(BaseModel):
     created_at: datetime
     updated_at: datetime
     last_rotated_at: datetime | None
+    #: True when the provider rejected this exact credential generation. The
+    #: key is durable, not refreshable, so the remedy is re-authentication —
+    #: the UI says so rather than retrying a revoked key.
+    needs_reauth: bool = False
 
 
 # --------------------------------------------------------------- helpers
@@ -178,6 +190,7 @@ def _project(row: TenantLlmCredential) -> LlmCredentialView:
         created_at=row.created_at,
         updated_at=row.updated_at,
         last_rotated_at=row.last_rotated_at,
+        needs_reauth=bool((row.settings or {}).get("needs_reauth")),
     )
 
 
@@ -211,6 +224,84 @@ def _enforce_provider_invariants(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"provider '{payload.provider}' requires api_key",
             )
+
+    # A light shape check, and only that: the prefix catches a pasted secret
+    # from the wrong provider or a truncated paste, and it is not evidence
+    # that the key is valid. Validity is established by the first real call.
+    if payload.provider in orcarouter.ORCAROUTER_PROVIDERS and payload.api_key and not payload.api_key.startswith("sk-orca-"):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="An OrcaRouter API key starts with 'sk-orca-'. Check the value you pasted.",
+        )
+
+
+def _orcarouter_defaults(provider: str, base_url: str | None, model: str | None) -> tuple[str | None, str | None]:
+    """Fill the fixed endpoint and default model for the OrcaRouter providers.
+
+    Both are stored so every downstream resolver — the explain path, the agents
+    service, the probe — reads one row and never has to know an OrcaRouter
+    default exists. An operator override still wins.
+    """
+    if provider not in orcarouter.ORCAROUTER_PROVIDERS:
+        return base_url, model
+    if base_url:
+        resolved_base = base_url
+    else:
+        try:
+            resolved_base = orcarouter.api_base()
+        except orcarouter.OrcaRouterError as exc:
+            # A malformed self-hosted override is a configuration error; store
+            # nothing and say so rather than silently writing the public URL.
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.message) from exc
+    return resolved_base, (model or orcarouter.DEFAULT_MODEL)
+
+
+async def _mark_needs_reauth(db, *, tenant_id, generation: str | None) -> bool:
+    """Mark the exact credential generation the provider rejected.
+
+    Returns whether the row was marked. A credential written after this
+    request began carries a different generation, and its failure belongs to a
+    credential that no longer exists — updating it would send the operator to
+    re-authorize a key that works.
+    """
+    if not generation:
+        return False
+    res = await db.execute(select(TenantLlmCredential).where(TenantLlmCredential.tenant_id == tenant_id))
+    row = res.scalar_one_or_none()
+    if row is None:
+        return False
+    if (row.settings or {}).get("credential_generation") != generation:
+        return False
+    settings = dict(row.settings or {})
+    settings["needs_reauth"] = True
+    settings["needs_reauth_generation"] = generation
+    row.settings = settings
+    await db.commit()
+    return True
+
+
+async def _clear_needs_reauth(db, *, tenant_id, generation: str | None) -> bool:
+    """Drop a stale re-authentication flag after a call that worked.
+
+    Same generation guard as :func:`_mark_needs_reauth`: a success for an
+    older credential says nothing about the key that replaced it.
+    """
+    if not generation:
+        return False
+    res = await db.execute(select(TenantLlmCredential).where(TenantLlmCredential.tenant_id == tenant_id))
+    row = res.scalar_one_or_none()
+    if row is None:
+        return False
+    if (row.settings or {}).get("credential_generation") != generation:
+        return False
+    settings = dict(row.settings or {})
+    if not settings.get("needs_reauth"):
+        return False
+    settings["needs_reauth"] = False
+    settings.pop("needs_reauth_generation", None)
+    row.settings = settings
+    await db.commit()
+    return True
 
 
 # --------------------------------------------------------------- endpoints
@@ -295,14 +386,25 @@ async def upsert_llm_credential(
     now = datetime.now(UTC)
     rotated = False
     previous_provider: str | None = None
+    resolved_base, resolved_model = _orcarouter_defaults(payload.provider, payload.base_url, payload.model)
+
+    # A new key rotates the credential generation. A late 401 from the
+    # previous credential is then recognisable as stale and cannot mark the
+    # replacement as broken.
+    write_settings = payload.settings
+    if payload.provider in orcarouter.ORCAROUTER_PROVIDERS and new_ciphertext is not None:
+        carried = payload.settings if payload.settings is not None else ((existing.settings if existing else None) or {})
+        write_settings = {**dict(carried), "credential_generation": uuid.uuid4().hex, "needs_reauth": False}
+        write_settings.pop("needs_reauth_generation", None)
+
     if existing is None:
         row = TenantLlmCredential(
             tenant_id=current_user.tenant_id,
             provider=payload.provider,
-            base_url=payload.base_url,
-            model=payload.model,
+            base_url=resolved_base,
+            model=resolved_model,
             api_key_vault=new_ciphertext,
-            settings=payload.settings or {},
+            settings=write_settings or {},
             enabled=payload.enabled,
             created_at=now,
             updated_at=now,
@@ -313,14 +415,14 @@ async def upsert_llm_credential(
     else:
         previous_provider = existing.provider
         existing.provider = payload.provider
-        existing.base_url = payload.base_url
-        existing.model = payload.model
+        existing.base_url = resolved_base
+        existing.model = resolved_model
         if new_ciphertext is not None:
             existing.api_key_vault = new_ciphertext
             existing.last_rotated_at = now
             rotated = True
-        if payload.settings is not None:
-            existing.settings = payload.settings
+        if write_settings is not None:
+            existing.settings = write_settings
         existing.enabled = payload.enabled
         existing.updated_at = now
         row = existing
@@ -514,6 +616,25 @@ async def test_llm_credential(
         model=existing.model,
         api_key=api_key,
     )
+
+    # A durable key that the provider rejects is a reauthentication signal, not
+    # a retry signal: there is no refresh grant to fall back to. Mark only the
+    # generation that was rejected — a late failure must not make a credential
+    # that was just replaced look broken.
+    if existing.provider in orcarouter.ORCAROUTER_PROVIDERS and result.status_code in (401, 403):
+        await _mark_needs_reauth(
+            db,
+            tenant_id=current_user.tenant_id,
+            generation=(existing.settings or {}).get("credential_generation"),
+        )
+    elif existing.provider in orcarouter.ORCAROUTER_PROVIDERS and result.outcome == "ok":
+        # Includes 429: reaching the quota means the credential authenticated.
+        await _clear_needs_reauth(
+            db,
+            tenant_id=current_user.tenant_id,
+            generation=(existing.settings or {}).get("credential_generation"),
+        )
+
     return LlmCredentialTestResult(
         outcome=result.outcome,
         detail=result.detail,

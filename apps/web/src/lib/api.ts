@@ -6292,6 +6292,7 @@ export type LlmProvider =
   | "openai"
   | "anthropic"
   | "azure-openai"
+  | "orcarouter"
   | "local-ollama"
   | "local-vllm"
   | "local-litellm"
@@ -6365,11 +6366,19 @@ export interface LlmStatus {
 //
 // The provider list is a *strict subset* of the read-side ``LlmProvider``
 // — ``none`` is never a writable choice.
+//
+// ``orcarouter`` and ``orcarouter-oauth`` are one provider reached two ways:
+// a pasted key and "Connect with OrcaRouter" (OAuth 2.0 + PKCE). Both store the
+// same durable ``sk-orca-…`` key in the same vault row, so the rest of the
+// product cannot tell which path minted it — only this panel can, and it uses
+// that to decide which authentication card to show.
 
 export type LlmWritableProvider =
   | "openai"
   | "anthropic"
   | "azure-openai"
+  | "orcarouter"
+  | "orcarouter-oauth"
   | "local-ollama"
   | "local-vllm"
   | "local-litellm"
@@ -6404,6 +6413,14 @@ export interface LlmCredentialView {
   updated_at: string;
   /** Last time the API key was rotated (set/changed). Null if never. */
   last_rotated_at: string | null;
+  /**
+   * Set when the provider rejected the stored credential with 401/403.
+   *
+   * A durable OrcaRouter key has no refresh grant, so this is an instruction
+   * to authenticate again rather than a transient error to retry. Older
+   * servers omit the field; absent means false.
+   */
+  needs_reauth?: boolean;
 }
 
 /**
@@ -6436,6 +6453,44 @@ export interface LlmCredentialTestResult {
   provider: string;
   model?: string;
   latency_ms?: number;
+}
+
+// ─── OrcaRouter Cyber Inference ─────────────────────────────────────────────
+//
+// The model list is fetched from the server, never typed by the operator: the
+// API asks the inference origin with `?capability=chat` and applies the
+// capability filter, so an embedding-only or image-generation id cannot become
+// a chat selection. ``degraded`` means discovery failed and ``data`` is the
+// verified seed; render that as a fallback, not as a live answer.
+
+export interface OrcaRouterModel {
+  id: string;
+  name: string;
+  context_length: number | null;
+  input_modalities: string[];
+  supported_endpoint_types: string[];
+  reasoning_efforts: string[];
+}
+
+export interface OrcaRouterCatalog {
+  object: "list";
+  data: OrcaRouterModel[];
+  source: "live" | "fallback";
+  degraded: boolean;
+  detail: string;
+  /** Provider routing ids offered above the catalog: default, cyber, fallback. */
+  recommended: OrcaRouterModel[];
+  default_model: string;
+}
+
+export interface OrcaRouterConnectStart {
+  authorize_url: string;
+  /** Public CSRF token echoed back to `finish`. The verifier never leaves the server. */
+  state: string;
+  expires_at: string;
+  expires_in_seconds: number;
+  provider: "orcarouter-oauth";
+  flow: "pkce-oob";
 }
 
 export const deploymentApi = {
@@ -6472,6 +6527,39 @@ export const deploymentApi = {
   testLlmCredential: () =>
     request<LlmCredentialTestResult>("/api/v1/llm/credentials/test", {
       method: "POST",
+    }),
+
+  /**
+   * Chat-capable models for OrcaRouter.
+   *
+   * ``api_key`` exists so the dropdown can be real before the key is saved;
+   * it is used for this one request and never persisted. Omit it to use the
+   * stored (vault-encrypted) key.
+   */
+  listOrcaRouterModels: (payload: { api_key?: string | null; capability?: "chat" } = {}) =>
+    request<OrcaRouterCatalog>("/api/v1/llm/orcarouter/models", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  /**
+   * Begin "Connect with OrcaRouter" (OAuth 2.0 + PKCE, out-of-band).
+   *
+   * Out-of-band rather than a loopback redirect because a self-hosted install
+   * has no predictable callback address and the API runs in a container. The
+   * response carries the consent URL and a ``state``; open the URL, then paste
+   * the code it shows into {@link finishOrcaRouterConnect}.
+   */
+  startOrcaRouterConnect: () =>
+    request<OrcaRouterConnectStart>("/api/v1/llm/orcarouter/connect/start", {
+      method: "POST",
+    }),
+
+  /** Redeem the out-of-band code and store the durable key. */
+  finishOrcaRouterConnect: (payload: { state: string; code: string }) =>
+    request<LlmCredentialView>("/api/v1/llm/orcarouter/connect/finish", {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };
 

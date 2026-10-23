@@ -78,6 +78,9 @@ router = APIRouter(prefix="/llm", tags=["llm"])
 _HOSTED_PROVIDERS: dict[str, str] = {
     "api.openai.com": "openai",
     "api.anthropic.com": "anthropic",
+    # OrcaRouter Cyber Inference. Only the inference origin appears here:
+    # authentication lives on www.orcarouter.ai and is never part of a base URL.
+    "api.orcarouter.ai": "orcarouter",
 }
 
 _HOSTED_SUBSTRINGS: tuple[tuple[str, str], ...] = (
@@ -87,6 +90,7 @@ _HOSTED_SUBSTRINGS: tuple[tuple[str, str], ...] = (
     ("ollama", "local-ollama"),
     ("vllm", "local-vllm"),
     ("litellm", "local-litellm"),
+    ("orcarouter", "orcarouter"),
 )
 
 
