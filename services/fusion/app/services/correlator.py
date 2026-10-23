@@ -8,6 +8,7 @@ from uuid import uuid4
 
 import redis.asyncio as aioredis
 import structlog
+from redis.exceptions import RedisError
 
 from app.core.config import settings
 from app.models.alert import AlertSeverity, IncidentSummary, RawAlert
@@ -37,6 +38,8 @@ class Correlator:
         self._redis = redis_client
         self._window = settings.correlation_window_seconds
         self._max_alerts = settings.max_alerts_per_incident
+        self._degraded = False
+        self.fallbacks = 0
 
     async def correlate(self, alert: RawAlert) -> tuple[bool, IncidentSummary]:
         """
@@ -44,7 +47,24 @@ class Correlator:
 
         Returns:
             (is_correlated_to_existing, incident_summary)
+
+        Redis is the correlation store, not the alert store. If it is
+        unreachable the alert still has to flow: a synthetic single-alert
+        incident is returned and the degradation is counted, rather than the
+        ``RedisError`` escaping into the engine and costing the alert (or being
+        swallowed by a caller that then commits the offset).
         """
+        try:
+            result = await self._correlate(alert)
+        except (TimeoutError, RedisError, OSError) as exc:
+            self.fallbacks += 1
+            self._enter_degraded(exc)
+            return False, self._create_incident(alert)
+
+        self._exit_degraded()
+        return result
+
+    async def _correlate(self, alert: RawAlert) -> tuple[bool, IncidentSummary]:
         corr_key = alert.correlation_key()
         index_key = f"{_CORRELATION_PREFIX}{corr_key}"
 
@@ -52,8 +72,12 @@ class Correlator:
         incident_id_bytes = await self._redis.get(index_key)
 
         if incident_id_bytes:
-            incident_id = incident_id_bytes.decode()
-            incident = await self._load_incident(incident_id)
+            try:
+                incident_id = incident_id_bytes.decode()
+            except (AttributeError, UnicodeDecodeError):
+                # A corrupt index value is a cache miss, not an alert failure.
+                incident_id = ""
+            incident = await self._load_incident(incident_id) if incident_id else None
             if incident and incident.alert_count < self._max_alerts:
                 # Update existing incident
                 incident = await self._merge_alert(incident, alert)
@@ -78,6 +102,23 @@ class Correlator:
             correlation_key=corr_key,
         )
         return False, incident
+
+    def metrics(self) -> dict[str, int | bool]:
+        return {"degraded": self._degraded, "fallbacks": self.fallbacks}
+
+    def _enter_degraded(self, exc: BaseException) -> None:
+        if not self._degraded:
+            self._degraded = True
+            logger.warning(
+                "fusion.correlation_degraded",
+                error=str(exc),
+                detail="Redis unavailable; alerts continue as uncorrelated single-alert incidents",
+            )
+
+    def _exit_degraded(self) -> None:
+        if self._degraded:
+            self._degraded = False
+            logger.info("fusion.correlation_recovered")
 
     def _create_incident(self, alert: RawAlert) -> IncidentSummary:
         incident = IncidentSummary(
@@ -137,4 +178,16 @@ class Correlator:
         data = await self._redis.get(key)
         if not data:
             return None
-        return IncidentSummary.model_validate_json(data)
+        try:
+            return IncidentSummary.model_validate_json(data)
+        except ValueError as exc:
+            # Redis is a cache, not the source of truth. A truncated or
+            # schema-stale incident payload must read as "no existing
+            # incident" and let a fresh one be created — raising here would
+            # dead-letter an otherwise valid alert over a cache artifact.
+            logger.warning(
+                "fusion.correlation_payload_invalid",
+                incident_id=incident_id,
+                error=str(exc),
+            )
+            return None

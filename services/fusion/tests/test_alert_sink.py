@@ -58,19 +58,29 @@ def _fused(decision: FusionDecision = FusionDecision.NEW_ALERT) -> FusedAlert:
     )
 
 
+_UNSET = object()
+
+
 class _StubConn:
-    def __init__(self, row):
+    def __init__(self, row, surviving=_UNSET):
         self._row = row
+        # The reconciliation SELECT and the INSERT are two different
+        # statements. A single scripted row cannot answer both without
+        # pretending the insert happened when it was filtered out.
+        self._surviving = row if surviving is _UNSET else surviving
         self.calls: list[tuple] = []
 
     async def fetchrow(self, sql, *args):
         self.calls.append((sql, args))
+        lowered = sql.lower().lstrip()
+        if lowered.startswith("select") and "from alerts" in lowered and "dedup_hash" in lowered:
+            return self._surviving
         return self._row
 
 
 class _StubPool:
-    def __init__(self, row):
-        self.conn = _StubConn(row)
+    def __init__(self, row, surviving=_UNSET):
+        self.conn = _StubConn(row, surviving=surviving)
 
     @asynccontextmanager
     async def _acquire(self):
@@ -95,12 +105,36 @@ def test_iocs_and_entities_extraction():
 
 
 @pytest.mark.asyncio
-async def test_duplicate_decision_is_never_persisted():
+async def test_duplicate_decision_is_verified_before_it_is_trusted():
+    """A DUPLICATE verdict is a hint, not proof that the row exists.
+
+    Fusion writes the dedup fingerprint to Redis before the insert. A crash in
+    that window leaves a fingerprint with no row, and the old sink returned
+    DUPLICATE without writing anything — permanent loss. The sink now verifies
+    the surviving row; when it exists, no second row is written.
+    """
+    surviving_id = uuid.uuid4()
     sink = AlertSink("postgresql://x")
-    sink._pool = _StubPool(row={"id": uuid.uuid4()})  # would succeed if called
+    sink._pool = _StubPool(row=None, surviving={"id": surviving_id})
     result = await sink.persist(_fused(FusionDecision.DUPLICATE))
     assert result.outcome is PersistOutcome.DUPLICATE
-    assert sink._pool.conn.calls == []
+    assert result.alert_id == str(surviving_id)
+    sqls = [sql for sql, _ in sink._pool.conn.calls]
+    assert any("FROM alerts" in sql for sql in sqls)
+    assert not any("INSERT INTO alerts" in sql for sql in sqls)
+
+
+@pytest.mark.asyncio
+async def test_stale_duplicate_hint_repairs_the_missing_row():
+    """The fingerprint survived a crash, but the row did not. Insert it."""
+    fused = _fused(FusionDecision.DUPLICATE)
+    sink = AlertSink("postgresql://x")
+    sink._pool = _StubPool(row={"id": fused.id}, surviving=None)
+    result = await sink.persist(fused)
+    assert result.outcome is PersistOutcome.INSERTED
+    assert result.alert_id == str(fused.id)
+    inserts = [sql for sql, _ in sink._pool.conn.calls if "INSERT INTO alerts" in sql]
+    assert len(inserts) == 1
 
 
 @pytest.mark.asyncio
@@ -133,13 +167,17 @@ async def test_new_alert_is_inserted_with_canonical_id_and_provenance():
 
 @pytest.mark.asyncio
 async def test_dedup_hit_returns_duplicate():
-    pool = _StubPool(row=None)  # WHERE NOT EXISTS / ON CONFLICT filtered it out
+    fused = _fused()
+    # WHERE NOT EXISTS filtered the insert out, and the reconciliation read
+    # resolves the row that filtered it.
+    pool = _StubPool(row=None, surviving={"id": fused.id})
     sink = AlertSink("postgresql://x")
     sink._pool = pool
-    result = await sink.persist(_fused())
+    result = await sink.persist(fused)
     assert result.outcome is PersistOutcome.DUPLICATE
-    assert result.alert_id == str(_fused().id)  # canonical id still known
+    assert result.alert_id == str(fused.id)
     assert result.durable is True
+    assert result.verified is True
 
 
 @pytest.mark.asyncio
@@ -157,6 +195,26 @@ async def test_db_unavailable_is_distinct_from_duplicate(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_unverifiable_duplicate_is_not_durable(monkeypatch):
+    """A correct fusion verdict is not proof of a durable row.
+
+    If the database cannot be asked, the consumer must retry rather than
+    commit a duplicate that may never have been written.
+    """
+    sink = AlertSink("postgresql://nope:nope@127.0.0.1:1/none")
+
+    async def _fail_start():
+        sink._pool = None
+
+    monkeypatch.setattr(sink, "start", _fail_start)
+    result = await sink.persist(_fused(FusionDecision.DUPLICATE))
+    assert result.outcome is PersistOutcome.DUPLICATE
+    assert result.verified is False
+    assert result.durable is False
+    assert result.retryable is True
+
+
+@pytest.mark.asyncio
 async def test_persist_exception_is_failed_not_duplicate():
     class _BoomPool(_StubPool):
         def acquire(self):
@@ -167,6 +225,44 @@ async def test_persist_exception_is_failed_not_duplicate():
     result = await sink.persist(_fused())
     assert result.outcome is PersistOutcome.FAILED
     assert result.durable is False
+
+
+@pytest.mark.asyncio
+async def test_a_broken_pool_is_replaced_without_a_fusion_restart(monkeypatch):
+    """A stale pool used to return FAILED forever after Postgres returned."""
+    fused = _fused()
+
+    class _BrokenPool:
+        def __init__(self):
+            self.closed = False
+
+        def acquire(self):
+            raise OSError("connection reset by peer")
+
+        async def close(self):
+            self.closed = True
+
+    broken = _BrokenPool()
+    recovered = _StubPool(row={"id": fused.id})
+    sink = AlertSink("postgresql://x")
+    sink._pool = broken
+
+    async def reconnect():
+        sink._pool = recovered
+
+    monkeypatch.setattr(sink, "start", reconnect)
+
+    first = await sink.persist(fused)
+    assert first.outcome is PersistOutcome.FAILED
+    assert first.retryable is True
+    assert first.durable is False
+    assert broken.closed is True
+    assert sink._pool is None
+
+    second = await sink.persist(fused)
+    assert second.outcome is PersistOutcome.INSERTED
+    assert second.durable is True
+    assert sink._pool is recovered
 
 
 def test_deterministic_id_is_replay_stable():

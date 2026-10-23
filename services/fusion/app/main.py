@@ -56,7 +56,16 @@ async def lifespan(app: FastAPI):
     configure_logging()
     logger.info("Starting AiSOC Alert Fusion Service", port=settings.http_port)
 
-    redis_client = aioredis.from_url(settings.redis_url, decode_responses=False)
+    # Short socket timeouts are part of the Redis fallback: a black-holed
+    # connection must fail open into Postgres-backed dedup, not stall the
+    # alert path waiting for a TCP read that never arrives.
+    redis_client = aioredis.from_url(
+        settings.redis_url,
+        decode_responses=False,
+        socket_connect_timeout=settings.redis_connect_timeout_seconds,
+        socket_timeout=settings.redis_socket_timeout_seconds,
+        health_check_interval=30,
+    )
 
     dedup = Deduplicator(redis_client)
     correlator = Correlator(redis_client)
@@ -141,7 +150,19 @@ async def lifespan(app: FastAPI):
     # The pool is passed as a callable because `sink.start()` opens it
     # during `worker.start()`, after this point; capturing it eagerly would
     # capture None and drop every dead letter.
-    dlq = PostgresDLQ(lambda: sink._pool) if sink is not None else None
+    # `ensure_pool`/`invalidate_pool` matter here: the DLQ shares the sink's
+    # pool, and while the consumer is holding a message neither the alert path
+    # nor anything else reconnects. Without them a Postgres outage that
+    # invalidated the pool would turn the hold into a permanent stall.
+    dlq = (
+        PostgresDLQ(
+            lambda: sink._pool,
+            ensure_pool=sink.ensure_pool,
+            invalidate_pool=sink.invalidate_pool,
+        )
+        if sink is not None
+        else None
+    )
 
     # Depth 6.1 — the observed AI estate. Shares the alert sink's pool for
     # the same reason the dead-letter queue does: one Postgres connection
@@ -150,6 +171,19 @@ async def lifespan(app: FastAPI):
     # capturing `sink._pool` eagerly would capture None and silently drop
     # every sighting for the life of the process.
     ai_assets = AiAssetRecorder(lambda: sink._pool) if sink is not None else None
+
+    if sink is None:
+        # Explicit, not inferred: this mode writes no alert rows and has no
+        # durable DLQ. The consumer still retries and holds, but its committed
+        # offsets are not evidence that an alert survived. Development-only.
+        logger.warning(
+            "fusion.alert_persistence_disabled",
+            setting="AISOC_ALERT_SINK_ENABLED=false",
+            detail=(
+                "alerts are not persisted to Postgres and dead letters are log-only; "
+                "Kafka offsets commit after processing, not after durable capture"
+            ),
+        )
 
     worker = FusionWorker(
         engine,

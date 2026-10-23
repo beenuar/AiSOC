@@ -1,12 +1,16 @@
 """Phase A1 — ClickHouse lake writer tests.
 
 Proves the OCSF->column mapping, batching (size + age + stop flush), IP/UUID
-coercion, and the fail-soft contract (a ClickHouse error drops the batch and
-never raises into the consumer). Uses a fake client so no live ClickHouse is
-needed; the live-container assertion is the integration.yml gate.
+coercion, and the fail-soft contract (a ClickHouse outage retains the batch,
+reconnects without a restart, and never raises into the consumer; only
+overflow or repeated data errors discard rows, with an explicit counter).
+Uses a fake client so no live ClickHouse is needed; the live-container
+assertion is the integration.yml gate.
 """
 
 from __future__ import annotations
+
+import uuid
 
 import pytest
 from app.services.lake_writer import LakeWriter, event_to_row
@@ -40,10 +44,11 @@ class _FakeClient:
     def __init__(self) -> None:
         self.inserted: list[dict] = []
         self.fail = False
+        self.error = "clickhouse down"
 
     def execute(self, sql, rows=None, **kwargs):  # noqa: ANN001
         if self.fail:
-            raise RuntimeError("clickhouse down")
+            raise RuntimeError(self.error)
         if rows:
             self.inserted.extend(rows)
         return []
@@ -86,11 +91,25 @@ async def test_missing_ip_coerced_to_null_ipv6():
     assert row["dest_ip"] == "::"
 
 
-async def test_non_uuid_event_id_left_none_for_default():
+async def test_a_non_uuid_event_id_gets_a_deterministic_uuid():
+    """The mapping must still yield a bindable id, and it must be stable.
+
+    A random id generated at buffer time was stable across a retry but not
+    across a process restart: replaying the same Kafka message after a crash
+    produced a second lake identity, so `LIMIT 1 BY event_id` could not
+    collapse it.
+    """
     msg = _message()
     msg["id"] = "not-a-uuid"
-    row = event_to_row(msg)
-    assert row["event_id"] is None
+    first = event_to_row(msg)
+    second = event_to_row(msg)
+    assert first["event_id"] is not None
+    assert uuid.UUID(first["event_id"])
+    assert first["event_id"] == second["event_id"]
+    # Different ingest ids stay distinct.
+    other = _message()
+    other["id"] = "another-id"
+    assert event_to_row(other)["event_id"] != first["event_id"]
 
 
 async def test_no_ocsf_or_bad_tenant_returns_none():
@@ -125,6 +144,19 @@ async def test_stop_flushes_remaining():
     assert len(fake.inserted) == 1
 
 
+async def test_stop_counts_rows_it_could_not_flush_as_dropped():
+    """A row still buffered when the process exits is not durable.
+
+    Logging it without incrementing `rows_dropped` leaves the metric claiming
+    the archive gap did not happen.
+    """
+    w, fake = _writer_with_fake(batch_size=100, reconnect_base_seconds=0, reconnect_max_seconds=0)
+    fake.fail = True
+    await w.write_event(_message())
+    await w.stop()
+    assert w.metrics()["rows_dropped"] == 1
+
+
 async def test_flush_if_stale_flushes_old_buffer():
     w, fake = _writer_with_fake(batch_size=100, batch_max_age_seconds=0.0)
     await w.write_event(_message())
@@ -132,25 +164,191 @@ async def test_flush_if_stale_flushes_old_buffer():
     assert len(fake.inserted) == 1
 
 
-async def test_omits_none_event_id_from_insert_row():
-    w, fake = _writer_with_fake(batch_size=1)
+async def test_a_non_uuid_ingest_id_still_binds_every_column():
+    """The driver cannot leave a column to its DEFAULT.
+
+    `clickhouse-driver` builds a RowOrientedBlock from the INSERT's column list
+    and reads ``row[name]`` for each one. The old writer omitted ``event_id``
+    when ingest's id was not a UUID, so the block raised ``KeyError`` before a
+    byte was sent; the batch was then retried as a *data* error and eventually
+    dropped, taking valid rows in the same batch with it.
+    """
+    block_module = pytest.importorskip("clickhouse_driver.block")
+    from app.services.lake_writer import _COLUMNS
+
+    w, fake = _writer_with_fake(batch_size=2)
     msg = _message()
     msg["id"] = "not-a-uuid"
+    await w.write_event(_message())  # a valid row in the same batch
+    await w.write_event(msg)  # triggers the flush
+
+    assert len(fake.inserted) == 2
+    for row in fake.inserted:
+        assert row["event_id"]
+        uuid.UUID(row["event_id"])
+        # Exactly what the real client does in send_data(): the row must carry
+        # a key for every column named in the INSERT.
+        block_module.RowOrientedBlock([(c, "String") for c in _COLUMNS], [row], types_check=False)
+
+
+async def test_a_generated_event_id_is_stable_across_a_retry():
+    """A retry re-sends the same buffered row.
+
+    A fresh id per attempt would leave `LIMIT 1 BY event_id` unable to collapse
+    a batch that was partially sent before the failure.
+    """
+    w, fake = _writer_with_fake(batch_size=1, reconnect_base_seconds=0, reconnect_max_seconds=0)
+    msg = _message()
+    msg["id"] = "not-a-uuid"
+    fake.fail = True
     await w.write_event(msg)
-    assert "event_id" not in fake.inserted[0]
+    generated = w._buffer[0]["event_id"]  # noqa: SLF001 — the retained row
+    assert generated
+
+    fake.fail = False
+    w._client = fake  # noqa: SLF001 — skip the reconnect delay
+    await w.flush()
+    assert fake.inserted[0]["event_id"] == generated
+
+
+async def test_a_non_uuid_ingest_id_is_stable_across_a_process_restart():
+    """The same Kafka message replayed by a new process keeps one identity.
+
+    This is the restart half of the retry test above. Ingest normally emits
+    UUIDs, but the topic accepts envelopes from other producers; those used to
+    receive `uuid.uuid4()` per process, so a crash-and-replay archived the same
+    event twice with two identities.
+    """
+    msg = _message()
+    msg["id"] = "not-a-uuid"
+
+    before, fake_before = _writer_with_fake(batch_size=1)
+    await before.write_event(msg)
+
+    after, fake_after = _writer_with_fake(batch_size=1)  # a fresh process
+    await after.write_event(msg)
+
+    assert fake_before.inserted[0]["event_id"] == fake_after.inserted[0]["event_id"]
+
+
+async def test_an_event_with_no_id_uses_stable_kafka_coordinates():
+    """An envelope with no ingest id is identified by where it lives.
+
+    Replaying the same partition/offset after a restart must resolve to the
+    same id, while a different offset is a different event even when the body
+    is byte-identical.
+    """
+    msg = _message()
+    del msg["id"]
+    assert event_to_row(msg)["event_id"] is None  # mapping alone has no identity
+
+    first, fake_first = _writer_with_fake(batch_size=1)
+    await first.write_event(msg, topic="aisoc.raw_events", partition=3, offset=42)
+
+    replay, fake_replay = _writer_with_fake(batch_size=1)
+    await replay.write_event(msg, topic="aisoc.raw_events", partition=3, offset=42)
+
+    other, fake_other = _writer_with_fake(batch_size=1)
+    await other.write_event(msg, topic="aisoc.raw_events", partition=3, offset=43)
+
+    assert fake_first.inserted[0]["event_id"] == fake_replay.inserted[0]["event_id"]
+    assert fake_other.inserted[0]["event_id"] != fake_first.inserted[0]["event_id"]
 
 
 # ── Fail-soft ────────────────────────────────────────────────────────────────
 
 
-async def test_flush_failure_drops_batch_and_does_not_raise():
-    w, fake = _writer_with_fake(batch_size=2)
+async def test_flush_failure_retains_batch_and_never_raises():
+    """A ClickHouse outage must not silently discard the archive batch.
+
+    The old writer dropped it. The batch is now retained and retried; the
+    failure is still visible in `flush_failures`.
+    """
+    w, fake = _writer_with_fake(batch_size=2, reconnect_base_seconds=0, reconnect_max_seconds=0)
     fake.fail = True
     await w.write_event(_message())
     await w.write_event(_message())  # triggers flush -> fails
     assert w.flush_failures == 1
     assert w.rows_written == 0
-    assert w.metrics()["buffered"] == 0  # batch was dropped, not re-buffered
+    assert w.metrics()["buffered"] == 2  # retained for the next attempt
+
+    # Recovery: the same batch is written once ClickHouse accepts it, with no
+    # process restart and no loss.
+    fake.fail = False
+    w._client = fake  # noqa: SLF001 — skip the reconnect delay in this unit test
+    await w.flush()
+    assert len(fake.inserted) == 2
+    assert w.rows_written == 2
+    assert w.metrics()["buffered"] == 0
+
+
+async def test_buffer_overflow_drops_oldest_rows_explicitly():
+    """Retention is bounded; overflow is counted rather than silent."""
+    w, fake = _writer_with_fake(batch_size=1, max_buffer_rows=2, reconnect_base_seconds=0, reconnect_max_seconds=0)
+    fake.fail = True
+    for _ in range(3):
+        await w.write_event(_message())  # each write attempts a flush, all fail
+    metrics = w.metrics()
+    assert metrics["buffered"] == 2
+    assert metrics["rows_dropped"] == 1
+
+
+async def test_data_errors_are_bounded_and_dropped_loudly():
+    """A batch the server keeps rejecting must not grow forever.
+
+    Connection errors are retained (the store is down, the rows may be fine);
+    non-connection errors are retried a bounded number of times and then
+    dropped with `rows_dropped` incremented.
+    """
+    w, fake = _writer_with_fake(
+        batch_size=2,
+        max_data_failures=2,
+        reconnect_base_seconds=0,
+        reconnect_max_seconds=0,
+    )
+    fake.fail = True
+    fake.error = "Code: 47. DB::Exception: missing column tenant_id"
+    await w.write_event(_message())
+    await w.write_event(_message())  # first data failure
+    w._client = fake  # noqa: SLF001 — retry without waiting for reconnect
+    await w.flush()  # second data failure reaches the bound
+    assert w.flush_failures == 2
+    assert w.metrics()["buffered"] == 0
+    assert w.metrics()["rows_dropped"] == 2
+
+
+async def test_connect_failure_is_retried_instead_of_permanently_disabling():
+    """A missing ClickHouse is recoverable; only a missing driver is final."""
+    clients = [_FakeClient()]
+    calls = {"n": 0}
+
+    def factory():  # noqa: ANN202
+        calls["n"] += 1
+        return clients[0]
+
+    w = LakeWriter(
+        host="x",
+        batch_size=1,
+        reconnect_base_seconds=0,
+        reconnect_max_seconds=0,
+        client_factory=factory,
+    )
+    await w.start()
+    assert calls["n"] == 1
+    await w.write_event(_message())
+    assert w.rows_written == 1
+
+    # Simulate a dropped connection: the next flush rebuilds the client from
+    # the factory rather than disabling the writer.
+    w._client = None  # noqa: SLF001
+    clients[0].fail = True
+    await w.write_event(_message())  # fails, drops its client
+    clients[0].fail = False
+    w._next_reconnect_at = 0.0  # noqa: SLF001 — eligible immediately
+    await w.flush()
+    assert calls["n"] >= 2
+    assert w.rows_written == 2
+    assert await w.write_event(_message()) is True  # still enabled, not disabled
 
 
 async def test_disabled_writer_is_noop():

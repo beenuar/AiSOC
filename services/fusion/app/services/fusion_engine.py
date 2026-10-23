@@ -163,12 +163,19 @@ class FusionEngine:
                 alert_id=str(alert.id),
                 original_id=original_id,
             )
+            # A decodable but non-UUID cache value must not turn a valid alert
+            # into an unhandled exception: the duplicate verdict stands, only
+            # the back-reference is dropped.
+            try:
+                duplicate_of = UUID(original_id) if original_id else None
+            except (AttributeError, TypeError, ValueError):
+                duplicate_of = None
             return FusedAlert(
                 id=alert.id,
                 tenant_id=alert.tenant_id,
                 incident_id=None,
                 fusion_decision=FusionDecision.DUPLICATE,
-                duplicate_of=UUID(original_id) if original_id else None,
+                duplicate_of=duplicate_of,
                 alert=alert,
             )
 
