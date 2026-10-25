@@ -81,6 +81,13 @@ from load_harness import (  # noqa: E402
 
 _FUSION_K8S_SELECTOR = "app.kubernetes.io/component=alert-fusion"
 
+#: Named so the self-test can assert the relation between them rather than
+#: either value: a stall rule shorter than a Kafka consumer-group rejoin
+#: cannot tell loss from an unfinished drain, and one longer than the drain
+#: budget can never fire.
+_DEFAULT_DRAIN_TIMEOUT_SECONDS = 420
+_DEFAULT_DRAIN_STALL_SECONDS = 90.0
+
 
 @dataclass
 class Verdict:
@@ -160,19 +167,152 @@ def fusion_victims(target: Target, namespace: str) -> list[str]:
     return [name for name in out.stdout.split() if name]
 
 
+def _inspect(victim: str, template: str) -> str | None:
+    done = subprocess.run(  # noqa: S603
+        ["docker", "inspect", "-f", template, victim],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    value = (done.stdout or "").strip()
+    return value if done.returncode == 0 and value else None
+
+
+def crash_rungs(pid: str, image: str, *, host_pid_is_ours: bool) -> list[tuple[str, list[str]]]:
+    """Every way this harness is allowed to make a container's PID 1 die.
+
+    Pure, and public, so the self-test can assert the one property that
+    matters and cannot be read off a passing live run: **none of these is
+    ``docker kill``**. Each rung delivers SIGKILL to the same process; they
+    differ only in the privilege the host makes available.
+
+    ``host_pid_is_ours`` gates the two rungs that signal a bare pid. On a
+    Docker Desktop host the daemon reports a pid from inside its VM, which on
+    the host is either absent or -- the reason this gate exists -- some
+    unrelated local process. Signalling it would kill a bystander on a
+    developer's laptop, so the bare-pid rungs are offered only when ``/proc``
+    confirms that pid belongs to this container, and the ``--pid=host``
+    container handles every other host.
+    """
+    rungs: list[tuple[str, list[str]]] = []
+    if host_pid_is_ours:
+        # Already privileged: root in a CI container, or a rootless daemon.
+        rungs.append(("direct kill", ["kill", "-9", pid]))
+        # The GitHub runner shape: an unprivileged job user with passwordless sudo.
+        rungs.append(("sudo kill", ["sudo", "-n", "kill", "-9", pid]))
+    # Works wherever a Docker daemon does, including Docker Desktop. Uses the
+    # victim's own image so nothing has to be pulled while the stream is in
+    # flight.
+    rungs.append(
+        (
+            "privileged --pid=host container",
+            ["docker", "run", "--rm", "--privileged", "--pid=host", "--entrypoint", "sh", image, "-c", f"kill -9 {pid}"],
+        )
+    )
+    return rungs
+
+
+def host_pid_is_container(container: str, pid: str) -> bool:
+    """Whether host pid *pid* really is this container's own process.
+
+    ``/proc`` is the only authority that can answer, and the question has to
+    be asked before any bare ``kill``: a pid number that is valid inside a
+    Docker Desktop VM is meaningless on the macOS host and may well name
+    something else. No ``/proc``, no match, no bare kill.
+    """
+    full_id = _inspect(container, "{{.Id}}")
+    if not full_id:
+        return False
+    try:
+        cgroup = Path(f"/proc/{pid}/cgroup").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    # Both cgroup drivers put the container id in the path:
+    # systemd `…/docker-<id>.scope`, cgroupfs `/docker/<id>`.
+    return full_id in cgroup or full_id[:12] in cgroup
+
+
+def _compose_crash(victim: str) -> tuple[bool, str]:
+    """Make the container's main process die the way a crash kills it.
+
+    ``docker kill`` is not a crash, and the difference is the whole of the
+    "1650 of 3000 events lost" measurement this harness used to produce.
+    The daemon records a killed container as *manually stopped*, and
+    ``restartmanager.ShouldRestart`` then declines to restart it. Measured on
+    Docker 29.5.2, 60 s after the signal:
+
+    ===========================================  ==========================
+    action                                       result
+    ===========================================  ==========================
+    ``docker kill -s KILL``, ``unless-stopped``  ``running=false``, ``restartCount=0``
+    ``docker kill -s KILL``, ``always``          ``running=false``, ``restartCount=0``
+    SIGKILL of the main process, host PID ns     ``running=true``, ``restartCount=1`` (~4 s)
+    ===========================================  ==========================
+
+    So ``restart: unless-stopped`` in ``docker-compose.yml`` was never the
+    problem -- ``always`` behaves identically -- and fusion staying dead was
+    the harness asking the daemon for an administrative stop and then
+    reporting the absence of a consumer as event loss. Under Kubernetes the
+    equivalent is genuine: ``kubectl delete pod --force`` is replaced by the
+    Deployment controller, so only the compose leg was wrong.
+
+    Signalling the container's PID 1 from the *host* namespace is the shape a
+    real crash has: the daemon sees an unexpected exit 137 it did not ask
+    for, and applies the restart policy. That also makes the policy itself
+    part of what is graded, which nothing else in CI checks.
+
+    ``docker exec <c> kill -9 1`` is not an alternative: PID 1 is
+    signal-protected inside its own PID namespace and survives (measured).
+
+    The three rungs exist because the privilege needed differs by host, not
+    because any of them is a weaker test -- they all deliver the same signal
+    to the same process. If none of them lands the caller is told, and the
+    run is refused rather than silently falling back to ``docker kill``,
+    which is the fallback that produced a number nobody could interpret.
+    """
+    pid = _inspect(victim, "{{.State.Pid}}")
+    if not pid or pid == "0":
+        return False, f"could not read a host PID for {victim}: docker reported {pid!r}"
+    image = _inspect(victim, "{{.Config.Image}}") or "busybox:1.36"
+    restarts_before = int(_inspect(victim, "{{.RestartCount}}") or 0)
+
+    attempted: list[str] = []
+    for label, argv in crash_rungs(pid, image, host_pid_is_ours=host_pid_is_container(victim, pid)):
+        done = subprocess.run(argv, capture_output=True, text=True, timeout=120, check=False)  # noqa: S603
+        detail = (done.stderr or done.stdout or "").strip()[:160]
+        attempted.append(f"{label}: rc={done.returncode} {detail}".strip())
+        # The exit code of `kill` is not the measurement -- whether the
+        # process died is. Watch the daemon's own view instead: either the
+        # container is down, or the restart policy has already replaced it.
+        deadline = time.time() + 20
+        while time.time() < deadline:
+            running = _inspect(victim, "{{.State.Running}}")
+            restarts = int(_inspect(victim, "{{.RestartCount}}") or restarts_before)
+            if running == "false" or restarts > restarts_before:
+                return True, f"{label} (restartCount {restarts_before} -> {restarts})"
+            time.sleep(0.5)
+
+    return False, (
+        f"the main process of {victim} (host pid {pid}) could not be signalled. "
+        "Refusing to fall back to `docker kill`, which the daemon treats as an administrative "
+        "stop and never restarts, so the run would measure a missing consumer as event loss. "
+        "Tried -- " + "; ".join(attempted)
+    )
+
+
 def kill_fusion(target: Target, namespace: str, victim: str) -> tuple[bool, str]:
     """Destroy the replica without letting it shut down cleanly.
 
-    ``--grace-period=0 --force`` and ``docker kill -s KILL`` are both
+    ``--grace-period=0 --force`` and the host-namespace SIGKILL are both
     deliberate: a graceful stop runs fusion's ``stop()``, which stops the
     consumer in an orderly way and would test the shutdown path rather than
     the crash path. The failure worth proving survivable is the one where the
     process never gets to run any code at all.
     """
-    if target.name == "kubernetes":
-        argv = ["kubectl", "-n", namespace, "delete", "pod", victim, "--grace-period=0", "--force", "--wait=false"]
-    else:
-        argv = ["docker", "kill", "-s", "KILL", victim]
+    if target.name != "kubernetes":
+        return _compose_crash(victim)
+    argv = ["kubectl", "-n", namespace, "delete", "pod", victim, "--grace-period=0", "--force", "--wait=false"]
     done = subprocess.run(argv, capture_output=True, text=True, check=False)  # noqa: S603
     return done.returncode == 0, (done.stderr or done.stdout).strip()[:300]
 
@@ -249,7 +389,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--postgres-ref", default="statefulset/postgres")
     parser.add_argument("--kafka-ref", default="statefulset/aisoc-kafka")
     parser.add_argument("--producer-bin", default=os.environ.get("AISOC_PRODUCER_BIN", ""))
-    parser.add_argument("--drain-timeout", type=int, default=420)
+    parser.add_argument("--drain-timeout", type=int, default=_DEFAULT_DRAIN_TIMEOUT_SECONDS)
+    parser.add_argument(
+        "--drain-stall-seconds",
+        type=float,
+        default=_DEFAULT_DRAIN_STALL_SECONDS,
+        help=(
+            "how long the alert count may stand still before the drain is called finished. "
+            "Must exceed the time a replacement consumer takes to be evicted from its group, "
+            "restart and get an assignment, or the stopping rule fires before recovery can show"
+        ),
+    )
     parser.add_argument("--restart-timeout", type=int, default=180)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
@@ -369,26 +519,15 @@ def main(argv: list[str] | None = None) -> int:
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     accepted = int(summary["accepted_events"])
 
-    drain_started = time.time()
-    stable_reads = 0
-    last = -1
-    while time.time() - drain_started < args.drain_timeout:
-        count = count_marked(target, run_id)
-        if count >= accepted:
-            break
-        # Three identical reads is the stopping rule when rows are still
-        # missing: one could be the gap between two batches.
-        stable_reads = stable_reads + 1 if count == last else 0
-        if stable_reads >= 3:
-            break
-        last = count
-        time.sleep(5)
-
-    seq_counts: dict[int, int] = {}
-    for row in collect_alerts(target, run_id):
-        seq_counts[row.seq] = seq_counts.get(row.seq, 0) + 1
-    verdict = grade(accepted, seq_counts)
-
+    # Wait for the replacement BEFORE grading, not after.
+    #
+    # This ran last, which meant the loss figure was computed over a window
+    # in which nothing was consuming by construction: the drain stopped
+    # ~20 s after the last row and the replacement was polled for afterwards,
+    # so even a replica that came back in 30 s and caught up in a minute
+    # would have been published as total loss. The measurement has to begin
+    # once there is something to measure.
+    replacement_started = time.time()
     after = wait_for_replacement(
         target,
         args.namespace,
@@ -400,6 +539,39 @@ def main(argv: list[str] | None = None) -> int:
         replaced = bool(after) and len(after) >= len(before)
     else:
         replaced = victim not in after and len(after) >= len(before)
+    replacement_seconds = round(time.time() - replacement_started, 1)
+    print(
+        f"chaos: replacement {'observed' if replaced else 'NOT observed'} after {replacement_seconds}s "
+        f"(replicas now: {', '.join(after) or 'none'})"
+    )
+
+    drain_started = time.time()
+    last = -1
+    last_progress = time.time()
+    while time.time() - drain_started < args.drain_timeout:
+        count = count_marked(target, run_id)
+        if count >= accepted:
+            break
+        if count != last:
+            last = count
+            last_progress = time.time()
+        # A stall window, not a read count. The old rule -- three identical
+        # reads five seconds apart -- gave up ~20 s after the last row, which
+        # is shorter than a hard-killed consumer takes to be evicted from its
+        # group and replaced (the coordinator alone waits out
+        # `session.timeout.ms`). A stopping rule shorter than the recovery it
+        # is watching for cannot tell "lost" from "not finished yet".
+        #
+        # This is a stopping rule, not a threshold: `--drain-timeout` is
+        # unchanged, so rows that genuinely never arrive still fail.
+        if time.time() - last_progress >= args.drain_stall_seconds:
+            break
+        time.sleep(5)
+
+    seq_counts: dict[int, int] = {}
+    for row in collect_alerts(target, run_id):
+        seq_counts[row.seq] = seq_counts.get(row.seq, 0) + 1
+    verdict = grade(accepted, seq_counts)
 
     report = {
         "schema": "aisoc.chaos_fusion_restart/v1",
@@ -412,6 +584,7 @@ def main(argv: list[str] | None = None) -> int:
         "replica_replaced": replaced,
         "killed_at_offset_seconds": round(killed_at - started, 1),
         "alerts_stored_when_killed": in_flight,
+        "replacement_seconds": replacement_seconds,
         "drain_seconds": round(time.time() - drain_started, 1),
         **verdict.as_dict(),
     }
@@ -420,15 +593,25 @@ def main(argv: list[str] | None = None) -> int:
         args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(report, indent=2))
 
-    if not verdict.ok:
+    # Replacement is reported first when it failed, because it is the fact
+    # that makes the other number meaningless. A run with no consumer loses
+    # everything that arrives after the kill *by construction*, so leading
+    # with the loss count invites a reader to diagnose the durability path
+    # for a defect that is not there -- which is exactly what happened to
+    # "1650 of 3000 events lost" before the kill primitive was fixed.
+    if not replaced:
         print(
-            f"\nFAIL: {len(verdict.missing)} event(s) produced no alert and {len(verdict.duplicated)} produced more than one.",
+            f"\nFAIL: the killed replica was not replaced within {args.restart_timeout}s "
+            f"({len(verdict.missing)} event(s) also produced no alert, which this explains: with no "
+            "consumer, every event accepted after the kill is lost by construction and the figure "
+            "says nothing about durability).",
             file=sys.stderr,
         )
         return 1
-    if not replaced:
+    if not verdict.ok:
         print(
-            "\nFAIL: the killed replica was not replaced, so the run survived by running at reduced capacity rather than by recovering.",
+            f"\nFAIL: {len(verdict.missing)} event(s) produced no alert and {len(verdict.duplicated)} produced more than one, "
+            f"across a replacement that was back in {replacement_seconds}s.",
             file=sys.stderr,
         )
         return 1
@@ -476,6 +659,36 @@ def _self_test() -> int:
         (
             "the compose branch is chosen for the adapter's target name, not the CLI's spelling",
             _is_compose(compose_name) and not _is_compose("kubernetes"),
+        ),
+        (
+            "no crash rung is `docker kill` — the daemon treats that as an administrative stop and never restarts",
+            all(
+                argv[:2] != ["docker", "kill"]
+                for _label, argv in crash_rungs("4242", "ghcr.io/beenuar/aisoc-fusion:latest", host_pid_is_ours=True)
+            ),
+        ),
+        (
+            "every crash rung delivers SIGKILL to the pid it was handed",
+            all("4242" in " ".join(argv) and "-9" in " ".join(argv) for _label, argv in crash_rungs("4242", "img", host_pid_is_ours=True)),
+        ),
+        (
+            "a pid that /proc cannot attribute to the container is never signalled directly — it may be a bystander",
+            [label for label, _argv in crash_rungs("4242", "img", host_pid_is_ours=False)] == ["privileged --pid=host container"],
+        ),
+        (
+            "the --pid=host rung reuses the victim's own image, so nothing is pulled mid-stream",
+            any(
+                "ghcr.io/beenuar/aisoc-fusion:latest" in argv
+                for _label, argv in crash_rungs("1", "ghcr.io/beenuar/aisoc-fusion:latest", host_pid_is_ours=False)
+            ),
+        ),
+        (
+            "the drain stall window is long enough to outlast a consumer-group rejoin and short enough to fire inside the drain budget",
+            # Asserted as a relation rather than a value: the numbers may move,
+            # but a stall rule shorter than a Kafka session timeout cannot tell
+            # "lost" from "not finished yet", and one longer than the drain
+            # budget can never fire at all.
+            30.0 < _DEFAULT_DRAIN_STALL_SECONDS < _DEFAULT_DRAIN_TIMEOUT_SECONDS,
         ),
     ]
     ok = True

@@ -109,10 +109,35 @@ jobs:
       # Dependent URLs point at readiness-class endpoints: a 503 there
       # means "alive but cannot do my job", which `_responding` counts as
       # not serving — the required outcome for a block store's dependents.
-      # Legs whose owning service does not yet export the store's key
-      # (fusion: lake_writer/kafka; ingest: kafka/graph) stay red with the
-      # finding naming that service — that red is the job of this
-      # workflow, and the follow-ups live on #1446.
+      #
+      # Every URL below now names the endpoint that actually carries the
+      # store's key. It previously named `/health` for fusion, ingest,
+      # agents and actions, and none of those four reports a dependency
+      # there: `register_dependency` writes to `/readyz` only, fusion's
+      # `/health` is a static `{"status": "healthy"}` from
+      # `app/api/router.py`, and ingest's is `Handler.Health`, which
+      # deliberately checks nothing so a restart loop stays
+      # distinguishable from a dependency outage. So four legs read a key
+      # that the endpoint they asked was never going to mention, and
+      # reported "readiness does not say so" about services that do say
+      # so, one route over. The two legs that passed are exactly the two
+      # already pointing somewhere the key exists.
+      #
+      # Conflating liveness and readiness on one route would be the other
+      # way to close that gap, and it is the anti-pattern `app/_health.py`
+      # and `Handler.Readyz` are both written against — a service that
+      # fails `/health` because a dependency is gone gets restarted in a
+      # loop instead of taken out of rotation.
+      #
+      # qdrant is the one leg that still reads `/health`, and deliberately:
+      # threatintel declares `vector_store` on a hand-written `/health`
+      # rather than through `register_dependency`, so `/readyz` does not
+      # carry it. Worth making uniform one day; pointing this leg at
+      # `/readyz` today would simply lose the key.
+      #
+      # realtime answers `/health`, `/healthz` and `/readyz` from one
+      # handler; it is spelled `/readyz` here so the sentence above is true
+      # of every row.
       fail-fast: false
       matrix:
         include:
@@ -121,15 +146,15 @@ jobs:
             readiness_url: http://127.0.0.1:8000/api/v1/health/ready
             dependent_urls: >-
               api=http://127.0.0.1:8000/api/v1/health/ready
-              fusion=http://127.0.0.1:8003/health
-              agents=http://127.0.0.1:8001/health
-              actions=http://127.0.0.1:8002/health
+              fusion=http://127.0.0.1:8003/readyz
+              agents=http://127.0.0.1:8001/readyz
+              actions=http://127.0.0.1:8002/readyz
           - store: redis
             profile: core
             readiness_url: http://127.0.0.1:8000/api/v1/health/ready
             dependent_urls: >-
               api=http://127.0.0.1:8000/api/v1/health/ready
-              agents=http://127.0.0.1:8001/health
+              agents=http://127.0.0.1:8001/readyz
           - store: qdrant
             profile: core
             readiness_url: http://127.0.0.1:8005/health
@@ -137,22 +162,22 @@ jobs:
               threatintel=http://127.0.0.1:8005/health
           - store: kafka
             profile: core
-            readiness_url: http://127.0.0.1:8081/health
+            readiness_url: http://127.0.0.1:8081/readyz
             dependent_urls: >-
-              ingest=http://127.0.0.1:8081/health
-              fusion=http://127.0.0.1:8003/health
-              realtime=http://127.0.0.1:8086/health
+              ingest=http://127.0.0.1:8081/readyz
+              fusion=http://127.0.0.1:8003/readyz
+              realtime=http://127.0.0.1:8086/readyz
           - store: clickhouse
             profile: full
-            readiness_url: http://127.0.0.1:8003/health
+            readiness_url: http://127.0.0.1:8003/readyz
             dependent_urls: >-
-              fusion=http://127.0.0.1:8003/health
+              fusion=http://127.0.0.1:8003/readyz
               api=http://127.0.0.1:8000/api/v1/health/ready
           - store: neo4j
             profile: full
-            readiness_url: http://127.0.0.1:8081/health
+            readiness_url: http://127.0.0.1:8081/readyz
             dependent_urls: >-
-              ingest=http://127.0.0.1:8081/health
+              ingest=http://127.0.0.1:8081/readyz
               api=http://127.0.0.1:8000/api/v1/health/ready
     steps:
       - uses: actions/checkout@v7
