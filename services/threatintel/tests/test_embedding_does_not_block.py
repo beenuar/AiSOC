@@ -47,7 +47,6 @@ async def test_the_event_loop_keeps_running_while_an_embed_is_in_flight(monkeypa
     monkeypatch.setattr(qdrant_module, "_EMBEDDING_MODEL", model)
 
     store = QdrantStore(client=None)  # type: ignore[arg-type]
-    heartbeats = 0
 
     # The deadline is absolute and fixed BEFORE the embed starts, which is
     # the whole load-bearing detail. A relative window computed inside the
@@ -57,17 +56,18 @@ async def test_the_event_loop_keeps_running_while_an_embed_is_in_flight(monkeypa
     # implementation, and did not catch it.
     deadline = time.monotonic() + 0.4
 
-    async def _heartbeat() -> None:
-        nonlocal heartbeats
+    async def _heartbeat() -> int:
         # Stands in for anything the service still owes an answer to while a
         # feed is ingesting: a health probe, a search, a push.
+        beats = 0
         while time.monotonic() < deadline:
             await asyncio.sleep(0.02)
-            heartbeats += 1
+            beats += 1
+        return beats
 
     heartbeat = asyncio.create_task(_heartbeat())
     vectors = await store._embed(["a", "b", "c"])
-    await heartbeat
+    heartbeats = await heartbeat
 
     assert model.calls == 1, "the embed never ran, so this proves nothing"
     assert len(vectors) == 3
