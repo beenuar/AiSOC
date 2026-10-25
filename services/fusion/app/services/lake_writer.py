@@ -15,17 +15,23 @@ queryable in the lake.
 Design constraints (mirroring ``AlertSink``):
 
 * **Fail-soft.** A ClickHouse outage must degrade to "events still flow through
-  Kafka/fusion, lake archival is dropped for the outage window" — never crash
-  the consumer. A failed flush drops that batch (best-effort archival) rather
-  than growing an unbounded in-memory buffer.
+  Kafka/fusion, lake archival resumes when the store returns" — never crash the
+  consumer. A failed connection flush retains the batch (bounded by
+  ``max_buffer_rows``) and reconnects with capped backoff; rows are only
+  discarded on explicit overflow or repeated non-connection errors, and both
+  increments a counter so the archive gap is visible.
 * **Batched.** ClickHouse is happiest with bulk inserts, so events are buffered
   and flushed by size (``batch_size``) or age (``batch_max_age_seconds``); the
   consumer calls :meth:`flush_if_stale` each loop and :meth:`flush` on stop.
 * **At-least-once with a deterministic ``event_id``.** MergeTree does not
   deduplicate, so a Kafka replay can produce a duplicate lake row. Each row
-  carries the ingest event id (when it is a valid UUID) so downstream queries
-  can ``argMax``/``LIMIT 1 BY event_id`` if exact-once is required. The Phase A1
-  gate asserts *queryability* (``count >= 1``), not exact-once.
+  carries a stable identity so downstream queries can ``argMax``/``LIMIT 1 BY
+  event_id`` if exact-once is required. Ingest ids are used verbatim when they
+  are UUIDs; a non-UUID ingest id is mapped through a fixed UUIDv5 namespace,
+  and an event with no id at all is keyed by its Kafka coordinates. Both are
+  stable across retries *and process restarts* — a random id generated in
+  memory was not, so a replay after a crash could not be collapsed. The Phase
+  A1 gate asserts *queryability* (``count >= 1``), not exact-once.
 
 ``clickhouse-driver`` is synchronous, so every insert is dispatched to a worker
 thread via :func:`asyncio.to_thread` to keep the fusion event loop responsive.
@@ -38,12 +44,15 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import random
 import time
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 import structlog
+
+from app.core.config import settings
 
 logger = structlog.get_logger()
 
@@ -112,6 +121,36 @@ _INSERT_SQL = f"INSERT INTO aisoc.raw_events ({', '.join(_COLUMNS)}) VALUES"
 
 # ClickHouse IPv6 columns reject empty/invalid strings; "::" is the safe null.
 _NULL_IP = "::"
+
+#: Fixed namespace for deterministic lake identities. Never change it: every
+#: replayed event would then look new to `LIMIT 1 BY event_id`, which is the
+#: property the namespace exists to provide.
+_EVENT_ID_NAMESPACE = uuid.uuid5(uuid.NAMESPACE_URL, "https://aisoc.dev/fusion/lake/event-id")
+
+
+def _stable_event_id(raw_id: Any) -> str | None:
+    """A deterministic UUID for an ingest id that is not one already.
+
+    Ingest derives its ids with UUIDv5, but the raw-events topic also accepts
+    envelopes from other producers (and from older versions) whose ``id`` is
+    not a UUID. Generating a random one made the lake row's identity depend on
+    the process that wrote it: replaying the same Kafka message after a restart
+    produced a second id for the same event.
+
+    A UUIDv5 over the ingest id is stable across attempts *and* restarts, and
+    still distinguishes two events that carry different ids. An absent/empty
+    id returns ``None``; :meth:`LakeWriter.write_event` fills that from the
+    Kafka coordinates, which are equally replay-stable.
+    """
+    if raw_id is None:
+        return None
+    text = str(raw_id)
+    if not text:
+        return None
+    try:
+        return str(uuid.UUID(text))
+    except (ValueError, AttributeError, TypeError):
+        return str(uuid.uuid5(_EVENT_ID_NAMESPACE, f"ingest:{text}"))
 
 
 def _get(obj: Any, *path: str) -> Any:
@@ -346,18 +385,58 @@ def event_to_row(message: dict[str, Any]) -> dict[str, Any] | None:
         **_activity_columns(ocsf),
     }
 
-    # Only set a deterministic event_id when the ingest id is a real UUID;
-    # otherwise let ClickHouse default generateUUIDv4().
+    # Only carry the ingest id when it identifies the event. A UUID is used
+    # verbatim; a non-UUID id is mapped through the fixed namespace so a replay
+    # (including one after a process restart) keeps the same row identity.
+    # `write_event` fills a missing id from the Kafka coordinates, because the
+    # driver cannot leave a column to its DEFAULT: it reads `row[name]` for
+    # every column named in the INSERT.
     raw_id = message.get("id") or message.get("event_id")
-    try:
-        row["event_id"] = str(uuid.UUID(str(raw_id)))
-    except (TypeError, ValueError):
-        row["event_id"] = None
+    row["event_id"] = _stable_event_id(raw_id)
     return row
 
 
+def _is_connection_lake_error(exc: BaseException) -> bool:
+    """Whether a failed lake insert looks like transport, not bad data.
+
+    A ClickHouse outage and a schema mismatch both raise from ``execute``. They
+    need different answers: retain the batch for the outage, but count and
+    eventually discard a batch the server keeps rejecting. Guessing wrong in
+    the outage direction loses events; guessing wrong in the data direction
+    grows the buffer until it hits its explicit bound.
+    """
+    name = type(exc).__name__.lower()
+    if any(marker in name for marker in ("network", "socket", "timeout", "connection", "unavailable")):
+        return True
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "connection",
+            "connect",
+            "refused",
+            "reset",
+            "timed out",
+            "timeout",
+            "unavailable",
+            "clickhouse down",
+            "server is not",
+            "can't connect",
+            "cannot connect",
+        )
+    )
+
+
 class LakeWriter:
-    """Batched, fail-soft ClickHouse writer for the ``aisoc.raw_events`` lake."""
+    """Batched, fail-soft ClickHouse writer for the ``aisoc.raw_events`` lake.
+
+    A failed batch is **retained and retried**, not dropped. Retention is
+    bounded by ``max_buffer_rows``; overflow discards the oldest rows and
+    increments ``rows_dropped`` with an error log, because unbounded memory is
+    a worse failure than an explicitly reported archive gap. A connection
+    failure triggers a capped exponential reconnect, so an outage that ends
+    does not require a fusion restart.
+    """
 
     def __init__(
         self,
@@ -369,6 +448,11 @@ class LakeWriter:
         password: str = "",
         batch_size: int = 100,
         batch_max_age_seconds: float = 2.0,
+        max_buffer_rows: int | None = None,
+        reconnect_base_seconds: float | None = None,
+        reconnect_max_seconds: float | None = None,
+        max_data_failures: int | None = None,
+        client_factory: Any | None = None,
     ) -> None:
         self._host = host
         self._port = port
@@ -377,37 +461,101 @@ class LakeWriter:
         self._password = password
         self._batch_size = max(1, batch_size)
         self._batch_max_age = batch_max_age_seconds
+        self._max_buffer_rows = max(self._batch_size, int(max_buffer_rows or settings.lake_max_buffer_rows))
+        base_seconds = reconnect_base_seconds if reconnect_base_seconds is not None else settings.lake_reconnect_base_seconds
+        self._reconnect_base = max(0.0, float(base_seconds))
+        self._reconnect_max = max(self._reconnect_base, float(reconnect_max_seconds or settings.lake_reconnect_max_seconds))
+        self._max_data_failures = max(1, int(max_data_failures or settings.lake_max_data_failures))
+        self._client_factory = client_factory
         self._client: Any | None = None
         self._buffer: list[dict[str, Any]] = []
         self._buffer_started_at: float = 0.0
+        # ImportError is the only permanent disable: without the driver there
+        # is no code that can ever connect. A missing server is recoverable.
         self._disabled = False
+        self._next_reconnect_at = 0.0
+        self._reconnect_attempt = 0
+        self._data_failures = 0
         self.rows_written = 0
         self.flush_failures = 0
+        self.rows_dropped = 0
+        self.connect_failures = 0
+        self.reconnects = 0
 
     async def start(self) -> None:
         if self._disabled:
             return
-        try:
-            from clickhouse_driver import Client  # noqa: PLC0415
-
-            self._client = Client(
-                host=self._host,
-                port=self._port,
-                database=self._database,
-                user=self._user,
-                password=self._password or "",
-                connect_timeout=10,
-            )
+        self._client = self._make_client()
+        if self._client is not None:
             logger.info("lake_writer.started", host=self._host, database=self._database)
+
+    def _make_client(self) -> Any | None:
+        try:
+            if self._client_factory is not None:
+                client = self._client_factory()
+            else:
+                from clickhouse_driver import Client  # noqa: PLC0415
+
+                client = Client(
+                    host=self._host,
+                    port=self._port,
+                    database=self._database,
+                    user=self._user,
+                    password=self._password or "",
+                    connect_timeout=10,
+                    send_receive_timeout=30,
+                )
         except ImportError:
             self._disabled = True
             logger.warning("lake_writer.disabled_no_driver")
+            return None
         except Exception as exc:  # noqa: BLE001 — degrade, never crash the worker
-            self._disabled = True
-            logger.error("lake_writer.connect_failed", error=str(exc))
+            self.connect_failures += 1
+            self._schedule_reconnect()
+            logger.error(
+                "lake_writer.connect_failed",
+                error=str(exc),
+                retry_in_seconds=round(max(0.0, self._next_reconnect_at - time.monotonic()), 1),
+            )
+            return None
+
+        was_degraded = self._reconnect_attempt > 0
+        self._reconnect_attempt = 0
+        self._next_reconnect_at = 0.0
+        if was_degraded:
+            self.reconnects += 1
+            logger.info("lake_writer.reconnected", host=self._host)
+        return client
+
+    def _schedule_reconnect(self) -> None:
+        exponent = min(self._reconnect_attempt, 16)
+        delay = min(self._reconnect_max, self._reconnect_base * (2**exponent))
+        # Full jitter over [delay/2, delay) avoids a thundering herd of fusion
+        # replicas reconnecting to the same ClickHouse at the same instant.
+        self._next_reconnect_at = time.monotonic() + (delay / 2) + (random.random() * delay / 2)
+        self._reconnect_attempt += 1
+
+    def _ensure_client(self) -> Any | None:
+        if self._client is not None:
+            return self._client
+        if time.monotonic() < self._next_reconnect_at:
+            return None
+        self._client = self._make_client()
+        return self._client
 
     async def stop(self) -> None:
         await self.flush()
+        if self._buffer:
+            # The process is going away and the store did not accept these
+            # rows. They are lost, so they belong in `rows_dropped`: a log line
+            # alone would leave the metric claiming nothing was discarded.
+            dropped = len(self._buffer)
+            self.rows_dropped += dropped
+            logger.error(
+                "lake_writer.shutdown_retained_rows",
+                rows=dropped,
+                detail="ClickHouse did not accept the buffered batch before shutdown; rows are not durable",
+            )
         if self._client is not None:
             try:
                 await asyncio.to_thread(self._client.disconnect)
@@ -415,22 +563,76 @@ class LakeWriter:
                 logger.warning("lake_writer.disconnect_failed", error=str(exc))
             self._client = None
 
-    async def write_event(self, message: dict[str, Any]) -> bool:
+    async def write_event(
+        self,
+        message: dict[str, Any],
+        *,
+        topic: str | None = None,
+        partition: int | None = None,
+        offset: int | None = None,
+    ) -> bool:
         """Buffer one normalized event for the lake. Returns True if buffered.
 
-        Flushes automatically when the buffer reaches ``batch_size``.
+        Flushes automatically when the buffer reaches ``batch_size``. A failed
+        flush leaves the batch buffered (bounded), so True still means the
+        event was accepted for archival, not that it is already durable.
+
+        ``topic``/``partition``/``offset`` are the Kafka coordinates of the
+        record being archived. They are the fallback identity for an envelope
+        that carries no ingest id: the same record re-delivered after a restart
+        has the same coordinates, so it keeps the same lake ``event_id``.
         """
         if self._disabled:
             return False
         row = event_to_row(message)
         if row is None:
             return False
+        if row["event_id"] is None:
+            # The driver must still *bind* every column: it builds a block from
+            # the INSERT's column list and reads `row[name]` for each column,
+            # so an omitted key is a KeyError before a byte is sent — not the
+            # column DEFAULT. The id is deterministic, so a retry of a
+            # partially-sent batch keeps the same id and `LIMIT 1 BY event_id`
+            # still works.
+            row["event_id"] = self._fallback_event_id(row, topic=topic, partition=partition, offset=offset)
         if not self._buffer:
             self._buffer_started_at = time.monotonic()
         self._buffer.append(row)
         if len(self._buffer) >= self._batch_size:
             await self.flush()
+        self._enforce_buffer_capacity()
         return True
+
+    @staticmethod
+    def _fallback_event_id(
+        row: dict[str, Any],
+        *,
+        topic: str | None,
+        partition: int | None,
+        offset: int | None,
+    ) -> str:
+        """Identity for an event with neither an ingest id nor a UUID one.
+
+        Kafka coordinates are preferred because they distinguish two distinct
+        records that happen to carry identical content. A direct caller that
+        supplies neither coordinates nor an id gets a content hash: still
+        stable across restarts, but byte-identical events collapse to one id.
+        The consumer always supplies coordinates, so production does not take
+        that branch.
+        """
+        if topic is not None and partition is not None and offset is not None:
+            return str(uuid.uuid5(_EVENT_ID_NAMESPACE, f"kafka:{topic}:{partition}:{offset}"))
+        material = json.dumps(
+            {
+                "tenant_id": row.get("tenant_id"),
+                "event_time": row.get("event_time"),
+                "class_uid": row.get("class_uid"),
+                "ocsf_json": row.get("ocsf_json"),
+            },
+            default=str,
+            sort_keys=True,
+        )
+        return str(uuid.uuid5(_EVENT_ID_NAMESPACE, f"content:{material}"))
 
     async def flush_if_stale(self) -> None:
         if self._buffer and (time.monotonic() - self._buffer_started_at) >= self._batch_max_age:
@@ -439,19 +641,24 @@ class LakeWriter:
     async def flush(self) -> None:
         if self._disabled or not self._buffer:
             return
-        batch = self._buffer
-        self._buffer = []
-        client = self._client
+        client = self._ensure_client()
         if client is None:
             return
 
+        batch = self._buffer
+        batch_started_at = self._buffer_started_at
+        self._buffer = []
+        self._buffer_started_at = 0.0
+
         def _insert() -> None:
             # clickhouse-driver executes INSERT ... VALUES with a list of dicts.
-            # Coerce the typed columns (IPv6) to the objects the driver binds,
-            # and omit event_id when None so the column DEFAULT applies.
+            # Coerce the typed columns (IPv6) to the objects the driver binds.
+            # Every column in `_COLUMNS` must be a key in every row: the driver
+            # reads `row[name]` per column, so a missing key raises KeyError
+            # before a byte is sent and the column DEFAULT never gets a chance.
             rows: list[dict[str, Any]] = []
             for row in batch:
-                out = {k: v for k, v in row.items() if not (k == "event_id" and v is None)}
+                out = dict(row)
                 out["source_ip"] = _to_ip_obj(row["source_ip"])
                 out["dest_ip"] = _to_ip_obj(row["dest_ip"])
                 rows.append(out)
@@ -460,13 +667,76 @@ class LakeWriter:
         try:
             await asyncio.to_thread(_insert)
             self.rows_written += len(batch)
-        except Exception as exc:  # noqa: BLE001 — best-effort archival; drop the batch
+            self._data_failures = 0
+        except asyncio.CancelledError:
+            # Cancellation (shutdown, task teardown) is a BaseException, so the
+            # handler below never sees it. The batch was already popped from
+            # the buffer; putting it back keeps cancellation from being a
+            # silent row-loss path. The task still unwinds.
+            self._buffer = batch + self._buffer
+            self._buffer_started_at = batch_started_at
+            self._enforce_buffer_capacity()
+            raise
+        except Exception as exc:  # noqa: BLE001 — never raise into the consumer
             self.flush_failures += 1
-            logger.error("lake_writer.flush_failed", error=str(exc), dropped=len(batch))
+            connection_error = _is_connection_lake_error(exc)
+            self._data_failures = 0 if connection_error else self._data_failures + 1
+
+            # Retain, oldest-first. `self._buffer` may have grown while the
+            # insert ran, so the failed batch goes in front of it.
+            self._buffer = batch + self._buffer
+            self._buffer_started_at = batch_started_at
+            overflow = self._enforce_buffer_capacity()
+
+            # Force a fresh client on the next attempt: a broken driver
+            # connection otherwise fails every subsequent flush, which is the
+            # permanent-disable failure in slower motion.
+            self._client = None
+            self._schedule_reconnect()
+
+            if not connection_error and self._data_failures >= self._max_data_failures:
+                dropped = len(self._buffer)
+                self._buffer = []
+                self._buffer_started_at = 0.0
+                self._data_failures = 0
+                self.rows_dropped += dropped
+                logger.error(
+                    "lake_writer.batch_dropped_after_data_errors",
+                    dropped=dropped,
+                    failures=self._max_data_failures,
+                    error=str(exc),
+                )
+                return
+
+            logger.error(
+                "lake_writer.flush_failed",
+                error=str(exc),
+                retained=len(self._buffer),
+                dropped_on_overflow=overflow,
+                retryable=connection_error,
+                retry_in_seconds=round(max(0.0, self._next_reconnect_at - time.monotonic()), 1),
+            )
+
+    def _enforce_buffer_capacity(self) -> int:
+        overflow = max(0, len(self._buffer) - self._max_buffer_rows)
+        if overflow:
+            del self._buffer[:overflow]
+            self.rows_dropped += overflow
+            self._buffer_started_at = time.monotonic()
+            logger.error(
+                "lake_writer.buffer_overflow_dropped",
+                dropped=overflow,
+                cap=self._max_buffer_rows,
+                detail="oldest buffered lake rows discarded; archive coverage has a gap",
+            )
+        return overflow
 
     def metrics(self) -> dict[str, int]:
         return {
             "rows_written": self.rows_written,
             "flush_failures": self.flush_failures,
             "buffered": len(self._buffer),
+            "rows_dropped": self.rows_dropped,
+            "connect_failures": self.connect_failures,
+            "reconnects": self.reconnects,
         }

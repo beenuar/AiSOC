@@ -15,8 +15,13 @@ This persists them. Two properties matter more than the writing:
 **A DLQ that fails must not take the pipeline with it.** The whole point
 of routing a poison message aside is to keep consuming; if recording that
 decision can raise, the DLQ becomes a second way for one bad event to stop
-everything. Every failure here is logged and swallowed, which is the one
-place in this codebase where swallowing is the correct behaviour.
+everything. Every failure here is logged and turned into ``False`` rather
+than raised, which is the one place in this codebase where swallowing is the
+correct behaviour.
+
+``False`` is not the same as "nothing to see": it tells the caller the
+capture did not happen, so the consumer can hold the Kafka offset instead of
+committing a message that exists nowhere durable.
 
 **The payload is truncated, never stored whole.** It is untrusted by
 definition — it is the thing the pipeline refused — and may be large or
@@ -26,7 +31,7 @@ the content that was rejected.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 import asyncpg
 import structlog
@@ -64,27 +69,50 @@ class PostgresDLQ(DeadLetterQueue):
     ``lambda: pool``.
     """
 
-    def __init__(self, pool_provider: Callable[[], asyncpg.Pool | None]) -> None:
+    #: A committed INSERT is durable storage; ``False`` from `record` is not.
+    durable = True
+
+    def __init__(
+        self,
+        pool_provider: Callable[[], asyncpg.Pool | None],
+        *,
+        ensure_pool: Callable[[], Awaitable[asyncpg.Pool | None]] | None = None,
+        invalidate_pool: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
         self._pool_provider = pool_provider
+        # The DLQ shares the alert sink's pool. When that pool has been
+        # invalidated, nothing rebuilds it during a recovery hold — no alert is
+        # being persisted, which is the only other caller of `ensure_pool`. The
+        # callbacks let the hold actually end once Postgres returns instead of
+        # waiting for a restart.
+        self._ensure_pool = ensure_pool
+        self._invalidate_pool = invalidate_pool
 
-    def _pool_now(self) -> asyncpg.Pool | None:
-        return self._pool_provider()
+    async def _pool_now(self) -> asyncpg.Pool | None:
+        pool = self._pool_provider()
+        if pool is None and self._ensure_pool is not None:
+            pool = await self._ensure_pool()
+        return pool
 
-    async def record(self, letter: DeadLetter) -> None:
+    async def record(self, letter: DeadLetter) -> bool:
         excerpt = (letter.payload_excerpt or "")[:MAX_EXCERPT]
         tenant_id = _as_uuid(letter.tenant_id)
 
-        pool = self._pool_now()
+        pool = await self._pool_now()
         if pool is None:
             # The sink never opened, so there is nowhere to write. Logged
             # at warning rather than silently skipped: a DLQ that records
             # nothing looks exactly like a pipeline dropping nothing.
+            #
+            # Returning False is what tells the consumer this capture did not
+            # happen, so it holds the offset instead of committing a message
+            # that now exists nowhere durable.
             logger.warning(
                 "dlq.no_pool",
                 topic=letter.topic,
                 reason=letter.reason,
             )
-            return
+            return False
 
         try:
             async with pool.acquire() as conn:
@@ -107,13 +135,21 @@ class PostgresDLQ(DeadLetterQueue):
             # consumer because we could not record it is worse: one poison
             # message would then halt the pipeline, which is precisely the
             # outcome the DLQ exists to prevent.
+            #
+            # Drop a pool that just failed so the next attempt can rebuild it;
+            # without this a stale handle makes every retry fail the same way.
+            if self._invalidate_pool is not None:
+                try:
+                    await self._invalidate_pool()
+                except Exception as invalidate_exc:  # noqa: BLE001
+                    logger.debug("dlq.pool_invalidate_failed", error=str(invalidate_exc))
             logger.warning(
                 "dlq.persist_failed",
                 topic=letter.topic,
                 reason=letter.reason,
                 error=str(exc),
             )
-            return
+            return False
 
         logger.info(
             "dlq.recorded",
@@ -121,6 +157,7 @@ class PostgresDLQ(DeadLetterQueue):
             reason=letter.reason,
             tenant_id=letter.tenant_id,
         )
+        return True
 
 
 def _as_uuid(value: str | None):

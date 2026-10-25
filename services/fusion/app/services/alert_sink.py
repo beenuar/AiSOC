@@ -20,6 +20,7 @@ Design constraints:
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -29,6 +30,7 @@ from typing import Any
 import asyncpg
 import structlog
 
+from app.core.config import settings
 from app.models.alert import FusedAlert, FusionDecision
 
 logger = structlog.get_logger()
@@ -50,10 +52,24 @@ class PersistOutcome(str, Enum):
 
 @dataclass(frozen=True)
 class PersistResult:
-    """Outcome of :meth:`AlertSink.persist` plus the canonical alert id."""
+    """Outcome of :meth:`AlertSink.persist` plus the canonical alert id.
+
+    ``retryable`` distinguishes an outage from a bad row. The outcome alone
+    cannot: a connection reset and a foreign-key violation both used to be
+    ``FAILED``, and the consumer treated both the same way — either committing
+    the offset (loss) or retrying a permanently bad alert forever.
+
+    ``verified`` says the caller may trust the outcome as durable evidence.
+    A ``DUPLICATE`` verdict with an unreachable database is a correct *fusion*
+    verdict but not a verified store state: the surviving row might itself
+    never have been written. The consumer must not commit until it is verified
+    or repaired.
+    """
 
     outcome: PersistOutcome
     alert_id: str | None = None
+    retryable: bool = False
+    verified: bool = True
 
     @property
     def persisted(self) -> bool:
@@ -61,8 +77,13 @@ class PersistResult:
 
     @property
     def durable(self) -> bool:
-        """True when the alert is known to exist in the store (new or dup)."""
-        return self.outcome in (PersistOutcome.INSERTED, PersistOutcome.DUPLICATE)
+        """True when the alert is known to exist in the store (new or dup).
+
+        Unverified duplicates are deliberately *not* durable. That distinction
+        is the difference between "fusion remembers seeing this" (a Redis hint
+        that may predate a crash) and "the row is in Postgres".
+        """
+        return self.verified and self.outcome in (PersistOutcome.INSERTED, PersistOutcome.DUPLICATE)
 
 
 _INSERT_SQL = """
@@ -96,6 +117,23 @@ RETURNING id
 # positional index into `_insert_args` keeps its meaning. Renumbering 24
 # placeholders to make a list read nicely is how a confidence score ends up
 # in a narrative column.
+
+#: The reconciliation read for a fusion ``DUPLICATE`` verdict.
+#:
+#: Fusion registers a dedup fingerprint in Redis *before* the row is durable.
+#: If the process dies (or Postgres rejects the insert) in that window, the
+#: re-delivered message is still classified ``DUPLICATE`` and the old sink
+#: returned without writing anything: the event was permanently lost while the
+#: consumer committed its offset. The dedup hint is therefore treated as a
+#: claim to verify, not a fact. If no row carries this ``(tenant, dedup_hash)``
+#: pair, the redelivered alert is inserted under its deterministic id.
+_SURVIVING_ALERT_SQL = """
+SELECT id
+  FROM alerts
+ WHERE tenant_id = $1
+   AND dedup_hash = $2::text
+ LIMIT 1
+"""
 
 #: Record a raw event that deduplicated onto an alert that already exists.
 #:
@@ -170,20 +208,75 @@ def writeback_vendor(connector_type: str | None) -> str | None:
     return _WRITEBACK_VENDOR_BY_CONNECTOR.get(connector_type.strip().lower())
 
 
-# Two idempotency guards, complementary (issue #568):
+# Three layers of idempotency, complementary (issue #568):
 #   * WHERE NOT EXISTS (tenant_id, dedup_hash) — content dedup; also protects
 #     legacy rows written before ids were deterministic (random id, same hash).
 #   * ON CONFLICT (id) DO NOTHING — exact-replay idempotency on the canonical
 #     deterministic UUID (RawAlert.deterministic_id()).
+#   * uq_alerts_tenant_dedup (migration 120) — the database-level guarantee for
+#     two concurrent writers that supply different ids but the same fingerprint.
+#     Under READ COMMITTED both can pass WHERE NOT EXISTS; the partial unique
+#     index makes the second INSERT raise UniqueViolationError instead of
+#     writing a second visible alert. `_persist_on_conn` resolves that
+#     violation to the winner's row (see `_DEDUP_UNIQUE_INDEX`).
 # NB: $11 (dedup_hash) is cast ::text in BOTH the INSERT target and the WHERE.
 # `dedup_hash` is VARCHAR(64); a varchar/text mismatch makes asyncpg's prepare
 # fail to unify parameter $11 ("inconsistent types deduced"), silently dropping
 # every write. Pinning both uses to ::text makes the deduction unambiguous.
 
+#: The partial unique index created by
+#: ``services/api/migrations/120_alerts_tenant_dedup_unique.sql``. A unique
+#: violation carrying this constraint name is the concurrent-dedup race, not a
+#: malformed row: the loser must resolve the winner's row rather than fail (or
+#: insert a second alert).
+_DEDUP_UNIQUE_INDEX = "uq_alerts_tenant_dedup"
+
 
 def _asyncpg_dsn(url: str) -> str:
     """Strip the SQLAlchemy driver suffix — asyncpg wants plain postgresql://."""
     return url.replace("postgresql+asyncpg://", "postgresql://", 1)
+
+
+def _is_retryable_db_error(exc: BaseException) -> bool:
+    """Whether re-running the statement could plausibly succeed.
+
+    Transient: the connection was lost, the server was shutting down, a
+    statement was cancelled by a timeout, or the pool was exhausted. Permanent:
+    a constraint violation, an unknown tenant, invalid SQL. The two classes
+    need different handling at the consumer: retry (and do not commit) versus
+    dead-letter and move on.
+    """
+    if isinstance(
+        exc,
+        (
+            asyncpg.PostgresConnectionError,
+            asyncpg.InterfaceError,
+            asyncpg.QueryCanceledError,
+            asyncpg.DeadlockDetectedError,
+            asyncpg.TooManyConnectionsError,
+            TimeoutError,
+            OSError,
+        ),
+    ):
+        return True
+    text = str(exc).lower()
+    return any(
+        marker in text
+        for marker in (
+            "connection",
+            "connect",
+            "server closed",
+            "connection reset",
+            "connection refused",
+            "timed out",
+            "timeout",
+            "pool",
+            "too many clients",
+            "starting up",
+            "shutting down",
+            "not yet accepting",
+        )
+    )
 
 
 def _iocs(fused: FusedAlert) -> list[dict[str, str]]:
@@ -286,20 +379,45 @@ class AlertSink:
         self._pool_size = pool_size
         self._pool: asyncpg.Pool | None = None
         self._connect_failed_logged = False
+        self._operation_timeout = float(getattr(settings, "alert_sink_operation_timeout_seconds", 10.0))
+        self._start_lock = asyncio.Lock()
 
     async def start(self) -> None:
         """Open the pool. Failure is logged, not raised (fail-soft)."""
-        try:
-            self._pool = await asyncpg.create_pool(self._dsn, min_size=1, max_size=self._pool_size, timeout=10)
-            logger.info("alert_sink.started")
-        except Exception as exc:  # noqa: BLE001 — degrade, never crash the worker
-            self._pool = None
-            logger.error("alert_sink.connect_failed", error=str(exc))
+        async with self._start_lock:
+            if self._pool is not None:
+                return
+            try:
+                self._pool = await asyncpg.create_pool(
+                    self._dsn,
+                    min_size=1,
+                    max_size=self._pool_size,
+                    timeout=10,
+                    command_timeout=self._operation_timeout,
+                )
+                logger.info("alert_sink.started")
+            except Exception as exc:  # noqa: BLE001 — degrade, never crash the worker
+                self._pool = None
+                logger.error("alert_sink.connect_failed", error=str(exc))
 
     async def stop(self) -> None:
-        if self._pool is not None:
-            await self._pool.close()
-            self._pool = None
+        await self._invalidate_pool()
+
+    async def _invalidate_pool(self) -> None:
+        """Forget a pool that just proved unusable.
+
+        ``_ensure_pool`` used to reconnect only when ``_pool is None``. A pool
+        whose server went away stayed non-None, so every later persist raised
+        from ``acquire()`` and returned ``FAILED`` forever even after Postgres
+        came back: recovery required a fusion restart. Dropping the handle on a
+        connection-level failure lets the next attempt rebuild it.
+        """
+        pool, self._pool = self._pool, None
+        if pool is not None:
+            try:
+                await pool.close()
+            except Exception as exc:  # noqa: BLE001 — the pool is already broken
+                logger.debug("alert_sink.pool_close_failed", error=str(exc))
 
     async def _ensure_pool(self) -> asyncpg.Pool | None:
         if self._pool is None:
@@ -308,54 +426,194 @@ class AlertSink:
             await self.start()
         return self._pool
 
+    async def ensure_pool(self) -> asyncpg.Pool | None:
+        """Rebuild the pool if it was invalidated.
+
+        Public because the dead-letter queue shares this pool: during a
+        recovery hold no alert is being persisted, so nothing else would
+        reconnect and the hold would never end after Postgres returns.
+        """
+        return await self._ensure_pool()
+
+    async def invalidate_pool(self) -> None:
+        """Drop a pool that just proved unusable, so the next call reconnects."""
+        await self._invalidate_pool()
+
     async def persist(self, fused: FusedAlert) -> PersistResult:
         """Insert one fused alert, returning a structured :class:`PersistResult`.
 
         The canonical alert id is ``fused.id`` (deterministic — issue #568), so
         even a duplicate / outage carries the id the row resolves to once the
         DB is reachable.
+
+        A fusion ``DUPLICATE`` is *reconciled* rather than trusted: the dedup
+        fingerprint lives in Redis and is written before the row, so it can
+        outlive a crash that prevented the insert. When no row carries the
+        fingerprint, the redelivered alert is persisted, repairing the loss
+        instead of confirming it.
         """
         canonical_id = str(fused.id)
-        alert = fused.alert
-        if fused.fusion_decision == FusionDecision.DUPLICATE:
-            # Fusion has already decided: there is no row to write, and a
-            # database outage cannot change that verdict. The folded-away
-            # event is still part of the surviving alert's provenance, so
-            # record it when there is a pool — best-effort, never a reconnect
-            # attempt, and never a different outcome.
-            if self._pool is not None:
-                try:
-                    async with self._pool.acquire() as conn:
-                        await self._record_deduplicated_event(conn, alert)
-                except Exception as exc:  # noqa: BLE001 — provenance is not worth the verdict
-                    logger.warning("alert_sink.dedup_provenance_failed", error=str(exc))
-            return PersistResult(PersistOutcome.DUPLICATE, canonical_id)
+        is_duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+        try:
+            result = await asyncio.wait_for(self._persist_once(fused), timeout=self._operation_timeout)
+        except TimeoutError as exc:
+            await self._invalidate_pool()
+            logger.error("alert_sink.persist_timeout", error=str(exc), duplicate=is_duplicate)
+            return PersistResult(
+                PersistOutcome.DUPLICATE if is_duplicate else PersistOutcome.UNAVAILABLE,
+                canonical_id,
+                retryable=True,
+                verified=False,
+            )
+        except asyncpg.ForeignKeyViolationError:
+            # Unknown tenant — a mis-provisioned connector, not a pipeline bug.
+            # Distinct from a duplicate so it is observable, not silently masked.
+            logger.warning("alert_sink.unknown_tenant", tenant_id=str(fused.alert.tenant_id))
+            return PersistResult(PersistOutcome.FAILED, None)
+        except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
+            retryable = _is_retryable_db_error(exc)
+            if retryable:
+                await self._invalidate_pool()
+            logger.error("alert_sink.persist_failed", error=str(exc), retryable=retryable, duplicate=is_duplicate)
+            if retryable and is_duplicate:
+                # Fusion's verdict stands, but the surviving row is unverified.
+                return PersistResult(PersistOutcome.DUPLICATE, canonical_id, retryable=True, verified=False)
+            return PersistResult(PersistOutcome.FAILED, None, retryable=retryable)
 
+        if result.outcome is PersistOutcome.INSERTED and result.alert_id:
+            await self._link_source_finding_safely(fused, alert_id=result.alert_id)
+        return result
+
+    async def _persist_once(self, fused: FusedAlert) -> PersistResult:
         pool = await self._ensure_pool()
         if pool is None:
             if not self._connect_failed_logged:
                 logger.error("alert_sink.unavailable_dropping_persistence")
                 self._connect_failed_logged = True
-            return PersistResult(PersistOutcome.UNAVAILABLE, canonical_id)
+            if fused.fusion_decision == FusionDecision.DUPLICATE:
+                # Cannot verify; the consumer must retry rather than commit a
+                # duplicate whose surviving row may never have been written.
+                return PersistResult(PersistOutcome.DUPLICATE, str(fused.id), retryable=True, verified=False)
+            return PersistResult(PersistOutcome.UNAVAILABLE, str(fused.id), retryable=True)
         self._connect_failed_logged = False
+        async with pool.acquire() as conn:
+            return await self._persist_on_conn(conn, fused)
+
+    async def _persist_on_conn(self, conn: Any, fused: FusedAlert) -> PersistResult:
+        """Persist one alert over an already-acquired connection.
+
+        Shared by the single and batch paths so the duplicate-reconciliation
+        rule cannot drift between them.
+        """
+        canonical_id = str(fused.id)
+        alert = fused.alert
+        is_duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+
+        if is_duplicate:
+            existing_id = await self._surviving_alert_id(conn, alert)
+            if existing_id is not None:
+                await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id))
 
         try:
-            async with pool.acquire() as conn:
-                row = await conn.fetchrow(_INSERT_SQL, *_insert_args(fused))
-                if row is None:
-                    logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
-                    await self._record_deduplicated_event(conn, alert)
-                    return PersistResult(PersistOutcome.DUPLICATE, canonical_id)
-            await self._link_source_finding(pool, alert, alert_id=row["id"])
-            return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
-        except asyncpg.ForeignKeyViolationError:
-            # Unknown tenant — a mis-provisioned connector, not a pipeline bug.
-            # Distinct from a duplicate so it is observable, not silently masked.
-            logger.warning("alert_sink.unknown_tenant", tenant_id=str(alert.tenant_id))
-            return PersistResult(PersistOutcome.FAILED, None)
-        except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the consumer
-            logger.error("alert_sink.persist_failed", error=str(exc))
-            return PersistResult(PersistOutcome.FAILED, None)
+            row = await conn.fetchrow(_INSERT_SQL, *_insert_args(fused))
+        except asyncpg.UniqueViolationError as exc:
+            # Two writers with different ids can both pass the WHERE NOT EXISTS
+            # guard under READ COMMITTED. The partial unique index from
+            # migration 120 is the authority that stops the second row; this
+            # writer lost the race and must resolve the winner's row rather
+            # than report a failure (which would dead-letter an alert that is
+            # already durable) or retry blindly (which would do the same).
+            #
+            # Both call sites (``persist`` and ``persist_many``) run each
+            # statement in autocommit, so the failed INSERT does not leave a
+            # transaction aborted and the reconciliation read below is valid.
+            # Nothing in services/fusion opens a transaction around persist;
+            # asyncpg's pool release also resets (ROLLBACKs) a leaked one. If a
+            # caller ever wraps this in a transaction, run the INSERT inside a
+            # nested ``conn.transaction()`` (a savepoint) so the error is
+            # rolled back before this read, or it will fail with "current
+            # transaction is aborted".
+            #
+            # Only this index is handled here. Any other *named* unique
+            # violation is a schema/code disagreement and falls through to the
+            # caller's existing failure path, so a database error is never
+            # converted into a duplicate verdict. A driver that does not name
+            # the index (constraint_name is None) still falls through to the
+            # surviving-row read: if a row with this tenant and hash exists,
+            # the alert is durable regardless of which constraint reported it.
+            constraint = getattr(exc, "constraint_name", None)
+            if constraint is not None and constraint != _DEDUP_UNIQUE_INDEX:
+                raise
+            existing_id = await self._surviving_alert_id(conn, alert)
+            if existing_id is not None:
+                logger.info(
+                    "alert_sink.concurrent_dedup_resolved",
+                    tenant_id=str(alert.tenant_id),
+                    fingerprint=alert.fingerprint(),
+                )
+                await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id))
+            # The winner's row is not visible: it was rolled back, deleted, or
+            # the read is looking at a different snapshot. Do not claim
+            # durability; the consumer retries.
+            logger.error(
+                "alert_sink.dedup_conflict_unverified",
+                tenant_id=str(alert.tenant_id),
+                fingerprint=alert.fingerprint(),
+            )
+            return PersistResult(PersistOutcome.FAILED, canonical_id, retryable=True, verified=False)
+
+        if row is None:
+            # The `WHERE NOT EXISTS` guard filtered the insert. Resolve the row
+            # that filtered it, so the returned id is the durable one (which
+            # may predate deterministic ids).
+            existing_id = await self._surviving_alert_id(conn, alert)
+            if existing_id is not None:
+                logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
+                await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id))
+            if is_duplicate:
+                # The hint said duplicate, but neither row nor insert exists.
+                # Do not report durability: a retry can settle the race.
+                logger.error(
+                    "alert_sink.duplicate_unverified",
+                    tenant_id=str(alert.tenant_id),
+                    fingerprint=alert.fingerprint(),
+                )
+                return PersistResult(PersistOutcome.FAILED, canonical_id, retryable=True, verified=False)
+            # A concurrent writer may have inserted the same id between the
+            # two statements; retrying the message will re-read it.
+            logger.warning("alert_sink.insert_filtered", alert_id=canonical_id)
+            return PersistResult(PersistOutcome.FAILED, None, retryable=True)
+
+        return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
+
+    async def _surviving_alert_id(self, conn: Any, alert: Any) -> Any | None:
+        row = await conn.fetchrow(_SURVIVING_ALERT_SQL, alert.tenant_id, alert.fingerprint())
+        return row["id"] if row is not None else None
+
+    async def _link_source_finding_safely(self, fused: FusedAlert, *, alert_id: Any) -> None:
+        # getattr rather than direct access: the batch-path tests construct the
+        # sink with __new__ and replace this method, so there is no pool yet.
+        pool = getattr(self, "_pool", None)
+        if pool is not None:
+            await self._link_source_finding(pool, fused.alert, alert_id=alert_id)
+
+    @staticmethod
+    def _unavailable_result(fused: FusedAlert) -> PersistResult:
+        """A non-durable result that preserves the fusion verdict.
+
+        A duplicate stays a duplicate (observable), but ``verified=False``
+        tells the consumer it cannot commit yet.
+        """
+        duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+        return PersistResult(
+            PersistOutcome.DUPLICATE if duplicate else PersistOutcome.UNAVAILABLE,
+            str(fused.id),
+            retryable=True,
+            verified=False,
+        )
 
     async def persist_many(self, fused_batch: Sequence[FusedAlert]) -> list[PersistResult]:
         """Insert a batch of fused alerts over one connection.
@@ -395,39 +653,55 @@ class AlertSink:
             if not self._connect_failed_logged:
                 logger.error("alert_sink.unavailable_dropping_persistence")
                 self._connect_failed_logged = True
-            return [PersistResult(PersistOutcome.UNAVAILABLE, str(f.id)) for f in fused_batch]
+            return [self._unavailable_result(f) for f in fused_batch]
         self._connect_failed_logged = False
 
-        async with pool.acquire() as conn:
-            for fused in fused_batch:
-                canonical_id = str(fused.id)
-                if fused.fusion_decision == FusionDecision.DUPLICATE:
-                    await self._record_deduplicated_event(conn, fused.alert)
-                    results.append(PersistResult(PersistOutcome.DUPLICATE, canonical_id))
-                    continue
-                try:
-                    row = await conn.fetchrow(_INSERT_SQL, *_insert_args(fused))
-                except asyncpg.ForeignKeyViolationError:
-                    logger.warning("alert_sink.unknown_tenant", tenant_id=str(fused.alert.tenant_id))
-                    results.append(PersistResult(PersistOutcome.FAILED, None))
-                    continue
-                except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the batch
-                    logger.error("alert_sink.persist_failed", error=str(exc))
-                    results.append(PersistResult(PersistOutcome.FAILED, None))
-                    continue
-
-                if row is None:
-                    await self._record_deduplicated_event(conn, fused.alert)
-                    results.append(PersistResult(PersistOutcome.DUPLICATE, canonical_id))
-                    continue
-                results.append(PersistResult(PersistOutcome.INSERTED, str(row["id"])))
+        connection_lost = False
+        try:
+            async with pool.acquire() as conn:
+                for fused in fused_batch:
+                    if connection_lost:
+                        results.append(self._unavailable_result(fused))
+                        continue
+                    try:
+                        results.append(await self._persist_on_conn(conn, fused))
+                    except asyncpg.ForeignKeyViolationError:
+                        logger.warning("alert_sink.unknown_tenant", tenant_id=str(fused.alert.tenant_id))
+                        results.append(PersistResult(PersistOutcome.FAILED, None))
+                    except Exception as exc:  # noqa: BLE001 — one bad row must not wedge the batch
+                        retryable = _is_retryable_db_error(exc)
+                        logger.error("alert_sink.persist_failed", error=str(exc), retryable=retryable)
+                        if retryable:
+                            # The connection is no longer trustworthy. Stop
+                            # using it for the rest of the batch, but keep the
+                            # results already obtained: those rows are durable.
+                            connection_lost = True
+                        duplicate = fused.fusion_decision == FusionDecision.DUPLICATE
+                        results.append(
+                            PersistResult(
+                                PersistOutcome.DUPLICATE if duplicate else PersistOutcome.FAILED,
+                                str(fused.id) if duplicate else None,
+                                retryable=retryable,
+                                verified=False,
+                            )
+                        )
+        except Exception as exc:  # noqa: BLE001 — acquire/context failure is not a row failure
+            retryable = _is_retryable_db_error(exc)
+            if retryable:
+                await self._invalidate_pool()
+            logger.error("alert_sink.batch_failed", error=str(exc), retryable=retryable)
+            done = len(results)
+            results.extend(self._unavailable_result(f) for f in fused_batch[done:])
+        else:
+            if connection_lost:
+                await self._invalidate_pool()
 
         # Source links after the inserts, on their own connections. They
         # are best-effort and a slow vendor lookup must not hold the
         # batch's connection open.
         for fused, result in zip(fused_batch, results, strict=True):
             if result.outcome is PersistOutcome.INSERTED and result.alert_id:
-                await self._link_source_finding(pool, fused.alert, alert_id=result.alert_id)
+                await self._link_source_finding_safely(fused, alert_id=result.alert_id)
 
         return results
 

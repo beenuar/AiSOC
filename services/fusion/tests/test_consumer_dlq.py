@@ -16,7 +16,7 @@ import pytest
 from app.core.config import settings
 from app.models.alert import FusionDecision
 from app.services.dlq import InMemoryDLQ
-from app.workers.consumer import FusionWorker
+from app.workers.consumer import FusionWorker, PermanentProcessingError
 
 pytestmark = pytest.mark.asyncio
 
@@ -98,7 +98,16 @@ async def test_invalid_raw_alert_is_dead_lettered_not_silently_dropped():
     worker._engine.process.assert_not_awaited()  # noqa: SLF001
 
 
-async def test_dead_letter_never_crashes_the_consumer_when_sink_fails():
+async def test_failed_dead_letter_is_not_reported_as_handled():
+    """A poison message whose capture failed must not let the offset commit.
+
+    The old contract returned cleanly when the DLQ raised. The consume loop
+    read that as success and committed the offset, so the poison message
+    existed only in a log line. The capture failure now propagates as a
+    permanent processing failure; `_handle_message` holds the message
+    uncommitted until a DLQ accepts it (or shutdown).
+    """
+
     class ExplodingDLQ:
         async def record(self, dead_letter):  # noqa: ANN001, ARG002
             raise RuntimeError("dlq sink down")
@@ -106,5 +115,5 @@ async def test_dead_letter_never_crashes_the_consumer_when_sink_fails():
     engine = SimpleNamespace(process=AsyncMock())
     worker = FusionWorker(engine=engine, sink=None, dlq=ExplodingDLQ())
     worker._producer = AsyncMock()  # noqa: SLF001
-    # Poison message + failing DLQ: must return cleanly, not raise.
-    await worker._process_message({"tenant_id": TENANT}, topic=RAW_EVENTS)  # noqa: SLF001
+    with pytest.raises(PermanentProcessingError):
+        await worker._process_message({"tenant_id": TENANT}, topic=RAW_EVENTS)  # noqa: SLF001

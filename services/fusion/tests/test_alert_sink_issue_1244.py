@@ -59,15 +59,24 @@ def _fused(
     return FusedAlert(id=raw.id, tenant_id=TENANT, fusion_decision=decision, alert=raw)
 
 
+_UNSET = object()
+
+
 class _StubConn:
     """Records every statement, and answers fetchrow with a scripted row."""
 
-    def __init__(self, row):
+    def __init__(self, row, surviving=_UNSET):
         self._row = row
+        # The duplicate-reconciliation SELECT is a different statement from
+        # the INSERT; both can be scripted independently.
+        self._surviving = row if surviving is _UNSET else surviving
         self.calls: list[tuple] = []
 
     async def fetchrow(self, sql, *args):
         self.calls.append((sql, args))
+        lowered = sql.lower().lstrip()
+        if lowered.startswith("select") and "from alerts" in lowered and "dedup_hash" in lowered:
+            return self._surviving
         return self._row
 
     async def execute(self, sql, *args):
@@ -76,8 +85,8 @@ class _StubConn:
 
 
 class _StubPool:
-    def __init__(self, row):
-        self.conn = _StubConn(row)
+    def __init__(self, row, surviving=_UNSET):
+        self.conn = _StubConn(row, surviving=surviving)
 
     @asynccontextmanager
     async def _acquire(self):
@@ -197,7 +206,9 @@ async def test_the_batch_path_writes_the_same_columns() -> None:
 @pytest.mark.asyncio
 async def test_a_dedup_hit_records_the_second_events_id() -> None:
     """The defect behind "522 events formed 0 correlation instances"."""
-    pool = _StubPool(row=None)  # WHERE NOT EXISTS filtered the insert out
+    # WHERE NOT EXISTS filtered the insert out; the reconciliation read finds
+    # the surviving row that filtered it.
+    pool = _StubPool(row=None, surviving={"id": uuid.uuid4()})
     sink = AlertSink("postgresql://x")
     sink._pool = pool
     fused = _fused(source_event_ids=["evt-2"])
@@ -221,7 +232,7 @@ async def test_a_dedup_hit_records_the_second_events_id() -> None:
 @pytest.mark.asyncio
 async def test_a_fusion_decided_duplicate_is_also_recorded() -> None:
     """Fusion's own DUPLICATE verdict returns before the insert is attempted."""
-    pool = _StubPool(row=None)
+    pool = _StubPool(row=None, surviving={"id": uuid.uuid4()})
     sink = AlertSink("postgresql://x")
     sink._pool = pool
 
@@ -260,19 +271,25 @@ async def test_an_event_with_no_source_id_issues_no_dedup_update() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_duplicate_verdict_survives_an_unreachable_database() -> None:
-    """Recording the provenance must not make DUPLICATE depend on the DB.
+async def test_a_duplicate_verdict_survives_an_unreachable_database(monkeypatch) -> None:
+    """The verdict survives, but it is not reported as durable.
 
-    Fusion decided; an outage changes only whether we can write the id down.
-    The early return has to stay ahead of `_ensure_pool`, or a DUPLICATE
-    starts reporting UNAVAILABLE and the consumer retries a decision that
-    was already made.
+    Fusion decided duplicate; an outage changes only whether we can verify the
+    surviving row. The outcome stays DUPLICATE (so the value is not rewritten
+    to UNAVAILABLE), and `verified=False` tells the consumer to retry rather
+    than commit a row that may not exist.
     """
     sink = AlertSink("postgresql://nope:nope@127.0.0.1:1/none")
-    sink._pool = None
+
+    async def _fail_start():
+        sink._pool = None
+
+    monkeypatch.setattr(sink, "start", _fail_start)
 
     result = await sink.persist(_fused(FusionDecision.DUPLICATE))
     assert result.outcome is PersistOutcome.DUPLICATE
+    assert result.verified is False
+    assert result.durable is False
 
 
 @pytest.mark.asyncio
@@ -284,8 +301,8 @@ async def test_a_failing_dedup_update_does_not_change_the_outcome() -> None:
             self.calls.append((sql, args))
             raise RuntimeError("connection reset")
 
-    pool = _StubPool(row=None)
-    pool.conn = _BoomConn(row=None)
+    pool = _StubPool(row=None, surviving={"id": uuid.uuid4()})
+    pool.conn = _BoomConn(row=None, surviving={"id": uuid.uuid4()})
     sink = AlertSink("postgresql://x")
     sink._pool = pool
 

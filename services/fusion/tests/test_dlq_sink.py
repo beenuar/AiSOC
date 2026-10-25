@@ -51,10 +51,14 @@ def _letter(**overrides: object) -> DeadLetter:
 
 
 class TestRecording:
+    def test_the_sink_declares_durable_capture(self) -> None:
+        """A committed INSERT is storage; the consumer may commit past it."""
+        assert PostgresDLQ.durable is True
+
     @pytest.mark.asyncio
     async def test_writes_the_letter(self) -> None:
         pool = _pool()
-        await PostgresDLQ(lambda: pool).record(_letter())
+        assert await PostgresDLQ(lambda: pool).record(_letter()) is True
         pool._conn.execute.assert_awaited_once()
         args = pool._conn.execute.await_args.args
         assert "aisoc_dead_letters" in args[0]
@@ -74,8 +78,10 @@ class TestRecording:
     @pytest.mark.asyncio
     async def test_no_pool_yet_is_logged_not_crashed(self) -> None:
         """The pool opens during worker startup, after the DLQ is built.
-        A dead letter arriving in that window must not raise."""
-        await PostgresDLQ(lambda: None).record(_letter())
+        A dead letter arriving in that window must not raise — but it also
+        did not get captured, so it must report False. Otherwise the consumer
+        commits an offset for a message that exists nowhere durable."""
+        assert await PostgresDLQ(lambda: None).record(_letter()) is False
 
     @pytest.mark.asyncio
     async def test_a_callable_pool_is_resolved_at_record_time(self) -> None:
@@ -85,7 +91,7 @@ class TestRecording:
         holder: list = [None]
         sink = PostgresDLQ(lambda: holder[0])
         holder[0] = pool
-        await sink.record(_letter())
+        assert await sink.record(_letter()) is True
         pool._conn.execute.assert_awaited_once()
 
 
@@ -96,13 +102,44 @@ class TestItCannotStopThePipeline:
         consuming. If recording that decision can raise, the DLQ becomes a
         second way for one bad event to halt everything."""
         pool = _pool(AsyncMock(side_effect=RuntimeError("connection refused")))
-        await PostgresDLQ(lambda: pool).record(_letter())  # must not raise
+        assert await PostgresDLQ(lambda: pool).record(_letter()) is False  # must not raise
 
     @pytest.mark.asyncio
     async def test_an_unacquirable_pool_is_swallowed(self) -> None:
         pool = MagicMock()
         pool.acquire = MagicMock(side_effect=RuntimeError("pool exhausted"))
-        await PostgresDLQ(lambda: pool).record(_letter())  # must not raise
+        assert await PostgresDLQ(lambda: pool).record(_letter()) is False  # must not raise
+
+
+class TestPoolRecovery:
+    @pytest.mark.asyncio
+    async def test_a_missing_pool_is_rebuilt_through_the_ensure_callback(self) -> None:
+        """During a recovery hold no alert is being persisted.
+
+        The DLQ shares the sink's pool, so without an explicit reconnect the
+        hold would never end after Postgres returns.
+        """
+        pool = _pool()
+        calls = {"n": 0}
+
+        async def ensure():  # noqa: ANN202
+            calls["n"] += 1
+            return pool
+
+        assert await PostgresDLQ(lambda: None, ensure_pool=ensure).record(_letter()) is True
+        assert calls["n"] == 1
+        pool._conn.execute.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_a_failed_pool_is_invalidated_for_the_next_attempt(self) -> None:
+        pool = _pool(AsyncMock(side_effect=RuntimeError("server closed the connection")))
+        invalidated = {"n": 0}
+
+        async def invalidate() -> None:
+            invalidated["n"] += 1
+
+        assert await PostgresDLQ(lambda: pool, invalidate_pool=invalidate).record(_letter()) is False
+        assert invalidated["n"] == 1
 
 
 class TestTenantParsing:
@@ -124,7 +161,7 @@ class TestTenantParsing:
         a guess would put another tenant's name on someone else's bad
         data."""
         pool = _pool()
-        await PostgresDLQ(lambda: pool).record(_letter(tenant_id=None))
+        assert await PostgresDLQ(lambda: pool).record(_letter(tenant_id=None)) is True
         assert pool._conn.execute.await_args.args[1] is None
 
 

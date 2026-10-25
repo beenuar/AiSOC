@@ -537,15 +537,16 @@ jobs:
           docker compose up -d fusion
           python3 scripts/integration/spine_test.py --await-alert --title "${TITLE}" --timeout 180
 
-      # ── Chaos: Postgres outage — graceful degradation + self-heal ────────
-      # Kill Postgres mid-stream. The fusion AlertSink must degrade to
-      # "fused alerts still flow over Kafka/WS, persistence is dropped for the
-      # outage window" WITHOUT crashing the consumer, and must self-heal once
-      # Postgres returns. Distinct event titles side-step fusion's in-memory
-      # dedup so the post-restart event is a fresh persist, not a duplicate.
-      # (The during-outage event's row is intentionally not recovered — a hard
-      # DB outage is a degradation window, not corruption; the healed event
-      # proves persistence resumes.)
+      # ── Chaos: Postgres outage — hold, recover, no silent loss ───────────
+      # Kill Postgres mid-stream. Fusion must stay alive, keep the Kafka
+      # offset uncommitted, and retry the alert with bounded backoff instead
+      # of committing past a failed insert. When Postgres returns, the
+      # during-outage event must become an alert row — the dedup fingerprint
+      # was registered in Redis before the failed insert, so this also
+      # exercises duplicate reconciliation (fusion says DUPLICATE, the sink
+      # verifies the surviving row, finds none, and repairs it).
+      # The post-recovery event then proves the sink's stale pool was replaced
+      # without restarting fusion.
       - name: Chaos — Postgres outage (graceful degradation + self-heal)
         run: |
           set -euo pipefail
@@ -576,8 +577,13 @@ jobs:
             sleep 1
           done
 
-          # A fresh event after restart must persist — proving the sink and the
-          # API both self-heal their Postgres pools with no restart.
+          # The event produced while the DB was down must be recovered, not
+          # abandoned. This is the assertion the old version deliberately
+          # omitted; accepting the loss is what let the retry defect ship.
+          python3 scripts/integration/spine_test.py --await-alert --title "${OUT}" --timeout 180
+
+          # A fresh event after restart must also persist — proving the sink
+          # and the API both self-heal their Postgres pools with no restart.
           python3 scripts/integration/spine_test.py --post-event --title "${HEAL}"
           python3 scripts/integration/spine_test.py --await-alert --title "${HEAL}" --timeout 180
 

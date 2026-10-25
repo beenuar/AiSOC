@@ -182,6 +182,57 @@ def count_marked(target: Target, run_id: str) -> int:
     return int(raw or 0)
 
 
+def _is_compose(target_name: str) -> bool:
+    """Whether a target name is the compose adapter's.
+
+    The CLI spells its choice ``compose`` and ``load_harness.compose_target``
+    names the adapter ``docker-compose``. Reading only the CLI spelling made
+    the self-test pass while ``main`` refused a single-replica stack: the guard
+    is handed ``Target.name``, which is the adapter's spelling.
+    """
+    return target_name in ("compose", "docker-compose")
+
+
+def minimum_replicas(target_name: str) -> int:
+    """How many fusion replicas the harness needs before it can prove anything.
+
+    Compose in CI runs one replica. Deleting it does not reduce capacity for a
+    survivor to absorb — the container is restarted and Kafka re-delivers from
+    the last committed offset — so a single-replica restart is a valid test of
+    the durability property. Kubernetes keeps the two-replica requirement: the
+    interesting claim there is takeover, not restart latency.
+    """
+    return 1 if _is_compose(target_name) else 2
+
+
+def wait_for_replacement(
+    target: Target,
+    namespace: str,
+    *,
+    victim: str,
+    replicas_before: list[str],
+    timeout_seconds: float,
+) -> list[str]:
+    """Poll until the killed replica is running again (or the timeout expires).
+
+    Compose restarts the same container name; Kubernetes creates a new pod.
+    Both count as replacement. Returning the last observation lets the caller
+    report what it actually saw rather than assuming recovery from ``docker
+    kill`` returning 0.
+    """
+    deadline = time.time() + max(1.0, timeout_seconds)
+    after = fusion_victims(target, namespace)
+    while time.time() < deadline:
+        after = fusion_victims(target, namespace)
+        if _is_compose(target.name):
+            if after and len(after) >= len(replicas_before):
+                return after
+        elif victim not in after and len(after) >= len(replicas_before):
+            return after
+        time.sleep(2)
+    return after
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--target", choices=("compose", "kubernetes"), default="kubernetes")
@@ -199,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--kafka-ref", default="statefulset/aisoc-kafka")
     parser.add_argument("--producer-bin", default=os.environ.get("AISOC_PRODUCER_BIN", ""))
     parser.add_argument("--drain-timeout", type=int, default=420)
+    parser.add_argument("--restart-timeout", type=int, default=180)
     parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)
 
@@ -221,11 +273,16 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     before = fusion_victims(target, args.namespace)
-    if len(before) < 2:
+    required = minimum_replicas(target.name)
+    if len(before) < required:
+        detail = (
+            "compose restarts the same container, so the offset/loss property is still testable"
+            if _is_compose(target.name)
+            else "the surviving replica must take over while the killed pod is absent"
+        )
         print(
             f"fusion_restart: found {len(before)} running fusion replica(s): {before or 'none'}. "
-            "This test needs at least two, because with one there is nothing for the surviving "
-            "consumer to take over and the result would only measure restart time.",
+            f"This target needs at least {required}: {detail}.",
             file=sys.stderr,
         )
         return 2
@@ -272,6 +329,18 @@ def main(argv: list[str] | None = None) -> int:
         time.sleep(1)
         if proc.poll() is not None:
             break
+    if proc.poll() is not None:
+        # The producer finished before the kill landed. Killing a replica now
+        # would measure restart time against an already-drained stream: the
+        # verdict would pass without ever testing an in-flight event. That is a
+        # vacuous PASS, so refuse to grade it.
+        print(
+            "chaos: the producer finished before the kill landed, so no event was in flight. "
+            "That tests nothing; raise --events, lower --target-eps, or lower --kill-at.",
+            file=sys.stderr,
+        )
+        return 2
+
     in_flight = count_marked(target, run_id)
     victim = before[0]
     killed_ok, detail = kill_fusion(target, args.namespace, victim)
@@ -320,8 +389,17 @@ def main(argv: list[str] | None = None) -> int:
         seq_counts[row.seq] = seq_counts.get(row.seq, 0) + 1
     verdict = grade(accepted, seq_counts)
 
-    after = fusion_victims(target, args.namespace)
-    replaced = args.target == "compose" or (victim not in after and len(after) >= len(before))
+    after = wait_for_replacement(
+        target,
+        args.namespace,
+        victim=victim,
+        replicas_before=before,
+        timeout_seconds=args.restart_timeout,
+    )
+    if _is_compose(args.target):
+        replaced = bool(after) and len(after) >= len(before)
+    else:
+        replaced = victim not in after and len(after) >= len(before)
 
     report = {
         "schema": "aisoc.chaos_fusion_restart/v1",
@@ -363,6 +441,9 @@ def main(argv: list[str] | None = None) -> int:
 
 def _self_test() -> int:
     """Prove the verdict fails in both directions it is supposed to catch."""
+    # The adapter's name, not the CLI's spelling: `main` reads `Target.name`,
+    # and those two disagreed once already.
+    compose_name = compose_target(Path("."), ["docker-compose.yml"], "").name
     checks = [
         (
             "a clean run passes",
@@ -383,6 +464,18 @@ def _self_test() -> int:
         (
             "a run where nothing was accepted is not a pass",
             not grade(0, {}).ok,
+        ),
+        (
+            "a single-replica compose stack is runnable (CI boots one fusion container)",
+            minimum_replicas(compose_name) == 1,
+        ),
+        (
+            "a single-replica kubernetes stack is still refused",
+            minimum_replicas("kubernetes") == 2,
+        ),
+        (
+            "the compose branch is chosen for the adapter's target name, not the CLI's spelling",
+            _is_compose(compose_name) and not _is_compose("kubernetes"),
         ),
     ]
     ok = True
