@@ -6,7 +6,9 @@ AiSOC — open-source AI Security Operations Center (MIT License)
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
+import threading
 from typing import Any
 
 import structlog
@@ -54,6 +56,40 @@ def tenant_scope_filter(tenant_id: str | None, *, include_shared: bool = True) -
     if include_shared and tenant_id != SHARED_TENANT:
         allowed.append(SHARED_TENANT)
     return Filter(must=[FieldCondition(key="tenant_id", match=MatchAny(any=allowed))])
+
+
+#: Loaded once, on first use, and shared. `TextEmbedding()` reads an ONNX
+#: model off disk; the old code constructed one per `_embed` call, so every
+#: batch, search and query paid that again. Guarded by a lock because
+#: `_embed_sync` runs in a worker thread and several may arrive together.
+_EMBEDDING_MODEL: Any = None
+_EMBEDDING_MODEL_LOCK = threading.Lock()
+
+
+def _embedding_model() -> Any:
+    global _EMBEDDING_MODEL
+    if _EMBEDDING_MODEL is None:
+        with _EMBEDDING_MODEL_LOCK:
+            if _EMBEDDING_MODEL is None:
+                from fastembed import TextEmbedding
+
+                _EMBEDDING_MODEL = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
+    return _EMBEDDING_MODEL
+
+
+def _embed_sync(texts: list[str]) -> list[list[float]]:
+    """The blocking half, kept separate so it is obvious what runs in a thread."""
+    embeddings = list(_embedding_model().embed(texts))
+    result = []
+    for emb in embeddings:
+        vec = list(emb)
+        # Pad/truncate to expected dimension
+        if len(vec) < _EMBEDDING_DIM:
+            vec = vec + [0.0] * (_EMBEDDING_DIM - len(vec))
+        elif len(vec) > _EMBEDDING_DIM:
+            vec = vec[:_EMBEDDING_DIM]
+        result.append(vec)
+    return result
 
 
 class QdrantStore:
@@ -210,22 +246,31 @@ class QdrantStore:
     # ─── Private helpers ──────────────────────────────────────────────────────
 
     async def _embed(self, texts: list[str]) -> list[list[float]]:
-        """Generate embeddings using fastembed or a stub."""
-        try:
-            from fastembed import TextEmbedding
+        """Generate embeddings using fastembed or a stub.
 
-            model = TextEmbedding(model_name="BAAI/bge-small-en-v1.5")
-            embeddings = list(model.embed(texts))
-            # Pad/truncate to expected dimension
-            result = []
-            for emb in embeddings:
-                vec = list(emb)
-                if len(vec) < _EMBEDDING_DIM:
-                    vec = vec + [0.0] * (_EMBEDDING_DIM - len(vec))
-                elif len(vec) > _EMBEDDING_DIM:
-                    vec = vec[:_EMBEDDING_DIM]
-                result.append(vec)
-            return result
+        Off the event loop, and with the model loaded once.
+
+        This was ``async def`` and awaited nothing: ``model.embed(texts)`` is
+        synchronous ONNX inference, so it ran on the event loop and the
+        service answered *nothing at all* for its duration — not a request,
+        not a health probe. The weekly chaos ``qdrant`` leg measured the
+        consequence twice in a row: threatintel's first CISA KEV poll embeds
+        1,756 indicators about 25 s after boot, and a readiness read landing
+        in that window got no status line and no body, which the grader
+        correctly scored as "threatintel stopped serving" while the store it
+        was grading was not the cause.
+
+        `asyncio.timeout` cannot save a caller from this, which is the part
+        worth remembering: `/health` caps its own Qdrant probe at 1.5 s, but
+        a blocked loop cannot run the timer either, so every in-process
+        deadline in the service is suspended at once.
+
+        The model is also built once rather than per call — `TextEmbedding()`
+        loads an ONNX model from disk, which the old code paid on every
+        batch, every search and every query.
+        """
+        try:
+            return await asyncio.to_thread(_embed_sync, texts)
         except Exception:
             # Fallback: zero vectors (embeddings will be non-functional but won't crash)
             return [[0.0] * _EMBEDDING_DIM for _ in texts]
