@@ -44,7 +44,9 @@ def _msg(offset: int = 0) -> SimpleNamespace:
 
 
 def _worker(dlq=None) -> FusionWorker:
-    worker = FusionWorker(engine=SimpleNamespace(process=AsyncMock()), dlq=dlq)
+    # The worker only ever awaits `engine.process`, so a namespace carrying
+    # that one attribute is the whole contract this suite needs.
+    worker = FusionWorker(engine=SimpleNamespace(process=AsyncMock()), dlq=dlq)  # type: ignore[arg-type]
     worker._running = True  # noqa: SLF001 — this test drives the loop directly
     worker._stop_event.clear()  # noqa: SLF001
     return worker
@@ -379,7 +381,10 @@ async def test_stop_waits_for_the_in_flight_message_before_closing_clients():
     assert consumer.stopped is True
     assert worker._running is False  # noqa: SLF001
     assert worker._stop_event.is_set()  # noqa: SLF001
-    await finish
+    # Drained through `gather` rather than a bare `await finish`: the bare form
+    # reads to CodeQL as `py/ineffectual-statement`. Same reason as the comment
+    # in `dlq.KafkaDLQ.record`.
+    await asyncio.gather(finish)
 
 
 @pytest.mark.asyncio

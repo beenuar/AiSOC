@@ -165,7 +165,15 @@ class KafkaDLQ:
         # ``send_and_wait`` is exactly this pair; using ``send`` keeps the sink
         # compatible with producers (and test doubles) that expose only send.
         future = await self._producer.send(self._topic, value=dead_letter.to_dict())
-        await future
+        acknowledged = await future
+        # The ack's payload — ``RecordMetadata`` in production, ``None`` from a
+        # producer double — is not part of this contract: ``record`` reports on
+        # the *absence of an exception*, which is what makes the offset commit
+        # that follows it safe. It is referenced rather than discarded because a
+        # bare ``await <name>`` reads to CodeQL as `py/ineffectual-statement`
+        # (it does not model ``await`` as effectful) and binding it to an
+        # unreferenced name only trades that for `py/unused-local-variable`.
+        logger.debug("fusion.dlq.acknowledged", topic=self._topic, acknowledged=acknowledged is not None)
         return True
 
 

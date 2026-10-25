@@ -52,8 +52,6 @@ from typing import Any
 
 import structlog
 
-from app.core.config import settings
-
 logger = structlog.get_logger()
 
 # Column order for the INSERT — must match ``_row`` and the ClickHouse schema in
@@ -454,6 +452,17 @@ class LakeWriter:
         max_data_failures: int | None = None,
         client_factory: Any | None = None,
     ) -> None:
+        # Imported here, not at module scope, and this is load-bearing rather
+        # than style: `tests/isolation/test_retro_hunt_live.py` and
+        # `test_backtest_lake_live.py` load THIS file by path precisely so the
+        # fusion service's `app` package never has to be on `sys.path` beside
+        # the API service's identically-named one. A module-scope
+        # `from app.core.config import ...` resolves to whichever `app` the
+        # process happens to hold — the API's, whose config pulls in
+        # `pydantic_settings` — and takes the whole offline isolation suite
+        # down at collection time. Keep every settings read inside a function.
+        from app.core.config import settings  # noqa: PLC0415
+
         self._host = host
         self._port = port
         self._database = database

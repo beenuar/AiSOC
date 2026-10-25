@@ -155,7 +155,7 @@ class _IndexConn:
         return "UPDATE 1"
 
 
-def _inserts(conn: object) -> list[str]:
+def _inserts(conn: _RaceConn | _IndexConn) -> list[str]:
     return [sql for sql, _ in conn.calls if "INSERT INTO alerts" in sql]
 
 
