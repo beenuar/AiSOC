@@ -845,6 +845,7 @@ const reportHealth = (_req: express.Request, res: express.Response) => {
     status: detached.length > 0 ? 'degraded' : 'healthy',
     service: 'aisoc-realtime',
     clients: wss.clients.size,
+    kafka: detached.length === 0,
     // Reported whether or not anything is wrong, so a healthy answer says
     // which subscriptions were checked rather than only that none failed.
     subscriptions: [...subscriptions.entries()].map(([name, state]) => ({
@@ -857,6 +858,7 @@ const reportHealth = (_req: express.Request, res: express.Response) => {
 };
 app.get('/health', reportHealth);
 app.get('/healthz', reportHealth);
+app.get('/readyz', reportHealth);
 
 // --- Start ---
 // Bind to "::" so we are reachable over Fly.io's 6PN private network (IPv6).

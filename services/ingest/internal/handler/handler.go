@@ -28,6 +28,10 @@ type GraphWriter interface {
 	WriteEvent(ctx context.Context, ev *graph.Event) error
 }
 
+type graphReadiness interface {
+	Ready(context.Context) error
+}
+
 // EventPublisher is the subset of *publisher.Publisher the HTTP path
 // depends on. Declared as an interface for the same reason GraphWriter is:
 // so a request can be driven end to end in a unit test — including which
@@ -306,8 +310,7 @@ func (h *Handler) Livez(w http.ResponseWriter, r *http.Request) {
 // directly instead: /v1/graph_ws/stream answers 503 with the reason, and
 // aisoc_graph_ws_source_not_resolving is the alertable signal.
 func (h *Handler) Readyz(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
-	defer cancel()
+	ctx := r.Context()
 
 	subs := h.subscriptionReport()
 	body := map[string]interface{}{
@@ -317,20 +320,34 @@ func (h *Handler) Readyz(w http.ResponseWriter, r *http.Request) {
 		// moment somebody is reading the output to find out what is wrong.
 		"subscriptions": subs,
 		"timestamp":     time.Now().UTC().Format(time.RFC3339),
+		"graph":         false,
 	}
 	// Named at the top level as well, so the degraded case is legible
 	// without reading the per-subscription map.
 	if degraded := degradedSubscriptions(subs); len(degraded) > 0 {
 		body["degraded_subscriptions"] = degraded
 	}
+	if graphProbe, ok := h.graph.(graphReadiness); ok {
+		graphCtx, graphCancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+		if err := graphProbe.Ready(graphCtx); err == nil {
+			body["graph"] = true
+		} else {
+			body["graph_error"] = err.Error()
+		}
+		graphCancel()
+	}
 
 	if h.pub == nil {
+		body["kafka"] = false
 		body["status"] = "not_ready"
 		body["reason"] = "no kafka publisher configured"
 		writeJSON(w, http.StatusServiceUnavailable, body)
 		return
 	}
-	if err := h.pub.Ready(ctx); err != nil {
+	kafkaCtx, kafkaCancel := context.WithTimeout(ctx, 1500*time.Millisecond)
+	defer kafkaCancel()
+	if err := h.pub.Ready(kafkaCtx); err != nil {
+		body["kafka"] = false
 		body["status"] = "not_ready"
 		body["reason"] = err.Error()
 		body["hint"] = "docker compose logs kafka | tail -40"
@@ -338,8 +355,9 @@ func (h *Handler) Readyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	body["status"] = "ready"
+	body["kafka"] = true
 	body["checks"] = map[string]string{"kafka": "reachable"}
-	if _, degraded := body["degraded_subscriptions"]; degraded {
+	if _, degraded := body["degraded_subscriptions"]; degraded || body["graph"] != true {
 		body["status"] = "ready_degraded"
 	}
 	writeJSON(w, http.StatusOK, body)

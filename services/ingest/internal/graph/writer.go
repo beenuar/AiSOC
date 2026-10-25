@@ -331,6 +331,12 @@ func newWriterFromDriver(driver Driver, cfg Config) *Writer {
 	return w
 }
 
+// Ready performs a bounded caller-context connectivity check. Graph is an
+// auxiliary projection, so callers report degradation without blocking ingest.
+func (w *Writer) Ready(ctx context.Context) error {
+	return w.driver.VerifyConnectivity(ctx)
+}
+
 // WriteEvent enqueues a graph projection for batched flush. NEVER blocks: if
 // the queue is full we drop and increment the metric. This is the explicit
 // guarantee from T1.1: graph-write failures must NOT block fusion ingest.
