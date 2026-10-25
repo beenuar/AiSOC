@@ -29,6 +29,13 @@ In this recording both triage runs fell back to the deterministic path, which
 the console labels (`model_used` reads `kafka:auto_triage:deterministic`), and
 the closing card says so.
 
+The console in the recording is **v11.0.0**, which is older than the stills in
+`apps/web/public/screenshots/` — those were re-captured at v20.1.0. The
+navigation gained entries after this was recorded, so the two do not match
+pixel for pixel. The sequence the recording demonstrates is unchanged, and it
+is kept as recorded rather than re-cut; see "Re-recording" below for what
+replacing it would involve.
+
 **That is no longer the common case.** Triage now asks the provider to
 constrain its reply to a JSON object: measured over 50 alerts through the
 gateway, replies triage could use went from 44 of 50 to 50 of 50. The recording

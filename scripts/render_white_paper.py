@@ -48,7 +48,8 @@ DEFAULT_OUT_DIR = REPO_ROOT / "apps" / "web" / "public" / "papers"
 # Records the digest of each markdown source at the moment its PDF was
 # rendered, so `--check` can tell a stale PDF from a current one.
 #
-# The digest is taken over the *source markdown*, never the rendered PDF.
+# The digest is taken over the *source closure* — the markdown plus every
+# local figure it embeds — and never over the rendered PDF.
 # WeasyPrint stamps a creation timestamp into its output and glyph metrics
 # depend on which fonts the host happens to have installed, so two correct
 # renders of one source do not produce equal bytes. A PDF byte comparison
@@ -197,6 +198,16 @@ COVER_HTML = """
 
 _IMG_RE = re.compile(r"!\[[^\]]*\]\(([^)\s]+)")
 
+# Papers reference figures from the repository root, which is also the
+# `base_url` WeasyPrint renders them against. One name for that root, read by
+# both the missing-figure refusal and the staleness digest, so the two cannot
+# disagree about which file a caption points at.
+IMAGE_ROOT = REPO_ROOT
+
+
+def _resolve_image(ref: str) -> Path:
+    return IMAGE_ROOT / ref.lstrip("/")
+
 
 def _assert_images_resolved(markdown_path: Path, output_path: Path) -> None:
     """Refuse a PDF whose figures point at files that are not there.
@@ -211,9 +222,7 @@ def _assert_images_resolved(markdown_path: Path, output_path: Path) -> None:
     """
     source = markdown_path.read_text(encoding="utf-8")
     missing = [
-        ref
-        for ref in _IMG_RE.findall(source)
-        if not ref.startswith(("http://", "https://", "data:")) and not (repo_root() / ref.lstrip("/")).is_file()
+        ref for ref in _IMG_RE.findall(source) if not ref.startswith(("http://", "https://", "data:")) and not _resolve_image(ref).is_file()
     ]
     if missing:
         output_path.unlink(missing_ok=True)
@@ -329,7 +338,31 @@ def _discover() -> list[tuple[Path, Path]]:
 
 
 def _source_digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
+    """Digest a paper's markdown *and every local figure it embeds*.
+
+    A PDF is only as current as its screenshots. Digesting the markdown alone
+    meant refreshing a capture left the recorded digest unchanged, so
+    ``--check`` reported the PDF as current while it still showed the previous
+    console. That is not hypothetical: the v20.1.0 release replaced fifteen
+    console captures without re-rendering the technical guide, and this check
+    passed throughout — the workflow even runs on `screenshots/**` for exactly
+    this reason, so the trigger was right and the comparison was blind to it.
+    """
+    digest = hashlib.sha256()
+    digest.update(path.read_bytes())
+    for ref in sorted(set(_IMG_RE.findall(path.read_text(encoding="utf-8", errors="replace")))):
+        if ref.startswith(("http://", "https://", "data:")):
+            continue
+        resolved = _resolve_image(ref)
+        if not resolved.is_file():
+            # A missing figure is `_assert_images_resolved`'s refusal to make,
+            # at render time, where it can say which caption is empty.
+            continue
+        # The path is part of the digest, so repointing a caption at a
+        # different file counts as a change even if the bytes are identical.
+        digest.update(b"\x00" + ref.encode("utf-8") + b"\x00")
+        digest.update(resolved.read_bytes())
+    return digest.hexdigest()
 
 
 def _display(path: Path) -> str:
@@ -427,18 +460,24 @@ def _injected_defect_cases() -> list[tuple[str, bool]]:
     everything would "detect" all four defects and be useless, so a
     well-formed paper is required to pass.
     """
-    global DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH
+    global DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH, IMAGE_ROOT
 
-    def plant(root: Path, *, pdf: bool, recorded: str | None, orphan: bool) -> None:
+    def plant(root: Path, *, pdf: bool, recorded: str | None, orphan: bool, figure: str | None = None) -> None:
         # Without this, the assignments below bind locals to `plant` and every
         # case silently grades the real tree instead of the planted one.
-        global DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH
+        global DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH, IMAGE_ROOT
 
         src_dir, out_dir = root / "content", root / "public"
         src_dir.mkdir(parents=True)
         out_dir.mkdir(parents=True)
+        IMAGE_ROOT = root
         source = src_dir / "paper.md"
-        source.write_text("# a paper\n")
+        source.write_text("# a paper\n" if figure is None else "# a paper\n\n![a console](shot.png)\n")
+        if figure is not None:
+            # Record the digest against the *first* capture, then replace the
+            # file the way a re-capture does. The markdown never changes, which
+            # is precisely how the real staleness went unnoticed.
+            (root / "shot.png").write_bytes(b"first capture")
         if pdf:
             (out_dir / "paper.pdf").write_bytes(b"%PDF-1.7 not a real render\n")
         entries: dict[str, str] = {}
@@ -448,6 +487,8 @@ def _injected_defect_cases() -> list[tuple[str, bool]]:
             entries["paper.md"] = "0" * 64
         if orphan:
             entries["deleted.md"] = "0" * 64
+        if figure == "refreshed":
+            (root / "shot.png").write_bytes(b"re-captured against a later release")
         DEFAULT_SRC_DIR, DEFAULT_OUT_DIR = src_dir, out_dir
         MANIFEST_PATH = out_dir / "render-manifest.json"
         MANIFEST_PATH.write_text(json.dumps({"sources": entries}) + "\n")
@@ -458,9 +499,17 @@ def _injected_defect_cases() -> list[tuple[str, bool]]:
         ("a source with no PDF at all is refused", {"pdf": False, "recorded": "match", "orphan": False}, False),
         ("a PDF with no recorded render is refused", {"pdf": True, "recorded": None, "orphan": False}, False),
         ("a recorded paper whose source is gone is refused", {"pdf": True, "recorded": "match", "orphan": True}, False),
+        # The control for the pair below: an embedded figure that has not moved
+        # must still pass, or the two cases together prove nothing.
+        ("a paper whose embedded figure is unchanged passes", {"pdf": True, "recorded": "match", "orphan": False, "figure": "kept"}, True),
+        (
+            "a figure re-captured since the PDF was rendered is refused",
+            {"pdf": True, "recorded": "match", "orphan": False, "figure": "refreshed"},
+            False,
+        ),
     ]
 
-    saved = (DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH)
+    saved = (DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH, IMAGE_ROOT)
     results: list[tuple[str, bool]] = []
     try:
         for description, shape, should_pass in cases:
@@ -468,7 +517,7 @@ def _injected_defect_cases() -> list[tuple[str, bool]]:
                 plant(Path(tmp), **shape)  # type: ignore[arg-type]
                 results.append((description, (_check() == 0) is should_pass))
     finally:
-        DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH = saved
+        DEFAULT_SRC_DIR, DEFAULT_OUT_DIR, MANIFEST_PATH, IMAGE_ROOT = saved
     return results
 
 

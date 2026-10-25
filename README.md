@@ -28,7 +28,7 @@ history you already collected, and a human approves before anything reaches a ve
 
 **[Watch the full three minutes](apps/web/public/demo/demo.mp4)** — install to AI verdict on one
 server against the published images, terminal waits shortened and the recording saying so on screen.
-The stills below are earlier runs under the same rules: no seeded rows, no demo mode, no mockups.
+The stills below are from a v20.1.0 run under the same rules — the recording is older than they are.
 ([step by step](apps/docs/docs/deployment/walkthrough.mdx) · [what is real](apps/web/public/screenshots/README.md))
 
 | | |
