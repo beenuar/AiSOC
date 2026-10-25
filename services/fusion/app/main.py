@@ -219,7 +219,13 @@ async def lifespan(app: FastAPI):
     worker_task = asyncio.create_task(worker.start())
     worker_task.add_done_callback(_log_worker_exit)
     register_subscription(app, "alerts+raw_events", lambda: worker.attached)
-    register_dependency(app, "kafka", lambda: worker.attached)
+    # Two different questions, which is why they are two probes and not one
+    # flag read twice. The subscription above is "am I consuming"; the
+    # dependency below is "can I reach the broker", and only the second can
+    # describe an outage -- `attached` stays true across one, because
+    # aiokafka's retry lives inside `__anext__` and the `async for` never
+    # exits. See `FusionWorker.broker_reachable`.
+    register_dependency(app, "kafka", worker.broker_reachable)
     app.state.worker_task = worker_task
     app.state.redis = redis_client
 

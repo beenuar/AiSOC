@@ -201,6 +201,38 @@ class FusionWorker:
         """
         return self._attached
 
+    async def broker_reachable(self) -> bool:
+        """Ask the broker, instead of asking the loop whether it is still looping.
+
+        :attr:`attached` answers "is the consume loop iterating", and under
+        aiokafka it keeps answering yes while the broker is gone: the retry
+        lives inside ``__anext__``, so the ``async for`` never exits and the
+        flag never clears. The weekly chaos ``kafka`` leg measured exactly
+        that -- fusion logged ``NodeNotReadyError`` and
+        ``GroupCoordinatorNotAvailableError`` continuously for the whole
+        outage while ``/readyz`` answered **200** with ``kafka: true``. That
+        is the UEBA failure shape with the loop still alive: a consumer
+        attached to nothing, indistinguishable from one on a quiet topic, and
+        a load balancer with no reason to route away from it.
+
+        So the ``kafka`` *dependency* is this, and the ``alerts+raw_events``
+        *subscription* stays :attr:`attached`. They are different questions --
+        "can I reach the broker" and "am I consuming" -- and a readiness body
+        that answers only the second cannot describe an unreachable broker.
+
+        ``fetch_all_metadata`` (which ``topics()`` drives) builds its own
+        ``ClusterMetadata``, so a probe cancelled by the caller's deadline
+        cannot corrupt the client's shared view of the cluster. The caller
+        (``app/_health.py``) bounds this at 1.5 s and treats a raise as
+        "not reachable", which is the honest reading: if asking whether the
+        broker is there is itself unanswerable, the answer is not yes.
+        """
+        consumer = self._consumer
+        if consumer is None:
+            return False
+        await consumer.topics()
+        return True
+
     @property
     def durable_capture(self) -> bool:
         """Whether a committed offset implies a durable capture on failure.
