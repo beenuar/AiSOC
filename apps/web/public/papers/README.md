@@ -61,8 +61,12 @@ When adding a new paper:
 
 Do not commit PDFs without their matching markdown source.
 
-**Editing a paper's markdown means running `make papers` and committing
-the result in the same change.** CI does not refresh PDFs for you. It
+**Editing a paper's markdown — or replacing a screenshot it embeds —
+means running `make papers` and committing the result in the same
+change.** The second half is not hypothetical: the v20.1.0 release
+refreshed fifteen console captures without re-rendering, and the
+published technical guide kept showing a console two releases old.
+CI does not refresh PDFs for you. It
 once did, pushing a `chore(papers)` commit straight to `main`, but that
 stopped working when `main` became branch-protected — the push is
 rejected with `GH006`. Opening a pull request instead is not available
@@ -81,7 +85,11 @@ reports rather than repairs:
 
 Staleness is judged by comparing each source's SHA-256 against the digest
 recorded in `render-manifest.json` when its PDF was last rendered, which
-`make papers` updates. PDF bytes are deliberately not compared: WeasyPrint
+`make papers` updates. The digest covers the paper's **source closure** —
+the markdown plus every local figure it embeds, keyed by path — so
+refreshing a screenshot marks the PDF stale even though the markdown is
+untouched, and repointing a caption at a different file counts as a change
+too. PDF bytes are deliberately not compared: WeasyPrint
 stamps a creation timestamp into its output and glyph metrics depend on
 the host's installed fonts, so two correct renders of the same source are
 not byte-identical. Commit `render-manifest.json` alongside the PDF.
