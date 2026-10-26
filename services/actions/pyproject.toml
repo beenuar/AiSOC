@@ -20,7 +20,7 @@ sqlalchemy = {extras = ["asyncio"], version = "^2.0.25"}
 structlog = ">=24.1,<27.0"
 httpx = ">=0.27,<0.29"
 aiokafka = ">=0.10,<0.15"
-python-dateutil = "^2.8.2"
+python-dateutil = ">=2.8.2,<4.0.0"
 cryptography = ">=46,<51"
 
 [tool.poetry.group.dev.dependencies]
