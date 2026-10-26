@@ -17,7 +17,7 @@ on:
 # generate requirements.txt via `poetry export`.
 env:
   OPENAPI_DEPS: >-
-    "fastapi>=0.117,<0.147" uvicorn pydantic "pydantic[email]" pydantic-settings
+    "fastapi>=0.117,<0.162" uvicorn pydantic "pydantic[email]" pydantic-settings
     "sqlalchemy[asyncio]" asyncpg structlog
     "PyJWT>=2.8,<3" "cryptography>=46,<51" "passlib[bcrypt]"
     tenacity pyyaml prometheus-client

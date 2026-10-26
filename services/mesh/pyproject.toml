@@ -11,7 +11,7 @@ python = "^3.11"
 # Floor 0.117: below it a `-> None` handler under PEP 563 trips FastAPI's
 # "204 must not have a response body" assert at import. One range for
 # every service — see services/api/pyproject.toml for the measurement.
-fastapi = ">=0.117,<0.147"
+fastapi = ">=0.117,<0.162"
 uvicorn = { version = ">=0.29,<0.52", extras = ["standard"] }
 pydantic = ">=2.7,<2.14"
 cryptography = ">=46,<51"

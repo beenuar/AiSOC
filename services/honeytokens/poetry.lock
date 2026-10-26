@@ -681,14 +681,14 @@ ssh = ["bcrypt (>=3.1.5)"]
 
 [[package]]
 name = "fastapi"
-version = "0.146.0"
+version = "0.161.1"
 description = "FastAPI framework, high performance, easy to learn, fast to code, ready for production"
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "fastapi-0.146.0-py3-none-any.whl", hash = "sha256:0eb9985a7d5bb11ce9a962d4b65e0cf1a2e13d6aca2e14da57bc526370e26748"},
-    {file = "fastapi-0.146.0.tar.gz", hash = "sha256:e96047fc353ff43f7fda069c3578a7d94902a762d9aca2e065f7f801abd91a49"},
+    {file = "fastapi-0.161.1-py3-none-any.whl", hash = "sha256:a1363080cf9aeedecd99f4e1a23669d7e77542227f6536f4d7bbd59f07ecaa94"},
+    {file = "fastapi-0.161.1.tar.gz", hash = "sha256:4076b88434452e20289379068e976c4a04c65ffc8e6be31510106e150a422f0f"},
 ]
 
 [package.dependencies]
@@ -2440,4 +2440,4 @@ dev = ["httpx", "pytest", "pytest-asyncio", "pytest-cov"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "bf55d5b7434db71f52ed0adf58d0e9c2b2bf3c51cf745af6feaeab61cd5e94d9"
+content-hash = "c7d1d1df250f0ada4bb4bb3ffbb29ed10de732716df5a0623afeab61ed596b06"

@@ -182,7 +182,7 @@ jobs:
           # Whatever the ceiling currently admits, which is what the locks
           # resolve. Both ends run so the declared range is a tested range
           # rather than an assumption about the middle.
-          - fastapi: '0.143.5'
+          - fastapi: '0.161.1'
             label: shipped
     env:
       API_DEPS: >-
