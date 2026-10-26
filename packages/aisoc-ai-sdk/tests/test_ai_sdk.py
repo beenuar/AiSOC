@@ -15,6 +15,8 @@ exception escaping into the caller's request path.
 from __future__ import annotations
 
 import json
+import threading
+import time
 
 import pytest
 from aisoc_ai import AiSocAiClient, CaptureMode, redact, secret_kinds
@@ -205,3 +207,153 @@ def test_counters_make_a_silent_sdk_diagnosable(client):
     client.tool_call("a")
     client.tool_call("b")
     assert client.stats()["emitted"] == 2
+
+
+# ── a span the host made unserializable ───────────────────────────────────
+#
+# `_emit` copies the caller's payload values into the envelope untouched, so
+# anything the host passes as `resource`, `latency_ms` or `session_id` reaches
+# `json.dumps` exactly as given. A `datetime`, a `Decimal`, a `set` or any
+# ordinary object is not JSON-serializable, and the host has no way to know
+# that the SDK requires otherwise — the public methods take `Any` and return
+# `True` the moment the span is queued.
+#
+# The cost of getting this wrong is the worst failure this package has: the
+# serialization happens on the background worker, so the exception does not
+# reach the caller at all. It ends the drain loop instead, and from then on
+# the SDK is permanently silent inside a customer's agent while `enabled`
+# still reads `True` and every method still answers `True`.
+
+
+def test_an_unserializable_span_does_not_raise_out_of_post(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Serializing is part of sending, so it belongs under the same guard.
+
+    The body used to be built *above* `_post`'s `try`, which left the one
+    failure the host can actually cause as the one failure not handled.
+    """
+    monkeypatch.setattr(AiSocAiClient, "_drain", lambda self: None)
+    c = AiSocAiClient(endpoint=RUNTIME, agent_id="a")
+
+    c._post(RUNTIME, [{"agent_id": "a", "resource": object()}])  # must not raise
+
+    assert c.stats()["dropped_unserializable"] == 1
+    # Not a transport failure: nothing was ever put on the wire, and conflating
+    # the two would send an operator to debug their network.
+    assert c.stats()["failed_transport"] == 0
+
+
+def test_the_worker_survives_a_post_that_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`_drain` documents "must never raise out of this thread" — hold it to that.
+
+    Asserted against a `_post` that raises for *any* reason rather than against
+    serialization specifically: the invariant is that no fault below the loop
+    can end it, and a guard written only for today's cause would not survive
+    the next one.
+    """
+    real_drain = AiSocAiClient._drain
+    monkeypatch.setattr(AiSocAiClient, "_drain", lambda self: None)
+    c = AiSocAiClient(endpoint=RUNTIME, agent_id="a")
+
+    def _boom(target: str, spans: list[dict[str, object]]) -> None:
+        # Stop first, so the loop terminates whether or not it survives — a
+        # test that hangs on the fixed tree proves nothing about the broken one.
+        c._stop.set()
+        raise TypeError("Object of type object is not JSON serializable")
+
+    monkeypatch.setattr(c, "_post", _boom)
+    c.tool_call("search")
+
+    real_drain(c)  # the real loop, synchronously: must return, not propagate
+
+
+def test_the_worker_thread_outlives_an_unserializable_span() -> None:
+    """End to end, through the real thread the host process actually runs."""
+    c = AiSocAiClient(endpoint=RUNTIME, agent_id="a")
+    try:
+        assert c._worker is not None and c._worker.is_alive()
+
+        # The bad type is the subject of this test, not an oversight: the
+        # host's type checker cannot stop a value arriving here at runtime.
+        c.tool_call("poison", resource=object())  # type: ignore[arg-type]
+        deadline = time.monotonic() + 10.0
+        while c.stats()["dropped_unserializable"] == 0 and time.monotonic() < deadline:
+            time.sleep(0.05)
+
+        assert c.stats()["dropped_unserializable"] == 1, "the poisoned span was never accounted for"
+        assert c._worker.is_alive(), "the emitter thread died; the SDK is now silent for the life of the process"
+    finally:
+        c._stop.set()
+
+
+# ── the request deadline ──────────────────────────────────────────────────
+
+
+def test_the_request_timeout_is_the_configured_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A host that cannot afford five seconds must be able to say so.
+
+    Asserted on the value handed to `urlopen` rather than on the attribute,
+    because the attribute existing and the attribute being *used* are the two
+    different claims and only the second one matters.
+    """
+    monkeypatch.setattr(AiSocAiClient, "_drain", lambda self: None)
+    seen: list[float | None] = []
+
+    class _Response:
+        status = 200
+
+        def __enter__(self) -> _Response:
+            return self
+
+        def __exit__(self, *exc: object) -> None:
+            return None
+
+    def _capture(request: object, timeout: float | None = None) -> _Response:
+        seen.append(timeout)
+        return _Response()
+
+    monkeypatch.setattr("urllib.request.urlopen", _capture)
+
+    AiSocAiClient(endpoint=RUNTIME, agent_id="a")._post(RUNTIME, [{"agent_id": "a"}])
+    AiSocAiClient(endpoint=RUNTIME, agent_id="a", timeout_seconds=0.25)._post(RUNTIME, [{"agent_id": "a"}])
+
+    assert seen == [5.0, 0.25]
+
+
+# ── concurrent emitters ───────────────────────────────────────────────────
+
+
+def test_concurrent_emitters_do_not_lose_spans(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Instrumentation sits in whatever threading model the host already has.
+
+    An agent serving several requests at once emits from all of them, so the
+    queue and the counters are touched concurrently. Sized under the 1000-span
+    bound on purpose: this asserts that nothing is lost when nothing *should*
+    be lost, which is the half `test_a_full_queue_drops_rather_than_growing`
+    cannot cover.
+    """
+    monkeypatch.setattr(AiSocAiClient, "_drain", lambda self: None)
+    c = AiSocAiClient(endpoint=RUNTIME, agent_id="a")
+
+    workers, per_worker = 10, 50
+
+    def _emit_many(worker: int) -> None:
+        for i in range(per_worker):
+            c.tool_call(f"tool-{worker}-{i}")
+
+    threads = [threading.Thread(target=_emit_many, args=(w,)) for w in range(workers)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=30)
+
+    assert all(not t.is_alive() for t in threads), "an emitter thread hung"
+    expected = workers * per_worker
+    assert c.stats()["emitted"] == expected
+    assert c.stats()["dropped_queue_full"] == 0
+    assert c._queue.qsize() == expected
+
+    names = set()
+    while not c._queue.empty():
+        _target, envelope = c._queue.get_nowait()
+        names.add(envelope["tool_name"])
+    assert len(names) == expected, "spans were lost or overwritten under concurrency"
