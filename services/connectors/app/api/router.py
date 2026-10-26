@@ -26,6 +26,7 @@ service's lifespan), not in this router.
 from __future__ import annotations
 
 import re
+import uuid
 from typing import Any
 
 import structlog
@@ -35,12 +36,16 @@ from pydantic import Field as PydField
 
 from app.connectors import CONNECTOR_REGISTRY, list_connector_schemas
 from app.connectors.base import Capability
-from app.db.connector_repo import fetch_enabled_connectors
+from app.db.connector_repo import fetch_enabled_connector_for_tenant
 from app.db.engine import get_engine
 from app.federated.query import QueryError, parse_unified_query
 from app.security.credential_vault import CredentialVaultError, get_vault
 from app.security.egress import EgressRefused, refuse_internal_destinations
-from app.security.tenant_scope import require_console_or_service_auth
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 
 logger = structlog.get_logger()
 #: Default-deny. Everything on this router either reads the connector
@@ -61,6 +66,16 @@ _CTRL_RE = re.compile(r"[\x00-\x1f\x7f]")
 #: constructor arguments. Passing them through raises ``TypeError`` and turns a
 #: working connector into a 422. Mirrors the filter in ``ConnectorScheduler``.
 _SCHEDULER_ONLY_CONFIG_KEYS = frozenset({"poll_interval_seconds", "checkpoint", "filter_rules"})
+
+#: One answer for "no such instance", "not enabled" and "belongs to another
+#: tenant", with the requested id deliberately **not** echoed back.
+#:
+#: Distinguishing those cases is what made this route an existence oracle over
+#: every tenant's connector ids: a 403 on a real id beside a 404 on an invented
+#: one enumerates the estate without reading a single row. A constant also
+#: keeps a caller-supplied string out of the response body, and costs the
+#: caller nothing — they already know which id they sent.
+_NO_SUCH_INSTANCE = "no enabled connector instance"
 
 
 def _connector_kwargs(connector_config: dict[str, Any]) -> dict[str, Any]:
@@ -368,6 +383,7 @@ async def get_instance_resource_config(
     instance_id: str,
     resource_id: str = Query(..., description="Vendor-native resource id"),
     ts: str | None = Query(None, description="Point in time (RFC 3339)"),
+    principal: TenantPrincipal = Depends(require_console_or_service_auth),
 ):
     """Fetch a resource's configuration for a **saved connector instance**.
 
@@ -382,11 +398,28 @@ async def get_instance_resource_config(
     `ConnectorScheduler` does at poll time, so the caller needs no secrets.
     That also means the ingest service never handles credentials, which is the
     reason the original contract could not simply be renamed into place.
+
+    Because it decrypts a stored credential and spends it on an authenticated
+    vendor call, the instance has to be resolved **inside the caller's tenant**
+    (GHSA-h4g5-39vv-pqfv). ``principal`` is declared as a parameter rather than
+    left to the router-level dependency: the router's ``Depends`` authenticates
+    either way, but a dependency whose result is never bound hands it nowhere,
+    which is how the tenant came to be known and then not used.
     """
+    tenant_id = scoped_tenant_or_403(principal)
+
+    try:
+        wanted = uuid.UUID(instance_id)
+    except ValueError:
+        # Not a UUID, so it identifies nothing. Answered exactly as "no such
+        # instance" rather than 422, so malformed, absent and someone else's
+        # are one answer — see the comment on ``_NO_SUCH_INSTANCE``.
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_INSTANCE) from None
+
     try:
         engine = get_engine()
         async with engine.begin() as conn:
-            instances = await fetch_enabled_connectors(conn)
+            target = await fetch_enabled_connector_for_tenant(conn, wanted, tenant_id)
     except Exception as exc:  # noqa: BLE001 — surfaced as 503, never silent
         logger.exception("connector.resource_config.instance_load_failed")
         raise HTTPException(
@@ -394,12 +427,14 @@ async def get_instance_resource_config(
             detail="could not load connector instances",
         ) from exc
 
-    target = next((i for i in instances if str(i.id) == instance_id), None)
     if target is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"no enabled connector instance '{_safe_log_val(instance_id)}'",
+        logger.info(
+            "connector.resource_config.not_found tenant=%s instance=%s subject=%s",
+            _safe_log_val(str(tenant_id)),
+            _safe_log_val(instance_id),
+            _safe_log_val(principal.subject),
         )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_NO_SUCH_INSTANCE)
 
     cls = CONNECTOR_REGISTRY.get(target.connector_type)
     if cls is None:

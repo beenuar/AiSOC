@@ -119,8 +119,56 @@ class ConnectorInstance:
     last_backfill_at: datetime | None = None
 
 
+def _instance_from_row(row: Any) -> ConnectorInstance:
+    """Map one result row onto the dataclass.
+
+    Shared by both readers below so the eighteen field assignments — the part
+    that actually drifts when a column is added — exist once.
+    """
+    return ConnectorInstance(
+        id=row.id,
+        tenant_id=row.tenant_id,
+        name=row.name,
+        connector_type=row.connector_type,
+        is_enabled=row.is_enabled,
+        auth_config=row.auth_config or {},
+        connector_config=row.connector_config or {},
+        health_status=row.health_status,
+        last_sync=row.last_sync,
+        events_ingested=row.events_ingested,
+        events_dropped=row.events_dropped,
+        error_count=row.error_count,
+        schema_fingerprint=row.schema_fingerprint,
+        last_schema_drift_at=row.last_schema_drift_at,
+        last_drift_details=row.last_drift_details,
+        last_outage_at=row.last_outage_at,
+        last_backfill_at=row.last_backfill_at,
+    )
+
+
+# The column list below is spelled out at each ``select()`` rather than shared
+# through a module-level tuple, and that is deliberate rather than careless.
+# ``scripts/check_tenant_query_predicates.py`` identifies which table a
+# statement reaches from the names appearing inside the ``select(...)`` call
+# itself; behind a ``*_COLUMNS`` splat the statement names no table and becomes
+# invisible to the gate. Queries on this table being invisible is precisely how
+# the unscoped read below went unnoticed, so the duplication buys the one thing
+# worth more than brevity here: both statements are scannable.
+
+
 async def fetch_enabled_connectors(connection: Any) -> list[ConnectorInstance]:
-    """Return every connector instance with ``is_enabled = True``.
+    """Every enabled instance, **across every tenant**.
+
+    Deliberately unscoped, and the only legitimate caller is
+    ``ConnectorScheduler``: its job is to poll every tenant's sources, so it
+    cannot presuppose a tenant, and a tenant missing from its working set is a
+    customer whose connectors silently stop ingesting.
+
+    **A request handler must not call this.** Serving one caller's request from
+    a cross-tenant working set is how a saved instance belonging to somebody
+    else got resolved, decrypted and spent (GHSA-h4g5-39vv-pqfv). Handlers take
+    :func:`fetch_enabled_connector_for_tenant`, which asks the database for the
+    one row the caller is entitled to instead of filtering afterwards.
 
     ``connection`` must be a SQLAlchemy ``AsyncConnection``. We accept ``Any``
     in the type hint to avoid forcing every caller to import the async
@@ -147,29 +195,57 @@ async def fetch_enabled_connectors(connection: Any) -> list[ConnectorInstance]:
     ).where(connectors_table.c.is_enabled.is_(True))
 
     result = await connection.execute(stmt)
-    rows = result.fetchall()
-    return [
-        ConnectorInstance(
-            id=row.id,
-            tenant_id=row.tenant_id,
-            name=row.name,
-            connector_type=row.connector_type,
-            is_enabled=row.is_enabled,
-            auth_config=row.auth_config or {},
-            connector_config=row.connector_config or {},
-            health_status=row.health_status,
-            last_sync=row.last_sync,
-            events_ingested=row.events_ingested,
-            events_dropped=row.events_dropped,
-            error_count=row.error_count,
-            schema_fingerprint=row.schema_fingerprint,
-            last_schema_drift_at=row.last_schema_drift_at,
-            last_drift_details=row.last_drift_details,
-            last_outage_at=row.last_outage_at,
-            last_backfill_at=row.last_backfill_at,
-        )
-        for row in rows
-    ]
+    return [_instance_from_row(row) for row in result.fetchall()]
+
+
+async def fetch_enabled_connector_for_tenant(
+    connection: Any,
+    connector_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+) -> ConnectorInstance | None:
+    """The one enabled instance with this id **that this tenant owns**, or ``None``.
+
+    The tenant is part of the lookup rather than a check applied to its result.
+    That distinction is the fix: filtering after a cross-tenant fetch means the
+    row — including its ``auth_config`` ciphertext — has already been read into
+    the process, and every past instance of this bug class in this codebase has
+    been a scope that was absent rather than narrow.
+
+    ``None`` covers both "no such instance" and "not yours", and callers must
+    keep answering them identically. Telling them apart turns a lookup into an
+    oracle enumerating which connector ids exist in other tenants.
+
+    ``tenant_id`` must come from the authenticated principal — a console
+    token's verified claim or the header a service token is required to
+    declare — never from a value the caller is free to assert.
+    """
+    stmt = select(
+        connectors_table.c.id,
+        connectors_table.c.tenant_id,
+        connectors_table.c.name,
+        connectors_table.c.connector_type,
+        connectors_table.c.is_enabled,
+        connectors_table.c.auth_config,
+        connectors_table.c.connector_config,
+        connectors_table.c.health_status,
+        connectors_table.c.last_sync,
+        connectors_table.c.events_ingested,
+        connectors_table.c.events_dropped,
+        connectors_table.c.error_count,
+        connectors_table.c.schema_fingerprint,
+        connectors_table.c.last_schema_drift_at,
+        connectors_table.c.last_drift_details,
+        connectors_table.c.last_outage_at,
+        connectors_table.c.last_backfill_at,
+    ).where(
+        connectors_table.c.is_enabled.is_(True),
+        connectors_table.c.id == connector_id,
+        connectors_table.c.tenant_id == tenant_id,
+    )
+
+    result = await connection.execute(stmt)
+    row = result.first()
+    return _instance_from_row(row) if row is not None else None
 
 
 async def record_poll_success(
@@ -312,6 +388,7 @@ async def record_schema_drift(
 __all__ = [
     "ConnectorInstance",
     "connectors_table",
+    "fetch_enabled_connector_for_tenant",
     "fetch_enabled_connectors",
     "metadata",
     "record_backfill_run",
