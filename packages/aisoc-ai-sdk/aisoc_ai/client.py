@@ -72,6 +72,11 @@ class _Counters:
     sent: int = 0
     dropped_queue_full: int = 0
     failed_transport: int = 0
+    #: Spans the host made unserializable — a `datetime`, a `Decimal`, any
+    #: object — passed through `_emit` untouched and refused by `json.dumps`.
+    #: Counted apart from `failed_transport` because nothing reached the wire;
+    #: conflating them would send an operator to debug their network.
+    dropped_unserializable: int = 0
 
 
 @dataclass
@@ -90,6 +95,12 @@ class AiSocAiClient:
     agent_name: str | None = None
     capture: CaptureMode = CaptureMode.HASHED
     enabled: bool = True
+    #: Per-request deadline for a batch POST. Configurable because the default
+    #: is tuned for an AiSOC reachable on a local network, and instrumentation
+    #: inside an agent that already holds a request open cannot assume that.
+    #: Shortening it trades telemetry for the host's latency budget, which is
+    #: the host's trade to make; the span is dropped and counted either way.
+    timeout_seconds: float = _REQUEST_TIMEOUT_SECONDS
 
     _queue: queue.Queue = field(default_factory=lambda: queue.Queue(maxsize=_QUEUE_MAXSIZE), init=False)
     _worker: threading.Thread | None = field(default=None, init=False)
@@ -261,6 +272,7 @@ class AiSocAiClient:
             "sent": c.sent,
             "dropped_queue_full": c.dropped_queue_full,
             "failed_transport": c.failed_transport,
+            "dropped_unserializable": c.dropped_unserializable,
         }
 
     # ── internals ─────────────────────────────────────────────────────────
@@ -302,10 +314,29 @@ class AiSocAiClient:
 
             for target, spans in batches.items():
                 if spans:
-                    self._post(target, spans)
+                    try:
+                        self._post(target, spans)
+                    except Exception:  # noqa: BLE001 — see the docstring above
+                        # The loop's contract is that nothing below it can end
+                        # it. `_post` handles what it can foresee; this holds
+                        # the invariant for what it cannot, because the cost of
+                        # being wrong is the whole SDK going silent for the
+                        # life of the host process with `enabled` still True.
+                        self._counters.failed_transport += len(spans)
+                        logger.debug("aisoc_ai: dropped %d span(s): unexpected emitter fault", len(spans), exc_info=True)
 
     def _post(self, target: str, spans: list[dict[str, Any]]) -> None:
-        body = json.dumps(spans).encode("utf-8")
+        try:
+            # Inside the guard, not above it: serializing is part of sending,
+            # and the one failure the *host* can cause — a value `json` cannot
+            # encode, reaching here untouched from `_emit` — was the one this
+            # method did not handle.
+            body = json.dumps(spans).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            self._counters.dropped_unserializable += len(spans)
+            logger.debug("aisoc_ai: dropped %d unserializable span(s): %s", len(spans), exc)
+            return
+
         request = urllib.request.Request(  # noqa: S310 — operator-configured URL
             target,
             data=body,
@@ -313,7 +344,7 @@ class AiSocAiClient:
             method="POST",
         )
         try:
-            with urllib.request.urlopen(request, timeout=_REQUEST_TIMEOUT_SECONDS) as response:  # noqa: S310
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:  # noqa: S310
                 if 200 <= response.status < 300:
                     self._counters.sent += len(spans)
                 else:

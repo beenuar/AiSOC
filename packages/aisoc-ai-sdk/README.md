@@ -114,9 +114,19 @@ quietly rather than loudly:
   losing telemetry.
 - **Off when unconfigured.** No `endpoint` disables the client rather than
   raising, which is how an operator turns it off.
+- **Never goes silent on a bad value.** A span carrying something `json`
+  cannot encode — a `datetime`, a `Decimal`, any object — is dropped and
+  counted as `dropped_unserializable`, not left to end the background thread.
+  Serialization happens off your request path, so an unhandled failure there
+  would stop all telemetry for the life of the process while every method
+  kept returning `True`.
 
 `client.stats()` returns emitted / sent / dropped / failed counters, so a
 silent SDK is distinguishable from an idle one.
+
+`timeout_seconds` (default 5.0) is the per-request deadline for a batch POST.
+Lower it when your own latency budget is tighter than the default assumes;
+spans that miss the deadline are dropped and counted either way.
 
 ## Detections this feeds
 
