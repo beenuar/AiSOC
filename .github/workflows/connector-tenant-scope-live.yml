@@ -1,0 +1,172 @@
+# The connectors resource-config route, against real Postgres and a real vendor socket.
+#
+# Why this exists
+# ---------------
+# GET /api/v1/connectors/instances/{id}/resource-config decrypts a saved
+# instance's vendor credential with the platform vault and spends it on an
+# authenticated vendor call. It resolved that instance from the caller-supplied
+# path id against *every* tenant's rows: the handler declared no principal, so
+# the TenantPrincipal the router-level Depends had already resolved was thrown
+# away, and the lookup underneath carried no tenant predicate. Any authenticated
+# caller of any role could therefore have the platform read another tenant's
+# cloud posture using that tenant's own credential, with the vendor-side audit
+# trail naming the victim (GHSA-h4g5-39vv-pqfv).
+#
+# RLS is not a second line here. `connectors` carries a policy, but the
+# connectors engine binds no `app.current_tenant_id`, so the policy's
+# `OR current_tenant_id() IS NULL` arm fails open and the query-layer predicate
+# is the only control.
+#
+# Why live, and why the vendor is a socket
+# ----------------------------------------
+# The finding is not "a row came back" — it is "the platform decrypted somebody
+# else's secret and paid a vendor with it". The only way to assert that is to
+# ask the vendor which credential it was paid with, so the vendor is a real HTTP
+# server and the whole decrypt -> construct -> authenticate path runs. A mock
+# that answers whatever it is asked cannot be asked that question.
+#
+# No `paths:` filter. A path filter here would mean the gate skips on exactly
+# the pull request that reshapes the auth dependency it exists to protect.
+name: Connector tenant scope (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Keyed per commit on push and per pull request on PRs, never on `github.ref`
+  # alone: that shape cancels the run for the commit before it, and a required
+  # check that was cancelled never graded the commit it is reported against.
+  group: connector-tenant-scope-live-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  connector-tenant-scope-live:
+    name: resource-config reaches only the caller's own tenant
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # The runtime role, not the owner: a superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, so grading isolation as `aisoc`
+      # would grade nothing.
+      CONNECTOR_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      AISOC_CONNECTORS_DISABLE_SCHEDULER: "1"
+      # This proof owns its loopback vendor fixture. Keep the exception exact;
+      # AISOC_SSRF_ALLOW_PRIVATE intentionally cannot admit loopback.
+      AISOC_SSRF_ALLOW_HOSTS: 127.0.0.1
+      SUITE: ../../tests/isolation/test_connector_resource_config_tenant_scope_live.py
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real application pulls in the real application's whole
+      # import chain, and a set that differs from the lock tests software
+      # nobody ships.
+      - name: Install connectors from its lockfile
+        working-directory: services/connectors
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # Proves the role the suite grades through cannot see around a policy.
+      # Without it, a future change to the DSN could silently move this whole
+      # job onto the owner and every isolation assertion would still pass.
+      - name: Refuse to grade isolation as a role that bypasses RLS
+        run: |
+          set -euo pipefail
+          privileged=$(psql -h localhost -U aisoc -d aisoc -tAc \
+            "SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = 'aisoc_app';")
+          if [ "$privileged" != "f" ]; then
+            echo "FAIL: aisoc_app is SUPERUSER or BYPASSRLS, so this job would grade nothing."
+            exit 1
+          fi
+          echo "OK: aisoc_app is neither SUPERUSER nor BYPASSRLS."
+
+      - name: Mint a credential key for the vault
+        run: |
+          KEY=$(python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+          echo "AISOC_CREDENTIAL_KEY=$KEY" >> "$GITHUB_ENV"
+
+      - name: A caller reaches its own tenant's instance and no other
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: python -m pytest "$SUITE" -v --tb=short
+
+      # The negative control, and it re-injects the real defect.
+      #
+      # The tenant predicate in `fetch_enabled_connector_for_tenant` is the
+      # load-bearing half of the fix: without it the lookup is by id across
+      # every tenant again, which is exactly what shipped. Removing it must
+      # make this suite fail. If it does not, the suite is not driving the
+      # production lookup and its green tick means nothing — which is worth
+      # failing the build over, because the alternative is a check that
+      # certifies tenant isolation while being blind to it.
+      #
+      # The guard above the edit is the part that keeps this honest over time:
+      # if the predicate is ever reshaped so the string is not found, this
+      # control fails loudly rather than passing by editing nothing.
+      - name: The gate fails when the tenant predicate is removed
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: |
+          set -euo pipefail
+          cp app/db/connector_repo.py /tmp/connector_repo.bak
+          restore() { cp /tmp/connector_repo.bak app/db/connector_repo.py; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/db/connector_repo.py")
+          s = p.read_text()
+          needle = "        connectors_table.c.tenant_id == tenant_id,\n"
+          if needle not in s:
+              print("FAIL: the tenant predicate this control removes is not there to remove.")
+              print("      The lookup has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "", 1))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the tenant predicate removed."
+            echo "      It is not grading the production lookup."
+            exit 1
+          fi
+          echo "OK: removing the tenant predicate makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q
