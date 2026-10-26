@@ -78,8 +78,11 @@ export async function setupTelemetry(log: pino.Logger): Promise<Shutdown> {
         import('@opentelemetry/resources'),
         import('@opentelemetry/api'),
       ]);
+    // `sdk-trace`, not `sdk-trace-base`. The latter is deprecated, has no
+    // stable 3.x, and its peer range caps `@opentelemetry/api` below 1.10 —
+    // which the 3.x line requires, so the two cannot coexist.
     const { TraceIdRatioBasedSampler, ParentBasedSampler } = await import(
-      '@opentelemetry/sdk-trace-base'
+      '@opentelemetry/sdk-trace'
     );
 
     const sdk = new NodeSDK({
