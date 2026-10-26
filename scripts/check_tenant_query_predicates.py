@@ -66,6 +66,40 @@ Structural signals only, because a naming convention is exactly what drifts:
 
 Anything else is a finding, and must be on the ratchet with a reason.
 
+Two arms, because a statement has no opinion about who calls it
+---------------------------------------------------------------
+The rule above asks whether a statement filters on a tenant. That is not
+sufficient on its own, and GHSA-h4g5-39vv-pqfv is the proof: the connectors
+scheduler's "every enabled instance, across every tenant" sweep is correctly
+unscoped and correctly ratcheted — and a *request handler* was calling it,
+picking one caller's row out of every tenant's by string-comparing an id, then
+decrypting that row's vendor credential and spending it. Both halves read as
+correct in isolation. Measured, with the Core-table rule below in place but
+without this second arm, the gate reported OK on the vulnerable tree.
+
+So the second arm asks: **which HTTP route handlers reach a statement that
+carries no tenant predicate?** A sweep's exemption is earned by there being no
+caller whose tenant it could have filtered on; a request handler has one, so
+reaching it retires the justification. ``ROUTE_REACHABLE`` records the pairs
+where a request legitimately may — pre-auth lookups, opaque-capability reads,
+administrative surfaces that are cross-tenant by design, and handlers that
+validated the key against the caller's tenant first — and it is a ratchet in
+both directions like the other.
+
+Two things it deliberately is not. It resolves a call through the importing
+module rather than by bare name: a name-only pass invented five call paths
+that do not exist, and a gate that fabricates findings gets switched off. And
+it does not flag a *worker* calling the same sweep, because that caller is the
+reason the exemption exists.
+
+A third blind spot, found while measuring this and **not** closed here, is
+recorded so it is not rediscovered as news: ``_TENANT_IN_SQL`` matches
+``tenant_id`` anywhere in a raw statement, including the projection, so
+``SELECT tenant_id, secret FROM t WHERE id = :id`` reads as scoped. The one
+statement in this tree that relies on it (``scheduler.py``'s tenant
+enumeration) is legitimately cross-tenant, so nothing is currently wrong —
+but the rule is weaker than it looks.
+
 Both directions
 ---------------
 The dominant failure shape in this repository is the one-directional gate: it
@@ -427,6 +461,41 @@ RATCHET: dict[str, str] = {
         "the sweep worker's 'which rooms are open' discovery, the same cross-tenant working-set "
         "shape as report_scheduler.run_once; sync_war_room then handles one room at a time"
     ),
+    # ── services/connectors, visible to this gate for the first time ────────
+    # These six are not new queries. They are the six statements the Core-table
+    # blindness hid (see build_inventory), surfacing together the moment the
+    # gate could see the table at all. Each was read before being recorded.
+    "services/connectors/app/db/connector_repo.py::fetch_enabled_connectors::connectors_table": (
+        "the connector scheduler's working set: 'which instances are enabled', across every tenant, "
+        "which cannot presuppose a tenant — the same discover-a-working-set shape as "
+        "hunt_scheduler.run_once and oauth_refresh._select_due_connectors above. A tenant missing "
+        "from it is a customer whose connectors silently stop ingesting. Its only two callers are "
+        "ConnectorScheduler.reload_jobs and _poll_one, neither reachable from a request; the "
+        "docstring now says a request handler must not call it, and the route that did "
+        "(GHSA-h4g5-39vv-pqfv) takes fetch_enabled_connector_for_tenant, which filters in SQL"
+    ),
+    "services/connectors/app/db/connector_repo.py::record_poll_success::connectors_table": (
+        "writes the poll outcome back to the row the sweep above already selected, by primary key — "
+        "the same shape and the same reasoning as oauth_refresh._refresh_one. Sole caller is "
+        "ConnectorScheduler (scheduler.py:875) passing an id from its own enumeration; no request "
+        "input reaches it"
+    ),
+    "services/connectors/app/db/connector_repo.py::record_poll_failure::connectors_table": (
+        "the failure counterpart of record_poll_success, keyed on the same swept primary key; sole caller scheduler.py:1111"
+    ),
+    "services/connectors/app/db/connector_repo.py::record_checkpoint::connectors_table": (
+        "persists the ingest cursor onto the swept row by primary key; sole caller "
+        "ConnectorScheduler._record_checkpoint (scheduler.py:950), which is handed target.id from "
+        "the poll it just completed"
+    ),
+    "services/connectors/app/db/connector_repo.py::record_backfill_run::connectors_table": (
+        "stamps the backfill timestamp on the swept row by primary key; sole caller "
+        "ConnectorScheduler._record_backfill_run (scheduler.py:902)"
+    ),
+    "services/connectors/app/db/connector_repo.py::record_schema_drift::connectors_table": (
+        "records a confirmed drift on the swept row by primary key; sole caller scheduler.py:926, "
+        "which compares the fingerprint of the poll it just performed"
+    ),
 }
 
 #: Raising this is a deliberate act with a diff attached. Appending to RATCHET
@@ -495,7 +564,15 @@ RATCHET: dict[str, str] = {
 # in one run. The policy's unbound-session arm (fixed in the same train) is
 # what admits the runner's GUC-less session at the database; this entry is
 # what records the query-layer decision.
-MAX_RATCHET = 54
+# 54 -> 60 (GHSA-h4g5-39vv-pqfv): the six `services/connectors` statements this
+# gate could not previously see. They are not six new exemptions earned by
+# argument — they are six statements that had been exempt by accident, because
+# the table they query is a SQLAlchemy Core `Table` and entity detection only
+# matched declarative class names. The count going up here is the gate getting
+# *stricter*: the statement that had to be fixed rather than recorded,
+# `fetch_enabled_connectors` called from a request handler, is absent from the
+# list because the route now uses a sibling that filters in SQL.
+MAX_RATCHET = 60
 
 
 # ---------------------------------------------------------------------------
@@ -506,8 +583,20 @@ MAX_RATCHET = 54
 @dataclass
 class Inventory:
     models: dict[str, str] = field(default_factory=dict)  # class name -> table
+    #: SQLAlchemy **Core** ``Table`` objects: the variable a statement names
+    #: (``connectors_table``) -> the table it maps (``connectors``). Kept
+    #: separate from ``models`` because the two are discovered differently and
+    #: reporting which one matched is what makes a finding checkable.
+    core_tables: dict[str, str] = field(default_factory=dict)
     tables: set[str] = field(default_factory=set)  # tables with a tenant_id column
     rls_tables: set[str] = field(default_factory=set)  # tables with an RLS policy
+
+    def entities(self) -> set[str]:
+        """Every name a statement can use to reach a tenant-scoped table."""
+        return set(self.models) | set(self.core_tables)
+
+    def table_for(self, entity: str) -> str:
+        return self.models.get(entity) or self.core_tables.get(entity, entity)
 
 
 def _skipped(path: Path, root: Path) -> bool:
@@ -561,6 +650,47 @@ def build_inventory(root: Path) -> Inventory:
             if "tenant_id" in fields and table is not None:
                 inv.models[node.name] = table
 
+        # SQLAlchemy **Core** tables, which the declarative scan above cannot
+        # see because they are an assignment rather than a class.
+        #
+        # This was a hole wide enough to drive a cross-tenant credential read
+        # through. `services/connectors` addresses the `connectors` table as
+        # `connectors_table = Table("connectors", metadata, Column(...))` and
+        # queries it as `select(connectors_table.c.id, ...)`. The entity match
+        # below is against *names appearing inside the select()*, and that name
+        # is `connectors_table` — which was in neither `models` nor `tables`,
+        # so six statements in that file, including the unscoped read behind
+        # GHSA-h4g5-39vv-pqfv, were skipped before any predicate was examined.
+        # The gate printed OK over the whole service: not because it excluded
+        # it, but because it could not see a single one of its queries.
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+                continue
+            target = node.targets[0]
+            call = node.value
+            if not (isinstance(target, ast.Name) and isinstance(call, ast.Call)):
+                continue
+            func = call.func
+            name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+            if name != "Table" or not call.args:
+                continue
+            first = call.args[0]
+            if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                continue
+            # Only a table that declares a tenant column, matching the rule
+            # the declarative branch applies. A Core table without one is not
+            # tenant-scoped and nothing here should claim it is.
+            declares_tenant = any(
+                isinstance(arg, ast.Call)
+                and (getattr(arg.func, "id", None) or getattr(arg.func, "attr", None)) == "Column"
+                and arg.args
+                and isinstance(arg.args[0], ast.Constant)
+                and arg.args[0].value == "tenant_id"
+                for arg in call.args
+            )
+            if declares_tenant:
+                inv.core_tables[target.id] = first.value
+
     # Four services manage their own schema through alembic rather than this
     # chain of .sql files, so a glob that only saw the latter reported their
     # twelve tenant-scoped tables as unprotected however many policies they
@@ -588,6 +718,7 @@ def build_inventory(root: Path) -> Inventory:
             inv.rls_tables.add(m.group(1).strip('"').split(".")[-1])
 
     inv.tables |= {t for t in inv.models.values() if t}
+    inv.tables |= {t for t in inv.core_tables.values() if t}
     return inv
 
 
@@ -959,8 +1090,9 @@ def _scan_orm(
         if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in STATEMENT_FUNCS):
             continue
         entities: set[str] = set()
+        known = inv.entities()
         for arg in node.args:
-            entities |= _names(arg) & inv.models.keys()
+            entities |= _names(arg) & known
         if not entities:
             continue
         total += 1
@@ -1041,7 +1173,7 @@ def _scan_orm(
         if fn is not None and (_tenant_validated_keys(fn, auth_names, parents, module_fns) & resolved):
             continue
 
-        table = inv.models.get(entity, entity)
+        table = inv.table_for(entity)
         # Scoped by an RLS context on the connection. Only counts on a table
         # that actually carries a policy: setting the GUC against a table with
         # no policy scopes nothing at all.
@@ -1177,6 +1309,268 @@ def _scan_sql(
     return findings, total, rls_scoped
 
 
+# ---------------------------------------------------------------------------
+# Route reachability
+# ---------------------------------------------------------------------------
+#
+# Why a second arm exists at all
+# ------------------------------
+# The ratchet exempts a *statement*, and a statement has no opinion about who
+# calls it. That is the gap GHSA-h4g5-39vv-pqfv went through, and it is worth
+# stating exactly, because the obvious reading of the advisory is wrong:
+# `services/connectors` was never excluded from this scan, and adding the
+# Core-table rule above does not catch the vulnerability either. Measured: with
+# that rule alone the gate reports OK on the vulnerable tree, because
+# `fetch_enabled_connectors` is a legitimate cross-tenant sweep and is
+# correctly ratcheted as one — while a *request handler* was calling it.
+#
+# "The scheduler legitimately iterates every tenant; a request handler does
+# not" is the whole rule. A sweep's exemption is earned by there being no
+# caller whose tenant it could have filtered on, so the exemption evaporates
+# the moment an HTTP route reaches it — and nothing noticed, because both
+# halves looked correct in isolation.
+#
+# Measured on `main`: 39 handler -> unscoped-statement pairs, every one of them
+# a pre-auth credential lookup, a deliberately cross-tenant admin surface or an
+# opaque-capability read that is *designed* to be called from a request. The
+# vulnerable tree had 40. The fortieth is the finding.
+
+#: Decorator attributes that mark an HTTP route handler.
+ROUTE_DECORATOR_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options"})
+
+#: Handlers that may reach a cross-tenant statement, and why *a request* may.
+#:
+#: Distinct from ``RATCHET``, which says why the statement needs no predicate.
+#: These two questions came apart in GHSA-h4g5-39vv-pqfv and the entry has to
+#: answer the second one: not "why is this query unscoped" but "why is it
+#: correct for an HTTP caller to reach it". Every pair below was read before it
+#: was recorded, and they fall into four shapes that are all *designed* for a
+#: request — unlike a sweep, whose exemption exists precisely because no
+#: request reaches it.
+#: Shorthands so a key fits a line. The gate compares whole keys, so these are
+#: joined back into exactly the paths `scan_route_reachability` emits.
+_EP = "services/api/app/api/v1/endpoints"
+_SV = "services/api/app/services"
+_OSQ = "services/osquery-tls/app"
+
+ROUTE_REACHABLE: dict[str, str] = {
+    # -- pre-auth: the lookup that assigns the tenant ------------------------
+    f"{_EP}/auth.py::login -> {_EP}/auth.py::login": ("sign-in by email: there is no tenant yet, and this query is what resolves one"),
+    f"{_EP}/auth.py::refresh_token -> {_EP}/auth.py::refresh_token": (
+        "refresh presents a signed token, not a tenant; the row it names assigns one"
+    ),
+    f"{_EP}/passkeys.py::passkey_authenticate_begin -> {_EP}/passkeys.py::passkey_authenticate_begin": (
+        "pre-auth WebAuthn: resolves who is signing in from the email they typed"
+    ),
+    f"{_EP}/passkeys.py::passkey_authenticate_finish -> {_EP}/passkeys.py::passkey_authenticate_finish": (
+        "pre-auth WebAuthn: the owner of the verified credential is what assigns the tenant"
+    ),
+    f"{_EP}/passkeys.py::passkey_authenticate_finish -> {_EP}/passkeys.py::_consume_challenge": (
+        "single-use WebAuthn challenge matched on its own high-entropy value, before any session exists"
+    ),
+    f"{_EP}/passkeys.py::passkey_register_finish -> {_EP}/passkeys.py::_consume_challenge": (
+        "the same single-use challenge, on the registration leg"
+    ),
+    f"{_EP}/mfa.py::webauthn_verify -> {_EP}/passkeys.py::_consume_challenge": (
+        "the same single-use challenge, reused by the step-up verifier"
+    ),
+    f"{_EP}/oauth.py::oauth_callback -> {_EP}/oauth.py::oauth_callback": (
+        "matched on the 32-byte single-use state nonce, which is itself the credential"
+    ),
+    # -- the row is addressed by an opaque capability and yields its own tenant
+    "services/honeytokens/app/api/routes.py::webhook_trigger -> services/honeytokens/app/api/routes.py::webhook_trigger": (
+        "canary callback: the token id is the capability and the row supplies its own tenant; "
+        "the caller is whoever tripped the token and holds no session"
+    ),
+    f"{_OSQ}/api/v1/endpoints/config.py::get_config -> {_OSQ}/services/node_registry.py::mark_seen": (
+        "node_key is the agent's enrolment credential; the heartbeat writes the row that key resolved"
+    ),
+    f"{_OSQ}/api/v1/endpoints/distributed_read.py::distributed_read -> {_OSQ}/services/node_registry.py::mark_seen": (
+        "the same node_key heartbeat, on the distributed-read leg"
+    ),
+    f"{_OSQ}/api/v1/endpoints/distributed_write.py::distributed_write -> {_OSQ}/services/node_registry.py::mark_seen": (
+        "the same node_key heartbeat, on the distributed-write leg"
+    ),
+    f"{_OSQ}/api/v1/endpoints/log.py::log -> {_OSQ}/services/node_registry.py::mark_seen": (
+        "the same node_key heartbeat, on the log-submission leg"
+    ),
+    f"{_EP}/replay.py::get_public_replay -> {_EP}/replay.py::get_public_replay": (
+        "a published replay is deliberately public; the slug is the capability"
+    ),
+    f"{_EP}/war_rooms.py::channel_decision -> {_EP}/war_rooms.py::channel_decision": (
+        "the chat bot presents the shared service token and a war-room id, holds no tenant, and the "
+        "handler binds the RLS context to the row's own tenant before acting"
+    ),
+    # -- cross-tenant by design, behind an administrative permission ---------
+    f"{_EP}/tenants.py::create_user -> {_EP}/tenants.py::create_user": (
+        "platform-admin provisioning: creates users across tenants by design"
+    ),
+    f"{_EP}/tenants.py::update_user -> {_EP}/tenants.py::update_user": (
+        "platform-admin user administration, authorised by the admin role rather than a tenant"
+    ),
+    f"{_EP}/rbac.py::set_primary_role -> {_EP}/rbac.py::set_primary_role": (
+        "mirrors the granted role onto a user id this endpoint already validated against the caller's tenant"
+    ),
+    f"{_EP}/usage.py::export_organization_month -> {_SV}/org_scope.py::resolve_portfolio_scope": (
+        "the MSSP portfolio resolver answers 'which tenants may this operator see', so it cannot "
+        "presuppose one; it is bounded by org_id + user_id"
+    ),
+    f"{_EP}/mssp.py::list_effective_rules_for_child -> {_SV}/mssp_rule_resolver.py::resolve_effective_rules": (
+        "MSSP rule packs are cross-tenant by construction, bounded by a pack_id from the verified portfolio"
+    ),
+    f"{_EP}/mssp.py::count_effective_rules_for_child -> {_SV}/mssp_rule_resolver.py::resolve_effective_rules": (
+        "the count beside the list above, same bound"
+    ),
+    f"{_EP}/detection_rules.py::hunt -> {_SV}/mssp_rule_resolver.py::resolve_effective_rules": (
+        "resolves the effective rule set for the caller's own tenant through the same portfolio bound"
+    ),
+    f"{_EP}/replay.py::publish_replay -> {_EP}/replay.py::_unique_slug": (
+        "slug-collision probe across all replays; a tenant-scoped check would mint duplicate public slugs"
+    ),
+    # -- the handler validated the key against the caller's tenant first -----
+    f"{_EP}/war_rooms.py::sync -> {_SV}/war_room.py::sync_war_room": (
+        "the handler loads the room WHERE id = :id AND tenant_id = :tenant_id, 404s on a miss and "
+        "passes current_user.tenant_id in, so the sweep function is reached only with a room this "
+        "request already proved it owns"
+    ),
+    f"{_EP}/investigations.py::get_run -> {_EP}/investigations.py::_fetch_model_costs": (
+        "costs are keyed on a run_id that _fetch_run already checked against the caller's tenant"
+    ),
+    f"{_EP}/admin_users.py::delete_user -> {_EP}/admin_users.py::_end_sessions": (
+        "keyed on a user id that came out of this module's tenant-scoped SELECT earlier in the request"
+    ),
+    f"{_EP}/admin_users.py::delete_user -> {_EP}/admin_users.py::_guard_last_admin": (
+        "counts admins holding that already-validated user's roles, and only ever denies the operation"
+    ),
+    f"{_EP}/admin_users.py::patch_status -> {_EP}/admin_users.py::_end_sessions": "same validated user id, status leg",
+    f"{_EP}/admin_users.py::patch_status -> {_EP}/admin_users.py::_guard_last_admin": "same last-admin guard, status leg",
+    f"{_EP}/admin_users.py::add_role -> {_EP}/admin_users.py::_end_sessions": "same validated user id, role-grant leg",
+    f"{_EP}/admin_users.py::remove_role -> {_EP}/admin_users.py::_end_sessions": "same validated user id, role-revoke leg",
+    f"{_EP}/admin_users.py::remove_role -> {_EP}/admin_users.py::_guard_last_admin": "same last-admin guard, role-revoke leg",
+    f"{_EP}/admin_users.py::set_roles -> {_EP}/admin_users.py::_end_sessions": "same validated user id, role-replace leg",
+    f"{_EP}/admin_users.py::set_roles -> {_EP}/admin_users.py::_guard_last_admin": "same last-admin guard, role-replace leg",
+}
+
+#: Shrink-only, exactly like MAX_RATCHET. 34 is what `main` measured once the
+#: fixed route stopped reaching the scheduler's sweep; the vulnerable tree
+#: measured 35.
+MAX_ROUTE_REACHABLE = 34
+
+#: How far to follow calls out of a handler. Four frames covers
+#: handler -> service -> repository with room to spare.
+_REACH_DEPTH = 4
+
+
+@dataclass(frozen=True)
+class ReachFinding:
+    handler_path: str
+    handler: str
+    target_path: str
+    target: str
+
+    @property
+    def key(self) -> str:
+        return f"{self.handler_path}::{self.handler} -> {self.target_path}::{self.target}"
+
+
+def _module_to_path(module: str, service: str) -> str | None:
+    """``app.db.connector_repo`` in service ``connectors`` -> its file path.
+
+    Resolution is by import rather than by bare name on purpose. A pass that
+    matched any function of the same name anywhere in the service reported
+    ``saml_login -> auth.login`` and ``identity_context_for_triage ->
+    bootstrap_admin.bootstrap``: two name collisions, neither a call. A gate
+    that invents findings gets switched off, which costs more than the gate
+    was worth.
+    """
+    if not module.startswith("app"):
+        return None
+    return f"services/{service}/{module.replace('.', '/')}.py"
+
+
+def _imported_names(tree: ast.AST, rel: str, service: str) -> dict[str, str]:
+    """``local name -> defining module's path``, for ``from app.x import y``."""
+    out: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom) or node.level or not node.module:
+            continue
+        path = _module_to_path(node.module, service)
+        if path is None:
+            continue
+        for alias in node.names:
+            out[alias.asname or alias.name] = path
+    return out
+
+
+def scan_route_reachability(root: Path, findings: list[Finding]) -> list[ReachFinding]:
+    """Handlers that reach a function owning a statement with no tenant predicate."""
+    unscoped = {(f.path, f.function) for f in findings}
+    if not unscoped:
+        return []
+
+    defined: set[tuple[str, str]] = set()
+    called: dict[tuple[str, str], set[str]] = {}
+    imports: dict[str, dict[str, str]] = {}
+    handlers: list[tuple[str, str, str]] = []  # (path, name, service)
+
+    for py in _python_files(root):
+        rel = py.relative_to(root).as_posix()
+        if not rel.startswith("services/"):
+            continue
+        service = rel.split("/")[1]
+        try:
+            tree = ast.parse(py.read_text(encoding="utf-8", errors="ignore"))
+        except SyntaxError:
+            continue
+        imports[rel] = _imported_names(tree, rel, service)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                continue
+            defined.add((rel, node.name))
+            names: set[str] = set()
+            for sub in ast.walk(node):
+                if not isinstance(sub, ast.Call):
+                    continue
+                func = sub.func
+                name = func.id if isinstance(func, ast.Name) else func.attr if isinstance(func, ast.Attribute) else None
+                if name:
+                    names.add(name)
+            called[(rel, node.name)] = names
+            for deco in node.decorator_list:
+                if isinstance(deco, ast.Call) and isinstance(deco.func, ast.Attribute) and deco.func.attr in ROUTE_DECORATOR_METHODS:
+                    handlers.append((rel, node.name, service))
+                    break
+
+    def resolve(name: str, from_path: str) -> tuple[str, str] | None:
+        if (from_path, name) in defined:
+            return (from_path, name)
+        target = imports.get(from_path, {}).get(name)
+        if target is not None and (target, name) in defined:
+            return (target, name)
+        return None
+
+    out: list[ReachFinding] = []
+    for path, handler, _service in handlers:
+        seen: set[tuple[str, str]] = set()
+        frontier = [(path, handler)]
+        for _ in range(_REACH_DEPTH):
+            nxt: list[tuple[str, str]] = []
+            for node_key in frontier:
+                if node_key in seen:
+                    continue
+                seen.add(node_key)
+                if node_key in unscoped:
+                    out.append(ReachFinding(path, handler, node_key[0], node_key[1]))
+                for name in called.get(node_key, ()):
+                    resolved = resolve(name, node_key[0])
+                    if resolved is not None and resolved not in seen:
+                        nxt.append(resolved)
+            frontier = nxt
+            if not frontier:
+                break
+    return sorted(set(out), key=lambda r: r.key)
+
+
 @dataclass
 class ScanResult:
     findings: list[Finding]
@@ -1241,6 +1635,20 @@ def partition(findings: list[Finding]) -> tuple[list[Finding], list[str]]:
     unratcheted = [f for f in findings if f.key not in RATCHET]
     stale = sorted(k for k in RATCHET if k not in seen_keys)
     return unratcheted, stale
+
+
+def partition_reach(reach: list[ReachFinding]) -> tuple[list[ReachFinding], list[str]]:
+    """Return (unallowed handler->statement pairs, stale allowlist keys).
+
+    Both directions, for the same reason the statement ratchet runs both: an
+    entry whose pair has gone — the handler stopped calling it, or the
+    statement gained a predicate — is a justification that has lapsed, and one
+    that keeps passing reads like a decision somebody made.
+    """
+    seen = {r.key for r in reach}
+    unallowed = [r for r in reach if r.key not in ROUTE_REACHABLE]
+    stale = sorted(k for k in ROUTE_REACHABLE if k not in seen)
+    return unallowed, stale
 
 
 def _print_inventory(findings: list[Finding], inv: Inventory, files: int, statements: int, rls_scoped: int = 0) -> None:
@@ -1459,6 +1867,74 @@ CREATE POLICY widgets_tenant ON widgets
     USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL);
 """
 
+#: SQLAlchemy **Core** tables, the shape that was invisible. The module declares
+#: its own table rather than importing a declarative model, so nothing here
+#: matches a class name — which is exactly the condition under which six
+#: statements in `services/connectors` were skipped before any predicate was
+#: looked at.
+_CORE_TABLE_DECL = """
+from sqlalchemy import Boolean, Column, MetaData, String, Table
+from sqlalchemy.dialects.postgresql import UUID
+
+metadata = MetaData()
+
+widgets_table = Table(
+    "widgets",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("tenant_id", UUID(as_uuid=True), nullable=False),
+    Column("is_enabled", Boolean, nullable=False),
+    Column("name", String(255)),
+)
+
+gadgets_table = Table(
+    "gadgets_no_tenant",
+    metadata,
+    Column("id", UUID(as_uuid=True), primary_key=True),
+    Column("name", String(255)),
+)
+"""
+
+_CORE_UNSCOPED = """
+from sqlalchemy import select
+from app.core_tables import widgets_table
+
+async def fetch(connection, widget_id):
+    stmt = select(widgets_table.c.id, widgets_table.c.name).where(widgets_table.c.id == widget_id)
+    return (await connection.execute(stmt)).first()
+"""
+
+_CORE_SCOPED = """
+from sqlalchemy import select
+from app.core_tables import widgets_table
+
+async def fetch(connection, widget_id, tenant_id):
+    stmt = select(widgets_table.c.id, widgets_table.c.name).where(
+        widgets_table.c.id == widget_id,
+        widgets_table.c.tenant_id == tenant_id,
+    )
+    return (await connection.execute(stmt)).first()
+"""
+
+_CORE_UPDATE_UNSCOPED = """
+from sqlalchemy import update
+from app.core_tables import widgets_table
+
+async def touch(connection, widget_id):
+    await connection.execute(update(widgets_table).where(widgets_table.c.id == widget_id).values(seen=True))
+"""
+
+#: A Core table that declares no tenant column is not tenant-scoped, and the
+#: rule must not claim it is. Without this control the detector could be
+#: "any Table(...)", which would report every lookup table in the tree.
+_CORE_TABLE_WITHOUT_TENANT = """
+from sqlalchemy import select
+from app.core_tables import gadgets_table
+
+async def fetch(connection, gadget_id):
+    return (await connection.execute(select(gadgets_table.c.id).where(gadgets_table.c.id == gadget_id))).first()
+"""
+
 _DOCSTRING_ONLY = '''
 """Widget helpers.
 
@@ -1503,6 +1979,34 @@ def _self_test() -> int:
         # The RLS-context rule, on both sides of its condition.
         ("control: RLS context bound on a table that has a policy", {"r.py": _RLS_CONTEXT_ON_COVERED_TABLE}, 0, _PROBE_MIGRATION),
         ("drift E: RLS context bound on a table with no policy", {"r.py": _RLS_CONTEXT_ON_UNCOVERED_TABLE}, 1, _PROBE_MIGRATION),
+        # SQLAlchemy Core tables. The whole family was invisible, so each arm
+        # is exercised: the read that was the vulnerability, the write shape
+        # beside it, the scoped form that must stay clean, and a Core table
+        # with no tenant column that must not be claimed at all.
+        (
+            "drift G: Core-table by-id read with no tenant predicate",
+            {"core_tables.py": _CORE_TABLE_DECL, "r.py": _CORE_UNSCOPED},
+            1,
+            None,
+        ),
+        (
+            "drift H: Core-table by-id update with no tenant predicate",
+            {"core_tables.py": _CORE_TABLE_DECL, "r.py": _CORE_UPDATE_UNSCOPED},
+            1,
+            None,
+        ),
+        (
+            "control: Core-table read carrying a tenant predicate",
+            {"core_tables.py": _CORE_TABLE_DECL, "r.py": _CORE_SCOPED},
+            0,
+            None,
+        ),
+        (
+            "control: a Core table declaring no tenant column is not tenant-scoped",
+            {"core_tables.py": _CORE_TABLE_DECL, "r.py": _CORE_TABLE_WITHOUT_TENANT},
+            0,
+            None,
+        ),
     ]
 
     failures = 0
@@ -1517,6 +2021,7 @@ def _self_test() -> int:
                 failures += 1
             print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {got} finding(s), want {want} (scanned {files} files)")
 
+    failures += _self_test_route_reachability()
     failures += _self_test_stale_ratchet()
     failures += _self_test_ratchet_ceiling()
     failures += _self_test_empty_corpus()
@@ -1524,9 +2029,16 @@ def _self_test() -> int:
     if failures:
         print(f"\nself-test FAILED: {failures} case(s) did not behave as specified", file=sys.stderr)
         return 1
+    # Counted rather than written down. The previous wording said "ten
+    # controls" and was already wrong by the time anybody read it, which is
+    # the same stale-figure-in-prose problem this gate exists to prevent.
+    drifts = sum(1 for _label, _src, want, _mig in cases if want)
+    controls = len(cases) - drifts
     print(
-        "\nself-test passed: drift detected in both directions, ten controls clear, a stale ratchet "
-        "entry is dropped, and each of the three ways the corpus can empty is refused."
+        f"\nself-test passed: {drifts} injected drifts detected and {controls} controls clear in the statement "
+        f"scan, the route-reachability arm detects the advisory's shape without flagging the worker that "
+        f"shape exists for, a stale ratchet entry is dropped, and each of the {len(_EMPTY_CORPUS_CASES)} ways "
+        "the corpus can empty is refused."
     )
     return 0
 
@@ -1580,6 +2092,104 @@ def _self_test_empty_corpus() -> int:
     return failures
 
 
+#: A repository module with both shapes side by side, so the reachability rule
+#: is exercised on both sides of its condition rather than only the failing one.
+_REACH_REPO = """
+from sqlalchemy import select
+from app.core_tables import widgets_table
+
+async def fetch_all_widgets(connection):
+    stmt = select(widgets_table.c.id, widgets_table.c.name).where(widgets_table.c.is_enabled.is_(True))
+    return (await connection.execute(stmt)).fetchall()
+
+async def fetch_widget_for_tenant(connection, widget_id, tenant_id):
+    stmt = select(widgets_table.c.id, widgets_table.c.name).where(
+        widgets_table.c.id == widget_id,
+        widgets_table.c.tenant_id == tenant_id,
+    )
+    return (await connection.execute(stmt)).first()
+"""
+
+#: The vulnerability's exact shape: a handler serving one caller out of a
+#: cross-tenant working set.
+_REACH_ROUTE_UNSCOPED = """
+from fastapi import APIRouter
+from app.repo import fetch_all_widgets
+
+router = APIRouter()
+
+@router.get("/widgets/{widget_id}")
+async def read_widget(widget_id, connection):
+    rows = await fetch_all_widgets(connection)
+    return next((r for r in rows if str(r.id) == widget_id), None)
+"""
+
+#: The fixed shape, which must stay clean or the rule is unusable.
+_REACH_ROUTE_SCOPED = """
+from fastapi import APIRouter
+from app.repo import fetch_widget_for_tenant
+
+router = APIRouter()
+
+@router.get("/widgets/{widget_id}")
+async def read_widget(widget_id, connection, principal):
+    return await fetch_widget_for_tenant(connection, widget_id, principal.tenant_id)
+"""
+
+#: A worker calling the same cross-tenant sweep. It must NOT be reported:
+#: the sweep's exemption is exactly for callers like this one, and a rule that
+#: flagged it would be telling every scheduler in the tree to scope a query
+#: that cannot be scoped.
+_REACH_WORKER = """
+from app.repo import fetch_all_widgets
+
+async def poll_everything(connection):
+    for row in await fetch_all_widgets(connection):
+        print(row)
+"""
+
+
+def _self_test_route_reachability() -> int:
+    """Prove the second arm detects the advisory's shape, and only that shape.
+
+    The statement ratchet alone cannot: measured against the vulnerable tree it
+    reported OK, because the sweep was correctly ratcheted and the defect was
+    *who called it*.
+    """
+    cases: tuple[tuple[str, dict[str, str], int], ...] = (
+        (
+            "drift I: a route handler serving one caller from a cross-tenant sweep",
+            {"core_tables.py": _CORE_TABLE_DECL, "repo.py": _REACH_REPO, "routes.py": _REACH_ROUTE_UNSCOPED},
+            1,
+        ),
+        (
+            "control: a route handler calling the by-id-and-tenant sibling",
+            {"core_tables.py": _CORE_TABLE_DECL, "repo.py": _REACH_REPO, "routes.py": _REACH_ROUTE_SCOPED},
+            0,
+        ),
+        (
+            "control: a worker calling the same sweep is what the exemption is for",
+            {"core_tables.py": _CORE_TABLE_DECL, "repo.py": _REACH_REPO, "worker.py": _REACH_WORKER},
+            0,
+        ),
+    )
+
+    failures = 0
+    with tempfile.TemporaryDirectory(prefix="predicates_reach_") as tmp:
+        for i, (label, sources, want) in enumerate(cases):
+            root = Path(tmp) / f"reach{i}"
+            _write_probe(root, sources)
+            result = scan(root=root)
+            reach = scan_route_reachability(root, result.findings)
+            got = len(reach)
+            if got == want:
+                print(f"  [PASS] {label}: {got} finding(s), want {want}")
+            else:
+                print(f"  [FAIL] {label}: {got} finding(s), want {want} — {[r.key for r in reach]}")
+                failures += 1
+    return failures
+
+
 def _self_test_stale_ratchet() -> int:
     """Strip a live ratchet entry's justification and assert it stops protecting.
 
@@ -1615,11 +2225,18 @@ def _self_test_stale_ratchet() -> int:
 
 
 def _self_test_ratchet_ceiling() -> int:
+    failures = 0
     if len(RATCHET) > MAX_RATCHET:
         print(f"  [FAIL] ratchet ceiling: {len(RATCHET)} entries exceeds MAX_RATCHET={MAX_RATCHET}")
-        return 1
-    print(f"  [PASS] ratchet ceiling: {len(RATCHET)}/{MAX_RATCHET} entries")
-    return 0
+        failures += 1
+    else:
+        print(f"  [PASS] ratchet ceiling: {len(RATCHET)}/{MAX_RATCHET} entries")
+    if len(ROUTE_REACHABLE) > MAX_ROUTE_REACHABLE:
+        print(f"  [FAIL] route-reachability ceiling: {len(ROUTE_REACHABLE)} exceeds MAX_ROUTE_REACHABLE={MAX_ROUTE_REACHABLE}")
+        failures += 1
+    else:
+        print(f"  [PASS] route-reachability ceiling: {len(ROUTE_REACHABLE)}/{MAX_ROUTE_REACHABLE} entries")
+    return failures
 
 
 # ---------------------------------------------------------------------------
@@ -1725,12 +2342,44 @@ def main(argv: list[str] | None = None) -> int:
             rls = "" if f.rls else "  [no RLS — the predicate is the only control]"
             print(f"  - {f.location()} {f.kind} on {f.table}{rls}", file=sys.stderr)
 
-    if stale or unratcheted:
+    # Second arm: who can *reach* a cross-tenant statement. A sweep's exemption
+    # is earned by having no caller, so an HTTP route reaching one retires the
+    # justification — which is the shape GHSA-h4g5-39vv-pqfv had, with both
+    # halves looking correct in isolation.
+    reach = scan_route_reachability(REPO_ROOT, findings)
+    unallowed, stale_reach = partition_reach(reach)
+
+    if len(ROUTE_REACHABLE) > MAX_ROUTE_REACHABLE:
+        print(
+            f"\nFAIL: {len(ROUTE_REACHABLE)} route-reachability entries exceeds MAX_ROUTE_REACHABLE={MAX_ROUTE_REACHABLE}.",
+            file=sys.stderr,
+        )
+        print("      It only shrinks. Scope the query rather than raising the ceiling.", file=sys.stderr)
+        return 1
+
+    if stale_reach:
+        print(f"\nFAIL: {len(stale_reach)} route-reachability entry/entries no longer describe a real call path.", file=sys.stderr)
+        print("      Remove them — a lapsed justification that still passes reads like a decision.", file=sys.stderr)
+        for key in stale_reach:
+            print(f"  - {key}", file=sys.stderr)
+
+    if unallowed:
+        print(
+            f"\nFAIL: {len(unallowed)} HTTP route handler(s) reach a statement that carries no tenant predicate.",
+            file=sys.stderr,
+        )
+        print("      A cross-tenant sweep is exempt because nothing calls it with a tenant to filter on.", file=sys.stderr)
+        print("      A request handler has one. Scope the read, or record why a request may reach it.", file=sys.stderr)
+        for item in unallowed:
+            print(f"  - {item.key}", file=sys.stderr)
+
+    if stale or unratcheted or stale_reach or unallowed:
         return 1
 
     print(
         f"OK: every statement on a tenant-scoped table filters on a tenant, "
-        f"or is one of {len(RATCHET)} ratcheted exceptions that still holds."
+        f"or is one of {len(RATCHET)} ratcheted exceptions that still holds; "
+        f"and every one of the {len(reach)} route->unscoped-statement paths is a recorded exception."
     )
     return 0
 

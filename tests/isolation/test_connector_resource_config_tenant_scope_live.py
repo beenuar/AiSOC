@@ -220,8 +220,7 @@ async def instances(engine, vendor):  # noqa: ANN001
         for tenant, token in ((TENANT_A, TOKEN_A), (TENANT_B, TOKEN_B)):
             await conn.execute(
                 sqlalchemy.text(
-                    "INSERT INTO tenants (id, name, slug, is_active) "
-                    "VALUES (CAST(:i AS uuid), :n, :s, true) ON CONFLICT (id) DO NOTHING"
+                    "INSERT INTO tenants (id, name, slug, is_active) VALUES (CAST(:i AS uuid), :n, :s, true) ON CONFLICT (id) DO NOTHING"
                 ),
                 {"i": str(tenant), "n": f"T-{tenant}", "s": f"t-{tenant}"},
             )
@@ -328,9 +327,7 @@ async def test_a_foreign_instance_is_indistinguishable_from_one_that_does_not_ex
     absent = await client.get(_url(uuid.uuid4()), headers=headers)
 
     assert foreign.status_code == absent.status_code == 404
-    assert foreign.json() == absent.json(), (
-        f"a foreign instance is distinguishable from an absent one: {foreign.json()} vs {absent.json()}"
-    )
+    assert foreign.json() == absent.json(), f"a foreign instance is distinguishable from an absent one: {foreign.json()} vs {absent.json()}"
 
 
 # ---------------------------------------------------------------------------
