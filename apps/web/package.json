@@ -69,7 +69,7 @@
     "eslint": "^9.39.0",
     "eslint-config-next": "16.4.2",
     "http-server": "^14.1.1",
-    "jsdom": "^30.1.0",
+    "jsdom": "^30.1.3",
     "postcss": "^8.5.30",
     "storybook": "^10.6.2",
     "tailwindcss": "^4.3.3",
