@@ -119,7 +119,10 @@ class _Subscription(BaseHTTPRequestHandler):
         raw = self.rfile.read(length) if length else b"{}"
 
         if self.path.endswith("/token"):
-            self._json({"access_token": "ya29.live-test", "expires_in": 3599})
+            # Deliberately not shaped like a Google token. A `ya29.` prefix is
+            # what a real one carries, and the secret scanner is right to
+            # flag it in a tracked file even when the value is invented.
+            self._json({"access_token": "stub-token", "expires_in": 3599})
             return
 
         if self.path.endswith(":pull"):

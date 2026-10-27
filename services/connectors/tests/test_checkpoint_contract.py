@@ -326,10 +326,10 @@ class TestIdentityDedupMachinery:
         one would surface as whichever dispatch happened to win.
         """
         with pytest.raises(ValueError, match="both an event-time watermark and a dedup identity"):
-
-            class _Both(_Cursored):
-                connector_id = "test_both"
-                dedup_identity_field: tuple[str, ...] = ("uid",)
+            # Built with `type` rather than a `class` statement so there is no
+            # name to leave unbound: defining the class *is* the call under
+            # test, and `__init_subclass__` raises before anything is bound.
+            type("_Both", (_Cursored,), {"connector_id": "test_both", "dedup_identity_field": ("uid",)})
 
 
 class TestTheSchedulerNoLongerDuckTypes:
