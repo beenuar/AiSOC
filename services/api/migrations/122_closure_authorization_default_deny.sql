@@ -1,4 +1,4 @@
--- 121_closure_authorization_default_deny.sql
+-- 122_closure_authorization_default_deny.sql
 --
 -- Record what the closure default-deny change means for each tenant on this
 -- deployment, so an operator can see who is affected and re-authorize
@@ -64,7 +64,7 @@ CREATE TABLE IF NOT EXISTS aisoc_closure_authorization_migration (
 );
 
 COMMENT ON TABLE aisoc_closure_authorization_migration IS
-    'Per-tenant outcome of the closure default-deny change (migration 121). '
+    'Per-tenant outcome of the closure default-deny change (migration 122). '
     'An audit record, not a control: nothing reads it to make a decision.';
 
 INSERT INTO aisoc_closure_authorization_migration (tenant_id, had_explicit_policy, was_enabled, outcome)
@@ -117,7 +117,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON aisoc_closure_authorization_migration TO
 --     INSERT INTO aisoc_closure_policies
 --         (tenant_id, alert_class, enabled, threshold, require_grant, updated_by, reason)
 --     VALUES ('<tenant-uuid>'::uuid, NULL, TRUE, 0.85, FALSE,
---             '<operator>', 'restoring pre-121 automatic closure, reviewed <date>');
+--             '<operator>', 'restoring pre-122 automatic closure, reviewed <date>');
 --
 -- `require_grant = FALSE` reproduces the old default exactly. Leaving it TRUE
 -- is the safer choice: closure then additionally waits for an `auto_close`

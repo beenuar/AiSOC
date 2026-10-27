@@ -305,7 +305,7 @@ async def resolve_closure_policy(
         # tenant's history either: a tenant that was auto-closing yesterday
         # because of this default is not thereby authorized today.
         #
-        # Migration 121 records, per tenant, which side of this change each
+        # Migration 122 records, per tenant, which side of this change each
         # deployment fell on, so an operator can see who is affected and
         # re-authorize deliberately rather than discovering it from a queue
         # that stopped draining.

@@ -9,7 +9,17 @@ What this gate is for
 `alerts.status` becomes `'resolved'` in exactly one statement in
 `services/agents`: the `UPDATE alerts` at the end of
 `app.investigator.ledger.persist_auto_triage`. That is what makes a chokepoint
-possible at all — and it is also a property that nothing was holding. A second
+possible at all — and it is also a property that nothing was holding.
+
+**Scope, stated because the obvious reading is wider than the truth.** This
+gate walks `services/agents/app` and nothing else, so what it proves is that
+*the agent* has one governed closure path. It is not a claim about the
+product: `services/connectors`'s vulnerability sweep carries its own
+`RESOLVE_REMEDIATED_SQL`, which closes a CVE-promotion alert of its own making
+once every affected asset is patched. That is a deterministic lifecycle rule
+rather than an autonomous verdict, it is tenant-scoped, and it is outside this
+phase — but a verdict string here saying "the only path to 'resolved'" would
+be false, so neither this gate nor its claim row says it. A second
 path to that statement had already appeared once: the outcome-memory
 suppression branch reached it with `auto_closed=True` having consulted no
 policy, no grant and no kill switch, and the test covering closure wiring
@@ -146,7 +156,7 @@ def check(repo_root: Path) -> list[str]:
         extra = sorted(writers - {LEDGER})
         if extra:
             failures.append(
-                "SQL that can set an alert to 'resolved' appears outside the ledger: "
+                "SQL that can set an alert to 'resolved' appears outside the ledger, inside services/agents: "
                 + ", ".join(extra)
                 + f". Every automatic closure must go through {CHOKEPOINT}; "
                 "a second statement is a second path nothing governs."
@@ -246,7 +256,10 @@ def main() -> int:
         print(f"check_closure_authorization: {failure}", file=sys.stderr)
     if failures:
         return 1
-    print(f"check_closure_authorization: OK — {LEDGER}:{GATED_FUNCTION} is the only path to 'resolved' and it is gated")
+    print(
+        f"check_closure_authorization: OK — within services/agents, {LEDGER}:{GATED_FUNCTION} "
+        "is the only path to 'resolved' and it is gated"
+    )
     return 0
 
 

@@ -5,8 +5,9 @@ Phase 1 of the closure remediation. See
 
 Why this exists
 ---------------
-`alerts.status` becomes `'resolved'` in exactly one statement: the `UPDATE
-alerts` at the end of :func:`app.investigator.ledger.persist_auto_triage`,
+Within this service, `alerts.status` becomes `'resolved'` in exactly one
+statement: the `UPDATE alerts` at the end of
+:func:`app.investigator.ledger.persist_auto_triage`,
 whose `CASE WHEN $7 AND NOT $10 THEN 'resolved'` turns on a caller-supplied
 `auto_closed` flag. Two production callers set that flag and only one of them
 asked permission.

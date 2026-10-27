@@ -11,8 +11,8 @@ same thing and was never decided by anybody.
 
 ## The shape of the fix
 
-`alerts.status` becomes `'resolved'` in exactly one statement in the whole
-service: the `UPDATE alerts` at the end of
+Within `services/agents`, `alerts.status` becomes `'resolved'` in exactly one
+statement: the `UPDATE alerts` at the end of
 `app.investigator.ledger.persist_auto_triage`, gated on a caller-supplied
 `auto_closed` flag. That makes a chokepoint possible, so the authorization now
 lives inside that function, between resolving the alert's tenant and opening
@@ -205,7 +205,7 @@ holding all three in their head.
 
 ## The migration
 
-`services/api/migrations/121_closure_authorization_default_deny.sql`.
+`services/api/migrations/122_closure_authorization_default_deny.sql`.
 
 **What it does.** Creates `aisoc_closure_authorization_migration` and writes
 one row per existing tenant recording which side of the default change that
@@ -236,7 +236,7 @@ reason — the same row the console writes:
 INSERT INTO aisoc_closure_policies
     (tenant_id, alert_class, enabled, threshold, require_grant, updated_by, reason)
 VALUES ('<tenant-uuid>'::uuid, NULL, TRUE, 0.85, FALSE,
-        '<operator>', 'restoring pre-121 automatic closure, reviewed <date>');
+        '<operator>', 'restoring pre-122 automatic closure, reviewed <date>');
 ```
 
 `require_grant = FALSE` reproduces the old default exactly. Leaving it `TRUE`
@@ -268,7 +268,7 @@ actually uses, and report a chokepoint call only where one exists.
 All commands were run from a worktree at `origin/main`, with a service
 virtualenv built from `services/agents`'s own locked set
 (`python3 scripts/service_requirements.py agents --locked`), and against
-PostgreSQL 16 with all 136 migrations applied as the schema owner. The code
+PostgreSQL 16 with all 137 migrations applied as the schema owner. The code
 under test connects as the **runtime** role `aisoc_app`, not the owner, so RLS
 is in force; a superuser would ignore every policy and let the cross-tenant
 assertions pass for the wrong reason.
@@ -285,8 +285,8 @@ assertions pass for the wrong reason.
 | `ruff check services/ scripts/ tests/ tools/` | All checks passed |
 | `scripts/check_mypy_baseline.py` | OK — no tree got worse (964 findings, 20 trees) |
 | `scripts/check_closure_authorization.py` | OK, and `--self-test` OK (5 cases, both directions) |
-| Migrations on a **fresh** database, 001→121 in order | applied cleanly |
-| Migration 121 re-applied | idempotent, records nothing twice |
+| Migrations on a **fresh** database, 001→122 in order | **137 applied cleanly** |
+| Migration 122 re-applied | idempotent, records nothing twice |
 | `scripts/check_claim_gate_matrix.py` | 321 rows — 316 GATED, 5 PARTIAL, 0 NO GATE |
 | `scripts/check_gate_coverage.py` | OK — all 178 checks reachable from a workflow |
 | `scripts/check_attribution.py --all` | OK — 13,666 tracked files, no tool attribution |
@@ -341,6 +341,52 @@ closure — the properties the chokepoint is not responsible for.
 ```
 
 After restoring all three: 28 offline passed, 15 live passed.
+
+## A second automatic closure path, outside this phase
+
+Found while rebasing, by asking the question this phase is about against the
+whole tree rather than against the service it changes. It was there before
+this work started and the original audit missed it.
+
+`services/connectors/app/vuln_promotion_sql.py` carries
+`RESOLVE_REMEDIATED_SQL`, run on a schedule from the connectors sweep
+(`scheduler.py`), which does:
+
+```sql
+UPDATE alerts al
+   SET status = 'resolved', resolved_at = NOW(), disposition = 'remediated: …'
+ WHERE al.tenant_id = CAST(:tenant_id AS uuid)
+   AND al.status NOT IN ('resolved', 'closed')
+   AND al.idempotency_key LIKE 'vuln-promo:%'
+   AND NOT EXISTS (… any unremediated asset for this CVE …)
+```
+
+So it is a second statement that automatically resolves a production alert,
+and the chokepoint does not govern it.
+
+**It is deliberately not fixed here**, for reasons worth recording rather than
+leaving as a silence:
+
+- It is a different category. The chokepoint governs an *autonomous verdict* —
+  a machine deciding an alert is benign and acting on that judgement. This
+  closes the connector's own synthetic alert when the condition the alert
+  represents has provably gone away: every asset carrying the CVE is patched.
+  That is a lifecycle rule, and the closure is a statement of fact rather than
+  an assessment.
+- Its blast radius is bounded by construction: `idempotency_key LIKE
+  'vuln-promo:%'` restricts it to rows the sweep itself minted, and the
+  tenant is bound per statement.
+- `services/connectors` is another phase's tree. Editing it from here is
+  exactly the cross-lane write this programme asks workers not to make.
+
+What a later phase should decide is whether "the alert's underlying condition
+is gone" belongs under the same authorization as "a model thinks this is
+benign", or whether it is correctly a separate lifecycle concern. This
+document records the question rather than answering it.
+
+The practical consequence now is one of wording: the gate walks
+`services/agents/app` only, so neither it nor its claim row says "the only
+path to `resolved`" without naming the tree it means.
 
 ## Remaining limitations
 
