@@ -13,8 +13,17 @@ import inspect
 
 import pytest
 from app.api.v1.endpoints import kill_switch
+from app.core.rbac_catalog import PERMISSIONS
+from app.core.security import ROLE_PERMISSIONS
+from app.db.database import get_db
 from app.main import app
 from fastapi.testclient import TestClient
+
+#: The permission the platform-wide routes require. Read from the module so
+#: the test cannot keep passing against a renamed constant, and defaulted so
+#: that a tree without the surface fails each assertion with its own reason
+#: rather than aborting collection and taking the rest of this file with it.
+PLATFORM_KILL_SWITCH = getattr(kill_switch, "PLATFORM_KILL_SWITCH_PERMISSION", "<no platform kill-switch permission is declared>")
 
 #: One client for the module. Resolution is by **sending a request**, not
 #: by walking `app.routes`: that is not the route table and what it holds
@@ -37,6 +46,19 @@ def _handler_for(path: str, method: str = "GET") -> str | None:
     if not operation:
         return None
     return operation.get("operationId", "").split("_api_v1_")[0] or None
+
+
+def _route_object(path: str, method: str):
+    """The router's own route, for assertions about the dependency tree.
+
+    Taken off ``kill_switch.router`` rather than ``app.routes``: what the
+    latter holds changes with the FastAPI minor, and a gate that enumerated it
+    once compared zero pairs and reported success.
+    """
+    for route in kill_switch.router.routes:
+        if route.path == path and method in set(getattr(route, "methods", set())):
+            return route
+    raise AssertionError(f"no route {method} {path}")
 
 
 class TestTheRoutesExist:
@@ -94,6 +116,74 @@ class TestItIsAudited:
         assert "\n" not in kill_switch._sanitize("a\nb")
         assert "\r" not in kill_switch._sanitize("a\rb")
         assert len(kill_switch._sanitize("x" * 5000)) <= 200
+
+
+class TestThePlatformSwitchHasASurface:
+    """The global switch had two readers and no writer.
+
+    Every write in this module bound ``t=user.tenant_id``, so the only scope
+    any caller could reach was their own tenant, while ``GET /kill-switch``
+    and ``services/agents`` ``kill_switch_engaged`` both consult the global
+    row on every alert. A reader over a table nothing writes is not a
+    control, and this one was labelled an emergency stop.
+    """
+
+    @pytest.mark.parametrize(
+        ("path", "handler"),
+        [
+            ("/api/v1/kill-switch/global/engage", "engage_global"),
+            ("/api/v1/kill-switch/global/release", "release_global"),
+        ],
+    )
+    def test_the_global_routes_exist(self, path: str, handler: str) -> None:
+        assert _reaches_a_route(path, "POST"), f"POST {path} answers 404, so the platform-wide stop has no product surface"
+        assert _handler_for(path, "POST") == handler
+
+    @pytest.mark.parametrize("name", ["engage_global", "release_global"])
+    def test_they_require_the_platform_permission(self, name: str) -> None:
+        """Not ``settings:write``. A tenant administrator holds that, and the
+        global switch stops every *other* tenant on the deployment too."""
+        source = inspect.getsource(getattr(kill_switch, name))
+        assert f'require_permission("{PLATFORM_KILL_SWITCH}")' in source, (
+            f"{name} does not require {PLATFORM_KILL_SWITCH}, so it is reachable by a principal "
+            "whose authority stops at their own tenant"
+        )
+
+    def test_no_tenant_scoped_role_holds_it(self) -> None:
+        """The permission is the authorization. If a tenant role held it,
+        requiring it would be theatre."""
+        holders = [role for role, perms in ROLE_PERMISSIONS.items() if PLATFORM_KILL_SWITCH in perms]
+        assert holders == [], (
+            f"{PLATFORM_KILL_SWITCH} is granted to {holders}, which are tenant-scoped roles. "
+            "Only the wildcard roles may freeze the whole deployment."
+        )
+        wildcard = [role for role, perms in ROLE_PERMISSIONS.items() if "*" in perms]
+        assert wildcard, "no role holds the wildcard, so nobody could ever engage the platform switch"
+
+    def test_it_is_in_the_seeded_catalog(self) -> None:
+        """A permission absent from the catalog renders blank on the Roles
+        screen and cannot be granted to a custom role."""
+        assert PLATFORM_KILL_SWITCH in {name for name, _d, _c in PERMISSIONS}
+
+    @pytest.mark.parametrize("name", ["engage_global", "release_global"])
+    def test_they_run_on_an_unbound_session(self, name: str) -> None:
+        """The inverse of the tenant routes, and load-bearing rather than an
+        oversight: the global row is admitted by ``WITH CHECK`` only when
+        ``current_tenant_id()`` is NULL, so a tenant-scoped session is exactly
+        the one that cannot write it.
+
+        Asserted on the resolved dependency so it cannot drift into
+        ``get_tenant_db`` the way the tenant routes once drifted out of it.
+        """
+        route = _route_object("/kill-switch/global/" + name.split("_")[0], "POST")
+        db = next((d.call for d in route.dependant.dependencies if d.name == "db"), None)
+        assert db is get_db, f"{name} must take the unbound session; a tenant-bound one cannot write the global row"
+
+    @pytest.mark.parametrize("name", ["engage_global", "release_global"])
+    def test_both_transitions_are_audited_as_global(self, name: str) -> None:
+        source = inspect.getsource(getattr(kill_switch, name))
+        assert "aisoc_kill_switch_audit" in source, f"{name} writes no audit row"
+        assert "'global'" in source, f"{name} does not record the scope as global"
 
 
 class TestReleasingAGlobalSwitch:
