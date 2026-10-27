@@ -137,12 +137,18 @@ def _env_tier() -> MaturityTier:
     return MaturityTier.L1_NOTIFY
 
 
-def _dsn() -> str | None:
+def resolve_dsn() -> str | None:
     """Resolve an asyncpg-compatible DSN, or None when no database is set.
 
     Accepts the SQLAlchemy form the API uses (`postgresql+asyncpg://`) as well
     as the plain pgx form `services/ingest` uses, because both spellings are
     already present in deployed environments.
+
+    Public because `kill_switch` reads the same database on the same request
+    and must agree with this module about whether one is configured. Two
+    resolvers answering differently would mean the autonomy policy and the
+    stop button disagree about whether this deployment has a database, and
+    the generous one would win.
     """
     raw = os.environ.get("DATABASE_DSN") or os.environ.get("DATABASE_URL") or ""
     raw = raw.strip()
@@ -355,7 +361,7 @@ async def _load_earned_verbs(conn: Any, tenant_id: str) -> dict[str, str]:
 
 async def resolve_tenant_policy(tenant_id: str | UUID | None) -> TenantPolicy:
     """Resolve the autonomy policy that governs this tenant's actions."""
-    dsn = _dsn()
+    dsn = resolve_dsn()
     if tenant_id is None or dsn is None:
         # Single-tenant or no database: the environment value is the operator's
         # explicit, documented choice.

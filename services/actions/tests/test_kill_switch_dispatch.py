@@ -206,9 +206,7 @@ def _request(**overrides) -> LiveActionRequest:
 
 @live_only
 class TestAnEngagedSwitchStopsTheVendor:
-    async def test_a_global_switch_stops_dispatch(
-        self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_a_global_switch_stops_dispatch(self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch) -> None:
         tenant = await switch.new_tenant()
         monkeypatch.setenv("DATABASE_DSN", switch.dsn)
         await switch.engage(None, "platform-wide freeze: investigating runaway containment")
@@ -247,9 +245,7 @@ class TestAnEngagedSwitchStopsTheVendor:
         assert len(recorder.calls) == 1, "an unrelated tenant's switch stopped this tenant's action"
         assert result.status is LiveActionStatus.SUCCEEDED
 
-    async def test_the_reason_names_the_switch_even_when_policy_would_also_refuse(
-        self, switch, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_the_reason_names_the_switch_even_when_policy_would_also_refuse(self, switch, monkeypatch: pytest.MonkeyPatch) -> None:
         """`isolate_host` is refused by the tier ladder too. Say which one.
 
         Two controls that both refuse are one control an operator cannot
@@ -268,9 +264,7 @@ class TestAnEngagedSwitchStopsTheVendor:
         assert result.details.get("blocked_by") == "kill_switch"
         assert "kill switch" in result.summary.lower()
 
-    async def test_a_dry_run_is_stopped_too(
-        self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_a_dry_run_is_stopped_too(self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch) -> None:
         """A preview is only credentials-free if the strip list is right.
 
         `services/actions/app/executors/siem.py` records what happens when it
@@ -287,9 +281,7 @@ class TestAnEngagedSwitchStopsTheVendor:
         assert recorder.calls == []
         assert result.status is LiveActionStatus.BLOCKED
 
-    async def test_blocked_is_not_reported_as_failed(
-        self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_blocked_is_not_reported_as_failed(self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch) -> None:
         """FAILED invites a retry. A deliberate stop is not a failure."""
         tenant = await switch.new_tenant()
         monkeypatch.setenv("DATABASE_DSN", switch.dsn)
@@ -306,9 +298,7 @@ class TestAnEngagedSwitchStopsTheVendor:
 class TestTheSwitchReleasedLetsWorkThrough:
     """The positive control. A stop control stuck on is a product that stopped."""
 
-    async def test_a_released_switch_does_not_block(
-        self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_a_released_switch_does_not_block(self, switch, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch) -> None:
         tenant = await switch.new_tenant()
         monkeypatch.setenv("DATABASE_DSN", switch.dsn)
         await switch.engage(tenant, "freeze for a moment")
@@ -404,9 +394,7 @@ class TestWhatHappensWhenTheSwitchCannotBeRead:
         assert result.details.get("blocked_by") != "kill_switch"
         assert "unreadable" in result.summary.lower()
 
-    async def test_no_database_configured_does_not_block(
-        self, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    async def test_no_database_configured_does_not_block(self, recorder: _RecordingExecutor, monkeypatch: pytest.MonkeyPatch) -> None:
         """A deployment with no database has no switch, and must still work.
 
         The same line `resolve_tenant_policy` already draws: no DSN is an
