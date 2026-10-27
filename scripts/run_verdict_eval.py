@@ -306,6 +306,47 @@ async def replay_corpus(
     return decisions, dict(window.writes_attempted), window.total_writes
 
 
+def prompt_provenance() -> dict[str, str]:
+    """Which prompt produced the verdicts, by the registry's version and hash.
+
+    A scorecard without it cannot be compared with the next one, and worse,
+    cannot be promoted into `services/agents/app/confidence/
+    autonomy_performance.json`: eligibility matches a measurement to a run on
+    the prompt's version *and* content hash, so a row that does not carry them
+    can never authorise anything. Read from the registry rather than hashed
+    here, so these are the same pair `prompts.lock.json` pins.
+    """
+    try:
+        from app.llm.prompt_registry import _shipped
+
+        prompt = _shipped().get("triage.system")
+    except Exception as exc:  # noqa: BLE001 - a scorecard must still be written
+        return {"name": "triage.system", "version": "unknown", "sha256": "unknown", "error": str(exc)}
+    return {"name": prompt.name, "version": prompt.version, "sha256": prompt.sha256}
+
+
+def context_configuration(decisions: list[dict[str, Any]]) -> dict[str, Any]:
+    """What the prompts carried besides the alert, so a reader knows the scope.
+
+    The replay freezes an empty context on purpose — a hand-authored corpus
+    has no history, and seeding priors would score the ground truth — so every
+    one of these is false. Recorded rather than left implicit: a verdict
+    accuracy measured with no organisation memory, no tenant skill and no
+    runbooks does not describe a deployment that has them, and the only way a
+    reader can know that is if the scorecard says so.
+    """
+    return {
+        "organisation_memory": False,
+        "tenant_skill": False,
+        "knowledge_base_runbooks": False,
+        "recent_dispositions": False,
+        "identity_context": False,
+        "injection_fence": True,
+        "frozen_context_snapshot": True,
+        "decisions_graded": len(decisions),
+    }
+
+
 def git_commit() -> str:
     try:
         out = subprocess.run(
@@ -416,8 +457,15 @@ def main(argv: list[str] | None = None) -> int:
         "corpus_items": len(decisions),
         "commit": report["commit"],
         "measured_at": datetime.now(UTC).strftime("%Y-%m-%d"),
+        "measured_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
         "synthetic": True,
         "provenance": report["provenance"],
+        # Required before a row may be promoted into
+        # `services/agents/app/confidence/autonomy_performance.json`:
+        # eligibility matches on the prompt's version and content hash, so a
+        # scorecard that does not name them can authorise nothing.
+        "prompt": prompt_provenance(),
+        "context_configuration": context_configuration(decisions),
         # The three numbers that decide whether the rest is worth reading.
         "llm_calls_placed": llm_calls,
         "decisions_answered_by_model": answered_by_model,
