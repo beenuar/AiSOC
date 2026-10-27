@@ -42,10 +42,10 @@ what the platform does on its own, and is not an outage.
 This paragraph used to name "the MCP write tools" as a third enforcement
 point. There are no MCP write tools. ``services/mcp`` exposes one tool that
 touches the response surface, ``aisoc_preview_action``, it is dry-run only,
-and ``tests/actions.test.ts`` asserts that the path performing an action
-appears nowhere in its source. Naming it here was worse than an unenforced
-claim: it told a reader the MCP server could perform actions, which was the
-more alarming half and was never true either.
+and ``services/mcp/tests/actions.test.ts`` asserts that the path performing
+an action appears nowhere in its source. Naming it here was worse than an
+unenforced claim: it told a reader the MCP server could perform actions,
+which was the more alarming half and was never true either.
 
 Two scopes
 ----------
