@@ -99,9 +99,8 @@ def test_user_message_is_the_production_alert_context(harness: ModuleType) -> No
     """
     from app.agents.auto_triage_agent import _build_alert_context
 
-    alert = harness._load_alerts(1)[0]
-    messages = harness._build_messages(alert)
-    state, nonce = harness._build_state(alert)
+    state, nonce = harness._build_state(harness._load_alerts(1)[0])
+    messages = harness._messages_for(state, nonce)
 
     assert messages[1]["content"] == _build_alert_context(state, nonce=nonce)
 
@@ -110,11 +109,28 @@ def test_system_prompt_carries_the_injection_fence(harness: ModuleType) -> None:
     """Production appends `system_rule(nonce)`; a harness without it is a different prompt."""
     from app.prompting.envelope import system_rule
 
-    alert = harness._load_alerts(1)[0]
-    system = harness._build_messages(alert)[0]["content"]
-    _, nonce = harness._build_state(alert)
+    state, nonce = harness._build_state(harness._load_alerts(1)[0])
+    system = harness._messages_for(state, nonce)[0]["content"]
 
     assert system.endswith(system_rule(nonce))
+
+
+def test_both_halves_of_the_prompt_share_one_nonce(harness: ModuleType) -> None:
+    """The fence instruction must name the markers the evidence is actually wrapped in.
+
+    `make_nonce` is random per call. A builder that minted a nonce for the
+    system rule and another for the context would produce a system message
+    pointing at markers that appear nowhere in the user message, which is a
+    silently weaker prompt than the one production sends.
+    """
+    alert = harness._load_alerts(1)[0]
+    alert = {**alert, "description": "see attached", "src_ip": "198.51.100.14"}
+    state, nonce = harness._build_state(alert)
+    system, user = harness._messages_for(state, nonce)
+
+    assert nonce in system["content"]
+    # The telemetry fence is the one block every alert gets, nonce or not.
+    assert nonce in user["content"] or "alert_telemetry" in user["content"]
 
 
 def test_classify_runs_the_production_parser(harness: ModuleType) -> None:
