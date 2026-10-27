@@ -540,11 +540,20 @@ disagrees this sharply with a single-gate run is the shell, not the tree.
   diff. Every `security-audit` run before 15:33 UTC succeeded across `main`
   and four other branches, and the two runs here at 16:23 and 16:28 are the
   first anywhere after the advisory published. This is the documented
-  stale-green shape — `main` passes because its last run predates the
-  advisory, and every open pull request will red on it until it is fixed at
-  the source. That fix is a lockfile regeneration under `services/api/`, which
-  is outside this change's scope and belongs on `main` rather than being
-  duplicated per branch. It has **not** been suppressed.
+  stale-green shape, and `main` has since confirmed it: its 15:32 run
+  succeeded and its 17:08 run **fails with the identical advisory**, so the
+  condition is repository-wide rather than branch-specific.
+
+  ```
+  failure  2026-10-27T17:08:06Z  main                        <- same CVE
+  failure  2026-10-27T16:55:12Z  remediation/gate-hardening
+  success  2026-10-27T15:32:56Z  main                        <- predates the advisory
+  success  2026-10-27T15:31:44Z  remediation/p1-closure-authz
+  ```
+
+  The fix is a lockfile regeneration under `services/api/`, which is outside
+  this change's scope and belongs on `main` rather than being duplicated per
+  branch. It has **not** been suppressed.
 - **The first push went red on a gate the local suite does not include**, and
   it is worth recording as the live example of the thing this file is about.
   Adding two matrix rows made three prose copies of the count stale:
