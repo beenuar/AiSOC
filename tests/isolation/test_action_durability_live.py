@@ -1017,6 +1017,10 @@ class TestAnUnknownOutcomeIsRecordedAsUnknown:
             try:
                 await task
             except (asyncio.CancelledError, httpx.HTTPError):
+                # Expected and carries no information: the replica was killed
+                # mid-request on purpose, so the in-flight approve either
+                # cancels or loses its connection. The assertion this test
+                # makes is about the durable record, read from Postgres below.
                 pass
         finally:
             if doomed.proc.poll() is None:  # pragma: no cover - teardown guard
@@ -1055,6 +1059,10 @@ class TestAnUnknownOutcomeIsRecordedAsUnknown:
             try:
                 await task
             except (asyncio.CancelledError, httpx.HTTPError):
+                # Expected and carries no information: the replica was killed
+                # mid-request on purpose, so the in-flight approve either
+                # cancels or loses its connection. The assertion this test
+                # makes is about the durable record, read from Postgres below.
                 pass
         finally:
             if doomed.proc.poll() is None:  # pragma: no cover - teardown guard
