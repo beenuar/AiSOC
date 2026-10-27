@@ -20,10 +20,31 @@ to be governed, so a new path fails the test by existing.
 
 from __future__ import annotations
 
+import subprocess
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import pytest
 from app.closure import policy as closure
+
+
+def _repo_root() -> Path:
+    """The repository per git, not per this file's position in it.
+
+    Counting directories above `__file__` is the thing
+    `scripts/gate_toolkit.repo_root` exists to stop: four levels up is
+    whatever happens to be there, and the repo's own meta-gate rejects it.
+    """
+    out = subprocess.run(  # noqa: S603
+        ["git", "rev-parse", "--show-toplevel"],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=Path(__file__).resolve().parent,
+    )
+    if out.returncode == 0 and out.stdout.strip():
+        return Path(out.stdout.strip()).resolve()
+    return Path(__file__).resolve().parents[3]
 
 
 class _Conn:
@@ -271,11 +292,10 @@ class TestNothingRoutesAroundTheChokepoint:
         detector here is the copy that drifts, and this repository has shipped
         that exact shape more than once.
         """
-        import pathlib
         import subprocess
         import sys
 
-        root = pathlib.Path(__file__).resolve().parents[3]
+        root = _repo_root()
         gate = root / "scripts" / "check_closure_authorization.py"
         assert gate.is_file(), f"the closure chokepoint gate is missing at {gate}"
 
@@ -289,13 +309,11 @@ class TestNothingRoutesAroundTheChokepoint:
 
     def test_the_gate_itself_detects_both_ways(self) -> None:
         """A gate nobody proved is a gate nobody should believe."""
-        import pathlib
         import subprocess
         import sys
 
-        root = pathlib.Path(__file__).resolve().parents[3]
         result = subprocess.run(  # noqa: S603
-            [sys.executable, str(root / "scripts" / "check_closure_authorization.py"), "--self-test"],
+            [sys.executable, str(_repo_root() / "scripts" / "check_closure_authorization.py"), "--self-test"],
             capture_output=True,
             text=True,
             check=False,

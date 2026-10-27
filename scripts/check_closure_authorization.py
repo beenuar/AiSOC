@@ -43,6 +43,12 @@ import re
 import sys
 from pathlib import Path
 
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root  # noqa: E402
+
 #: The module permitted to carry closure SQL, relative to the agents app.
 LEDGER = "investigator/ledger.py"
 
@@ -226,13 +232,16 @@ async def {GATED_FUNCTION}(conn):
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--self-test", action="store_true", help="prove the detector works in both directions")
-    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    # `repo_root()` asks git rather than counting directories above this file.
+    # Two levels up is whatever happens to be there, which is the wrong answer
+    # the moment the script is copied, vendored or run from a build context.
+    parser.add_argument("--root", type=Path, default=None)
     args = parser.parse_args()
 
     if args.self_test:
         return self_test()
 
-    failures = check(args.root)
+    failures = check(args.root or repo_root())
     for failure in failures:
         print(f"check_closure_authorization: {failure}", file=sys.stderr)
     if failures:
