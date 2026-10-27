@@ -108,9 +108,24 @@ class ActionStatus(str, Enum):
     AWAITING_APPROVAL = "awaiting_approval"
     APPROVED = "approved"
     REJECTED = "rejected"
+    #: Claimed for execution. Written to the durable store *before* the vendor
+    #: is contacted and never only afterwards, so a replica that dies
+    #: mid-dispatch leaves a record that cannot be mistaken for one nobody
+    #: started. The member always existed; nothing wrote it.
     RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
+    #: The dispatch did not come back clean and the vendor could not be read
+    #: back, so whether the estate changed is genuinely unknown.
+    #:
+    #: Its absence was the defect. A containment the EDR had accepted, whose
+    #: response was then lost, was recorded as ``failed`` — the reading whose
+    #: obvious remedy is to run it again. Nothing here may be re-approved;
+    #: ``POST /actions/{id}/reconcile`` resolves it by asking the vendor.
+    #:
+    #: Not a terminal success: `services/api`'s usage meter counts `completed`
+    #: as the one status meaning a vendor was touched, and that stays true.
+    RECONCILIATION_REQUIRED = "reconciliation_required"
     ROLLED_BACK = "rolled_back"
 
 
@@ -251,6 +266,23 @@ class ActionRequest(BaseModel):
     # W4.1 — structured invoking identity. Optional for back-compat with the
     # legacy `requested_by` string + system-initiated calls.
     principal: ActionPrincipal | None = None
+    #: Who originally asked for this action, when that is not the caller.
+    #:
+    #: Three identities meet on an approved action and collapsing any two
+    #: breaks a control. `principal` is the *invoking* identity whose
+    #: permissions gate the submit; the approver arrives separately on the
+    #: approve call; and this is the originator, read only for separation of
+    #: duties and provenance, never for authorization.
+    #:
+    #: It exists because `services/api` had nowhere to put the originator and
+    #: sent the deciding console user as `principal`, which became
+    #: `requested_by_user_id`. Separation of duties then compared the approver
+    #: against itself and refused: every approval raised in the responder app
+    #: was answered 403 upstream and surfaced as a 502. The free-text
+    #: `requested_by` beside this is a label and is deliberately not used for
+    #: the comparison — it is caller-supplied and trusting it would make the
+    #: control forgeable in the other direction.
+    requester: ActionPrincipal | None = None
     rationale: str = ""
     auto_rollback: bool = False
     rollback_after_seconds: int | None = None

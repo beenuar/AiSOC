@@ -125,6 +125,10 @@ class _VendorState:
         #: the containment and whose device API is then unavailable is the one
         #: case where the outcome genuinely cannot be established.
         self.probe_available = True
+        #: What the containment route answers. A 500 is a vendor that received
+        #: the request and refused it, which — unlike a dropped response — the
+        #: read-back can and must settle as a genuine failure.
+        self.contain_http_status = 200
 
     def reset(self) -> None:
         with self.lock:
@@ -135,6 +139,7 @@ class _VendorState:
             self.drop_response = False
             self.device_status = "normal"
             self.probe_available = True
+            self.contain_http_status = 200
 
 
 VENDOR = _VendorState()
@@ -177,6 +182,7 @@ class _VendorHandler(BaseHTTPRequestHandler):
             with VENDOR.lock:
                 delay = VENDOR.contain_delay
                 drop = VENDOR.drop_response
+                http_status = VENDOR.contain_http_status
                 VENDOR.contain_calls.append(
                     {
                         "action": action,
@@ -184,12 +190,15 @@ class _VendorHandler(BaseHTTPRequestHandler):
                         "at": datetime.now(UTC).isoformat(),
                     }
                 )
-                if action == "contain":
+                if action == "contain" and http_status < 400:
                     VENDOR.device_status = "contained"
             if delay:
                 time.sleep(delay)
             if drop:
                 self.close_connection = True
+                return
+            if http_status >= 400:
+                self._send({"errors": [{"message": "containment refused"}]}, status=http_status)
                 return
             self._send({"resources": [{"id": "dev-1"}], "errors": []})
             return
@@ -871,30 +880,33 @@ class TestAnUnknownOutcomeIsRecordedAsUnknown:
             f"{stored['_column_status']!r}; the host's real state is unknown and the record must say so"
         )
 
-    async def test_a_dispatch_the_vendor_never_received_is_still_a_failure(self, replicas, vendor_base_url) -> None:
+    async def test_a_refused_dispatch_is_still_a_failure(self, replicas, vendor_base_url) -> None:
         """The control. Not everything becomes "unknown" — that would be its own lie.
 
-        The device is reachable and reports ``normal``, so the containment
-        demonstrably did not take and ``failed`` is the honest record.
+        The vendor answered the containment with a 500 and the device is
+        readable and reports ``normal``, so the containment demonstrably did
+        not take and ``failed`` is the honest record. A change that resolved
+        every imperfect dispatch to ``reconciliation_required`` would pass
+        every other test in this class and fail this one.
         """
         a, _b = replicas
         tenant = str(uuid.uuid4())
         action_id = str(uuid.uuid4())
         agent = _principal(tenant, user_id="agents-service")
         analyst = _principal(tenant, user_id="dana")
-        params = dict(_vendor_params(vendor_base_url))
-        # A base URL that resolves to a closed port: the request is never
-        # written, so the vendor records nothing.
-        params["cs_base_url"] = f"http://127.0.0.1:{_free_port()}"
+        params = _vendor_params(vendor_base_url)
 
         await _submit(a, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
+        with VENDOR.lock:
+            VENDOR.contain_http_status = 500
+
         response = await _approve(a, action_id, analyst, timeout=60.0)
         assert response.status_code in (200, 202), response.text
-        assert _contain_calls() == 0
 
         stored = await _read_record(_DSN, action_id)
         assert stored is not None
         assert stored["_column_status"] == "failed", stored["_column_status"]
+        assert stored["verification"]["outcome"] == "failed", stored.get("verification")
 
     async def test_a_vendor_timeout_is_not_recorded_as_a_failure(self, replicas, vendor_base_url) -> None:
         """"The request timed out" and "the action did not happen" are different facts.
@@ -1103,17 +1115,23 @@ class TestReconciliationReadsTheVendorRatherThanGuessing:
         assert reconciled.json()["status"] == "failed", reconciled.json()
         assert _contain_calls() == before
 
-    async def test_without_a_probe_the_record_stays_unknown(self, replicas, vendor_base_url) -> None:
-        """An unverifiable action is not quietly resolved either way."""
+    async def test_an_unreadable_vendor_leaves_the_record_unknown(self, replicas, vendor_base_url) -> None:
+        """A reconciliation that cannot read the vendor resolves nothing.
+
+        The tempting failure is to treat an unanswerable probe as a clean
+        result in whichever direction is convenient. It stays unknown, and the
+        operator is told so rather than told it is handled.
+        """
         a, _b = replicas
-        action_id, _analyst, _params = await self._strand(a, vendor_base_url)
+        action_id, _analyst, params = await self._strand(a, vendor_base_url)
         before = _contain_calls()
+        with VENDOR.lock:
+            VENDOR.probe_available = False
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             reconciled = await client.post(
                 f"{a.base_url}/api/v1/actions/{action_id}/reconcile",
-                # No credentials, so the probe cannot run.
-                json={"parameters": {}},
+                json={"parameters": params},
                 headers={"Authorization": f"Bearer {SERVICE_TOKEN}"},
             )
 

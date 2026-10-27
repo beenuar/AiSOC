@@ -44,6 +44,14 @@ class ActionsServiceError(RuntimeError):
     operator-facing string, which it deliberately builds as an error *type*
     rather than a raw exception. Rendering the wrong one into an HTML page is
     how an unauthenticated email-approval link starts leaking topology.
+
+    ``indeterminate`` is the difference between "it was refused" and "we never
+    heard back". A refusal is a fact about the decision; a transport error on
+    a POST that may already have been processed is not, and reporting the
+    second as the first told an operator their action had not run when it may
+    well have. The actions service answers the question properly — it claims
+    the execution durably before contacting a vendor, so the outcome is
+    readable afterwards — but this client must not assert what it cannot see.
     """
 
     def __init__(
@@ -52,10 +60,12 @@ class ActionsServiceError(RuntimeError):
         *,
         status_code: int | None = None,
         upstream_detail: str | None = None,
+        indeterminate: bool = False,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.upstream_detail = upstream_detail or "The action service refused the decision."
+        self.indeterminate = indeterminate
 
 
 def base_url() -> str:
@@ -81,8 +91,13 @@ async def _post(path: str, payload: dict[str, Any] | None) -> dict[str, Any]:
     try:
         async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
             response = await client.post(url, headers=service_headers(), json=payload)
-    except httpx.HTTPError as exc:
+    except httpx.ConnectError as exc:
+        # Nothing was written to a socket, so nothing was processed.
         raise ActionsServiceError(f"actions service unreachable: {exc}") from exc
+    except httpx.HTTPError as exc:
+        # A timeout or a dropped connection on a POST: the request may have
+        # been received and acted on. Say so rather than calling it a refusal.
+        raise ActionsServiceError(f"actions service unreachable: {exc}", indeterminate=True) from exc
 
     if response.status_code >= 400:
         detail = _detail(response)
@@ -190,9 +205,19 @@ async def submit_action(
     rationale: str,
     parameters: dict[str, Any] | None = None,
     principal: dict[str, Any] | None = None,
+    requester: dict[str, Any] | None = None,
     requested_by: str = "aisoc-api",
 ) -> dict[str, Any]:
-    """Submit an action. The gate decides whether it executes or waits."""
+    """Submit an action. The gate decides whether it executes or waits.
+
+    ``principal`` is the *invoking* identity, whose permissions the actions
+    service checks. ``requester`` is who originally asked, when that is
+    somebody else — an agent that proposed a containment a human is about to
+    approve. They are separate fields because collapsing them broke
+    separation of duties: this client sent the approving console user as
+    ``principal``, the actions service recorded it as the requester, and the
+    approval that followed was refused for being its own request.
+    """
     payload: dict[str, Any] = {
         "id": action_id,
         "action_type": action_type,
@@ -205,6 +230,8 @@ async def submit_action(
     }
     if principal is not None:
         payload["principal"] = principal
+    if requester is not None:
+        payload["requester"] = requester
     return await _post("/api/v1/actions", payload)
 
 
