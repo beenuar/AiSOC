@@ -227,6 +227,29 @@ node dist/index.js doctor
 
 **The config file is malformed.** The installer refuses to overwrite a config it can't parse, to avoid clobbering hand-edits. Fix or back up the file, then re-run.
 
+## Registry listings
+
+Directory sites index MCP servers from a descriptor committed next to the code rather than by scraping the repository. AiSOC ships two:
+
+| File | Read by | What it carries |
+|---|---|---|
+| [`services/mcp/server.json`](https://github.com/beenuar/AiSOC/blob/main/services/mcp/server.json) | the [official MCP registry](https://registry.modelcontextprotocol.io) | Name (`io.github.beenuar/aisoc`), description, version, repository and icon. |
+| `glama.json` (repository root) | [Glama](https://glama.ai/mcp/servers) | The GitHub accounts permitted to maintain the listing. |
+
+**AiSOC is not listed in the MCP registry yet, and the reason is the npm packaging status above rather than a missing descriptor.** The registry stores metadata only — it never hosts the artifact — so a listing has to name a package a client can actually install. It also verifies that whoever publishes the listing owns that package: for npm it reads an `mcpName` field out of the published `package.json` and requires it to equal the server name. `services/mcp/package.json` already declares `"mcpName": "io.github.beenuar/aisoc"`, so that check will pass the moment the package exists; what is missing is the package. Until then `server.json` deliberately declares no `packages` entry, because a listing pointing at an unresolvable package is worse for a reader than no listing.
+
+Once `@aisoc/mcp` is on npm, listing it is a short follow-up: add a `packages` entry naming the published version, then
+
+```bash
+brew install mcp-publisher          # or download the release binary
+mcp-publisher login github
+cd services/mcp && mcp-publisher publish
+```
+
+`mcp-publisher validate` checks `server.json` without publishing, and is worth running first.
+
+Nothing in a registry listing changes how the server is installed by hand — the source build above keeps working, and an entry in a directory is discovery, not a new install path.
+
 ## Source & contributions
 
 The package source lives in [`services/mcp`](https://github.com/beenuar/AiSOC/tree/main/services/mcp). Tests, tool definitions, and the installer are all there. PRs welcome — the contract tests in [`tests/tools.test.ts`](https://github.com/beenuar/AiSOC/blob/main/services/mcp/tests/tools.test.ts) will tell you immediately if you forget metadata, ordering, or naming conventions on a new tool.
