@@ -286,6 +286,15 @@ assertions pass for the wrong reason.
 | `scripts/check_closure_authorization.py` | OK, and `--self-test` OK (5 cases, both directions) |
 | Migrations on a **fresh** database, 001→121 in order | applied cleanly |
 | Migration 121 re-applied | idempotent, records nothing twice |
+| `scripts/check_claim_gate_matrix.py` | 321 rows — 316 GATED, 5 PARTIAL, 0 NO GATE |
+| `scripts/check_gate_coverage.py` | OK — all 178 checks reachable from a workflow |
+| `scripts/check_attribution.py --all` | OK — 13,666 tracked files, no tool attribution |
+| `scripts/check_competitor_names.py` | OK |
+| `scripts/check_machine_paths.py` | OK — 13,209 tracked text files, no machine-specific path |
+| `scripts/check_comment_paths.py` | OK — 2,284 repository paths named in comments all exist |
+| `scripts/check_module_reachability.py` | OK — 1,036 of 1,064 modules reachable |
+| `scripts/check_raw_sql_columns.py` | OK — 560 statements parsed, 367 compared |
+| `scripts/check_text_bind_casts.py` | OK — no `:name::type` |
 
 The three passing live tests on the pre-fix tree are the positive control, the
 shadow guard and manual closure — all three are properties the fix had to
@@ -294,9 +303,43 @@ intended reading.
 
 ### Negative controls
 
-Each mechanism was reverted on top of the fix and the suite re-run, to show
-the tests fail again for the stated reason rather than passing for some
-unrelated one. Outputs are in the pull request body.
+Each mechanism was reverted on top of the fix and the suites re-run, then the
+file restored from `HEAD` and the suites confirmed green again. Reverting one
+mechanism at a time is what makes the result attributable: a single
+pre-fix-versus-post-fix comparison shows the three changes together and cannot
+say which test is held up by which.
+
+**1. Remove the chokepoint call from `ledger.persist_auto_triage`** (18 lines).
+
+```
+12 failed, 3 passed              tests/isolation/test_closure_authorization_live.py
+check_closure_authorization: investigator/ledger.py:persist_auto_triage can set
+an alert to 'resolved' without calling authorize_auto_closure. An automatic
+closure would bypass the tenant's policy, the earned grant and the kill switch.
+exit=1
+```
+
+The three still passing are the positive control, the shadow guard and manual
+closure — the properties the chokepoint is not responsible for.
+
+**2. Restore the permissive `row is None` branch** (Finding 14).
+
+```
+2 failed, 26 passed   test_closure_authorization.py::...::test_a_tenant_with_no_policy_row_is_not_authorized
+                      test_closure_policy.py::TestPerTenantPolicy::test_no_policy_row_is_not_authorization
+3 failed, 12 passed   live: test_an_eligible_verdict_does_not_close_without_an_explicit_policy
+                            test_one_tenants_policy_cannot_authorize_anothers_closure
+                            test_an_unauthorized_verdict_is_still_recorded
+```
+
+**3. Restore `pool is None → (False, "")` in `kill_switch_engaged`** (Finding 10).
+
+```
+2 failed, 14 passed   test_a_pool_that_failed_to_open_refuses
+                      test_the_kill_switch_refuses_when_the_pool_is_unavailable
+```
+
+After restoring all three: 28 offline passed, 15 live passed.
 
 ## Remaining limitations
 

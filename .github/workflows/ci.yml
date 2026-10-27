@@ -363,6 +363,17 @@ jobs:
         run: python scripts/check_one_permission_model.py --self-test
       - name: Verify the database is authoritative for permissions
         run: python scripts/check_one_permission_model.py
+      # `alerts.status` reaches 'resolved' from one statement, and for a while
+      # two callers reached it while only one asked permission: the
+      # outcome-memory suppression branch closed alerts having consulted no
+      # policy, no grant and no kill switch. The wiring test that was supposed
+      # to cover this asserted one substring against one function, so it could
+      # not see the path nobody remembered. This holds the property the
+      # chokepoint rests on — one closure statement, in one module, gated.
+      - name: Closure authorization chokepoint — self-test
+        run: python scripts/check_closure_authorization.py --self-test
+      - name: Verify every automatic closure passes the authorization chokepoint
+        run: python scripts/check_closure_authorization.py
       # Thirteen Kafka clients across Python, Go and TypeScript, and not one
       # passed a security protocol — so every one took the library default,
       # which is PLAINTEXT in all three. The spine carries raw event bodies,
