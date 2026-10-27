@@ -94,9 +94,7 @@ async def _refuse_a_vacuous_run(pool) -> None:
     nothing, and it would have reported the pre-fix tree healthy.
     """
     async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT current_user AS who, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user"
-        )
+        row = await conn.fetchrow("SELECT current_user AS who, rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
         forced = await conn.fetchval(
             "SELECT bool_and(relforcerowsecurity) FROM pg_class WHERE relname IN ('aisoc_kill_switch', 'aisoc_kill_switch_audit')"
         )

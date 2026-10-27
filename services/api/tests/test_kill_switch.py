@@ -61,6 +61,28 @@ def _route_object(path: str, method: str):
     raise AssertionError(f"no route {method} {path}")
 
 
+def _required_permissions(route) -> set[str]:
+    """Every permission the route's dependency tree actually resolves.
+
+    ``require_permission`` returns a closure, so the permission it enforces
+    lives in that closure's cells rather than anywhere readable from the
+    route. Walking the resolved tree is what makes this an assertion about
+    enforcement instead of about spelling.
+    """
+    found: set[str] = set()
+
+    def walk(dependant) -> None:
+        call = dependant.call
+        closure = getattr(call, "__closure__", None) or ()
+        if getattr(call, "__name__", "") == "_check":
+            found.update(cell.cell_contents for cell in closure if isinstance(cell.cell_contents, str))
+        for sub in dependant.dependencies:
+            walk(sub)
+
+    walk(route.dependant)
+    return found
+
+
 class TestTheRoutesExist:
     @pytest.mark.parametrize(
         ("path", "method", "handler"),
@@ -139,14 +161,21 @@ class TestThePlatformSwitchHasASurface:
         assert _reaches_a_route(path, "POST"), f"POST {path} answers 404, so the platform-wide stop has no product surface"
         assert _handler_for(path, "POST") == handler
 
-    @pytest.mark.parametrize("name", ["engage_global", "release_global"])
-    def test_they_require_the_platform_permission(self, name: str) -> None:
+    @pytest.mark.parametrize("verb", ["engage", "release"])
+    def test_they_require_the_platform_permission(self, verb: str) -> None:
         """Not ``settings:write``. A tenant administrator holds that, and the
-        global switch stops every *other* tenant on the deployment too."""
-        source = inspect.getsource(getattr(kill_switch, name))
-        assert f'require_permission("{PLATFORM_KILL_SWITCH}")' in source, (
-            f"{name} does not require {PLATFORM_KILL_SWITCH}, so it is reachable by a principal "
-            "whose authority stops at their own tenant"
+        global switch stops every *other* tenant on the deployment too.
+
+        Read off the **resolved** dependency tree rather than the handler's
+        source. A substring assertion would pass on
+        ``Annotated[Any, require_permission(...)]`` with no ``Depends()``,
+        which FastAPI silently drops — that exact shape left eleven routes
+        reading as gated while enforcing nothing.
+        """
+        required = _required_permissions(_route_object(f"/kill-switch/global/{verb}", "POST"))
+        assert PLATFORM_KILL_SWITCH in required, (
+            f"{verb}_global resolves {sorted(required) or 'no permission check'}, not {PLATFORM_KILL_SWITCH}, "
+            "so it is reachable by a principal whose authority stops at their own tenant"
         )
 
     def test_no_tenant_scoped_role_holds_it(self) -> None:
