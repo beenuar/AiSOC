@@ -26,34 +26,48 @@ Resumption and backpressure
 ---------------------------
 
 The subscription is the cursor. A message is redelivered until it is
-acknowledged, so a restart mid-poll costs a duplicate rather than a gap, and
-the declared ``(event_time, record_id)`` checkpoint suppresses that
-duplicate downstream. Acknowledgement happens **after** the batch has been
-turned into events, never before.
+acknowledged, so a restart mid-poll costs a duplicate rather than a gap.
+
+Acknowledgement happens after **ingest has confirmed the batch is durable**,
+not merely after the batch has been turned into events. That distinction is
+the one this connector originally got wrong: it acknowledged once the
+entries were in a local list, while the push to ingest happens later, in the
+scheduler, after ``fetch_alerts`` has already returned. A crash or a 5xx in
+that gap took messages the subscription had been told to forget, and no
+cursor can recover a message that is gone. So the fetch stages its ack ids
+and :meth:`commit_acknowledgements` answers the subscription once the
+scheduler has ingest's verdict.
 
 ``collection_budget`` bounds the poll, because a subscription holds up to
 seven days of retention and a sink on an organisation's Data Access logs
 fills that quickly. Unacknowledged messages stay on the subscription and the
-next poll pulls them.
+next poll pulls them. A second bound applies for as long as ack ids are
+held: the poll stops pulling once it has spent half the subscription's ack
+deadline, leaving the rest for ingest. Overrunning anyway costs a duplicate,
+because an expired ack id is refused and its message redelivers.
 
 A note on ordering: Pub/Sub does not guarantee order unless the topic is
 created with message ordering enabled *and* the publisher sets an ordering
-key, which Cloud Logging sinks do not. The checkpoint therefore sorts by
-``(event_time, record_id)`` within each poll and tolerates a late arrival by
-re-reading its own overlap — which is why the cursor is a de-duplicator here
-rather than a watermark that may skip.
+key, which Cloud Logging sinks do not. So this connector does **not** keep an
+event-time high-water mark — an entry older than the last batch's newest is
+an ordinary first arrival here, and a watermark would discard it the only
+time it is ever offered. It de-duplicates on ``messageId``, which the vendor
+keeps stable across a redelivery (``ackId`` is not: a fresh one is minted
+every time the message is handed over).
 """
 
 from __future__ import annotations
 
 import base64
 import json
+import time
 from typing import Any
 
 import httpx
 import structlog
 
 from app.connectors.base import (
+    AcknowledgementResult,
     BaseConnector,
     Capability,
     CollectionBudget,
@@ -150,16 +164,18 @@ class GCPPubSubConnector(BaseConnector):
     connector_name = "GCP Pub/Sub (log sink)"
     connector_category = "cloud"
 
-    checkpoint_time_field = ("event_time",)
-    checkpoint_id_field = ("record_id",)
+    #: `record_id` is the vendor's `messageId`, which is stable across a
+    #: redelivery. Not an event-time watermark: a sink sets no ordering key,
+    #: so "older than the last batch" is not "already seen" here.
+    dedup_identity_field = ("record_id",)
 
     collection_budget = CollectionBudget(
         max_batches_per_poll=20,
         max_events_per_poll=20_000,
         backlog_stays_on_the_queue=(
-            "Only messages whose entries were emitted are acknowledged. Anything the budget stops short of "
-            "stays unacknowledged on the subscription and is redelivered on the next poll, so a backlog "
-            "drains over several polls rather than in one pass."
+            "Nothing is acknowledged until ingest confirms the batch, so anything the budget stops short of "
+            "stays unacknowledged on the subscription and is redelivered on the next poll, and so does "
+            "anything ingest refused. A backlog drains over several polls rather than in one pass."
         ),
     )
 
@@ -210,7 +226,10 @@ class GCPPubSubConnector(BaseConnector):
                     default=120,
                     help_text=(
                         "Recorded for the setup guide and compared against the subscription at test time. "
-                        "A deadline shorter than one poll redelivers messages this connector is still reading."
+                        "Messages stay unacknowledged until ingest confirms them, so the deadline has to cover "
+                        "a poll and the push that follows it — not just the poll. AiSOC stops pulling once it "
+                        "has spent half the deadline, and a message whose deadline lapses first is redelivered "
+                        "and de-duplicated rather than lost."
                     ),
                 ),
             ],
@@ -294,10 +313,26 @@ class GCPPubSubConnector(BaseConnector):
             logger.warning("gcp_pubsub.auth_failed", error=str(exc))
             return []
 
+        started = time.monotonic()
+
         async with httpx.AsyncClient(timeout=30.0) as client:
             for _ in range(budget.max_batches_per_poll):
                 if len(rows) >= budget.max_events_per_poll:
                     truncated = True
+                    break
+                if self.pending_acknowledgements() and self.acknowledgement_hold_exhausted(time.monotonic() - started):
+                    # Ack ids already held are closer to expiry than to being
+                    # answered. Taking another batch would widen a window that
+                    # is already most of the deadline, so the remainder stays
+                    # on the subscription.
+                    truncated = True
+                    logger.info(
+                        "gcp_pubsub.ack_deadline_reserve_reached",
+                        subscription=self._subscription_path,
+                        held=len(self.pending_acknowledgements()),
+                        ack_deadline_seconds=self._ack_deadline,
+                        detail="remainder stays unacknowledged on the subscription for the next poll",
+                    )
                     break
                 try:
                     resp = await client.post(
@@ -345,10 +380,11 @@ class GCPPubSubConnector(BaseConnector):
                         }
                     )
 
-                # Acknowledge after the batch is in `rows`, never before: a
-                # failure between the two has to cost a duplicate, not a gap.
-                if ack_ids:
-                    await self._acknowledge(client, token, ack_ids)
+                # Staged, not acknowledged. Being in `rows` is not durability
+                # and this function cannot observe anything that is: the push
+                # to ingest happens after it returns. The scheduler commits
+                # these once it has ingest's answer.
+                self.stage_acknowledgement(ack_ids)
 
                 if len(received) < _PULL_SIZE:
                     break
@@ -363,20 +399,45 @@ class GCPPubSubConnector(BaseConnector):
 
         return [self.normalize(row) for row in self.apply_checkpoint(rows)]
 
-    async def _acknowledge(self, client: httpx.AsyncClient, token: str, ack_ids: list[str]) -> None:
+    def acknowledgement_deadline_seconds(self) -> int:
+        """The subscription's ack deadline, which is how long an ackId lives."""
+        return self._ack_deadline
+
+    async def commit_acknowledgements(self) -> AcknowledgementResult:
+        """Acknowledge the staged ack ids.
+
+        Called by the scheduler only once ingest has confirmed the whole batch
+        reached Kafka. A fresh client because the one the fetch used is long
+        closed; the ack ids themselves stay valid until the deadline expires,
+        independent of any connection.
+
+        Not fatal, and not silent. A refused or expired ack id means the
+        message redelivers, the identity cursor drops the duplicate, and a
+        persistent failure shows as a subscription that never drains — which
+        an operator can only diagnose if it was counted.
+        """
+        ack_ids = self.take_pending_acknowledgements()
+        if not ack_ids:
+            return AcknowledgementResult(requested=0, confirmed=0, failed=0)
         try:
-            resp = await client.post(
-                f"{_PUBSUB_ROOT}/{self._subscription_path}:acknowledge",
-                headers=self._auth.headers(token),
-                json={"ackIds": ack_ids},
-            )
-            resp.raise_for_status()
+            token = await self._auth.token()
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                resp = await client.post(
+                    f"{_PUBSUB_ROOT}/{self._subscription_path}:acknowledge",
+                    headers=self._auth.headers(token),
+                    json={"ackIds": ack_ids},
+                )
+                resp.raise_for_status()
         except Exception as exc:
-            # Not fatal, and not silent. The messages redeliver, the
-            # checkpoint drops the duplicates, and a persistent failure here
-            # shows as a subscription that never drains — which an operator
-            # can only diagnose if it was logged.
-            logger.warning("gcp_pubsub.ack_failed", count=len(ack_ids), error=str(exc))
+            logger.warning(
+                "gcp_pubsub.ack_failed",
+                subscription=self._subscription_path,
+                count=len(ack_ids),
+                error=str(exc),
+                detail="these messages will be redelivered and de-duplicated on messageId",
+            )
+            return AcknowledgementResult(requested=len(ack_ids), confirmed=0, failed=len(ack_ids))
+        return AcknowledgementResult(requested=len(ack_ids), confirmed=len(ack_ids), failed=0)
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         entry = _as_dict(raw.get("entry"))

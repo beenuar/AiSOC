@@ -24,7 +24,7 @@ AWS CloudTrail organisation trail delivered to S3 and announced on SQS. Reads ma
 | `secret_key` | Secret Access Key | secret | no | — | **encrypted at rest** · Required only when supplying a static access key above. |
 | `include_data_events` | Include data events | boolean | no | `True` | S3 / Lambda / DynamoDB data events. These answer 'what did they read', and are the highest-volume thing in the trail — most land at info severity. |
 | `include_flow_logs` | Include VPC flow logs | boolean | no | `True` | VPC flow logs published to the same bucket (key prefix .../vpcflowlogs/...). |
-| `visibility_timeout_seconds` | Receive visibility timeout (seconds) | number | no | `300` | How long a received message is hidden from other consumers. Must comfortably exceed one poll, or an object is re-announced while this poll is still reading it. |
+| `visibility_timeout_seconds` | Receive visibility timeout (seconds) | number | no | `300` | How long a received message is hidden from other consumers. Messages are not deleted until ingest confirms their events, so this has to cover a poll and the push that follows it — not just the poll. AiSOC stops receiving once it has spent half the timeout, and a message whose visibility lapses first is redelivered and de-duplicated rather than lost. Set a redrive policy on the queue so a notification naming an unreadable object is quarantined to a dead-letter queue instead of retried forever. |
 
 :::note Credential handling
 `secret_key` is encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API — a read of the saved connector shows the field as set, not its contents. See [credential vault](../operations/credentials.md).

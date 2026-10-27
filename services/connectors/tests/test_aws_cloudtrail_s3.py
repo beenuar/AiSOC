@@ -213,16 +213,23 @@ class TestAPoll:
         connector = _connector(sqs, _FakeS3(_objects()), include_flow_logs=False)
 
         assert await connector.fetch_alerts() == []
-        assert sqs.deleted == ["h1"], "a filtered-out object still consumes its notification"
+        assert connector.pending_acknowledgements() == ["h1"], "a filtered-out object still consumes its notification"
 
 
-class TestAcknowledgementIsTheCheckpoint:
+class TestTheQueueIsTheCursor:
     @pytest.mark.asyncio
-    async def test_a_fully_read_object_acknowledges_its_message(self) -> None:
+    async def test_a_fully_read_object_answers_its_message_once_ingest_has(self) -> None:
+        """Read in full, so the message becomes answerable — but only the
+        scheduler, holding ingest's verdict, may answer it."""
         sqs = _FakeSQS([[_message("h1", _fixture("sqs_s3_notification.json"))]])
         connector = _connector(sqs, _FakeS3(_objects()))
 
         await connector.fetch_alerts()
+
+        assert connector.pending_acknowledgements() == ["h1"]
+        assert sqs.deleted == []
+
+        await connector.commit_acknowledgements()
 
         assert sqs.deleted == ["h1"]
 
@@ -255,15 +262,22 @@ class TestAcknowledgementIsTheCheckpoint:
         resumed.set_checkpoint(cursor)
 
         assert await resumed.fetch_alerts() == []
+        assert resumed.pending_acknowledgements() == ["h2"], "a duplicate is still a message that has to leave the queue"
 
     @pytest.mark.asyncio
     async def test_an_undecodable_notification_is_consumed_rather_than_looped(self) -> None:
         """A message that can never become events has to leave the queue, or
-        it redelivers until its retention expires."""
+        it redelivers until its retention expires. It rides along with the
+        batch: it contributes no rows, so an all-garbage poll submits an empty
+        batch, ingest accepts it trivially, and the queue still drains."""
         sqs = _FakeSQS([[_message("h1", "not json at all")]])
         connector = _connector(sqs, _FakeS3(_objects()))
 
         assert await connector.fetch_alerts() == []
+        assert connector.pending_acknowledgements() == ["h1"]
+
+        await connector.commit_acknowledgements()
+
         assert sqs.deleted == ["h1"]
 
 
@@ -529,7 +543,7 @@ class TestBackpressure:
         # taken off the queue and are still there for the next poll.
         assert sqs.receive_calls == 1
         assert len(alerts) == 3, "the object is the atomic unit, so the bound overshoots by at most one object"
-        assert sqs.deleted == ["h0"]
+        assert connector.pending_acknowledgements() == ["h0"]
 
     @pytest.mark.asyncio
     async def test_the_visibility_timeout_reaches_the_receive_call(self) -> None:

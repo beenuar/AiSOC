@@ -1216,10 +1216,14 @@ class _AtLeastOnceQueue:
     why acking early cannot be undone.
     """
 
-    def __init__(self, messages: list[dict[str, Any]]) -> None:
+    def __init__(self, messages: list[dict[str, Any]], *, refuse_acks: bool = False) -> None:
         self._messages: dict[str, dict[str, Any]] = {m["handle"]: m for m in messages}
         self.receive_calls = 0
         self.acked: list[str] = []
+        #: Models a handle the source refuses — a lapsed visibility timeout,
+        #: an expired ack deadline, a missing delete permission. The message
+        #: stays, which is what makes the redelivery real rather than asserted.
+        self.refuse_acks = refuse_acks
 
     def receive(self) -> list[dict[str, Any]]:
         self.receive_calls += 1
@@ -1227,6 +1231,8 @@ class _AtLeastOnceQueue:
 
     def ack(self, handles: list[str]) -> None:
         for handle in handles:
+            if self.refuse_acks:
+                continue
             self._messages.pop(handle, None)
             self.acked.append(handle)
 
@@ -1250,6 +1256,15 @@ class _QueueBackedConnector(BaseConnector):
     #: of a multi-event notification failing.
     broken: frozenset[str] = frozenset()
 
+    def __init__(self, **_config: Any) -> None:
+        """Accept whatever the scheduler hands over, like a real connector.
+
+        Not decoration: without it the scheduler's ``TypeError`` guard catches
+        the construction, records a failure and returns before polling — and
+        a test asserting "the message was not acknowledged" then passes
+        because nothing ran at all.
+        """
+
     @classmethod
     def schema(cls) -> ConnectorSchema:  # pragma: no cover - not exercised
         raise NotImplementedError
@@ -1271,8 +1286,14 @@ class _QueueBackedConnector(BaseConnector):
 
     async def commit_acknowledgements(self) -> AcknowledgementResult:
         handles = self.take_pending_acknowledgements()
-        type(self).queue.ack(handles)
-        return AcknowledgementResult(requested=len(handles), confirmed=len(handles), failed=0)
+        queue = type(self).queue
+        before = queue.depth
+        queue.ack(handles)
+        # Derived from what the queue actually did, not from what was asked.
+        # A result that reports success for every handle it was handed is the
+        # exact shape that hides a delete nobody is allowed to make.
+        confirmed = before - queue.depth
+        return AcknowledgementResult(requested=len(handles), confirmed=confirmed, failed=len(handles) - confirmed)
 
 
 def _queue_message(handle: str, *record_ids: str) -> dict[str, Any]:
@@ -1290,12 +1311,16 @@ def _queue_scheduler(
     config: dict[str, Any] = {"poll_interval_seconds": 60}
     if checkpoint is not None:
         config["checkpoint"] = checkpoint
-    inst = _make_instance(connector_type="test_queue_backed", auth_config={}, connector_config=config)
+    inst = _make_instance(connector_type="test_queue_backed", connector_config=config)
     monkeypatch.setattr(_QueueBackedConnector, "queue", queue)
     monkeypatch.setattr(_QueueBackedConnector, "broken", broken)
     monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"test_queue_backed": _QueueBackedConnector})
     engine = _FakeEngine([inst])
-    return ConnectorScheduler(engine=engine, ingest_client=ingest, vault=_FakeVault()), inst, engine
+    # The fakes are structural stand-ins, deliberately narrower than the real
+    # clients — the point of this module, and the reason every other test here
+    # does the same.
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=ingest, vault=_FakeVault())  # type: ignore[arg-type]
+    return scheduler, inst, engine
 
 
 @pytest.mark.asyncio
@@ -1424,18 +1449,24 @@ async def test_the_checkpoint_is_durable_before_the_acknowledgement_is_sent(monk
 
 
 @pytest.mark.asyncio
-async def test_a_redelivery_after_a_crash_in_that_window_is_not_a_duplicate(monkeypatch):
-    """The crash this ordering is for: accepted, checkpointed, never acked."""
-    queue = _AtLeastOnceQueue([_queue_message("h1", "r1")])
+async def test_a_redelivery_after_a_lost_acknowledgement_is_not_a_duplicate(monkeypatch):
+    """Accepted downstream, checkpointed, acknowledgement never landed.
+
+    Covers both the crash in that window and a source that refused the
+    handle; they are the same situation from the next poll's point of view.
+    The event must not be submitted twice, and the message must still leave.
+    """
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1")], refuse_acks=True)
     ingest = _FakeIngestClient(accepted=1)
     scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
 
-    # Model the crash: the ack never happens, so the message comes back.
-    monkeypatch.setattr(_QueueBackedConnector, "commit_acknowledgements", AsyncMock(return_value=AcknowledgementResult(1, 0, 1)))
     await scheduler._poll_one(connector_id=inst.id)
+
+    assert [e["external_id"] for e in (ingest.last_payload or {})["events"]] == ["r1"]
+    assert queue.depth == 1, "the refused handle means the message is still there"
     persisted = engine.checkpoint_calls[-1]["checkpoint"]
 
-    monkeypatch.undo()
+    # The redelivery, against a source that now accepts the acknowledgement.
     resumed_queue = _AtLeastOnceQueue([_queue_message("h1", "r1")])
     resumed_ingest = _FakeIngestClient(accepted=0)
     resumed, inst2, _engine2 = _queue_scheduler(monkeypatch, resumed_queue, resumed_ingest, checkpoint=persisted)

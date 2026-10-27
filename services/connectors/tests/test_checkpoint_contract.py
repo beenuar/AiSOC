@@ -149,22 +149,28 @@ class TestAdoptionIsCountedNotAssumed:
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),
         "azure_activity": (("eventTimestamp",), ("eventDataId", "id")),
-        # Depth plan 4.1. These three read a queue or an object store rather
-        # than a time-windowed API, so the cursor is doing a different job:
-        # the queue already guarantees nothing is lost, and the cursor exists
-        # to drop the duplicate that at-least-once delivery guarantees will
-        # eventually arrive. All three therefore carry a synthetic
-        # `record_id` built from the object or message identity, which is
-        # what makes it stable across a re-read.
-        "aws_cloudtrail_s3": (("event_time",), ("record_id",)),
-        "gcp_pubsub": (("event_time",), ("record_id",)),
+        # Depth plan 4.1. Reads an object store rather than a time-windowed
+        # API, so the cursor is doing a different job: the store already
+        # guarantees nothing is lost, and the cursor exists to drop the
+        # re-read that listing the container from the beginning produces. It
+        # therefore carries a synthetic `record_id` built from the capture
+        # path and sequence number, which is what makes it stable.
+        #
+        # Phase 3 removed `aws_cloudtrail_s3` and `gcp_pubsub` from this
+        # table. Both read an *unordered* queue, where a high-water mark
+        # discards a late arrival the only time it is ever offered; they
+        # dedup on identity instead and are recorded in
+        # `TestUnorderedSourcesDoNotCarryAWatermark`. This one stays because
+        # its container is never drained and is re-listed from the start on
+        # every poll, which a bounded identity set cannot survive.
         "azure_event_hubs": (("event_time",), ("record_id",)),
     }
 
     def test_the_adopters_are_exactly_the_ones_recorded(self) -> None:
         actual = {cid for cid, cls in CONNECTOR_REGISTRY.items() if cls.checkpoints()}
+        identity_based = set(TestUnorderedSourcesDoNotCarryAWatermark.UNORDERED)
 
-        assert actual == set(self.EXPECTED), (
+        assert actual == set(self.EXPECTED) | identity_based, (
             "the set of checkpointing connectors changed. Adding one is good — record it here. "
             "Losing one silently is the defect this replaces."
         )
@@ -182,8 +188,9 @@ class TestAdoptionIsCountedNotAssumed:
         overlap window after a restart, which is safe and loses events older
         than that window. The number is here so the gap is legible."""
         without = sorted(cid for cid, cls in CONNECTOR_REGISTRY.items() if not cls.checkpoints())
+        adopters = len(self.EXPECTED) + len(TestUnorderedSourcesDoNotCarryAWatermark.UNORDERED)
 
-        assert len(without) == len(CONNECTOR_REGISTRY) - len(self.EXPECTED)
+        assert len(without) == len(CONNECTOR_REGISTRY) - adopters
         assert len(CONNECTOR_REGISTRY) >= 84
 
 
@@ -312,14 +319,17 @@ class TestIdentityDedupMachinery:
 
     def test_declaring_both_schemes_is_refused(self) -> None:
         """They answer the same question two different ways, and a connector
-        carrying both would silently use one of them."""
+        carrying both would silently use one of them.
 
-        class _Both(_Cursored):
-            connector_id = "test_both"
-            dedup_identity_field: tuple[str, ...] = ("uid",)
+        Refused when the class is defined rather than when it is polled: an
+        import-time error names the connector on startup, where a poll-time
+        one would surface as whichever dispatch happened to win.
+        """
+        with pytest.raises(ValueError, match="both an event-time watermark and a dedup identity"):
 
-        with pytest.raises(ValueError, match="both"):
-            _Both()
+            class _Both(_Cursored):
+                connector_id = "test_both"
+                dedup_identity_field: tuple[str, ...] = ("uid",)
 
 
 class TestTheSchedulerNoLongerDuckTypes:

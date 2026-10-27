@@ -133,12 +133,17 @@ class TestAPoll:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_every_message_in_the_batch_is_acknowledged(self, service_account_json: str) -> None:
+    async def test_every_message_in_the_batch_is_eventually_acknowledged(self, service_account_json: str) -> None:
+        """Every message the poll consumed is answered — once the scheduler
+        commits. A connector that never acknowledges is not safe, it is a
+        subscription that never drains."""
         _mock_token()
         respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json=_pull_response()), httpx.Response(200, json={})])
         ack = respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
 
-        await _connector(service_account_json).fetch_alerts()
+        connector = _connector(service_account_json)
+        await connector.fetch_alerts()
+        await connector.commit_acknowledgements()
 
         assert ack.called
         assert json.loads(ack.calls.last.request.content)["ackIds"] == [
@@ -233,7 +238,10 @@ class TestAPoll:
         )
         ack = respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
 
-        assert await _connector(service_account_json).fetch_alerts() == []
+        connector = _connector(service_account_json)
+        assert await connector.fetch_alerts() == []
+        await connector.commit_acknowledgements()
+
         assert json.loads(ack.calls.last.request.content)["ackIds"] == ["ack-empty"]
 
 
@@ -416,9 +424,7 @@ class TestAnOlderEntryArrivingLaterSurvives:
 
         # Redelivered: same messageId, a fresh ackId, exactly as Pub/Sub does it.
         redelivered = [_received("m-1", "ack-1-again", "2026-10-08T11:00:00Z", "entry-1")]
-        respx.post(_PULL_URL).mock(
-            side_effect=[httpx.Response(200, json={"receivedMessages": redelivered}), httpx.Response(200, json={})]
-        )
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json={"receivedMessages": redelivered}), httpx.Response(200, json={})])
         resumed = _connector(service_account_json)
         resumed.set_checkpoint(cursor)
 
