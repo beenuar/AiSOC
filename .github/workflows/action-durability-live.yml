@@ -1,0 +1,237 @@
+# An approved action reaches the vendor once, or visibly not at all.
+#
+# Remediation phase 2. The approve path in services/actions read a record,
+# compared its status in Python, called the vendor, and saved afterwards.
+# Everything an approval is supposed to guarantee lived in that gap: two
+# replicas both executed, a vendor that accepted a containment and dropped the
+# response was recorded as "failed", an approver in any tenant could approve
+# any tenant's containment, and a crash left a record indistinguishable from
+# an action nobody started.
+#
+# Why this job and not a unit test
+# --------------------------------
+# `action_store` answers from a process-local dict, so one process hands two
+# concurrent approvals the *same object* and the race cannot be observed at
+# all. The decisive case needs two containers behind one database — which is
+# the deployed shape — and a real Postgres, because the whole mechanism is a
+# conditional UPDATE and a row lock.
+#
+# The vendor is a stub, and only the vendor. Authorization, persistence and
+# retry are the things under test and are not replaced by anything: a mock
+# that answers whatever it is asked cannot notice an action that ran twice.
+#
+# No `paths:` filter. This grades a governed response capability, and a path
+# filter is how a required check reports success having examined nothing.
+name: Action durability (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: action-durability-live-${{ github.ref }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  action-durability-live:
+    name: One approval, one vendor call, or an honest unknown
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS policy
+      # in the schema, and a live suite that runs as one is measuring a
+      # posture nothing ships with.
+      ACTIONS_DSN: postgresql://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      ENVIRONMENT: test
+      OTEL_SDK_DISABLED: "true"
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # Both services' own lockfiles, not a hand-curated pip list. The test
+      # process imports services/api's actions client and approval dispatch;
+      # the subprocesses it starts are services/actions. One interpreter runs
+      # both, selected per step by `working-directory`, because each names its
+      # top-level package `app` and importing one shadows the other.
+      - name: Install api from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+
+      - name: Install actions from its lockfile
+        working-directory: services/actions
+        run: |
+          set -euo pipefail
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio greenlet
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: Identity, intent, the claim, and reconciliation
+        working-directory: services/api
+        env:
+          ISOLATION_ACTIONS_DSN: ${{ env.ACTIONS_DSN }}
+          PYTHONPATH: .
+        run: python -m pytest ../../tests/isolation/test_action_durability_live.py -v --tb=short
+
+      - name: The suite actually ran
+        working-directory: services/api
+        env:
+          ISOLATION_ACTIONS_DSN: ${{ env.ACTIONS_DSN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_action_durability_live.py -q 2>&1 | tee /tmp/durability-run.txt
+          if grep -qE '[0-9]+ skipped' /tmp/durability-run.txt; then
+            echo "FAIL: a case skipped in the job whose whole purpose is to run it live."
+            exit 1
+          fi
+          if ! grep -qE '[0-9]+ passed' /tmp/durability-run.txt; then
+            echo "FAIL: no case reported as passed."
+            exit 1
+          fi
+
+      # ── negative controls ────────────────────────────────────────────────
+      #
+      # Each removes exactly one line of the fix and requires the suite to go
+      # red. A gate nobody has watched fail is a gate nobody has tested.
+
+      - name: The gate fails when the claim stops checking the status
+        working-directory: services/api
+        env:
+          ISOLATION_ACTIONS_DSN: ${{ env.ACTIONS_DSN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          store=../actions/app/services/action_store.py
+          cp "$store" /tmp/action_store.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("../actions/app/services/action_store.py")
+          s = p.read_text()
+          needle = "               AND status = $3\n"
+          if needle not in s:
+              print("negative control could not find the claim's status predicate; the claim has "
+                    "been reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "", 1))
+          PY
+          set +e
+          python -m pytest \
+            "../../tests/isolation/test_action_durability_live.py::TestExecutionIsClaimedBeforeTheVendorIsContacted" \
+            -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/action_store.bak "$store"
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: without the status predicate both replicas claimed and the suite stayed green."
+            exit 1
+          fi
+          echo "OK: without the predicate both replicas execute and the suite goes red, as it must."
+
+      - name: The gate fails when the upsert stops protecting a pending intent
+        working-directory: services/api
+        env:
+          ISOLATION_ACTIONS_DSN: ${{ env.ACTIONS_DSN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          store=../actions/app/services/action_store.py
+          cp "$store" /tmp/action_store.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("../actions/app/services/action_store.py")
+          s = p.read_text()
+          needle = "     WHERE aisoc_action_records.status NOT IN {_INTENT_LOCKED_SQL_LIST}\n"
+          if needle not in s:
+              print("negative control could not find the upsert's intent guard")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "     WHERE true\n", 1))
+          PY
+          set +e
+          python -m pytest \
+            "../../tests/isolation/test_action_durability_live.py::TestApprovalIsBoundToTheIntent" \
+            -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/action_store.bak "$store"
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: a pending approval was retargeted and the suite stayed green."
+            exit 1
+          fi
+          echo "OK: without the guard a pending approval is retargeted, and the suite goes red."
+
+      # Tenant isolation on the approve path is two layers, so a one-line
+      # removal proves nothing: take out the narrowing and the authorization
+      # check refuses, take out the check and the narrowed read 404s. The
+      # control removes both, which is also the honest statement of what is
+      # being claimed — that the pair is load-bearing, not either alone.
+      - name: The gate fails when nothing scopes an approval to a tenant
+        working-directory: services/api
+        env:
+          ISOLATION_ACTIONS_DSN: ${{ env.ACTIONS_DSN }}
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          cp ../actions/app/security/authz.py /tmp/authz.bak
+          cp ../actions/app/api/router.py /tmp/router.bak
+          python - <<'PY'
+          import pathlib, sys
+          authz = pathlib.Path("../actions/app/security/authz.py")
+          router = pathlib.Path("../actions/app/api/router.py")
+          a, r = authz.read_text(), router.read_text()
+          check = "    if approver.tenant_id is not None and record_tenant and str(approver.tenant_id) != record_tenant:\n"
+          narrow = "    record = await _load_for_decision(action_id, _tenant_of(bound))\n"
+          if check not in a or narrow not in r:
+              print("negative control could not find both tenant layers; they have been reshaped "
+                    "and this control no longer proves anything")
+              sys.exit(1)
+          authz.write_text(a.replace(check, "    if False:\n", 1))
+          router.write_text(r.replace(narrow, "    record = await _load_for_decision(action_id, None)\n"))
+          PY
+          set +e
+          python -m pytest \
+            "../../tests/isolation/test_action_durability_live.py::TestTheThreeIdentitiesStayDistinct::test_an_approver_from_another_tenant_is_refused" \
+            -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/authz.bak ../actions/app/security/authz.py
+          cp /tmp/router.bak ../actions/app/api/router.py
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: with neither layer present another tenant's containment was still refused."
+            exit 1
+          fi
+          echo "OK: with neither layer present another tenant's host is contained, and the suite goes red."
