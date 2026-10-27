@@ -521,11 +521,20 @@ disagrees this sharply with a single-gate run is the shell, not the tree.
 
 ## Not verified
 
-- **Neither gate has been observed on a GitHub runner.** Everything above was
-  run locally on Python 3.14; CI pins 3.11. The migration gate is
-  standard-library only and the tenant gate was already running in
-  `isolation.yml`, so the risk is low — but "it passes locally" is not "the
-  required check went green", and the pull request is where that gets settled.
+- ~~Neither gate has been observed on a GitHub runner.~~ **Resolved on
+  [#1530](https://github.com/beenuar/AiSOC/pull/1530):** `Migrations — No
+  duplicate numbers` passed in 10 s and `Route tenant scope (no route lets its
+  caller name the tenant)` — the job that runs the tenant-predicate gate and
+  its self-test — passed in 3 m 12 s, both on ubuntu-latest with Python 3.11.
+- **The first push went red on a gate the local suite does not include**, and
+  it is worth recording as the live example of the thing this file is about.
+  Adding two matrix rows made three prose copies of the count stale:
+  `apps/docs/docs/compliance/evidence-pack.md` and two figures in
+  `ROADMAP.md`. One of those sentences warns the reader, in the sentence
+  itself, that a count copied into prose goes stale in silence. The cross-check
+  lives in `scripts/readme_gates.py`, which is not invoked by `ci.yml` and so
+  was not in the 181-gate sweep run before pushing — run `readme_gates.py`
+  directly after touching the matrix.
 - **The claim that no runner recurses into a migration subdirectory** was
   established by reading `run_migrations.py`, the four `alembic.ini`
   `script_location` values and `lake_migrations.py`. It was not established by
