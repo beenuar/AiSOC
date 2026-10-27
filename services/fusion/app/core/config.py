@@ -47,7 +47,19 @@ class Settings(BaseSettings):
     consumer_retry_base_seconds: float = Field(default=0.5, alias="AISOC_CONSUMER_RETRY_BASE_SECONDS")
     consumer_retry_max_seconds: float = Field(default=30.0, alias="AISOC_CONSUMER_RETRY_MAX_SECONDS")
     consumer_recovery_retry_seconds: float = Field(default=10.0, alias="AISOC_CONSUMER_RECOVERY_RETRY_SECONDS")
+    # End-to-end deadline for one fused-alert delivery: the enqueue *and* the
+    # broker acknowledgement. It used to bound the enqueue alone, which is a
+    # local memory append and effectively never times out.
     kafka_send_timeout_seconds: float = Field(default=30.0, alias="AISOC_KAFKA_SEND_TIMEOUT_SECONDS")
+    # Recovery journal for an alert that is durable in Postgres but whose
+    # notification never reached the broker (app/services/alert_outbox.py).
+    # The grace period is the head start the consumer's own inline retries
+    # get: set it above the retry budget or the relay competes with a retry
+    # that is still running and publishes avoidable duplicates.
+    alert_outbox_enabled: bool = Field(default=True, alias="AISOC_ALERT_OUTBOX_ENABLED")
+    outbox_relay_interval_seconds: float = Field(default=15.0, alias="AISOC_OUTBOX_RELAY_INTERVAL_SECONDS")
+    outbox_relay_batch_size: int = Field(default=50, alias="AISOC_OUTBOX_RELAY_BATCH_SIZE")
+    outbox_relay_grace_seconds: float = Field(default=120.0, alias="AISOC_OUTBOX_RELAY_GRACE_SECONDS")
     # How long stop() waits for the in-flight message before closing clients.
     # Work that does not finish is left uncommitted, so it is re-delivered.
     shutdown_grace_seconds: float = Field(default=15.0, alias="AISOC_SHUTDOWN_GRACE_SECONDS")
