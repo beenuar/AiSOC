@@ -147,6 +147,7 @@ jobs:
         working-directory: services/agents
         env:
           ISOLATION_CLOSURE_AUTHZ_DSN: ${{ env.LIVE_DSN }}
+          # aisoc-db-role: owner — fixtures only. The suite seeds scratch tenants, policy rows for several tenants at once and the *global* kill-switch row, whose own WITH CHECK (tenant_id = current_tenant_id()) makes it uninsertable by any non-owner. The code under test reads ISOLATION_CLOSURE_AUTHZ_DSN above, which is the runtime role, so every assertion is still judged under forced RLS
           ISOLATION_CLOSURE_AUTHZ_ADMIN_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
         run: python -m pytest ../../tests/isolation/test_closure_authorization_live.py -v --tb=short -rs
 
