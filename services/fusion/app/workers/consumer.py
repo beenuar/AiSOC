@@ -270,6 +270,11 @@ class FusionWorker:
         self._producer = AIOKafkaProducer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            # Fused alerts are keyed by their canonical alert id so every
+            # re-publication of one alert lands on the same partition and a
+            # downstream consumer can collapse duplicates. Without a
+            # serializer aiokafka requires the key to be bytes already.
+            key_serializer=lambda k: None if k is None else str(k).encode("utf-8"),
             **kafka_client_kwargs(),
         )
         await self._consumer.start()
@@ -872,10 +877,7 @@ class FusionWorker:
             raise RuntimeError("fusion produced a fused alert before the Kafka producer started")
         try:
             await asyncio.wait_for(
-                producer.send(
-                    settings.kafka_topic_alerts_fused,
-                    value=envelope,
-                ),
+                self._deliver(producer, envelope, key=str(fused.id)),
                 timeout=max(0.1, settings.kafka_send_timeout_seconds),
             )
         except asyncio.CancelledError:
@@ -886,6 +888,44 @@ class FusionWorker:
             # makes that a no-op at the database.
             _METRICS["publish_failed"] += 1
             raise RetryableProcessingError(f"fused alert publish failed: {exc}") from exc
+
+    @staticmethod
+    async def _deliver(producer: Any, envelope: dict, *, key: str) -> None:
+        """Publish one envelope and wait for the broker to acknowledge it.
+
+        ``AIOKafkaProducer.send`` is a coroutine that appends the record to
+        the client's batch accumulator and returns a *future* resolving when
+        the broker acks. Awaiting the call alone awaits the **enqueue**: the
+        record is in this process's memory and nowhere else, and the delivery
+        outcome -- including a refusal that arrives milliseconds later -- is
+        in the future that was discarded. The consumer commits the input
+        offset straight afterwards, so that window loses the notification
+        while keeping the alert row and advancing past the source event.
+
+        Written as the ``send`` + ``await future`` pair rather than
+        ``send_and_wait`` to match ``dlq.KafkaDLQ.record``, which carries the
+        same reasoning, and because it keeps the worker compatible with
+        producers that expose only ``send``.
+
+        The caller wraps this in one ``wait_for``, so the configured timeout
+        is an end-to-end *delivery* deadline rather than a bound on the
+        enqueue. A timeout cancels the wait, not the record: aiokafka may
+        still deliver it, so a timed-out publish is reported as unconfirmed
+        and re-published, never as lost.
+
+        ``key`` puts every copy of one alert on a single partition and gives
+        a downstream consumer something stable to collapse duplicates on.
+        Re-publication is designed-for here -- an offset commit and a broker
+        ack cannot be made atomic -- so the key is part of the contract, not
+        a tuning detail.
+        """
+        future = await producer.send(settings.kafka_topic_alerts_fused, value=envelope, key=key)
+        acknowledged = await future
+        # Referenced rather than discarded for the reason `KafkaDLQ.record`
+        # records: a bare `await <name>` reads to CodeQL as an ineffectual
+        # statement. The ack's payload is not part of this contract -- the
+        # absence of an exception is what makes the offset commit safe.
+        logger.debug("fusion.publish_acknowledged", key=key, acknowledged=acknowledged is not None)
 
     @staticmethod
     def get_metrics() -> dict:

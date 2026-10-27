@@ -4,6 +4,10 @@ Pytest config for the fusion service test suite.
 Sets ``asyncio_mode = auto`` so the ``@pytest.mark.asyncio`` decorators in
 ``test_entity_risk.py`` resolve without per-test event-loop boilerplate. The
 existing ``test_alert_model.py`` is sync and unaffected.
+
+The canonical Kafka producer double lives in ``tests/kafka_doubles.py``:
+anything reaching a publish must use it rather than ``AsyncMock()``, which
+cannot tell an enqueue from a delivery.
 """
 
 from __future__ import annotations

@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.models.alert import FusionDecision
 from app.services.dlq import InMemoryDLQ
 from app.workers.consumer import FusionWorker, PermanentProcessingError
+from tests.kafka_doubles import TwoStageProducer
 
 pytestmark = pytest.mark.asyncio
 
@@ -50,7 +51,10 @@ def _worker_with_dlq() -> tuple[FusionWorker, InMemoryDLQ]:
         )
     )
     worker = FusionWorker(engine=engine, sink=None, dlq=dlq)
-    worker._producer = AsyncMock()  # noqa: SLF001 — test drives the internals
+    # Not an AsyncMock: its `send` cannot distinguish an enqueue from a
+    # delivery, so a publish that never leaves the process passes. See
+    # tests.kafka_doubles.TwoStageProducer.
+    worker._producer = TwoStageProducer()  # noqa: SLF001 — test drives the internals
     return worker, dlq
 
 
@@ -59,7 +63,9 @@ async def test_valid_event_is_processed_and_not_dead_lettered():
     await worker._process_message(_valid_raw_event(), topic=RAW_EVENTS)  # noqa: SLF001
     assert dlq.records == []
     worker._engine.process.assert_awaited_once()  # noqa: SLF001
-    worker._producer.send.assert_awaited_once()  # noqa: SLF001
+    assert len(worker._producer.enqueued) == 1  # noqa: SLF001
+    assert worker._producer.futures[0].done(), "published without waiting for the broker"  # noqa: SLF001
+    await worker._producer.drain()  # noqa: SLF001
 
 
 async def test_missing_ocsf_event_is_dead_lettered_not_dropped():

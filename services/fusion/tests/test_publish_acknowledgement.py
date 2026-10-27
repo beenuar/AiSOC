@@ -21,14 +21,13 @@ Why the double here is shaped the way it is
 ``AsyncMock()`` cannot test this. Its ``send`` returns an awaitable resolving
 to a ``MagicMock``, so ``send`` and ``send_and_wait`` are indistinguishable:
 both read as "awaited, no exception". Every assertion built on one would pass
-against the defect. :class:`TwoStageProducer` models the real contract -- the
-enqueue and the acknowledgement are separate awaitables with separate outcomes
--- which is the only way a test can tell the two apart.
+against the defect. ``tests.kafka_doubles.TwoStageProducer`` models the real contract --
+the enqueue and the acknowledgement are separate awaitables with separate
+outcomes -- which is the only way a test can tell the two apart.
 """
 
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -37,49 +36,7 @@ from app.core.config import settings
 from app.models.alert import AlertSeverity, FusedAlert, FusionDecision, RawAlert
 from app.services.alert_sink import PersistOutcome, PersistResult
 from app.workers.consumer import FusionWorker, RetryableProcessingError
-
-
-class TwoStageProducer:
-    """A producer double with aiokafka's real enqueue/acknowledge split.
-
-    ``send`` resolves as soon as the record is "accepted into the batch" and
-    hands back a future. What that future does is the whole point of the
-    double: it can resolve with metadata (delivered), resolve with an
-    exception (the broker refused it *after* the enqueue returned), or never
-    resolve at all (the record is still sitting in the accumulator).
-    """
-
-    def __init__(self, *, ack_after: float = 0.0, ack_error: Exception | None = None, never_ack: bool = False) -> None:
-        self.enqueued: list[dict] = []
-        self.futures: list[asyncio.Future] = []
-        self._ack_after = ack_after
-        self._ack_error = ack_error
-        self._never_ack = never_ack
-        self._tasks: list[asyncio.Task] = []
-
-    async def send(self, topic, value=None, key=None):  # noqa: ANN001, ANN201
-        loop = asyncio.get_running_loop()
-        future: asyncio.Future = loop.create_future()
-        self.enqueued.append({"topic": topic, "value": value, "key": key})
-        self.futures.append(future)
-        if not self._never_ack:
-            self._tasks.append(loop.create_task(self._settle(future)))
-        return future
-
-    async def _settle(self, future: asyncio.Future) -> None:
-        if self._ack_after:
-            await asyncio.sleep(self._ack_after)
-        if future.done():  # pragma: no cover — the caller cancelled it
-            return
-        if self._ack_error is not None:
-            future.set_exception(self._ack_error)
-        else:
-            future.set_result(SimpleNamespace(topic="t", partition=0, offset=len(self.enqueued)))
-
-    async def drain(self) -> None:
-        for task in self._tasks:
-            task.cancel()
-        await asyncio.gather(*self._tasks, return_exceptions=True)
+from tests.kafka_doubles import TwoStageProducer
 
 
 def _alert() -> RawAlert:
