@@ -47,7 +47,22 @@ from typing import Any
 
 import structlog
 
+from app.memory.institutional import POOL_READY, POOL_UNAVAILABLE, POOL_UNCONFIGURED
+
 logger = structlog.get_logger()
+
+__all__ = [
+    "POOL_READY",
+    "POOL_UNAVAILABLE",
+    "POOL_UNCONFIGURED",
+    "ClosureDecision",
+    "decide",
+    "kill_switch_engaged",
+    "reset_cache",
+    "resolve_closure_policy",
+    "resolve_pool",
+    "shared_pool",
+]
 
 #: Seconds a resolved policy or switch state is reused. Short, because the
 #: plan requires the switch to take effect "within one poll interval,
@@ -62,27 +77,36 @@ _cache: dict[str, tuple[float, Any]] = {}
 _pool_factory = None
 
 
-async def _pool() -> Any | None:
+async def resolve_pool() -> tuple[Any | None, str]:
+    """The pool, and why there is not one.
+
+    The state matters more than the pool. ``None`` used to be the only
+    answer, and this module read it as "nothing is configured, fall back to
+    the process-wide threshold" — permissive. But ``None`` also meant "a
+    database is configured and we could not reach it", which must refuse.
+    Those two are now different values and the callers below branch on them.
+    """
     global _pool_factory  # noqa: PLW0603
     if _pool_factory is None:
-        from app.memory.institutional import _get_pool
+        from app.memory.institutional import connection_pool
 
-        _pool_factory = _get_pool
+        _pool_factory = connection_pool
     try:
         return await _pool_factory()
     except Exception as exc:  # noqa: BLE001
         logger.warning("closure.pool.unavailable", error=str(exc))
-        return None
+        return None, POOL_UNAVAILABLE
 
 
 async def shared_pool() -> Any | None:
     """The pool this package reads, for callers that need their own query.
 
-    Exported rather than left as `_pool`, so a caller does not reach
-    through the package into a private name the type checker refuses and
-    a refactor can silently move.
+    Exported rather than left private, so a caller does not reach through
+    the package into a name the type checker refuses and a refactor can
+    silently move.
     """
-    return await _pool()
+    pool, _ = await resolve_pool()
+    return pool
 
 
 async def decide(
@@ -93,12 +117,14 @@ async def decide(
     default_threshold: float,
 ) -> ClosureDecision:
     """The call the triage path makes. Resolves its own pool."""
+    pool, state = await resolve_pool()
     return await resolve_closure_policy(
-        await _pool(),
+        pool,
         tenant_id=tenant_id,
         alert_class=alert_class,
         confidence=confidence,
         default_threshold=default_threshold,
+        pool_state=state,
     )
 
 
@@ -137,12 +163,23 @@ def _store(key: str, value: Any) -> None:
     _cache[key] = (time.monotonic() + _CACHE_TTL_SECONDS, value)
 
 
-async def kill_switch_engaged(pool: Any, tenant_id: str | None) -> tuple[bool, str]:
+async def kill_switch_engaged(
+    pool: Any,
+    tenant_id: str | None,
+    *,
+    pool_state: str = POOL_READY,
+) -> tuple[bool, str]:
     """Whether closure and dispatch are frozen, and the reason.
 
     Checks the global row and the tenant's row. Either engaged is enough:
     the platform operator can stop everything, and a tenant can stop their
     own, and neither needs the other's agreement.
+
+    ``pool_state`` exists because ``pool is None`` returned ``(False, "")``
+    here — the switch reporting itself *not engaged* on a database it could
+    not read. A stop control that answers "no" when it cannot answer at all
+    is worse than one that is missing, because an operator who pressed it
+    believes it took effect.
     """
     key = f"kill:{tenant_id or '-'}"
     hit = _cached(key)
@@ -150,7 +187,12 @@ async def kill_switch_engaged(pool: Any, tenant_id: str | None) -> tuple[bool, s
         return hit
 
     if pool is None:
-        return (False, "")
+        if pool_state == POOL_UNCONFIGURED:
+            # No database anywhere, so there is no switch and nothing durable
+            # to close either. Not cached: a deployment that gains a database
+            # must not keep answering from before it had one.
+            return (False, "")
+        return (True, "__unreadable__:kill-switch state unreadable, refusing to auto-close")
 
     try:
         async with pool.acquire() as conn:
@@ -191,23 +233,35 @@ async def resolve_closure_policy(
     alert_class: str | None,
     confidence: float,
     default_threshold: float,
+    pool_state: str = POOL_READY,
 ) -> ClosureDecision:
     """Decide whether this verdict may close the alert without a human."""
-    engaged, why = await kill_switch_engaged(pool, tenant_id)
+    engaged, why = await kill_switch_engaged(pool, tenant_id, pool_state=pool_state)
     if engaged:
         if why.startswith("__unreadable__:"):
             return ClosureDecision(False, default_threshold, why.split(":", 1)[1], source="error")
         return ClosureDecision(False, default_threshold, why, source="kill_switch")
 
-    if pool is None or not tenant_id:
-        # No database and no tenant: the process-wide threshold, exactly as
-        # before this module existed.
-        allowed = confidence >= default_threshold
+    if pool is None:
+        # Reached only for POOL_UNCONFIGURED; the unavailable case already
+        # refused above, through the switch. Either way there is no recorded
+        # authorization to read, and automatic closure requires one.
         return ClosureDecision(
-            allowed,
+            False,
             default_threshold,
-            f"process-wide threshold {default_threshold:.2f}",
-            source="env",
+            "no closure policy store is configured, so no tenant has authorized automatic closure",
+            source="default_deny",
+        )
+
+    if not tenant_id:
+        # A closure that cannot be attributed to a tenant cannot be
+        # authorized by one. This used to fall through to the process-wide
+        # threshold, which authorized it on behalf of nobody.
+        return ClosureDecision(
+            False,
+            default_threshold,
+            "no tenant on this verdict, so no policy can authorize closing it",
+            source="default_deny",
         )
 
     key = f"policy:{tenant_id}:{alert_class or '-'}"
@@ -241,13 +295,25 @@ async def resolve_closure_policy(
         row = None
 
     if row is None:
-        # No policy configured. Additive: behave as before.
-        allowed = confidence >= default_threshold
+        # No policy configured, and that is not consent.
+        #
+        # This used to apply the process-wide threshold, so every tenant
+        # auto-closed from the first confident benign verdict — including one
+        # that had never opened the screen. The absence of a row is the
+        # absence of a decision, and inferring authorization from it is
+        # exactly what this phase exists to stop. Nothing is inferred from a
+        # tenant's history either: a tenant that was auto-closing yesterday
+        # because of this default is not thereby authorized today.
+        #
+        # Migration 121 records, per tenant, which side of this change each
+        # deployment fell on, so an operator can see who is affected and
+        # re-authorize deliberately rather than discovering it from a queue
+        # that stopped draining.
         return ClosureDecision(
-            allowed,
+            False,
             default_threshold,
-            f"no tenant policy, process-wide threshold {default_threshold:.2f}",
-            source="env",
+            f"{alert_class or 'this tenant'} has no closure policy, and automatic closure requires an explicit one",
+            source="default_deny",
         )
 
     if not row["enabled"]:

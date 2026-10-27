@@ -269,9 +269,7 @@ class TestClosureNeedsExplicitAuthorization:
         await _persist(tenant_id=tenant_id, alert_id=alert_id)
 
         row = await _row(pool, alert_id)
-        assert row["status"] != "resolved", (
-            "an alert auto-resolved for a tenant that has authorized no automatic closure at all"
-        )
+        assert row["status"] != "resolved", "an alert auto-resolved for a tenant that has authorized no automatic closure at all"
         assert row["resolved_at"] is None
 
     async def test_an_explicitly_authorized_tenant_still_closes(self, pool) -> None:
@@ -487,9 +485,7 @@ class TestStopControls:
             closure_policy.reset_cache()
             running_alert = await _alert(pool, running)
             await _persist(tenant_id=running, alert_id=running_alert)
-            assert (await _row(pool, running_alert))["status"] == "resolved", (
-                "one tenant's stop control froze another tenant's closures"
-            )
+            assert (await _row(pool, running_alert))["status"] == "resolved", "one tenant's stop control froze another tenant's closures"
         finally:
             await _release_kill_switches(pool)
             closure_policy.reset_cache()
@@ -506,9 +502,7 @@ class TestStopControls:
 
         try:
             await _persist(tenant_id=tenant_id, alert_id=alert_id, tier="memory", confidence=0.9)
-            assert (await _row(pool, alert_id))["status"] != "resolved", (
-                "the kill switch did not stop an outcome-memory closure"
-            )
+            assert (await _row(pool, alert_id))["status"] != "resolved", "the kill switch did not stop an outcome-memory closure"
         finally:
             await _release_kill_switches(pool)
             closure_policy.reset_cache()

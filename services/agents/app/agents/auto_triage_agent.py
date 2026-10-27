@@ -37,6 +37,7 @@ from app.agents.dispositions import (
     TRUE_POSITIVE,
     normalize_disposition,
 )
+from app.closure import authorization as closure_authorization
 from app.closure.qa_sampling import ClosureQaSampler
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
@@ -126,18 +127,19 @@ def _alert_class_of(state: InvestigationState) -> str | None:
     Prefers the explicit category the fused alert carries; falls back to the
     detection rule's category, which is what the shadow-mode grants are
     scoped by, so a grant and a policy row agree on what "this class" means.
+
+    The ``raw_alert`` half delegates to :func:`app.closure.authorization.alert_class_of`
+    rather than restating the key list. This function pre-checks the policy
+    and the chokepoint at the durable write re-checks it; if the two derived
+    the class differently, one policy row could pass here and fail there, and
+    the disagreement would look like a flapping gate rather than two readers
+    of the same field.
     """
     for attribute in ("alert_class", "category", "alert_category"):
         value = getattr(state, attribute, None)
         if isinstance(value, str) and value.strip():
             return value.strip()
-    raw = getattr(state, "raw_alert", None) or {}
-    if isinstance(raw, dict):
-        for key in ("alert_class", "category", "rule_category"):
-            value = raw.get(key)
-            if isinstance(value, str) and value.strip():
-                return value.strip()
-    return None
+    return closure_authorization.alert_class_of(getattr(state, "raw_alert", None) or {})
 
 
 def get_threshold() -> float:

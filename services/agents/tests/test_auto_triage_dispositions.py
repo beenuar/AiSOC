@@ -94,7 +94,7 @@ def test_btp_is_a_valid_detection_not_a_false_positive():
 
 
 @pytest.mark.asyncio
-async def test_approved_penetration_test_is_benign_true_positive(monkeypatch):
+async def test_approved_penetration_test_is_benign_true_positive(monkeypatch, authorized_closure_tenant):
     _patch_llm(monkeypatch, BENIGN_TRUE_POSITIVE, 0.95, "approved red-team engagement, matches change ticket")
     out = await ata.run_auto_triage(_state("Credential dumping on HR-LAPTOP", {"severity": "high", "risk_score": 0.8}))
     assert out.verdict == BENIGN_TRUE_POSITIVE
@@ -110,7 +110,7 @@ async def test_scheduled_scanner_is_benign_true_positive(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_genuine_false_positive(monkeypatch):
+async def test_genuine_false_positive(monkeypatch, authorized_closure_tenant):
     _patch_llm(monkeypatch, FALSE_POSITIVE, 0.92, "rule misfired on a mis-parsed command-line field")
     out = await ata.run_auto_triage(_state("Suspicious PowerShell", {"severity": "low", "risk_score": 0.1}))
     assert out.verdict == FALSE_POSITIVE

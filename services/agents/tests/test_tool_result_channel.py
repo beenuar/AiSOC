@@ -284,7 +284,11 @@ class TestAVerdictRestingOnACallThatNeverHappened:
         assert any("enrich_ioc" in f and "never called" in f for f in out.findings)
 
     @pytest.mark.asyncio
-    async def test_an_ordinary_rationale_still_auto_closes(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def test_an_ordinary_rationale_still_auto_closes(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        authorized_closure_tenant,  # noqa: ANN001
+    ) -> None:
         """The negative control for the demotion. A check that blocks every
         closure is indistinguishable from a broken one."""
         _patch_llm(

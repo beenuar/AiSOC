@@ -61,14 +61,22 @@ def _clear_cache():
 
 @pytest.mark.asyncio
 class TestPerTenantPolicy:
-    async def test_no_policy_row_behaves_exactly_as_before(self) -> None:
-        """Additive. A deployment that configures nothing is unchanged."""
+    async def test_no_policy_row_is_not_authorization(self) -> None:
+        """This used to assert the opposite, and that was the defect.
+
+        The original reading was "additive: a deployment that configures
+        nothing is unchanged", which was true of the code and wrong as a
+        posture — it made the absence of a decision into a decision, so every
+        tenant auto-closed from its first confident benign verdict. Closure
+        remediation Finding 14; the behaviour is covered end to end in
+        `test_closure_authorization.py` and the live suite.
+        """
         pool = _Pool(_Conn(policy_row=None))
         decision = await closure.resolve_closure_policy(
             pool, tenant_id="t1", alert_class="identity", confidence=0.9, default_threshold=0.85
         )
-        assert decision.allowed is True
-        assert decision.source == "env"
+        assert decision.allowed is False
+        assert decision.source == "default_deny"
         assert decision.threshold == 0.85
 
     async def test_a_tenant_can_disable_closure_for_one_class(self) -> None:
@@ -188,16 +196,27 @@ class TestFailureIsRefusal:
 class TestTheWiring:
     """The policy is consulted by the real closure decision, not just
     importable. A passing test on an uncalled function is indistinguishable
-    from a working feature until someone traces the call graph."""
+    from a working feature until someone traces the call graph.
 
-    def test_the_triage_agent_calls_the_policy(self) -> None:
+    These two assert the *agent's* pre-check, which is advisory: it is what
+    puts "auto-close withheld" in front of an operator. Authorization itself
+    is decided at the durable write, and the test that no path can reach that
+    write ungoverned is
+    `test_closure_authorization.TestNothingRoutesAroundTheChokepoint`, which
+    enumerates every closure path rather than checking the one somebody
+    remembered. The enumeration exists because this class, in its original
+    form, was the whole of the wiring coverage — and the second closure path
+    went unnoticed underneath it for exactly that reason.
+    """
+
+    def test_the_triage_agent_pre_checks_the_policy(self) -> None:
         import inspect
 
         from app.agents import auto_triage_agent
 
         source = inspect.getsource(auto_triage_agent.run_auto_triage)
         assert "closure_policy.decide(" in source, (
-            "run_auto_triage does not consult the closure policy, so the policy table is another mechanism with no reader"
+            "run_auto_triage does not consult the closure policy, so an operator loses the explanation on the alert"
         )
         assert "should_auto_close = verdict in AUTO_CLOSEABLE_DISPOSITIONS and closure.allowed" in source
 

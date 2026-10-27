@@ -7,6 +7,33 @@ with no caller look reachable to ``scripts/check_module_reachability.py``.
 Placing this here keeps that gate's verdict on ``guardrails`` honest.
 """
 
-from .policy import ClosureDecision, decide, kill_switch_engaged, reset_cache, shared_pool
+from .policy import (
+    POOL_READY,
+    POOL_UNAVAILABLE,
+    POOL_UNCONFIGURED,
+    ClosureDecision,
+    decide,
+    kill_switch_engaged,
+    reset_cache,
+    resolve_pool,
+    shared_pool,
+)
 
-__all__ = ["ClosureDecision", "decide", "kill_switch_engaged", "reset_cache", "shared_pool"]
+# `authorization` is deliberately NOT re-exported here. It imports
+# `app.agents.dispositions`, and `app.agents` reaches back into this package,
+# so eagerly importing it from the package root would be a cycle. Callers
+# import `app.closure.authorization` directly, which is also the honest
+# spelling for a chokepoint: it should be obvious in a diff when a module
+# starts depending on it.
+
+__all__ = [
+    "POOL_READY",
+    "POOL_UNAVAILABLE",
+    "POOL_UNCONFIGURED",
+    "ClosureDecision",
+    "decide",
+    "kill_switch_engaged",
+    "reset_cache",
+    "resolve_pool",
+    "shared_pool",
+]

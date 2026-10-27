@@ -55,7 +55,7 @@ async def test_prompt_injection_in_evidence_blocks_autoclose(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_clean_evidence_still_autocloses(monkeypatch):
+async def test_clean_evidence_still_autocloses(monkeypatch, authorized_closure_tenant):
     _patch_llm(monkeypatch, FALSE_POSITIVE, 0.98)
     ata._metrics["injection_demoted"] = 0
     st = _state("Scheduled scan", {"severity": "low", "note": "Nessus scheduled vulnerability scan from 10.0.0.5"})

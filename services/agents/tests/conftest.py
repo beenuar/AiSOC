@@ -56,6 +56,51 @@ def _reset_agent_singletons():
     _RESPONSE_CACHE.clear()
 
 
+@pytest.fixture
+def authorized_closure_tenant(monkeypatch: pytest.MonkeyPatch):
+    """A tenant that has explicitly authorized automatic closure.
+
+    Automatic closure is default-deny since the Phase 1 closure remediation:
+    a tenant with no row in `aisoc_closure_policies` does not auto-close, and
+    neither does a deployment with no policy store at all — which is every
+    test in this suite, because `_no_ambient_database` removes the DSN.
+
+    That makes "did this alert auto-close?" ambiguous for a test about some
+    *other* control. `test_clean_evidence_still_autocloses` is really
+    asserting that the prompt-injection guard did not demote a clean verdict;
+    it has no opinion about closure policy, and without this fixture it would
+    be asserting the closure default instead and would pass or fail for a
+    reason it never mentions.
+
+    Deliberately opt-in rather than autouse. Requesting it by name is the
+    test saying out loud which side of the default it assumes, and an
+    autouse version would make the whole suite permissive and hide the new
+    default from every test at once.
+
+    Nothing that covers authorization itself uses this. Those tests drive the
+    real policy (`test_closure_authorization.py`) and the real policy against
+    real Postgres (`tests/isolation/test_closure_authorization_live.py`).
+    """
+    from app import closure as closure_package
+    from app.closure import policy as closure_policy
+
+    async def _authorized(*, tenant_id, alert_class, confidence, default_threshold):  # noqa: ANN001, ANN202, ARG001
+        return closure_policy.ClosureDecision(
+            confidence >= default_threshold,
+            default_threshold,
+            "test fixture: this tenant has authorized automatic closure",
+            source="policy",
+        )
+
+    # Both spellings. `auto_triage_agent` calls `app.closure.decide` (the
+    # package re-export) and the ledger chokepoint calls
+    # `app.closure.policy.decide`; patching one would leave the other live and
+    # the test would turn on which path it happened to take.
+    monkeypatch.setattr(closure_package, "decide", _authorized)
+    monkeypatch.setattr(closure_policy, "decide", _authorized)
+    return _authorized
+
+
 @pytest.fixture(autouse=True)
 def _no_ambient_database(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch):
     """Run the unit suite with no database, and fail loudly if one is reached.

@@ -18,6 +18,10 @@ on:
       - "services/agents/app/hunt/**"
       - "tests/isolation/test_agent_service_auth_live.py"
       - "tests/isolation/test_closure_grant_live.py"
+      - "tests/isolation/test_closure_authorization_live.py"
+      - "services/agents/app/investigator/ledger.py"
+      - "services/agents/app/memory/institutional.py"
+      - "services/agents/app/workers/**"
       - "tests/isolation/test_api_to_connectors_auth.py"
       - "services/api/app/api/v1/endpoints/federated.py"
       - "services/api/app/services/case_fanout.py"
@@ -127,6 +131,24 @@ jobs:
         env:
           ISOLATION_CLOSURE_DSN: ${{ env.LIVE_DSN }}
         run: python -m pytest ../../tests/isolation/test_closure_grant_live.py -v --tb=short -rs
+
+      # Closure remediation Phase 1. Two modules disagreed about who asks
+      # permission before an alert closes, and the disagreement is resolved by
+      # SQL, so a fake connection cannot see it: the offline double answers
+      # both sides happily and cannot run the `CASE` expression that is the
+      # actual closure.
+      #
+      # Two DSNs on purpose. The code under test connects as the runtime role,
+      # where RLS is forced — a superuser ignores every policy and would let
+      # the cross-tenant assertions pass for the wrong reason. Fixtures write
+      # rows for several tenants at once and read them back, which under those
+      # same policies needs the owner.
+      - name: Every automatic closure passes the authorization chokepoint
+        working-directory: services/agents
+        env:
+          ISOLATION_CLOSURE_AUTHZ_DSN: ${{ env.LIVE_DSN }}
+          ISOLATION_CLOSURE_AUTHZ_ADMIN_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+        run: python -m pytest ../../tests/isolation/test_closure_authorization_live.py -v --tb=short -rs
 
       - name: A tenant can opt itself into retro-hunts
         working-directory: services/api

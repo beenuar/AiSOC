@@ -247,10 +247,11 @@ class TestTheChokepointItself:
         policy row could pass one and fail the other, and the disagreement
         would read as a flapping gate rather than as two readers.
         """
+        import uuid as _uuid
+
         from app.agents import auto_triage_agent
         from app.closure import authorization
         from app.models.state import InvestigationState
-        import uuid as _uuid
 
         raw = {"id": "a", "category": "identity"}
         state = InvestigationState(incident_id=_uuid.uuid4(), tenant_id=_uuid.uuid4(), raw_alert=raw)
@@ -261,29 +262,45 @@ class TestTheChokepointItself:
 class TestNothingRoutesAroundTheChokepoint:
     """Enumerates the closure paths instead of spot-checking one of them."""
 
-    def test_only_the_ledger_can_set_an_alert_to_resolved(self) -> None:
-        """One statement, in one module, or the chokepoint is not a chokepoint."""
+    def test_the_chokepoint_gate_passes(self) -> None:
+        """Runs `scripts/check_closure_authorization.py` rather than restating it.
+
+        The gate asserts that only the ledger carries SQL which can set an
+        alert to `'resolved'`, and that the function holding it calls the
+        chokepoint. Shelling out keeps one implementation: a copy of the
+        detector here is the copy that drifts, and this repository has shipped
+        that exact shape more than once.
+        """
         import pathlib
-        import re
+        import subprocess
+        import sys
 
-        root = pathlib.Path(__file__).resolve().parents[1] / "app"
-        pattern = re.compile(r"status\s*=\s*(CASE|')", re.IGNORECASE)
-        writers = set()
-        for path in root.rglob("*.py"):
-            text = path.read_text(encoding="utf-8")
-            if "resolved" not in text:
-                continue
-            for line in text.splitlines():
-                if "resolved" in line and pattern.search(line):
-                    writers.add(path.relative_to(root).as_posix())
-                    break
-            if "THEN 'resolved'" in text:
-                writers.add(path.relative_to(root).as_posix())
+        root = pathlib.Path(__file__).resolve().parents[3]
+        gate = root / "scripts" / "check_closure_authorization.py"
+        assert gate.is_file(), f"the closure chokepoint gate is missing at {gate}"
 
-        assert writers == {"investigator/ledger.py"}, (
-            f"a module other than the ledger can write alerts.status='resolved': {sorted(writers)}. "
-            "Every automatic closure must go through app.closure.authorization."
+        result = subprocess.run(  # noqa: S603
+            [sys.executable, str(gate), "--root", str(root)],
+            capture_output=True,
+            text=True,
+            check=False,
         )
+        assert result.returncode == 0, f"closure chokepoint gate failed:\n{result.stdout}\n{result.stderr}"
+
+    def test_the_gate_itself_detects_both_ways(self) -> None:
+        """A gate nobody proved is a gate nobody should believe."""
+        import pathlib
+        import subprocess
+        import sys
+
+        root = pathlib.Path(__file__).resolve().parents[3]
+        result = subprocess.run(  # noqa: S603
+            [sys.executable, str(root / "scripts" / "check_closure_authorization.py"), "--self-test"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, f"closure chokepoint gate self-test failed:\n{result.stdout}\n{result.stderr}"
 
     def test_the_ledger_consults_the_chokepoint_before_closing(self) -> None:
         import inspect
@@ -306,9 +323,7 @@ class TestNothingRoutesAroundTheChokepoint:
 
         root = pathlib.Path(__file__).resolve().parents[1] / "app"
         callers = {
-            path.relative_to(root).as_posix()
-            for path in root.rglob("*.py")
-            if "persist_auto_triage(" in path.read_text(encoding="utf-8")
+            path.relative_to(root).as_posix() for path in root.rglob("*.py") if "persist_auto_triage(" in path.read_text(encoding="utf-8")
         }
         assert callers == {
             "investigator/ledger.py",

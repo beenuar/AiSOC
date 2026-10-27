@@ -33,6 +33,7 @@ from typing import Any
 import asyncpg
 import structlog
 
+from app.closure.authorization import authorize_auto_closure
 from app.investigator.chatops_notify import notify_chatops
 
 logger = structlog.get_logger()
@@ -572,6 +573,40 @@ async def persist_auto_triage(
                 logger.debug("ledger.auto_triage_skip", reason="unknown_tenant", tenant_ref=tenant_ref)
                 return False
             await _set_rls_context(conn, tenant_id)
+
+            # The authorization chokepoint. This is the only statement in the
+            # service that can set `alerts.status = 'resolved'`, so it is the
+            # only place the question has to be asked — and asking it here
+            # rather than in each caller is what stops a future path closing
+            # alerts without one. `_maybe_suppress_from_memory` was exactly
+            # that path: it reached this function with `auto_closed=True`
+            # having consulted no policy, no grant and no kill switch.
+            #
+            # Evaluated against the tenant this row actually belongs to, not
+            # the caller's `tenant_ref`, and immediately before the write
+            # rather than when the verdict was reached — so a retry, a resumed
+            # run or a deduplicated verdict is judged by the policy in force
+            # now. An authorization that travelled with a verdict would let a
+            # tenant disable closure and still have in-flight work close
+            # alerts behind them.
+            if auto_closed:
+                authorization = await authorize_auto_closure(
+                    tenant_ref=str(tenant_id),
+                    raw_alert=raw_alert,
+                    verdict=verdict,
+                    confidence=confidence,
+                    shadow=shadow,
+                    ungrounded=bool(ungrounded),
+                    tier=tier,
+                )
+                if not authorization.allowed:
+                    auto_closed = False
+                    # Said out loud on the alert itself. An alert that
+                    # silently stays open is a support ticket, and the
+                    # agent's own pre-check cannot have written this reason
+                    # because the policy may have changed since.
+                    findings = [*(findings or []), f"Auto-close withheld ({authorization.source}): {authorization.reason}"]
+
             async with conn.transaction():
                 await conn.execute(
                     """
