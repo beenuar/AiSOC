@@ -143,6 +143,7 @@ def intent_of(record: dict[str, Any]) -> dict[str, Any]:
     """The immutable part of an action, for comparison and for an error."""
     return {field: record.get(field) for field in INTENT_FIELDS}
 
+
 #: Set once a write has actually reached Postgres.
 #:
 #: This existed as a flag nothing read, which made the comment above it a

@@ -299,7 +299,7 @@ def _spawn_replica(name: str, dsn: str) -> Replica:
     deadline = time.time() + 45
     while time.time() < deadline:
         if proc.poll() is not None:
-            output = (proc.stdout.read() or b"").decode()[-2000:]
+            output = ((proc.stdout.read() if proc.stdout else b"") or b"").decode()[-2000:]
             pytest.fail(f"actions replica {name} exited before serving:\n{output}")
         try:
             httpx.get(f"http://127.0.0.1:{port}/api/v1/health", timeout=1.0)
@@ -520,8 +520,7 @@ class TestTheThreeIdentitiesStayDistinct:
         dispatch = await approvals._dispatch_decision(row, user, approve=True)
 
         assert dispatch["state"] == "executed", (
-            f"the console approval path did not execute: {dispatch}. "
-            "Every tap of Approve in the responder app surfaced this as a 502."
+            f"the console approval path did not execute: {dispatch}. Every tap of Approve in the responder app surfaced this as a 502."
         )
         assert _contain_calls() == 1
 
@@ -607,8 +606,7 @@ class TestTheThreeIdentitiesStayDistinct:
         refused = await _approve(b, action_id, _principal(attacker_tenant, user_id="mallory"))
 
         assert refused.status_code in (403, 404), (
-            f"an approver in tenant {attacker_tenant} was served tenant {victim}'s action: "
-            f"{refused.status_code} {refused.text}"
+            f"an approver in tenant {attacker_tenant} was served tenant {victim}'s action: {refused.status_code} {refused.text}"
         )
         assert _contain_calls() == 0, "another tenant's host was contained"
 
@@ -651,15 +649,11 @@ class TestApprovalIsBoundToTheIntent:
         analyst = _principal(tenant, user_id="dana")
         params = _vendor_params(vendor_base_url)
 
-        first = await _submit(
-            a, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params
-        )
+        first = await _submit(a, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
         assert first.status_code == 200
         assert first.json()["status"] == "awaiting_approval"
 
-        swapped = await _submit(
-            b, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="dc-01", params=params
-        )
+        swapped = await _submit(b, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="dc-01", params=params)
         assert swapped.status_code == 409, (
             f"the pending action was retargeted to dc-01 while awaiting approval: {swapped.status_code} {swapped.text}"
         )
@@ -686,12 +680,8 @@ class TestApprovalIsBoundToTheIntent:
         agent = _principal(tenant, user_id="agents-service")
         params = _vendor_params(vendor_base_url)
 
-        first = await _submit(
-            a, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params
-        )
-        again = await _submit(
-            b, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params
-        )
+        first = await _submit(a, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
+        again = await _submit(b, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
         assert first.status_code == 200
         assert again.status_code == 200, again.text
         assert again.json()["status"] == "awaiting_approval"
@@ -724,17 +714,19 @@ class TestExecutionIsClaimedBeforeTheVendorIsContacted:
         with VENDOR.lock:
             VENDOR.contain_delay = 1.5
 
-        first, second = await asyncio.gather(
-            _approve(a, action_id, analyst),
-            _approve(b, action_id, analyst),
-            return_exceptions=True,
+        outcomes: list[Any] = list(
+            await asyncio.gather(
+                _approve(a, action_id, analyst),
+                _approve(b, action_id, analyst),
+                return_exceptions=True,
+            )
         )
 
         assert _contain_calls() == 1, (
             f"the host was contained {_contain_calls()} times for one approval. "
-            f"replica a -> {getattr(first, 'status_code', first)}, replica b -> {getattr(second, 'status_code', second)}"
+            f"replicas answered {[getattr(o, 'status_code', o) for o in outcomes]}"
         )
-        codes = sorted(getattr(r, "status_code", 500) for r in (first, second))
+        codes = sorted(getattr(r, "status_code", 500) for r in outcomes)
         assert codes[0] == 200, f"neither replica executed: {codes}"
         assert codes[1] in (400, 409), f"the losing replica did not refuse cleanly: {codes}"
 
@@ -909,7 +901,7 @@ class TestAnUnknownOutcomeIsRecordedAsUnknown:
         assert stored["verification"]["outcome"] == "failed", stored.get("verification")
 
     async def test_a_vendor_timeout_is_not_recorded_as_a_failure(self, replicas, vendor_base_url) -> None:
-        """"The request timed out" and "the action did not happen" are different facts.
+        """ "The request timed out" and "the action did not happen" are different facts.
 
         The slow sibling of the lost-response case, kept because a real
         ``httpx`` read timeout and a dropped connection are different code
@@ -975,9 +967,7 @@ class TestAnUnknownOutcomeIsRecordedAsUnknown:
 
         doomed = _spawn_replica("doomed", _DSN)
         try:
-            await _submit(
-                doomed, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params
-            )
+            await _submit(doomed, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
             with VENDOR.lock:
                 VENDOR.contain_delay = 8.0
 
@@ -1019,9 +1009,7 @@ class TestAnUnknownOutcomeIsRecordedAsUnknown:
 
         doomed = _spawn_replica("restart-a", _DSN)
         try:
-            await _submit(
-                doomed, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params
-            )
+            await _submit(doomed, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
             with VENDOR.lock:
                 VENDOR.contain_delay = 8.0
             task = asyncio.create_task(_approve(doomed, action_id, analyst, timeout=60.0))
@@ -1057,9 +1045,7 @@ class TestReconciliationReadsTheVendorRatherThanGuessing:
         agent = _principal(tenant, user_id="agents-service")
         analyst = _principal(tenant, user_id="dana")
         params = _vendor_params(vendor_base_url)
-        await _submit(
-            replica, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params
-        )
+        await _submit(replica, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
         with VENDOR.lock:
             VENDOR.drop_response = True
             VENDOR.probe_available = False
