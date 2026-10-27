@@ -2,6 +2,7 @@
   "name": "@aisoc/mcp",
   "version": "0.1.0",
   "description": "MCP server that exposes AiSOC (alerts, cases, agent investigations, the decision ledger) to Claude Desktop, Cursor, Cody, Continue, and any MCP-aware agent.",
+  "mcpName": "io.github.beenuar/aisoc",
   "keywords": [
     "aisoc",
     "mcp",
