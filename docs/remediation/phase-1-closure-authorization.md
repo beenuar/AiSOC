@@ -276,7 +276,8 @@ assertions pass for the wrong reason.
 | Check | Result |
 | --- | --- |
 | Live suite, pre-fix | 12 failed, 3 passed — every failure the alert sitting at `resolved` |
-| Live suite, post-fix | **15 passed** |
+| Live suite, post-fix (local) | **15 passed** |
+| Live suite on a CI runner ([run](https://github.com/beenuar/AiSOC/actions/runs/40515014261)) | **15 passed** |
 | Offline closure suites, post-fix | **28 passed** |
 | Agents suite, baseline on `origin/main` | 2050 passed, 5 skipped |
 | Agents suite, post-fix | **2066 passed, 5 skipped** |
@@ -345,14 +346,14 @@ After restoring all three: 28 offline passed, 15 live passed.
 
 Stated plainly, because an implied pass is worth less than a named gap.
 
-- **The live suite is not yet in a workflow on `main`.** It is wired into
-  `.github/workflows/agent-auth-live.yml`, which is the job that already
+- **The live suite has run green on a CI runner, but not yet on `main`.** It
+  is wired into `.github/workflows/agent-auth-live.yml`, the job that already
   stands up Postgres with every migration applied and runs the sibling
-  closure-grant suite — but a workflow file added in a pull request has not
-  been observed to pass on `main`, and until it has, "the gate exists" and "a
-  pull request cannot regress it" are separate claims. The claim-to-gate
-  matrix row is recorded as `PARTIAL` for that reason and returns to `GATED`
-  in the change that observes it green on `main`.
+  closure-grant suite, and all 15 tests passed there on this pull request.
+  That run graded the pull request's merge ref; the job has not run on `main`,
+  so "the gate works" and "a future pull request cannot regress it" remain
+  separate claims. The claim-to-gate matrix row is `PARTIAL` for that reason
+  and returns to `GATED` in the change that observes it green on `main`.
 - **No hosted model was exercised.** Nothing here places an LLM call; the
   tests drive the persistence and policy path with verdicts supplied directly.
   That is the correct scope for an authorization fix, but it means this work
