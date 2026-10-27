@@ -38,6 +38,7 @@ from app.agents.dispositions import (
     normalize_disposition,
 )
 from app.closure.qa_sampling import ClosureQaSampler
+from app.confidence import eligibility
 from app.confidence.claim_support import score_claim_support
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
@@ -111,6 +112,10 @@ _metrics: dict[str, Any] = {
     # is the same defect one level up: a *conclusion* whose provenance
     # resolves to nothing, rather than an indicator or a tool result.
     "unsupported_decisive_claims": 0,
+    # Phase 7. A closure the tenant's policy allowed and measured performance
+    # did not: either this model/prompt/class has never been graded closing
+    # alerts, under the strict posture, or it has been graded and fell short.
+    "autonomy_not_earned": 0,
 }
 
 
@@ -145,6 +150,19 @@ def _alert_class_of(state: InvestigationState) -> str | None:
             if isinstance(value, str) and value.strip():
                 return value.strip()
     return None
+
+
+def _triage_prompt() -> Any:
+    """The registered prompt this agent sends, for provenance.
+
+    Read from the registry rather than hashed here, so the version and hash
+    recorded against a closure are the same pair `prompts.lock.json` pins and
+    `scripts/check_prompt_lock.py` gates. A measurement taken on one prompt
+    must not authorise a closure made under another.
+    """
+    from app.llm.prompt_registry import _shipped
+
+    return _shipped().get("triage.system")
 
 
 def get_threshold() -> float:
@@ -586,6 +604,43 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         default_threshold=AUTO_CLOSE_THRESHOLD,
     )
     should_auto_close = verdict in AUTO_CLOSEABLE_DISPOSITIONS and closure.allowed
+
+    # Phase 7. The threshold above compares the model's own `confidence`
+    # field against a number, and that is the whole of the numeric gate on
+    # unattended closure. A model reporting 0.97 on every reply clears it
+    # every time, and nothing has ever checked whether a 0.97 was earned.
+    #
+    # This asks the separate question: has *this* model, on *this* prompt
+    # version and hash, for this tenant context and alert class, been measured
+    # closing alerts correctly over a minimum sample, recently enough to still
+    # describe what is running? It can only narrow — it withholds a closure
+    # the policy allowed and never grants one the policy withheld — which is
+    # the contract the three demotions below already hold to, and it is why
+    # it does not touch `app.closure.policy`.
+    #
+    # With no funded evaluation provider the committed record carries zero
+    # rows, so every configuration resolves to UNMEASURED, which is additive
+    # by default and denied under AISOC_AUTONOMY_REQUIRE_MEASURED=1. The
+    # verdict is recorded on the basis either way: "not measured" belongs in
+    # front of whoever reviews the closure.
+    autonomy = eligibility.evaluate_eligibility(
+        model=getattr(llm, "model_name", None) or getattr(llm, "model", None),
+        prompt_version=_triage_prompt().version,
+        prompt_sha256=_triage_prompt().sha256,
+        tenant_context=str(state.tenant_id) if getattr(state, "tenant_id", None) else "default",
+        alert_class=_alert_class_of(state),
+    )
+    state.confidence_basis.append(f"auto_closure_safety={autonomy.render_precision()} ({autonomy.state.value}: {autonomy.reason})")
+    if should_auto_close and not autonomy.allows_auto_close:
+        _metrics["autonomy_not_earned"] += 1
+        should_auto_close = False
+        state.add_finding(f"Auto-close withheld: {autonomy.reason}. Routed to manual review.")
+        logger.warning(
+            "auto_triage.autonomy_not_earned",
+            incident_id=str(state.incident_id),
+            state=autonomy.state.value,
+            reason=autonomy.reason,
+        )
 
     if verdict in AUTO_CLOSEABLE_DISPOSITIONS and not closure.allowed:
         # Say why. An operator asking "why was this not closed" gets an
