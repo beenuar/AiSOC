@@ -215,6 +215,134 @@ _TENANT_IN_SQL = re.compile(r"\btenant_id\b", re.IGNORECASE)
 
 
 # ---------------------------------------------------------------------------
+# Does a raw statement's `tenant_id` actually constrain the rows?
+# ---------------------------------------------------------------------------
+#
+# `_TENANT_IN_SQL` answers "does this string contain the token", which is not
+# the question. The blind spot was recorded in this module's own docstring and
+# left open on the grounds that one statement relied on it and that statement
+# was legitimately cross-tenant. That stopped being true: measured on `main`,
+# 18 statements were credited by a token that constrains nothing, two of them
+# `UPDATE … RETURNING id, tenant_id` worker sweeps that the ratchet is supposed
+# to account for by name and did not, because the bare match short-circuited
+# before the ratchet was ever consulted.
+#
+# The distinction is where the token sits, so the token's *clause* is what gets
+# read. Occurrences are attributed to the clause keyword most recently opened
+# before them, which handles subqueries and CTEs the way they actually nest:
+# `WHERE id IN (SELECT … WHERE tenant_id = $1)` credits the inner predicate,
+# and `UPDATE … WHERE <no tenant> RETURNING tenant_id` credits nothing.
+#
+# A real SQL parser was considered and rejected. `sqlglot` is in the tree and
+# pinned exactly, but every gate here has to run on a bare interpreter before
+# any `pip install` (see `scripts/gate_toolkit.py`), and a gate that acquires a
+# dependency is a gate that gets skipped in the one environment that matters.
+# The cost of that choice is recorded in `_UNCREDITED` below.
+
+#: Comments are stripped before any clause is located. Two statements in this
+#: tree carry a `--` note, and a token inside one constrains nothing while
+#: reading exactly like a predicate to a positional scan.
+_SQL_LINE_COMMENT = re.compile(r"--[^\n]*")
+_SQL_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
+
+#: Clause keywords, **longest first**: `ON CONFLICT` must not be read as a join
+#: `ON`, and `DELETE FROM` must not be read as a bare `FROM`. Python's `re`
+#: alternation is first-match-wins rather than longest-match, so this ordering
+#: is load-bearing and `test_on_conflict_is_not_read_as_a_join_on` pins it.
+_SQL_CLAUSE = re.compile(
+    r"\b("
+    r"ON\s+CONFLICT|DO\s+UPDATE\s+SET|DELETE\s+FROM|INSERT\s+INTO|"
+    r"GROUP\s+BY|ORDER\s+BY|LEFT\s+JOIN|RIGHT\s+JOIN|INNER\s+JOIN|OUTER\s+JOIN|CROSS\s+JOIN|"
+    r"SELECT|FROM|WHERE|HAVING|RETURNING|VALUES|USING|UPDATE|SET|JOIN|ON|LIMIT|OFFSET|WITH"
+    r")\b",
+    re.IGNORECASE,
+)
+
+#: Clauses in which `tenant_id` restricts which rows are read or written.
+#:
+#: `ON CONFLICT (tenant_id, …)` is here because the conflict target is what
+#: selects the existing row an upsert updates — it is that statement's WHERE.
+#: `INSERT INTO t (tenant_id, …)` is here for the write direction: the column
+#: list plus a bound value is what stamps the new row with a tenant, and it is
+#: the only form in which an INSERT can be scoped at all. 90 of the 108
+#: statements this rule re-examines are that shape and every one is correct;
+#: flagging them would have been 90 false positives, which is how a gate gets
+#: switched off.
+_CONSTRAINING_CLAUSES = frozenset({"WHERE", "ON", "USING", "HAVING", "ON CONFLICT", "INSERT INTO"})
+
+#: Deliberately **not** credited, each for a stated reason:
+#:
+#: `SELECT` / `RETURNING`   a projection names a column on the way out; it says
+#:                          nothing about which rows were chosen. This is the
+#:                          defect being closed.
+#: `ORDER BY` / `GROUP BY`  sorting and bucketing happen after the rows are
+#:                          picked. A cross-tenant aggregate grouped by tenant
+#:                          is still a cross-tenant read.
+#: `VALUES`                 a bound value alone does not say which column it
+#:                          lands in; the column list is what does.
+#: `SET`                    on an UPDATE this *writes* the tenant column, which
+#:                          constrains nothing about which rows are rewritten —
+#:                          it is a tenant reassignment, the opposite of a
+#:                          scope.
+_UNCREDITED = ("SELECT", "RETURNING", "ORDER BY", "GROUP BY", "VALUES", "SET", "DO UPDATE SET", "FROM", "LIMIT", "OFFSET")
+
+#: Known residuals, stated rather than silently carried. Neither is reachable
+#: in this tree today and both are checked for by the self-test so that stays
+#: visible:
+#:
+#: * a correlated subquery in a projection (`SELECT (SELECT … WHERE
+#:   b.tenant_id = a.tenant_id) FROM a`) credits the outer statement off the
+#:   inner predicate. The correlation makes the outer read per-tenant in
+#:   practice, so this errs toward a credit rather than a false alarm.
+#: * `INSERT INTO a (tenant_id, …) SELECT … FROM b` credits the stamped write
+#:   while the *read* from `b` may be unscoped. One statement of this shape
+#:   exists and it carries its own `WHERE tenant_id`.
+
+
+#: A predicate *fragment* carries no clause keyword of its own — it is the
+#: ``" AND tenant_id = :tid"`` that a caller concatenates onto a base query, or
+#: an element of a ``filters`` list. The token is only credited there when it
+#: is one side of a comparison, so ``", tenant_id"`` appended to a projection
+#: stays uncredited. An optional ``::cast`` sits between the two in asyncpg
+#: code (``tenant_id::uuid = $1``) and has to be stepped over.
+_TENANT_COMPARED = re.compile(
+    r"\btenant_id\b\s*(?:::\s*\w+\s*)?\s*(?:=|<>|!=|>=|<=|>|<|\bIN\b|\bIS\b|\bLIKE\b|\bBETWEEN\b|\bANY\b)"
+    r"|(?:=|<>|!=|\bIN\b|\bANY\b)\s*\(?\s*\btenant_id\b",
+    re.IGNORECASE,
+)
+
+
+def _tenant_predicate_in_sql(blob: str) -> bool:
+    """Whether `tenant_id` appears somewhere that constrains the rows.
+
+    Replaces a bare `tenant_id in the string` test. Returns False for a token
+    that only ever appears in a projection, a `RETURNING` list, an `ORDER BY`,
+    a `GROUP BY`, an UPDATE's `SET`, or a comment.
+
+    Called on two kinds of string and has to answer for both: a whole
+    statement, where the clause the token sits in decides; and a bare predicate
+    fragment with no clause keyword at all, where being one side of a
+    comparison decides.
+    """
+    text_only = _SQL_BLOCK_COMMENT.sub(" ", _SQL_LINE_COMMENT.sub(" ", blob))
+    clauses = [(m.start(), re.sub(r"\s+", " ", m.group(1).upper())) for m in _SQL_CLAUSE.finditer(text_only)]
+    for hit in _TENANT_IN_SQL.finditer(text_only):
+        governing = ""
+        for start, keyword in clauses:
+            if start > hit.start():
+                break
+            governing = keyword
+        if governing in _CONSTRAINING_CLAUSES:
+            return True
+        # No clause opened before the token: this is a fragment, not a
+        # statement. Credit it only if the token is being compared against
+        # something rather than merely listed.
+        if not governing and _TENANT_COMPARED.search(text_only[max(0, hit.start() - 24) : hit.end() + 24]):
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Ratchet
 # ---------------------------------------------------------------------------
 
@@ -496,10 +624,147 @@ RATCHET: dict[str, str] = {
         "records a confirmed drift on the swept row by primary key; sole caller scheduler.py:926, "
         "which compares the fingerprint of the poll it just performed"
     ),
+    # ── raw SQL, visible to this gate for the first time ───────────────────
+    # Not new queries, and not new debt. These seventeen statements are
+    # unchanged on disk; they were credited by `_TENANT_IN_SQL` matching the
+    # token anywhere in the string — a `RETURNING id, tenant_id`, a `SELECT
+    # tenant_id, …` projection, an `ORDER BY tenant_id`. The clause-aware rule
+    # (`_tenant_predicate_in_sql`) withdrew that credit, so each one arrives
+    # here to be read on its merits for the first time. Every one was read.
+    # None of them was given a predicate instead, because in every case a
+    # tenant predicate would break the thing the statement exists to do.
+    #
+    # i. the lookup that *establishes* the tenant — same class as the
+    #    pre-auth group at the top of this table, reached before a request
+    #    has a tenant to filter on.
+    "services/api/app/auth/sso_provisioning.py::resolve_connection::aisoc_sso_connections": (
+        "pre-auth: resolves which SSO connection an assertion belongs to, by (provider, issuer). "
+        "The row it finds is what assigns the tenant, so filtering on a tenant would mean no "
+        "federated sign-in could ever resolve one"
+    ),
+    "services/api/app/auth/saml_metadata.py::resolve_saml_connection::aisoc_sso_connections": (
+        "pre-auth: the SP-metadata and ACS entry points resolve a connection by issuer, or by none "
+        "at all on the console link, before any principal exists. LIMIT 2 so an ambiguous "
+        "configuration is detected rather than silently resolved to the first row"
+    ),
+    "services/api/app/api/v1/endpoints/mfa.py::_principal_for_enrolment::users": (
+        "pre-auth second-factor enrolment: `:u` is the subject of a signed, purpose-checked "
+        "sign-in challenge (`read_challenge(..., expect_purpose='enroll')`), not a caller-supplied "
+        "id. The row it reads is what assigns the tenant the enrolment is then stamped with"
+    ),
+    "services/api/app/api/v1/endpoints/inbox_itsm.py::_fetch_token_and_connector::tenant_inbox_tokens": (
+        "the inbound ITSM webhook carries an opaque inbox token and nothing else; this lookup is "
+        "what turns that token into a tenant. Same shape as the SCIM bearer-token entry above"
+    ),
+    # ii. read cross-tenant *in order to* enforce the tenant check.
+    "services/api/app/api/v1/endpoints/inbox_itsm.py::_fetch_token_and_connector::connectors": (
+        "deliberately reads the connector row without a tenant predicate so the next statement can "
+        "compare `connector_row.tenant_id != token_row.tenant_id`, log a cross-tenant attempt with "
+        "both ids and refuse. Scoping the SELECT would collapse that into an indistinguishable "
+        "404 and lose the signal the SOC is meant to see; nothing from the row is returned to the "
+        "caller before the comparison"
+    ),
+    # iii. an identity predicate, which is strictly narrower than a tenant.
+    "services/api/app/api/v1/endpoints/mfa.py::enrolment_row::aisoc_user_mfa": (
+        "keyed on user_id, which every one of its eight callers passes as the authenticated "
+        "principal's own (`current_user.user_id`, `principal.user_id`, or a user id already "
+        "resolved from a verified challenge). A user id is narrower than a tenant id, which this "
+        "gate credits on the ORM path; the raw-SQL path cannot see it because the predicate is "
+        "bound in the caller, one function away"
+    ),
+    # iv. a worker's working set: "which tenants", which cannot presuppose one.
+    #     The same discover-then-bind shape already recorded above for
+    #     hunt_scheduler.run_once and oauth_refresh._select_due_connectors.
+    "services/api/app/workers/autonomy_drift.py::<module>::aisoc_autonomy_grants": (
+        "the drift sweep's enumeration — SELECT DISTINCT tenant_id across granted autonomy — which "
+        "is the question 'which tenants hold a grant to re-check'. Each tenant is bound "
+        "individually afterwards"
+    ),
+    "services/api/app/workers/retention_purge.py::_load_policies::retention_policies": (
+        "loads every tenant's retention policy so the purge can run each one; a tenant missing from "
+        "this read is a tenant whose data is never purged, which is the compliance failure the "
+        "worker exists to prevent"
+    ),
+    "services/api/app/workers/phishing_report_intake.py::_mailbox_connectors::connectors": (
+        "the intake worker's working set of enabled mailbox connectors across tenants; ordered by "
+        "tenant so the fan-out is deterministic. Each connector is then polled under its own row's "
+        "tenant"
+    ),
+    "services/api/app/workers/shadow_reconcile.py::<module>::aisoc_shadow_mode": (
+        "COUNT(DISTINCT tenant_id) of tenants in shadow mode — a fleet-wide gauge for one log "
+        "line. It returns a number, never a tenant's rows"
+    ),
+    "services/api/app/workers/approval_expiry.py::<module>::agent_approvals": (
+        "expires every tenant's stale approvals in one statement, bounded by `expires_at < now()`. "
+        "This is the UPDATE beside the no-deadline count already recorded above for "
+        "approval_expiry.run_once, and it was the clearest instance of the defect this rule "
+        "closes: it was credited by `RETURNING id, tenant_id`, a clause that constrains nothing"
+    ),
+    "services/fusion/app/services/sessions.py::<module>::sessions": (
+        "SELECT DISTINCT tenant_id of sessions due for expiry — the enumeration that drives the "
+        "sweep, which then closes each tenant's sessions under its own id"
+    ),
+    "services/fusion/app/services/alert_outbox.py::claim::fusion_alert_outbox": (
+        "the outbox dispatcher claims due rows across every tenant under a lease; an outbox that "
+        "drained only one tenant would stall delivery for all the others. The claim is bounded by "
+        "`claimed_until` and `created_at`, and each claimed row carries the tenant it is delivered "
+        "under. Credited until now by `RETURNING … tenant_id`"
+    ),
+    "services/fusion/app/services/alert_outbox.py::backlog::fusion_alert_outbox": (
+        "the depth-and-age gauge behind the outbox's health signal, grouped by tenant precisely so "
+        "one tenant's backlog is attributable. GROUP BY is not a filter: it buckets rows that were "
+        "already read, which is why this rule does not credit it"
+    ),
+    "services/fusion/app/memory/provider.py::refresh::alerts": (
+        "rebuilds the per-signature prior cache for every tenant in one pass, then partitions the "
+        "rows by `tenant_id` in Python and hands each tenant only its own through "
+        "`get_priors(tenant_id)`. The projected tenant_id is the partition key; a per-tenant query "
+        "would be one round trip per tenant on a cadence"
+    ),
+    "services/connectors/app/scheduler.py::_promote_overdue_findings::connectors": (
+        "SELECT DISTINCT tenant_id over enabled connectors — the scheduler's tenant enumeration, "
+        "and the one statement this module's docstring already named as relying on the bare-token "
+        "credit. It now holds a reason instead of a regex match"
+    ),
+    # v. a fragment, judged at its use sites rather than here.
+    "services/api/app/services/alert_source_link.py::<module>::alert_source_links": (
+        "`_SELECT` is a column list and a FROM, never executed as written: every one of its four "
+        "callers interpolates it into an f-string that appends `WHERE tenant_id = :tenant_id`, and "
+        "this gate judges each of those four call sites independently — a fifth caller that "
+        "omitted the predicate would be flagged there. Entry is keyed on this table, so an "
+        "unscoped statement on any other table in this module still fails"
+    ),
 }
 
 #: Raising this is a deliberate act with a diff attached. Appending to RATCHET
 #: without raising it fails the gate, which is the whole point.
+#:
+#: 60 -> 77 when `_tenant_predicate_in_sql` replaced the bare-token match.
+#: This one needs its reasoning written down, because "raise the ceiling until
+#: the scan passes" is the exact move this repository forbids, and from the
+#: diff alone it looks identical.
+#:
+#: What it is not: seventeen new unscoped queries. Not one line of
+#: `services/` changed in the commit that moved this number. Those seventeen
+#: statements are byte-for-byte what they were, and every one was already
+#: unscoped — the gate credited them because `tenant_id` appeared *somewhere*
+#: in the SQL text, which for two of them was a `RETURNING` list and for
+#: eleven was a `SELECT` projection or an `ORDER BY`.
+#:
+#: So 60 was never a debt balance. It was the balance a broken detector could
+#: see, and the seventeen were debt the whole time, carried off the books. The
+#: honest number is 77, and the number of genuinely new exemptions this change
+#: introduces is zero.
+#:
+#: The alternative — leaving the ceiling at 60 — was rejected: it fails the
+#: gate on every pull request for findings no author introduced and none can
+#: fix, which is how a gate gets switched off. The other alternative, giving
+#: the seventeen real predicates, was rejected per statement and for a reason
+#: recorded per statement: four are pre-auth lookups that a tenant predicate
+#: would make unable to resolve a tenant at all, nine are worker sweeps whose
+#: whole job is "every tenant", one reads cross-tenant *in order to* enforce
+#: the tenant check, one is keyed on an identity narrower than a tenant, and
+#: one is a fragment judged at its four call sites instead.
 #:
 #: 32 -> 33 for the SCIM bearer-token lookup. It belongs to the first group
 #: above, the lookups that *establish* a tenant rather than operate inside one:
@@ -572,7 +837,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 60
+MAX_RATCHET = 77
 
 
 # ---------------------------------------------------------------------------
@@ -1268,7 +1533,7 @@ def _scan_sql(
         fn = _enclosing_function(node, fn_of)
         fn_name = getattr(fn, "name", "<module>")
 
-        if _TENANT_IN_SQL.search(blob):
+        if _tenant_predicate_in_sql(blob):
             continue
 
         # The predicate may be concatenated in from a clause list, or bound
@@ -1280,7 +1545,12 @@ def _scan_sql(
         names = _names(stmt_node)
         binds = _local_bindings(fn) if fn is not None else {}
         resolved = _expand(names, binds)
-        if any(_TENANT_IN_SQL.search(r) for r in resolved) or (resolved & TENANT_TOKENS):
+        # `_names` collects string *constants* as well as identifiers, so the
+        # statement's own SQL comes back round in `resolved` and a bare token
+        # test here silently re-grants the credit the clause rule above just
+        # withheld. Measured: that defeated the clause rule on 14 of the 17
+        # statements it had correctly demoted. Same rule, both places.
+        if any(_tenant_predicate_in_sql(r) for r in resolved) or (resolved & TENANT_TOKENS):
             continue
         auth_names = _auth_bound_names(fn) if fn is not None else set()
         if auth_names & names:
@@ -1351,6 +1621,7 @@ ROUTE_DECORATOR_METHODS = frozenset({"get", "post", "put", "patch", "delete", "h
 #: joined back into exactly the paths `scan_route_reachability` emits.
 _EP = "services/api/app/api/v1/endpoints"
 _SV = "services/api/app/services"
+_AU = "services/api/app/auth"
 _OSQ = "services/osquery-tls/app"
 
 ROUTE_REACHABLE: dict[str, str] = {
@@ -1449,12 +1720,60 @@ ROUTE_REACHABLE: dict[str, str] = {
     f"{_EP}/admin_users.py::remove_role -> {_EP}/admin_users.py::_guard_last_admin": "same last-admin guard, role-revoke leg",
     f"{_EP}/admin_users.py::set_roles -> {_EP}/admin_users.py::_end_sessions": "same validated user id, role-replace leg",
     f"{_EP}/admin_users.py::set_roles -> {_EP}/admin_users.py::_guard_last_admin": "same last-admin guard, role-replace leg",
+    # -- pre-auth: the request has no tenant yet, which is why it is here ----
+    # Twelve pairs that appeared together when `_tenant_predicate_in_sql`
+    # withdrew the bare-token credit from the four statements behind them.
+    # They are the first of this table's four shapes and the least ambiguous
+    # one: a handler cannot filter on a tenant it has not been assigned, and
+    # each of these statements is the thing that assigns it.
+    f"{_AU}/oidc.py::oidc_callback -> {_AU}/sso_provisioning.py::resolve_connection": (
+        "the OIDC callback arrives with an authorization code and an issuer, not a session; the "
+        "connection row it resolves is what names the tenant the user is provisioned into"
+    ),
+    f"{_AU}/saml.py::saml_acs -> {_AU}/sso_provisioning.py::resolve_connection": (
+        "the SAML assertion consumer service, same reasoning as the OIDC callback: unauthenticated "
+        "by construction, and the resolved connection is what assigns the tenant"
+    ),
+    f"{_AU}/saml.py::saml_acs -> {_AU}/saml_metadata.py::resolve_saml_connection": (
+        "the ACS resolves the connection a second time by the assertion's issuer in order to load "
+        "the signing certificate it must verify against, before anything in the assertion is trusted"
+    ),
+    f"{_AU}/saml.py::saml_login -> {_AU}/saml_metadata.py::resolve_saml_connection": (
+        "SP-initiated sign-in: the console link carries no issuer and no principal, so this is the "
+        "lookup that decides which IdP to redirect to"
+    ),
+    f"{_AU}/saml.py::saml_logout -> {_AU}/saml_metadata.py::resolve_saml_connection": (
+        "single logout is reached with the session already being torn down and must resolve the "
+        "same connection to validate the LogoutRequest's signature"
+    ),
+    f"{_EP}/inbox_itsm.py::inbound_itsm_webhook -> {_EP}/inbox_itsm.py::_fetch_token_and_connector": (
+        "the vendor's ITSM webhook authenticates with an opaque inbox token and nothing else. The "
+        "helper is the tenant resolution step, and its second statement is deliberately "
+        "cross-tenant so a token from one tenant aimed at another tenant's connector is detected "
+        "and logged rather than silently 404'd"
+    ),
+    f"{_EP}/auth.py::login -> {_EP}/mfa.py::enrolment_row": (
+        "sign-in asks whether the user it has just resolved holds a second factor, keyed on that "
+        "user's own id. A tenant predicate would add nothing: user_id is the narrower key"
+    ),
+    f"{_EP}/mfa.py::mfa_status -> {_EP}/mfa.py::enrolment_row": "reads current_user.user_id's own enrolment",
+    f"{_EP}/mfa.py::enroll_begin -> {_EP}/mfa.py::enrolment_row": "same, enrolment leg: principal.user_id only",
+    f"{_EP}/mfa.py::enroll_confirm -> {_EP}/mfa.py::enrolment_row": "same, confirmation leg: principal.user_id only",
+    f"{_EP}/mfa.py::verify -> {_EP}/mfa.py::enrolment_row": (
+        "second-factor verification during sign-in, keyed on the user id carried by the signed sign-in challenge the caller presented"
+    ),
+    f"{_EP}/mfa.py::disable -> {_EP}/mfa.py::enrolment_row": "same, disable leg: current_user.user_id only",
 }
 
 #: Shrink-only, exactly like MAX_RATCHET. 34 is what `main` measured once the
 #: fixed route stopped reaching the scheduler's sweep; the vulnerable tree
 #: measured 35.
-MAX_ROUTE_REACHABLE = 34
+#: 34 -> 46 alongside MAX_RATCHET's 60 -> 77 and for the same reason: the
+#: twelve pairs added were not reachable-by-a-request findings that appeared,
+#: they are pairs that became *visible* when the four statements behind them
+#: stopped being credited by a token in a projection. All twelve are pre-auth
+#: routes, the shape whose exemption is strongest, and no handler changed.
+MAX_ROUTE_REACHABLE = 46
 
 #: How far to follow calls out of a handler. Four frames covers
 #: handler -> service -> repository with room to spare.
@@ -1707,6 +2026,195 @@ from sqlalchemy import text
 
 async def get_widget(widget_id, db):
     return await db.execute(text("SELECT * FROM widgets WHERE id = :id").bindparams(id=widget_id))
+"""
+
+# ── where `tenant_id` sits, one probe per clause the dialect offers ────────
+#
+# The rule this exercises is `_tenant_predicate_in_sql`. A sibling gate in this
+# tree printed OK over four real violations because its detector knew two
+# syntaxes out of five, so these are written per *clause* rather than per
+# instance found on `main`: every clause a tenant column can legally appear in
+# gets a probe, on whichever side of the rule it belongs.
+#
+# Must be FLAGGED — the token is there and constrains nothing.
+
+_SQL_TENANT_IN_RETURNING = """
+from sqlalchemy import text
+
+async def expire(db):
+    return await db.execute(text(
+        "UPDATE widgets SET status = 'expired' WHERE expires_at < now() RETURNING id, tenant_id"
+    ))
+"""
+
+_SQL_TENANT_IN_PROJECTION = """
+from sqlalchemy import text
+
+async def get_widget(widget_id, db):
+    return await db.execute(text(
+        "SELECT id, tenant_id, secret FROM widgets WHERE id = :id"
+    ).bindparams(id=widget_id))
+"""
+
+_SQL_TENANT_IN_ORDER_BY = """
+from sqlalchemy import text
+
+async def all_widgets(db):
+    return await db.execute(text("SELECT id, secret FROM widgets ORDER BY tenant_id"))
+"""
+
+_SQL_TENANT_IN_GROUP_BY = """
+from sqlalchemy import text
+
+async def depth(db):
+    return await db.execute(text("SELECT count(*) FROM widgets GROUP BY tenant_id"))
+"""
+
+_SQL_TENANT_IN_COMMENT = """
+from sqlalchemy import text
+
+async def get_widget(widget_id, db):
+    return await db.execute(text(
+        "SELECT id FROM widgets -- callers must pass tenant_id\\n WHERE id = :id"
+    ).bindparams(id=widget_id))
+"""
+
+_SQL_TENANT_IN_BLOCK_COMMENT = """
+from sqlalchemy import text
+
+async def get_widget(widget_id, db):
+    return await db.execute(text(
+        "SELECT id FROM widgets /* tenant_id is applied by RLS */ WHERE id = :id"
+    ).bindparams(id=widget_id))
+"""
+
+_SQL_TENANT_IN_UPDATE_SET = """
+from sqlalchemy import text
+
+async def reassign(widget_id, new_tenant, db):
+    return await db.execute(text(
+        "UPDATE widgets SET tenant_id = :t WHERE id = :id"
+    ).bindparams(t=new_tenant, id=widget_id))
+"""
+
+# Must PASS — the token constrains which rows are read or written.
+
+_SQL_TENANT_IN_WHERE = """
+from sqlalchemy import text
+
+async def get_widget(widget_id, db):
+    return await db.execute(text(
+        "SELECT id, secret FROM widgets WHERE id = :id AND tenant_id = :t"
+    ).bindparams(id=widget_id, t="x"))
+"""
+
+_SQL_TENANT_IN_JOIN_ON = """
+from sqlalchemy import text
+
+async def joined(db):
+    return await db.execute(text(
+        "SELECT w.id FROM widgets w JOIN gadgets g ON g.tenant_id = w.tenant_id WHERE w.id = :id"
+    ).bindparams(id="x"))
+"""
+
+_SQL_TENANT_IN_USING = """
+from sqlalchemy import text
+
+async def joined(db):
+    return await db.execute(text("SELECT w.id FROM widgets w JOIN gadgets USING (tenant_id)"))
+"""
+
+_SQL_TENANT_IN_HAVING = """
+from sqlalchemy import text
+
+async def noisy(db):
+    return await db.execute(text(
+        "SELECT count(*) FROM widgets GROUP BY kind HAVING tenant_id = :t"
+    ).bindparams(t="x"))
+"""
+
+_SQL_TENANT_IN_INSERT_COLUMNS = """
+from sqlalchemy import text
+
+async def add(db):
+    return await db.execute(text(
+        "INSERT INTO widgets (id, tenant_id, secret) VALUES (:id, :t, :s) RETURNING id"
+    ).bindparams(id="i", t="x", s="s"))
+"""
+
+_SQL_TENANT_IN_ON_CONFLICT = """
+from sqlalchemy import text
+
+async def upsert(db):
+    return await db.execute(text(
+        "INSERT INTO widgets (id, secret) VALUES (:id, :s) "
+        "ON CONFLICT (tenant_id, id) DO UPDATE SET secret = EXCLUDED.secret"
+    ).bindparams(id="i", s="s"))
+"""
+
+_SQL_TENANT_IN_SUBQUERY_WHERE = """
+from sqlalchemy import text
+
+async def claim(db):
+    return await db.execute(text(
+        "UPDATE widgets SET claimed = true WHERE id IN ("
+        "  SELECT id FROM widgets WHERE tenant_id = :t LIMIT 10) RETURNING id"
+    ).bindparams(t="x"))
+"""
+
+_SQL_TENANT_IN_CTE = """
+from sqlalchemy import text
+
+async def recent(db):
+    return await db.execute(text(
+        "WITH mine AS (SELECT id FROM widgets WHERE tenant_id = :t) "
+        "SELECT id FROM mine"
+    ).bindparams(t="x"))
+"""
+
+_SQL_TENANT_CAST_THEN_COMPARED = """
+from sqlalchemy import text
+
+async def get_widget(db):
+    return await db.execute(text("SELECT id FROM widgets WHERE tenant_id::uuid = $1"))
+"""
+
+# The two ways a predicate arrives from outside the string the scanner reads.
+# Both land on `_tenant_predicate_in_sql`, by different routes: the f-string
+# flattens into one blob carrying its own WHERE, while the appended fragment
+# has no clause keyword at all and is credited only because the token is one
+# side of a comparison. The second is the branch a clause-position rule would
+# otherwise get wrong, and it is how `alert_source_link.py`'s four call sites
+# are written.
+_SQL_TENANT_VIA_FSTRING = """
+from sqlalchemy import text
+
+_COLUMNS = "SELECT id, secret"
+
+async def get_widget(widget_id, tenant, db):
+    return await db.execute(
+        text(f"{_COLUMNS} FROM widgets WHERE tenant_id = :t AND id = :id").bindparams(t=tenant, id=widget_id)
+    )
+"""
+
+_SQL_TENANT_VIA_APPENDED_FRAGMENT = """
+from sqlalchemy import text
+
+async def get_widget(widget_id, tenant, db):
+    sql = "SELECT id, secret FROM widgets WHERE id = :id"
+    sql += " AND tenant_id = :t"
+    return await db.execute(text(sql).bindparams(id=widget_id, t=tenant))
+"""
+
+#: The fragment branch must not become a blanket pass: a fragment that merely
+#: *names* the column, as an appended projection would, still credits nothing.
+_SQL_FRAGMENT_NAMES_BUT_DOES_NOT_COMPARE = """
+from sqlalchemy import text
+
+async def get_widget(widget_id, db):
+    sql = "SELECT id FROM widgets WHERE id = :id"
+    sql += " ORDER BY tenant_id"
+    return await db.execute(text(sql).bindparams(id=widget_id))
 """
 
 _SCOPED_VIA_LIST = """
@@ -2005,6 +2513,33 @@ def _self_test() -> int:
             "control: a Core table declaring no tenant column is not tenant-scoped",
             {"core_tables.py": _CORE_TABLE_DECL, "r.py": _CORE_TABLE_WITHOUT_TENANT},
             0,
+            None,
+        ),
+        # Clause position in raw SQL. Every clause a tenant column can legally
+        # appear in, on the side of the rule it belongs to. The bare-token
+        # match passed all seven of the first group.
+        ("drift I: tenant_id only in a RETURNING list", {"r.py": _SQL_TENANT_IN_RETURNING}, 1, None),
+        ("drift J: tenant_id only in a SELECT projection", {"r.py": _SQL_TENANT_IN_PROJECTION}, 1, None),
+        ("drift K: tenant_id only in an ORDER BY", {"r.py": _SQL_TENANT_IN_ORDER_BY}, 1, None),
+        ("drift L: tenant_id only in a GROUP BY", {"r.py": _SQL_TENANT_IN_GROUP_BY}, 1, None),
+        ("drift M: tenant_id only in a -- line comment", {"r.py": _SQL_TENANT_IN_COMMENT}, 1, None),
+        ("drift N: tenant_id only in a /* block comment */", {"r.py": _SQL_TENANT_IN_BLOCK_COMMENT}, 1, None),
+        ("drift O: UPDATE SET tenant_id rewrites the column, it does not scope", {"r.py": _SQL_TENANT_IN_UPDATE_SET}, 1, None),
+        ("control: tenant_id in a WHERE", {"r.py": _SQL_TENANT_IN_WHERE}, 0, None),
+        ("control: tenant_id in a JOIN ... ON", {"r.py": _SQL_TENANT_IN_JOIN_ON}, 0, None),
+        ("control: tenant_id in a USING (...)", {"r.py": _SQL_TENANT_IN_USING}, 0, None),
+        ("control: tenant_id in a HAVING", {"r.py": _SQL_TENANT_IN_HAVING}, 0, None),
+        ("control: INSERT column list stamps the written row", {"r.py": _SQL_TENANT_IN_INSERT_COLUMNS}, 0, None),
+        ("control: ON CONFLICT target selects the upserted row", {"r.py": _SQL_TENANT_IN_ON_CONFLICT}, 0, None),
+        ("control: predicate inside a subquery, RETURNING outside it", {"r.py": _SQL_TENANT_IN_SUBQUERY_WHERE}, 0, None),
+        ("control: predicate inside a CTE", {"r.py": _SQL_TENANT_IN_CTE}, 0, None),
+        ("control: tenant_id::uuid = $1 — a cast before the operator", {"r.py": _SQL_TENANT_CAST_THEN_COMPARED}, 0, None),
+        ("control: predicate carried in by an f-string", {"r.py": _SQL_TENANT_VIA_FSTRING}, 0, None),
+        ("control: predicate appended as a bare fragment", {"r.py": _SQL_TENANT_VIA_APPENDED_FRAGMENT}, 0, None),
+        (
+            "drift P: an appended fragment that names tenant_id without comparing it",
+            {"r.py": _SQL_FRAGMENT_NAMES_BUT_DOES_NOT_COMPARE},
+            1,
             None,
         ),
     ]
