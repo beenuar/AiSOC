@@ -667,6 +667,40 @@ class TestApprovalIsBoundToTheIntent:
         with VENDOR.lock:
             assert VENDOR.contain_calls, "nothing reached the vendor"
 
+    async def test_a_resubmission_cannot_change_the_parameters_either(self, replicas, vendor_base_url) -> None:
+        """The subtler half, and the one a target-only guard would miss.
+
+        An action gated *because of what it targets* can be rewritten through
+        its parameters alone — same verb, same host, a different thing done to
+        it — and the approval card would not change at all.
+        """
+        a, b = replicas
+        tenant = str(uuid.uuid4())
+        action_id = str(uuid.uuid4())
+        agent = _principal(tenant, user_id="agents-service")
+        params = _vendor_params(vendor_base_url)
+
+        first = await _submit(a, tenant=tenant, action_id=action_id, requester=agent, principal=agent, target="ws-4471", params=params)
+        assert first.status_code == 200
+        assert "scope" not in first.json()["parameters"]
+
+        altered = await _submit(
+            b,
+            tenant=tenant,
+            action_id=action_id,
+            requester=agent,
+            principal=agent,
+            target="ws-4471",
+            params={**params, "scope": "entire-subnet"},
+        )
+        assert altered.status_code == 409, (
+            f"a pending action's parameters were rewritten while it awaited approval: {altered.status_code} {altered.text}"
+        )
+
+        stored = await _read_record(_DSN, action_id)
+        assert stored is not None
+        assert "scope" not in (stored.get("parameters") or {}), stored.get("parameters")
+
     async def test_an_identical_resubmission_is_still_idempotent(self, replicas, vendor_base_url) -> None:
         """A retried submit of the same intent must not become an error.
 

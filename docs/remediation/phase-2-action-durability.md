@@ -411,8 +411,8 @@ containers on loopback sockets, and a recording HTTP vendor.
 
 | Check | Result |
 | --- | --- |
-| `tests/isolation/test_action_durability_live.py` **before** the fix | 19 failed, 7 passed |
-| the same suite **after** | **26 passed** |
+| `tests/isolation/test_action_durability_live.py` **before** the fix | 20 failed, 7 passed |
+| the same suite **after** | **27 passed** |
 | `services/actions` offline suite | 1,237 passed (baseline 1,234 + 3 new) |
 | `services/api` offline suite | 4,964 passed, 164 skipped |
 | `ruff check services/ scripts/ tests/ tools/` | All checks passed |
@@ -441,7 +441,7 @@ which pair is load-bearing is the accurate claim.
 
 Written against a weaker design, both now assert a stronger property, and both
 were re-run against the pre-fix tree to confirm they still fail there (they are
-in the 19).
+in the 20).
 
 * A lost vendor response was expected to produce `reconciliation_required`. The
   implementation reads the device back, finds it contained, and records
