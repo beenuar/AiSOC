@@ -247,7 +247,9 @@ def load_records() -> tuple[PerformanceRecord, ...]:
     return _cached_records()
 
 
-def _matches(record: PerformanceRecord, *, model: str, prompt_version: str, prompt_sha256: str, tenant_context: str, alert_class: str | None) -> bool:
+def _matches(
+    record: PerformanceRecord, *, model: str, prompt_version: str, prompt_sha256: str, tenant_context: str, alert_class: str | None
+) -> bool:
     if record.model != model:
         return False
     if record.prompt_version != prompt_version or record.prompt_sha256 != prompt_sha256:
@@ -282,7 +284,18 @@ def evaluate_eligibility(
             require_measured=strict,
         )
 
-    candidates = [r for r in rows if _matches(r, model=model, prompt_version=prompt_version, prompt_sha256=prompt_sha256, tenant_context=tenant_context, alert_class=alert_class)]
+    candidates = [
+        r
+        for r in rows
+        if _matches(
+            r,
+            model=model,
+            prompt_version=prompt_version,
+            prompt_sha256=prompt_sha256,
+            tenant_context=tenant_context,
+            alert_class=alert_class,
+        )
+    ]
     if not candidates:
         return EligibilityDecision(
             state=Eligibility.UNMEASURED,

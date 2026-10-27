@@ -152,6 +152,56 @@ def _alert_class_of(state: InvestigationState) -> str | None:
     return None
 
 
+def _scannable_fields(state: InvestigationState) -> list[tuple[str, Any]]:
+    """Every attacker-reachable block that reaches this prompt, for the guard.
+
+    The scan used to see ``raw_alert`` and nothing else, while the prompt is
+    assembled from five channels. Measured by ablation in
+    ``tests/adversarial/test_authorization_under_compromise.py``: a payload
+    placed in a retrieved runbook, in a prior analyst decision or in compiled
+    organisation memory reached the model and was scanned by nothing.
+
+    All three are genuinely attacker-reachable. A runbook is imported in bulk
+    from wikis and vendor advisories and routinely quotes attacker output
+    verbatim — ``app.context.knowledge_base`` fences it for exactly that
+    reason. A disposition's ``scope_value`` and a memory statement both
+    interpolate alert-derived values such as a process name or a hostname.
+
+    Flat ``(name, value)`` pairs, because that is what ``scan_evidence_fields``
+    takes, and the names are prefixed so a signal names the channel it came
+    from rather than a bare key an operator cannot place.
+
+    This is a detection signal and not the control: the authorization property
+    holds through ``claim_support`` whether or not any of this matches, which
+    the ablation in that suite is what proves. What it adds is coverage of
+    ``injection_suspected``, which gates whether a benign disposition reached
+    through attacker-reachable text may ever auto-close a later alert of the
+    same signature.
+    """
+    fields: list[tuple[str, Any]] = [
+        (str(k), v) for k, v in (state.raw_alert or {}).items() if isinstance(v, str | int | float | list | dict)
+    ]
+
+    for index, row in enumerate((state.knowledge_base or {}).get("runbooks") or []):
+        if isinstance(row, dict):
+            fields.append((f"knowledge_base.runbooks[{index}].content", row.get("content")))
+
+    for index, row in enumerate((state.recent_dispositions or {}).get("decisions") or []):
+        if isinstance(row, dict):
+            fields.append((f"recent_dispositions.decisions[{index}].note", row.get("note")))
+            fields.append((f"recent_dispositions.decisions[{index}].scope_value", row.get("scope_value")))
+
+    for index, row in enumerate(state.organisation_memory or []):
+        if isinstance(row, dict):
+            fields.append((f"organisation_memory[{index}].statement", row.get("statement")))
+
+    skill = state.tenant_skill or {}
+    if skill.get("triage_guidance"):
+        fields.append(("tenant_skill.triage_guidance", skill.get("triage_guidance")))
+
+    return [(name, value) for name, value in fields if isinstance(value, str | int | float | list | dict)]
+
+
 def _triage_prompt() -> Any:
     """The registered prompt this agent sends, for provenance.
 
@@ -443,7 +493,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # agent can never be steered into auto-closing an alert whose own evidence
     # is trying to manipulate the model. Per-run nonce fences the instructions.
     raw = state.raw_alert or {}
-    injection = scan_evidence_fields((str(k), v) for k, v in raw.items() if isinstance(v, str | int | float | list | dict))
+    injection = scan_evidence_fields(_scannable_fields(state))
     nonce = make_nonce()
 
     alert_context = _build_alert_context(state, nonce=nonce)
@@ -666,7 +716,9 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     if claim_support.blocks_auto_close:
         _metrics["unsupported_decisive_claims"] += 1
         should_auto_close = False
-        state.confidence_basis.append(f"claim_support={claim_support.score if claim_support.scored else 'not scored'} ({claim_support.reason})")
+        state.confidence_basis.append(
+            f"claim_support={claim_support.score if claim_support.scored else 'not scored'} ({claim_support.reason})"
+        )
         state.add_finding(f"Auto-close blocked: {claim_support.reason} Routed to manual review.")
         logger.warning(
             "auto_triage.unsupported_decisive_claim",

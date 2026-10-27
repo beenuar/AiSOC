@@ -275,7 +275,9 @@ _SUPPORT_FALLBACK: dict[ClaimKind, tuple[ClaimKind, ...]] = {
 }
 
 #: Values that mean a support key is present and says *no*. Lower-cased.
-_DENIALS = frozenset({"false", "no", "none", "null", "nil", "n/a", "na", "unknown", "", "0", "revoked", "expired", "denied", "rejected", "pending"})
+_DENIALS = frozenset(
+    {"false", "no", "none", "null", "nil", "n/a", "na", "unknown", "", "0", "revoked", "expired", "denied", "rejected", "pending"}
+)
 
 #: Keys whose truthiness inverts: `outside_change_window: true` denies.
 _INVERTED_KEYS = frozenset({"outside_change_window", "unapproved", "unauthorized", "unauthorised", "unscheduled"})

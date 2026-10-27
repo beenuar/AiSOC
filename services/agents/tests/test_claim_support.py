@@ -27,7 +27,6 @@ would make the test measure the model instead.
 from __future__ import annotations
 
 import pytest
-
 from app.confidence.claim_support import ClaimKind, score_claim_support
 from app.confidence.groundedness import score_groundedness
 
@@ -205,7 +204,7 @@ def test_a_change_id_the_evidence_does_not_carry_is_never_supported() -> None:
 
 
 def test_a_prior_review_claim_is_not_covered_by_a_change_record() -> None:
-    """"An analyst closed this before" is a different assertion from "it was approved"."""
+    """ "An analyst closed this before" is a different assertion from "it was approved"."""
     evidence = {**SCAN_EVIDENCE, "change_ticket": "CHG0049112", "approved_by": "security-engineering"}
     rationale = "An analyst has reviewed this signature and closed it as a known false-positive."
 

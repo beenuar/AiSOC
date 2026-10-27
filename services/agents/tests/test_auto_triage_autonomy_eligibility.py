@@ -18,7 +18,6 @@ import json
 from uuid import uuid4
 
 import pytest
-
 from app.agents import auto_triage_agent
 from app.confidence import eligibility
 from app.confidence.eligibility import PerformanceRecord
@@ -35,7 +34,9 @@ CLEAN_ALERT = {
 
 #: A rationale that reasons from the telemetry and makes no decisive claim,
 #: so the claim-support gate does not fire and this file measures one thing.
-CLEAN_RATIONALE = "The rule counts distinct destination ports and this source contacted 1024 of them, which is the condition it was written for."
+CLEAN_RATIONALE = (
+    "The rule counts distinct destination ports and this source contacted 1024 of them, which is the condition it was written for."
+)
 
 
 class _FixedReply:

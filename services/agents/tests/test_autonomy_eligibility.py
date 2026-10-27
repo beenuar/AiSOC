@@ -35,7 +35,6 @@ import json
 from pathlib import Path
 
 import pytest
-
 from app.confidence import eligibility
 from app.confidence.eligibility import Eligibility, PerformanceRecord, evaluate_eligibility, load_records
 

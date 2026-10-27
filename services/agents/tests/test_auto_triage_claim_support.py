@@ -19,7 +19,6 @@ import json
 from uuid import uuid4
 
 import pytest
-
 from app.agents import auto_triage_agent
 from app.models.state import AgentStatus, InvestigationState
 
@@ -81,7 +80,9 @@ async def test_unsupported_authorization_claim_blocks_the_closure(pin_model) -> 
         {
             "verdict": "benign_true_positive",
             "confidence": 0.97,
-            "rationale": ("Traffic from 198.51.100.14 to 203.0.113.7 is our approved vulnerability scanner, authorized under change CHG0049112."),
+            "rationale": (
+                "Traffic from 198.51.100.14 to 203.0.113.7 is our approved vulnerability scanner, authorized under change CHG0049112."
+            ),
         }
     )
 
@@ -117,7 +118,10 @@ async def test_a_rationale_making_no_decisive_claim_still_closes(pin_model) -> N
         {
             "verdict": "false_positive",
             "confidence": 0.95,
-            "rationale": "The rule counts distinct destination ports and this source contacted 1024 of them, which is the condition it was written for; the dst_ip 203.0.113.7 is the scanner collector.",
+            "rationale": (
+                "The rule counts distinct destination ports and this source contacted 1024 of them, "
+                "which is the condition it was written for; the dst_ip 203.0.113.7 is the collector."
+            ),
         }
     )
 
