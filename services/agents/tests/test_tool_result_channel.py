@@ -291,11 +291,19 @@ class TestAVerdictRestingOnACallThatNeverHappened:
     ) -> None:
         """The negative control for the demotion. A check that blocks every
         closure is indistinguishable from a broken one."""
+        # Reasons from the telemetry and claims no authorization. It used to
+        # say "originates from the authorised vulnerability scanner", which
+        # `app.confidence.claim_support` now withholds a closure for: the only
+        # thing backing it was the word "scan" inside the `note` field, and
+        # treating untrusted free text as an approval record would let anyone
+        # who can write into a log field authorize their own activity. The
+        # negative control this test *is* — that an ordinary rationale still
+        # closes — is unchanged and is what the assertions below check.
         _patch_llm(
             monkeypatch,
             verdict=FALSE_POSITIVE,
             confidence=0.99,
-            rationale="The scan originates from the authorised vulnerability scanner.",
+            rationale="The source is the host named in the alert and the destination set matches the rule's own threshold.",
         )
         ata._metrics["ungrounded_tool_claims"] = 0
 

@@ -39,6 +39,8 @@ from app.agents.dispositions import (
 )
 from app.closure import authorization as closure_authorization
 from app.closure.qa_sampling import ClosureQaSampler
+from app.confidence import eligibility
+from app.confidence.claim_support import score_claim_support
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
@@ -105,6 +107,16 @@ _metrics: dict[str, Any] = {
     # citation it is the sibling of: both are a claim whose provenance resolves
     # to nothing, and both block auto-close.
     "ungrounded_tool_claims": 0,
+    # Phase 7. A rationale asserting the activity was authorized, scheduled
+    # or already reviewed, where nothing in the evidence or in the tenant's
+    # own recorded context says so. Counted beside the two above because it
+    # is the same defect one level up: a *conclusion* whose provenance
+    # resolves to nothing, rather than an indicator or a tool result.
+    "unsupported_decisive_claims": 0,
+    # Phase 7. A closure the tenant's policy allowed and measured performance
+    # did not: either this model/prompt/class has never been graded closing
+    # alerts, under the strict posture, or it has been graded and fell short.
+    "autonomy_not_earned": 0,
 }
 
 
@@ -140,6 +152,69 @@ def _alert_class_of(state: InvestigationState) -> str | None:
         if isinstance(value, str) and value.strip():
             return value.strip()
     return closure_authorization.alert_class_of(getattr(state, "raw_alert", None) or {})
+
+
+def _scannable_fields(state: InvestigationState) -> list[tuple[str, Any]]:
+    """Every attacker-reachable block that reaches this prompt, for the guard.
+
+    The scan used to see ``raw_alert`` and nothing else, while the prompt is
+    assembled from five channels. Measured by ablation in
+    ``tests/adversarial/test_authorization_under_compromise.py``: a payload
+    placed in a retrieved runbook, in a prior analyst decision or in compiled
+    organisation memory reached the model and was scanned by nothing.
+
+    All three are genuinely attacker-reachable. A runbook is imported in bulk
+    from wikis and vendor advisories and routinely quotes attacker output
+    verbatim — ``app.context.knowledge_base`` fences it for exactly that
+    reason. A disposition's ``scope_value`` and a memory statement both
+    interpolate alert-derived values such as a process name or a hostname.
+
+    Flat ``(name, value)`` pairs, because that is what ``scan_evidence_fields``
+    takes, and the names are prefixed so a signal names the channel it came
+    from rather than a bare key an operator cannot place.
+
+    This is a detection signal and not the control: the authorization property
+    holds through ``claim_support`` whether or not any of this matches, which
+    the ablation in that suite is what proves. What it adds is coverage of
+    ``injection_suspected``, which gates whether a benign disposition reached
+    through attacker-reachable text may ever auto-close a later alert of the
+    same signature.
+    """
+    fields: list[tuple[str, Any]] = [
+        (str(k), v) for k, v in (state.raw_alert or {}).items() if isinstance(v, str | int | float | list | dict)
+    ]
+
+    for index, row in enumerate((state.knowledge_base or {}).get("runbooks") or []):
+        if isinstance(row, dict):
+            fields.append((f"knowledge_base.runbooks[{index}].content", row.get("content")))
+
+    for index, row in enumerate((state.recent_dispositions or {}).get("decisions") or []):
+        if isinstance(row, dict):
+            fields.append((f"recent_dispositions.decisions[{index}].note", row.get("note")))
+            fields.append((f"recent_dispositions.decisions[{index}].scope_value", row.get("scope_value")))
+
+    for index, row in enumerate(state.organisation_memory or []):
+        if isinstance(row, dict):
+            fields.append((f"organisation_memory[{index}].statement", row.get("statement")))
+
+    skill = state.tenant_skill or {}
+    if skill.get("triage_guidance"):
+        fields.append(("tenant_skill.triage_guidance", skill.get("triage_guidance")))
+
+    return [(name, value) for name, value in fields if isinstance(value, str | int | float | list | dict)]
+
+
+def _triage_prompt() -> Any:
+    """The registered prompt this agent sends, for provenance.
+
+    Read from the registry rather than hashed here, so the version and hash
+    recorded against a closure are the same pair `prompts.lock.json` pins and
+    `scripts/check_prompt_lock.py` gates. A measurement taken on one prompt
+    must not authorise a closure made under another.
+    """
+    from app.llm.prompt_registry import _shipped
+
+    return _shipped().get("triage.system")
 
 
 def get_threshold() -> float:
@@ -420,7 +495,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # agent can never be steered into auto-closing an alert whose own evidence
     # is trying to manipulate the model. Per-run nonce fences the instructions.
     raw = state.raw_alert or {}
-    injection = scan_evidence_fields((str(k), v) for k, v in raw.items() if isinstance(v, str | int | float | list | dict))
+    injection = scan_evidence_fields(_scannable_fields(state))
     nonce = make_nonce()
 
     alert_context = _build_alert_context(state, nonce=nonce)
@@ -546,6 +621,23 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # something that did not happen.
     fabricated_tools = unverified_tool_claims(rationale, called_tools=())
 
+    # Phase 7. The third member of that family, and the one indicator
+    # grounding is structurally blind to: a conclusion that reuses the
+    # alert's own valid indicators to assert something the evidence does not
+    # say. "198.51.100.14 is our approved scanner, change CHG0049112" scores
+    # 1.0 on groundedness — every indicator it cites is in the evidence — and
+    # there is no scanner and no change record anywhere in the payload.
+    #
+    # `organisation_memory` is passed as supporting context because the
+    # tenant's own compiled record of what analysts have repeatedly decided is
+    # authoritative for "this is sanctioned here" and is not in the payload.
+    # It reaches the prompt outside the untrusted fence for the same reason.
+    claim_support = score_claim_support(
+        rationale,
+        state.raw_alert,
+        supporting_context=render_for_prompt(state.organisation_memory),
+    )
+
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
     state.add_finding(f"Auto-triage rationale: {rationale}")
 
@@ -564,6 +656,43 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         default_threshold=AUTO_CLOSE_THRESHOLD,
     )
     should_auto_close = verdict in AUTO_CLOSEABLE_DISPOSITIONS and closure.allowed
+
+    # Phase 7. The threshold above compares the model's own `confidence`
+    # field against a number, and that is the whole of the numeric gate on
+    # unattended closure. A model reporting 0.97 on every reply clears it
+    # every time, and nothing has ever checked whether a 0.97 was earned.
+    #
+    # This asks the separate question: has *this* model, on *this* prompt
+    # version and hash, for this tenant context and alert class, been measured
+    # closing alerts correctly over a minimum sample, recently enough to still
+    # describe what is running? It can only narrow — it withholds a closure
+    # the policy allowed and never grants one the policy withheld — which is
+    # the contract the three demotions below already hold to, and it is why
+    # it does not touch `app.closure.policy`.
+    #
+    # With no funded evaluation provider the committed record carries zero
+    # rows, so every configuration resolves to UNMEASURED, which is additive
+    # by default and denied under AISOC_AUTONOMY_REQUIRE_MEASURED=1. The
+    # verdict is recorded on the basis either way: "not measured" belongs in
+    # front of whoever reviews the closure.
+    autonomy = eligibility.evaluate_eligibility(
+        model=getattr(llm, "model_name", None) or getattr(llm, "model", None),
+        prompt_version=_triage_prompt().version,
+        prompt_sha256=_triage_prompt().sha256,
+        tenant_context=str(state.tenant_id) if getattr(state, "tenant_id", None) else "default",
+        alert_class=_alert_class_of(state),
+    )
+    state.confidence_basis.append(f"auto_closure_safety={autonomy.render_precision()} ({autonomy.state.value}: {autonomy.reason})")
+    if should_auto_close and not autonomy.allows_auto_close:
+        _metrics["autonomy_not_earned"] += 1
+        should_auto_close = False
+        state.add_finding(f"Auto-close withheld: {autonomy.reason}. Routed to manual review.")
+        logger.warning(
+            "auto_triage.autonomy_not_earned",
+            incident_id=str(state.incident_id),
+            state=autonomy.state.value,
+            reason=autonomy.reason,
+        )
 
     if verdict in AUTO_CLOSEABLE_DISPOSITIONS and not closure.allowed:
         # Say why. An operator asking "why was this not closed" gets an
@@ -584,6 +713,21 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
             "auto_triage.unverified_tool_claim",
             incident_id=str(state.incident_id),
             claimed=fabricated_tools[:10],
+        )
+
+    if claim_support.blocks_auto_close:
+        _metrics["unsupported_decisive_claims"] += 1
+        should_auto_close = False
+        state.confidence_basis.append(
+            f"claim_support={claim_support.score if claim_support.scored else 'not scored'} ({claim_support.reason})"
+        )
+        state.add_finding(f"Auto-close blocked: {claim_support.reason} Routed to manual review.")
+        logger.warning(
+            "auto_triage.unsupported_decisive_claim",
+            incident_id=str(state.incident_id),
+            unsupported=[c.phrase for c in claim_support.unsupported][:10],
+            contradicted=[c.phrase for c in claim_support.contradicted][:10],
+            contradicted_by=list(claim_support.contradicted_by)[:10],
         )
 
     # Prompt-injection L0 demotion: a high-severity injection signal always

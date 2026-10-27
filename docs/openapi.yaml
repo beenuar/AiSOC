@@ -11669,6 +11669,78 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/kill-switch/global/engage:
+    post:
+      tags:
+      - autonomy
+      summary: Freeze autonomous closure and action dispatch for every tenant
+      description: 'Stop autonomous closure and dispatch across the whole deployment.
+
+
+        One row, upserted. The conflict target is the expression index
+
+        `aisoc_kill_switch_global_idx ON aisoc_kill_switch ((TRUE)) WHERE tenant_id
+
+        IS NULL`, which is what keeps the global switch a singleton rather than a
+
+        pile of rows a reader would have to reconcile at 3am.'
+      operationId: engage_global_api_v1_kill_switch_global_engage_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngageRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitchState'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/kill-switch/global/release:
+    post:
+      tags:
+      - autonomy
+      summary: Resume autonomous closure and action dispatch across every tenant
+      description: 'Release the platform-wide stop.
+
+
+        A tenant that engaged its own switch keeps it: the two scopes are
+
+        independent and neither needs the other''s agreement, so releasing globally
+
+        must not silently resume a tenant that asked to stay stopped.'
+      operationId: release_global_api_v1_kill_switch_global_release_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReleaseRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KillSwitchState'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/ledger/{run_id}/publish/preview:
     post:
       tags:

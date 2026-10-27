@@ -95,11 +95,41 @@ def test_btp_is_a_valid_detection_not_a_false_positive():
 
 @pytest.mark.asyncio
 async def test_approved_penetration_test_is_benign_true_positive(monkeypatch, authorized_closure_tenant):
-    _patch_llm(monkeypatch, BENIGN_TRUE_POSITIVE, 0.95, "approved red-team engagement, matches change ticket")
-    out = await ata.run_auto_triage(_state("Credential dumping on HR-LAPTOP", {"severity": "high", "risk_score": 0.8}))
+    _patch_llm(monkeypatch, BENIGN_TRUE_POSITIVE, 0.95, "approved red-team engagement, matches change ticket CHG0049112")
+    # The evidence now carries the approval the rationale cites. It did not,
+    # and this test asserted the closure anyway — so it was pinning "an
+    # unevidenced authorization claim may close an alert" as intended
+    # behaviour. That is the defect `app.confidence.claim_support` exists to
+    # stop, and the test below is the other half of the pair.
+    #
+    # The disposition invariant this file is about is untouched: a valid
+    # detection of authorized activity is still auto-closeable, and still not
+    # a false positive.
+    out = await ata.run_auto_triage(
+        _state(
+            "Credential dumping on HR-LAPTOP",
+            {"severity": "high", "risk_score": 0.8, "change_ticket": "CHG0049112", "approved_by": "security-engineering"},
+        )
+    )
     assert out.verdict == BENIGN_TRUE_POSITIVE
     # A valid detection of authorized activity is auto-closeable, not escalated.
     assert out.status == AgentStatus.COMPLETED
+
+
+@pytest.mark.asyncio
+async def test_unevidenced_approval_claim_does_not_auto_close(monkeypatch):
+    """The same verdict and the same confidence, with nothing backing the claim.
+
+    The verdict stays — the model is entitled to its reading — but the closure
+    is withheld, because "approved red-team engagement" is the sentence that
+    licenses closing the alert and the evidence contains no approval, no
+    engagement and no change record.
+    """
+    _patch_llm(monkeypatch, BENIGN_TRUE_POSITIVE, 0.95, "approved red-team engagement, matches change ticket")
+    out = await ata.run_auto_triage(_state("Credential dumping on HR-LAPTOP", {"severity": "high", "risk_score": 0.8}))
+    assert out.verdict == BENIGN_TRUE_POSITIVE
+    assert out.status != AgentStatus.COMPLETED
+    assert any("Auto-close blocked" in f for f in out.findings)
 
 
 @pytest.mark.asyncio

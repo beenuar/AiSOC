@@ -1,0 +1,15 @@
+{
+  "schema": "aisoc.autonomy_performance/v1",
+  "status": "pending",
+  "reason": "No evaluation provider is funded in this repository, so no auto-closure precision has been measured for any model. The honest content of this file is zero rows. A fabricated row, or a row scoring 0.000, would read as a measured grade and would be the defect app/confidence/eligibility.py exists to prevent. Every configuration therefore resolves to UNMEASURED, which is additive by default and denied under AISOC_AUTONOMY_REQUIRE_MEASURED=1.",
+  "produced_by": "scripts/run_verdict_eval.py --out <scorecard.json>, promoted by hand after review",
+  "promotion_rules": [
+    "A row may only be added from a scorecard whose mode is 'live' and whose llm_calls_placed is greater than zero. A deterministic run grades the offline fallback and says nothing about a model.",
+    "auto_close_precision is the scorecard's auto_close_precision, computed over auto_close_considered. It is not headline accuracy and the two must never be copied into one another.",
+    "samples is the scorecard's auto_close_considered, not its corpus_items. A corpus of 72 items does not yield 72 closure decisions.",
+    "prompt_version and prompt_sha256 come from the prompt registry at the revision graded, not from the current tree.",
+    "corpus_digest and code_revision are copied verbatim from the scorecard so a row can be traced back to the run that produced it.",
+    "A row measured on a corpus that was tuned against is not independent and must not be promoted."
+  ],
+  "records": []
+}

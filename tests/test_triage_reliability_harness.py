@@ -16,6 +16,18 @@ Parsed rather than imported: ``auto_triage_agent`` pulls in the agents service's
 dependency tree, which is not installed for the repository-level gates, and a
 test that skips when an import fails is a test that stops running the day the
 environment changes.
+
+That reasoning still holds and this file keeps its shape, but it is only half
+the coverage and the missing half cost a published figure. Parsing cannot
+notice that the harness does not *execute*: it imported ``_SYSTEM_PROMPT``
+from ``auto_triage_agent`` long after production moved to the prompt registry,
+so every run raised ``ImportError`` on the first alert while all three
+assertions below stayed green. The half that imports the harness and builds a
+real prompt through production is
+``services/agents/tests/test_triage_reliability_harness_runs.py``, which runs
+in the one CI job that installs ``services/agents/poetry.lock``. Keep both:
+this one is the always-on gate, that one is the one that can see a broken
+import.
 """
 
 from __future__ import annotations

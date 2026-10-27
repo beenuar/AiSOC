@@ -99,6 +99,12 @@ PERMISSIONS: Final[tuple[tuple[str, str, str], ...]] = (
     ("plugins:read", "View plugins", "plugins"),
     ("plugins:admin", "Administer plugins", "plugins"),
     ("plugins:execute", "Execute plugins", "plugins"),
+    # The platform-wide stop over autonomous closure and action dispatch.
+    # Deployment-wide authority, so no tenant-scoped role is granted it: the
+    # switch freezes every *other* tenant too, and `settings:write` — which a
+    # tenant administrator holds — would have handed that reach to all of
+    # them. Seeded by migration 123; see `endpoints/kill_switch.py`.
+    ("platform_kill_switch:write", "Engage or release the platform-wide kill switch", "system"),
     ("*", "Every permission (wildcard; admin role)", "system"),
 )
 

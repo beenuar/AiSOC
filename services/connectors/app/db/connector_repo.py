@@ -32,6 +32,7 @@ from sqlalchemy import (
     Table,
     Text,
     bindparam,
+    case,
     func,
     literal_column,
     select,
@@ -401,7 +402,38 @@ async def record_checkpoint(
     patch = bindparam("checkpoint_patch", {"checkpoint": checkpoint}, JSONB, unique=True)
     # A literal rather than another `cast(...)` bind, for the same reason.
     empty = literal_column("'{}'::jsonb")
-    merged = func.coalesce(connectors_table.c.connector_config, empty).op("||")(patch)
+    config = connectors_table.c.connector_config
+    # Heal the array a previous release left behind, at write time.
+    #
+    # ``_recover_connector_config`` recovers the array shape on *read*, but it
+    # never lands in the column: every ``||`` merge below would see the raw
+    # array and append the patch as one more element instead of setting the
+    # ``checkpoint`` key, so a connector upgraded past the fix kept its row
+    # corrupt forever — and the first API that validates the column strictly
+    # (``ConnectorResponse.connector_config: dict``) answers 500 for the whole
+    # connectors list, not just this row.
+    #
+    # The fold mirrors the read-side recovery: object elements merge left to
+    # right (later wins), double-encoded string elements are decoded and
+    # merged too, anything else is dropped. A hand-mangled string that starts
+    # with ``{`` but does not parse still raises — inside the scheduler's
+    # best-effort caller, which is the same failure shape as before: a failed
+    # checkpoint write costs a re-scan, never corruption.
+    heal_array = literal_column(
+        "(SELECT coalesce(jsonb_object_agg(kv.key, kv.value ORDER BY el.ord), '{}'::jsonb) "
+        "FROM jsonb_array_elements(connectors.connector_config) WITH ORDINALITY AS el(v, ord), "
+        "LATERAL jsonb_each(CASE "
+        "WHEN jsonb_typeof(el.v) = 'object' THEN el.v "
+        "WHEN jsonb_typeof(el.v) = 'string' AND left(btrim(el.v #>> '{}'), 1) = '{' "
+        "THEN btrim(el.v #>> '{}')::jsonb "
+        "ELSE '{}'::jsonb END) AS kv(key, value))"
+    )
+    base = case(
+        (config.is_(None), empty),
+        (func.jsonb_typeof(config) == "array", heal_array),
+        else_=config,
+    )
+    merged = base.op("||")(patch)
     stmt = update(connectors_table).where(connectors_table.c.id == connector_id).values(connector_config=merged, updated_at=now)
     await connection.execute(stmt)
 
