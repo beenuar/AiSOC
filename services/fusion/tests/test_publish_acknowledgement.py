@@ -36,6 +36,7 @@ from app.core.config import settings
 from app.models.alert import AlertSeverity, FusedAlert, FusionDecision, RawAlert
 from app.services.alert_sink import PersistOutcome, PersistResult
 from app.workers.consumer import FusionWorker, RetryableProcessingError
+
 from tests.kafka_doubles import TwoStageProducer
 
 
@@ -56,10 +57,19 @@ def _fused(alert: RawAlert) -> FusedAlert:
 
 
 def _worker(producer) -> tuple[FusionWorker, RawAlert]:  # noqa: ANN001
+    """A worker whose alert is always durable, so the test is about the publish.
+
+    The three ignores match the sibling durability suite: the worker only
+    ever awaits ``engine.process`` and ``sink.persist``, so a namespace and
+    a mock are the whole contract these tests need. Targeted rather than a
+    widened config, which is what ``check_mypy_baseline`` asks for.
+    """
     alert = _alert()
     fused = _fused(alert)
-    worker = FusionWorker(engine=SimpleNamespace(process=AsyncMock(return_value=fused)), sink=AsyncMock())
-    worker._sink.persist = AsyncMock(return_value=PersistResult(PersistOutcome.INSERTED, str(fused.id)))  # noqa: SLF001
+    worker = FusionWorker(engine=SimpleNamespace(process=AsyncMock(return_value=fused)), sink=AsyncMock())  # type: ignore[arg-type]
+    worker._sink.persist = AsyncMock(  # type: ignore[method-assign, union-attr]  # noqa: SLF001
+        return_value=PersistResult(PersistOutcome.INSERTED, str(fused.id))
+    )
     worker._producer = producer  # noqa: SLF001
     return worker, alert
 

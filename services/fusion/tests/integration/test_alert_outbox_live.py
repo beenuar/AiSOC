@@ -77,9 +77,10 @@ async def test_the_migration_applies_and_a_record_round_trips(pool):  # noqa: AN
         tenant_id=tenant, alert_id=alert_id, topic="aisoc.alerts.fused", key=alert_id, payload=_envelope(alert_id), error="broker down"
     )
 
-    count, oldest = await outbox.backlog()
+    count, oldest, by_tenant = await outbox.backlog()
     assert count == 1
     assert oldest is not None and oldest >= 0.0
+    assert by_tenant == {tenant: 1}, "an operator needs to know whose notifications are stuck, not just how many"
 
     claimed = await outbox.claim(limit=10, lease_seconds=30.0, grace_seconds=0.0)
     assert len(claimed) == 1
@@ -88,7 +89,7 @@ async def test_the_migration_applies_and_a_record_round_trips(pool):  # noqa: AN
     assert claimed[0].key == alert_id
     assert claimed[0].attempts == 1
 
-    await outbox.resolve([claimed[0].id])
+    await outbox.resolve(claimed)
     assert (await outbox.backlog())[0] == 0
 
 
@@ -188,4 +189,4 @@ async def test_a_missing_table_is_reported_rather_than_silently_absorbed(pool): 
 
     assert await outbox.record(tenant_id=str(uuid.uuid4()), alert_id=str(uuid.uuid4()), topic="t", key="k", payload={}, error="x") is False
     assert outbox.available is False
-    assert await outbox.backlog() == (None, None), "an unreadable backlog is not an empty one"
+    assert await outbox.backlog() == (None, None, {}), "an unreadable backlog is not an empty one"

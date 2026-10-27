@@ -43,6 +43,7 @@ from app.services.windowed_detection import (
     load_sequence_rules,
     load_window_rules,
 )
+
 from tests.redis_doubles import FakeRedis
 
 #: Transcribed from what the connector emits. A transcription rather than a

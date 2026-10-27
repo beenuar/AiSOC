@@ -36,6 +36,7 @@ from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import WindowedDetectionEngine, WindowRule, load_window_rules
+
 from tests.redis_doubles import FakeRedis
 
 RULESET = Path(__file__).resolve().parents[1] / "app" / "data" / "windowed_ruleset.json"
@@ -267,6 +268,7 @@ async def test_enrichment_runs_before_the_window_counts() -> None:
     )
     engine = WindowedDetectionEngine(FakeRedis(), rules=(rule,))
     tenant = str(uuid4())
+
     def build(actor: str, target: str) -> dict[str, Any]:
         return {
             "tenant_id": tenant,

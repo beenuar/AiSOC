@@ -70,46 +70,6 @@ SET attempts = fusion_alert_outbox.attempts + 1,
 
 _CLEAR_SQL = "DELETE FROM fusion_alert_outbox WHERE tenant_id = $1::uuid AND alert_id = $2::uuid"
 
-#: Claim with a lease, in one statement. ``FOR UPDATE SKIP LOCKED`` is what
-#: makes two replicas safe to run: the second one's sub-select steps over the
-#: rows the first has locked instead of blocking on them. The lease (rather
-#: than a lock held for the duration of the publish) is what makes a relay
-#: that dies mid-publish recoverable — the rows become claimable again when
-#: it expires, instead of being stranded behind a connection that is gone.
-#:
-#: ``created_at < now() - grace`` gives the consumer's own inline retry budget
-#: first refusal. Without it the relay would race the retry that is already
-#: in progress and publish a duplicate for every transient broker blip.
-_CLAIM_SQL = """
-UPDATE fusion_alert_outbox AS o
-SET claimed_until = now() + make_interval(secs => $1::double precision),
-    last_attempt_at = now()
-WHERE o.id IN (
-    SELECT c.id FROM fusion_alert_outbox AS c
-    WHERE (c.claimed_until IS NULL OR c.claimed_until < now())
-      AND c.created_at < now() - make_interval(secs => $2::double precision)
-    ORDER BY c.created_at
-    FOR UPDATE SKIP LOCKED
-    LIMIT $3::int
-)
-RETURNING o.id, o.tenant_id, o.alert_id, o.topic, o.dedupe_key, o.payload, o.attempts
-"""
-
-_RESOLVE_SQL = "DELETE FROM fusion_alert_outbox WHERE id = ANY($1::bigint[])"
-
-_FAIL_SQL = """
-UPDATE fusion_alert_outbox
-SET attempts = attempts + 1, last_error = $2, claimed_until = NULL
-WHERE id = $1::bigint
-"""
-
-_PENDING_SQL = "SELECT count(*) AS n FROM fusion_alert_outbox"
-
-#: The oldest pending notification, so an operator can tell a backlog that is
-#: draining from one that is stuck. A count alone cannot: ten rows that are
-#: ten seconds old and ten that are three days old read identically.
-_OLDEST_SQL = "SELECT extract(epoch FROM now() - min(created_at)) AS age FROM fusion_alert_outbox"
-
 
 @dataclass(frozen=True)
 class PendingNotification:
@@ -235,9 +195,33 @@ class AlertNotificationOutbox:
         pool = await self._pool()
         if pool is None:
             return []
+        # Claim with a lease, in one statement. ``FOR UPDATE SKIP LOCKED`` is what
+        # makes two replicas safe to run: the second one's sub-select steps over the
+        # rows the first has locked instead of blocking on them. The lease (rather
+        # than a lock held for the duration of the publish) is what makes a relay
+        # that dies mid-publish recoverable — the rows become claimable again when
+        # it expires, instead of being stranded behind a connection that is gone.
+        #
+        # ``created_at < now() - grace`` gives the consumer's own inline retry budget
+        # first refusal. Without it the relay would race the retry that is already
+        # in progress and publish a duplicate for every transient broker blip.
+        claim_sql = """
+UPDATE fusion_alert_outbox AS o
+SET claimed_until = now() + make_interval(secs => $1::double precision),
+    last_attempt_at = now()
+WHERE o.id IN (
+    SELECT c.id FROM fusion_alert_outbox AS c
+    WHERE (c.claimed_until IS NULL OR c.claimed_until < now())
+      AND c.created_at < now() - make_interval(secs => $2::double precision)
+    ORDER BY c.created_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT $3::int
+)
+RETURNING o.id, o.tenant_id, o.alert_id, o.topic, o.dedupe_key, o.payload, o.attempts
+"""
         try:
             async with pool.acquire() as conn:
-                rows = await conn.fetch(_CLAIM_SQL, float(lease_seconds), float(grace_seconds), int(limit))
+                rows = await conn.fetch(claim_sql, float(lease_seconds), float(grace_seconds), int(limit))
         except Exception as exc:  # noqa: BLE001
             if self._is_missing_schema(exc):
                 self._note_missing_schema()
@@ -266,57 +250,92 @@ class AlertNotificationOutbox:
             )
         return claimed
 
-    async def resolve(self, ids: list[int]) -> None:
-        """Delete the rows this replica has now delivered."""
-        if self._schema_missing or not ids:
+    async def resolve(self, delivered: list[PendingNotification]) -> None:
+        """Delete the rows this replica has now delivered.
+
+        Takes the claims rather than bare ids so the delete carries a tenant
+        predicate. The relay spans tenants by construction -- it drains
+        whatever is owed -- but that is a reason for the *claim* to be
+        unscoped, not for every statement after it: a delete keyed on an id
+        alone would reach any row in the table if the id were ever wrong,
+        and the pairing costs nothing because the claim already returned it.
+        """
+        if self._schema_missing or not delivered:
             return
         pool = await self._pool()
         if pool is None:
             return
+        resolve_sql = """
+DELETE FROM fusion_alert_outbox
+WHERE (tenant_id, id) IN (SELECT * FROM unnest($1::uuid[], $2::bigint[]))
+"""
         try:
             async with pool.acquire() as conn:
-                await conn.execute(_RESOLVE_SQL, ids)
+                await conn.execute(resolve_sql, [item.tenant_id for item in delivered], [item.id for item in delivered])
         except Exception as exc:  # noqa: BLE001
             # The lease expires and the row is re-claimed, so the cost of
             # this failing is a duplicate publication, not a lost alert.
-            logger.warning("fusion.outbox_resolve_failed", count=len(ids), error=str(exc))
+            logger.warning("fusion.outbox_resolve_failed", count=len(delivered), error=str(exc))
 
-    async def record_attempt_failed(self, outbox_id: int, error: str) -> None:
-        """Release the lease early so a transient failure retries sooner."""
-        if self._schema_missing:
-            return
-        pool = await self._pool()
-        if pool is None:
-            return
-        try:
-            async with pool.acquire() as conn:
-                await conn.execute(_FAIL_SQL, outbox_id, error[:2000])
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("fusion.outbox_attempt_update_failed", outbox_id=outbox_id, error=str(exc))
+    async def record_attempt_failed(self, pending: PendingNotification, error: str) -> None:
+        """Release the lease early so a transient failure retries sooner.
 
-    async def backlog(self) -> tuple[int | None, float | None]:
-        """``(pending rows, age of the oldest in seconds)``.
-
-        ``None`` for either means it could not be read, which is deliberately
-        not zero: an unreadable backlog reported as no backlog is how a stuck
-        relay looks healthy.
+        Scoped on the tenant the claim returned, for the reason
+        :meth:`resolve` is.
         """
         if self._schema_missing:
-            return None, None
+            return
         pool = await self._pool()
         if pool is None:
-            return None, None
+            return
+        fail_sql = """
+UPDATE fusion_alert_outbox
+SET attempts = attempts + 1, last_error = $3, claimed_until = NULL
+WHERE id = $1::bigint AND tenant_id = $2::uuid
+"""
         try:
             async with pool.acquire() as conn:
-                count = await conn.fetchval(_PENDING_SQL)
-                oldest = await conn.fetchval(_OLDEST_SQL)
+                await conn.execute(fail_sql, pending.id, pending.tenant_id, error[:2000])
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("fusion.outbox_attempt_update_failed", outbox_id=pending.id, error=str(exc))
+
+    async def backlog(self) -> tuple[int | None, float | None, dict[str, int]]:
+        """``(pending rows, age of the oldest in seconds, per-tenant counts)``.
+
+        ``None`` for either number means it could not be read, which is
+        deliberately not zero: an unreadable backlog reported as no backlog
+        is how a stuck relay looks healthy. The age rides along because a
+        count alone cannot tell a backlog that is draining from one that is
+        stuck -- ten rows ten seconds old and ten three days old read
+        identically.
+
+        Grouped by tenant rather than summed in SQL. On a deployment serving
+        several tenants the useful question is *whose* notifications are
+        stuck, and a single number cannot answer it; the totals the metrics
+        route renders are folded from these rows.
+        """
+        if self._schema_missing:
+            return None, None, {}
+        pool = await self._pool()
+        if pool is None:
+            return None, None, {}
+        backlog_sql = """
+SELECT tenant_id, count(*) AS n, extract(epoch FROM now() - min(created_at)) AS age
+FROM fusion_alert_outbox
+GROUP BY tenant_id
+"""
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(backlog_sql)
         except Exception as exc:  # noqa: BLE001
             if self._is_missing_schema(exc):
                 self._note_missing_schema()
             else:
                 logger.warning("fusion.outbox_backlog_unreadable", error=str(exc))
-            return None, None
-        return (int(count) if count is not None else None, float(oldest) if oldest is not None else None)
+            return None, None, {}
+        per_tenant = {str(row["tenant_id"]): int(row["n"]) for row in rows}
+        oldest = max((float(row["age"]) for row in rows if row["age"] is not None), default=None)
+        return sum(per_tenant.values()), oldest, per_tenant
 
 
 class NotificationRelay:
@@ -394,7 +413,7 @@ class NotificationRelay:
         pending = await self._outbox.claim(limit=self._batch, lease_seconds=self._lease, grace_seconds=self._grace)
         if not pending:
             return 0
-        delivered: list[int] = []
+        delivered: list[PendingNotification] = []
         for item in pending:
             try:
                 await self._publish(item.payload, item.key)
@@ -408,12 +427,12 @@ class NotificationRelay:
                     attempts=item.attempts,
                     error=str(exc),
                 )
-                await self._outbox.record_attempt_failed(item.id, str(exc))
+                await self._outbox.record_attempt_failed(item, str(exc))
                 # Stop the sweep rather than walking the rest of the batch
                 # into the same unreachable broker. The remaining rows keep
                 # their lease and are re-claimed once it expires.
                 break
-            delivered.append(item.id)
+            delivered.append(item)
         if delivered:
             self.recovered += len(delivered)
             await self._outbox.resolve(delivered)

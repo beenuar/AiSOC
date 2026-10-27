@@ -28,8 +28,8 @@ from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import SequenceRule, WindowedDetectionEngine
-from tests.redis_doubles import FakeRedis
 
+from tests.redis_doubles import FakeRedis
 
 SPRAY_THEN_SUCCESS = SequenceRule(
     id="wd-seq-test-spray-then-success",

@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.models.alert import FusionDecision
 from app.services.dlq import InMemoryDLQ
 from app.workers.consumer import FusionWorker, PermanentProcessingError
+
 from tests.kafka_doubles import TwoStageProducer
 
 pytestmark = pytest.mark.asyncio

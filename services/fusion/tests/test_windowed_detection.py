@@ -9,8 +9,8 @@ from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import WindowedDetectionEngine, WindowRule
-from tests.redis_doubles import FakeRedis
 
+from tests.redis_doubles import FakeRedis
 
 _EVENT_SEQ = itertools.count()
 

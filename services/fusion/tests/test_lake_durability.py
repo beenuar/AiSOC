@@ -318,7 +318,7 @@ async def test_the_backlog_is_actually_reachable_from_the_metrics_route(tmp_path
     assert body["lake"]["capacity_refusals"] == 0
     assert body["lake"]["degraded"] is False
     # No journal configured, so the honest answer is "unknown", not zero.
-    assert body["notifications"] == {"pending": None, "oldest_seconds": None}
+    assert body["notifications"] == {"pending": None, "oldest_seconds": None, "by_tenant": {}}
 
 
 @pytest.mark.asyncio

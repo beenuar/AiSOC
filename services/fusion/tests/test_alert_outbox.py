@@ -36,6 +36,7 @@ from app.services.alert_outbox import NotificationRelay, PendingNotification
 from app.services.alert_sink import PersistOutcome, PersistResult
 from app.services.dlq import InMemoryDLQ
 from app.workers.consumer import FusionWorker
+
 from tests.kafka_doubles import TwoStageProducer
 
 TENANT = "00000000-0000-0000-0000-000000000001"
@@ -84,16 +85,17 @@ class InMemoryOutbox:
     async def claim(self, *, limit, lease_seconds, grace_seconds) -> list[PendingNotification]:  # noqa: ANN001, ARG002
         return list(self.rows.values())[:limit]
 
-    async def resolve(self, ids) -> None:  # noqa: ANN001
-        for key, row in list(self.rows.items()):
-            if row.id in ids:
+    async def resolve(self, delivered) -> None:  # noqa: ANN001
+        done = {(item.tenant_id, item.alert_id) for item in delivered}
+        for key in list(self.rows):
+            if key in done:
                 del self.rows[key]
 
-    async def record_attempt_failed(self, outbox_id, error) -> None:  # noqa: ANN001, ARG002
+    async def record_attempt_failed(self, pending, error) -> None:  # noqa: ANN001, ARG002
         return None
 
-    async def backlog(self) -> tuple[int | None, float | None]:
-        return len(self.rows), (0.0 if self.rows else None)
+    async def backlog(self) -> tuple[int | None, float | None, dict[str, int]]:
+        return len(self.rows), (0.0 if self.rows else None), {t: 1 for t, _ in self.rows}
 
 
 def _alert() -> RawAlert:

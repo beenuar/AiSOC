@@ -552,7 +552,9 @@ class LakeWriter:
             recovered_before = self._spool.rows_recovered
             await self.flush()
             self._spool.rows_recovered = recovered_before + (carried - self._spool.rows_on_disk())
-            logger.info("lake_writer.spool_recovery_finished", recovered=self._spool.rows_recovered, still_pending=self._spool.rows_on_disk())
+            logger.info(
+                "lake_writer.spool_recovery_finished", recovered=self._spool.rows_recovered, still_pending=self._spool.rows_on_disk()
+            )
 
     def _make_client(self) -> Any | None:
         try:

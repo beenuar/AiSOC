@@ -1096,15 +1096,15 @@ class FusionWorker:
         # observable recovery.
         _METRICS["notifications_recovered"] += 1
 
-    async def pending_notifications(self) -> tuple[int | None, float | None]:
-        """``(undelivered notifications, age of the oldest in seconds)``.
+    async def pending_notifications(self) -> tuple[int | None, float | None, dict[str, int]]:
+        """``(undelivered notifications, age of the oldest, per-tenant counts)``.
 
-        ``(None, None)`` when there is no journal configured or it cannot be
-        read — never ``(0, None)``, because an unreadable backlog reported as
-        an empty one is how a stuck relay looks healthy.
+        ``(None, None, {})`` when there is no journal configured or it cannot
+        be read — never ``(0, None, {})``, because an unreadable backlog
+        reported as an empty one is how a stuck relay looks healthy.
         """
         if self._outbox is None:
-            return None, None
+            return None, None, {}
         return await self._outbox.backlog()
 
     @staticmethod

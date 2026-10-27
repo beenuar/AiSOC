@@ -57,8 +57,8 @@ async def metrics():
     lake = _worker_ref.lake
     body["lake"] = lake.metrics() | {"degraded": lake.archive_degraded} if lake is not None else None
 
-    pending, oldest_seconds = await _worker_ref.pending_notifications()
-    body["notifications"] = {"pending": pending, "oldest_seconds": oldest_seconds}
+    pending, oldest_seconds, by_tenant = await _worker_ref.pending_notifications()
+    body["notifications"] = {"pending": pending, "oldest_seconds": oldest_seconds, "by_tenant": by_tenant}
     return body
 
 

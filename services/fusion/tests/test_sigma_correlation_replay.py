@@ -27,6 +27,7 @@ from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import WindowedDetectionEngine, load_sequence_rules, load_window_rules
+
 from tests.redis_doubles import FakeRedis
 
 RULESET = Path(__file__).resolve().parents[1] / "app" / "data" / "windowed_ruleset.json"
