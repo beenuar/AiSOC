@@ -37,15 +37,28 @@ _ID, _TENANT, _STATUS, _TIER, _RECORD = range(5)
 
 
 class _RecordingConnection:
-    """Captures the arguments `save()` binds, and nothing else."""
+    """Captures the arguments `save()` binds, and nothing else.
+
+    `fetchval` rather than `execute` since the upsert gained `RETURNING id`:
+    an `ON CONFLICT DO UPDATE` whose `WHERE` is not satisfied returns no row,
+    which is the only signal Postgres gives that it declined to change what a
+    pending approval would do. The double answers "a row was written", which
+    is the normal case these tests are about.
+    """
 
     def __init__(self) -> None:
         self.args: tuple[Any, ...] = ()
         self.sql = ""
+        #: What the upsert returns. `None` is a refused intent change.
+        self.returns: Any = "written"
 
-    async def execute(self, sql: str, *args: Any) -> None:
+    async def fetchval(self, sql: str, *args: Any) -> Any:
         self.sql = sql
         self.args = args
+        return self.returns
+
+    async def fetchrow(self, _sql: str, *_args: Any) -> Any:
+        return None
 
     async def close(self) -> None:
         return None
@@ -129,3 +142,31 @@ class TestTheApprovalTierIsPersisted:
         frozen on a row that is saved again after execution."""
         await action_store.save(_record())
         assert captured.sql.count("approval_tier") >= 2, captured.sql
+
+
+class TestTheUpsertRefusesToChangeAPendingAction:
+    """`ON CONFLICT (id) DO UPDATE SET record = EXCLUDED.record` had no
+    condition, so a second submission of the same id replaced the record an
+    approver was looking at — a different target under the same approval."""
+
+    @pytest.mark.asyncio
+    async def test_a_declined_upsert_raises_rather_than_reporting_success(self, captured):
+        captured.returns = None
+        with pytest.raises(action_store.ActionIntentConflict):
+            await action_store.save(_record(status=ActionStatus.AWAITING_APPROVAL))
+
+    @pytest.mark.asyncio
+    async def test_a_refused_write_does_not_land_in_the_process_cache(self, captured):
+        """The durable store is authoritative; a refused write must not leave
+        this replica holding a record the database never accepted."""
+        captured.returns = None
+        record = _record(status=ActionStatus.AWAITING_APPROVAL, target="dc-01")
+        with pytest.raises(action_store.ActionIntentConflict):
+            await action_store.save(record)
+        assert action_store._MEMORY.get(str(record["id"])) is None
+
+    @pytest.mark.asyncio
+    async def test_the_statement_compares_every_field_that_defines_the_intent(self, captured):
+        await action_store.save(_record())
+        for field in action_store.INTENT_FIELDS:
+            assert f"'{field}'" in captured.sql, f"{field} is declared as intent and the upsert never compares it"

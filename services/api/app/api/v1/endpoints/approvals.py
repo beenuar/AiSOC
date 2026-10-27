@@ -105,6 +105,69 @@ class ApprovalDecisionRequest(BaseModel):
     comment: str | None = Field(default=None, max_length=2000)
 
 
+#: Where the originating identity is kept on the approval row.
+#:
+#: Inside ``action`` rather than in a column of its own, following the two
+#: server-written keys already there (``delivery``, ``dispatch``) and the
+#: reasoning migration 055 gives for keeping the record whole: the shape is
+#: owned by the thing that writes it, and a column per field makes every
+#: contract change a migration.
+#:
+#: Always overwritten from the authenticated principal at create time and
+#: never read out of the request body. ``requested_by`` beside it stays a
+#: free-text label — it is caller-supplied, and separation of duties
+#: evaluated against it would be forgeable from the body.
+_REQUESTER_KEY = "requester_principal"
+
+#: Dispatch states recorded on the approval row.
+#:
+#: ``dispatching`` is the one that did not exist. ``_dispatch_decision`` ran
+#: before ``db.commit()``, so a crash in between left the approval ``pending``
+#: against an action that had run — the row's own answer to "was this
+#: executed" was silently wrong in the dangerous direction. The decision is
+#: now committed first with the dispatch marked in flight, so an interrupted
+#: decide is visible rather than invisible.
+_DISPATCH_IN_FLIGHT = "dispatching"
+#: The actions service was reached and answered.
+_DISPATCH_EXECUTED = "executed"
+_DISPATCH_DECLINED = "declined"
+#: The actions service refused, with a reason.
+_DISPATCH_FAILED = "failed"
+#: We never heard back. Distinct from ``failed`` because the request may have
+#: been processed, and "your action did not run" is a claim the evidence does
+#: not support.
+_DISPATCH_UNKNOWN = "unknown"
+_DISPATCH_NOT_EXECUTABLE = "not_executable"
+
+#: Dispatch states that mean the decision has not finished being carried out.
+#: A repeat decide re-enters on these rather than reporting success: the
+#: actions service claims an execution durably before contacting a vendor, so
+#: a re-entry cannot double-execute — it is answered 409 — and the alternative
+#: is an approval whose row says ``approved`` and whose action never ran.
+_UNRESOLVED_DISPATCH = frozenset({_DISPATCH_IN_FLIGHT, _DISPATCH_UNKNOWN})
+
+
+def _requester_principal(user: AuthUser) -> dict[str, Any]:
+    """The identity that raised this approval, from authenticated context.
+
+    For an agent-raised approval this is the agents service's own service
+    principal; for one a human raised it is that human, which is what keeps
+    separation of duties biting on the half where it must.
+    """
+    return {
+        "user_id": str(user.user_id),
+        "tenant_id": str(user.tenant_id),
+        "email": getattr(user, "email", None),
+        "roles": [user.role] if user.role else [],
+        "permissions": user.effective_permissions(),
+    }
+
+
+def _dispatch_state(row: AgentApproval) -> str | None:
+    dispatch = (row.action or {}).get("dispatch")
+    return dispatch.get("state") if isinstance(dispatch, dict) else None
+
+
 @router.get("", response_model=ApprovalListResponse)
 async def list_approvals(
     user: AuthUser,
@@ -198,7 +261,7 @@ async def create_approval(
         title=body.title,
         summary=body.summary,
         risk_level=body.risk_level,
-        action=body.action,
+        action={**(body.action or {}), _REQUESTER_KEY: _requester_principal(user)},
         expires_at=body.expires_at,
         status="pending",
     )
@@ -254,10 +317,11 @@ async def decide_approval(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Approval not found")
 
     new_status = "approved" if body.decision == "approve" else "denied"
+    unresolved = _dispatch_state(row) in _UNRESOLVED_DISPATCH
 
-    if row.status == new_status:
+    if row.status == new_status and not unresolved:
         return ApprovalResponse.model_validate(row)
-    if row.status not in {"pending", "expired"}:
+    if row.status not in {"pending", "expired"} and row.status != new_status:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Approval already {row.status}; cannot change to {new_status}",
@@ -268,12 +332,28 @@ async def decide_approval(
     row.decided_at = datetime.now(UTC)
     row.decision_comment = body.comment
 
-    # Dispatch before committing the decision, so an approval that the actions
-    # service refuses does not leave a row reading "approved" against an
-    # action that never ran. This endpoint used to flip the row and stop:
-    # every tap of Approve in the responder app recorded a decision and
-    # executed nothing, which is the most dangerous shape a security control
-    # can have — it reports that the host was contained.
+    # Commit the decision with the dispatch marked in flight, *then* dispatch.
+    #
+    # The order used to be the other way round, with a comment explaining that
+    # dispatching first stopped a refused action leaving a row reading
+    # "approved". It did, and it opened a worse hole: the dispatch ran at one
+    # line and `db.commit()` at the next, so a crash in between left the
+    # approval `pending` against an action that had already contained a host.
+    # Nothing in the row said a dispatch had been attempted, so the recovery
+    # was to approve it again.
+    #
+    # Writing the attempt first costs the thing the old comment protected —
+    # the window where the row says approved and the action has not run yet —
+    # and that window is now *visible*, which is the property that matters:
+    # `dispatch.state` says `dispatching`, a repeat decide re-enters, and the
+    # actions service's durable claim is what stops a re-entry from executing
+    # twice.
+    row.action = {
+        **(row.action or {}),
+        "dispatch": {"state": _DISPATCH_IN_FLIGHT, "started_at": datetime.now(UTC).isoformat()},
+    }
+    await db.commit()
+
     dispatch = await _dispatch_decision(row, user, approve=body.decision == "approve")
     row.action = {**(row.action or {}), "dispatch": dispatch}
 
@@ -284,7 +364,7 @@ async def decide_approval(
     # resume — fire-and-forget pattern matches the rest of the surface.
     await _notify_realtime(row, event="approval_decided")
 
-    if dispatch.get("state") == "failed":
+    if dispatch.get("state") == _DISPATCH_FAILED:
         # The decision is durable and the operator is told the truth: their
         # choice was recorded, the execution behind it was not accepted.
         raise HTTPException(
@@ -292,6 +372,17 @@ async def decide_approval(
             detail=(
                 f"Decision recorded, but the action service refused it: {dispatch.get('detail')}. "
                 "The approval row reflects your decision; the action did not run."
+            ),
+        )
+    if dispatch.get("state") == _DISPATCH_UNKNOWN:
+        # Deliberately not phrased as a failure. The action service may have
+        # executed this; it claims an execution durably before touching a
+        # vendor, so the answer exists and nobody should act on a guess.
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=(
+                f"Decision recorded, but the action service did not answer: {dispatch.get('detail')}. "
+                "Whether the action ran is not yet known — check the action's status before deciding again."
             ),
         )
 
@@ -316,15 +407,19 @@ async def _dispatch_decision(
     ``declined``        the decision was to deny; the action was rejected
                         upstream so it cannot later be approved by replay.
     ``executed``        the actions service accepted and ran it.
-    ``failed``          the actions service refused or was unreachable.
+    ``failed``          the actions service refused, with a reason.
+    ``unknown``         we never heard back. The request may have been
+                        processed; the actions service claims an execution
+                        durably before contacting a vendor, so the answer
+                        exists upstream and must be read rather than guessed.
     """
     action = row.action or {}
     action_type = action.get("action_type") or action.get("type")
     target = action.get("target")
     if not isinstance(action_type, str) or not action_type.strip():
-        return {"state": "not_executable", "reason": "approval carries no action_type"}
+        return {"state": _DISPATCH_NOT_EXECUTABLE, "reason": "approval carries no action_type"}
     if not isinstance(target, str) or not target.strip():
-        return {"state": "not_executable", "reason": "approval carries no target"}
+        return {"state": _DISPATCH_NOT_EXECUTABLE, "reason": "approval carries no target"}
 
     # The approval id is reused as the action id so the two systems share one
     # identifier. Without that, "which action did this approval authorise"
@@ -353,6 +448,20 @@ async def _dispatch_decision(
         "permissions": permissions,
     }
 
+    # Who originally asked, stamped onto the row from authenticated context
+    # when the approval was created. Sent as `requester`, a separate field
+    # from `principal`, because the actions service records the requester for
+    # separation of duties: sending the deciding user as `principal` made
+    # them the requester too, so every approval was refused upstream as its
+    # own request and surfaced here as a 502.
+    #
+    # Falls back to this caller only when the approval predates the stamp, in
+    # which case separation of duties has nothing to compare and the actions
+    # service records that rather than claiming it passed.
+    requester = action.get(_REQUESTER_KEY)
+    if not isinstance(requester, dict) or not requester.get("user_id"):
+        requester = None
+
     try:
         await submit_action(
             action_id=action_id,
@@ -362,34 +471,38 @@ async def _dispatch_decision(
             incident_id=str(row.run_id or row.id),
             rationale=row.summary or row.title,
             parameters=action.get("parameters") or {},
-            # The requester is the agent, not the approver. Sending the
-            # approver here would make them both, and separation of duties
-            # would pass by accident.
+            # A label, not an identity. The authorization basis is `requester`.
             requested_by=row.requested_by or "agent",
             # Identifies the caller to the gate. Omitting it was harmless only
             # while `AISOC_ACTIONS_REQUIRE_PRINCIPAL` defaults false; turning
             # that on would have broken the submit leg exactly as the decide
             # leg was broken.
             principal=principal,
+            requester=requester,
         )
     except ActionsServiceError as exc:
         logger.warning(
             "Approval dispatch: submit refused",
             extra={"approval_id": action_id, "status": exc.status_code, "detail": str(exc)},
         )
-        return {"state": "failed", "stage": "submit", "detail": str(exc)}
+        # A submit that was never acknowledged has still not authorized
+        # anything: the actions service gates before it executes, and the
+        # decide leg below is what would have released it.
+        state = _DISPATCH_UNKNOWN if exc.indeterminate else _DISPATCH_FAILED
+        return {"state": state, "stage": "submit", "detail": str(exc)}
 
     try:
         result = await decide_action(action_id=action_id, approve=approve, approver=principal)
     except ActionsServiceError as exc:
         logger.warning(
-            "Approval dispatch: decision refused",
-            extra={"approval_id": action_id, "status": exc.status_code, "detail": str(exc)},
+            "Approval dispatch: decision not confirmed",
+            extra={"approval_id": action_id, "status": exc.status_code, "detail": str(exc), "indeterminate": exc.indeterminate},
         )
-        return {"state": "failed", "stage": "decide", "detail": str(exc)}
+        state = _DISPATCH_UNKNOWN if exc.indeterminate else _DISPATCH_FAILED
+        return {"state": state, "stage": "decide", "action_id": action_id, "detail": str(exc)}
 
     return {
-        "state": "executed" if approve else "declined",
+        "state": _DISPATCH_EXECUTED if approve else _DISPATCH_DECLINED,
         "action_id": action_id,
         "action_status": result.get("status"),
         "blast_radius": result.get("blast_radius"),

@@ -16,13 +16,12 @@ Design constraints (mirroring ``AlertSink``):
 
 * **Fail-soft.** A ClickHouse outage must degrade to "events still flow through
   Kafka/fusion, lake archival resumes when the store returns" — never crash the
-  consumer. A failed connection flush retains the batch (bounded by
-  ``max_buffer_rows``) and reconnects with capped backoff; rows are only
-  discarded on explicit overflow or repeated non-connection errors, and both
-  increments a counter so the archive gap is visible.
-* **Batched.** ClickHouse is happiest with bulk inserts, so events are buffered
-  and flushed by size (``batch_size``) or age (``batch_max_age_seconds``); the
-  consumer calls :meth:`flush_if_stale` each loop and :meth:`flush` on stop.
+  consumer. A failed flush leaves the rows on the spool and reconnects with
+  capped backoff.
+* **Batched.** ClickHouse is happiest with bulk inserts, so events are drained
+  from the spool in batches by size (``batch_size``) or age
+  (``batch_max_age_seconds``); the consumer calls :meth:`flush_if_stale` each
+  loop and :meth:`flush` on stop.
 * **At-least-once with a deterministic ``event_id``.** MergeTree does not
   deduplicate, so a Kafka replay can produce a duplicate lake row. Each row
   carries a stable identity so downstream queries can ``argMax``/``LIMIT 1 BY
@@ -32,6 +31,28 @@ Design constraints (mirroring ``AlertSink``):
   stable across retries *and process restarts* — a random id generated in
   memory was not, so a replay after a crash could not be collapsed. The Phase
   A1 gate asserts *queryability* (``count >= 1``), not exact-once.
+
+Durability: the queue is on disk
+--------------------------------
+This used to buffer rows in a Python list and return ``True`` from
+:meth:`write_event` to mean "accepted for archival". The fusion consumer then
+committed the input Kafka offset, so the only record of what had been archived
+advanced on the strength of process memory. A hard kill lost the buffer whole,
+and the capacity guard discarded the *oldest* rows — whose offsets had been
+committed minutes earlier, so nothing could replay them and nothing knew they
+were missing.
+
+The queue is now :class:`app.services.lake_spool.LakeSpool`, an append-only
+disk spool. ``write_event`` returns ``True`` only once the row is on it, and
+:meth:`start` replays whatever ClickHouse never took. The byte cap is
+**back-pressure, not discard**: at the cap ``write_event`` returns ``False``,
+the consumer holds the Kafka offset, and Kafka's retention — the durable log
+this platform already runs — becomes the buffer. Raising a memory limit was
+never a durability fix and neither is raising this one.
+
+``lake_spool`` documents exactly what the spool survives (a process kill, yes;
+a power loss only with ``AISOC_LAKE_SPOOL_FSYNC``; a destroyed container only
+if the directory is a mounted volume).
 
 ``clickhouse-driver`` is synchronous, so every insert is dispatched to a worker
 thread via :func:`asyncio.to_thread` to keep the fusion event loop responsive.
@@ -426,14 +447,18 @@ def _is_connection_lake_error(exc: BaseException) -> bool:
 
 
 class LakeWriter:
-    """Batched, fail-soft ClickHouse writer for the ``aisoc.raw_events`` lake.
+    """Spool-backed, fail-soft ClickHouse writer for the ``aisoc.raw_events`` lake.
 
-    A failed batch is **retained and retried**, not dropped. Retention is
-    bounded by ``max_buffer_rows``; overflow discards the oldest rows and
-    increments ``rows_dropped`` with an error log, because unbounded memory is
-    a worse failure than an explicitly reported archive gap. A connection
-    failure triggers a capped exponential reconnect, so an outage that ends
-    does not require a fusion restart.
+    A failed batch is **retained on disk and retried**, not dropped. A
+    connection failure triggers a capped exponential reconnect, so an outage
+    that ends does not require a fusion restart. Capacity is enforced on the
+    spool as back-pressure: nothing is ever discarded to make room.
+
+    The one path that does give up is a batch ClickHouse refuses repeatedly
+    as *data* (a schema disagreement, not a transport fault). Retrying it
+    forever would block everything behind it, so after ``max_data_failures``
+    it is moved to the spool's quarantine directory — retained for replay,
+    counted, and logged — rather than deleted.
     """
 
     def __init__(
@@ -451,6 +476,9 @@ class LakeWriter:
         reconnect_max_seconds: float | None = None,
         max_data_failures: int | None = None,
         client_factory: Any | None = None,
+        spool_dir: str | None = None,
+        max_spool_bytes: int | None = None,
+        spool_fsync: bool | None = None,
     ) -> None:
         # Imported here, not at module scope, and this is load-bearing rather
         # than style: `tests/isolation/test_retro_hunt_live.py` and
@@ -462,6 +490,7 @@ class LakeWriter:
         # `pydantic_settings` — and takes the whole offline isolation suite
         # down at collection time. Keep every settings read inside a function.
         from app.core.config import settings  # noqa: PLC0415
+        from app.services.lake_spool import LakeSpool  # noqa: PLC0415 — same reason as the settings import above
 
         self._host = host
         self._port = port
@@ -477,8 +506,15 @@ class LakeWriter:
         self._max_data_failures = max(1, int(max_data_failures or settings.lake_max_data_failures))
         self._client_factory = client_factory
         self._client: Any | None = None
-        self._buffer: list[dict[str, Any]] = []
-        self._buffer_started_at: float = 0.0
+        #: The queue is the spool, not a list. ``write_event`` returns True
+        #: only once the row is on it, which is the property the consumer's
+        #: offset commit now depends on.
+        self._spool = LakeSpool(
+            spool_dir or settings.lake_spool_dir,
+            max_bytes=int(max_spool_bytes or settings.lake_max_spool_bytes),
+            fsync=settings.lake_spool_fsync if spool_fsync is None else spool_fsync,
+        )
+        self._oldest_pending_at: float = 0.0
         # ImportError is the only permanent disable: without the driver there
         # is no code that can ever connect. A missing server is recoverable.
         self._disabled = False
@@ -494,9 +530,31 @@ class LakeWriter:
     async def start(self) -> None:
         if self._disabled:
             return
+        spool_ready = self._spool.open()
         self._client = self._make_client()
         if self._client is not None:
-            logger.info("lake_writer.started", host=self._host, database=self._database)
+            logger.info("lake_writer.started", host=self._host, database=self._database, spool=str(self._spool.directory))
+        if not spool_ready:
+            return
+        # Replay whatever the previous process accepted and never archived.
+        # This is the half that was missing: `_fallback_event_id` has always
+        # produced a replay-stable id and the table is read with
+        # `LIMIT 1 BY event_id`, so a replay would deduplicate correctly --
+        # there was simply nothing that ever replayed.
+        carried = self._spool.rows_on_disk()
+        if carried:
+            logger.warning(
+                "lake_writer.spool_recovery_started",
+                rows=carried,
+                detail="lake rows accepted by a previous process were never archived; replaying them now",
+            )
+            self._oldest_pending_at = time.monotonic()
+            recovered_before = self._spool.rows_recovered
+            await self.flush()
+            self._spool.rows_recovered = recovered_before + (carried - self._spool.rows_on_disk())
+            logger.info(
+                "lake_writer.spool_recovery_finished", recovered=self._spool.rows_recovered, still_pending=self._spool.rows_on_disk()
+            )
 
     def _make_client(self) -> Any | None:
         try:
@@ -554,17 +612,19 @@ class LakeWriter:
 
     async def stop(self) -> None:
         await self.flush()
-        if self._buffer:
-            # The process is going away and the store did not accept these
-            # rows. They are lost, so they belong in `rows_dropped`: a log line
-            # alone would leave the metric claiming nothing was discarded.
-            dropped = len(self._buffer)
-            self.rows_dropped += dropped
-            logger.error(
-                "lake_writer.shutdown_retained_rows",
-                rows=dropped,
-                detail="ClickHouse did not accept the buffered batch before shutdown; rows are not durable",
+        pending = self._spool.rows_on_disk()
+        if pending:
+            # Not `rows_dropped` any more, and the distinction is the whole
+            # point of the spool: these rows are on disk and the next start
+            # replays them. Counting them as dropped would report a loss
+            # that has not happened and hide the one that has.
+            logger.warning(
+                "lake_writer.shutdown_pending_rows",
+                rows=pending,
+                spool=str(self._spool.directory),
+                detail="ClickHouse did not accept these rows before shutdown; they are spooled and will be replayed on restart",
             )
+        self._spool.close()
         if self._client is not None:
             try:
                 await asyncio.to_thread(self._client.disconnect)
@@ -580,11 +640,19 @@ class LakeWriter:
         partition: int | None = None,
         offset: int | None = None,
     ) -> bool:
-        """Buffer one normalized event for the lake. Returns True if buffered.
+        """Spool one normalized event for the lake. Returns True if durable.
 
-        Flushes automatically when the buffer reaches ``batch_size``. A failed
-        flush leaves the batch buffered (bounded), so True still means the
-        event was accepted for archival, not that it is already durable.
+        ``True`` means the row is **on disk** and will reach ClickHouse even
+        if this process is killed now. That is a stronger claim than the one
+        this method used to make — it returned True for an append to a list,
+        and the consumer committed the Kafka offset on the strength of it.
+
+        ``False`` means the row is *not* recoverable: the spool is at its
+        byte cap or its directory is unusable. The caller must not let the
+        input offset commit, which is what turns a full disk into
+        back-pressure rather than silent archive loss.
+
+        Flushes automatically once ``batch_size`` rows are pending.
 
         ``topic``/``partition``/``offset`` are the Kafka coordinates of the
         record being archived. They are the fallback identity for an envelope
@@ -604,12 +672,13 @@ class LakeWriter:
             # partially-sent batch keeps the same id and `LIMIT 1 BY event_id`
             # still works.
             row["event_id"] = self._fallback_event_id(row, topic=topic, partition=partition, offset=offset)
-        if not self._buffer:
-            self._buffer_started_at = time.monotonic()
-        self._buffer.append(row)
-        if len(self._buffer) >= self._batch_size:
+        pending_before = self._spool.rows_on_disk()
+        if not self._spool.append([row]):
+            return False
+        if pending_before == 0:
+            self._oldest_pending_at = time.monotonic()
+        if pending_before + 1 >= self._batch_size:
             await self.flush()
-        self._enforce_buffer_capacity()
         return True
 
     @staticmethod
@@ -644,20 +713,31 @@ class LakeWriter:
         return str(uuid.uuid5(_EVENT_ID_NAMESPACE, f"content:{material}"))
 
     async def flush_if_stale(self) -> None:
-        if self._buffer and (time.monotonic() - self._buffer_started_at) >= self._batch_max_age:
+        if self._oldest_pending_at and (time.monotonic() - self._oldest_pending_at) >= self._batch_max_age:
             await self.flush()
 
     async def flush(self) -> None:
-        if self._disabled or not self._buffer:
+        """Drain the spool into ClickHouse, oldest batch first.
+
+        Reading the spool is non-destructive: a batch's lines are committed
+        only once ClickHouse has taken them, so a crash anywhere in here
+        leaves the rows for the next attempt. The cost is that a crash
+        *between* the insert and the commit replays those rows, which the
+        deterministic ``event_id`` and ``LIMIT 1 BY event_id`` collapse.
+        """
+        if self._disabled:
             return
         client = self._ensure_client()
         if client is None:
             return
 
-        batch = self._buffer
-        batch_started_at = self._buffer_started_at
-        self._buffer = []
-        self._buffer_started_at = 0.0
+        for batch, segment, consumed in self._spool.read_batches(self._batch_size):
+            if not await self._insert_batch(client, batch, segment, consumed):
+                return
+        self._oldest_pending_at = time.monotonic() if self._spool.rows_on_disk() else 0.0
+
+    async def _insert_batch(self, client: Any, batch: list[dict[str, Any]], segment: Any, consumed: int) -> bool:
+        """Insert one batch. False means stop draining (the store is unhappy)."""
 
         def _insert() -> None:
             # clickhouse-driver executes INSERT ... VALUES with a list of dicts.
@@ -675,27 +755,15 @@ class LakeWriter:
 
         try:
             await asyncio.to_thread(_insert)
-            self.rows_written += len(batch)
-            self._data_failures = 0
         except asyncio.CancelledError:
-            # Cancellation (shutdown, task teardown) is a BaseException, so the
-            # handler below never sees it. The batch was already popped from
-            # the buffer; putting it back keeps cancellation from being a
-            # silent row-loss path. The task still unwinds.
-            self._buffer = batch + self._buffer
-            self._buffer_started_at = batch_started_at
-            self._enforce_buffer_capacity()
+            # Cancellation (shutdown, task teardown) is a BaseException, so
+            # the handler below never sees it. Nothing is committed, so the
+            # rows stay spooled and the next start replays them.
             raise
         except Exception as exc:  # noqa: BLE001 — never raise into the consumer
             self.flush_failures += 1
             connection_error = _is_connection_lake_error(exc)
             self._data_failures = 0 if connection_error else self._data_failures + 1
-
-            # Retain, oldest-first. `self._buffer` may have grown while the
-            # insert ran, so the failed batch goes in front of it.
-            self._buffer = batch + self._buffer
-            self._buffer_started_at = batch_started_at
-            overflow = self._enforce_buffer_capacity()
 
             # Force a fresh client on the next attempt: a broken driver
             # connection otherwise fails every subsequent flush, which is the
@@ -704,48 +772,66 @@ class LakeWriter:
             self._schedule_reconnect()
 
             if not connection_error and self._data_failures >= self._max_data_failures:
-                dropped = len(self._buffer)
-                self._buffer = []
-                self._buffer_started_at = 0.0
+                # A batch the server keeps refusing is a schema disagreement,
+                # not a transport fault. Retrying forever blocks everything
+                # behind it; deleting it makes the gap permanent even after
+                # someone fixes the schema. Quarantine keeps both doors open.
+                self._spool.quarantine(batch, reason=str(exc))
+                self._spool.commit_segment(segment, consumed)
                 self._data_failures = 0
-                self.rows_dropped += dropped
-                logger.error(
-                    "lake_writer.batch_dropped_after_data_errors",
-                    dropped=dropped,
-                    failures=self._max_data_failures,
-                    error=str(exc),
-                )
-                return
+                return False
 
             logger.error(
                 "lake_writer.flush_failed",
                 error=str(exc),
-                retained=len(self._buffer),
-                dropped_on_overflow=overflow,
+                pending=self._spool.rows_on_disk(),
                 retryable=connection_error,
                 retry_in_seconds=round(max(0.0, self._next_reconnect_at - time.monotonic()), 1),
             )
+            return False
 
-    def _enforce_buffer_capacity(self) -> int:
-        overflow = max(0, len(self._buffer) - self._max_buffer_rows)
-        if overflow:
-            del self._buffer[:overflow]
-            self.rows_dropped += overflow
-            self._buffer_started_at = time.monotonic()
-            logger.error(
-                "lake_writer.buffer_overflow_dropped",
-                dropped=overflow,
-                cap=self._max_buffer_rows,
-                detail="oldest buffered lake rows discarded; archive coverage has a gap",
-            )
-        return overflow
+        self.rows_written += len(batch)
+        self._data_failures = 0
+        self._spool.commit_segment(segment, consumed)
+        return True
 
     def metrics(self) -> dict[str, int]:
+        pending = self._spool.rows_on_disk()
         return {
             "rows_written": self.rows_written,
             "flush_failures": self.flush_failures,
-            "buffered": len(self._buffer),
+            # Kept under its original name because dashboards and the health
+            # route read it, but it now counts rows pending **on disk** rather
+            # than in memory. The number means something much stronger: a
+            # backlog that survives this process.
+            "buffered": pending,
+            "spool_rows": pending,
+            "spool_bytes": self._spool.bytes_on_disk(),
+            # Reserved for a genuine, unrecoverable loss. Nothing in the
+            # normal path increments it any more: capacity is back-pressure
+            # and a refused batch is quarantined, so a non-zero value here
+            # means events are actually gone.
             "rows_dropped": self.rows_dropped,
+            "rows_recovered": self._spool.rows_recovered,
+            "quarantined_rows": self._spool.quarantined_rows_on_disk(),
+            "capacity_refusals": self._spool.capacity_refusals,
+            "spool_unreadable_lines": self._spool.unreadable_lines,
+            "spool_write_failures": self._spool.write_failures,
             "connect_failures": self.connect_failures,
             "reconnects": self.reconnects,
         }
+
+    @property
+    def spooled_rows(self) -> int:
+        """Rows accepted for archival that ClickHouse has not taken yet."""
+        return self._spool.rows_on_disk()
+
+    @property
+    def archive_degraded(self) -> bool:
+        """Whether archival cannot currently make an event durable.
+
+        Exposed because "the lake is behind" and "the lake is refusing
+        events" are different operational states and a backlog count alone
+        cannot distinguish them.
+        """
+        return self._disabled or not self._spool.usable

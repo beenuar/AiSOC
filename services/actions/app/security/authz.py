@@ -81,24 +81,55 @@ def authorize_action(request: ActionRequest, *, require_principal: bool | None =
         raise ActionAuthzError(f"principal {principal.user_id} lacks '{required}' required for {request.action_type.value}")
 
 
+#: Recorded on the action when separation of duties had nothing to compare.
+#:
+#: ``if separation_of_duties and requester and ...`` passed silently whenever
+#: the submission carried no principal, which is possible while
+#: ``AISOC_ACTIONS_REQUIRE_PRINCIPAL`` is false. The control reported itself
+#: satisfied on exactly the requests it could not evaluate, and the record
+#: afterwards was indistinguishable from one where it had been checked and
+#: passed. Refusing instead would brick every legacy system-initiated action
+#: during an incident, which is why this is a recorded fact rather than a
+#: denial — but it has to *be* a fact, in the row, not an omission.
+SOD_UNEVALUATED = "unevaluated"
+SOD_ENFORCED = "enforced"
+
+
 def authorize_approver(
     record: dict[str, Any],
     approver: ActionPrincipal,
     *,
     separation_of_duties: bool = True,
-) -> None:
+) -> str:
     """Enforce that an approver may approve this action (W4.4).
 
-    The approver must hold the action's required permission and — under
-    separation of duties — must not be the principal who requested it."""
+    Three conditions, and the tenant one was missing. An approver had to hold
+    the action's permission tier and not be its requester, but nothing compared
+    their tenant to the action's — so a principal holding
+    ``actions:execute:high`` in *any* tenant could approve any other tenant's
+    containment, against a store where an id was the only other control.
+    :func:`authorize_action` had carried the same comparison since it was
+    written; only the approve side went without.
+
+    Returns which separation-of-duties state applied, for the caller to record.
+    """
     action_type = ActionType(record["action_type"])
     required = _required_permission(action_type)
     if not has_action_permission(approver.permissions, required):
         raise ActionAuthzError(f"approver {approver.user_id} lacks '{required}' to approve {action_type.value}")
 
+    record_tenant = str(record.get("tenant_id") or "").strip()
+    if approver.tenant_id is not None and record_tenant and str(approver.tenant_id) != record_tenant:
+        raise ActionAuthzError("approver tenant does not match the action's tenant")
+
     requester = record.get("requested_by_user_id")
-    if separation_of_duties and requester and str(requester) == str(approver.user_id):
+    if not separation_of_duties:
+        return SOD_UNEVALUATED
+    if not requester:
+        return SOD_UNEVALUATED
+    if str(requester) == str(approver.user_id):
         raise ActionAuthzError("approver cannot be the requester (separation of duties)")
+    return SOD_ENFORCED
 
 
 async def require_service_auth(authorization: str | None = Header(default=None)) -> None:

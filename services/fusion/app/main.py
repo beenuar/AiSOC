@@ -14,6 +14,7 @@ from app.memory.provider import MemoryPriorProvider
 from app.services import ioc_match
 from app.services.ai_asset_recorder import AiAssetRecorder
 from app.services.alert_enricher import AlertEnricher
+from app.services.alert_outbox import AlertNotificationOutbox
 from app.services.alert_sink import AlertSink
 from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.baselines import BaselineStore
@@ -172,6 +173,18 @@ async def lifespan(app: FastAPI):
     # every sighting for the life of the process.
     ai_assets = AiAssetRecorder(lambda: sink._pool) if sink is not None else None
 
+    # Remediation phase 4 — the recovery record for a fused alert that is
+    # durable in Postgres but whose Kafka notification never landed. Shares
+    # the sink's pool, and is passed as a callable for the same reason the
+    # two above are: `sink.start()` opens it during `worker.start()`, after
+    # this point. Without a sink there is no pool and no alert row either,
+    # so there is nothing for the journal to be about.
+    outbox = (
+        AlertNotificationOutbox(lambda: sink._pool, ensure_pool=sink.ensure_pool)
+        if sink is not None and settings.alert_outbox_enabled
+        else None
+    )
+
     if sink is None:
         # Explicit, not inferred: this mode writes no alert rows and has no
         # durable DLQ. The consumer still retries and holds, but its committed
@@ -206,6 +219,7 @@ async def lifespan(app: FastAPI):
         sessions=SessionStore(_fusion_pool()) if settings.alert_sink_enabled else None,
         ueba_cache=ueba_cache,
         ai_assets=ai_assets,
+        outbox=outbox,
     )
     set_worker(worker)
 

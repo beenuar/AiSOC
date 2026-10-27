@@ -22,8 +22,22 @@ that looks right in a demo, and each is a rule here:
 **It resumes.** A queue collector that restarts and re-reads from "now"
 loses every object delivered while it was down; one that re-reads from the
 beginning replays the whole bucket. Both are silent. The connector has to
-declare the cursor fields the base class's ``apply_checkpoint`` orders and
-de-duplicates on.
+declare a cursor the base class's ``apply_checkpoint`` de-duplicates on,
+in one of the two shapes that exist:
+
+* ``checkpoint_time_field`` *and* ``checkpoint_id_field`` — a monotonic
+  ``(event_time, id)`` high-water mark, correct where arrival order follows
+  event order, which is a time-windowed API poll or an object store listed
+  oldest-first.
+* ``dedup_identity_field`` — a bounded set of seen identities, which is
+  what an *unordered* source needs. Phase 3: on a queue a high-water mark
+  discards an out-of-order arrival the only time it will ever be offered,
+  and the message carrying it has already been acknowledged. Pub/Sub orders
+  nothing without an ordering key, and a Cloud Logging sink sets none; S3
+  notifications over SQS are unordered by construction.
+
+Declaring both is refused by ``BaseConnector.__init_subclass__`` at import,
+because they answer the same question two different ways.
 
 **It stops.** A backlog can be arbitrarily deep — an SQS queue after an
 outage, a Pub/Sub subscription with a week of retention — and a poll that
@@ -118,6 +132,14 @@ class Declared:
     checkpoint_id: bool
     budget: bool
     budget_leaves_backlog: bool
+    #: The second shape a resumable cursor comes in: a bounded set of seen
+    #: identities, for a source whose arrival order is not its event order.
+    dedup_identity: bool = False
+
+    @property
+    def resumes(self) -> bool:
+        """Whether the connector declares a cursor of either shape."""
+        return (self.checkpoint_time and self.checkpoint_id) or self.dedup_identity
 
 
 def _class_attribute_values(tree: ast.Module, attr: str) -> list[ast.expr]:
@@ -167,6 +189,7 @@ def read_declaration(root: Path, path: CollectionPath) -> Declared:
 
     checkpoint_time = any(_is_nonempty_tuple(v) for v in _class_attribute_values(tree, "checkpoint_time_field"))
     checkpoint_id = any(_is_nonempty_tuple(v) for v in _class_attribute_values(tree, "checkpoint_id_field"))
+    dedup_identity = any(_is_nonempty_tuple(v) for v in _class_attribute_values(tree, "dedup_identity_field"))
 
     budget = False
     leaves_backlog = False
@@ -180,7 +203,7 @@ def read_declaration(root: Path, path: CollectionPath) -> Declared:
             reason = kwargs.get("backlog_stays_on_the_queue")
             if isinstance(reason, ast.Constant) and isinstance(reason.value, str) and reason.value.strip():
                 leaves_backlog = True
-    return Declared(True, checkpoint_time, checkpoint_id, budget, leaves_backlog)
+    return Declared(True, checkpoint_time, checkpoint_id, budget, leaves_backlog, dedup_identity)
 
 
 def registered_ids(root: Path) -> set[str]:
@@ -244,12 +267,13 @@ def evaluate(root: Path, paths: tuple[CollectionPath, ...] = REQUIRED_PATHS) -> 
                 f"({REGISTRY_REL}), so the catalogue, the setup wizard and the scheduler cannot reach it."
             )
 
-        if not (declared.checkpoint_time and declared.checkpoint_id):
+        if not declared.resumes:
             failures.append(
-                f"{path.connector_id}: declares no resumable cursor "
-                f"(needs a non-empty checkpoint_time_field and checkpoint_id_field in {where}). "
-                f"A queue collector without one either loses everything delivered while it was down "
-                f"or replays the backlog, and both are silent."
+                f"{path.connector_id}: declares no resumable cursor in {where} — needs either "
+                f"checkpoint_time_field and checkpoint_id_field (a high-water mark, for a source whose "
+                f"arrival order follows its event order) or dedup_identity_field (a bounded set of seen "
+                f"identities, for an unordered queue). A queue collector without one either loses "
+                f"everything delivered while it was down or replays the backlog, and both are silent."
             )
 
         if not declared.budget:
@@ -334,8 +358,13 @@ def _self_test() -> int:
                     encoding="utf-8",
                 )
             elif kind == "CHECKPOINT" and module.is_file():
+                # Both shapes, because either one satisfies the rule and
+                # disabling only the one this connector happens to use today
+                # would stop proving anything the day it switches.
                 module.write_text(
-                    module.read_text(encoding="utf-8").replace("checkpoint_id_field = (", "checkpoint_id_field_disabled = ("),
+                    module.read_text(encoding="utf-8")
+                    .replace("checkpoint_id_field = (", "checkpoint_id_field_disabled = (")
+                    .replace("dedup_identity_field = (", "dedup_identity_field_disabled = ("),
                     encoding="utf-8",
                 )
             elif kind == "BUDGET" and module.is_file():

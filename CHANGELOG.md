@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The Jira connector pulls issues from `GET /rest/api/3/search/jql`. Jira
+  Cloud removed `GET /rest/api/3/search` (it now answers 410 Gone), which left
+  the connector's alert pull failing on every poll. The request already names
+  the fields `normalize()` reads, so the issue shape it receives is unchanged.
 - **The image `stable` channel guard read the registry through a buildx
   template, and when the runner's buildx stopped resolving it the guard
   failed open** — the read returned empty with stderr discarded, "empty" was

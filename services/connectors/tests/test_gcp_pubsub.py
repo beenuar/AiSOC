@@ -14,6 +14,7 @@ does when a key field is missing.
 
 from __future__ import annotations
 
+import base64
 import json
 from pathlib import Path
 from typing import Any
@@ -132,12 +133,17 @@ class TestAPoll:
 
     @pytest.mark.asyncio
     @respx.mock
-    async def test_every_message_in_the_batch_is_acknowledged(self, service_account_json: str) -> None:
+    async def test_every_message_in_the_batch_is_eventually_acknowledged(self, service_account_json: str) -> None:
+        """Every message the poll consumed is answered — once the scheduler
+        commits. A connector that never acknowledges is not safe, it is a
+        subscription that never drains."""
         _mock_token()
         respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json=_pull_response()), httpx.Response(200, json={})])
         ack = respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
 
-        await _connector(service_account_json).fetch_alerts()
+        connector = _connector(service_account_json)
+        await connector.fetch_alerts()
+        await connector.commit_acknowledgements()
 
         assert ack.called
         assert json.loads(ack.calls.last.request.content)["ackIds"] == [
@@ -232,8 +238,246 @@ class TestAPoll:
         )
         ack = respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
 
-        assert await _connector(service_account_json).fetch_alerts() == []
+        connector = _connector(service_account_json)
+        assert await connector.fetch_alerts() == []
+        await connector.commit_acknowledgements()
+
         assert json.loads(ack.calls.last.request.content)["ackIds"] == ["ack-empty"]
+
+
+def _entry(timestamp: str, insert_id: str) -> str:
+    """One base64-encoded ``LogEntry``, the shape a sink publishes."""
+    return base64.b64encode(
+        json.dumps(
+            {
+                "insertId": insert_id,
+                "timestamp": timestamp,
+                "severity": "NOTICE",
+                "logName": "projects/example-logging/logs/cloudaudit.googleapis.com%2Factivity",
+                "resource": {"type": "gce_instance", "labels": {"project_id": "example-prod"}},
+                "protoPayload": {"methodName": "v1.compute.instances.insert", "authenticationInfo": {"principalEmail": "a@example.com"}},
+            }
+        ).encode()
+    ).decode()
+
+
+def _received(message_id: str, ack_id: str, timestamp: str, insert_id: str) -> dict[str, Any]:
+    return {"ackId": ack_id, "message": {"messageId": message_id, "publishTime": timestamp, "data": _entry(timestamp, insert_id)}}
+
+
+class TestTheAckOutlivesTheFetch:
+    """Phase 3, finding 4. Acknowledging is the irreversible step.
+
+    A Pub/Sub ack makes the subscription forget the message. The existing
+    tests pin that the ack comes after the entries are *decoded*, which is one
+    layer short of the thing that matters: ``fetch_alerts`` returns, and only
+    then does the scheduler push to ingest. Between those two points the
+    messages exist nowhere but a local list.
+    """
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_nothing_is_acknowledged_while_the_entries_are_only_in_a_list(self, service_account_json: str) -> None:
+        _mock_token()
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json=_pull_response()), httpx.Response(200, json={})])
+        ack = respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
+
+        alerts = await _connector(service_account_json).fetch_alerts()
+
+        assert len(alerts) == 3, "the entries are decoded"
+        assert not ack.called, "but nothing durable has accepted them, so the subscription must still hold them"
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_the_ack_ids_are_staged_for_the_scheduler(self, service_account_json: str) -> None:
+        _mock_token()
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json=_pull_response()), httpx.Response(200, json={})])
+        respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
+
+        connector = _connector(service_account_json)
+        await connector.fetch_alerts()
+
+        assert connector.pending_acknowledgements() == [
+            "UAYWLF1GSFE3GQhoUQ5PXIz90001",
+            "UAYWLF1GSFE3GQhoUQ5PXIz90002",
+            "UAYWLF1GSFE3GQhoUQ5PXIz90003",
+        ]
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_committing_acknowledges_exactly_what_was_staged(self, service_account_json: str) -> None:
+        _mock_token()
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json=_pull_response()), httpx.Response(200, json={})])
+        ack = respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
+        connector = _connector(service_account_json)
+        await connector.fetch_alerts()
+
+        result = await connector.commit_acknowledgements()
+
+        assert json.loads(ack.calls.last.request.content)["ackIds"] == [
+            "UAYWLF1GSFE3GQhoUQ5PXIz90001",
+            "UAYWLF1GSFE3GQhoUQ5PXIz90002",
+            "UAYWLF1GSFE3GQhoUQ5PXIz90003",
+        ]
+        assert (result.requested, result.confirmed, result.failed) == (3, 3, 0)
+        assert connector.pending_acknowledgements() == []
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_discarding_leaves_the_subscription_holding_them(self, service_account_json: str) -> None:
+        _mock_token()
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json=_pull_response()), httpx.Response(200, json={})])
+        ack = respx.post(_ACK_URL).mock(return_value=httpx.Response(200, json={}))
+        connector = _connector(service_account_json)
+        await connector.fetch_alerts()
+
+        connector.discard_acknowledgements()
+
+        assert not ack.called
+        assert connector.pending_acknowledgements() == []
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_an_expired_ack_deadline_is_reported_rather_than_assumed(self, service_account_json: str) -> None:
+        """The bounded-hold failure mode. Pub/Sub answers 400 for an ack id
+        whose deadline has passed; the message is already being redelivered,
+        so the honest outcome is a counted failure, not a silent success."""
+        _mock_token()
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json=_pull_response()), httpx.Response(200, json={})])
+        respx.post(_ACK_URL).mock(return_value=httpx.Response(400, json={"error": "ack id expired"}))
+        connector = _connector(service_account_json)
+        await connector.fetch_alerts()
+
+        result = await connector.commit_acknowledgements()
+
+        assert (result.requested, result.confirmed, result.failed) == (3, 0, 3)
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_an_empty_payload_message_is_still_staged(self, service_account_json: str) -> None:
+        """It produced no event, so no downstream acceptance will ever cover
+        it — but leaving it unacknowledged forever is how a subscription stops
+        draining. It rides along with the batch's own acknowledgement."""
+        _mock_token()
+        respx.post(_PULL_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"receivedMessages": [{"ackId": "ack-empty", "message": {"messageId": "1", "data": ""}}]}),
+                httpx.Response(200, json={}),
+            ]
+        )
+        connector = _connector(service_account_json)
+
+        assert await connector.fetch_alerts() == []
+        assert connector.pending_acknowledgements() == ["ack-empty"]
+
+
+class TestAnOlderEntryArrivingLaterSurvives:
+    """Phase 3, finding 5.
+
+    The module docstring says the cursor "tolerates a late arrival by
+    re-reading its own overlap", which is not what the base class does: it
+    keeps a single monotonic ``(event_time, record_id)`` high-water mark and
+    drops anything at or below it. A sink sets no ordering key, so a late
+    entry is routine — and it is discarded the first time it is ever seen.
+    """
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_an_entry_older_than_the_last_batch_is_still_emitted(self, service_account_json: str) -> None:
+        _mock_token()
+        respx.post(_PULL_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"receivedMessages": [_received("m-new", "ack-new", "2026-10-08T11:00:00Z", "newer")]}),
+                httpx.Response(200, json={}),
+            ]
+        )
+        first = _connector(service_account_json)
+        assert len(await first.fetch_alerts()) == 1
+        cursor = first.get_checkpoint()
+        assert cursor is not None
+
+        respx.post(_PULL_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"receivedMessages": [_received("m-old", "ack-old", "2026-10-08T09:00:00Z", "older")]}),
+                httpx.Response(200, json={}),
+            ]
+        )
+        resumed = _connector(service_account_json)
+        resumed.set_checkpoint(cursor)
+
+        assert [a["external_id"] for a in await resumed.fetch_alerts()] == ["older"], (
+            "Pub/Sub gives no ordering without an ordering key, so this entry has never been seen before"
+        )
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_a_genuine_redelivery_is_still_suppressed(self, service_account_json: str) -> None:
+        """Pub/Sub is at-least-once, so the same message really does arrive
+        twice whenever an ack does not land. Removing the cursor outright
+        would trade a silent drop for a silent duplicate."""
+        _mock_token()
+        same = [_received("m-1", "ack-1", "2026-10-08T11:00:00Z", "entry-1")]
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json={"receivedMessages": same}), httpx.Response(200, json={})])
+        first = _connector(service_account_json)
+        assert len(await first.fetch_alerts()) == 1
+        cursor = first.get_checkpoint()
+
+        # Redelivered: same messageId, a fresh ackId, exactly as Pub/Sub does it.
+        redelivered = [_received("m-1", "ack-1-again", "2026-10-08T11:00:00Z", "entry-1")]
+        respx.post(_PULL_URL).mock(side_effect=[httpx.Response(200, json={"receivedMessages": redelivered}), httpx.Response(200, json={})])
+        resumed = _connector(service_account_json)
+        resumed.set_checkpoint(cursor)
+
+        assert await resumed.fetch_alerts() == []
+
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_two_entries_sharing_a_timestamp_both_survive(self, service_account_json: str) -> None:
+        _mock_token()
+        respx.post(_PULL_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"receivedMessages": [_received("m-a", "ack-a", "2026-10-08T11:00:00Z", "tie-a")]}),
+                httpx.Response(200, json={}),
+            ]
+        )
+        first = _connector(service_account_json)
+        await first.fetch_alerts()
+        cursor = first.get_checkpoint()
+
+        respx.post(_PULL_URL).mock(
+            side_effect=[
+                httpx.Response(200, json={"receivedMessages": [_received("m-b", "ack-b", "2026-10-08T11:00:00Z", "tie-b")]}),
+                httpx.Response(200, json={}),
+            ]
+        )
+        resumed = _connector(service_account_json)
+        resumed.set_checkpoint(cursor)
+
+        assert [a["external_id"] for a in await resumed.fetch_alerts()] == ["tie-b"]
+
+
+class TestTheHoldIsBounded:
+    @pytest.mark.asyncio
+    @respx.mock
+    async def test_the_poll_stops_pulling_near_the_ack_deadline(self, service_account_json: str, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A held ackId is only good until the deadline expires, so the poll
+        stops taking new messages rather than collecting a batch whose first
+        half it can no longer answer for."""
+        from app.connectors import gcp_pubsub as module
+
+        clock = {"now": 0.0}
+        monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+        _mock_token()
+
+        def _slow_pull(_request: httpx.Request) -> httpx.Response:
+            clock["now"] += 20.0
+            return httpx.Response(200, json={"receivedMessages": _pull_response()["receivedMessages"] * 84})
+
+        pull = respx.post(_PULL_URL).mock(side_effect=_slow_pull)
+
+        await _connector(service_account_json, ack_deadline_seconds=30).fetch_alerts()
+
+        assert pull.call_count == 1
 
 
 class TestBackpressure:

@@ -245,7 +245,7 @@
       },
       {
         "default": 300,
-        "help_text": "How long a received message is hidden from other consumers. Must comfortably exceed one poll, or an object is re-announced while this poll is still reading it.",
+        "help_text": "How long a received message is hidden from other consumers. Messages are not deleted until ingest confirms their events, so this has to cover a poll and the push that follows it \u2014 not just the poll. AiSOC stops receiving once it has spent half the timeout, and a message whose visibility lapses first is redelivered and de-duplicated rather than lost. Set a redrive policy on the queue so a notification naming an unreadable object is quarantined to a dead-letter queue instead of retried forever.",
         "label": "Receive visibility timeout (seconds)",
         "name": "visibility_timeout_seconds",
         "required": false,
@@ -1612,7 +1612,7 @@
       },
       {
         "default": 120,
-        "help_text": "Recorded for the setup guide and compared against the subscription at test time. A deadline shorter than one poll redelivers messages this connector is still reading.",
+        "help_text": "Recorded for the setup guide and compared against the subscription at test time. Messages stay unacknowledged until ingest confirms them, so the deadline has to cover a poll and the push that follows it \u2014 not just the poll. AiSOC stops pulling once it has spent half the deadline, and a message whose deadline lapses first is redelivered and de-duplicated rather than lost.",
         "label": "Acknowledgement deadline (seconds)",
         "name": "ack_deadline_seconds",
         "required": false,

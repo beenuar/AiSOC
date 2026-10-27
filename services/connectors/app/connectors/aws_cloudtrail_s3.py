@@ -37,21 +37,35 @@ How a poll works
 2. For each announced object, ``s3:GetObject`` and gunzip. The key says what
    is inside — CloudTrail JSON, a CloudTrail digest (skipped: it is a
    signature over other files, not events), or VPC flow-log text.
-3. Every record becomes one envelope carrying its event time and a stable
-   id, so the base class's checkpoint can order and de-duplicate them.
-4. ``sqs:DeleteMessage`` once the object's records are out. Delete-after,
-   never delete-before: a crash between the two redelivers the object, and a
-   duplicate is recoverable where a silently dropped object is not.
+3. Every record becomes one envelope carrying its event time, a stable id and
+   the key of the object it came out of, which is what the base class
+   de-duplicates on.
+4. ``sqs:DeleteMessage`` once **ingest has confirmed** every event from every
+   object the message named. Not once the records are out: this function
+   returns long before the scheduler pushes to ingest, so deleting here drops
+   messages on the floor whenever that push fails, and a deleted SQS message
+   cannot be replayed from anywhere. The handles are staged and
+   :meth:`commit_acknowledgements` answers the queue once the verdict is in.
 
 Resumption and backpressure
 ---------------------------
 
 The queue *is* the cursor. Nothing is lost while this connector is down,
 because an undeleted message returns after its visibility timeout, and the
-trail keeps writing to S3 regardless. The declared checkpoint is the second
-layer: redelivery is normal in SQS (at-least-once), so the ``(event_time,
-record_id)`` cursor suppresses the re-read of an object the previous poll
-had already emitted but whose delete did not land.
+trail keeps writing to S3 regardless. The declared cursor is the second
+layer: redelivery is normal in SQS (at-least-once), so a set of seen object
+keys suppresses the re-read of an object the previous poll already emitted
+but whose delete did not land.
+
+It is a set and not a high-water mark on purpose. S3 notifications over SQS
+arrive in no particular order, so an object whose events are older than the
+previous batch's newest is an ordinary first arrival — and a watermark would
+discard it on sight, after its announcing message had already been deleted.
+
+A second bound applies while receipt handles are held: the poll stops
+receiving once it has spent half the visibility timeout, leaving the rest for
+ingest. Overrunning costs a duplicate rather than a gap, because a receipt
+whose visibility has lapsed is refused and its message redelivers.
 
 ``collection_budget`` bounds the poll. A queue that accumulated through a
 six-hour outage holds six hours of an estate's control plane, and draining
@@ -79,6 +93,7 @@ from __future__ import annotations
 import gzip
 import ipaddress
 import json
+import time
 from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import unquote_plus
@@ -88,6 +103,7 @@ import structlog
 from app.connectors.aws_cloudtrail import _event_severity as _management_event_severity
 from app.connectors.aws_vpc_flow import _parse_v2_record, _record_severity
 from app.connectors.base import (
+    AcknowledgementResult,
     BaseConnector,
     Capability,
     CollectionBudget,
@@ -133,6 +149,12 @@ _DESTRUCTIVE_DATA_EVENTS = frozenset(
 #: memory. CloudTrail caps its own objects far below it; a gzip bomb or a
 #: misdirected bucket does not.
 MAX_OBJECT_BYTES = 256 * 1024 * 1024
+
+#: Receives after which a notification is called out as stuck. SQS's default
+#: ``maxReceiveCount`` for a redrive policy is 10 and AWS's own guidance is
+#: not to go below 5, so warning at 5 names the problem at about the point a
+#: correctly-configured queue would be quarantining it anyway.
+_POISON_RECEIVE_COUNT = 5
 
 
 def _data_event_severity(event_name: str, error_code: str | None) -> str:
@@ -220,19 +242,22 @@ class AWSCloudTrailS3Connector(BaseConnector):
     connector_name = "AWS CloudTrail (S3 + SQS)"
     connector_category = "cloud"
 
-    #: `record_id` is `<object key>#<index>`, stable across a redelivery of
-    #: the same object, which is what makes the cursor suppress the duplicate
-    #: SQS guarantees it will eventually produce.
-    checkpoint_time_field = ("event_time",)
-    checkpoint_id_field = ("record_id",)
+    #: The object key, which every record read out of that object shares and
+    #: which is stable across a redelivery of its notification — so one entry
+    #: suppresses a re-read of the whole object. Deliberately coarser than
+    #: `record_id`: the object is this connector's atomic unit (a message is
+    #: only answered when every object it named was read in full), and keying
+    #: on the object keeps the retained set to the few hundred keys one poll
+    #: can announce rather than the twenty thousand records they hold.
+    dedup_identity_field = ("object_key",)
 
     collection_budget = CollectionBudget(
         max_batches_per_poll=20,
         max_events_per_poll=20_000,
         backlog_stays_on_the_queue=(
-            "Only a fully-emitted object's SQS message is deleted, so anything the budget stops short of is "
-            "still on the queue and the next poll receives it. A six-hour backlog therefore drains over "
-            "several polls instead of in one pass."
+            "No message is deleted until ingest confirms the batch, so anything the budget stops short of is "
+            "still on the queue and the next poll receives it, and so is anything ingest refused. A six-hour "
+            "backlog therefore drains over several polls instead of in one pass."
         ),
     )
 
@@ -302,8 +327,12 @@ class AWSCloudTrailS3Connector(BaseConnector):
                     required=False,
                     default=300,
                     help_text=(
-                        "How long a received message is hidden from other consumers. Must comfortably exceed "
-                        "one poll, or an object is re-announced while this poll is still reading it."
+                        "How long a received message is hidden from other consumers. Messages are not deleted "
+                        "until ingest confirms their events, so this has to cover a poll and the push that "
+                        "follows it — not just the poll. AiSOC stops receiving once it has spent half the "
+                        "timeout, and a message whose visibility lapses first is redelivered and de-duplicated "
+                        "rather than lost. Set a redrive policy on the queue so a notification naming an "
+                        "unreadable object is quarantined to a dead-letter queue instead of retried forever."
                     ),
                 ),
             ],
@@ -392,9 +421,23 @@ class AWSCloudTrailS3Connector(BaseConnector):
         objects_read = 0
         truncated = False
 
+        started = time.monotonic()
+
         for _ in range(budget.max_batches_per_poll):
             if len(rows) >= budget.max_events_per_poll:
                 truncated = True
+                break
+            if self.pending_acknowledgements() and self.acknowledgement_hold_exhausted(time.monotonic() - started):
+                # Receipts already held are closer to lapsing than to being
+                # deleted. Receiving another batch would widen a window that
+                # is already half the timeout, so the rest stays on the queue.
+                truncated = True
+                logger.info(
+                    "cloudtrail_s3.visibility_reserve_reached",
+                    held=len(self.pending_acknowledgements()),
+                    visibility_timeout_seconds=self._visibility_timeout,
+                    detail="remainder stays on the queue for the next poll",
+                )
                 break
             try:
                 received = sqs.receive_message(
@@ -402,6 +445,10 @@ class AWSCloudTrailS3Connector(BaseConnector):
                     MaxNumberOfMessages=10,
                     VisibilityTimeout=self._visibility_timeout,
                     WaitTimeSeconds=1,
+                    # Asked for explicitly because SQS omits it otherwise, and
+                    # it is the only signal that a notification is stuck in a
+                    # retry loop rather than the queue being quiet.
+                    AttributeNames=["ApproximateReceiveCount"],
                 )
             except Exception as exc:
                 logger.warning("cloudtrail_s3.receive_failed", error=str(exc))
@@ -413,13 +460,17 @@ class AWSCloudTrailS3Connector(BaseConnector):
 
             for message in messages:
                 handle = message.get("ReceiptHandle")
+                self._warn_if_poisoned(message)
                 announced = _s3_notifications(message.get("Body") or "")
                 if not announced:
                     # An s3:TestEvent, or a message this queue should not be
-                    # carrying. Either way it will never become events, so
-                    # delete it rather than let it redeliver forever.
+                    # carrying. Either way it will never become events, so it
+                    # rides along with this batch's acknowledgement rather
+                    # than redelivering for ever. It contributes no rows, so
+                    # an all-test-event poll is an empty batch that ingest
+                    # accepts trivially and the queue still drains.
                     if handle:
-                        self._delete(sqs, handle)
+                        self.stage_acknowledgement([handle])
                     continue
 
                 emitted_all = True
@@ -442,7 +493,10 @@ class AWSCloudTrailS3Connector(BaseConnector):
                         logger.warning("cloudtrail_s3.object_failed", bucket=bucket, key=key, error=str(exc))
 
                 if emitted_all and handle:
-                    self._delete(sqs, handle)
+                    # Staged, not deleted. Every object this message named was
+                    # read, but "read" is not "durable" — the push to ingest
+                    # happens after this function returns.
+                    self.stage_acknowledgement([handle])
 
                 if len(rows) >= budget.max_events_per_poll:
                     truncated = True
@@ -463,19 +517,77 @@ class AWSCloudTrailS3Connector(BaseConnector):
 
         return [self.normalize(row) for row in self.apply_checkpoint(rows)]
 
-    def _delete(self, sqs: Any, receipt_handle: str) -> None:
-        """Acknowledge one notification.
+    def acknowledgement_deadline_seconds(self) -> int:
+        """The visibility timeout, which is how long a receipt handle lasts."""
+        return self._visibility_timeout
 
-        Failing to delete is not fatal and must not abort the poll: the
-        message redelivers, the object is read again, and the checkpoint
-        drops the duplicate. Logged at warning because a delete that keeps
-        failing is a permissions problem that will otherwise present as a
-        queue that never drains.
+    def _warn_if_poisoned(self, message: dict[str, Any]) -> None:
+        """Say so when a message keeps coming back.
+
+        A notification naming an object that can never be read — deleted
+        object, a bucket policy the task role does not satisfy, a truncated
+        upload — is withheld on every poll by design, because the alternative
+        is dropping audit data on a transient S3 error. That is correct and it
+        is also an infinite retry if nothing bounds it.
+
+        The bound belongs to the queue, not here: SQS's own redrive policy
+        moves a message to a dead-letter queue after N receives, which is a
+        durable quarantine with the original payload intact and needs no code.
+        What this does is make the situation visible, because
+        ``ApproximateReceiveCount`` is the only evidence an operator has that
+        the queue is retrying rather than idle.
         """
         try:
-            sqs.delete_message(QueueUrl=self._queue_url, ReceiptHandle=receipt_handle)
-        except Exception as exc:
-            logger.warning("cloudtrail_s3.delete_failed", error=str(exc))
+            received = int((message.get("Attributes") or {}).get("ApproximateReceiveCount") or 0)
+        except (TypeError, ValueError):
+            return
+        if received >= _POISON_RECEIVE_COUNT:
+            logger.warning(
+                "cloudtrail_s3.message_redelivered_repeatedly",
+                receive_count=received,
+                message_id=str(message.get("MessageId") or "")[:64],
+                detail=(
+                    "this notification has been withheld on every poll because an object it names could not be read; "
+                    "set a redrive policy on the queue so it is quarantined to a dead-letter queue rather than retried forever"
+                ),
+            )
+
+    async def commit_acknowledgements(self) -> AcknowledgementResult:
+        """Delete the staged notifications.
+
+        Called by the scheduler only once ingest has confirmed every event in
+        the batch reached Kafka. A fresh SQS client because the one the fetch
+        used is local to it; the receipt handles stay valid for as long as
+        their visibility timeout has left to run.
+
+        A delete that does not land is not fatal and must not raise: the
+        message redelivers, the object is read again, and the object-key
+        cursor drops the duplicate. Counted rather than only logged, because
+        a delete that keeps failing is a permissions problem that otherwise
+        presents as a queue that never drains.
+        """
+        handles = self.take_pending_acknowledgements()
+        if not handles:
+            return AcknowledgementResult(requested=0, confirmed=0, failed=0)
+        try:
+            sqs = self._client("sqs")
+        except RuntimeError as exc:
+            logger.warning("cloudtrail_s3.ack_client_init_failed", count=len(handles), error=str(exc))
+            return AcknowledgementResult(requested=len(handles), confirmed=0, failed=len(handles))
+
+        confirmed = 0
+        failed = 0
+        for handle in handles:
+            try:
+                sqs.delete_message(QueueUrl=self._queue_url, ReceiptHandle=handle)
+            except Exception as exc:
+                # Per handle, not per batch: one lapsed receipt among twenty
+                # must not strand the nineteen that are still good.
+                failed += 1
+                logger.warning("cloudtrail_s3.delete_failed", error=str(exc))
+            else:
+                confirmed += 1
+        return AcknowledgementResult(requested=len(handles), confirmed=confirmed, failed=failed)
 
     def _read_object(self, s3: Any, bucket: str, key: str, kind: str) -> list[dict[str, Any]]:
         """Fetch one object and turn it into envelopes."""

@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.kafka_security import kafka_client_kwargs
 from app.models.alert import FusionDecision, RawAlert
 from app.services.ai_asset_recorder import AiAssetRecorder
+from app.services.alert_outbox import AlertNotificationOutbox, NotificationRelay
 from app.services.alert_sink import AlertSink, PersistOutcome, PersistResult
 from app.services.detection_engine import DetectionEngine
 from app.services.dlq import DeadLetter, DeadLetterQueue, LoggingDLQ, safe_record
@@ -45,6 +46,10 @@ _METRICS = {
     "persist_failed": 0,
     "persist_retryable": 0,
     "laked": 0,
+    # Events archival could not make durable. Non-zero means the spool is
+    # full or unusable: with AISOC_LAKE_ARCHIVE_REQUIRED on these hold the
+    # Kafka offset, and with it off each one is a gap in the lake.
+    "lake_refused": 0,
     # Events recorded against a session (depth plan 2.4). Counted separately
     # from `laked` so a deployment can see that the session store is working
     # rather than inferring it from alerts that happen to carry an id.
@@ -62,6 +67,13 @@ _METRICS = {
     "retry_exhausted": 0,
     "recovery_holds": 0,
     "publish_failed": 0,
+    # Notifications for an alert that is durable in Postgres but did not
+    # reach the broker. `journalled` are recoverable (the relay will
+    # publish them); `unrecoverable` could not even be recorded, and
+    # `recovered` is how many the relay has since delivered.
+    "notifications_journalled": 0,
+    "notifications_unrecoverable": 0,
+    "notifications_recovered": 0,
     # 1 when the configured DLQ is durable storage, 0 in the explicit
     # persistence-free mode (LoggingDLQ). A committed offset is evidence of
     # durable capture only in the first case.
@@ -140,9 +152,21 @@ class FusionWorker:
         overlays: OverlayCache | None = None,
         sessions: SessionStore | None = None,
         ai_assets: AiAssetRecorder | None = None,
+        outbox: AlertNotificationOutbox | None = None,
     ) -> None:
         self._engine = engine
         self._sink = sink
+        #: Recovery record for an alert that is durable in Postgres but whose
+        #: notification never reached the broker. Optional in the same sense
+        #: the lake writer is: a deployment that passes nothing keeps the
+        #: previous behaviour, which is that such an alert is lost once the
+        #: retry budget runs out. See app/services/alert_outbox.py.
+        self._outbox = outbox
+        self._relay: NotificationRelay | None = None
+        #: Set when a notification could neither be published nor journalled,
+        #: so the dead-letter reason can say so instead of reading like an
+        #: ordinary transient failure.
+        self._notification_at_risk = False
         self._lake = lake
         self._detector = detector
         self._windowed = windowed_detector
@@ -189,6 +213,17 @@ class FusionWorker:
     @property
     def engine(self) -> FusionEngine:
         return self._engine
+
+    @property
+    def lake(self) -> LakeWriter | None:
+        """The archival writer, so its backlog can be reported.
+
+        Exposed because ``LakeWriter.metrics()`` had no caller anywhere in
+        the service: the archive backlog, the capacity pressure and the
+        quarantined rows were all computed on demand by a method nothing
+        demanded.
+        """
+        return self._lake
 
     @property
     def attached(self) -> bool:
@@ -270,6 +305,11 @@ class FusionWorker:
         self._producer = AIOKafkaProducer(
             bootstrap_servers=settings.kafka_bootstrap_servers,
             value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            # Fused alerts are keyed by their canonical alert id so every
+            # re-publication of one alert lands on the same partition and a
+            # downstream consumer can collapse duplicates. Without a
+            # serializer aiokafka requires the key to be bytes already.
+            key_serializer=lambda k: None if k is None else str(k).encode("utf-8"),
             **kafka_client_kwargs(),
         )
         await self._consumer.start()
@@ -290,6 +330,18 @@ class FusionWorker:
             # forever and "what else did this sitting do" would accumulate
             # months of unrelated activity under one id.
             self._flush_task = asyncio.create_task(self._periodic_flush())
+        # Started after the producer, because its first sweep publishes. A
+        # relay that is not started is the same defect as a journal nothing
+        # reads: the rows accumulate and the alerts stay undelivered.
+        if self._outbox is not None:
+            self._relay = NotificationRelay(
+                self._outbox,
+                self._publish_recovered,
+                interval_seconds=settings.outbox_relay_interval_seconds,
+                batch_size=settings.outbox_relay_batch_size,
+                grace_seconds=settings.outbox_relay_grace_seconds,
+            )
+            self._relay.start()
         self._running = True
         if not self._durable_capture:
             logger.warning(
@@ -347,6 +399,12 @@ class FusionWorker:
             with contextlib.suppress(asyncio.CancelledError):
                 _ = await self._flush_task  # await the cancellation to settle
             self._flush_task = None
+        if self._relay is not None:
+            # Stopped before the producer is closed. A sweep publishing
+            # through a torn-down producer would mark nothing delivered and
+            # bump every claimed row's attempt count for no reason.
+            await self._relay.stop()
+            self._relay = None
 
         # Let an in-flight message finish (and, if it succeeded, commit)
         # before tearing the clients down. Closing Kafka underneath the loop
@@ -492,6 +550,9 @@ class FusionWorker:
 
         attempt = 0
         max_retries = max(0, settings.consumer_max_retries)
+        # Per message, not per worker: the flag describes this record's
+        # notifications, and leaving it set would mislabel the next one.
+        self._notification_at_risk = False
         while True:
             if not self._running or self._stop_event.is_set():
                 return False
@@ -533,10 +594,19 @@ class FusionWorker:
                     offset=msg.offset,
                     error=str(exc),
                 )
+                reason = f"transient processing failure after {attempt} attempts: {exc}"
+                if self._notification_at_risk:
+                    # Say which kind of loss this is. The alert row is
+                    # durable; what is gone is the notification, and the
+                    # dead-letter payload is now the only copy of the
+                    # envelope. An operator reading "transient processing
+                    # failure" alone would look for a missing alert and
+                    # find one, and conclude the pipeline is fine.
+                    reason += " (fused alert is durable but its notification was neither published nor journalled)"
                 captured = await self._dead_letter_or_hold(
                     topic=msg.topic,
                     payload=msg.value,
-                    reason=f"transient processing failure after {attempt} attempts: {exc}",
+                    reason=reason,
                     partition=msg.partition,
                     offset=msg.offset,
                 )
@@ -722,8 +792,38 @@ class FusionWorker:
             # Phase A1 — archive EVERY normalized event into the ClickHouse lake
             # first, independent of the promotion decision below. A non-promoted
             # Medium event still has to be queryable via /lake/sql.
-            if self._lake is not None and await self._lake.write_event(payload, topic=resolved_topic, partition=partition, offset=offset):
-                _METRICS["laked"] += 1
+            #
+            # The return value is now load-bearing rather than a counter
+            # input. It used to mean "appended to a list", and this offset
+            # committed regardless — so archival rode entirely on an
+            # in-memory buffer that a kill erased. True now means the row is
+            # on the archival spool and survives this process; False means it
+            # is not recoverable, and committing the offset would be the
+            # silent archive loss the spool exists to prevent.
+            #
+            # Only the spool refusing an event holds the offset. A ClickHouse
+            # outage is absorbed by the spool and costs the alert path
+            # nothing, which is the distinction between "the archive is
+            # behind" and "the archive cannot accept anything".
+            if self._lake is not None:
+                if await self._lake.write_event(payload, topic=resolved_topic, partition=partition, offset=offset):
+                    _METRICS["laked"] += 1
+                else:
+                    _METRICS["lake_refused"] += 1
+                    if settings.lake_archive_required:
+                        raise RetryableProcessingError(
+                            "lake archival could not make this event durable; holding the offset rather than losing the archive"
+                        )
+                    logger.error(
+                        "fusion.lake_gap",
+                        topic=resolved_topic,
+                        partition=partition,
+                        offset=offset,
+                        detail=(
+                            "AISOC_LAKE_ARCHIVE_REQUIRED is off, so this event is not archived and the offset will commit; "
+                            "the lake has a gap at this offset"
+                        ),
+                    )
 
             # Depth 6.1 — the observed AI estate is built here rather than by
             # a separate worker reading the lake, for one reason: this is the
@@ -768,11 +868,45 @@ class FusionWorker:
             # Wave 2 — stateful/windowed detections (brute force, spray, scans)
             # count this event into its sliding window and fire once on threshold.
             if self._windowed is not None:
-                for hit in await self._windowed.evaluate(payload, overlay):
+                # The event identity is threaded in so an observation is
+                # idempotent: this loop re-runs on every re-delivery, and
+                # with a random member per call one event counted N times
+                # crossed a threshold of N. Same preference order as the
+                # lake writer -- ingest id, then Kafka coordinates.
+                windowed_hits = await self._windowed.evaluate(
+                    payload,
+                    overlay,
+                    event_id=validation.source_event_id,
+                    topic=resolved_topic,
+                    partition=partition,
+                    offset=offset,
+                )
+                for hit in windowed_hits:
                     win_alert = self._windowed.build_alert(payload, hit)
-                    if win_alert is not None:
-                        _METRICS["detected"] += 1
+                    if win_alert is None:
+                        # Nothing will be persisted, so the claim has to go
+                        # back or this window stays suppressed for a hit
+                        # that never became an alert.
+                        await self._windowed.release(hit)
+                        continue
+                    _METRICS["detected"] += 1
+                    # A threshold hit is claimed, not fired, until its alert
+                    # is durable. Confirming after persistence is what lets
+                    # a re-delivery recover an alert the database refused;
+                    # the claim itself (taken atomically inside `evaluate`)
+                    # is what stops two workers firing the same window.
+                    try:
                         await self._fuse_and_persist(win_alert, source_event_id=validation.source_event_id, session=session)
+                    except BaseException:
+                        # Best-effort: under cancellation this await may not
+                        # complete, which is why the claim also carries a
+                        # lease. A released claim re-fires on the next
+                        # delivery; an unreleased one re-fires when the
+                        # lease expires. Neither suppresses the window.
+                        with contextlib.suppress(Exception):
+                            await self._windowed.release(hit)
+                        raise
+                    await self._windowed.confirm(hit)
 
             # Ingest-normalized OCSF event — run the deterministic promotion
             # policy (see app/services/promoter.py). Non-promoted events are
@@ -870,12 +1004,10 @@ class FusionWorker:
         producer = self._producer
         if producer is None:  # pragma: no cover — assigned by start()
             raise RuntimeError("fusion produced a fused alert before the Kafka producer started")
+        key = str(fused.id)
         try:
             await asyncio.wait_for(
-                producer.send(
-                    settings.kafka_topic_alerts_fused,
-                    value=envelope,
-                ),
+                self._deliver(producer, envelope, key=key),
                 timeout=max(0.1, settings.kafka_send_timeout_seconds),
             )
         except asyncio.CancelledError:
@@ -884,8 +1016,134 @@ class FusionWorker:
             # The row is durable but the notification is not. Retrying the
             # message republishes it; the sink's duplicate reconciliation
             # makes that a no-op at the database.
+            #
+            # Journal it before raising. The retry budget is finite: once it
+            # runs out the message is dead-lettered and the offset *is*
+            # committed, and from then on nothing re-delivers this record.
+            # The journal is the only thing that can still publish the alert
+            # after that point, so it has to be written now rather than at
+            # the moment of giving up.
             _METRICS["publish_failed"] += 1
+            await self._journal_notification(fused, envelope, key=key, error=str(exc))
             raise RetryableProcessingError(f"fused alert publish failed: {exc}") from exc
+
+        if result.outcome is PersistOutcome.DUPLICATE:
+            # DUPLICATE is the one outcome meaning "this alert already
+            # existed", so it is the only path on which an earlier attempt
+            # can have left a journal row pending. Clearing it here is what
+            # stops the relay republishing an alert an inline retry already
+            # delivered. An INSERTED alert is new and cannot have been
+            # journalled, so the happy path pays nothing for this.
+            await self._clear_journalled_notification(fused)
+
+    async def _journal_notification(self, fused: Any, envelope: dict, *, key: str, error: str) -> None:
+        """Record an undelivered notification, and say so loudly if we cannot.
+
+        A failure here is not fatal to the message — the alert row is durable
+        and the offset is still uncommitted — but it does mean that if the
+        retry budget runs out, the dead-letter capture will be the only
+        record of this alert's envelope. That is a real archive of the
+        payload rather than silent loss, but it is not a delivery, so it gets
+        its own counter and a critical log rather than being folded into the
+        publish-failure count.
+        """
+        if self._outbox is None:
+            return
+        recorded = await self._outbox.record(
+            tenant_id=str(fused.tenant_id),
+            alert_id=str(fused.id),
+            topic=settings.kafka_topic_alerts_fused,
+            key=key,
+            payload=envelope,
+            error=error,
+        )
+        if recorded:
+            _METRICS["notifications_journalled"] += 1
+            return
+        _METRICS["notifications_unrecoverable"] += 1
+        self._notification_at_risk = True
+        logger.critical(
+            "fusion.notification_unrecoverable",
+            alert_id=str(fused.id),
+            tenant_id=str(fused.tenant_id),
+            error=error,
+            detail=(
+                "the alert row is durable but its notification could not be published or journalled; "
+                "if the retry budget runs out the dead-letter capture is the only record of the envelope"
+            ),
+        )
+
+    async def _clear_journalled_notification(self, fused: Any) -> None:
+        if self._outbox is None:
+            return
+        await self._outbox.clear(tenant_id=str(fused.tenant_id), alert_id=str(fused.id))
+
+    async def _publish_recovered(self, envelope: dict, key: str) -> None:
+        """Deliver a journalled envelope through the same awaited-ack path.
+
+        Injected into the relay rather than giving it its own producer call,
+        so there is exactly one definition of "delivered" in this service.
+        """
+        producer = self._producer
+        if producer is None:
+            raise RuntimeError("the notification relay ran before the Kafka producer started")
+        await asyncio.wait_for(
+            self._deliver(producer, envelope, key=key),
+            timeout=max(0.1, settings.kafka_send_timeout_seconds),
+        )
+        # Counted here rather than at shutdown so the figure is live: a
+        # recovery an operator cannot see until the process stops is not an
+        # observable recovery.
+        _METRICS["notifications_recovered"] += 1
+
+    async def pending_notifications(self) -> tuple[int | None, float | None, dict[str, int]]:
+        """``(undelivered notifications, age of the oldest, per-tenant counts)``.
+
+        ``(None, None, {})`` when there is no journal configured or it cannot
+        be read — never ``(0, None, {})``, because an unreadable backlog
+        reported as an empty one is how a stuck relay looks healthy.
+        """
+        if self._outbox is None:
+            return None, None, {}
+        return await self._outbox.backlog()
+
+    @staticmethod
+    async def _deliver(producer: Any, envelope: dict, *, key: str) -> None:
+        """Publish one envelope and wait for the broker to acknowledge it.
+
+        ``AIOKafkaProducer.send`` is a coroutine that appends the record to
+        the client's batch accumulator and returns a *future* resolving when
+        the broker acks. Awaiting the call alone awaits the **enqueue**: the
+        record is in this process's memory and nowhere else, and the delivery
+        outcome -- including a refusal that arrives milliseconds later -- is
+        in the future that was discarded. The consumer commits the input
+        offset straight afterwards, so that window loses the notification
+        while keeping the alert row and advancing past the source event.
+
+        Written as the ``send`` + ``await future`` pair rather than
+        ``send_and_wait`` to match ``dlq.KafkaDLQ.record``, which carries the
+        same reasoning, and because it keeps the worker compatible with
+        producers that expose only ``send``.
+
+        The caller wraps this in one ``wait_for``, so the configured timeout
+        is an end-to-end *delivery* deadline rather than a bound on the
+        enqueue. A timeout cancels the wait, not the record: aiokafka may
+        still deliver it, so a timed-out publish is reported as unconfirmed
+        and re-published, never as lost.
+
+        ``key`` puts every copy of one alert on a single partition and gives
+        a downstream consumer something stable to collapse duplicates on.
+        Re-publication is designed-for here -- an offset commit and a broker
+        ack cannot be made atomic -- so the key is part of the contract, not
+        a tuning detail.
+        """
+        future = await producer.send(settings.kafka_topic_alerts_fused, value=envelope, key=key)
+        acknowledged = await future
+        # Referenced rather than discarded for the reason `KafkaDLQ.record`
+        # records: a bare `await <name>` reads to CodeQL as an ineffectual
+        # statement. The ack's payload is not part of this contract -- the
+        # absence of an exception is what makes the offset commit safe.
+        logger.debug("fusion.publish_acknowledged", key=key, acknowledged=acknowledged is not None)
 
     @staticmethod
     def get_metrics() -> dict:

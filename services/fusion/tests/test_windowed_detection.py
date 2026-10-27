@@ -3,39 +3,16 @@ sliding window, and only once per window."""
 
 from __future__ import annotations
 
+import itertools
 import json
 from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import WindowedDetectionEngine, WindowRule
 
+from tests.redis_doubles import FakeRedis
 
-class _FakeRedis:
-    """Minimal in-memory Redis for the sorted-set window + fired marker."""
-
-    def __init__(self) -> None:
-        self.zsets: dict[str, dict[str, float]] = {}
-        self.strings: dict[str, str] = {}
-
-    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self.zsets.setdefault(key, {}).update(mapping)
-
-    async def zremrangebyscore(self, key: str, min_s: float, max_s: float) -> None:
-        z = self.zsets.get(key, {})
-        for m in [m for m, s in list(z.items()) if min_s <= s <= max_s]:
-            del z[m]
-
-    async def expire(self, key: str, ttl: int) -> None:
-        return None
-
-    async def zcard(self, key: str) -> int:
-        return len(self.zsets.get(key, {}))
-
-    async def set(self, key: str, value: str, nx: bool = False, ex: int | None = None):
-        if nx and key in self.strings:
-            return None
-        self.strings[key] = value
-        return True
+_EVENT_SEQ = itertools.count()
 
 
 def _auth_fail_event(tenant: str, user: str = "alice", src: str = "1.2.3.4") -> dict:
@@ -45,12 +22,18 @@ def _auth_fail_event(tenant: str, user: str = "alice", src: str = "1.2.3.4") -> 
             "tenant_uid": tenant,
             "raw_data": json.dumps({"event_type": "authentication", "outcome": "failure", "user": user, "src_ip": src}),
         },
+        # Each call is a distinct event and carries the id ingest would have
+        # stamped on it. The engine counts one observation per event
+        # identity, which is what makes a re-delivery idempotent, so a
+        # builder returning byte-identical events would be simulating one
+        # event arriving repeatedly -- a different scenario entirely.
+        "id": f"evt-{next(_EVENT_SEQ)}",
     }
 
 
 @pytest.mark.asyncio
 async def test_bruteforce_fires_at_threshold_once():
-    eng = WindowedDetectionEngine(_FakeRedis())
+    eng = WindowedDetectionEngine(FakeRedis())
     tenant = str(uuid4())
 
     # First 4 failures: below the threshold of 5 -> no brute-force hit.
@@ -69,7 +52,7 @@ async def test_bruteforce_fires_at_threshold_once():
 
 @pytest.mark.asyncio
 async def test_group_by_isolates_entities():
-    eng = WindowedDetectionEngine(_FakeRedis())
+    eng = WindowedDetectionEngine(FakeRedis())
     tenant = str(uuid4())
     # 4 failures for alice + 4 for bob: neither user reaches the per-user threshold.
     for _ in range(4):
@@ -81,7 +64,7 @@ async def test_group_by_isolates_entities():
 
 @pytest.mark.asyncio
 async def test_non_matching_event_never_fires():
-    eng = WindowedDetectionEngine(_FakeRedis())
+    eng = WindowedDetectionEngine(FakeRedis())
     tenant = str(uuid4())
     benign = {"tenant_id": tenant, "ocsf_event": {"raw_data": json.dumps({"event_type": "process", "user": "alice"})}}
     for _ in range(20):
@@ -91,7 +74,7 @@ async def test_non_matching_event_never_fires():
 
 @pytest.mark.asyncio
 async def test_build_alert_from_hit():
-    eng = WindowedDetectionEngine(_FakeRedis())
+    eng = WindowedDetectionEngine(FakeRedis())
     tenant = str(uuid4())
     hit = None
     for _ in range(5):
@@ -143,14 +126,14 @@ DISTINCT_RULE = WindowRule(
 async def test_repeating_one_value_never_crosses_a_distinct_threshold():
     """The regression this exists for: a script reading the same secret in a
     loop is not enumeration, and must not be reported as it."""
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(DISTINCT_RULE,))
     for _ in range(20):
         assert await engine.evaluate(_secret_event("alice", "db-password")) == []
 
 
 @pytest.mark.asyncio
 async def test_distinct_values_cross_the_threshold():
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(DISTINCT_RULE,))
     assert await engine.evaluate(_secret_event("alice", "s1")) == []
     assert await engine.evaluate(_secret_event("alice", "s2")) == []
     hits = await engine.evaluate(_secret_event("alice", "s3"))
@@ -159,7 +142,7 @@ async def test_distinct_values_cross_the_threshold():
 
 @pytest.mark.asyncio
 async def test_distinct_counts_are_per_entity():
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(DISTINCT_RULE,))
     for secret in ("s1", "s2"):
         await engine.evaluate(_secret_event("alice", secret))
     # Bob's two are his own; neither principal has reached three.
@@ -171,7 +154,7 @@ async def test_distinct_counts_are_per_entity():
 async def test_an_event_missing_the_distinct_field_is_skipped_not_counted():
     """Falling back to counting events would be a different, louder detection
     wearing this one's id."""
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(DISTINCT_RULE,))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(DISTINCT_RULE,))
     bare = {"tenant_id": _TENANT, "ocsf_event": {"raw_event": {"event_type": "secret_access", "user": "alice"}}}
     for _ in range(10):
         assert await engine.evaluate(bare) == []

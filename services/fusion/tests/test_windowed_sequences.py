@@ -29,39 +29,7 @@ from uuid import uuid4
 import pytest
 from app.services.windowed_detection import SequenceRule, WindowedDetectionEngine
 
-
-class _FakeRedis:
-    """The sorted-set, hash and marker calls the engine makes, faithfully."""
-
-    def __init__(self) -> None:
-        self.zsets: dict[str, dict[str, float]] = {}
-
-        self.strings: dict[str, str] = {}
-
-    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self.zsets.setdefault(key, {}).update(mapping)
-
-    async def zremrangebyscore(self, key: str, min_s: float, max_s: float) -> None:
-        members = self.zsets.get(key, {})
-        for member in [m for m, score in list(members.items()) if min_s <= score <= max_s]:
-            del members[member]
-
-    async def zcard(self, key: str) -> int:
-        return len(self.zsets.get(key, {}))
-
-    async def zrangebyscore(self, key: str, min_s: float, max_s: float, withscores: bool = False) -> list[Any]:
-        items = sorted(((m, s) for m, s in self.zsets.get(key, {}).items() if min_s <= s <= max_s), key=lambda kv: (kv[1], kv[0]))
-        return items if withscores else [m for m, _ in items]
-
-    async def expire(self, key: str, ttl: int) -> None:
-        return None
-
-    async def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> Any:
-        if nx and key in self.strings:
-            return None
-        self.strings[key] = value
-        return True
-
+from tests.redis_doubles import FakeRedis
 
 SPRAY_THEN_SUCCESS = SequenceRule(
     id="wd-seq-test-spray-then-success",
@@ -89,7 +57,7 @@ def _event(tenant: str, outcome: str, when: float, user: str = "alice") -> dict[
 
 
 def _engine() -> WindowedDetectionEngine:
-    return WindowedDetectionEngine(_FakeRedis(), rules=(), sequences=(SPRAY_THEN_SUCCESS,))
+    return WindowedDetectionEngine(FakeRedis(), rules=(), sequences=(SPRAY_THEN_SUCCESS,))
 
 
 @pytest.mark.asyncio
@@ -163,7 +131,7 @@ async def test_one_event_cannot_advance_two_stages() -> None:
         group_by="user",
         window_seconds=600,
     )
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(), sequences=(overlapping,))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(), sequences=(overlapping,))
     tenant = str(uuid4())
     assert not await engine.evaluate(_event(tenant, "failure", 1000.0))
     hits = await engine.evaluate(_event(tenant, "failure", 1001.0))
@@ -195,7 +163,7 @@ async def test_a_three_stage_sequence_needs_all_three_in_order() -> None:
         group_by="user",
         window_seconds=600,
     )
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(), sequences=(three,))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(), sequences=(three,))
     tenant = str(uuid4())
     assert not await engine.evaluate(_event(tenant, "failure", 1000.0))
     assert not await engine.evaluate(_event(tenant, "mfa_reset", 1010.0))

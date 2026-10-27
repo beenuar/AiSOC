@@ -631,6 +631,10 @@ class ConnectorScheduler:
                 connector_id,
                 target.connector_type,
             )
+            # A fetch that raised part-way may already have staged handles for
+            # the batches it did read. None of it reached ingest, so none of
+            # it may be acknowledged.
+            self._discard_acknowledgements(connector, connector_id, reason="fetch_failed", staged=0)
             await self._record_failure(target.id)
             return
 
@@ -728,6 +732,12 @@ class ConnectorScheduler:
                 connector_id,
                 len(kept),
             )
+            # Nothing reached Kafka, so nothing may be acknowledged. Dropping
+            # the staged handles leaves the messages on the source to be
+            # redelivered; discarding explicitly rather than letting the
+            # connector fall out of scope so the intent is legible here, at
+            # the one place that knows ingest refused.
+            self._discard_acknowledgements(connector, connector_id, reason="ingest_failed", staged=len(kept))
             await self._record_failure(target.id)
             return
 
@@ -760,6 +770,26 @@ class ConnectorScheduler:
                     rejected,
                     counts_present,
                 )
+
+        # Only now may the source be told to forget the messages. Withholding
+        # a cursor is not enough on a queue: a cursor over data that has
+        # already been deleted from the queue protects nothing, which is why
+        # the connectors stage their receipt handles and ack ids instead of
+        # answering the source inside their own fetch.
+        #
+        # After the checkpoint write, deliberately. A crash between the two
+        # leaves messages that will be redelivered and a cursor that
+        # recognises them; the other order leaves a source that has forgotten
+        # them and a cursor that has not recorded them.
+        if batch_fully_accepted:
+            await self._commit_acknowledgements(connector, connector_id, target.connector_type)
+        else:
+            self._discard_acknowledgements(
+                connector,
+                connector_id,
+                reason="batch_not_fully_accepted",
+                staged=len(kept),
+            )
 
         # If drift was detected, persist that fact *before* marking the
         # poll successful so the UI reflects "drifted" status alongside
@@ -952,6 +982,74 @@ class ConnectorScheduler:
             logger.debug(
                 "connector.scheduler.record_checkpoint_failed id=%s",
                 connector_id,
+            )
+
+    async def _commit_acknowledgements(self, connector: Any, connector_id: uuid.UUID, connector_type: str) -> None:
+        """Answer the source for a batch ingest confirmed is durable.
+
+        Never raises into the poll. A failed acknowledgement costs a
+        redelivery, which the connector's identity cursor de-duplicates, so
+        the poll was still a success — but the count is logged because a
+        connector whose acknowledgements never land is a queue that never
+        drains, and that is otherwise indistinguishable from a quiet source.
+        """
+        try:
+            result = await connector.commit_acknowledgements()
+        except NotImplementedError:
+            # A connector that stages handles without implementing the commit.
+            # Loud: the queue will not drain, and nothing else would say so.
+            logger.error(
+                "connector.scheduler.acknowledge_unimplemented id=%s type=%s",
+                connector_id,
+                connector_type,
+            )
+            return
+        except Exception:
+            logger.exception(
+                "connector.scheduler.acknowledge_failed id=%s type=%s",
+                connector_id,
+                connector_type,
+            )
+            return
+
+        requested = int(getattr(result, "requested", 0) or 0)
+        failed = int(getattr(result, "failed", 0) or 0)
+        if failed:
+            logger.warning(
+                "connector.scheduler.acknowledge_partial id=%s type=%s requested=%d confirmed=%d failed=%d",
+                connector_id,
+                connector_type,
+                requested,
+                int(getattr(result, "confirmed", 0) or 0),
+                failed,
+            )
+        elif requested:
+            logger.debug(
+                "connector.scheduler.acknowledged id=%s type=%s count=%d",
+                connector_id,
+                connector_type,
+                requested,
+            )
+
+    def _discard_acknowledgements(self, connector: Any, connector_id: uuid.UUID, *, reason: str, staged: int) -> None:
+        """Leave the source holding its messages, and say that it happened.
+
+        The silent version of this is the defect: a poll that fetched, failed
+        to ship and left no trace reads as a quiet source on the next poll.
+        """
+        try:
+            pending = len(connector.pending_acknowledgements())
+            connector.discard_acknowledgements()
+        except Exception:  # never let acknowledgement bookkeeping break a poll
+            logger.debug("connector.scheduler.discard_failed id=%s", connector_id)
+            return
+        if pending:
+            logger.warning(
+                "connector.scheduler.acknowledgement_withheld id=%s reason=%s messages=%d events=%d",
+                connector_id,
+                reason,
+                pending,
+                staged,
             )
 
     async def _sync_vulnerability_findings(self, connector: Any, target: Any) -> None:

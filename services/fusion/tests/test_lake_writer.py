@@ -144,17 +144,21 @@ async def test_stop_flushes_remaining():
     assert len(fake.inserted) == 1
 
 
-async def test_stop_counts_rows_it_could_not_flush_as_dropped():
-    """A row still buffered when the process exits is not durable.
+async def test_stop_leaves_an_unflushed_row_recoverable_rather_than_dropped():
+    """This assertion used to be the opposite, and it was pinning the defect.
 
-    Logging it without incrementing `rows_dropped` leaves the metric claiming
-    the archive gap did not happen.
+    A row the store had not taken by shutdown really was lost, because the
+    queue was a list in memory, so counting it as dropped was the honest
+    reading. The queue is now the disk spool: the row is still there, the
+    next start replays it, and reporting it as dropped would claim a loss
+    that has not happened — while making a real one indistinguishable.
     """
     w, fake = _writer_with_fake(batch_size=100, reconnect_base_seconds=0, reconnect_max_seconds=0)
     fake.fail = True
     await w.write_event(_message())
     await w.stop()
-    assert w.metrics()["rows_dropped"] == 1
+    assert w.metrics()["rows_dropped"] == 0
+    assert w.metrics()["spool_rows"] == 1, "the row must still be queued for the next process"
 
 
 async def test_flush_if_stale_flushes_old_buffer():
@@ -202,7 +206,11 @@ async def test_a_generated_event_id_is_stable_across_a_retry():
     msg["id"] = "not-a-uuid"
     fake.fail = True
     await w.write_event(msg)
-    generated = w._buffer[0]["event_id"]  # noqa: SLF001 — the retained row
+    # Read back off the spool rather than an in-memory buffer: the row is on
+    # disk now, which is what makes the identity survive the restart the
+    # sibling test covers.
+    retained = next(iter(w._spool.read_batches(10)))[0]  # noqa: SLF001 — the retained row
+    generated = retained[0]["event_id"]
     assert generated
 
     fake.fail = False
@@ -282,23 +290,31 @@ async def test_flush_failure_retains_batch_and_never_raises():
     assert w.metrics()["buffered"] == 0
 
 
-async def test_buffer_overflow_drops_oldest_rows_explicitly():
-    """Retention is bounded; overflow is counted rather than silent."""
-    w, fake = _writer_with_fake(batch_size=1, max_buffer_rows=2, reconnect_base_seconds=0, reconnect_max_seconds=0)
+async def test_capacity_refuses_the_newest_row_rather_than_discarding_the_oldest():
+    """The other assertion that used to pin the defect.
+
+    The old guard discarded the *oldest* buffered rows on overflow — rows
+    whose Kafka offsets had been committed minutes earlier, so nothing could
+    ever replay them and nothing knew they were missing. Capacity now
+    refuses the incoming event instead, which the consumer turns into a held
+    offset: Kafka's retention becomes the buffer and nothing is lost.
+    """
+    w, fake = _writer_with_fake(batch_size=1, max_spool_bytes=1, reconnect_base_seconds=0, reconnect_max_seconds=0)
     fake.fail = True
-    for _ in range(3):
-        await w.write_event(_message())  # each write attempts a flush, all fail
+    assert await w.write_event(_message()) is False, "a full spool must refuse, so the offset is held"
     metrics = w.metrics()
-    assert metrics["buffered"] == 2
-    assert metrics["rows_dropped"] == 1
+    assert metrics["capacity_refusals"] >= 1
+    assert metrics["rows_dropped"] == 0
 
 
-async def test_data_errors_are_bounded_and_dropped_loudly():
-    """A batch the server keeps rejecting must not grow forever.
+async def test_data_errors_are_bounded_and_quarantined_loudly():
+    """A batch the server keeps rejecting must not block everything behind it.
 
     Connection errors are retained (the store is down, the rows may be fine);
-    non-connection errors are retried a bounded number of times and then
-    dropped with `rows_dropped` incremented.
+    non-connection errors are retried a bounded number of times and then set
+    aside. They used to be deleted, which made the gap permanent even after
+    someone fixed the schema — so they are now quarantined on disk, counted,
+    and replayable.
     """
     w, fake = _writer_with_fake(
         batch_size=2,
@@ -313,8 +329,9 @@ async def test_data_errors_are_bounded_and_dropped_loudly():
     w._client = fake  # noqa: SLF001 — retry without waiting for reconnect
     await w.flush()  # second data failure reaches the bound
     assert w.flush_failures == 2
-    assert w.metrics()["buffered"] == 0
-    assert w.metrics()["rows_dropped"] == 2
+    assert w.metrics()["spool_rows"] == 0, "the rejected batch must stop blocking the queue"
+    assert w.metrics()["quarantined_rows"] == 2
+    assert w.metrics()["rows_dropped"] == 0, "set aside for replay is not the same as lost"
 
 
 async def test_connect_failure_is_retried_instead_of_permanently_disabling():

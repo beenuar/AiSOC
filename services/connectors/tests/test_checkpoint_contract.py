@@ -47,6 +47,13 @@ class _Uncursored(_Cursored):
     checkpoint_id_field: tuple[str, ...] = ()
 
 
+class _Identified(_Uncursored):
+    """A queue-shaped connector: dedups on identity, never on event time."""
+
+    connector_id = "test_identified"
+    dedup_identity_field: tuple[str, ...] = ("rid",)
+
+
 def _row(ts: str, uid: str) -> dict[str, Any]:
     return {"ts": ts, "uid": uid}
 
@@ -142,22 +149,28 @@ class TestAdoptionIsCountedNotAssumed:
         "m365_audit": (("CreationTime",), ("Id",)),
         "aws_cloudtrail": (("EventTime",), ("EventId",)),
         "azure_activity": (("eventTimestamp",), ("eventDataId", "id")),
-        # Depth plan 4.1. These three read a queue or an object store rather
-        # than a time-windowed API, so the cursor is doing a different job:
-        # the queue already guarantees nothing is lost, and the cursor exists
-        # to drop the duplicate that at-least-once delivery guarantees will
-        # eventually arrive. All three therefore carry a synthetic
-        # `record_id` built from the object or message identity, which is
-        # what makes it stable across a re-read.
-        "aws_cloudtrail_s3": (("event_time",), ("record_id",)),
-        "gcp_pubsub": (("event_time",), ("record_id",)),
+        # Depth plan 4.1. Reads an object store rather than a time-windowed
+        # API, so the cursor is doing a different job: the store already
+        # guarantees nothing is lost, and the cursor exists to drop the
+        # re-read that listing the container from the beginning produces. It
+        # therefore carries a synthetic `record_id` built from the capture
+        # path and sequence number, which is what makes it stable.
+        #
+        # Phase 3 removed `aws_cloudtrail_s3` and `gcp_pubsub` from this
+        # table. Both read an *unordered* queue, where a high-water mark
+        # discards a late arrival the only time it is ever offered; they
+        # dedup on identity instead and are recorded in
+        # `TestUnorderedSourcesDoNotCarryAWatermark`. This one stays because
+        # its container is never drained and is re-listed from the start on
+        # every poll, which a bounded identity set cannot survive.
         "azure_event_hubs": (("event_time",), ("record_id",)),
     }
 
     def test_the_adopters_are_exactly_the_ones_recorded(self) -> None:
         actual = {cid for cid, cls in CONNECTOR_REGISTRY.items() if cls.checkpoints()}
+        identity_based = set(TestUnorderedSourcesDoNotCarryAWatermark.UNORDERED)
 
-        assert actual == set(self.EXPECTED), (
+        assert actual == set(self.EXPECTED) | identity_based, (
             "the set of checkpointing connectors changed. Adding one is good — record it here. "
             "Losing one silently is the defect this replaces."
         )
@@ -175,9 +188,148 @@ class TestAdoptionIsCountedNotAssumed:
         overlap window after a restart, which is safe and loses events older
         than that window. The number is here so the gap is legible."""
         without = sorted(cid for cid, cls in CONNECTOR_REGISTRY.items() if not cls.checkpoints())
+        adopters = len(self.EXPECTED) + len(TestUnorderedSourcesDoNotCarryAWatermark.UNORDERED)
 
-        assert len(without) == len(CONNECTOR_REGISTRY) - len(self.EXPECTED)
+        assert len(without) == len(CONNECTOR_REGISTRY) - adopters
         assert len(CONNECTOR_REGISTRY) >= 84
+
+
+class TestUnorderedSourcesDoNotCarryAWatermark:
+    """Phase 3, finding 5.
+
+    A monotonic ``(event_time, record_id)`` high-water mark is right for an
+    ordered, time-windowed API poll — that is what the design comment on
+    ``apply_checkpoint`` describes and it is sound. It is wrong for a queue.
+    Neither Pub/Sub (no ordering key from a Cloud Logging sink) nor an S3
+    notification over SQS is ordered, so an event older than the last batch's
+    newest is an ordinary first arrival. A watermark discards it, silently,
+    and the message that carried it has already been acknowledged.
+    """
+
+    #: Sources whose arrival order is not their event order. These dedup on a
+    #: stable identity instead; the queue itself is what guarantees no gap.
+    UNORDERED = {
+        "aws_cloudtrail_s3": ("object_key",),
+        "gcp_pubsub": ("record_id",),
+    }
+
+    @pytest.mark.parametrize("connector_id", sorted(UNORDERED))
+    def test_it_dedups_on_an_identity_rather_than_a_time(self, connector_id: str) -> None:
+        cls = CONNECTOR_REGISTRY[connector_id]
+
+        assert cls.dedup_identity_field == self.UNORDERED[connector_id]
+        assert cls.checkpoint_time_field == (), "an event-time watermark over an unordered source drops unseen events"
+        assert cls.checkpoint_id_field == ()
+
+    @pytest.mark.parametrize("connector_id", sorted(UNORDERED))
+    def test_it_still_resumes_from_a_persisted_cursor(self, connector_id: str) -> None:
+        """Identity dedup is a cursor too. Dropping out of the checkpointing
+        set would mean the scheduler stopped seeding it at all."""
+        assert CONNECTOR_REGISTRY[connector_id].checkpoints() is True
+
+    def test_a_blob_store_that_is_relisted_every_poll_keeps_its_watermark(self) -> None:
+        """``azure_event_hubs`` reads Capture files from a container that is
+        never drained, and lists it from the beginning on every poll. The
+        watermark is doing load-bearing work there: a bounded identity set
+        would roll over and re-emit the oldest files for ever. It has the
+        same out-of-order weakness across partitions, but its source is
+        re-readable rather than destroyed, so the fix is a different one.
+        """
+        cls = CONNECTOR_REGISTRY["azure_event_hubs"]
+
+        assert cls.dedup_identity_field == ()
+        assert cls.checkpoint_time_field == ("event_time",)
+
+
+class TestIdentityDedupMachinery:
+    @pytest.fixture()
+    def connector(self) -> _Identified:
+        return _Identified()
+
+    def test_an_older_row_never_seen_before_is_kept(self, connector: _Identified) -> None:
+        """The whole finding, at the level the logic lives."""
+        connector.set_checkpoint({"seen": _Identified.seen_tokens(["later"])})
+
+        kept = connector.apply_checkpoint([{"rid": "earlier", "ts": "t1"}])
+
+        assert [r["rid"] for r in kept] == ["earlier"]
+
+    def test_a_row_already_seen_is_dropped(self, connector: _Identified) -> None:
+        connector.set_checkpoint({"seen": _Identified.seen_tokens(["dupe"])})
+
+        assert connector.apply_checkpoint([{"rid": "dupe", "ts": "t1"}]) == []
+
+    def test_the_staged_cursor_carries_this_batch(self, connector: _Identified) -> None:
+        connector.apply_checkpoint([{"rid": "a"}, {"rid": "b"}])
+        staged = connector.get_checkpoint()
+
+        assert staged is not None
+        assert set(staged["seen"]) == set(_Identified.seen_tokens(["a", "b"]))
+
+    def test_rows_are_not_reordered(self, connector: _Identified) -> None:
+        """Arrival order is the only order a queue has; imposing an event-time
+        sort on it implies a guarantee the source does not make."""
+        kept = connector.apply_checkpoint([{"rid": "c", "ts": "t3"}, {"rid": "a", "ts": "t1"}])
+
+        assert [r["rid"] for r in kept] == ["c", "a"]
+
+    def test_a_row_with_no_identity_is_kept_rather_than_guessed_at(self, connector: _Identified) -> None:
+        kept = connector.apply_checkpoint([{"rid": ""}, {"rid": "a"}])
+
+        assert len(kept) == 2, "an unidentifiable row cannot be proven a duplicate, so it is not treated as one"
+
+    def test_the_set_is_bounded_and_forgets_the_oldest_first(self) -> None:
+        """The bound's failure mode is a duplicate, never a drop — the
+        opposite of the watermark it replaces."""
+
+        class _Small(_Identified):
+            connector_id = "test_small"
+            max_dedup_identities = 3
+
+        connector = _Small()
+        connector.set_checkpoint({"seen": _Small.seen_tokens(["a", "b", "c"])})
+        connector.apply_checkpoint([{"rid": "d"}])
+        staged = connector.get_checkpoint()
+
+        assert staged is not None
+        assert len(staged["seen"]) == 3
+        assert _Small.seen_tokens(["a"])[0] not in staged["seen"]
+        assert _Small.seen_tokens(["d"])[0] in staged["seen"]
+
+    def test_an_identity_is_scoped_to_its_connector(self) -> None:
+        """Two sources can mint the same record id. The token binds the
+        connector so one cannot suppress the other's event; the tenant scope
+        comes from the per-instance row the cursor is stored on."""
+
+        class _Other(_Identified):
+            connector_id = "test_other_identified"
+
+        assert _Identified.seen_tokens(["same"]) != _Other.seen_tokens(["same"])
+
+    def test_a_watermark_cursor_left_by_an_earlier_release_is_ignored(self) -> None:
+        """Compatibility. A connector upgraded in place finds a
+        ``{"time", "id"}`` cursor in its config, and must neither crash on it
+        nor resurrect the behaviour it replaced."""
+        connector = _Identified()
+        connector.set_checkpoint({"time": "t9", "id": "z"})
+
+        kept = connector.apply_checkpoint([{"rid": "a", "ts": "t1"}])
+
+        assert [r["rid"] for r in kept] == ["a"]
+
+    def test_declaring_both_schemes_is_refused(self) -> None:
+        """They answer the same question two different ways, and a connector
+        carrying both would silently use one of them.
+
+        Refused when the class is defined rather than when it is polled: an
+        import-time error names the connector on startup, where a poll-time
+        one would surface as whichever dispatch happened to win.
+        """
+        with pytest.raises(ValueError, match="both an event-time watermark and a dedup identity"):
+            # Built with `type` rather than a `class` statement so there is no
+            # name to leave unbound: defining the class *is* the call under
+            # test, and `__init_subclass__` raises before anything is bound.
+            type("_Both", (_Cursored,), {"connector_id": "test_both", "dedup_identity_field": ("uid",)})
 
 
 class TestTheSchedulerNoLongerDuckTypes:
