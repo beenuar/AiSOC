@@ -258,6 +258,16 @@ having been demonstrated once. Each control refuses to run if it cannot find
 the line it removes, so a reshaped gate fails loudly instead of silently
 proving nothing.
 
+One caveat, stated rather than buried: the **seeding** connection is the
+owner's, declared inline with `aisoc-db-role: owner` and a reason, because
+`check_runtime_db_role.py` correctly refuses an undeclared superuser DSN on
+a live surface — seeding as owner is exactly the workaround that hid the
+global row's unwritability. It is used here for one reason and the reason is
+narrow: until migration 123 lands, no runtime session can put the global row
+in place at all, and these cases grade the *reader*. The dispatcher under
+test still connects as `aisoc_app` under `FORCE ROW LEVEL SECURITY`. Once
+#1534 lands, the seed DSN can be the runtime role and the marker deleted.
+
 A note on the chosen `search_siem` capability: `isolate_host` is HIGH blast
 and the autonomy gate refuses it at every tier, so a test watching it stop
 would have passed on the unfixed tree for a reason unrelated to the switch.

@@ -258,6 +258,7 @@ jobs:
         working-directory: services/actions
         env:
           AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
           AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
           PYTHONPATH: .
         run: python -m pytest tests/test_kill_switch_dispatch.py -v --tb=short -rs
@@ -266,6 +267,7 @@ jobs:
         working-directory: services/actions
         env:
           AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
           AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
           PYTHONPATH: .
         run: |
@@ -284,6 +286,7 @@ jobs:
         working-directory: services/actions
         env:
           AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
           AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
           PYTHONPATH: .
         run: |
@@ -315,6 +318,7 @@ jobs:
         working-directory: services/actions
         env:
           AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
           AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
           PYTHONPATH: .
         run: |
