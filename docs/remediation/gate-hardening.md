@@ -526,6 +526,25 @@ disagrees this sharply with a single-gate run is the shell, not the tree.
   duplicate numbers` passed in 10 s and `Route tenant scope (no route lets its
   caller name the tenant)` — the job that runs the tenant-predicate gate and
   its self-test — passed in 3 m 12 s, both on ubuntu-latest with Python 3.11.
+- **CodeQL flagged the first revision**, `py/unused-global-variable` on
+  `_UNCREDITED` — a tuple written as documentation and referenced by nothing.
+  Rather than delete it, the clause list became the single source the regex is
+  built from and `_clause_classification_is_total()` now asserts the two
+  classification tables are disjoint and together cover all 25 keywords, which
+  is checked by the self-test. A keyword added to the matcher and classified
+  nowhere would otherwise default to "not constraining" — the safe direction,
+  but one nobody decided.
+- **`security-audit` fails on this branch and the cause is not this branch.**
+  `CVE-2026-114605 in dnspython==2.8.0`, a purely transitive dependency
+  resolved in `services/api/poetry.lock`; `dnspython` appears nowhere in the
+  diff. Every `security-audit` run before 15:33 UTC succeeded across `main`
+  and four other branches, and the two runs here at 16:23 and 16:28 are the
+  first anywhere after the advisory published. This is the documented
+  stale-green shape — `main` passes because its last run predates the
+  advisory, and every open pull request will red on it until it is fixed at
+  the source. That fix is a lockfile regeneration under `services/api/`, which
+  is outside this change's scope and belongs on `main` rather than being
+  duplicated per branch. It has **not** been suppressed.
 - **The first push went red on a gate the local suite does not include**, and
   it is worth recording as the live example of the thing this file is about.
   Adding two matrix rows made three prose copies of the count stale:

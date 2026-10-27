@@ -249,12 +249,40 @@ _SQL_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
 #: `ON`, and `DELETE FROM` must not be read as a bare `FROM`. Python's `re`
 #: alternation is first-match-wins rather than longest-match, so this ordering
 #: is load-bearing and `test_on_conflict_is_not_read_as_a_join_on` pins it.
+#: Ordered longest-first; the regex is built from this tuple rather than
+#: written out separately, so the keyword set the matcher recognises and the
+#: keyword set the two classification tables below are checked against cannot
+#: be two different lists.
+_CLAUSE_KEYWORDS: tuple[str, ...] = (
+    "ON CONFLICT",
+    "DO UPDATE SET",
+    "DELETE FROM",
+    "INSERT INTO",
+    "GROUP BY",
+    "ORDER BY",
+    "LEFT JOIN",
+    "RIGHT JOIN",
+    "INNER JOIN",
+    "OUTER JOIN",
+    "CROSS JOIN",
+    "SELECT",
+    "FROM",
+    "WHERE",
+    "HAVING",
+    "RETURNING",
+    "VALUES",
+    "USING",
+    "UPDATE",
+    "SET",
+    "JOIN",
+    "ON",
+    "LIMIT",
+    "OFFSET",
+    "WITH",
+)
+
 _SQL_CLAUSE = re.compile(
-    r"\b("
-    r"ON\s+CONFLICT|DO\s+UPDATE\s+SET|DELETE\s+FROM|INSERT\s+INTO|"
-    r"GROUP\s+BY|ORDER\s+BY|LEFT\s+JOIN|RIGHT\s+JOIN|INNER\s+JOIN|OUTER\s+JOIN|CROSS\s+JOIN|"
-    r"SELECT|FROM|WHERE|HAVING|RETURNING|VALUES|USING|UPDATE|SET|JOIN|ON|LIMIT|OFFSET|WITH"
-    r")\b",
+    r"\b(" + "|".join(kw.replace(" ", r"\s+") for kw in _CLAUSE_KEYWORDS) + r")\b",
     re.IGNORECASE,
 )
 
@@ -284,7 +312,55 @@ _CONSTRAINING_CLAUSES = frozenset({"WHERE", "ON", "USING", "HAVING", "ON CONFLIC
 #:                          constrains nothing about which rows are rewritten —
 #:                          it is a tenant reassignment, the opposite of a
 #:                          scope.
-_UNCREDITED = ("SELECT", "RETURNING", "ORDER BY", "GROUP BY", "VALUES", "SET", "DO UPDATE SET", "FROM", "LIMIT", "OFFSET")
+#:
+#: Read by `_clause_classification_is_total`, not only by a human: a clause
+#: added to `_SQL_CLAUSE` and classified into neither set would silently
+#: default to "not credited", which is the safe direction but an unstated one.
+#: The self-test asserts the two sets are disjoint and together cover every
+#: alternative the regex can emit, so adding a keyword forces a decision.
+_UNCREDITED = frozenset(
+    {
+        "SELECT",
+        "RETURNING",
+        "ORDER BY",
+        "GROUP BY",
+        "VALUES",
+        "SET",
+        "DO UPDATE SET",
+        "FROM",
+        "LIMIT",
+        "OFFSET",
+        "UPDATE",
+        "DELETE FROM",
+        "JOIN",
+        "LEFT JOIN",
+        "RIGHT JOIN",
+        "INNER JOIN",
+        "OUTER JOIN",
+        "CROSS JOIN",
+        "WITH",
+    }
+)
+
+
+def _clause_classification_is_total() -> tuple[bool, str]:
+    """Every clause `_SQL_CLAUSE` can emit is classified exactly once.
+
+    A keyword the regex matches but neither set names falls through to "not
+    constraining". That is the right default and the wrong way to arrive at
+    it — nobody decided. Checked rather than trusted, because the regex and
+    the two sets are three lists that have to agree and sit 60 lines apart.
+    """
+    emitted = set(_CLAUSE_KEYWORDS)
+    both = _CONSTRAINING_CLAUSES & _UNCREDITED
+    unclassified = emitted - _CONSTRAINING_CLAUSES - _UNCREDITED
+    problems = []
+    if both:
+        problems.append(f"classified twice: {sorted(both)}")
+    if unclassified:
+        problems.append(f"matched by _SQL_CLAUSE but classified nowhere: {sorted(unclassified)}")
+    return (not problems), "; ".join(problems) or f"{len(emitted)} clause keyword(s), each classified exactly once"
+
 
 #: Known residuals, stated rather than silently carried. Neither is reachable
 #: in this tree today and both are checked for by the self-test so that stays
@@ -2555,6 +2631,10 @@ def _self_test() -> int:
             if not ok:
                 failures += 1
             print(f"  [{'PASS' if ok else 'FAIL'}] {label}: {got} finding(s), want {want} (scanned {files} files)")
+
+    total_ok, total_detail = _clause_classification_is_total()
+    failures += 0 if total_ok else 1
+    print(f"  [{'PASS' if total_ok else 'FAIL'}] clause classification is total: {total_detail}")
 
     failures += _self_test_route_reachability()
     failures += _self_test_stale_ratchet()
