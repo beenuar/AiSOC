@@ -28,6 +28,7 @@ to cross its threshold. It is not a claim that the rule detects an attack.
 
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 from typing import Any
@@ -35,41 +36,9 @@ from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import WindowedDetectionEngine, WindowRule, load_window_rules
+from tests.redis_doubles import FakeRedis
 
 RULESET = Path(__file__).resolve().parents[1] / "app" / "data" / "windowed_ruleset.json"
-
-
-class _FakeRedis:
-    """In-memory stand-in for the sorted-set window and the fired marker.
-
-    Deliberately a faithful implementation of the five calls the engine makes
-    rather than a mock that answers whatever is asked: a double that returns
-    a crossing count for any key would make every assertion below vacuous.
-    """
-
-    def __init__(self) -> None:
-        self.zsets: dict[str, dict[str, float]] = {}
-        self.strings: dict[str, str] = {}
-
-    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self.zsets.setdefault(key, {}).update(mapping)
-
-    async def zremrangebyscore(self, key: str, min_s: float, max_s: float) -> None:
-        members = self.zsets.get(key, {})
-        for member in [m for m, score in list(members.items()) if min_s <= score <= max_s]:
-            del members[member]
-
-    async def expire(self, key: str, ttl: int) -> None:
-        return None
-
-    async def zcard(self, key: str) -> int:
-        return len(self.zsets.get(key, {}))
-
-    async def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> Any:
-        if nx and key in self.strings:
-            return None
-        self.strings[key] = value
-        return True
 
 
 def _translated() -> list[dict[str, Any]]:
@@ -112,6 +81,10 @@ def _satisfying_value(key: str, value: Any) -> tuple[str, Any] | None:
     return key, value
 
 
+#: Distinct ingest ids for distinct events; see `_event_for`.
+_EVENT_SEQ = itertools.count()
+
+
 def _event_for(rule: dict[str, Any], tenant: str, entity: str, distinct: str) -> dict[str, Any]:
     """A flat connector-shaped event that this rule's selector accepts."""
     raw: dict[str, Any] = {}
@@ -123,14 +96,23 @@ def _event_for(rule: dict[str, Any], tenant: str, entity: str, distinct: str) ->
     raw[rule["group_by"]] = entity
     if rule.get("distinct_by"):
         raw[rule["distinct_by"]] = distinct
-    return {"tenant_id": tenant, "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps(raw)}}
+    # Every call is a distinct event, so each gets the id ingest would have
+    # stamped on it. The engine counts one observation per event identity --
+    # that is what makes a re-delivery idempotent -- so a builder that
+    # returned byte-identical events would be simulating one event arriving
+    # repeatedly, which is a different scenario and a different verdict.
+    return {
+        "tenant_id": tenant,
+        "id": f"evt-{next(_EVENT_SEQ)}",
+        "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps(raw)},
+    }
 
 
-def _engine(rule: dict[str, Any]) -> tuple[WindowedDetectionEngine, _FakeRedis]:
+def _engine(rule: dict[str, Any]) -> tuple[WindowedDetectionEngine, FakeRedis]:
     """An engine holding exactly one rule, so a hit can only be that rule's."""
     loaded = {r.id: r for r in load_window_rules()}
     assert rule["id"] in loaded, f"{rule['id']} is in the committed JSON but the engine did not load it"
-    redis = _FakeRedis()
+    redis = FakeRedis()
     return WindowedDetectionEngine(redis, rules=(loaded[rule["id"]],)), redis
 
 
@@ -240,20 +222,24 @@ async def test_a_translated_rule_reads_a_tenant_allowlist_boolean() -> None:
             return {}
 
     loaded = {r.id: r for r in load_window_rules()}
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(loaded[rule["id"]],))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(loaded[rule["id"]],))
     tenant = str(uuid4())
 
     def event() -> dict[str, Any]:
         raw = {k: v for k, v in rule["match_when"].items() if k != clause}
         raw[rule["group_by"]] = "entity-a"
-        return {"tenant_id": tenant, "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps(raw)}}
+        return {
+            "tenant_id": tenant,
+            "id": f"evt-{next(_EVENT_SEQ)}",
+            "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps(raw)},
+        }
 
     # Without the overlay the allowlist clause is unresolvable, so the rule
     # must stay silent rather than treat "unknown" as "not allowlisted".
     for _ in range(rule["threshold"] + 2):
         assert not await engine.evaluate(event())
 
-    engine_with_overlay = WindowedDetectionEngine(_FakeRedis(), rules=(loaded[rule["id"]],))
+    engine_with_overlay = WindowedDetectionEngine(FakeRedis(), rules=(loaded[rule["id"]],))
     hits: list[Any] = []
     for _ in range(rule["threshold"]):
         hits = await engine_with_overlay.evaluate(event(), _Overlay())
@@ -279,12 +265,16 @@ async def test_enrichment_runs_before_the_window_counts() -> None:
         threshold=2,
         window_seconds=60,
     )
-    engine = WindowedDetectionEngine(_FakeRedis(), rules=(rule,))
+    engine = WindowedDetectionEngine(FakeRedis(), rules=(rule,))
     tenant = str(uuid4())
-    same = {"tenant_id": tenant, "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps({"actor": "u1", "target": "u1"})}}
-    different = {"tenant_id": tenant, "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps({"actor": "u1", "target": "u2"})}}
+    def build(actor: str, target: str) -> dict[str, Any]:
+        return {
+            "tenant_id": tenant,
+            "id": f"evt-{next(_EVENT_SEQ)}",
+            "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps({"actor": actor, "target": target})},
+        }
 
-    assert not await engine.evaluate(different)
-    assert not await engine.evaluate(different)
-    assert not await engine.evaluate(same)
-    assert [h.rule_id for h in await engine.evaluate(same)] == ["wd-test-derived"]
+    assert not await engine.evaluate(build("u1", "u2"))
+    assert not await engine.evaluate(build("u1", "u2"))
+    assert not await engine.evaluate(build("u1", "u1"))
+    assert [h.rule_id for h in await engine.evaluate(build("u1", "u1"))] == ["wd-test-derived"]

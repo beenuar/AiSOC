@@ -115,6 +115,10 @@ class LakeSpool:
         self._segment_bytes = max(1, int(segment_bytes))
         self._fsync = fsync
         self._handle: Any = None
+        #: Lazily scanned, then maintained by append and invalidated by
+        #: anything that rewrites a segment. None means "rescan".
+        self._rows_cache: int | None = None
+        self._bytes_cache: int | None = None
         self._segment: Path | None = None
         self._segment_bytes_written = 0
         self.rows_spooled = 0
@@ -150,9 +154,34 @@ class LakeSpool:
                 detail="lake rows cannot be made durable; archival will apply back-pressure rather than accept them",
             )
             return False
+        # Seeded from the directory, not carried over: the count that
+        # matters is the one a restarted process reads, and whatever the
+        # previous process had in memory is gone with it.
+        self._invalidate()
         return True
 
     def bytes_on_disk(self) -> int:
+        if self._bytes_cache is None:
+            self._bytes_cache = self._scan_bytes()
+        return self._bytes_cache
+
+    def rows_on_disk(self) -> int:
+        """Pending rows.
+
+        Cached, and the cache is seeded by a real scan of the directory at
+        :meth:`open` — which is the case that matters, because the number is
+        read right after the restart this module exists for, when a running
+        total from the previous process would be meaningless. From then on
+        it is maintained by the two operations that can change it (append
+        and commit), because counting lines in every segment on every
+        accepted event is an O(backlog) cost on the hot path: with the
+        scan in place the fusion suite went from 18 s to 30 s.
+        """
+        if self._rows_cache is None:
+            self._rows_cache = self._scan_rows()
+        return self._rows_cache
+
+    def _scan_bytes(self) -> int:
         total = 0
         for segment in self._segments():
             try:
@@ -161,13 +190,7 @@ class LakeSpool:
                 continue
         return total
 
-    def rows_on_disk(self) -> int:
-        """Pending rows, counted by line.
-
-        Deliberately a real count rather than a running total: a total kept
-        in memory is wrong after the restart this module exists for, which is
-        precisely when an operator reads it.
-        """
+    def _scan_rows(self) -> int:
         pending = 0
         for segment in self._segments():
             try:
@@ -176,6 +199,16 @@ class LakeSpool:
             except OSError:  # pragma: no cover
                 continue
         return pending
+
+    def _invalidate(self) -> None:
+        """Drop the cached counts so the next read rescans.
+
+        Used after a commit or a quarantine, where the change is a rewrite
+        rather than a known delta and guessing at one is how a counter
+        drifts away from the directory it claims to describe.
+        """
+        self._rows_cache = None
+        self._bytes_cache = None
 
     def _segments(self) -> list[Path]:
         if not self._dir.exists():
@@ -212,10 +245,15 @@ class LakeSpool:
         except OSError as exc:
             self.write_failures += 1
             self._close_segment()
+            self._invalidate()
             logger.error("lake_spool.append_failed", error=str(exc), rows=len(rows))
             return False
         self._segment_bytes_written += len(encoded)
         self.rows_spooled += len(rows)
+        if self._rows_cache is not None:
+            self._rows_cache += len(rows)
+        if self._bytes_cache is not None:
+            self._bytes_cache += len(encoded)
         if self._segment_bytes_written >= self._segment_bytes:
             self._close_segment()
         return True
@@ -300,6 +338,8 @@ class LakeSpool:
             tmp.replace(segment)
         except OSError as exc:  # pragma: no cover
             logger.warning("lake_spool.commit_failed", segment=segment.name, error=str(exc))
+        finally:
+            self._invalidate()
 
     def quarantine(self, rows: list[dict[str, Any]], *, reason: str) -> None:
         """Move rows ClickHouse keeps refusing somewhere replayable.
@@ -320,6 +360,7 @@ class LakeSpool:
             logger.error("lake_spool.quarantine_failed", error=str(exc), rows=len(rows))
             return
         self.rows_quarantined += len(rows)
+        self._invalidate()
         logger.error(
             "lake_spool.quarantined",
             rows=len(rows),

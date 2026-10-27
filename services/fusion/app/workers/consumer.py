@@ -868,11 +868,45 @@ class FusionWorker:
             # Wave 2 — stateful/windowed detections (brute force, spray, scans)
             # count this event into its sliding window and fire once on threshold.
             if self._windowed is not None:
-                for hit in await self._windowed.evaluate(payload, overlay):
+                # The event identity is threaded in so an observation is
+                # idempotent: this loop re-runs on every re-delivery, and
+                # with a random member per call one event counted N times
+                # crossed a threshold of N. Same preference order as the
+                # lake writer -- ingest id, then Kafka coordinates.
+                windowed_hits = await self._windowed.evaluate(
+                    payload,
+                    overlay,
+                    event_id=validation.source_event_id,
+                    topic=resolved_topic,
+                    partition=partition,
+                    offset=offset,
+                )
+                for hit in windowed_hits:
                     win_alert = self._windowed.build_alert(payload, hit)
-                    if win_alert is not None:
-                        _METRICS["detected"] += 1
+                    if win_alert is None:
+                        # Nothing will be persisted, so the claim has to go
+                        # back or this window stays suppressed for a hit
+                        # that never became an alert.
+                        await self._windowed.release(hit)
+                        continue
+                    _METRICS["detected"] += 1
+                    # A threshold hit is claimed, not fired, until its alert
+                    # is durable. Confirming after persistence is what lets
+                    # a re-delivery recover an alert the database refused;
+                    # the claim itself (taken atomically inside `evaluate`)
+                    # is what stops two workers firing the same window.
+                    try:
                         await self._fuse_and_persist(win_alert, source_event_id=validation.source_event_id, session=session)
+                    except BaseException:
+                        # Best-effort: under cancellation this await may not
+                        # complete, which is why the claim also carries a
+                        # lease. A released claim re-fires on the next
+                        # delivery; an unreleased one re-fires when the
+                        # lease expires. Neither suppresses the window.
+                        with contextlib.suppress(Exception):
+                            await self._windowed.release(hit)
+                        raise
+                    await self._windowed.confirm(hit)
 
             # Ingest-normalized OCSF event — run the deterministic promotion
             # policy (see app/services/promoter.py). Non-promoted events are

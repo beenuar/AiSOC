@@ -43,6 +43,7 @@ from app.services.windowed_detection import (
     load_sequence_rules,
     load_window_rules,
 )
+from tests.redis_doubles import FakeRedis
 
 #: Transcribed from what the connector emits. A transcription rather than a
 #: reimplementation: the connector's own test asserts this exact mapping
@@ -116,47 +117,9 @@ AITM_RULE_IDS = (
 )
 
 
-class _FakeRedis:
-    """The sorted-set and marker calls the engine makes, faithfully.
-
-    A fake store, not a fake engine: every matching, grouping, windowing and
-    ordering decision below is made by the real ``WindowedDetectionEngine``.
-    Redis here is storage, which is why the alert-reduction gate could drive
-    the real correlator without a container either.
-    """
-
-    def __init__(self) -> None:
-        self.zsets: dict[str, dict[str, float]] = {}
-        self.strings: dict[str, str] = {}
-
-    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self.zsets.setdefault(key, {}).update(mapping)
-
-    async def zremrangebyscore(self, key: str, min_s: float, max_s: float) -> None:
-        members = self.zsets.get(key, {})
-        for member in [m for m, score in list(members.items()) if min_s <= score <= max_s]:
-            del members[member]
-
-    async def zcard(self, key: str) -> int:
-        return len(self.zsets.get(key, {}))
-
-    async def zrangebyscore(self, key: str, min_s: float, max_s: float, withscores: bool = False) -> list[Any]:
-        items = sorted(((m, s) for m, s in self.zsets.get(key, {}).items() if min_s <= s <= max_s), key=lambda kv: (kv[1], kv[0]))
-        return items if withscores else [m for m, _ in items]
-
-    async def expire(self, key: str, ttl: int) -> None:
-        return None
-
-    async def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> Any:
-        if nx and key in self.strings:
-            return None
-        self.strings[key] = value
-        return True
-
-
 def _shipped_engine() -> WindowedDetectionEngine:
     """The engine, loaded with what the product ships."""
-    return WindowedDetectionEngine(_FakeRedis(), rules=load_window_rules(), sequences=load_sequence_rules())
+    return WindowedDetectionEngine(FakeRedis(), rules=load_window_rules(), sequences=load_sequence_rules())
 
 
 def _message(tenant: str, event: dict[str, Any], when: float) -> dict[str, Any]:

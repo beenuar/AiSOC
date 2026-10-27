@@ -36,77 +36,7 @@ from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import WindowedDetectionEngine, WindowRule
-
-
-class FakeRedis:
-    """In-memory stand-in with the sorted-set and string-key semantics used here.
-
-    Includes ``zcount`` and ``eval`` because the engine needs event-time range
-    counting and an owner-checked release. ``eval`` dispatches on the exact
-    scripts the module defines rather than interpreting Lua -- the real
-    semantics are pinned against a live server in
-    ``tests/integration/test_windowed_detection_live.py``, and a double that
-    guessed at them would be the more-capable-than-reality kind.
-    """
-
-    def __init__(self) -> None:
-        self.zsets: dict[str, dict[str, float]] = {}
-        self.strings: dict[str, str] = {}
-        self.failing = False
-
-    def _check(self) -> None:
-        if self.failing:
-            raise ConnectionError("redis down")
-
-    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self._check()
-        self.zsets.setdefault(key, {}).update(mapping)
-
-    async def zremrangebyscore(self, key: str, min_s: float, max_s: float) -> None:
-        self._check()
-        z = self.zsets.get(key, {})
-        for m in [m for m, s in list(z.items()) if min_s <= s <= max_s]:
-            del z[m]
-
-    async def zrangebyscore(self, key: str, min_s: float, max_s: float, withscores: bool = False):  # noqa: ANN201, FBT001, FBT002
-        self._check()
-        entries = sorted(((s, m) for m, s in self.zsets.get(key, {}).items() if min_s <= s <= max_s))
-        return [(m, s) for s, m in entries] if withscores else [m for _, m in entries]
-
-    async def zcard(self, key: str) -> int:
-        self._check()
-        return len(self.zsets.get(key, {}))
-
-    async def expire(self, key: str, ttl: int) -> None:
-        self._check()
-
-    async def set(self, key: str, value: str, nx: bool = False, ex: int | None = None):  # noqa: ANN201, FBT001, FBT002
-        self._check()
-        if nx and key in self.strings:
-            return None
-        self.strings[key] = value
-        return True
-
-    async def get(self, key: str):  # noqa: ANN201
-        self._check()
-        return self.strings.get(key)
-
-    async def eval(self, script: str, numkeys: int, *args):  # noqa: ANN201, ARG002
-        self._check()
-        from app.services import windowed_detection as wd
-
-        key, token = args[0], args[1]
-        if script == wd._RELEASE_IF_OWNER:
-            if self.strings.get(key) == token:
-                del self.strings[key]
-                return 1
-            return 0
-        if script == wd._CONFIRM_IF_OWNER:
-            if self.strings.get(key) == token:
-                self.strings[key] = wd.FIRED_CONFIRMED
-                return 1
-            return 0
-        raise AssertionError(f"the double does not know this script: {script[:40]}")
+from tests.redis_doubles import FakeRedis
 
 
 def _auth_fail(tenant: str, user: str = "alice", when: str | None = None) -> dict:

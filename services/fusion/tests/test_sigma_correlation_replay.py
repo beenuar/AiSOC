@@ -18,6 +18,7 @@ that works.
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 from pathlib import Path
@@ -26,38 +27,9 @@ from uuid import uuid4
 
 import pytest
 from app.services.windowed_detection import WindowedDetectionEngine, load_sequence_rules, load_window_rules
+from tests.redis_doubles import FakeRedis
 
 RULESET = Path(__file__).resolve().parents[1] / "app" / "data" / "windowed_ruleset.json"
-
-
-class _FakeRedis:
-    def __init__(self) -> None:
-        self.zsets: dict[str, dict[str, float]] = {}
-        self.strings: dict[str, str] = {}
-
-    async def zadd(self, key: str, mapping: dict[str, float]) -> None:
-        self.zsets.setdefault(key, {}).update(mapping)
-
-    async def zremrangebyscore(self, key: str, min_s: float, max_s: float) -> None:
-        members = self.zsets.get(key, {})
-        for member in [m for m, score in list(members.items()) if min_s <= score <= max_s]:
-            del members[member]
-
-    async def zcard(self, key: str) -> int:
-        return len(self.zsets.get(key, {}))
-
-    async def zrangebyscore(self, key: str, min_s: float, max_s: float, withscores: bool = False) -> list[Any]:
-        items = sorted(((m, s) for m, s in self.zsets.get(key, {}).items() if min_s <= s <= max_s), key=lambda kv: (kv[1], kv[0]))
-        return items if withscores else [m for m, _ in items]
-
-    async def expire(self, key: str, ttl: int) -> None:
-        return None
-
-    async def set(self, key: str, value: str, nx: bool = False, ex: int | None = None) -> Any:
-        if nx and key in self.strings:
-            return None
-        self.strings[key] = value
-        return True
 
 
 def _correlations() -> list[dict[str, Any]]:
@@ -87,20 +59,29 @@ def _satisfying(key: str, value: Any) -> tuple[str, Any]:
     return key, value
 
 
+_EVENT_SEQ = itertools.count()
+
+
 def _event(rule: dict[str, Any], tenant: str, clause: dict[str, Any], entity: str, when: float, distinct: str = "") -> dict[str, Any]:
     raw = dict(_satisfying(key, value) for key, value in clause.items())
     raw[rule["group_by"]] = entity
     raw["event_time"] = when
     if rule.get("distinct_by"):
         raw[rule["distinct_by"]] = distinct
-    return {"tenant_id": tenant, "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps(raw)}}
+    # A distinct ingest id per call, as above: the engine counts one
+    # observation per event identity.
+    return {
+        "tenant_id": tenant,
+        "id": f"evt-{next(_EVENT_SEQ)}",
+        "ocsf_event": {"tenant_uid": tenant, "raw_data": json.dumps(raw)},
+    }
 
 
 def _engine_for(rule: dict[str, Any]) -> WindowedDetectionEngine:
     counting = tuple(r for r in load_window_rules() if r.id == rule["id"])
     staged = tuple(r for r in load_sequence_rules() if r.id == rule["id"])
     assert counting or staged, f"{rule['id']} is in the committed JSON but neither loader accepted it"
-    return WindowedDetectionEngine(_FakeRedis(), rules=counting, sequences=staged)
+    return WindowedDetectionEngine(FakeRedis(), rules=counting, sequences=staged)
 
 
 def test_all_four_correlation_types_are_covered() -> None:
@@ -110,13 +91,32 @@ def test_all_four_correlation_types_are_covered() -> None:
 
 @pytest.mark.asyncio
 async def test_event_count_fires_at_its_threshold_and_not_one_short() -> None:
+    """The threshold event has to be *inside* the window, which it was not.
+
+    This used to place the first five events a second apart and the sixth
+    996 seconds later, in a 600-second window, and it passed -- because the
+    engine scored observations by arrival time and ignored ``event_time``
+    entirely. Under event-time windowing those six events are correctly not
+    a burst, so the data is now what the rule actually describes and the
+    out-of-window case is asserted rather than relied on by accident.
+    """
     rule = BY_TYPE["event_count"]
-    engine = _engine_for(rule)
     tenant = str(uuid4())
+    entity = "arn:aws:iam::1:user/a"
+
+    engine = _engine_for(rule)
     for index in range(rule["threshold"] - 1):
-        assert not await engine.evaluate(_event(rule, tenant, rule["match_when"], "arn:aws:iam::1:user/a", 1000.0 + index))
-    hits = await engine.evaluate(_event(rule, tenant, rule["match_when"], "arn:aws:iam::1:user/a", 2000.0))
+        assert not await engine.evaluate(_event(rule, tenant, rule["match_when"], entity, 1000.0 + index))
+    hits = await engine.evaluate(_event(rule, tenant, rule["match_when"], entity, 1000.0 + rule["threshold"]))
     assert [h.rule_id for h in hits] == [rule["id"]]
+
+    spread = _engine_for(rule)
+    for index in range(rule["threshold"] - 1):
+        assert not await spread.evaluate(_event(rule, tenant, rule["match_when"], entity, 1000.0 + index))
+    outside = 1000.0 + rule["window_seconds"] + 1
+    assert not await spread.evaluate(_event(rule, tenant, rule["match_when"], entity, outside)), (
+        "an event past the window must not complete a burst it was never part of"
+    )
 
 
 @pytest.mark.asyncio
