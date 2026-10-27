@@ -404,8 +404,9 @@ the bucket keeps the object.
 1. Establish the window. The last-known-good point is the `event_time` in the
    old checkpoint:
    ```sql
-   SELECT id, name, connector_config -> 'checkpoint'
-   FROM connectors WHERE connector_type = 'aws_cloudtrail_s3';
+   SELECT id, name, connector_type, connector_config -> 'checkpoint'
+   FROM connectors
+   WHERE connector_type IN ('aws_cloudtrail_s3', 'gcp_pubsub');
    ```
    On a row corrupted by finding 6 the cursor is the encoded string in the
    array's second element.
