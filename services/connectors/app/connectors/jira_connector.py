@@ -143,7 +143,7 @@ class JiraConnector(BaseConnector):
 
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.get(
-                f"{self._base_url}/rest/api/3/search",
+                f"{self._base_url}/rest/api/3/search/jql",
                 headers=self._auth_header(),
                 params={
                     "jql": jql,

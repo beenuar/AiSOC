@@ -213,16 +213,23 @@ class TestAPoll:
         connector = _connector(sqs, _FakeS3(_objects()), include_flow_logs=False)
 
         assert await connector.fetch_alerts() == []
-        assert sqs.deleted == ["h1"], "a filtered-out object still consumes its notification"
+        assert connector.pending_acknowledgements() == ["h1"], "a filtered-out object still consumes its notification"
 
 
-class TestAcknowledgementIsTheCheckpoint:
+class TestTheQueueIsTheCursor:
     @pytest.mark.asyncio
-    async def test_a_fully_read_object_acknowledges_its_message(self) -> None:
+    async def test_a_fully_read_object_answers_its_message_once_ingest_has(self) -> None:
+        """Read in full, so the message becomes answerable — but only the
+        scheduler, holding ingest's verdict, may answer it."""
         sqs = _FakeSQS([[_message("h1", _fixture("sqs_s3_notification.json"))]])
         connector = _connector(sqs, _FakeS3(_objects()))
 
         await connector.fetch_alerts()
+
+        assert connector.pending_acknowledgements() == ["h1"]
+        assert sqs.deleted == []
+
+        await connector.commit_acknowledgements()
 
         assert sqs.deleted == ["h1"]
 
@@ -255,16 +262,252 @@ class TestAcknowledgementIsTheCheckpoint:
         resumed.set_checkpoint(cursor)
 
         assert await resumed.fetch_alerts() == []
+        assert resumed.pending_acknowledgements() == ["h2"], "a duplicate is still a message that has to leave the queue"
 
     @pytest.mark.asyncio
     async def test_an_undecodable_notification_is_consumed_rather_than_looped(self) -> None:
         """A message that can never become events has to leave the queue, or
-        it redelivers until its retention expires."""
+        it redelivers until its retention expires. It rides along with the
+        batch: it contributes no rows, so an all-garbage poll submits an empty
+        batch, ingest accepts it trivially, and the queue still drains."""
         sqs = _FakeSQS([[_message("h1", "not json at all")]])
         connector = _connector(sqs, _FakeS3(_objects()))
 
         assert await connector.fetch_alerts() == []
+        assert connector.pending_acknowledgements() == ["h1"]
+
+        await connector.commit_acknowledgements()
+
         assert sqs.deleted == ["h1"]
+
+
+class TestTheHandleOutlivesTheFetch:
+    """Phase 3, finding 4. Deleting the receipt is the irreversible step.
+
+    ``fetch_alerts`` returning is not downstream acceptance — the scheduler
+    pushes to ingest *after* it returns, and ingest is the first hop that
+    writes anything durable. A delete issued inside the pull loop therefore
+    drops the message on the floor whenever the push that follows fails, and
+    an SQS message that has been deleted cannot be replayed from anywhere.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_message_is_not_deleted_while_its_records_are_only_in_a_list(self) -> None:
+        """Being in a Python list is not durability.
+
+        The fix is not "delete later in the same function"; it is that the
+        delete cannot happen in this function at all, because nothing this
+        function can observe proves the records survived.
+        """
+        sqs = _FakeSQS([[_message("h1", _fixture("sqs_s3_notification.json"))]])
+        connector = _connector(sqs, _FakeS3(_objects()))
+
+        alerts = await connector.fetch_alerts()
+
+        assert len(alerts) == 3, "the records are read"
+        assert sqs.deleted == [], "but nothing downstream has accepted them yet, so the receipt must survive the fetch"
+
+    @pytest.mark.asyncio
+    async def test_the_handle_is_staged_for_the_scheduler_to_commit(self) -> None:
+        """Staged, not acknowledged. The scheduler owns the commit because it
+        is the only layer that sees ingest's answer."""
+        sqs = _FakeSQS([[_message("h1", _fixture("sqs_s3_notification.json"))]])
+        connector = _connector(sqs, _FakeS3(_objects()))
+
+        await connector.fetch_alerts()
+
+        assert connector.pending_acknowledgements() == ["h1"]
+
+    @pytest.mark.asyncio
+    async def test_committing_deletes_exactly_what_was_staged(self) -> None:
+        sqs = _FakeSQS([[_message("h1", _fixture("sqs_s3_notification.json"))]])
+        connector = _connector(sqs, _FakeS3(_objects()))
+        await connector.fetch_alerts()
+
+        result = await connector.commit_acknowledgements()
+
+        assert sqs.deleted == ["h1"]
+        assert (result.requested, result.confirmed, result.failed) == (1, 1, 0)
+        assert connector.pending_acknowledgements() == [], "a committed handle is not re-committed"
+
+    @pytest.mark.asyncio
+    async def test_discarding_leaves_the_message_on_the_queue(self) -> None:
+        """What the scheduler does when ingest did not accept the batch. The
+        message redelivers after its visibility timeout, which is the entire
+        point of not having deleted it."""
+        sqs = _FakeSQS([[_message("h1", _fixture("sqs_s3_notification.json"))]])
+        connector = _connector(sqs, _FakeS3(_objects()))
+        await connector.fetch_alerts()
+
+        connector.discard_acknowledgements()
+
+        assert sqs.deleted == []
+        assert connector.pending_acknowledgements() == []
+
+    @pytest.mark.asyncio
+    async def test_an_unreadable_object_still_withholds_the_whole_message(self) -> None:
+        """Partial acceptance at the source end: one notification can name
+        several objects, and a message is only answerable when every object it
+        names was read."""
+        body = json.dumps(
+            {
+                "Records": [
+                    {"s3": {"bucket": {"name": "b"}, "object": {"key": CLOUDTRAIL_KEY}}},
+                    {"s3": {"bucket": {"name": "b"}, "object": {"key": "AWSLogs/o-x/1/CloudTrail/us-east-1/2026/10/08/missing.json.gz"}}},
+                ]
+            }
+        )
+        sqs = _FakeSQS([[_message("h1", body)]])
+        connector = _connector(sqs, _FakeS3({CLOUDTRAIL_KEY: _objects()[CLOUDTRAIL_KEY]}))
+
+        alerts = await connector.fetch_alerts()
+
+        assert len(alerts) == 3, "the readable object's records are still emitted"
+        assert connector.pending_acknowledgements() == [], "but the message is not answerable while one object is unread"
+        assert sqs.deleted == []
+
+    @pytest.mark.asyncio
+    async def test_a_failed_delete_is_reported_rather_than_assumed(self) -> None:
+        """A delete that does not land means the message redelivers. The
+        scheduler cannot react to what it is not told."""
+        sqs = _FakeSQS([[_message("h1", _fixture("sqs_s3_notification.json"))]])
+
+        def _refuse(**_kwargs: Any) -> dict[str, Any]:
+            raise RuntimeError("AccessDenied: sqs:DeleteMessage")
+
+        connector = _connector(sqs, _FakeS3(_objects()))
+        await connector.fetch_alerts()
+        sqs.delete_message = _refuse  # type: ignore[method-assign]
+
+        result = await connector.commit_acknowledgements()
+
+        assert (result.requested, result.confirmed, result.failed) == (1, 0, 1)
+
+
+class TestAnOlderObjectAnnouncedLaterSurvives:
+    """Phase 3, finding 5.
+
+    S3 event notifications over SQS are unordered by construction, so an
+    object whose events are older than the previous batch's newest event is
+    an ordinary arrival, not a duplicate. A monotonic ``(event_time,
+    record_id)`` high-water mark discards it on first sight, and because the
+    announcing message was already deleted there is nothing left to replay.
+    """
+
+    @staticmethod
+    def _object_at(event_time: str, event_id: str) -> bytes:
+        """A vendor-shaped CloudTrail object with one record at a chosen time."""
+        return gzip.compress(
+            json.dumps(
+                {
+                    "Records": [
+                        {
+                            "eventID": event_id,
+                            "eventTime": event_time,
+                            "eventName": "ConsoleLogin",
+                            "eventSource": "signin.amazonaws.com",
+                            "eventCategory": "Management",
+                            "awsRegion": "us-east-1",
+                            "recipientAccountId": "123456789012",
+                            "sourceIPAddress": "198.51.100.24",
+                            "userIdentity": {"type": "IAMUser", "userName": "late-arrival"},
+                        }
+                    ]
+                }
+            ).encode()
+        )
+
+    @staticmethod
+    def _notification(key: str) -> str:
+        return json.dumps({"Records": [{"s3": {"bucket": {"name": "b"}, "object": {"key": key}}}]})
+
+    @pytest.mark.asyncio
+    async def test_an_event_older_than_the_last_batch_is_still_emitted(self) -> None:
+        newer_key = "AWSLogs/o-x/1/CloudTrail/us-east-1/2026/10/08/newer.json.gz"
+        older_key = "AWSLogs/o-x/1/CloudTrail/us-east-1/2026/10/08/older.json.gz"
+        objects = {
+            newer_key: self._object_at("2026-10-08T11:00:00Z", "newer-1"),
+            older_key: self._object_at("2026-10-08T09:00:00Z", "older-1"),
+        }
+
+        first = _connector(_FakeSQS([[_message("h1", self._notification(newer_key))]]), _FakeS3(objects))
+        assert len(await first.fetch_alerts()) == 1
+        cursor = first.get_checkpoint()
+        assert cursor is not None
+
+        resumed = _connector(_FakeSQS([[_message("h2", self._notification(older_key))]]), _FakeS3(objects))
+        resumed.set_checkpoint(cursor)
+        alerts = await resumed.fetch_alerts()
+
+        assert [a["external_id"] for a in alerts] == ["older-1"], (
+            "an out-of-order arrival on an unordered queue is a new event, not a duplicate — "
+            "and its notification has already been deleted, so dropping it here loses it for good"
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_genuine_redelivery_of_the_same_object_is_still_suppressed(self) -> None:
+        """The other half, and the reason the cursor cannot simply be deleted.
+        SQS is at-least-once: the same object does arrive twice."""
+        key = "AWSLogs/o-x/1/CloudTrail/us-east-1/2026/10/08/same.json.gz"
+        objects = {key: self._object_at("2026-10-08T11:00:00Z", "same-1")}
+
+        first = _connector(_FakeSQS([[_message("h1", self._notification(key))]]), _FakeS3(objects))
+        assert len(await first.fetch_alerts()) == 1
+        cursor = first.get_checkpoint()
+
+        resumed = _connector(_FakeSQS([[_message("h2", self._notification(key))]]), _FakeS3(objects))
+        resumed.set_checkpoint(cursor)
+
+        assert await resumed.fetch_alerts() == [], "the same object read twice must not become two alerts"
+
+    @pytest.mark.asyncio
+    async def test_two_distinct_events_sharing_a_timestamp_both_survive(self) -> None:
+        key_a = "AWSLogs/o-x/1/CloudTrail/us-east-1/2026/10/08/a.json.gz"
+        key_b = "AWSLogs/o-x/1/CloudTrail/us-east-1/2026/10/08/b.json.gz"
+        objects = {
+            key_a: self._object_at("2026-10-08T11:00:00Z", "tie-a"),
+            key_b: self._object_at("2026-10-08T11:00:00Z", "tie-b"),
+        }
+
+        first = _connector(_FakeSQS([[_message("h1", self._notification(key_a))]]), _FakeS3(objects))
+        await first.fetch_alerts()
+        cursor = first.get_checkpoint()
+
+        resumed = _connector(_FakeSQS([[_message("h2", self._notification(key_b))]]), _FakeS3(objects))
+        resumed.set_checkpoint(cursor)
+
+        assert [a["external_id"] for a in await resumed.fetch_alerts()] == ["tie-b"]
+
+
+class TestTheHoldIsBounded:
+    """An SQS visibility timeout is finite, so holding a receipt is only safe
+    for as long as the timeout has left to run. The poll stops taking new work
+    rather than collecting a batch it cannot answer for."""
+
+    @pytest.mark.asyncio
+    async def test_the_poll_stops_taking_new_work_near_the_visibility_deadline(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.connectors import aws_cloudtrail_s3 as module
+
+        clock = {"now": 0.0}
+        monkeypatch.setattr(module.time, "monotonic", lambda: clock["now"])
+
+        batches = [[_message(f"h{i}", _fixture("sqs_s3_notification.json"))] for i in range(4)]
+        sqs = _FakeSQS(batches)
+
+        real_receive = sqs.receive_message
+
+        def _receive_then_age(**kwargs: Any) -> dict[str, Any]:
+            # Each receive burns 20s of a 30s timeout, so the second one puts
+            # the poll past the half-timeout reserve.
+            clock["now"] += 20.0
+            return real_receive(**kwargs)
+
+        sqs.receive_message = _receive_then_age  # type: ignore[method-assign]
+        connector = _connector(sqs, _FakeS3(_objects()), visibility_timeout_seconds=30)
+
+        await connector.fetch_alerts()
+
+        assert sqs.receive_calls == 1, "a second batch would be held past the point the first receipt can be trusted"
 
 
 class TestBackpressure:
@@ -300,7 +543,7 @@ class TestBackpressure:
         # taken off the queue and are still there for the next poll.
         assert sqs.receive_calls == 1
         assert len(alerts) == 3, "the object is the atomic unit, so the bound overshoots by at most one object"
-        assert sqs.deleted == ["h0"]
+        assert connector.pending_acknowledgements() == ["h0"]
 
     @pytest.mark.asyncio
     async def test_the_visibility_timeout_reaches_the_receive_call(self) -> None:

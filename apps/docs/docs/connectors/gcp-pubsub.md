@@ -22,7 +22,7 @@ Google Cloud logs streamed through a Cloud Logging sink onto a Pub/Sub subscript
 | `project_id` | Project ID (of the subscription) | string | yes | — | The project the Pub/Sub subscription lives in, which may differ from the projects the sink reads. |
 | `subscription_id` | Subscription ID | string | yes | — | A pull subscription on the topic your log sink publishes to. Push subscriptions are not read by this connector. |
 | `service_account_json` | Service account JSON key | secret | yes | — | **encrypted at rest** · Needs roles/pubsub.subscriber on the subscription. Paste the entire key file; it is encrypted at rest by the credential vault. |
-| `ack_deadline_seconds` | Acknowledgement deadline (seconds) | number | no | `120` | Recorded for the setup guide and compared against the subscription at test time. A deadline shorter than one poll redelivers messages this connector is still reading. |
+| `ack_deadline_seconds` | Acknowledgement deadline (seconds) | number | no | `120` | Recorded for the setup guide and compared against the subscription at test time. Messages stay unacknowledged until ingest confirms them, so the deadline has to cover a poll and the push that follows it — not just the poll. AiSOC stops pulling once it has spent half the deadline, and a message whose deadline lapses first is redelivered and de-duplicated rather than lost. |
 
 :::note Credential handling
 `service_account_json` is encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API — a read of the saved connector shows the field as set, not its contents. See [credential vault](../operations/credentials.md).

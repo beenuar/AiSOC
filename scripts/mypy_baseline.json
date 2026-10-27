@@ -1,9 +1,9 @@
 {
   "(environment)": {
     "flags": "--no-color-output --no-error-summary --no-site-packages --no-incremental",
-    "mypy": "2.4.0",
+    "mypy": "2.3.1",
     "mypy_major": "2",
-    "python": "3.11"
+    "python": "3.14"
   },
   "(unmanaged)": {
     "plugins/mttr-widget/plugin.py": {

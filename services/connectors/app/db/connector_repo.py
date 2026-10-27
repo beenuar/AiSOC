@@ -31,8 +31,9 @@ from sqlalchemy import (
     String,
     Table,
     Text,
-    cast,
+    bindparam,
     func,
+    literal_column,
     select,
     update,
 )
@@ -119,6 +120,47 @@ class ConnectorInstance:
     last_backfill_at: datetime | None = None
 
 
+def _recover_connector_config(value: Any) -> dict[str, Any]:
+    """The config object, recovering the array a previous release could write.
+
+    ``record_checkpoint`` double-encoded its patch, so Postgres coerced the
+    merge to an array and every connector that checkpointed once was left with
+    ``[{...the real config...}, "{\\"checkpoint\\": {...}}"]``. The poll that
+    followed raised on ``.items()`` and the instance went unhealthy for good.
+
+    Reading that shape back is recovery, not tolerance of a current bug: the
+    write path can no longer produce it, and an operator who upgrades should
+    not have to run SQL to get their connectors polling again. Both halves are
+    recoverable — the config is the mapping element, and the cursor is inside
+    the encoded string — so a resumed connector does not re-read its overlap
+    either.
+
+    Anything else unrecognisable becomes ``{}``, which is what the caller's
+    ``or {}`` already meant.
+    """
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, list):
+        return {}
+
+    recovered: dict[str, Any] = {}
+    checkpoint: Any = None
+    for element in value:
+        if isinstance(element, dict):
+            recovered.update(element)
+            continue
+        if isinstance(element, str):
+            try:
+                decoded = json.loads(element)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(decoded, dict):
+                checkpoint = decoded.get("checkpoint", checkpoint)
+    if checkpoint is not None and "checkpoint" not in recovered:
+        recovered["checkpoint"] = checkpoint
+    return recovered
+
+
 def _instance_from_row(row: Any) -> ConnectorInstance:
     """Map one result row onto the dataclass.
 
@@ -132,7 +174,7 @@ def _instance_from_row(row: Any) -> ConnectorInstance:
         connector_type=row.connector_type,
         is_enabled=row.is_enabled,
         auth_config=row.auth_config or {},
-        connector_config=row.connector_config or {},
+        connector_config=_recover_connector_config(row.connector_config),
         health_status=row.health_status,
         last_sync=row.last_sync,
         events_ingested=row.events_ingested,
@@ -336,8 +378,30 @@ async def record_checkpoint(
     re-scans a bounded overlap rather than skipping events.
     """
     now = datetime.now(UTC)
-    patch = cast(json.dumps({"checkpoint": checkpoint}), JSONB)
-    merged = func.coalesce(connectors_table.c.connector_config, cast("{}", JSONB)).op("||")(patch)
+    # Bound as a mapping with a JSONB type, serialised exactly once.
+    #
+    # `cast(json.dumps(...), JSONB)` -- what this was -- serialises twice:
+    # `cast` declares the bind's type as JSONB, so SQLAlchemy's JSONB bind
+    # processor encodes the string it was handed, and Postgres receives a JSON
+    # *string scalar* rather than an object. `jsonb || <scalar>` then coerces
+    # both operands to arrays, so one successful checkpointed poll rewrote
+    # `connector_config` from
+    #     {"poll_interval_seconds": 120, "filter_rules": [...]}
+    # to
+    #     [{"poll_interval_seconds": 120, ...}, "{\"checkpoint\": {...}}"]
+    # and the *next* poll raised `AttributeError: 'list' object has no
+    # attribute 'items'` on reading it, which the poll's broad handler
+    # recorded as a failure. The instance went unhealthy and stayed there,
+    # with its poll interval and its filter rules no longer readable.
+    #
+    # Nothing caught it because every scheduler test patches this function
+    # with a fake that records the dict it was handed, so the statement below
+    # had never been executed by a test. `tests/isolation/
+    # test_queue_acknowledgement_live.py` now runs it against real Postgres.
+    patch = bindparam("checkpoint_patch", {"checkpoint": checkpoint}, JSONB, unique=True)
+    # A literal rather than another `cast(...)` bind, for the same reason.
+    empty = literal_column("'{}'::jsonb")
+    merged = func.coalesce(connectors_table.c.connector_config, empty).op("||")(patch)
     stmt = update(connectors_table).where(connectors_table.c.id == connector_id).values(connector_config=merged, updated_at=now)
     await connection.execute(stmt)
 

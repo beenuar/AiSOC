@@ -103,6 +103,60 @@ jobs:
           ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
         run: python -m pytest ../../tests/isolation/test_connector_scheduler_live.py -v --tb=short
 
+      # Phase 3. Two properties that only a real socket and a real database
+      # can show: that nothing reaches `:acknowledge` while ingest has not
+      # confirmed the batch, and that the cursor survives the JSONB round
+      # trip it is written through. A fake engine recording the dict it was
+      # handed proves the scheduler called it, not that the value comes back
+      # — which is how `record_checkpoint` double-encoded its patch for the
+      # whole life of the feature while every scheduler test passed.
+      - name: A queue is acknowledged only after ingest confirms the batch
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: python -m pytest ../../tests/isolation/test_queue_acknowledgement_live.py -v --tb=short
+
+      # The negative control for it, re-injecting the pre-fix acknowledgement
+      # placement: acking inside the pull loop, once the entries are in a
+      # local list and before the scheduler has pushed anything anywhere.
+      #
+      # If the suite still passes with that back, it is not observing the
+      # subscription and proves nothing about durability.
+      - name: The gate fails when the subscription is acknowledged during the fetch
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: |
+          cp app/connectors/gcp_pubsub.py /tmp/gcp_pubsub.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/connectors/gcp_pubsub.py")
+          s = p.read_text()
+          staged = "                self.stage_acknowledgement(ack_ids)"
+          if staged not in s:
+              print("negative control could not find the staging call; the connector has "
+                    "been reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(s.replace(staged, "\n".join([
+              "                if ack_ids:",
+              "                    _resp = await client.post(",
+              "                        f\"{_PUBSUB_ROOT}/{self._subscription_path}:acknowledge\",",
+              "                        headers=self._auth.headers(token),",
+              "                        json={\"ackIds\": ack_ids},",
+              "                    )",
+              "                    _resp.raise_for_status()",
+          ]), 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_queue_acknowledgement_live.py -q >/dev/null 2>&1; then
+            cp /tmp/gcp_pubsub.bak app/connectors/gcp_pubsub.py
+            echo "FAIL: the suite passed with the subscription acknowledged during the fetch."
+            echo "      It is not observing the acknowledgement, so it cannot show durability."
+            exit 1
+          fi
+          cp /tmp/gcp_pubsub.bak app/connectors/gcp_pubsub.py
+          echo "OK: acknowledging before ingest confirms the batch makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_queue_acknowledgement_live.py -q
+
       # The negative control, and it re-injects the real defect.
       #
       # `next_run_time=None` is what shipped. Measured: four of the five

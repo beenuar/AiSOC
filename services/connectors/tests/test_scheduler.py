@@ -21,6 +21,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from app.connectors.base import AcknowledgementResult, BaseConnector, ConnectorSchema
 from app.db.connector_repo import ConnectorInstance
 from app.scheduler import ConnectorScheduler, _coerce_poll_interval
 
@@ -1192,3 +1193,285 @@ async def test_poll_refuses_a_stored_internal_destination(monkeypatch):
     fake_connector_class.assert_not_called()
     assert fake_engine.failure_calls == [inst.id]
     assert fake_engine.success_calls == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — acknowledgement waits for durable downstream acceptance
+#
+# These drive a connector over a queue that really behaves like one, rather
+# than a MagicMock. The defect under test is an acknowledgement that lands
+# before durability, and a mock records the call without modelling its
+# consequence: the message leaving the queue. This queue drains on ack and
+# redelivers everything that was never acked, so "was the event lost?" is a
+# question the test can actually ask.
+# ---------------------------------------------------------------------------
+
+
+class _AtLeastOnceQueue:
+    """A queue with the one property that makes this class of bug possible.
+
+    An acknowledged message is gone for good; an unacknowledged one comes
+    back. Nothing here is more capable than SQS or Pub/Sub — in particular
+    there is no second copy of an acked message anywhere, which is precisely
+    why acking early cannot be undone.
+    """
+
+    def __init__(self, messages: list[dict[str, Any]], *, refuse_acks: bool = False) -> None:
+        self._messages: dict[str, dict[str, Any]] = {m["handle"]: m for m in messages}
+        self.receive_calls = 0
+        self.acked: list[str] = []
+        #: Models a handle the source refuses — a lapsed visibility timeout,
+        #: an expired ack deadline, a missing delete permission. The message
+        #: stays, which is what makes the redelivery real rather than asserted.
+        self.refuse_acks = refuse_acks
+
+    def receive(self) -> list[dict[str, Any]]:
+        self.receive_calls += 1
+        return [dict(m) for m in self._messages.values()]
+
+    def ack(self, handles: list[str]) -> None:
+        for handle in handles:
+            if self.refuse_acks:
+                continue
+            self._messages.pop(handle, None)
+            self.acked.append(handle)
+
+    @property
+    def depth(self) -> int:
+        return len(self._messages)
+
+
+class _QueueBackedConnector(BaseConnector):
+    """The smallest honest queue connector: pull, stage, let the caller commit."""
+
+    connector_id = "test_queue_backed"
+    connector_name = "Queue backed"
+    connector_category = "cloud"
+    dedup_identity_field: tuple[str, ...] = ("record_id",)
+
+    #: Set by the test. The scheduler constructs a fresh instance per poll,
+    #: so per-poll state cannot live on the instance — same as production.
+    queue: Any = None
+    #: Record ids whose ``normalize`` should raise, to model one child event
+    #: of a multi-event notification failing.
+    broken: frozenset[str] = frozenset()
+
+    def __init__(self, **_config: Any) -> None:
+        """Accept whatever the scheduler hands over, like a real connector.
+
+        Not decoration: without it the scheduler's ``TypeError`` guard catches
+        the construction, records a failure and returns before polling — and
+        a test asserting "the message was not acknowledged" then passes
+        because nothing ran at all.
+        """
+
+    @classmethod
+    def schema(cls) -> ConnectorSchema:  # pragma: no cover - not exercised
+        raise NotImplementedError
+
+    async def test_connection(self) -> dict[str, Any]:  # pragma: no cover
+        raise NotImplementedError
+
+    async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        for message in type(self).queue.receive():
+            rows.extend(message["rows"])
+            self.stage_acknowledgement([message["handle"]])
+        return [self.normalize(row) for row in self.apply_checkpoint(rows)]
+
+    def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        if raw.get("record_id") in type(self).broken:
+            raise ValueError(f"cannot normalize {raw['record_id']}")
+        return {"source": self.connector_id, "raw_event": raw, "external_id": raw["record_id"]}
+
+    async def commit_acknowledgements(self) -> AcknowledgementResult:
+        handles = self.take_pending_acknowledgements()
+        queue = type(self).queue
+        before = queue.depth
+        queue.ack(handles)
+        # Derived from what the queue actually did, not from what was asked.
+        # A result that reports success for every handle it was handed is the
+        # exact shape that hides a delete nobody is allowed to make.
+        confirmed = before - queue.depth
+        return AcknowledgementResult(requested=len(handles), confirmed=confirmed, failed=len(handles) - confirmed)
+
+
+def _queue_message(handle: str, *record_ids: str) -> dict[str, Any]:
+    return {"handle": handle, "rows": [{"record_id": rid, "event_time": f"2026-10-08T11:00:0{i}Z"} for i, rid in enumerate(record_ids)]}
+
+
+def _queue_scheduler(
+    monkeypatch: Any,
+    queue: _AtLeastOnceQueue,
+    ingest: _FakeIngestClient,
+    *,
+    broken: frozenset[str] = frozenset(),
+    checkpoint: dict[str, Any] | None = None,
+) -> tuple[ConnectorScheduler, ConnectorInstance, _FakeEngine]:
+    config: dict[str, Any] = {"poll_interval_seconds": 60}
+    if checkpoint is not None:
+        config["checkpoint"] = checkpoint
+    inst = _make_instance(connector_type="test_queue_backed", connector_config=config)
+    monkeypatch.setattr(_QueueBackedConnector, "queue", queue)
+    monkeypatch.setattr(_QueueBackedConnector, "broken", broken)
+    monkeypatch.setattr("app.scheduler.CONNECTOR_REGISTRY", {"test_queue_backed": _QueueBackedConnector})
+    engine = _FakeEngine([inst])
+    # The fakes are structural stand-ins, deliberately narrower than the real
+    # clients — the point of this module, and the reason every other test here
+    # does the same.
+    scheduler = ConnectorScheduler(engine=engine, ingest_client=ingest, vault=_FakeVault())  # type: ignore[arg-type]
+    return scheduler, inst, engine
+
+
+@pytest.mark.asyncio
+async def test_a_fetch_that_ingest_rejects_leaves_the_message_on_the_queue(monkeypatch):
+    """Finding 4, stated as the property that matters: no loss.
+
+    The fetch succeeds, ingest answers 500, and the only acceptable outcome is
+    that the message is still there to be read again.
+    """
+    from app.ingest_client import IngestClientError
+
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient()
+    ingest.exc = IngestClientError("ingest down")
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == [], "acknowledging here deletes the only copy of the events"
+    assert queue.depth == 1
+    assert engine.failure_calls == [inst.id]
+    assert engine.checkpoint_calls == []
+
+
+@pytest.mark.asyncio
+async def test_the_rejected_batch_is_recovered_in_full_on_the_next_poll(monkeypatch):
+    """Completeness, not just 'the handle survived'. The second poll has to
+    produce the same events, because that is what 'not lost' means."""
+    from app.ingest_client import IngestClientError
+
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient()
+    ingest.exc = IngestClientError("ingest down")
+    scheduler, inst, _engine = _queue_scheduler(monkeypatch, queue, ingest)
+    await scheduler._poll_one(connector_id=inst.id)
+
+    ingest.exc = None
+    ingest.accepted = 2
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert [e["external_id"] for e in (ingest.last_payload or {})["events"]] == ["r1", "r2"]
+    assert queue.acked == ["h1"]
+    assert queue.depth == 0
+
+
+@pytest.mark.asyncio
+async def test_a_partially_accepted_batch_is_not_acknowledged(monkeypatch):
+    """Ingest reports per-event normalization failures as HTTP 200 with
+    counts, so a 200 is not a guarantee. One rejected event means the whole
+    notification stays answerable."""
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient(accepted=1, rejected=1)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == []
+    assert queue.depth == 1
+    assert engine.checkpoint_calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_child_event_that_cannot_be_normalized_withholds_the_acknowledgement(monkeypatch):
+    """One notification, several events, one of them unusable. The scheduler's
+    normalizer returns the raw row rather than raising, so the batch reaches
+    ingest with an event ingest will reject — and the ack has to wait for that
+    answer rather than assume it."""
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient(accepted=1, rejected=1)
+    scheduler, inst, _engine = _queue_scheduler(monkeypatch, queue, ingest, broken=frozenset({"r2"}))
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == []
+    assert queue.depth == 1
+
+
+@pytest.mark.asyncio
+async def test_a_fully_accepted_batch_is_acknowledged_and_does_not_come_back(monkeypatch):
+    """The other direction. A guarantee that never acknowledges is not a
+    guarantee, it is a queue that never drains."""
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1", "r2")])
+    ingest = _FakeIngestClient(accepted=2)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert queue.acked == ["h1"]
+    assert queue.depth == 0
+    assert engine.success_calls == [inst.id]
+
+
+@pytest.mark.asyncio
+async def test_the_checkpoint_is_durable_before_the_acknowledgement_is_sent(monkeypatch):
+    """Process exits after acceptance but before acknowledgement.
+
+    The ordering is what makes that survivable: the identities are persisted
+    first, so the redelivery that follows a crash in this window is
+    recognised as one. Acking first would make the crash lose nothing but
+    would make a *failed* ack indistinguishable from a successful one.
+    """
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1")])
+    ingest = _FakeIngestClient(accepted=1)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+    order: list[str] = []
+
+    real_ack = _AtLeastOnceQueue.ack
+
+    def _record_ack(self: _AtLeastOnceQueue, handles: list[str]) -> None:
+        order.append("ack")
+        real_ack(self, handles)
+
+    monkeypatch.setattr(_AtLeastOnceQueue, "ack", _record_ack)
+    original_record = scheduler._record_checkpoint
+
+    async def _record_checkpoint(*args: Any, **kwargs: Any) -> None:
+        order.append("checkpoint")
+        await original_record(*args, **kwargs)
+
+    monkeypatch.setattr(scheduler, "_record_checkpoint", _record_checkpoint)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert order == ["checkpoint", "ack"]
+    assert engine.checkpoint_calls, "the dedup identities have to reach the database before the queue forgets the message"
+
+
+@pytest.mark.asyncio
+async def test_a_redelivery_after_a_lost_acknowledgement_is_not_a_duplicate(monkeypatch):
+    """Accepted downstream, checkpointed, acknowledgement never landed.
+
+    Covers both the crash in that window and a source that refused the
+    handle; they are the same situation from the next poll's point of view.
+    The event must not be submitted twice, and the message must still leave.
+    """
+    queue = _AtLeastOnceQueue([_queue_message("h1", "r1")], refuse_acks=True)
+    ingest = _FakeIngestClient(accepted=1)
+    scheduler, inst, engine = _queue_scheduler(monkeypatch, queue, ingest)
+
+    await scheduler._poll_one(connector_id=inst.id)
+
+    assert [e["external_id"] for e in (ingest.last_payload or {})["events"]] == ["r1"]
+    assert queue.depth == 1, "the refused handle means the message is still there"
+    persisted = engine.checkpoint_calls[-1]["checkpoint"]
+
+    # The redelivery, against a source that now accepts the acknowledgement.
+    resumed_queue = _AtLeastOnceQueue([_queue_message("h1", "r1")])
+    resumed_ingest = _FakeIngestClient(accepted=0)
+    resumed, inst2, _engine2 = _queue_scheduler(monkeypatch, resumed_queue, resumed_ingest, checkpoint=persisted)
+
+    await resumed._poll_one(connector_id=inst2.id)
+
+    assert (resumed_ingest.last_payload or {})["events"] == [], "the event was already accepted downstream once"
+    assert resumed_queue.acked == ["h1"], "and the message still has to leave the queue"
