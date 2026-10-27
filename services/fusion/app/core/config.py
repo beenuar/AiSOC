@@ -80,6 +80,30 @@ class Settings(BaseSettings):
     # bound that retention: when the cap is reached the oldest rows are
     # discarded with an explicit counter/log, never silently.
     lake_max_buffer_rows: int = Field(default=10000, alias="AISOC_LAKE_MAX_BUFFER_ROWS")
+    # Archival's own durable boundary (app/services/lake_spool.py). A row is
+    # on this spool before `write_event` returns True, so the consumer's
+    # offset commit no longer rides on an in-memory list.
+    #
+    # Relative by default so a first run needs no provisioning, but it is
+    # only as durable as the filesystem under it: in a container, mount a
+    # volume here or a destroyed container loses rows whose Kafka offsets
+    # were already committed.
+    lake_spool_dir: str = Field(default=".aisoc/lake-spool", alias="AISOC_LAKE_SPOOL_DIR")
+    # Back-pressure threshold, not a discard threshold. At the cap the writer
+    # refuses events and the consumer holds its Kafka offset, so Kafka's
+    # retention becomes the buffer. Raising it is not a durability fix.
+    lake_max_spool_bytes: int = Field(default=512 * 1024 * 1024, alias="AISOC_LAKE_MAX_SPOOL_BYTES")
+    # Off by default: an un-synced append already survives a process kill,
+    # SIGKILL and a container stop, because the bytes are in the kernel page
+    # cache. Turn it on to also survive a power loss, at a disk round trip
+    # per batch.
+    lake_spool_fsync: bool = Field(default=False, alias="AISOC_LAKE_SPOOL_FSYNC")
+    # Whether an event that could not be spooled holds the Kafka offset.
+    # On (the default) an unusable or full spool applies back-pressure
+    # instead of losing the archive silently. Turning it off restores
+    # best-effort archival, where a refused event is counted as a reported
+    # gap and the alert pipeline keeps moving.
+    lake_archive_required: bool = Field(default=True, alias="AISOC_LAKE_ARCHIVE_REQUIRED")
     lake_reconnect_base_seconds: float = Field(default=0.5, alias="AISOC_LAKE_RECONNECT_BASE_SECONDS")
     lake_reconnect_max_seconds: float = Field(default=30.0, alias="AISOC_LAKE_RECONNECT_MAX_SECONDS")
     # A server-side/data error is retried this many times, then the batch is

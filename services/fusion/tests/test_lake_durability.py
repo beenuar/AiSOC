@@ -260,7 +260,17 @@ async def test_a_batch_the_server_keeps_rejecting_is_quarantined_not_deleted(tmp
         def disconnect(self) -> None:
             return None
 
-    writer = _writer(tmp_path, _RejectingClickHouse(), batch_size=1, max_data_failures=2)
+    writer = _writer(
+        tmp_path,
+        _RejectingClickHouse(),
+        batch_size=1,
+        max_data_failures=2,
+        # Without this the reconnect backoff skips the second and third
+        # flushes, the failure counter never reaches its bound, and the test
+        # would pass for having proved nothing.
+        reconnect_base_seconds=0,
+        reconnect_max_seconds=0,
+    )
     await writer.start()
     for n in range(3):
         await writer.write_event(_event(f"ev-{n}"), topic="aisoc.raw_events", partition=0, offset=n)
@@ -272,6 +282,43 @@ async def test_a_batch_the_server_keeps_rejecting_is_quarantined_not_deleted(tmp
     assert quarantined, "a rejected batch must be readable again after the schema is fixed"
     recovered = [json.loads(line) for line in quarantined[0].read_text(encoding="utf-8").splitlines() if line.strip()]
     assert recovered and uuid.UUID(recovered[0]["event_id"])
+
+
+@pytest.mark.asyncio
+async def test_the_backlog_is_actually_reachable_from_the_metrics_route(tmp_path):
+    """A gap nobody can see is a gap nobody reported.
+
+    ``LakeWriter.metrics()`` existed and had no caller anywhere in the
+    service, so every one of these figures was computed on demand by a
+    method nothing demanded. The requirement is to *expose* backlog,
+    capacity pressure and quarantined rows, which means a route has to
+    return them.
+    """
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    from app.api import router as router_module
+    from app.workers.consumer import FusionWorker
+
+    writer = _writer(tmp_path, _DownClickHouse(), batch_size=50)
+    await writer.start()
+    for n in range(3):
+        await writer.write_event(_event(f"ev-{n}"), topic="aisoc.raw_events", partition=0, offset=n)
+
+    worker = FusionWorker(engine=SimpleNamespace(process=AsyncMock()), lake=writer)
+    router_module.set_worker(worker)
+    try:
+        body = await router_module.metrics()
+    finally:
+        router_module.set_worker(None)  # type: ignore[arg-type]
+
+    assert body["lake"]["spool_rows"] == 3
+    assert body["lake"]["spool_bytes"] > 0
+    assert body["lake"]["quarantined_rows"] == 0
+    assert body["lake"]["capacity_refusals"] == 0
+    assert body["lake"]["degraded"] is False
+    # No journal configured, so the honest answer is "unknown", not zero.
+    assert body["notifications"] == {"pending": None, "oldest_seconds": None}
 
 
 @pytest.mark.asyncio

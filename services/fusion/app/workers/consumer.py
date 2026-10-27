@@ -46,6 +46,10 @@ _METRICS = {
     "persist_failed": 0,
     "persist_retryable": 0,
     "laked": 0,
+    # Events archival could not make durable. Non-zero means the spool is
+    # full or unusable: with AISOC_LAKE_ARCHIVE_REQUIRED on these hold the
+    # Kafka offset, and with it off each one is a gap in the lake.
+    "lake_refused": 0,
     # Events recorded against a session (depth plan 2.4). Counted separately
     # from `laked` so a deployment can see that the session store is working
     # rather than inferring it from alerts that happen to carry an id.
@@ -209,6 +213,17 @@ class FusionWorker:
     @property
     def engine(self) -> FusionEngine:
         return self._engine
+
+    @property
+    def lake(self) -> LakeWriter | None:
+        """The archival writer, so its backlog can be reported.
+
+        Exposed because ``LakeWriter.metrics()`` had no caller anywhere in
+        the service: the archive backlog, the capacity pressure and the
+        quarantined rows were all computed on demand by a method nothing
+        demanded.
+        """
+        return self._lake
 
     @property
     def attached(self) -> bool:
@@ -777,8 +792,38 @@ class FusionWorker:
             # Phase A1 — archive EVERY normalized event into the ClickHouse lake
             # first, independent of the promotion decision below. A non-promoted
             # Medium event still has to be queryable via /lake/sql.
-            if self._lake is not None and await self._lake.write_event(payload, topic=resolved_topic, partition=partition, offset=offset):
-                _METRICS["laked"] += 1
+            #
+            # The return value is now load-bearing rather than a counter
+            # input. It used to mean "appended to a list", and this offset
+            # committed regardless — so archival rode entirely on an
+            # in-memory buffer that a kill erased. True now means the row is
+            # on the archival spool and survives this process; False means it
+            # is not recoverable, and committing the offset would be the
+            # silent archive loss the spool exists to prevent.
+            #
+            # Only the spool refusing an event holds the offset. A ClickHouse
+            # outage is absorbed by the spool and costs the alert path
+            # nothing, which is the distinction between "the archive is
+            # behind" and "the archive cannot accept anything".
+            if self._lake is not None:
+                if await self._lake.write_event(payload, topic=resolved_topic, partition=partition, offset=offset):
+                    _METRICS["laked"] += 1
+                else:
+                    _METRICS["lake_refused"] += 1
+                    if settings.lake_archive_required:
+                        raise RetryableProcessingError(
+                            "lake archival could not make this event durable; holding the offset rather than losing the archive"
+                        )
+                    logger.error(
+                        "fusion.lake_gap",
+                        topic=resolved_topic,
+                        partition=partition,
+                        offset=offset,
+                        detail=(
+                            "AISOC_LAKE_ARCHIVE_REQUIRED is off, so this event is not archived and the offset will commit; "
+                            "the lake has a gap at this offset"
+                        ),
+                    )
 
             # Depth 6.1 — the observed AI estate is built here rather than by
             # a separate worker reading the lake, for one reason: this is the
