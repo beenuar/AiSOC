@@ -57,9 +57,7 @@ async def connector_row(engine):  # noqa: ANN001, ANN201
     connector_id = uuid.uuid4()
     async with engine.begin() as conn:
         await conn.execute(
-            sqlalchemy.text(
-                "INSERT INTO tenants (id, name, slug) VALUES (:i, :n, :s) ON CONFLICT DO NOTHING"
-            ),
+            sqlalchemy.text("INSERT INTO tenants (id, name, slug) VALUES (:i, :n, :s) ON CONFLICT DO NOTHING"),
             {"i": tenant_id, "n": f"h-{tenant_id.hex[:8]}", "s": f"h-{tenant_id.hex[:8]}"},
         )
     yield {"tenant_id": tenant_id, "connector_id": connector_id}
@@ -98,9 +96,7 @@ async def _raw_config(engine, row: dict[str, Any]) -> Any:  # noqa: ANN001
 
     async with engine.begin() as conn:
         result = await conn.execute(
-            sqlalchemy.text(
-                "SELECT connector_config::text FROM connectors WHERE id = :i"
-            ),
+            sqlalchemy.text("SELECT connector_config::text FROM connectors WHERE id = :i"),
             {"i": row["connector_id"]},
         )
         return json.loads(result.scalar_one())
