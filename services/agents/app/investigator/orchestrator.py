@@ -203,13 +203,22 @@ def _apply_groundedness(state: InvestigatorState) -> None:
         case_id=state.case_id,
         groundedness=outcome.score,
         hallucinated=list(outcome.hallucinated[:10]),
+        unsupported_claims=outcome.demoted_for_claims,
     )
     forensic.confidence = outcome.confidence
-    caveat = (
-        f"Groundedness {outcome.score:.0%}: some indicators cited above do not appear in the "
-        f"evidence provided to the agent ({', '.join(outcome.hallucinated[:5])}). "
-        "Treat them as unverified."
-    )
+    if outcome.demoted_for_claims:
+        # Naming indicator grounding here would send a reader to compare the
+        # IPs in the analysis against the evidence and find them all present,
+        # because they are: this demotion is about the conclusion, not the
+        # indicators. A caveat that points at the wrong check is worse than
+        # none.
+        caveat = f"{outcome.reason} Treat the conclusion as unverified."
+    else:
+        caveat = (
+            f"Groundedness {outcome.score:.0%}: some indicators cited above do not appear in the "
+            f"evidence provided to the agent ({', '.join(outcome.hallucinated[:5])}). "
+            "Treat them as unverified."
+        )
     forensic.summary = f"{forensic.summary}\n\n{caveat}" if forensic.summary else caveat
 
 

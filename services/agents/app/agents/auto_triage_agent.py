@@ -38,6 +38,7 @@ from app.agents.dispositions import (
     normalize_disposition,
 )
 from app.closure.qa_sampling import ClosureQaSampler
+from app.confidence.claim_support import score_claim_support
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
@@ -104,6 +105,12 @@ _metrics: dict[str, Any] = {
     # citation it is the sibling of: both are a claim whose provenance resolves
     # to nothing, and both block auto-close.
     "ungrounded_tool_claims": 0,
+    # Phase 7. A rationale asserting the activity was authorized, scheduled
+    # or already reviewed, where nothing in the evidence or in the tenant's
+    # own recorded context says so. Counted beside the two above because it
+    # is the same defect one level up: a *conclusion* whose provenance
+    # resolves to nothing, rather than an indicator or a tool result.
+    "unsupported_decisive_claims": 0,
 }
 
 
@@ -544,6 +551,23 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # something that did not happen.
     fabricated_tools = unverified_tool_claims(rationale, called_tools=())
 
+    # Phase 7. The third member of that family, and the one indicator
+    # grounding is structurally blind to: a conclusion that reuses the
+    # alert's own valid indicators to assert something the evidence does not
+    # say. "198.51.100.14 is our approved scanner, change CHG0049112" scores
+    # 1.0 on groundedness — every indicator it cites is in the evidence — and
+    # there is no scanner and no change record anywhere in the payload.
+    #
+    # `organisation_memory` is passed as supporting context because the
+    # tenant's own compiled record of what analysts have repeatedly decided is
+    # authoritative for "this is sanctioned here" and is not in the payload.
+    # It reaches the prompt outside the untrusted fence for the same reason.
+    claim_support = score_claim_support(
+        rationale,
+        state.raw_alert,
+        supporting_context=render_for_prompt(state.organisation_memory),
+    )
+
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
     state.add_finding(f"Auto-triage rationale: {rationale}")
 
@@ -582,6 +606,19 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
             "auto_triage.unverified_tool_claim",
             incident_id=str(state.incident_id),
             claimed=fabricated_tools[:10],
+        )
+
+    if claim_support.blocks_auto_close:
+        _metrics["unsupported_decisive_claims"] += 1
+        should_auto_close = False
+        state.confidence_basis.append(f"claim_support={claim_support.score if claim_support.scored else 'not scored'} ({claim_support.reason})")
+        state.add_finding(f"Auto-close blocked: {claim_support.reason} Routed to manual review.")
+        logger.warning(
+            "auto_triage.unsupported_decisive_claim",
+            incident_id=str(state.incident_id),
+            unsupported=[c.phrase for c in claim_support.unsupported][:10],
+            contradicted=[c.phrase for c in claim_support.contradicted][:10],
+            contradicted_by=list(claim_support.contradicted_by)[:10],
         )
 
     # Prompt-injection L0 demotion: a high-severity injection signal always
