@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [20.2.0] - 2026-10-28
+
+### Security
+
+- `qs` moves to **6.17.0** via the repo-wide `pnpm.overrides` block
+  ([GHSA-6pq8-jhm2-2vcw](https://github.com/advisories/GHSA-6pq8-jhm2-2vcw),
+  medium: `qs.stringify` with `arrayFormat: 'comma'` throws an uncaught
+  TypeError on array elements carrying a non-callable own `toString`,
+  reachable as a DoS by anything serialising caller-influenced structures
+  into a query string). The override was chosen over per-package bumps
+  because `qs` is transitive and a per-dependency bump would leave the
+  other resolution paths behind. The only runtime `qs` in the lockfile is
+  now 6.17.0; the nearby `6.15.0` is `@types/qs`, a types package.
+- The two remaining Dependabot alerts — `deepmerge` prototype poisoning
+  (LOW, root and `apps/mobile` lockfiles) — are dismissed as tolerable
+  risk rather than fixed, because **no patched version exists**: the
+  latest published `deepmerge` (4.3.1) is inside the vulnerable range.
+  The dismissal records the evidence: the only dependents are dev/build
+  tooling (`jest-config`, `@svgr/plugin-svgo`, `@expo/config`) merging
+  repo-authored configuration, not untrusted input. To be re-checked
+  when upstream ships a release above 4.3.1.
+
 ### Fixed
 
 - The Jira connector pulls issues from `GET /rest/api/3/search/jql`. Jira
