@@ -95,7 +95,14 @@ async def _authorize_closure(pool, tenant_id: str, *, threshold: float = 0.50) -
     first, or releasing the switch leaves the alert refused for an unrelated
     reason and the test proves nothing about the switch at all.
     """
-    async with pool.acquire() as conn:
+    async with pool.acquire() as conn, conn.transaction():
+        # `aisoc_closure_policies` is FORCE ROW LEVEL SECURITY with
+        # `WITH CHECK (tenant_id = current_tenant_id())`, so a write needs a
+        # bound tenant. This suite otherwise runs unbound -- which is correct
+        # for the global kill-switch row and is why the three tests above
+        # need no binding. Bound transaction-locally so nothing leaks into
+        # the next test on a pooled connection.
+        await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", tenant_id)
         await conn.execute(
             """
             INSERT INTO aisoc_closure_policies
