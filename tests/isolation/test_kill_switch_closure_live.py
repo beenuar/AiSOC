@@ -86,6 +86,27 @@ async def _tenant(pool) -> str:
     return tenant_id
 
 
+async def _authorize_closure(pool, tenant_id: str, *, threshold: float = 0.50) -> None:
+    """Give the tenant an explicit closure policy.
+
+    Automatic closure is default-deny: a tenant with no row in
+    `aisoc_closure_policies` does not auto-close, whatever the kill switch
+    says. A test about the *switch* therefore has to authorize closure
+    first, or releasing the switch leaves the alert refused for an unrelated
+    reason and the test proves nothing about the switch at all.
+    """
+    async with pool.acquire() as conn:
+        await conn.execute(
+            """
+            INSERT INTO aisoc_closure_policies
+                (tenant_id, alert_class, enabled, threshold, require_grant)
+            VALUES ($1::uuid, NULL, TRUE, $2, FALSE)
+            """,
+            tenant_id,
+            threshold,
+        )
+
+
 async def _engage_globally(pool, reason: str) -> None:
     async with pool.acquire() as conn:
         await conn.execute(
@@ -149,6 +170,10 @@ class TestTheClosurePathObservesTheGlobalSwitch:
         from app.closure.policy import kill_switch_engaged, reset_cache, resolve_closure_policy
 
         tenant_id = await _tenant(pool)
+        # Closure is default-deny, so without an explicit policy the release
+        # below would be masked by the missing policy and this control could
+        # not tell "switch released" from "tenant never authorized closure".
+        await _authorize_closure(pool, tenant_id)
         await _engage_globally(pool, "platform-wide stop")
         reset_cache()
         assert (await kill_switch_engaged(pool, tenant_id))[0] is True
