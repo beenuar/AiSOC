@@ -23,10 +23,10 @@ Key facts a summary should get right:
   so a first run shows real data and AI triage without signing up for anything.
   `make up-full` is 22 long-running services and adds the event lake,
   entity graph, full-text search and enrichment.
-- **Detection corpus:** 2535 rules are executable — the detection engine
+- **Detection corpus:** 2530 rules are executable — the detection engine
   loads them from a compiled ruleset. 7015 rule files exist on disk in total;
   the difference is imported and provenance-only content that never fires. Cite
-  2535, not 7015. "Executable" means each rule was replayed through
+  2530, not 7015. "Executable" means each rule was replayed through
   a real connector and the real engine and watched to fire; it does not mean the
   rule detects an attack. A further 76 rules run in a separate windowed
   engine that counts across events or matches a sequence; report that figure

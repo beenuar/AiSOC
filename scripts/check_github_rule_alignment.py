@@ -273,7 +273,9 @@ def _load_inputs() -> tuple[list[tuple[str, dict[str, Any]]], dict[str, dict[str
 
 
 def _self_test() -> int:
-    specs, engine_rules, windowed_rules, retired = _load_inputs()
+    # The self-test proves the *checker* can fail, over a synthetic corpus it
+    # controls; the real tree's inputs are exercised by `--check`, which CI
+    # runs immediately before this.
 
     # A rule matching the unprefixed event_type — the exact defect shape of
     # issue #1545 — must be reported, through the real connector and engine.
