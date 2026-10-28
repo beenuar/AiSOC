@@ -233,6 +233,12 @@ def _rule_fields(match_when: dict) -> set[str]:
 #: breaks.
 _DERIVED_TIME_FIELDS = frozenset({"is_business_hours", "is_after_hours", "is_weekend"})
 
+#: The source-IP privacy boolean `derived_fields.ip_privacy_fields` computes
+#: from `src_ip` (issue #1545). Named exactly rather than pattern-matched for
+#: the same reason as the tenant set below: `ip_is_internal` is computed and
+#: a hypothetical `registry_is_internal` would not be.
+_DERIVED_IP_FIELDS = frozenset({"ip_is_internal"})
+
 #: Booleans the **tenant overlay** computes, from that tenant's own directory
 #: import (`identity_nodes.privilege_tier`). Depth plan 3.3.
 #:
@@ -308,6 +314,7 @@ def _is_derivable(field: str, namespace: set[str]) -> bool:
     """True when the engine can compute this field from what it already has."""
     if (
         field in _DERIVED_TIME_FIELDS
+        or field in _DERIVED_IP_FIELDS
         or field in _TENANT_DERIVED_FIELDS
         or field in _FIRST_SEEN_DERIVED_FIELDS
         or field in _BASELINE_DERIVED_FIELDS

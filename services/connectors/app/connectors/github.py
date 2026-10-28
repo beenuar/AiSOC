@@ -251,11 +251,17 @@ class GitHubConnector(BaseConnector):
         "org.update_member",  # role changes (member → owner is the canary)
         "org.transfer",
         # access tokens / SSH / SSO
-        "personal_access_token.create",
+        #
+        # Two strings this list used to carry name actions GitHub never
+        # emits (issue #1545): `deploy_key.create` — deploy keys do not have
+        # their own audit category, an add is logged as `public_key.create`
+        # (below) — and `personal_access_token.create` — the documented
+        # lifecycle is for fine-grained tokens, where the risk moment is
+        # `access_granted` (below). A severity list naming actions the
+        # vendor never emits is a claim nothing can test.
         "personal_access_token.access_granted",
         "oauth_authorization.create",
         "public_key.create",
-        "deploy_key.create",
         "two_factor_authentication.disabled",
         # branch protection bypass / deletion
         "protected_branch.destroy",

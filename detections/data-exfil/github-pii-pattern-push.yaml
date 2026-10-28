@@ -18,7 +18,11 @@ detection:
 false_positives:
 - Test fixtures (must be tagged)
 playbook: tpl-secret-leak
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): greps `diff_text` for secret patterns, and
+  no GitHub telemetry carries diff contents — the audit log''s git.push has no payload and webhooks name
+  files, not hunks. Content inspection is GitHub secret scanning''s job; surfacing its alerts is connector
+  work, not a rewrite of this rule.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

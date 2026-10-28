@@ -1,4 +1,4 @@
 {
-  "action": "disabled",
+  "action": "protected_branch.policy_override",
   "scopes": "prefix-chat:write.public-suffix"
 }

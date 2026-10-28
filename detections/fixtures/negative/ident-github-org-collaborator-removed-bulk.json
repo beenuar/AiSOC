@@ -1,4 +1,4 @@
 {
-  "action": "disabled",
+  "action": "protected_branch.policy_override",
   "events_per_minute": 120.0
 }

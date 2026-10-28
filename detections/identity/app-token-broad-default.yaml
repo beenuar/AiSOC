@@ -18,7 +18,10 @@ detection:
 false_positives:
 - GitHub Apps from approved-publisher list
 playbook: tpl-supply-chain
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): integration_installation.create entries carry
+  the app''s name but not its permission set, so `permission_administration` is never present. The installed
+  app''s permissions are exposed by GET /orgs/{org}/installations; surfacing that is connector work.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

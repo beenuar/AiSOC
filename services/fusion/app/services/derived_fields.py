@@ -29,6 +29,7 @@ detection that fires on ignorance.
 
 from __future__ import annotations
 
+import ipaddress
 import re
 from datetime import datetime
 from typing import Any
@@ -139,6 +140,48 @@ def time_of_day_fields(
     }
 
 
+#: Internal address space, by explicit list rather than `ipaddress.is_private`
+#: / `is_global`: those predicates have moved between Python minors (the
+#: documentation ranges flipped under the IANA special-registry alignment),
+#: and a security predicate must not answer differently under two interpreter
+#: builds of the same commit. RFC 1918, loopback and link-local plus their
+#: IPv6 equivalents are internal; everything else — including carrier-grade
+#: NAT and the documentation ranges — is not, so a runner registering from a
+#: CGN address reads as external, which is the alarm an operator wants.
+_INTERNAL_NETWORKS = tuple(
+    ipaddress.ip_network(net)
+    for net in (
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "127.0.0.0/8",
+        "169.254.0.0/16",
+        "fc00::/7",
+        "fe80::/10",
+        "::1/128",
+    )
+)
+
+
+def ip_privacy_fields(event: dict[str, Any], requested: set[str] | None = None) -> dict[str, bool]:
+    """Compute `ip_is_internal` from `src_ip`, when some rule asks for it.
+
+    Absent, not false, when the event carries no parseable source address —
+    an unknown origin is not an external one, and a rule gated on
+    `ip_is_internal: false` must not fire because we did not know.
+    """
+    if not requested or "ip_is_internal" not in requested:
+        return {}
+    raw = event.get("src_ip")
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        addr = ipaddress.ip_address(raw.strip())
+    except ValueError:
+        return {}
+    return {"ip_is_internal": any(addr in net for net in _INTERNAL_NETWORKS)}
+
+
 def enrich(
     event: dict[str, Any],
     requested: set[str] | None = None,
@@ -156,6 +199,7 @@ def enrich(
     derived: dict[str, Any] = {}
     derived.update(time_of_day_fields(event, business_start=business_start, business_end=business_end))
     derived.update(comparison_fields(event, requested))
+    derived.update(ip_privacy_fields(event, requested))
 
     if not derived:
         return event
@@ -181,7 +225,7 @@ def requested_derived_fields(rules: list[dict[str, Any]]) -> set[str]:
                     walk(value)
                     continue
                 field, _ = _split_op(key)
-                if _COMPARISON_RE.match(field) or field.startswith("is_"):
+                if _COMPARISON_RE.match(field) or field.startswith("is_") or field == "ip_is_internal":
                     names.add(field)
         elif isinstance(clause, list):
             for item in clause:

@@ -1,5 +1,5 @@
 {
-  "count": 765,
+  "count": 760,
   "rules": [
     {
       "category": "application",
@@ -290,30 +290,10 @@
     },
     {
       "category": "application",
-      "id": "det-application-016",
-      "match_when": {
-        "action": "git.push",
-        "actor_role_not_in": [
-          "admin",
-          "release"
-        ],
-        "ref_in_protected_branches": true
-      },
-      "mitre": [
-        "T1195.002"
-      ],
-      "name": "Push to Protected Branch by Non-Admin",
-      "product": "github",
-      "service": "audit",
-      "severity": "high",
-      "slug": "github-protected-branch-bypass"
-    },
-    {
-      "category": "application",
       "id": "det-application-017",
       "match_when": {
-        "action": "repo.visibility_change",
-        "visibility": "public"
+        "action": "repo.access",
+        "public_repo": true
       },
       "mitre": [
         "T1530"
@@ -773,26 +753,12 @@
     },
     {
       "category": "application",
-      "id": "det-application-046",
-      "match_when": {
-        "approver_role_neq": "codeowner",
-        "event_type": "push",
-        "path_contains": ".github/workflows/"
-      },
-      "mitre": [
-        "T1199"
-      ],
-      "name": "CI Workflow Modified By Account Without CODEOWNER Approval",
-      "product": "github",
-      "service": "repo",
-      "severity": "high",
-      "slug": "app-ci-workflow-modified-by-non-owner"
-    },
-    {
-      "category": "application",
       "id": "det-application-047",
       "match_when": {
-        "event_type": "runner_register",
+        "action_in": [
+          "org.register_self_hosted_runner",
+          "repo.register_self_hosted_runner"
+        ],
         "ip_is_internal": false
       },
       "mitre": [
@@ -876,7 +842,8 @@
       "category": "application",
       "id": "det-application-052",
       "match_when": {
-        "event_type": "deploy_key.create"
+        "action": "public_key.create",
+        "repo_contains": "/"
       },
       "mitre": [
         "T1098.004"
@@ -924,7 +891,7 @@
       "category": "application",
       "id": "det-application-057",
       "match_when": {
-        "event_type_in": [
+        "action_in": [
           "protected_branch.policy_override",
           "protected_branch.destroy"
         ]
@@ -4340,26 +4307,6 @@
       "service": "http",
       "severity": "medium",
       "slug": "off-hours-bulk-download"
-    },
-    {
-      "category": "data-exfil",
-      "id": "det-data-exfil-010",
-      "match_when": {
-        "action": "git.push",
-        "diff_text_pattern_match_any": [
-          "AKIA[0-9A-Z]{16}",
-          "ghp_[A-Za-z0-9]{36}",
-          "[A-Z0-9._%+-]+@[A-Z0-9.-]+ pii=true"
-        ]
-      },
-      "mitre": [
-        "T1552.001"
-      ],
-      "name": "Git Push Containing PII or Secret Pattern",
-      "product": "github",
-      "service": "audit",
-      "severity": "high",
-      "slug": "github-pii-pattern-push"
     },
     {
       "category": "data-exfil",
@@ -10290,22 +10237,6 @@
     },
     {
       "category": "identity",
-      "id": "det-identity-024",
-      "match_when": {
-        "action": "integration_installation.create",
-        "permission_administration": "write"
-      },
-      "mitre": [
-        "T1098.001"
-      ],
-      "name": "GitHub App Installed with Repo Admin Permission",
-      "product": "github",
-      "service": "audit",
-      "severity": "high",
-      "slug": "app-token-broad-default"
-    },
-    {
-      "category": "identity",
       "id": "det-identity-025",
       "match_when": {
         "device_fingerprint_seen_before": false,
@@ -12086,26 +12017,6 @@
       "service": "audit",
       "severity": "critical",
       "slug": "ident-github-org-2fa-disabled"
-    },
-    {
-      "category": "identity",
-      "id": "det-identity-154",
-      "match_when": {
-        "action": "personal_access_token.create",
-        "scopes_contains_all": [
-          "repo",
-          "workflow",
-          "admin:org"
-        ]
-      },
-      "mitre": [
-        "T1098.001"
-      ],
-      "name": "GitHub Classic PAT Created With repo+workflow+admin:org",
-      "product": "github",
-      "service": "audit",
-      "severity": "high",
-      "slug": "ident-github-pat-classic-created-with-broad-scopes"
     },
     {
       "category": "identity",

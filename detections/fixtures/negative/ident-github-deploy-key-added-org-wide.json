@@ -1,4 +1,4 @@
 {
-  "action": "disabled",
+  "action": "protected_branch.policy_override",
   "distinct_repos_per_actor_per_hour": 110.0
 }

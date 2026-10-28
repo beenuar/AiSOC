@@ -19,7 +19,11 @@ detection:
 false_positives:
 - Bootstrap of new repository
 playbook: tpl-supply-chain
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): matches pushes that modify .github/workflows/
+  without CODEOWNER approval, but the audit log''s git.push entries carry no file paths and no review
+  role — `path` and `approver_role` exist in no GitHub telemetry this connector pulls. The push webhook''s
+  per-commit file list could carry the paths; surfacing it is connector work.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

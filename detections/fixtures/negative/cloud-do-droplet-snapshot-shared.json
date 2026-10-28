@@ -1,4 +1,4 @@
 {
-  "action": "disabled",
+  "action": "protected_branch.policy_override",
   "destination_account_external": true
 }

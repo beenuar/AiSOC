@@ -1169,12 +1169,28 @@ APPLICATION: list[dict] = [
         "severity": "critical",
         "mitre": ["t1530"],
         "log_source": {"product": "github", "service": "audit"},
-        "fields": {"action", "visibility"},
-        "match_when": {"action": "repo.visibility_change", "visibility": "public"},
+        # `repo.visibility_change` is not in GitHub's audit vocabulary: a
+        # visibility change is logged as `repo.access`, and the entry carries
+        # `public_repo` (the new state) plus `previous_visibility` — not a
+        # `visibility` string (issue #1545).
+        "fields": {"action", "public_repo"},
+        "match_when": {"action": "repo.access", "public_repo": True},
         "fp": ["OSS publication (must reference release ticket)"],
         "playbook": "tpl-data-exposure",
-        "positive": {"action": "repo.visibility_change", "visibility": "public", "repo": "internal-tooling", "actor": "user@corp.com"},
-        "negative": {"action": "repo.visibility_change", "visibility": "private", "repo": "internal-tooling", "actor": "user@corp.com"},
+        "positive": {
+            "action": "repo.access",
+            "public_repo": True,
+            "previous_visibility": "private",
+            "repo": "example-org/internal-tooling",
+            "actor": "user@corp.com",
+        },
+        "negative": {
+            "action": "repo.access",
+            "public_repo": False,
+            "previous_visibility": "public",
+            "repo": "example-org/internal-tooling",
+            "actor": "user@corp.com",
+        },
     },
     {
         "slug": "container-image-pulled-untrusted-registry",

@@ -18,7 +18,11 @@ detection:
 false_positives:
 - CI bootstrap (must be ticketed)
 playbook: tpl-persistence
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-external-source): classic-PAT creation never reaches the org
+  audit log — the documented personal_access_token.* lifecycle covers fine-grained tokens — and no audit
+  entry carries a created token''s scopes: the common `token_scopes` field describes the token that authenticated
+  the API call, not the token being created.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

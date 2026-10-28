@@ -166,4 +166,49 @@ DECISIONS: dict[str, Refusal] = {
         "`LogonType` (2, 10 and 11 are interactive) and no source lifts that field, "
         "so the boolean has nothing to derive from.",
     ),
+    # ── GitHub rules whose evidence the audit log does not carry (#1545) ─
+    #
+    # Issue #1545 measured ten of twelve GitHub rules unable to fire on real
+    # connector output. Five were re-claused onto what GitHub actually emits;
+    # these five want evidence the org audit log does not contain, and a
+    # plausible substitute would be a different detection wearing the same
+    # name. Each reason names where the evidence actually lives.
+    "application/app-ci-workflow-modified-by-non-owner": Refusal(
+        NEEDS_CONNECTOR_FIELD,
+        "matches pushes that modify .github/workflows/ without CODEOWNER approval, "
+        "but the audit log's git.push entries carry no file paths and no review "
+        "role — `path` and `approver_role` exist in no GitHub telemetry this "
+        "connector pulls. The push webhook's per-commit file list could carry the "
+        "paths; surfacing it is connector work.",
+    ),
+    "application/github-protected-branch-bypass": Refusal(
+        NEEDS_CONNECTOR_FIELD,
+        "wants `ref_in_protected_branches` and `actor_role` on a git.push, and the "
+        "audit entry carries neither a ref nor the actor's org role. The observable "
+        "form of a protection bypass in this telemetry is "
+        "`protected_branch.policy_override`, which app-protected-branch-disabled "
+        "already matches.",
+    ),
+    "data-exfil/github-pii-pattern-push": Refusal(
+        NEEDS_EXTERNAL_SOURCE,
+        "greps `diff_text` for secret patterns, and no GitHub telemetry carries "
+        "diff contents — the audit log's git.push has no payload and webhooks name "
+        "files, not hunks. Content inspection is GitHub secret scanning's job; "
+        "surfacing its alerts is connector work, not a rewrite of this rule.",
+    ),
+    "identity/ident-github-pat-classic-created-with-broad-scopes": Refusal(
+        NEEDS_EXTERNAL_SOURCE,
+        "classic-PAT creation never reaches the org audit log — the documented "
+        "personal_access_token.* lifecycle covers fine-grained tokens — and no "
+        "audit entry carries a created token's scopes: the common `token_scopes` "
+        "field describes the token that authenticated the API call, not the token "
+        "being created.",
+    ),
+    "identity/app-token-broad-default": Refusal(
+        NEEDS_CONNECTOR_FIELD,
+        "integration_installation.create entries carry the app's name but not its "
+        "permission set, so `permission_administration` is never present. The "
+        "installed app's permissions are exposed by GET /orgs/{org}/installations; "
+        "surfacing that is connector work.",
+    ),
 }

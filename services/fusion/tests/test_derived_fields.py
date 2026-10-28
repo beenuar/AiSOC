@@ -20,6 +20,7 @@ import pytest
 from app.services.derived_fields import (
     comparison_fields,
     enrich,
+    ip_privacy_fields,
     requested_derived_fields,
     time_of_day_fields,
 )
@@ -137,6 +138,38 @@ class TestTimeOfDay:
         assert time_of_day_fields(event, business_start=9, business_end=23)["is_business_hours"] is True
 
 
+class TestIpPrivacy:
+    """`ip_is_internal`, derived from `src_ip` (issue #1545).
+
+    The ranges are an explicit list rather than `ipaddress.is_private`,
+    because that predicate has moved between Python minors and a security
+    predicate must not answer differently under two interpreter builds of
+    the same commit.
+    """
+
+    @pytest.mark.parametrize("ip", ["10.20.30.40", "172.16.9.1", "192.168.1.5", "127.0.0.1", "169.254.1.1", "fe80::1", "fc00::1", "::1"])
+    def test_private_loopback_and_link_local_are_internal(self, ip: str) -> None:
+        assert ip_privacy_fields({"src_ip": ip}, {"ip_is_internal"}) == {"ip_is_internal": True}
+
+    @pytest.mark.parametrize("ip", ["203.0.113.9", "198.51.100.7", "100.64.0.1", "2001:db8::1"])
+    def test_everything_else_is_external_including_cgn_and_documentation_ranges(self, ip: str) -> None:
+        """A runner registering from carrier-grade NAT reads as external,
+        which is the alarm an operator wants."""
+        assert ip_privacy_fields({"src_ip": ip}, {"ip_is_internal"}) == {"ip_is_internal": False}
+
+    def test_a_missing_address_yields_no_key_rather_than_false(self) -> None:
+        """An unknown origin is not an external one: a rule gated on
+        `ip_is_internal: false` must not fire because we did not know."""
+        assert ip_privacy_fields({"actor": "alice"}, {"ip_is_internal"}) == {}
+
+    def test_an_unparseable_address_yields_no_key(self) -> None:
+        assert ip_privacy_fields({"src_ip": "not-an-ip"}, {"ip_is_internal"}) == {}
+
+    def test_not_computed_unless_some_rule_asks(self) -> None:
+        assert ip_privacy_fields({"src_ip": "10.0.0.1"}, set()) == {}
+        assert ip_privacy_fields({"src_ip": "10.0.0.1"}, {"actor_eq_target"}) == {}
+
+
 class TestEnrich:
     def test_a_vendor_value_is_never_overwritten(self) -> None:
         """A vendor's own answer about its own tenant's hours beats ours."""
@@ -166,6 +199,10 @@ class TestRequestedFields:
             {"match_when": {"is_business_hours": False}},
         ]
         assert requested_derived_fields(rules) == {"actor_eq_target", "is_business_hours"}
+
+    def test_collects_the_ip_privacy_field(self) -> None:
+        rules = [{"match_when": {"action": "org.register_self_hosted_runner", "ip_is_internal": False}}]
+        assert requested_derived_fields(rules) == {"ip_is_internal"}
 
     def test_walks_nested_clauses(self) -> None:
         rules = [{"match_when": {"any_of": [{"actor_eq_target": True}, {"x": 1}]}}]

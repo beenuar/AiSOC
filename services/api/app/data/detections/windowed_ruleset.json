@@ -1050,11 +1050,11 @@
     },
     {
       "category": "identity",
-      "distinct_by": "repository",
+      "distinct_by": "repo",
       "group_by": "actor",
       "id": "wd-ident-github-deploy-key-added-org-wide",
       "match_when": {
-        "action": "deploy_key.add"
+        "action": "public_key.create"
       },
       "mitre": [
         "T1098.001"

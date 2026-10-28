@@ -1,6 +1,7 @@
 {
-  "action": "repo.visibility_change",
+  "action": "repo.access",
   "actor": "user@corp.com",
-  "repo": "internal-tooling",
-  "visibility": "private"
+  "previous_visibility": "public",
+  "public_repo": false,
+  "repo": "example-org/internal-tooling"
 }

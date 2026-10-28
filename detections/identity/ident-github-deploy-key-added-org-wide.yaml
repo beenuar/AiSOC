@@ -13,7 +13,7 @@ log_source:
   service: audit
 detection:
   condition: |
-    action == "deploy_key.add"
+    action == "public_key.create"
     AND distinct_repos_per_actor_per_hour > 10
 false_positives:
 - Sanctioned automation/IaC pipeline

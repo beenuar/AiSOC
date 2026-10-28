@@ -1,3 +1,3 @@
 {
-  "event_type": "protected_branch.policy_override"
+  "action": "protected_branch.policy_override"
 }

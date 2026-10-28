@@ -1,3 +1,5 @@
 {
-  "event_type": "deploy_key.create"
+  "action": "public_key.create",
+  "actor": "user@corp.com",
+  "repo": "example-org/payments-core"
 }

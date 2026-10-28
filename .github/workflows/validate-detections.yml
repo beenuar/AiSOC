@@ -157,6 +157,19 @@ jobs:
       - name: Prove the fireability gate is not vacuous
         run: python3 scripts/compile_sigma_ruleset.py --prove-gate
 
+      # Issue #1545: ten of twelve GitHub rules could not fire on what the
+      # GitHub connector actually emits — unprefixed event_type values, audit
+      # actions that do not exist in GitHub's vocabulary, fields no GitHub
+      # telemetry carries. Fixture replay cannot catch the class (fixtures
+      # are synthesized from the rule), so this replays real-shaped audit
+      # entries through the real connector and the real engine, the same way
+      # the Sigma fireability proof does.
+      - name: Verify GitHub rules fire on real connector output
+        run: python3 scripts/check_github_rule_alignment.py --check
+
+      - name: Prove the GitHub-alignment gate is not vacuous
+        run: python3 scripts/check_github_rule_alignment.py --self-test
+
       - name: Count rules by severity
         if: always()
         run: |

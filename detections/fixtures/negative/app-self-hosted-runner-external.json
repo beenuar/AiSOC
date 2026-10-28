@@ -1,4 +1,5 @@
 {
-  "event_type": "http_request",
-  "ip_is_internal": false
+  "action": "org.register_self_hosted_runner",
+  "actor": "proof-actor",
+  "src_ip": "10.20.30.40"
 }

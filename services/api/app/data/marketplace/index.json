@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-12T04:44:25Z",
+  "generated": "2026-10-28T19:50:45Z",
   "categories": [
     {
       "id": "playbooks",
@@ -38,10 +38,10 @@
       "imported": 6113,
       "stable": 901
     },
-    "executable": 2703,
-    "quarantined": 4480,
-    "executable_detections": 2535,
-    "reference_only_detections": 4480,
+    "executable": 2698,
+    "quarantined": 4485,
+    "executable_detections": 2530,
+    "reference_only_detections": 4485,
     "not_a_detection": 168
   },
   "mitre_coverage": {
@@ -159,7 +159,7 @@
       "T1091": 1,
       "T1095": 4,
       "T1098": 48,
-      "T1098.001": 21,
+      "T1098.001": 19,
       "T1098.003": 8,
       "T1098.004": 6,
       "T1098.005": 1,
@@ -211,9 +211,9 @@
       "T1190": 39,
       "T1195": 3,
       "T1195.001": 2,
-      "T1195.002": 7,
+      "T1195.002": 6,
       "T1197": 13,
-      "T1199": 12,
+      "T1199": 11,
       "T1200": 3,
       "T1201": 3,
       "T1202": 26,
@@ -319,7 +319,7 @@
       "T1550.003": 3,
       "T1550.004": 1,
       "T1552": 3,
-      "T1552.001": 17,
+      "T1552.001": 16,
       "T1552.002": 3,
       "T1552.004": 7,
       "T1552.005": 1,
@@ -439,7 +439,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2405,
+    "total_with_mitre": 2400,
     "unique_techniques_all_rules": 494,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -31020,10 +31020,11 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
-      "executable": true,
+      "enabled": false,
+      "executable": false,
       "path": "detections/application/github-protected-branch-bypass.yaml",
-      "sha256": "408d302476035003e40f95c04c61d77e4ed4136848a38f6e6e5bf4407a28ec06"
+      "quarantine_reason": "not executable (needs-connector-field): wants `ref_in_protected_branches` and `actor_role` on a git.push, and the audit entry carries neither a ref nor the actor's org role. The observable form of a protection bypass in this telemetry is `protected_branch.policy_override`, which app-protected-branch-disabled already matches.",
+      "sha256": "e01150cf5d5fc13af7fe4092f7956d7589061b7b89721797946e1af10753cabd"
     },
     {
       "id": "det-application-017",
@@ -31048,7 +31049,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/application/github-public-repo-flip.yaml",
-      "sha256": "a84b1745a96ff19c92c44021c914e4f6fcdf51dd0e26ed43235fb65a5a227566"
+      "sha256": "301ff06edbbf04aeb7ece2e2dccdd2596b2d8d3a89bf294eff3e9891787acf33"
     },
     {
       "id": "det-application-018",
@@ -31774,10 +31775,11 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
-      "executable": true,
+      "enabled": false,
+      "executable": false,
       "path": "detections/application/app-ci-workflow-modified-by-non-owner.yaml",
-      "sha256": "cbdd8b151fb99ccdede43f2f4e91b16bfd8f7d5a9a458a787dfe1d0b2d427489"
+      "quarantine_reason": "not executable (needs-connector-field): matches pushes that modify .github/workflows/ without CODEOWNER approval, but the audit log's git.push entries carry no file paths and no review role \u2014 `path` and `approver_role` exist in no GitHub telemetry this connector pulls. The push webhook's per-commit file list could carry the paths; surfacing it is connector work.",
+      "sha256": "24368520c3844f542e60e7af76035978ea893a4c415b04d1a3871bdbb62694a0"
     },
     {
       "id": "det-application-047",
@@ -31802,7 +31804,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/application/app-self-hosted-runner-external.yaml",
-      "sha256": "826b9b5d236411e0dc567ac2341bc6c58aa6ce74b4fd5ebbddb574ca919d6f14"
+      "sha256": "34f18e7c0f5c90ba516ae13137ddf9e1ef6fc0ed00e539d9ed96863a11093432"
     },
     {
       "id": "det-application-048",
@@ -31927,7 +31929,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/application/app-deploy-key-added-github.yaml",
-      "sha256": "9ee43d16d2cc1f4b7b35f13e49e1f726097dc7fcdd0167441416fa70f9d2bc50"
+      "sha256": "1b8442952eee7ef1b38bea033db18ac15c2fd960cf7a39075b07e7844bb2338a"
     },
     {
       "id": "det-application-053",
@@ -32054,7 +32056,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/application/app-protected-branch-disabled.yaml",
-      "sha256": "f74a64858a2962bcbac0134f1a5c3b1aa38913f7639dc0fcc63595e70083e303"
+      "sha256": "b63813e952ba0970198ae425d078deda160beccffedfa765f1a6d9707f602f8a"
     },
     {
       "id": "det-application-058",
@@ -38774,10 +38776,11 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
-      "executable": true,
+      "enabled": false,
+      "executable": false,
       "path": "detections/data-exfil/github-pii-pattern-push.yaml",
-      "sha256": "99d74ffff6ec73dcbcff94ea9363abc2877d92ce0f27e211e265a94d79b5a266"
+      "quarantine_reason": "not executable (needs-external-source): greps `diff_text` for secret patterns, and no GitHub telemetry carries diff contents \u2014 the audit log's git.push has no payload and webhooks name files, not hunks. Content inspection is GitHub secret scanning's job; surfacing its alerts is connector work, not a rewrite of this rule.",
+      "sha256": "9ec45286627557b194b6a1ad1f82877cf959b727fd185997258993c21aa53909"
     },
     {
       "id": "det-data-exfil-011",
@@ -47276,10 +47279,11 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
-      "executable": true,
+      "enabled": false,
+      "executable": false,
       "path": "detections/identity/app-token-broad-default.yaml",
-      "sha256": "e3839bca699a59da546ccafd93cbaaf1cdc7b360331ba986e87f449179c13209"
+      "quarantine_reason": "not executable (needs-connector-field): integration_installation.create entries carry the app's name but not its permission set, so `permission_administration` is never present. The installed app's permissions are exposed by GET /orgs/{org}/installations; surfacing that is connector work.",
+      "sha256": "8bf57a9cc950b80d33dce074e9acb9daaa7c9a1b46a0781211c5cdaa9980bb20"
     },
     {
       "id": "det-identity-025",
@@ -50550,10 +50554,11 @@
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": true,
-      "executable": true,
+      "enabled": false,
+      "executable": false,
       "path": "detections/identity/ident-github-pat-classic-created-with-broad-scopes.yaml",
-      "sha256": "f2799fdd6d0cba81929a38a331dbf194124f9c5bf772414a286d759e4d3fb6cd"
+      "quarantine_reason": "not executable (needs-external-source): classic-PAT creation never reaches the org audit log \u2014 the documented personal_access_token.* lifecycle covers fine-grained tokens \u2014 and no audit entry carries a created token's scopes: the common `token_scopes` field describes the token that authenticated the API call, not the token being created.",
+      "sha256": "3857957fad4cd0871d68735956badce1c5d0d27abdf05c16dcee134dd2f3def1"
     },
     {
       "id": "det-identity-155",
@@ -50605,7 +50610,7 @@
       "executable": false,
       "path": "detections/identity/ident-github-deploy-key-added-org-wide.yaml",
       "quarantine_reason": "superseded by the windowed rule wd-ident-github-deploy-key-added-org-wide; this stateless form named a counter no source emits",
-      "sha256": "77f95373794530900f68dcf340bbf424c147c44bfc9baea79fb08f8c066bc851"
+      "sha256": "c35989d8944dcda686869c3e3d88af85ffa2e294ee188fb01a0fd4b176e9c338"
     },
     {
       "id": "det-identity-157",

@@ -333,7 +333,11 @@ DECISIONS: dict[str, Translation | Refusal | Covered] = {
     "identity/ident-ping-admin-role-burst": Translation(group_by="actor"),
     "identity/ident-oidc-many-clients-from-single-actor": Translation(group_by="actor"),
     "identity/ident-github-org-collaborator-removed-bulk": Translation(group_by="actor"),
-    "identity/ident-github-deploy-key-added-org-wide": Translation(group_by="actor", distinct_by="repository"),
+    # `repo` is the key the audit-log entry actually carries (the connector's
+    # own tests and GitHub's REST reference use it); `repository` was a
+    # guessed name, and a distinct-by over a missing field never counts
+    # (issue #1545).
+    "identity/ident-github-deploy-key-added-org-wide": Translation(group_by="actor", distinct_by="repo"),
     # -------------------------------------------------------------------- network
     "network/c2-beacon-high-frequency": Refusal(
         AGGREGATE,

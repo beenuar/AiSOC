@@ -13,8 +13,8 @@ log_source:
   service: audit
 detection:
   condition: |
-    action == "repo.visibility_change"
-    AND visibility == "public"
+    action == "repo.access"
+    AND public_repo == true
 false_positives:
 - OSS publication (must reference release ticket)
 playbook: tpl-data-exposure

@@ -1,31 +1,31 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-09T04:33:12Z",
+  "generated": "2026-10-28T19:42:22Z",
   "stats": {
-    "considered": 2511,
-    "eligible": 2500,
-    "selected": 489,
+    "considered": 2506,
+    "eligible": 2495,
+    "selected": 485,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
-    "unique_techniques": 137,
+    "unique_techniques": 138,
     "selected_by_tier": {
       "imported": 163,
-      "native": 326
+      "native": 322
     },
     "selected_by_severity": {
       "critical": 99,
-      "high": 264,
+      "high": 260,
       "low": 16,
       "medium": 110
     },
     "selected_by_category": {
-      "application": 29,
+      "application": 27,
       "cloud": 152,
-      "data-exfil": 13,
+      "data-exfil": 12,
       "endpoint": 219,
-      "identity": 67,
+      "identity": 66,
       "network": 9
     }
   },
@@ -287,7 +287,7 @@
     },
     "exfil": {
       "label": "Data Exfiltration",
-      "count": 44,
+      "count": 43,
       "rule_ids": [
         "det-application-081",
         "det-cloud-058",
@@ -300,7 +300,6 @@
         "det-data-exfil-005",
         "det-data-exfil-007",
         "det-data-exfil-009",
-        "det-data-exfil-010",
         "det-data-exfil-011",
         "det-data-exfil-012",
         "det-data-exfil-014",
@@ -528,7 +527,7 @@
         "det-identity-021",
         "det-identity-022",
         "det-identity-023",
-        "det-identity-024",
+        "det-identity-025",
         "det-identity-027",
         "det-identity-031",
         "det-identity-034",
@@ -555,14 +554,12 @@
     },
     "supply-chain": {
       "label": "Supply Chain",
-      "count": 40,
+      "count": 35,
       "rule_ids": [
         "det-application-006",
         "det-application-014",
-        "det-application-016",
         "det-application-017",
         "det-application-023",
-        "det-application-046",
         "det-application-047",
         "det-application-048",
         "det-application-049",
@@ -576,15 +573,12 @@
         "det-cloud-049",
         "det-cloud-071",
         "det-cloud-143",
-        "det-data-exfil-010",
         "det-endpoint-024",
         "det-endpoint-190",
         "det-endpoint-280",
-        "det-identity-024",
         "det-identity-040",
         "det-identity-114",
         "det-identity-153",
-        "det-identity-154",
         "sigmahq-sigma-0ee4d8a5-4e67-4faf-acfa-62a78457d1f2",
         "sigmahq-sigma-1f0489be-b496-4ddf-b3a9-5900f2044e9c",
         "sigmahq-sigma-401e5d00-b944-11ea-8f9a-00163ecd60ae",
@@ -724,7 +718,7 @@
     "T1090": 2,
     "T1090.002": 1,
     "T1098": 17,
-    "T1098.001": 12,
+    "T1098.001": 10,
     "T1098.003": 5,
     "T1098.004": 4,
     "T1098.007": 1,
@@ -745,8 +739,8 @@
     "T1190": 11,
     "T1195": 1,
     "T1195.001": 1,
-    "T1195.002": 6,
-    "T1199": 11,
+    "T1195.002": 5,
+    "T1199": 10,
     "T1201": 1,
     "T1203": 1,
     "T1204.002": 1,
@@ -778,8 +772,9 @@
     "T1550": 5,
     "T1550.001": 1,
     "T1550.003": 2,
+    "T1550.004": 1,
     "T1552": 3,
-    "T1552.001": 7,
+    "T1552.001": 6,
     "T1552.004": 1,
     "T1552.007": 1,
     "T1553.002": 1,
@@ -921,31 +916,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-application-016",
-      "name": "Push to Protected Branch by Non-Admin",
-      "path": "detections/application/github-protected-branch-bypass.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1195.002"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "supply-chain"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "github",
-      "has_executable_body": true
-    },
-    {
       "id": "det-application-017",
       "name": "Internal Repository Made Public",
       "path": "detections/application/github-public-repo-flip.yaml",
@@ -1020,31 +990,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "gitlab",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-application-046",
-      "name": "CI Workflow Modified By Account Without CODEOWNER Approval",
-      "path": "detections/application/app-ci-workflow-modified-by-non-owner.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "application",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1199"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "supply-chain"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "github",
       "has_executable_body": true
     },
     {
@@ -5181,32 +5126,6 @@
       "has_executable_body": true
     },
     {
-      "id": "det-data-exfil-010",
-      "name": "Git Push Containing PII or Secret Pattern",
-      "path": "detections/data-exfil/github-pii-pattern-push.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "data-exfil",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1552.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "exfil",
-        "supply-chain"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "github",
-      "has_executable_body": true
-    },
-    {
       "id": "det-data-exfil-011",
       "name": "Outbound Paste to Public Pastebin / Gist",
       "path": "detections/data-exfil/outbound-paste-public.yaml",
@@ -7613,21 +7532,20 @@
       "has_executable_body": true
     },
     {
-      "id": "det-identity-024",
-      "name": "GitHub App Installed with Repo Admin Permission",
-      "path": "detections/identity/app-token-broad-default.yaml",
+      "id": "det-identity-025",
+      "name": "Persistent Session Token Reused from New Device Fingerprint",
+      "path": "detections/identity/token-reuse-new-device.yaml",
       "tier": "native",
       "source": "core",
       "category": "identity",
       "severity": "high",
       "mitre_techniques": [
-        "T1098.001"
+        "T1550.004"
       ],
       "mitre_tactics": [],
       "families": [
         "cloud",
-        "identity",
-        "supply-chain"
+        "identity"
       ],
       "quality_score": 0.977,
       "quality_notes": [
@@ -7636,7 +7554,7 @@
         "severity:high(+0.128)",
         "executable(+0.15)"
       ],
-      "log_source_product": "github",
+      "log_source_product": "okta",
       "has_executable_body": true
     },
     {
@@ -8850,33 +8768,6 @@
         "tier:native(+0.5)",
         "mitre_techniques:1(+0.2)",
         "severity:critical(+0.150)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "github",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-154",
-      "name": "GitHub Classic PAT Created With repo+workflow+admin:org",
-      "path": "detections/identity/ident-github-pat-classic-created-with-broad-scopes.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity",
-        "supply-chain"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
         "executable(+0.15)"
       ],
       "log_source_product": "github",

@@ -96,6 +96,10 @@ COUNT_BEARING_FILES: tuple[tuple[Path, str, tuple[re.Pattern[str], ...]], ...] =
         REPO_ROOT / "README.md",
         "executable",
         (
+            # The "What AiSOC does" opening paragraph. Unregistered until
+            # issue #1545, which is exactly how it sat one correction behind
+            # the two registered sites below in the same file.
+            re.compile(r"(?P<pre>runs the )(?P<n>\d+)(?P<post> executable rules of)"),
             re.compile(r"(?P<pre>fusion runs )(?P<n>\d+)(?P<post> executable detection rules)"),
             re.compile(r"(?P<pre>\| Detection engine \()(?P<n>\d+)(?P<post> executable rules\))"),
         ),

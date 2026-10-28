@@ -1,3 +1,4 @@
 {
-  "event_type": "http_request"
+  "action": "public_key.create",
+  "actor": "user@corp.com"
 }

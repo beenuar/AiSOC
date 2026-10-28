@@ -214,9 +214,22 @@ DEVOPS_RULES: list[dict] = [
         mitre=["t1199"],
         product="github",
         service="actions",
-        when={"event_type": "runner_register", "ip_is_internal": False},
+        # `runner_register` is not in GitHub's vocabulary; registrations are
+        # `org.register_self_hosted_runner` / `repo.register_self_hosted_runner`.
+        # `ip_is_internal` is derived by the engine from `src_ip` (which the
+        # connector maps from the audit entry's `actor_ip`); when the org
+        # does not disclose IPs the field is absent and the rule stays
+        # silent — unknown is not external (issue #1545).
+        when={
+            "action_in": ["org.register_self_hosted_runner", "repo.register_self_hosted_runner"],
+            "ip_is_internal": False,
+        },
         fp=["Approved partner-hosted runner"],
         playbook="tpl-supply-chain",
+        # Explicit fixtures carry the source IP rather than the derived
+        # boolean, so fixture replay exercises the derivation itself.
+        positive={"action": "org.register_self_hosted_runner", "src_ip": "203.0.113.9", "actor": "proof-actor"},
+        negative={"action": "org.register_self_hosted_runner", "src_ip": "10.20.30.40", "actor": "proof-actor"},
     ),
     S(
         slug="app-build-signing-key-rotated",
@@ -269,9 +282,23 @@ DEVOPS_RULES: list[dict] = [
         mitre=["t1098.004"],
         product="github",
         service="repo",
-        when={"event_type": "deploy_key.create"},
+        # GitHub's audit log has no deploy_key.* category: a deploy-key add
+        # is logged as `public_key.create` ("An SSH key was added to a user
+        # account or a deploy key was added to a repository"). The repo slug
+        # is what marks the deploy-key case — a user SSH-key add carries no
+        # repo, and the matcher treats a missing field as no match. `action`
+        # rather than `event_type` because the connector prefixes the latter
+        # (`github.{action}`); the raw audit entry's own key is the stable
+        # one (issue #1545).
+        when={"action": "public_key.create", "repo_contains": "/"},
         fp=["Sanctioned automation onboarding"],
         playbook="tpl-persistence",
+        positive={"action": "public_key.create", "repo": "example-org/payments-core", "actor": "user@corp.com"},
+        # The negative is the other thing public_key.create genuinely logs:
+        # a user SSH-key add, which carries no repo at all. Explicit because
+        # the auto-negative flips the repo *value* and the vocabulary's
+        # alternatives are repo slugs, every one of which still contains "/".
+        negative={"action": "public_key.create", "actor": "user@corp.com"},
     ),
     S(
         slug="app-npm-package-publish-new-account",
@@ -324,7 +351,11 @@ DEVOPS_RULES: list[dict] = [
         mitre=["t1098.004"],
         product="github",
         service="repo",
-        when={"event_type_in": ["protected_branch.policy_override", "protected_branch.destroy"]},
+        # Both are documented audit actions, but the connector emits
+        # `event_type=github.{action}`, so clausing the unprefixed values on
+        # `event_type` could never match. The raw entry's `action` key is
+        # visible to the engine and carries them unprefixed (issue #1545).
+        when={"action_in": ["protected_branch.policy_override", "protected_branch.destroy"]},
         fp=[FP_TUNING],
         playbook="tpl-supply-chain",
     ),

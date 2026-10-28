@@ -1334,7 +1334,12 @@ SAAS_RULES: list[dict] = [
         mitre=["t1098.001"],
         product="github",
         service="audit",
-        when={"action": "deploy_key.add", "distinct_repos_per_actor_per_hour_gt": 10},
+        # GitHub has no deploy_key.* audit category; a deploy-key add is
+        # `public_key.create` with the repo slug. The windowed translation
+        # counts distinct `repo` values per actor, and an entry with no repo
+        # (a user SSH-key add) is skipped by the distinct counter rather
+        # than counted (issue #1545).
+        when={"action": "public_key.create", "distinct_repos_per_actor_per_hour_gt": 10},
         fp=[FP_AUTOMATION],
         playbook="tpl-persistence",
     ),

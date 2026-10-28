@@ -19,7 +19,11 @@ detection:
 false_positives:
 - Emergency hotfix workflow (must reference change ticket)
 playbook: tpl-supply-chain
-enabled: true
+enabled: false
+quarantine_reason: 'not executable (needs-connector-field): wants `ref_in_protected_branches` and `actor_role`
+  on a git.push, and the audit entry carries neither a ref nor the actor''s org role. The observable form
+  of a protection bypass in this telemetry is `protected_branch.policy_override`, which app-protected-branch-disabled
+  already matches.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'
