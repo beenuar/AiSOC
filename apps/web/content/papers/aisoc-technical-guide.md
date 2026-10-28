@@ -2,8 +2,8 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.0"
-date: "2026-10-03"
+version: "v1.1"
+date: "2026-10-28"
 license: "MIT (same as the AiSOC project)"
 abstract: |
   A complete operator's guide to AiSOC: installing it on a laptop and on a
@@ -57,7 +57,7 @@ connector / ingest API
         ├──────────► graph writer ──► Neo4j       (entity graph)
         │
         ▼
-    fusion  ──────── 2,529 executable detection rules, your tenant's tuning,
+    fusion  ──────── 2,535 executable detection rules, your tenant's tuning,
         │            correlation into alerts
         ▼
    Postgres ──────── the alert, the case, the audit chain
@@ -233,10 +233,25 @@ is not zero, and publishing it as zero would claim instant resolution.*
 
 ### Windows
 
-`install.ps1` handles Windows 10 and 11 through `winget`. Run it from an
-elevated PowerShell. It creates the administrator and runs the smoke test, the
-same as the Unix path — an earlier version handed off to a demo stack and
-printed "AiSOC is up and running" without doing either.
+`install.ps1` handles Windows 10 and 11 through `winget`. Run it as your
+normal user, **not** from an elevated PowerShell — the installer's own help
+says so, and `winget` elevates per package as needed. The one exception is
+WSL2: when it is missing, the installer stops, names the elevated
+`wsl --install` and the reboot it needs, and picks up where it left off when
+you re-run it. Git, Docker Desktop, Node, pnpm and Python 3 are the
+prerequisites it installs; Python is on that list because three steps of the
+install are Python programs.
+
+It generates `.env`'s fifteen secrets with the same generator `make up` uses
+and resolves port conflicts the same way — both repaired in v20.2.0, when a
+fresh Windows install could not boot at all: the template it used to copy
+ships `ENVIRONMENT=production` with its secrets empty, which is exactly the
+configuration the API refuses to start on, and a Postgres already holding
+5432 ended the install with advice to hand-edit `docker-compose.yml`. A
+`windows-latest` CI job now proves every generated secret lands non-empty.
+It creates the administrator and runs the smoke test, the same as the Unix
+path — an earlier version handed off to a demo stack and printed "AiSOC is
+up and running" without doing either.
 
 ---
 
@@ -471,6 +486,17 @@ Seven providers are supported — `openai`, `anthropic`, `azure-openai`,
 tenant in **Settings → Deployment & AI**, or from the first-run wizard. The key
 is encrypted at rest with the credential vault and never returned by the API;
 reads report only `has_api_key`.
+
+For `custom` — any OpenAI-compatible endpoint, which is how a gateway or
+aggregator is used without a named integration — the model id no longer has
+to be typed by hand: **List models from endpoint** asks the endpoint's
+`/models` route and offers the chat-capable entries as choices
+(`POST /api/v1/llm/credentials/models`, an externally contributed feature).
+The stored key is sent only to the stored base URL — a form pointing at a
+changed URL makes a keyless request rather than sending the saved credential
+somewhere it was never configured for — and the typed id remains available
+when an endpoint publishes no list. Discovery filters a dropdown; whether a
+model actually answers is still the Test button's job.
 
 **Test it before you rely on it.** The *Test* button places one real one-token
 completion and reports what happened:
