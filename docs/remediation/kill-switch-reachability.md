@@ -359,8 +359,8 @@ Stated rather than implied.
 - **No multi-replica test.** The suites drive one application process. The
   switch is a database row read by every replica, so there is no per-replica
   state to diverge, but that is an argument rather than a measurement.
-- **Only closure honours the switch. Three of the four paths the docstring
-  names do not consult it at all.** `endpoints/kill_switch.py` opens by
+- **~~Only closure honours the switch. Three of the four paths the docstring
+  names do not consult it at all.~~ Closed since this note was written.** `endpoints/kill_switch.py` opens by
   saying the switch is "checked first and separately by everything that
   acts: closure in the triage worker, the actions dispatcher, playbook
   dispatch and the MCP write tools". Closure is real and is proven above:
@@ -371,6 +371,15 @@ Stated rather than implied.
   `app.closure` in any form, and neither does playbook dispatch or the MCP
   write surface.
 
+  So, *at the time this note was written*, **an engaged kill switch stopped
+  automatic closure and did not stop action dispatch.** That is no longer true:
+  the follow-up gated `live_actions.dispatch()` before the executor is resolved,
+  which covers the actions dispatcher and playbook dispatch, and corrected the
+  MCP claim rather than implementing it, because no MCP write surface exists.
+  See [`kill-switch-enforcement-reach.md`](kill-switch-enforcement-reach.md).
+  What follows is kept as the record of what was true then.
+
+  <!-- superseded -->
   So **an engaged kill switch stops automatic closure and does not stop
   action dispatch.** That is a second, separate defect of the same family as
   this one, found while verifying this note rather than reported. It is not

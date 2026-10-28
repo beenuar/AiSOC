@@ -125,7 +125,20 @@ async def test_a_bad_tier_env_value_is_conservative(monkeypatch: pytest.MonkeyPa
 async def test_sqlalchemy_style_dsn_is_accepted(monkeypatch: pytest.MonkeyPatch):
     """Both DSN spellings are already present in deployed environments."""
     monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://u:p@h/db")
-    assert tenant_policy._dsn() == "postgresql://u:p@h/db"
+    assert tenant_policy.resolve_dsn() == "postgresql://u:p@h/db"
+
+
+async def test_the_kill_switch_reads_the_same_dsn_this_module_does(monkeypatch: pytest.MonkeyPatch):
+    """One resolver, because two would disagree about whether a database exists.
+
+    The autonomy policy and the stop button read the same database on the
+    same request. If they resolved the DSN separately, a deployment could
+    have a tier the policy could read and a switch the dispatcher could not,
+    and the generous half would win.
+    """
+    from app.services import kill_switch
+
+    assert kill_switch.resolve_dsn is tenant_policy.resolve_dsn
 
 
 # ── whitelist ─────────────────────────────────────────────────────────────

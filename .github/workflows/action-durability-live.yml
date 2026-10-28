@@ -235,3 +235,121 @@ jobs:
             exit 1
           fi
           echo "OK: with neither layer present another tenant's host is contained, and the suite goes red."
+
+      # ── the kill switch actually stops this dispatcher ───────────────────
+      #
+      # Same Postgres, same runtime role, same reason to be live: the switch
+      # is a row and the defect was that nothing read it. Parity 2.2
+      # documented the switch as "checked first and separately by everything
+      # that acts: closure in the triage worker, the actions dispatcher,
+      # playbook dispatch and the MCP write tools" and `services/actions`
+      # contained no reference to it at all, so an operator who pressed the
+      # platform-wide stop kept dispatching isolations.
+      #
+      # Seeding uses the owner connection and only the owner connection,
+      # because on this schema the global row (`tenant_id IS NULL`) satisfies
+      # `WITH CHECK (tenant_id = current_tenant_id())` for no session at all.
+      # That writability defect belongs to the PR making the global switch
+      # engageable; what these cases grade is whether dispatch *reads* an
+      # engaged switch, which was separately and completely false. The
+      # dispatcher still reads as `aisoc_app`, under FORCE ROW LEVEL
+      # SECURITY, which is the posture that ships.
+      - name: An engaged kill switch stops the dispatcher, and a released one does not
+        working-directory: services/actions
+        env:
+          AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
+          AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+          PYTHONPATH: .
+        run: python -m pytest tests/test_kill_switch_dispatch.py -v --tb=short -rs
+
+      - name: Every case ran, none skipped
+        working-directory: services/actions
+        env:
+          AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
+          AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_kill_switch_dispatch.py -q 2>&1 | tee /tmp/kill-switch-run.txt
+          if grep -qE '[0-9]+ skipped' /tmp/kill-switch-run.txt; then
+            echo "FAIL: a case skipped in the job whose whole purpose is to run it against a real switch."
+            exit 1
+          fi
+          if ! grep -qE '[0-9]+ passed' /tmp/kill-switch-run.txt; then
+            echo "FAIL: no case reported as passed."
+            exit 1
+          fi
+
+      - name: The gate fails when dispatch stops consulting the switch
+        working-directory: services/actions
+        env:
+          AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
+          AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          cp app/live_actions/dispatcher.py /tmp/ks-dispatcher.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/live_actions/dispatcher.py")
+          s = p.read_text()
+          needle = "    if switch.engaged:\n"
+          if needle not in s:
+              print("negative control could not find the kill-switch gate; it has been "
+                    "reshaped and this control no longer proves anything")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    if False:\n", 1))
+          PY
+          set +e
+          python -m pytest tests/test_kill_switch_dispatch.py -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/ks-dispatcher.bak app/live_actions/dispatcher.py
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: dispatch ignored an engaged switch and the suite stayed green."
+            exit 1
+          fi
+          echo "OK: without the gate an engaged switch dispatches, and the suite goes red."
+
+      - name: The gate fails when an unreadable switch is read as released
+        working-directory: services/actions
+        env:
+          AISOC_KILL_SWITCH_TEST_DSN: ${{ env.ACTIONS_DSN }}
+          # aisoc-db-role: owner — seeds rows only; the global row satisfies WITH CHECK (tenant_id = current_tenant_id()) for no runtime session, and the dispatcher under test still reads as aisoc_app above
+          AISOC_KILL_SWITCH_TEST_SEED_DSN: postgresql://aisoc:aisoc_ci_only@localhost:5432/aisoc
+          PYTHONPATH: .
+        run: |
+          set -euo pipefail
+          cp app/services/kill_switch.py /tmp/ks-reader.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/services/kill_switch.py")
+          s = p.read_text()
+          needle = "            unreadable=True,\n        )\n"
+          if needle not in s:
+              print("negative control could not find the fail-closed return")
+              sys.exit(1)
+          p.write_text(s.replace(
+              "        return KillSwitchState(\n"
+              "            engaged=True,\n"
+              '            scope="unknown",\n'
+              '            reason="kill-switch state unreadable, refusing to dispatch",\n'
+              "            unreadable=True,\n"
+              "        )\n",
+              "        return _RELEASED\n", 1))
+          PY
+          set +e
+          python -m pytest \
+            "tests/test_kill_switch_dispatch.py::TestWhatHappensWhenTheSwitchCannotBeRead" \
+            -q >/dev/null 2>&1
+          rc=$?
+          set -e
+          cp /tmp/ks-reader.bak app/services/kill_switch.py
+          if [ "$rc" -eq 0 ]; then
+            echo "FAIL: a database that could not answer was read as 'nobody pressed it', and the suite stayed green."
+            exit 1
+          fi
+          echo "OK: failing open on an unreadable switch goes red, as it must."

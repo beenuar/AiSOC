@@ -11,8 +11,41 @@ and it must work without reasoning about per-class rows, without a deploy
 and without a restart.
 
 So it is one boolean with a mandatory reason, checked first and separately
-by everything that acts: closure in the triage worker, the actions
-dispatcher, playbook dispatch and the MCP write tools.
+by the two things that act without a human.
+
+What it stops
+-------------
+1. **Automatic closure**, in the triage worker. ``closure.decide()`` checks
+   the switch before the per-class policy, so an engaged switch withholds
+   auto-close whatever the confidence.
+2. **Action dispatch**, at ``services/actions`` ``live_actions.dispatch()``
+   — before the executor is looked up, so no vendor is contacted. That is
+   the single chokepoint every route to a customer's estate passes through:
+   ``POST /live-actions/dispatch``, the ``/dry-run`` sibling, the agent
+   loop, and **playbook steps**, which reach it through
+   ``action_bridge`` → ``POST /playbook-steps/dispatch`` →
+   ``actions_client``. A blocked request comes back ``blocked``, never
+   ``failed``: failed invites a retry, and the retry is refused too.
+
+Dry runs are stopped as well. A preview is only credentials-free while the
+strip list matches what each client factory reads, and
+``services/actions/app/executors/siem.py`` records a release where it did
+not and a "dry run" reached the customer's production SIEM. An operator who
+pressed the stop button did not mean "stop, except for previews".
+
+What it does not stop
+---------------------
+Anything a human does. Analysts keep triaging, the console keeps working,
+and an operator can still act directly at the vendor — the switch governs
+what the platform does on its own, and is not an outage.
+
+This paragraph used to name "the MCP write tools" as a third enforcement
+point. There are no MCP write tools. ``services/mcp`` exposes one tool that
+touches the response surface, ``aisoc_preview_action``, it is dry-run only,
+and ``services/mcp/tests/actions.test.ts`` asserts that the path performing
+an action appears nowhere in its source. Naming it here was worse than an
+unenforced claim: it told a reader the MCP server could perform actions,
+which was the more alarming half and was never true either.
 
 Two scopes
 ----------

@@ -5,6 +5,11 @@ The dispatcher is the single entry point used by the REST router and by
 internal callers (agent loop, playbook engine). It enforces these invariants
 so individual executors never have to think about them:
 
+  0. **The kill switch is checked before anything else.** Global or per
+     tenant, engaged or unreadable, every request returns BLOCKED without
+     an executor being looked up. Parity 2.2 documented this and never
+     built it: the switch stopped automatic closure and this dispatcher
+     carried on isolating hosts.
   1. **Unknown (vendor, capability) returns FAILED, not 500.** Callers
      get a structured :class:`LiveActionResult` so the agent loop can
      decide whether to fall back to a different vendor.
@@ -50,6 +55,7 @@ from app.services.autonomy_safety import (
     rollback_capability,
 )
 from app.services.credential_resolver import resolve_params
+from app.services.kill_switch import KillSwitchState, kill_switch_state
 from app.services.maturity import _AUTO_ALLOWED_AT_TIER, MaturityTier
 from app.services.tenant_policy import TenantPolicy, resolve_tenant_policy
 from app.services.verification import PostActionVerifier, VerificationOutcome
@@ -417,6 +423,38 @@ async def _verify_effect(
     return result.model_copy(update={"details": details})
 
 
+def _stopped_by_kill_switch(request: LiveActionRequest, state: KillSwitchState) -> LiveActionResult:
+    """A visible refusal that names the switch, and is not a failure.
+
+    Three things this is deliberately not. Not SUCCEEDED, obviously. Not
+    FAILED, because FAILED invites a retry and the next attempt is refused
+    for the same reason — an agent loop would spend a freeze retrying. And
+    not silent: ``blocked_by`` is a machine-readable field so a console or a
+    playbook report can say *which* control stopped this, rather than
+    leaving an operator to guess between the switch and the tier ladder.
+
+    ``executed`` is the platform's single word for "a vendor was touched",
+    and nothing here touched one: the executor is not looked up, let alone
+    called, before this returns.
+    """
+    detail = (
+        "kill-switch state unreadable, refusing to dispatch" if state.unreadable else f"kill switch engaged ({state.scope}): {state.reason}"
+    )
+    return LiveActionResult(
+        request_id=request.request_id,
+        status=LiveActionStatus.BLOCKED,
+        capability=request.capability,
+        vendor_id=request.vendor_id,
+        summary=f"{request.capability} on {request.target or 'target'}: not dispatched — {detail}",
+        details={
+            "blocked_by": "kill_switch_unreadable" if state.unreadable else "kill_switch",
+            "kill_switch_scope": state.scope,
+            "kill_switch_reason": state.reason,
+            "vendor_contacted": False,
+        },
+    )
+
+
 def _not_executed(request: LiveActionRequest, status: LiveActionStatus, decision: AutonomyDecision) -> LiveActionResult:
     return LiveActionResult(
         request_id=request.request_id,
@@ -448,6 +486,32 @@ async def dispatch(request: LiveActionRequest) -> LiveActionResult:
         capability=request.capability,
         dry_run=request.dry_run,
     )
+
+    # ── The kill switch, before anything else ────────────────────────────
+    #
+    # First, and separately from the autonomy policy, because it is what
+    # somebody reaches for at 3am and it must not depend on tier rows,
+    # contracts or a registered executor being correct. Every other refusal
+    # in this function is a judgement about one action; this one is an
+    # operator saying stop.
+    #
+    # Dry runs are stopped too, which is a decision rather than an
+    # oversight. A preview is only credentials-free if the strip list in
+    # `builtins` matches what each client factory reads, and
+    # `executors/siem.py` records what happened when it did not: "a 'dry
+    # run' calls the customer's production SIEM. That is exactly what
+    # happened." During a declared freeze that is not a risk worth carrying
+    # for the convenience of a preview, and an operator who pressed the stop
+    # button did not mean "stop, except for previews".
+    switch = await kill_switch_state(str(request.tenant_id) if request.tenant_id else None)
+    if switch.engaged:
+        log.warning(
+            "live_action.blocked_by_kill_switch",
+            scope=switch.scope,
+            unreadable=switch.unreadable,
+            reason=switch.reason,
+        )
+        return _stopped_by_kill_switch(request, switch)
 
     # Phase B2 — translate connector-style credentials into executor params.
     if request.auth_config:
