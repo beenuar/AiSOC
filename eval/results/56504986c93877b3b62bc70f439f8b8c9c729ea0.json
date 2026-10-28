@@ -1,0 +1,5559 @@
+{
+  "generated_at": "2026-10-28T02:54:33.356517+00:00",
+  "dataset": "synthetic_incidents.json (200 cases, deterministic)",
+  "suite_filter": "all",
+  "suites": {
+    "mitre_accuracy": {
+      "metric": "accuracy",
+      "value": 0.97,
+      "target": 0.8,
+      "passed": true,
+      "duration_ms": 6.5,
+      "details": {
+        "incidents": 200,
+        "correct": 194,
+        "precision": 0.7058,
+        "recall": 0.85,
+        "f1": 0.7712
+      },
+      "per_template": {
+        "metric": "macro_accuracy",
+        "value": 0.9636,
+        "target": 0.8,
+        "passed": true,
+        "template_count": 55,
+        "failing_templates": [
+          "outlook-auto-forward-rule",
+          "compromised-ci-runner"
+        ]
+      }
+    },
+    "alert_reduction": {
+      "metric": "reduction_ratio",
+      "value": 0.753,
+      "target": 0.7,
+      "passed": true,
+      "duration_ms": 18.4,
+      "details": {
+        "alerts_in": 1000,
+        "incidents_out": 247,
+        "reduction_pct": "75.3%",
+        "storm_incidents": 16
+      }
+    },
+    "investigation_completeness": {
+      "metric": "mean_keyword_coverage",
+      "value": 0.9425,
+      "target": 0.85,
+      "passed": true,
+      "duration_ms": 6.4,
+      "details": {
+        "incidents": 200,
+        "fully_covered": 134,
+        "fully_covered_pct": 0.67
+      },
+      "per_template": {
+        "metric": "macro_completeness",
+        "value": 0.9429,
+        "target": 0.8,
+        "passed": true,
+        "template_count": 55,
+        "failing_templates": []
+      }
+    },
+    "response_quality": {
+      "metric": "mean_rubric_score",
+      "value": 1.0,
+      "target": 0.8,
+      "passed": true,
+      "duration_ms": 2.8,
+      "details": {
+        "incidents": 200,
+        "criteria": {
+          "action_aligned": 1.0,
+          "severity_aware": 1.0,
+          "mitre_aligned": 1.0,
+          "evidence_grounded": 1.0,
+          "actionable": 1.0
+        }
+      },
+      "per_template": {
+        "metric": "macro_score",
+        "value": 1.0,
+        "target": 0.75,
+        "passed": true,
+        "template_count": 55,
+        "failing_templates": []
+      }
+    },
+    "hunt_corpus": {
+      "metric": "positive_scenario_catch_rate",
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true,
+      "duration_ms": 107.8,
+      "details": {
+        "hunts": 68,
+        "positives_expected": 68,
+        "positives_caught": 68,
+        "negatives_expected": 68,
+        "false_positives": 0,
+        "false_positive_rate": 0.0,
+        "negative_ceiling": 0.0,
+        "orphan_incident_ids": [],
+        "misses": [],
+        "false_positive_details": [],
+        "positive_pass": true,
+        "negative_pass": true,
+        "no_orphans": true
+      }
+    },
+    "adversary_eval": {
+      "metric": "graceful_degradation_catch_rate",
+      "value": 0.475,
+      "target": 0.4,
+      "passed": true,
+      "duration_ms": 8.2,
+      "details": {
+        "incidents": 200,
+        "correct": 95,
+        "lost_all_tactics": 105,
+        "buckets": {
+          "heavy": {
+            "incidents": 93,
+            "correct": 4,
+            "accuracy": 0.043
+          },
+          "medium": {
+            "incidents": 69,
+            "correct": 55,
+            "accuracy": 0.7971
+          },
+          "light": {
+            "incidents": 38,
+            "correct": 36,
+            "accuracy": 0.9474
+          }
+        },
+        "light_floor": 0.85,
+        "heavy_ceiling": 0.5,
+        "light_pass": true,
+        "heavy_pass": true
+      }
+    },
+    "confidence_calibration": {
+      "metric": "investigation_brier_score",
+      "value": 0.0604,
+      "target": 0.18,
+      "passed": true,
+      "duration_ms": 9.1,
+      "details": {
+        "lower_is_better": true,
+        "investigation_brier": 0.0604,
+        "investigation_brier_max": 0.18,
+        "investigation_ece": 0.173,
+        "investigation_ece_max": 0.18,
+        "triage_brier": 0.0623,
+        "triage_brier_max": 0.2,
+        "triage_ece": 0.1771,
+        "triage_ece_max": 0.2,
+        "investigation_separation": 0.654,
+        "triage_separation": 0.6458,
+        "mean_confidence_positive_investigation": 0.704,
+        "mean_confidence_benign_investigation": 0.05,
+        "investigation_brier_pass": true,
+        "investigation_ece_pass": true,
+        "triage_brier_pass": true,
+        "triage_ece_pass": true
+      }
+    },
+    "memory_recall": {
+      "metric": "memory_recall_accuracy",
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true,
+      "duration_ms": 0.8,
+      "details": {
+        "total_cases": 14,
+        "passed_cases": 14,
+        "failed_cases": []
+      }
+    },
+    "override_accuracy": {
+      "metric": "override_accuracy",
+      "value": 1.0,
+      "target": 1.0,
+      "passed": true,
+      "duration_ms": 1.5,
+      "details": {
+        "total_cases": 6,
+        "passed_cases": 6,
+        "failed_cases": []
+      }
+    },
+    "playbook_completion_rate": {
+      "metric": "completion_rate",
+      "value": 0.735,
+      "target": 0.5,
+      "passed": true,
+      "duration_ms": 17.7,
+      "details": {
+        "incidents": 200,
+        "covered": 147,
+        "aligned": 132,
+        "overall_completion_rate": 0.735,
+        "overall_completion_pass": true,
+        "high_critical_completion_rate_mapped": 1.0,
+        "high_critical_completion_rate_raw": 0.8122,
+        "high_critical_covered_mapped": 147,
+        "high_critical_total_mapped": 147,
+        "high_critical_floor": 0.95,
+        "high_critical_pass": true,
+        "action_alignment_rate": 0.898,
+        "action_alignment_floor": 0.85,
+        "action_alignment_pass": true,
+        "per_severity": {
+          "high": {
+            "incidents": 93,
+            "covered": 63,
+            "aligned": 55
+          },
+          "critical": {
+            "incidents": 88,
+            "covered": 84,
+            "aligned": 77
+          },
+          "medium": {
+            "incidents": 19,
+            "covered": 0,
+            "aligned": 0
+          }
+        },
+        "per_category": {
+          "account-takeover": {
+            "incidents": 27,
+            "covered": 98,
+            "aligned": 98
+          },
+          "anomalous-data": {
+            "incidents": 12,
+            "covered": 12,
+            "aligned": 8
+          },
+          "bec": {
+            "incidents": 14,
+            "covered": 45,
+            "aligned": 23
+          },
+          "brute-force": {
+            "incidents": 7,
+            "covered": 7,
+            "aligned": 7
+          },
+          "cloud-account-takeover": {
+            "incidents": 10,
+            "covered": 10,
+            "aligned": 7
+          },
+          "cloud-misconfig": {
+            "incidents": 9,
+            "covered": 66,
+            "aligned": 6
+          },
+          "container-escape": {
+            "incidents": 8,
+            "covered": 8,
+            "aligned": 8
+          },
+          "data-exfil": {
+            "incidents": 22,
+            "covered": 47,
+            "aligned": 12
+          },
+          "ddos": {
+            "incidents": 3,
+            "covered": 12,
+            "aligned": 6
+          },
+          "endpoint-isolation": {
+            "incidents": 12,
+            "covered": 12,
+            "aligned": 12
+          },
+          "ids-critical": {
+            "incidents": 6,
+            "covered": 6,
+            "aligned": 6
+          },
+          "insider-risk": {
+            "incidents": 14,
+            "covered": 34,
+            "aligned": 14
+          },
+          "lateral-movement": {
+            "incidents": 24,
+            "covered": 72,
+            "aligned": 36
+          },
+          "malware": {
+            "incidents": 8,
+            "covered": 8,
+            "aligned": 8
+          },
+          "network-containment": {
+            "incidents": 3,
+            "covered": 3,
+            "aligned": 3
+          },
+          "phishing": {
+            "incidents": 12,
+            "covered": 12,
+            "aligned": 12
+          },
+          "privilege-escalation": {
+            "incidents": 12,
+            "covered": 12,
+            "aligned": 0
+          },
+          "ransomware": {
+            "incidents": 3,
+            "covered": 15,
+            "aligned": 15
+          },
+          "supply-chain": {
+            "incidents": 13,
+            "covered": 45,
+            "aligned": 3
+          },
+          "suspicious-signin": {
+            "incidents": 9,
+            "covered": 15,
+            "aligned": 15
+          },
+          "web-compromise": {
+            "incidents": 8,
+            "covered": 8,
+            "aligned": 8
+          }
+        },
+        "orphan_templates": [],
+        "orphan_playbooks": [],
+        "no_orphan_playbooks": true,
+        "no_orphan_templates": true
+      }
+    },
+    "detection_fp_rate": {
+      "metric": "worst_per_rule_fp_rate",
+      "value": 0.0047,
+      "target": 0.05,
+      "passed": true,
+      "duration_ms": 1717.8,
+      "details": {
+        "lower_is_better": true,
+        "rules_evaluated": 857,
+        "rules_passed": 857,
+        "rules_failed": 0,
+        "mean_fpr": 0.0,
+        "worst_fpr": 0.0047,
+        "ceiling": 0.05,
+        "failing_rules_sample": []
+      }
+    }
+  },
+  "telemetry": {
+    "present": true,
+    "events": 361,
+    "sources": {
+      "azure_signin": 21,
+      "cloudtrail": 13,
+      "db_audit": 4,
+      "dns": 7,
+      "edr": 38,
+      "github_audit": 13,
+      "k8s_audit": 7,
+      "linux_auditd": 33,
+      "linux_journald": 4,
+      "m365_audit": 28,
+      "sysmon": 113,
+      "vpn": 3,
+      "web_access": 26,
+      "windows_security": 51
+    },
+    "incidents_with_telemetry": 200,
+    "path": "services/agents/tests/eval_data/synthetic_telemetry.jsonl"
+  },
+  "per_investigation": {
+    "mode": "deterministic_substrate",
+    "model": "gpt-4o",
+    "rate_card_per_m_tokens_usd": {
+      "input": 2.5,
+      "output": 10.0
+    },
+    "system_prompt_tokens": 800,
+    "completion_base_tokens": 800,
+    "chars_per_token": 4,
+    "telemetry_events_per_prompt": 5,
+    "incidents": 200,
+    "templates": 55,
+    "aggregate": {
+      "tokens": {
+        "prompt": {
+          "count": 200,
+          "min": 874,
+          "max": 1055,
+          "mean": 955.51,
+          "median": 963.0,
+          "p50": 963,
+          "p95": 1031,
+          "p99": 1050
+        },
+        "completion": {
+          "count": 200,
+          "min": 800,
+          "max": 1440,
+          "mean": 1230.4,
+          "median": 1120.0,
+          "p50": 1120,
+          "p95": 1440,
+          "p99": 1440
+        },
+        "total": {
+          "count": 200,
+          "min": 1674,
+          "max": 2482,
+          "mean": 2185.91,
+          "median": 2114.0,
+          "p50": 2114,
+          "p95": 2452,
+          "p99": 2478
+        }
+      },
+      "usd": {
+        "count": 200,
+        "min": 0.010185,
+        "max": 0.017005,
+        "mean": 0.014693,
+        "median": 0.013685,
+        "p50": 0.013685,
+        "p95": 0.01693,
+        "p99": 0.016995
+      },
+      "latency_ms": {
+        "count": 200,
+        "min": 0.0038,
+        "max": 0.04,
+        "mean": 0.0077,
+        "median": 0.0075,
+        "p50": 0.0075,
+        "p95": 0.0113,
+        "p99": 0.0179
+      }
+    },
+    "per_template": [
+      {
+        "template_id": "ad-dcsync",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 913,
+            "max": 917,
+            "mean": 915.25,
+            "median": 915.5,
+            "p50": 915,
+            "p95": 917,
+            "p99": 917
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2353,
+            "max": 2357,
+            "mean": 2355.25,
+            "median": 2355.5,
+            "p50": 2355,
+            "p95": 2357,
+            "p99": 2357
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016683,
+          "max": 0.016693,
+          "mean": 0.016689,
+          "median": 0.016689,
+          "p50": 0.016688,
+          "p95": 0.016693,
+          "p99": 0.016693
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0042,
+          "max": 0.0047,
+          "mean": 0.0045,
+          "median": 0.0045,
+          "p50": 0.0045,
+          "p95": 0.0047,
+          "p99": 0.0047
+        }
+      },
+      {
+        "template_id": "azure-ad-impossible-travel",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 934,
+            "max": 938,
+            "mean": 936,
+            "median": 936,
+            "p50": 936,
+            "p95": 938,
+            "p99": 938
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2374,
+            "max": 2378,
+            "mean": 2376,
+            "median": 2376,
+            "p50": 2376,
+            "p95": 2378,
+            "p99": 2378
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.016735,
+          "max": 0.016745,
+          "mean": 0.01674,
+          "median": 0.01674,
+          "p50": 0.01674,
+          "p95": 0.016745,
+          "p99": 0.016745
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0056,
+          "max": 0.0061,
+          "mean": 0.0058,
+          "median": 0.0057,
+          "p50": 0.0057,
+          "p95": 0.0061,
+          "p99": 0.0061
+        }
+      },
+      {
+        "template_id": "bec-wire-fraud",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 907,
+            "max": 912,
+            "mean": 909,
+            "median": 908,
+            "p50": 908,
+            "p95": 912,
+            "p99": 912
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2347,
+            "max": 2352,
+            "mean": 2349,
+            "median": 2348,
+            "p50": 2348,
+            "p95": 2352,
+            "p99": 2352
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.016668,
+          "max": 0.01668,
+          "mean": 0.016673,
+          "median": 0.01667,
+          "p50": 0.01667,
+          "p95": 0.01668,
+          "p99": 0.01668
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.004,
+          "max": 0.0042,
+          "mean": 0.0041,
+          "median": 0.0041,
+          "p50": 0.0041,
+          "p95": 0.0042,
+          "p99": 0.0042
+        }
+      },
+      {
+        "template_id": "bulk-pii-download",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 886,
+            "max": 888,
+            "mean": 887.25,
+            "median": 887.5,
+            "p50": 887,
+            "p95": 888,
+            "p99": 888
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2326,
+            "max": 2328,
+            "mean": 2327.25,
+            "median": 2327.5,
+            "p50": 2327,
+            "p95": 2328,
+            "p99": 2328
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016615,
+          "max": 0.01662,
+          "mean": 0.016618,
+          "median": 0.016619,
+          "p50": 0.016618,
+          "p95": 0.01662,
+          "p99": 0.01662
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0041,
+          "max": 0.0386,
+          "mean": 0.0128,
+          "median": 0.0042,
+          "p50": 0.0041,
+          "p95": 0.0386,
+          "p99": 0.0386
+        }
+      },
+      {
+        "template_id": "certutil-download-cradle",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 988,
+            "max": 991,
+            "mean": 989.75,
+            "median": 990.0,
+            "p50": 990,
+            "p95": 991,
+            "p99": 991
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2108,
+            "max": 2111,
+            "mean": 2109.75,
+            "median": 2110.0,
+            "p50": 2110,
+            "p95": 2111,
+            "p99": 2111
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01367,
+          "max": 0.013677,
+          "mean": 0.013674,
+          "median": 0.013675,
+          "p50": 0.013675,
+          "p95": 0.013677,
+          "p99": 0.013677
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0075,
+          "max": 0.0087,
+          "mean": 0.0079,
+          "median": 0.0077,
+          "p50": 0.0076,
+          "p95": 0.0087,
+          "p99": 0.0087
+        }
+      },
+      {
+        "template_id": "clipboard-keylogger",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 990,
+            "max": 1001,
+            "mean": 996,
+            "median": 996.5,
+            "p50": 994,
+            "p95": 1001,
+            "p99": 1001
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2110,
+            "max": 2121,
+            "mean": 2116,
+            "median": 2116.5,
+            "p50": 2114,
+            "p95": 2121,
+            "p99": 2121
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013675,
+          "max": 0.013702,
+          "mean": 0.01369,
+          "median": 0.013691,
+          "p50": 0.013685,
+          "p95": 0.013702,
+          "p99": 0.013702
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0074,
+          "max": 0.008,
+          "mean": 0.0076,
+          "median": 0.0076,
+          "p50": 0.0074,
+          "p95": 0.008,
+          "p99": 0.008
+        }
+      },
+      {
+        "template_id": "compromised-ci-runner",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 940,
+            "max": 942,
+            "mean": 940.67,
+            "median": 940,
+            "p50": 940,
+            "p95": 942,
+            "p99": 942
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2380,
+            "max": 2382,
+            "mean": 2380.67,
+            "median": 2380,
+            "p50": 2380,
+            "p95": 2382,
+            "p99": 2382
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.01675,
+          "max": 0.016755,
+          "mean": 0.016752,
+          "median": 0.01675,
+          "p50": 0.01675,
+          "p95": 0.016755,
+          "p99": 0.016755
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0075,
+          "max": 0.0075,
+          "mean": 0.0075,
+          "median": 0.0075,
+          "p50": 0.0075,
+          "p95": 0.0075,
+          "p99": 0.0075
+        }
+      },
+      {
+        "template_id": "confluence-watering-hole",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 960,
+            "max": 967,
+            "mean": 963,
+            "median": 962.5,
+            "p50": 962,
+            "p95": 967,
+            "p99": 967
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2080,
+            "max": 2087,
+            "mean": 2083,
+            "median": 2082.5,
+            "p50": 2082,
+            "p95": 2087,
+            "p99": 2087
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.0136,
+          "max": 0.013617,
+          "mean": 0.013607,
+          "median": 0.013606,
+          "p50": 0.013605,
+          "p95": 0.013617,
+          "p99": 0.013617
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0066,
+          "max": 0.0109,
+          "mean": 0.0077,
+          "median": 0.0066,
+          "p50": 0.0066,
+          "p95": 0.0109,
+          "p99": 0.0109
+        }
+      },
+      {
+        "template_id": "credential-spray",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 963,
+            "max": 971,
+            "mean": 967.5,
+            "median": 968.0,
+            "p50": 965,
+            "p95": 971,
+            "p99": 971
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2083,
+            "max": 2091,
+            "mean": 2087.5,
+            "median": 2088.0,
+            "p50": 2085,
+            "p95": 2091,
+            "p99": 2091
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013607,
+          "max": 0.013627,
+          "mean": 0.013618,
+          "median": 0.013619,
+          "p50": 0.013612,
+          "p95": 0.013627,
+          "p99": 0.013627
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0072,
+          "max": 0.0078,
+          "mean": 0.0075,
+          "median": 0.0076,
+          "p50": 0.0075,
+          "p95": 0.0078,
+          "p99": 0.0078
+        }
+      },
+      {
+        "template_id": "cron-backdoor",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 923,
+            "max": 926,
+            "mean": 924,
+            "median": 923.5,
+            "p50": 923,
+            "p95": 926,
+            "p99": 926
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2043,
+            "max": 2046,
+            "mean": 2044,
+            "median": 2043.5,
+            "p50": 2043,
+            "p95": 2046,
+            "p99": 2046
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013507,
+          "max": 0.013515,
+          "mean": 0.01351,
+          "median": 0.013508,
+          "p50": 0.013507,
+          "p95": 0.013515,
+          "p99": 0.013515
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0069,
+          "max": 0.0113,
+          "mean": 0.008,
+          "median": 0.0069,
+          "p50": 0.0069,
+          "p95": 0.0113,
+          "p99": 0.0113
+        }
+      },
+      {
+        "template_id": "ddos-syn-flood",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 880,
+            "max": 880,
+            "mean": 880,
+            "median": 880,
+            "p50": 880,
+            "p95": 880,
+            "p99": 880
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2000,
+            "max": 2000,
+            "mean": 2000,
+            "median": 2000,
+            "p50": 2000,
+            "p95": 2000,
+            "p99": 2000
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.0134,
+          "max": 0.0134,
+          "mean": 0.0134,
+          "median": 0.0134,
+          "p50": 0.0134,
+          "p95": 0.0134,
+          "p99": 0.0134
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0039,
+          "max": 0.0043,
+          "mean": 0.0041,
+          "median": 0.004,
+          "p50": 0.004,
+          "p95": 0.0043,
+          "p99": 0.0043
+        }
+      },
+      {
+        "template_id": "dga-c2",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 948,
+            "max": 950,
+            "mean": 949.33,
+            "median": 950,
+            "p50": 950,
+            "p95": 950,
+            "p99": 950
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2068,
+            "max": 2070,
+            "mean": 2069.33,
+            "median": 2070,
+            "p50": 2070,
+            "p95": 2070,
+            "p99": 2070
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.01357,
+          "max": 0.013575,
+          "mean": 0.013573,
+          "median": 0.013575,
+          "p50": 0.013575,
+          "p95": 0.013575,
+          "p99": 0.013575
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0075,
+          "max": 0.0083,
+          "mean": 0.0079,
+          "median": 0.0078,
+          "p50": 0.0078,
+          "p95": 0.0083,
+          "p99": 0.0083
+        }
+      },
+      {
+        "template_id": "disable-edr-tooling",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 996,
+            "max": 999,
+            "mean": 997.25,
+            "median": 997.0,
+            "p50": 996,
+            "p95": 999,
+            "p99": 999
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2436,
+            "max": 2439,
+            "mean": 2437.25,
+            "median": 2437.0,
+            "p50": 2436,
+            "p95": 2439,
+            "p99": 2439
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01689,
+          "max": 0.016898,
+          "mean": 0.016893,
+          "median": 0.016892,
+          "p50": 0.01689,
+          "p95": 0.016898,
+          "p99": 0.016898
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0096,
+          "max": 0.0102,
+          "mean": 0.0099,
+          "median": 0.0099,
+          "p50": 0.0098,
+          "p95": 0.0102,
+          "p99": 0.0102
+        }
+      },
+      {
+        "template_id": "dns-tunnel-exfil",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 886,
+            "max": 886,
+            "mean": 886,
+            "median": 886.0,
+            "p50": 886,
+            "p95": 886,
+            "p99": 886
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2326,
+            "max": 2326,
+            "mean": 2326,
+            "median": 2326.0,
+            "p50": 2326,
+            "p95": 2326,
+            "p99": 2326
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016615,
+          "max": 0.016615,
+          "mean": 0.016615,
+          "median": 0.016615,
+          "p50": 0.016615,
+          "p95": 0.016615,
+          "p99": 0.016615
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0038,
+          "max": 0.0041,
+          "mean": 0.0039,
+          "median": 0.0039,
+          "p50": 0.0038,
+          "p95": 0.0041,
+          "p99": 0.0041
+        }
+      },
+      {
+        "template_id": "docker-runtime-abuse",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 939,
+            "max": 942,
+            "mean": 940.25,
+            "median": 940.0,
+            "p50": 940,
+            "p95": 942,
+            "p99": 942
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2059,
+            "max": 2062,
+            "mean": 2060.25,
+            "median": 2060.0,
+            "p50": 2060,
+            "p95": 2062,
+            "p99": 2062
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013547,
+          "max": 0.013555,
+          "mean": 0.013551,
+          "median": 0.01355,
+          "p50": 0.01355,
+          "p95": 0.013555,
+          "p99": 0.013555
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0076,
+          "max": 0.0094,
+          "mean": 0.0083,
+          "median": 0.0081,
+          "p50": 0.008,
+          "p95": 0.0094,
+          "p99": 0.0094
+        }
+      },
+      {
+        "template_id": "ec2-imds-credential-theft",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 963,
+            "max": 965,
+            "mean": 963.67,
+            "median": 963,
+            "p50": 963,
+            "p95": 965,
+            "p99": 965
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2403,
+            "max": 2405,
+            "mean": 2403.67,
+            "median": 2403,
+            "p50": 2403,
+            "p95": 2405,
+            "p99": 2405
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.016808,
+          "max": 0.016813,
+          "mean": 0.01681,
+          "median": 0.016808,
+          "p50": 0.016808,
+          "p95": 0.016813,
+          "p99": 0.016813
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0076,
+          "max": 0.008,
+          "mean": 0.0078,
+          "median": 0.0079,
+          "p50": 0.0079,
+          "p95": 0.008,
+          "p99": 0.008
+        }
+      },
+      {
+        "template_id": "event-log-cleared",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 964,
+            "max": 967,
+            "mean": 965.25,
+            "median": 965.0,
+            "p50": 965,
+            "p95": 967,
+            "p99": 967
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2084,
+            "max": 2087,
+            "mean": 2085.25,
+            "median": 2085.0,
+            "p50": 2085,
+            "p95": 2087,
+            "p99": 2087
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01361,
+          "max": 0.013617,
+          "mean": 0.013613,
+          "median": 0.013612,
+          "p50": 0.013612,
+          "p95": 0.013617,
+          "p99": 0.013617
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0072,
+          "max": 0.0078,
+          "mean": 0.0075,
+          "median": 0.0075,
+          "p50": 0.0074,
+          "p95": 0.0078,
+          "p99": 0.0078
+        }
+      },
+      {
+        "template_id": "github-pat-leak",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 940,
+            "max": 941,
+            "mean": 940.67,
+            "median": 941,
+            "p50": 941,
+            "p95": 941,
+            "p99": 941
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2380,
+            "max": 2381,
+            "mean": 2380.67,
+            "median": 2381,
+            "p50": 2381,
+            "p95": 2381,
+            "p99": 2381
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.01675,
+          "max": 0.016753,
+          "mean": 0.016752,
+          "median": 0.016753,
+          "p50": 0.016753,
+          "p95": 0.016753,
+          "p99": 0.016753
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.007,
+          "max": 0.0072,
+          "mean": 0.0071,
+          "median": 0.0071,
+          "p50": 0.0071,
+          "p95": 0.0072,
+          "p99": 0.0072
+        }
+      },
+      {
+        "template_id": "helpdesk-password-reset-abuse",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 927,
+            "max": 930,
+            "mean": 928.33,
+            "median": 928,
+            "p50": 928,
+            "p95": 930,
+            "p99": 930
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2047,
+            "max": 2050,
+            "mean": 2048.33,
+            "median": 2048,
+            "p50": 2048,
+            "p95": 2050,
+            "p99": 2050
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013517,
+          "max": 0.013525,
+          "mean": 0.013521,
+          "median": 0.01352,
+          "p50": 0.01352,
+          "p95": 0.013525,
+          "p99": 0.013525
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0066,
+          "max": 0.0068,
+          "mean": 0.0067,
+          "median": 0.0066,
+          "p50": 0.0066,
+          "p95": 0.0068,
+          "p99": 0.0068
+        }
+      },
+      {
+        "template_id": "https-c2-beacon",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 910,
+            "max": 912,
+            "mean": 911,
+            "median": 911,
+            "p50": 911,
+            "p95": 912,
+            "p99": 912
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2350,
+            "max": 2352,
+            "mean": 2351,
+            "median": 2351,
+            "p50": 2351,
+            "p95": 2352,
+            "p99": 2352
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.016675,
+          "max": 0.01668,
+          "mean": 0.016678,
+          "median": 0.016678,
+          "p50": 0.016678,
+          "p95": 0.01668,
+          "p99": 0.01668
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0045,
+          "max": 0.0047,
+          "mean": 0.0046,
+          "median": 0.0046,
+          "p50": 0.0046,
+          "p95": 0.0047,
+          "p99": 0.0047
+        }
+      },
+      {
+        "template_id": "insider-mailbox-export",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 891,
+            "max": 896,
+            "mean": 894,
+            "median": 895,
+            "p50": 895,
+            "p95": 896,
+            "p99": 896
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2011,
+            "max": 2016,
+            "mean": 2014,
+            "median": 2015,
+            "p50": 2015,
+            "p95": 2016,
+            "p99": 2016
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013427,
+          "max": 0.01344,
+          "mean": 0.013435,
+          "median": 0.013437,
+          "p50": 0.013437,
+          "p95": 0.01344,
+          "p99": 0.01344
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0041,
+          "max": 0.0062,
+          "mean": 0.0048,
+          "median": 0.0041,
+          "p50": 0.0041,
+          "p95": 0.0062,
+          "p99": 0.0062
+        }
+      },
+      {
+        "template_id": "k8s-privileged-pod-escape",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 973,
+            "max": 975,
+            "mean": 974.5,
+            "median": 975.0,
+            "p50": 975,
+            "p95": 975,
+            "p99": 975
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2413,
+            "max": 2415,
+            "mean": 2414.5,
+            "median": 2415.0,
+            "p50": 2415,
+            "p95": 2415,
+            "p99": 2415
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016833,
+          "max": 0.016838,
+          "mean": 0.016837,
+          "median": 0.016838,
+          "p50": 0.016838,
+          "p95": 0.016838,
+          "p99": 0.016838
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0103,
+          "max": 0.0133,
+          "mean": 0.0121,
+          "median": 0.0125,
+          "p50": 0.0121,
+          "p95": 0.0133,
+          "p99": 0.0133
+        }
+      },
+      {
+        "template_id": "kerberoasting",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 983,
+            "max": 990,
+            "mean": 986.5,
+            "median": 986.5,
+            "p50": 984,
+            "p95": 990,
+            "p99": 990
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2423,
+            "max": 2430,
+            "mean": 2426.5,
+            "median": 2426.5,
+            "p50": 2424,
+            "p95": 2430,
+            "p99": 2430
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016858,
+          "max": 0.016875,
+          "mean": 0.016866,
+          "median": 0.016866,
+          "p50": 0.01686,
+          "p95": 0.016875,
+          "p99": 0.016875
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0075,
+          "max": 0.0078,
+          "mean": 0.0076,
+          "median": 0.0077,
+          "p50": 0.0076,
+          "p95": 0.0078,
+          "p99": 0.0078
+        }
+      },
+      {
+        "template_id": "ldap-bloodhound-discovery",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 963,
+            "max": 967,
+            "mean": 964.25,
+            "median": 963.5,
+            "p50": 963,
+            "p95": 967,
+            "p99": 967
+          },
+          "completion": {
+            "count": 4,
+            "min": 800,
+            "max": 800,
+            "mean": 800,
+            "median": 800.0,
+            "p50": 800,
+            "p95": 800,
+            "p99": 800
+          },
+          "total": {
+            "count": 4,
+            "min": 1763,
+            "max": 1767,
+            "mean": 1764.25,
+            "median": 1763.5,
+            "p50": 1763,
+            "p95": 1767,
+            "p99": 1767
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.010408,
+          "max": 0.010417,
+          "mean": 0.010411,
+          "median": 0.010409,
+          "p50": 0.010408,
+          "p95": 0.010417,
+          "p99": 0.010417
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0076,
+          "max": 0.0101,
+          "mean": 0.0083,
+          "median": 0.0077,
+          "p50": 0.0076,
+          "p95": 0.0101,
+          "p99": 0.0101
+        }
+      },
+      {
+        "template_id": "linux-journald-tampering",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 889,
+            "max": 891,
+            "mean": 889.67,
+            "median": 889,
+            "p50": 889,
+            "p95": 891,
+            "p99": 891
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2009,
+            "max": 2011,
+            "mean": 2009.67,
+            "median": 2009,
+            "p50": 2009,
+            "p95": 2011,
+            "p99": 2011
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013422,
+          "max": 0.013427,
+          "mean": 0.013424,
+          "median": 0.013422,
+          "p50": 0.013422,
+          "p95": 0.013427,
+          "p99": 0.013427
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0039,
+          "max": 0.0041,
+          "mean": 0.004,
+          "median": 0.004,
+          "p50": 0.004,
+          "p95": 0.0041,
+          "p99": 0.0041
+        }
+      },
+      {
+        "template_id": "linux-suid-abuse",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 920,
+            "max": 926,
+            "mean": 922.75,
+            "median": 922.5,
+            "p50": 921,
+            "p95": 926,
+            "p99": 926
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2040,
+            "max": 2046,
+            "mean": 2042.75,
+            "median": 2042.5,
+            "p50": 2041,
+            "p95": 2046,
+            "p99": 2046
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.0135,
+          "max": 0.013515,
+          "mean": 0.013507,
+          "median": 0.013506,
+          "p50": 0.013502,
+          "p95": 0.013515,
+          "p99": 0.013515
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0071,
+          "max": 0.0073,
+          "mean": 0.0073,
+          "median": 0.0073,
+          "p50": 0.0073,
+          "p95": 0.0073,
+          "p99": 0.0073
+        }
+      },
+      {
+        "template_id": "lsass-memory-dump",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 993,
+            "max": 999,
+            "mean": 995.75,
+            "median": 995.5,
+            "p50": 995,
+            "p95": 999,
+            "p99": 999
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2433,
+            "max": 2439,
+            "mean": 2435.75,
+            "median": 2435.5,
+            "p50": 2435,
+            "p95": 2439,
+            "p99": 2439
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016883,
+          "max": 0.016898,
+          "mean": 0.016889,
+          "median": 0.016889,
+          "p50": 0.016887,
+          "p95": 0.016898,
+          "p99": 0.016898
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0075,
+          "max": 0.0103,
+          "mean": 0.0085,
+          "median": 0.0082,
+          "p50": 0.008,
+          "p95": 0.0103,
+          "p99": 0.0103
+        }
+      },
+      {
+        "template_id": "malicious-container-image",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 959,
+            "max": 960,
+            "mean": 959.67,
+            "median": 960,
+            "p50": 960,
+            "p95": 960,
+            "p99": 960
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2079,
+            "max": 2080,
+            "mean": 2079.67,
+            "median": 2080,
+            "p50": 2080,
+            "p95": 2080,
+            "p99": 2080
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013597,
+          "max": 0.0136,
+          "mean": 0.013599,
+          "median": 0.0136,
+          "p50": 0.0136,
+          "p95": 0.0136,
+          "p99": 0.0136
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0089,
+          "max": 0.0096,
+          "mean": 0.0092,
+          "median": 0.009,
+          "p50": 0.009,
+          "p95": 0.0096,
+          "p99": 0.0096
+        }
+      },
+      {
+        "template_id": "npm-supply-chain",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 989,
+            "max": 991,
+            "mean": 990.5,
+            "median": 991.0,
+            "p50": 991,
+            "p95": 991,
+            "p99": 991
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2429,
+            "max": 2431,
+            "mean": 2430.5,
+            "median": 2431.0,
+            "p50": 2431,
+            "p95": 2431,
+            "p99": 2431
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016873,
+          "max": 0.016878,
+          "mean": 0.016877,
+          "median": 0.016878,
+          "p50": 0.016878,
+          "p95": 0.016878,
+          "p99": 0.016878
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0101,
+          "max": 0.0172,
+          "mean": 0.012,
+          "median": 0.0103,
+          "p50": 0.0102,
+          "p95": 0.0172,
+          "p99": 0.0172
+        }
+      },
+      {
+        "template_id": "oauth-consent-phish",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 952,
+            "max": 953,
+            "mean": 952.25,
+            "median": 952.0,
+            "p50": 952,
+            "p95": 953,
+            "p99": 953
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2072,
+            "max": 2073,
+            "mean": 2072.25,
+            "median": 2072.0,
+            "p50": 2072,
+            "p95": 2073,
+            "p99": 2073
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01358,
+          "max": 0.013582,
+          "mean": 0.013581,
+          "median": 0.01358,
+          "p50": 0.01358,
+          "p95": 0.013582,
+          "p99": 0.013582
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0075,
+          "max": 0.0091,
+          "mean": 0.008,
+          "median": 0.0076,
+          "p50": 0.0075,
+          "p95": 0.0091,
+          "p99": 0.0091
+        }
+      },
+      {
+        "template_id": "oauth-refresh-token-theft",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 892,
+            "max": 894,
+            "mean": 892.67,
+            "median": 892,
+            "p50": 892,
+            "p95": 894,
+            "p99": 894
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2012,
+            "max": 2014,
+            "mean": 2012.67,
+            "median": 2012,
+            "p50": 2012,
+            "p95": 2014,
+            "p99": 2014
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.01343,
+          "max": 0.013435,
+          "mean": 0.013432,
+          "median": 0.01343,
+          "p50": 0.01343,
+          "p95": 0.013435,
+          "p99": 0.013435
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0039,
+          "max": 0.0041,
+          "mean": 0.004,
+          "median": 0.0041,
+          "p50": 0.0041,
+          "p95": 0.0041,
+          "p99": 0.0041
+        }
+      },
+      {
+        "template_id": "office-vsto-addin",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 1005,
+            "max": 1009,
+            "mean": 1007,
+            "median": 1007,
+            "p50": 1007,
+            "p95": 1009,
+            "p99": 1009
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2125,
+            "max": 2129,
+            "mean": 2127,
+            "median": 2127,
+            "p50": 2127,
+            "p95": 2129,
+            "p99": 2129
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013712,
+          "max": 0.013722,
+          "mean": 0.013717,
+          "median": 0.013717,
+          "p50": 0.013717,
+          "p95": 0.013722,
+          "p99": 0.013722
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0077,
+          "max": 0.0083,
+          "mean": 0.0079,
+          "median": 0.0078,
+          "p50": 0.0078,
+          "p95": 0.0083,
+          "p99": 0.0083
+        }
+      },
+      {
+        "template_id": "outlook-auto-forward-rule",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 893,
+            "max": 897,
+            "mean": 895,
+            "median": 895,
+            "p50": 895,
+            "p95": 897,
+            "p99": 897
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2013,
+            "max": 2017,
+            "mean": 2015,
+            "median": 2015,
+            "p50": 2015,
+            "p95": 2017,
+            "p99": 2017
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013432,
+          "max": 0.013442,
+          "mean": 0.013437,
+          "median": 0.013437,
+          "p50": 0.013437,
+          "p95": 0.013442,
+          "p99": 0.013442
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0042,
+          "max": 0.0046,
+          "mean": 0.0044,
+          "median": 0.0043,
+          "p50": 0.0043,
+          "p95": 0.0046,
+          "p99": 0.0046
+        }
+      },
+      {
+        "template_id": "pass-the-hash-lateral",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 963,
+            "max": 970,
+            "mean": 967.25,
+            "median": 968.0,
+            "p50": 967,
+            "p95": 970,
+            "p99": 970
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2403,
+            "max": 2410,
+            "mean": 2407.25,
+            "median": 2408.0,
+            "p50": 2407,
+            "p95": 2410,
+            "p99": 2410
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016808,
+          "max": 0.016825,
+          "mean": 0.016819,
+          "median": 0.016821,
+          "p50": 0.016818,
+          "p95": 0.016825,
+          "p99": 0.016825
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0074,
+          "max": 0.0179,
+          "mean": 0.0102,
+          "median": 0.0077,
+          "p50": 0.0076,
+          "p95": 0.0179,
+          "p99": 0.0179
+        }
+      },
+      {
+        "template_id": "personal-drive-exfil",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 888,
+            "max": 889,
+            "mean": 888.75,
+            "median": 889.0,
+            "p50": 889,
+            "p95": 889,
+            "p99": 889
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2328,
+            "max": 2329,
+            "mean": 2328.75,
+            "median": 2329.0,
+            "p50": 2329,
+            "p95": 2329,
+            "p99": 2329
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01662,
+          "max": 0.016623,
+          "mean": 0.016622,
+          "median": 0.016623,
+          "p50": 0.016623,
+          "p95": 0.016623,
+          "p99": 0.016623
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0039,
+          "max": 0.0042,
+          "mean": 0.004,
+          "median": 0.004,
+          "p50": 0.004,
+          "p95": 0.0042,
+          "p99": 0.0042
+        }
+      },
+      {
+        "template_id": "phishing-macro-email",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 1048,
+            "max": 1055,
+            "mean": 1051.25,
+            "median": 1051.0,
+            "p50": 1050,
+            "p95": 1055,
+            "p99": 1055
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2168,
+            "max": 2175,
+            "mean": 2171.25,
+            "median": 2171.0,
+            "p50": 2170,
+            "p95": 2175,
+            "p99": 2175
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01382,
+          "max": 0.013837,
+          "mean": 0.013828,
+          "median": 0.013827,
+          "p50": 0.013825,
+          "p95": 0.013837,
+          "p99": 0.013837
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0108,
+          "max": 0.04,
+          "mean": 0.0182,
+          "median": 0.0109,
+          "p50": 0.0109,
+          "p95": 0.04,
+          "p99": 0.04
+        }
+      },
+      {
+        "template_id": "powershell-obfuscated-dropper",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 1012,
+            "max": 1017,
+            "mean": 1015.25,
+            "median": 1016.0,
+            "p50": 1015,
+            "p95": 1017,
+            "p99": 1017
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2452,
+            "max": 2457,
+            "mean": 2455.25,
+            "median": 2456.0,
+            "p50": 2455,
+            "p95": 2457,
+            "p99": 2457
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01693,
+          "max": 0.016942,
+          "mean": 0.016938,
+          "median": 0.01694,
+          "p50": 0.016938,
+          "p95": 0.016942,
+          "p99": 0.016942
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0076,
+          "max": 0.0086,
+          "mean": 0.008,
+          "median": 0.0079,
+          "p50": 0.0078,
+          "p95": 0.0086,
+          "p99": 0.0086
+        }
+      },
+      {
+        "template_id": "process-hollowing-svchost",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 1036,
+            "max": 1038,
+            "mean": 1037.25,
+            "median": 1037.5,
+            "p50": 1037,
+            "p95": 1038,
+            "p99": 1038
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2476,
+            "max": 2478,
+            "mean": 2477.25,
+            "median": 2477.5,
+            "p50": 2477,
+            "p95": 2478,
+            "p99": 2478
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.01699,
+          "max": 0.016995,
+          "mean": 0.016993,
+          "median": 0.016994,
+          "p50": 0.016993,
+          "p95": 0.016995,
+          "p99": 0.016995
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0107,
+          "max": 0.0115,
+          "mean": 0.0111,
+          "median": 0.0111,
+          "p50": 0.0109,
+          "p95": 0.0115,
+          "p99": 0.0115
+        }
+      },
+      {
+        "template_id": "public-s3-bucket-pii",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 977,
+            "max": 978,
+            "mean": 977.33,
+            "median": 977,
+            "p50": 977,
+            "p95": 978,
+            "p99": 978
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2417,
+            "max": 2418,
+            "mean": 2417.33,
+            "median": 2417,
+            "p50": 2417,
+            "p95": 2418,
+            "p99": 2418
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.016843,
+          "max": 0.016845,
+          "mean": 0.016844,
+          "median": 0.016843,
+          "p50": 0.016843,
+          "p95": 0.016845,
+          "p99": 0.016845
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.01,
+          "max": 0.0114,
+          "mean": 0.0106,
+          "median": 0.0104,
+          "p50": 0.0104,
+          "p95": 0.0114,
+          "p99": 0.0114
+        }
+      },
+      {
+        "template_id": "ransomware-encryption",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 1031,
+            "max": 1042,
+            "mean": 1037.67,
+            "median": 1040,
+            "p50": 1040,
+            "p95": 1042,
+            "p99": 1042
+          },
+          "completion": {
+            "count": 3,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 3,
+            "min": 2471,
+            "max": 2482,
+            "mean": 2477.67,
+            "median": 2480,
+            "p50": 2480,
+            "p95": 2482,
+            "p99": 2482
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.016977,
+          "max": 0.017005,
+          "mean": 0.016994,
+          "median": 0.017,
+          "p50": 0.017,
+          "p95": 0.017005,
+          "p99": 0.017005
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0104,
+          "max": 0.0109,
+          "mean": 0.0106,
+          "median": 0.0106,
+          "p50": 0.0106,
+          "p95": 0.0109,
+          "p99": 0.0109
+        }
+      },
+      {
+        "template_id": "rdp-lateral-movement",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 910,
+            "max": 915,
+            "mean": 912.5,
+            "median": 912.5,
+            "p50": 912,
+            "p95": 915,
+            "p99": 915
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2030,
+            "max": 2035,
+            "mean": 2032.5,
+            "median": 2032.5,
+            "p50": 2032,
+            "p95": 2035,
+            "p99": 2035
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013475,
+          "max": 0.013487,
+          "mean": 0.013481,
+          "median": 0.013481,
+          "p50": 0.01348,
+          "p95": 0.013487,
+          "p99": 0.013487
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0042,
+          "max": 0.0045,
+          "mean": 0.0043,
+          "median": 0.0043,
+          "p50": 0.0042,
+          "p95": 0.0045,
+          "p99": 0.0045
+        }
+      },
+      {
+        "template_id": "registry-run-persistence",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 983,
+            "max": 990,
+            "mean": 987,
+            "median": 987.5,
+            "p50": 987,
+            "p95": 990,
+            "p99": 990
+          },
+          "completion": {
+            "count": 4,
+            "min": 800,
+            "max": 800,
+            "mean": 800,
+            "median": 800.0,
+            "p50": 800,
+            "p95": 800,
+            "p99": 800
+          },
+          "total": {
+            "count": 4,
+            "min": 1783,
+            "max": 1790,
+            "mean": 1787,
+            "median": 1787.5,
+            "p50": 1787,
+            "p95": 1790,
+            "p99": 1790
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.010457,
+          "max": 0.010475,
+          "mean": 0.010467,
+          "median": 0.010469,
+          "p50": 0.010468,
+          "p95": 0.010475,
+          "p99": 0.010475
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0071,
+          "max": 0.0077,
+          "mean": 0.0074,
+          "median": 0.0073,
+          "p50": 0.0072,
+          "p95": 0.0077,
+          "p99": 0.0077
+        }
+      },
+      {
+        "template_id": "s3-exfil-cloud-storage",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 937,
+            "max": 941,
+            "mean": 939.5,
+            "median": 940.0,
+            "p50": 939,
+            "p95": 941,
+            "p99": 941
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2377,
+            "max": 2381,
+            "mean": 2379.5,
+            "median": 2380.0,
+            "p50": 2379,
+            "p95": 2381,
+            "p99": 2381
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016743,
+          "max": 0.016753,
+          "mean": 0.016749,
+          "median": 0.016751,
+          "p50": 0.016748,
+          "p95": 0.016753,
+          "p99": 0.016753
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0055,
+          "max": 0.0078,
+          "mean": 0.0063,
+          "median": 0.006,
+          "p50": 0.0057,
+          "p95": 0.0078,
+          "p99": 0.0078
+        }
+      },
+      {
+        "template_id": "saml-golden-ticket",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 965,
+            "max": 971,
+            "mean": 967,
+            "median": 966.0,
+            "p50": 966,
+            "p95": 971,
+            "p99": 971
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2405,
+            "max": 2411,
+            "mean": 2407,
+            "median": 2406.0,
+            "p50": 2406,
+            "p95": 2411,
+            "p99": 2411
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016813,
+          "max": 0.016828,
+          "mean": 0.016818,
+          "median": 0.016815,
+          "p50": 0.016815,
+          "p95": 0.016828,
+          "p99": 0.016828
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.008,
+          "max": 0.009,
+          "mean": 0.0086,
+          "median": 0.0086,
+          "p50": 0.0084,
+          "p95": 0.009,
+          "p99": 0.009
+        }
+      },
+      {
+        "template_id": "scheduled-task-persistence",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 1019,
+            "max": 1025,
+            "mean": 1020.75,
+            "median": 1019.5,
+            "p50": 1019,
+            "p95": 1025,
+            "p99": 1025
+          },
+          "completion": {
+            "count": 4,
+            "min": 800,
+            "max": 800,
+            "mean": 800,
+            "median": 800.0,
+            "p50": 800,
+            "p95": 800,
+            "p99": 800
+          },
+          "total": {
+            "count": 4,
+            "min": 1819,
+            "max": 1825,
+            "mean": 1820.75,
+            "median": 1819.5,
+            "p50": 1819,
+            "p95": 1825,
+            "p99": 1825
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.010547,
+          "max": 0.010563,
+          "mean": 0.010552,
+          "median": 0.010549,
+          "p50": 0.010547,
+          "p95": 0.010563,
+          "p99": 0.010563
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0079,
+          "max": 0.0096,
+          "mean": 0.0086,
+          "median": 0.0084,
+          "p50": 0.0082,
+          "p95": 0.0096,
+          "p99": 0.0096
+        }
+      },
+      {
+        "template_id": "service-account-privileged-command",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 907,
+            "max": 909,
+            "mean": 907.67,
+            "median": 907,
+            "p50": 907,
+            "p95": 909,
+            "p99": 909
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2027,
+            "max": 2029,
+            "mean": 2027.67,
+            "median": 2027,
+            "p50": 2027,
+            "p95": 2029,
+            "p99": 2029
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013467,
+          "max": 0.013472,
+          "mean": 0.013469,
+          "median": 0.013467,
+          "p50": 0.013467,
+          "p95": 0.013472,
+          "p99": 0.013472
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.004,
+          "max": 0.0042,
+          "mean": 0.0041,
+          "median": 0.0041,
+          "p50": 0.0041,
+          "p95": 0.0042,
+          "p99": 0.0042
+        }
+      },
+      {
+        "template_id": "smb-share-enumeration",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 966,
+            "max": 971,
+            "mean": 969.5,
+            "median": 970.5,
+            "p50": 970,
+            "p95": 971,
+            "p99": 971
+          },
+          "completion": {
+            "count": 4,
+            "min": 800,
+            "max": 800,
+            "mean": 800,
+            "median": 800.0,
+            "p50": 800,
+            "p95": 800,
+            "p99": 800
+          },
+          "total": {
+            "count": 4,
+            "min": 1766,
+            "max": 1771,
+            "mean": 1769.5,
+            "median": 1770.5,
+            "p50": 1770,
+            "p95": 1771,
+            "p99": 1771
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.010415,
+          "max": 0.010427,
+          "mean": 0.010424,
+          "median": 0.010426,
+          "p50": 0.010425,
+          "p95": 0.010427,
+          "p99": 0.010427
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0073,
+          "max": 0.0079,
+          "mean": 0.0076,
+          "median": 0.0075,
+          "p50": 0.0074,
+          "p95": 0.0079,
+          "p99": 0.0079
+        }
+      },
+      {
+        "template_id": "uac-bypass-fodhelper",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 994,
+            "max": 998,
+            "mean": 995.25,
+            "median": 994.5,
+            "p50": 994,
+            "p95": 998,
+            "p99": 998
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2114,
+            "max": 2118,
+            "mean": 2115.25,
+            "median": 2114.5,
+            "p50": 2114,
+            "p95": 2118,
+            "p99": 2118
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013685,
+          "max": 0.013695,
+          "mean": 0.013688,
+          "median": 0.013686,
+          "p50": 0.013685,
+          "p95": 0.013695,
+          "p99": 0.013695
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0075,
+          "max": 0.0084,
+          "mean": 0.0079,
+          "median": 0.0078,
+          "p50": 0.0076,
+          "p95": 0.0084,
+          "p99": 0.0084
+        }
+      },
+      {
+        "template_id": "uefi-firmware-implant",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 947,
+            "max": 949,
+            "mean": 948.5,
+            "median": 949.0,
+            "p50": 949,
+            "p95": 949,
+            "p99": 949
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2387,
+            "max": 2389,
+            "mean": 2388.5,
+            "median": 2389.0,
+            "p50": 2389,
+            "p95": 2389,
+            "p99": 2389
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016768,
+          "max": 0.016773,
+          "mean": 0.016772,
+          "median": 0.016773,
+          "p50": 0.016773,
+          "p95": 0.016773,
+          "p99": 0.016773
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0067,
+          "max": 0.0071,
+          "mean": 0.0068,
+          "median": 0.0067,
+          "p50": 0.0067,
+          "p95": 0.0071,
+          "p99": 0.0071
+        }
+      },
+      {
+        "template_id": "usb-autorun-airgap",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 985,
+            "max": 991,
+            "mean": 988.25,
+            "median": 988.5,
+            "p50": 988,
+            "p95": 991,
+            "p99": 991
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2105,
+            "max": 2111,
+            "mean": 2108.25,
+            "median": 2108.5,
+            "p50": 2108,
+            "p95": 2111,
+            "p99": 2111
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013662,
+          "max": 0.013677,
+          "mean": 0.01367,
+          "median": 0.013671,
+          "p50": 0.01367,
+          "p95": 0.013677,
+          "p99": 0.013677
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0075,
+          "max": 0.0132,
+          "mean": 0.009,
+          "median": 0.0077,
+          "p50": 0.0077,
+          "p95": 0.0132,
+          "p99": 0.0132
+        }
+      },
+      {
+        "template_id": "vpn-new-geography",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 937,
+            "max": 939,
+            "mean": 938.33,
+            "median": 939,
+            "p50": 939,
+            "p95": 939,
+            "p99": 939
+          },
+          "completion": {
+            "count": 3,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 3,
+            "min": 2057,
+            "max": 2059,
+            "mean": 2058.33,
+            "median": 2059,
+            "p50": 2059,
+            "p95": 2059,
+            "p99": 2059
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.013542,
+          "max": 0.013547,
+          "mean": 0.013545,
+          "median": 0.013547,
+          "p50": 0.013547,
+          "p95": 0.013547,
+          "p99": 0.013547
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.0069,
+          "max": 0.0074,
+          "mean": 0.0072,
+          "median": 0.0074,
+          "p50": 0.0074,
+          "p95": 0.0074,
+          "p99": 0.0074
+        }
+      },
+      {
+        "template_id": "webapp-sqli-ssrf-exploit",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 966,
+            "max": 969,
+            "mean": 968,
+            "median": 968.5,
+            "p50": 968,
+            "p95": 969,
+            "p99": 969
+          },
+          "completion": {
+            "count": 4,
+            "min": 1440,
+            "max": 1440,
+            "mean": 1440,
+            "median": 1440.0,
+            "p50": 1440,
+            "p95": 1440,
+            "p99": 1440
+          },
+          "total": {
+            "count": 4,
+            "min": 2406,
+            "max": 2409,
+            "mean": 2408,
+            "median": 2408.5,
+            "p50": 2408,
+            "p95": 2409,
+            "p99": 2409
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.016815,
+          "max": 0.016823,
+          "mean": 0.01682,
+          "median": 0.016822,
+          "p50": 0.01682,
+          "p95": 0.016823,
+          "p99": 0.016823
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0072,
+          "max": 0.0106,
+          "mean": 0.0086,
+          "median": 0.0083,
+          "p50": 0.0074,
+          "p95": 0.0106,
+          "p99": 0.0106
+        }
+      },
+      {
+        "template_id": "wmi-event-subscription",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 987,
+            "max": 991,
+            "mean": 988.75,
+            "median": 988.5,
+            "p50": 987,
+            "p95": 991,
+            "p99": 991
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2107,
+            "max": 2111,
+            "mean": 2108.75,
+            "median": 2108.5,
+            "p50": 2107,
+            "p95": 2111,
+            "p99": 2111
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013667,
+          "max": 0.013677,
+          "mean": 0.013671,
+          "median": 0.013671,
+          "p50": 0.013667,
+          "p95": 0.013677,
+          "p99": 0.013677
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.0078,
+          "max": 0.0096,
+          "mean": 0.0084,
+          "median": 0.0082,
+          "p50": 0.008,
+          "p95": 0.0096,
+          "p99": 0.0096
+        }
+      },
+      {
+        "template_id": "wmi-lateral-execution",
+        "incidents": 4,
+        "tokens": {
+          "prompt": {
+            "count": 4,
+            "min": 937,
+            "max": 939,
+            "mean": 938,
+            "median": 938.0,
+            "p50": 937,
+            "p95": 939,
+            "p99": 939
+          },
+          "completion": {
+            "count": 4,
+            "min": 1120,
+            "max": 1120,
+            "mean": 1120,
+            "median": 1120.0,
+            "p50": 1120,
+            "p95": 1120,
+            "p99": 1120
+          },
+          "total": {
+            "count": 4,
+            "min": 2057,
+            "max": 2059,
+            "mean": 2058,
+            "median": 2058.0,
+            "p50": 2057,
+            "p95": 2059,
+            "p99": 2059
+          }
+        },
+        "usd": {
+          "count": 4,
+          "min": 0.013542,
+          "max": 0.013547,
+          "mean": 0.013545,
+          "median": 0.013545,
+          "p50": 0.013542,
+          "p95": 0.013547,
+          "p99": 0.013547
+        },
+        "latency_ms": {
+          "count": 4,
+          "min": 0.004,
+          "max": 0.0044,
+          "mean": 0.0042,
+          "median": 0.0041,
+          "p50": 0.0041,
+          "p95": 0.0044,
+          "p99": 0.0044
+        }
+      },
+      {
+        "template_id": "xmrig-cryptominer",
+        "incidents": 3,
+        "tokens": {
+          "prompt": {
+            "count": 3,
+            "min": 874,
+            "max": 877,
+            "mean": 875.67,
+            "median": 876,
+            "p50": 876,
+            "p95": 877,
+            "p99": 877
+          },
+          "completion": {
+            "count": 3,
+            "min": 800,
+            "max": 800,
+            "mean": 800,
+            "median": 800,
+            "p50": 800,
+            "p95": 800,
+            "p99": 800
+          },
+          "total": {
+            "count": 3,
+            "min": 1674,
+            "max": 1677,
+            "mean": 1675.67,
+            "median": 1676,
+            "p50": 1676,
+            "p95": 1677,
+            "p99": 1677
+          }
+        },
+        "usd": {
+          "count": 3,
+          "min": 0.010185,
+          "max": 0.010193,
+          "mean": 0.010189,
+          "median": 0.01019,
+          "p50": 0.01019,
+          "p95": 0.010193,
+          "p99": 0.010193
+        },
+        "latency_ms": {
+          "count": 3,
+          "min": 0.004,
+          "max": 0.0043,
+          "mean": 0.0041,
+          "median": 0.0041,
+          "p50": 0.0041,
+          "p95": 0.0043,
+          "p99": 0.0043
+        }
+      }
+    ],
+    "transparency_note": "These numbers are computed against the deterministic substrate. They are an upper-bound projection of what the live agent will consume on the same workload using a 4-chars/token estimator and an illustrative public 2025-era rate card. The wet-eval (T5.5) replaces them with real tiktoken counts and real LLM wall-clock.",
+    "incident_records": [
+      {
+        "incident_id": "INC-EVAL-001",
+        "template_id": "phishing-macro-email",
+        "severity": "high",
+        "prompt_tokens": 1048,
+        "completion_tokens": 1120,
+        "total_tokens": 2168,
+        "latency_ms": 0.04,
+        "usd": 0.01382
+      },
+      {
+        "incident_id": "INC-EVAL-002",
+        "template_id": "webapp-sqli-ssrf-exploit",
+        "severity": "critical",
+        "prompt_tokens": 966,
+        "completion_tokens": 1440,
+        "total_tokens": 2406,
+        "latency_ms": 0.0106,
+        "usd": 0.016815
+      },
+      {
+        "incident_id": "INC-EVAL-003",
+        "template_id": "confluence-watering-hole",
+        "severity": "high",
+        "prompt_tokens": 963,
+        "completion_tokens": 1120,
+        "total_tokens": 2083,
+        "latency_ms": 0.0109,
+        "usd": 0.013607
+      },
+      {
+        "incident_id": "INC-EVAL-004",
+        "template_id": "npm-supply-chain",
+        "severity": "critical",
+        "prompt_tokens": 991,
+        "completion_tokens": 1440,
+        "total_tokens": 2431,
+        "latency_ms": 0.0172,
+        "usd": 0.016878
+      },
+      {
+        "incident_id": "INC-EVAL-005",
+        "template_id": "usb-autorun-airgap",
+        "severity": "high",
+        "prompt_tokens": 985,
+        "completion_tokens": 1120,
+        "total_tokens": 2105,
+        "latency_ms": 0.0132,
+        "usd": 0.013662
+      },
+      {
+        "incident_id": "INC-EVAL-006",
+        "template_id": "oauth-consent-phish",
+        "severity": "high",
+        "prompt_tokens": 952,
+        "completion_tokens": 1120,
+        "total_tokens": 2072,
+        "latency_ms": 0.0091,
+        "usd": 0.01358
+      },
+      {
+        "incident_id": "INC-EVAL-007",
+        "template_id": "powershell-obfuscated-dropper",
+        "severity": "critical",
+        "prompt_tokens": 1012,
+        "completion_tokens": 1440,
+        "total_tokens": 2452,
+        "latency_ms": 0.0086,
+        "usd": 0.01693
+      },
+      {
+        "incident_id": "INC-EVAL-008",
+        "template_id": "certutil-download-cradle",
+        "severity": "high",
+        "prompt_tokens": 990,
+        "completion_tokens": 1120,
+        "total_tokens": 2110,
+        "latency_ms": 0.0087,
+        "usd": 0.013675
+      },
+      {
+        "incident_id": "INC-EVAL-009",
+        "template_id": "docker-runtime-abuse",
+        "severity": "high",
+        "prompt_tokens": 940,
+        "completion_tokens": 1120,
+        "total_tokens": 2060,
+        "latency_ms": 0.0094,
+        "usd": 0.01355
+      },
+      {
+        "incident_id": "INC-EVAL-010",
+        "template_id": "wmi-event-subscription",
+        "severity": "high",
+        "prompt_tokens": 990,
+        "completion_tokens": 1120,
+        "total_tokens": 2110,
+        "latency_ms": 0.0084,
+        "usd": 0.013675
+      },
+      {
+        "incident_id": "INC-EVAL-011",
+        "template_id": "registry-run-persistence",
+        "severity": "medium",
+        "prompt_tokens": 990,
+        "completion_tokens": 800,
+        "total_tokens": 1790,
+        "latency_ms": 0.0077,
+        "usd": 0.010475
+      },
+      {
+        "incident_id": "INC-EVAL-012",
+        "template_id": "scheduled-task-persistence",
+        "severity": "medium",
+        "prompt_tokens": 1020,
+        "completion_tokens": 800,
+        "total_tokens": 1820,
+        "latency_ms": 0.0087,
+        "usd": 0.01055
+      },
+      {
+        "incident_id": "INC-EVAL-013",
+        "template_id": "uefi-firmware-implant",
+        "severity": "critical",
+        "prompt_tokens": 947,
+        "completion_tokens": 1440,
+        "total_tokens": 2387,
+        "latency_ms": 0.0071,
+        "usd": 0.016768
+      },
+      {
+        "incident_id": "INC-EVAL-014",
+        "template_id": "cron-backdoor",
+        "severity": "high",
+        "prompt_tokens": 926,
+        "completion_tokens": 1120,
+        "total_tokens": 2046,
+        "latency_ms": 0.007,
+        "usd": 0.013515
+      },
+      {
+        "incident_id": "INC-EVAL-015",
+        "template_id": "uac-bypass-fodhelper",
+        "severity": "high",
+        "prompt_tokens": 998,
+        "completion_tokens": 1120,
+        "total_tokens": 2118,
+        "latency_ms": 0.0084,
+        "usd": 0.013695
+      },
+      {
+        "incident_id": "INC-EVAL-016",
+        "template_id": "k8s-privileged-pod-escape",
+        "severity": "critical",
+        "prompt_tokens": 975,
+        "completion_tokens": 1440,
+        "total_tokens": 2415,
+        "latency_ms": 0.0129,
+        "usd": 0.016838
+      },
+      {
+        "incident_id": "INC-EVAL-017",
+        "template_id": "linux-suid-abuse",
+        "severity": "high",
+        "prompt_tokens": 926,
+        "completion_tokens": 1120,
+        "total_tokens": 2046,
+        "latency_ms": 0.0073,
+        "usd": 0.013515
+      },
+      {
+        "incident_id": "INC-EVAL-018",
+        "template_id": "process-hollowing-svchost",
+        "severity": "critical",
+        "prompt_tokens": 1037,
+        "completion_tokens": 1440,
+        "total_tokens": 2477,
+        "latency_ms": 0.0115,
+        "usd": 0.016993
+      },
+      {
+        "incident_id": "INC-EVAL-019",
+        "template_id": "event-log-cleared",
+        "severity": "high",
+        "prompt_tokens": 965,
+        "completion_tokens": 1120,
+        "total_tokens": 2085,
+        "latency_ms": 0.0078,
+        "usd": 0.013612
+      },
+      {
+        "incident_id": "INC-EVAL-020",
+        "template_id": "disable-edr-tooling",
+        "severity": "critical",
+        "prompt_tokens": 996,
+        "completion_tokens": 1440,
+        "total_tokens": 2436,
+        "latency_ms": 0.0102,
+        "usd": 0.01689
+      },
+      {
+        "incident_id": "INC-EVAL-021",
+        "template_id": "lsass-memory-dump",
+        "severity": "critical",
+        "prompt_tokens": 996,
+        "completion_tokens": 1440,
+        "total_tokens": 2436,
+        "latency_ms": 0.0083,
+        "usd": 0.01689
+      },
+      {
+        "incident_id": "INC-EVAL-022",
+        "template_id": "credential-spray",
+        "severity": "high",
+        "prompt_tokens": 971,
+        "completion_tokens": 1120,
+        "total_tokens": 2091,
+        "latency_ms": 0.0078,
+        "usd": 0.013627
+      },
+      {
+        "incident_id": "INC-EVAL-023",
+        "template_id": "kerberoasting",
+        "severity": "critical",
+        "prompt_tokens": 989,
+        "completion_tokens": 1440,
+        "total_tokens": 2429,
+        "latency_ms": 0.0078,
+        "usd": 0.016873
+      },
+      {
+        "incident_id": "INC-EVAL-024",
+        "template_id": "ad-dcsync",
+        "severity": "critical",
+        "prompt_tokens": 915,
+        "completion_tokens": 1440,
+        "total_tokens": 2355,
+        "latency_ms": 0.0047,
+        "usd": 0.016688
+      },
+      {
+        "incident_id": "INC-EVAL-025",
+        "template_id": "saml-golden-ticket",
+        "severity": "critical",
+        "prompt_tokens": 965,
+        "completion_tokens": 1440,
+        "total_tokens": 2405,
+        "latency_ms": 0.009,
+        "usd": 0.016813
+      },
+      {
+        "incident_id": "INC-EVAL-026",
+        "template_id": "ldap-bloodhound-discovery",
+        "severity": "medium",
+        "prompt_tokens": 967,
+        "completion_tokens": 800,
+        "total_tokens": 1767,
+        "latency_ms": 0.0101,
+        "usd": 0.010417
+      },
+      {
+        "incident_id": "INC-EVAL-027",
+        "template_id": "smb-share-enumeration",
+        "severity": "medium",
+        "prompt_tokens": 971,
+        "completion_tokens": 800,
+        "total_tokens": 1771,
+        "latency_ms": 0.0079,
+        "usd": 0.010427
+      },
+      {
+        "incident_id": "INC-EVAL-028",
+        "template_id": "pass-the-hash-lateral",
+        "severity": "critical",
+        "prompt_tokens": 963,
+        "completion_tokens": 1440,
+        "total_tokens": 2403,
+        "latency_ms": 0.0179,
+        "usd": 0.016808
+      },
+      {
+        "incident_id": "INC-EVAL-029",
+        "template_id": "rdp-lateral-movement",
+        "severity": "high",
+        "prompt_tokens": 915,
+        "completion_tokens": 1120,
+        "total_tokens": 2035,
+        "latency_ms": 0.0045,
+        "usd": 0.013487
+      },
+      {
+        "incident_id": "INC-EVAL-030",
+        "template_id": "wmi-lateral-execution",
+        "severity": "high",
+        "prompt_tokens": 937,
+        "completion_tokens": 1120,
+        "total_tokens": 2057,
+        "latency_ms": 0.0044,
+        "usd": 0.013542
+      },
+      {
+        "incident_id": "INC-EVAL-031",
+        "template_id": "bulk-pii-download",
+        "severity": "critical",
+        "prompt_tokens": 888,
+        "completion_tokens": 1440,
+        "total_tokens": 2328,
+        "latency_ms": 0.0042,
+        "usd": 0.01662
+      },
+      {
+        "incident_id": "INC-EVAL-032",
+        "template_id": "clipboard-keylogger",
+        "severity": "high",
+        "prompt_tokens": 999,
+        "completion_tokens": 1120,
+        "total_tokens": 2119,
+        "latency_ms": 0.008,
+        "usd": 0.013697
+      },
+      {
+        "incident_id": "INC-EVAL-033",
+        "template_id": "dns-tunnel-exfil",
+        "severity": "critical",
+        "prompt_tokens": 886,
+        "completion_tokens": 1440,
+        "total_tokens": 2326,
+        "latency_ms": 0.0041,
+        "usd": 0.016615
+      },
+      {
+        "incident_id": "INC-EVAL-034",
+        "template_id": "s3-exfil-cloud-storage",
+        "severity": "critical",
+        "prompt_tokens": 937,
+        "completion_tokens": 1440,
+        "total_tokens": 2377,
+        "latency_ms": 0.0063,
+        "usd": 0.016743
+      },
+      {
+        "incident_id": "INC-EVAL-035",
+        "template_id": "personal-drive-exfil",
+        "severity": "critical",
+        "prompt_tokens": 889,
+        "completion_tokens": 1440,
+        "total_tokens": 2329,
+        "latency_ms": 0.0042,
+        "usd": 0.016623
+      },
+      {
+        "incident_id": "INC-EVAL-036",
+        "template_id": "dga-c2",
+        "severity": "high",
+        "prompt_tokens": 950,
+        "completion_tokens": 1120,
+        "total_tokens": 2070,
+        "latency_ms": 0.0083,
+        "usd": 0.013575
+      },
+      {
+        "incident_id": "INC-EVAL-037",
+        "template_id": "https-c2-beacon",
+        "severity": "critical",
+        "prompt_tokens": 912,
+        "completion_tokens": 1440,
+        "total_tokens": 2352,
+        "latency_ms": 0.0046,
+        "usd": 0.01668
+      },
+      {
+        "incident_id": "INC-EVAL-038",
+        "template_id": "ransomware-encryption",
+        "severity": "critical",
+        "prompt_tokens": 1040,
+        "completion_tokens": 1440,
+        "total_tokens": 2480,
+        "latency_ms": 0.0109,
+        "usd": 0.017
+      },
+      {
+        "incident_id": "INC-EVAL-039",
+        "template_id": "xmrig-cryptominer",
+        "severity": "medium",
+        "prompt_tokens": 876,
+        "completion_tokens": 800,
+        "total_tokens": 1676,
+        "latency_ms": 0.0043,
+        "usd": 0.01019
+      },
+      {
+        "incident_id": "INC-EVAL-040",
+        "template_id": "bec-wire-fraud",
+        "severity": "critical",
+        "prompt_tokens": 912,
+        "completion_tokens": 1440,
+        "total_tokens": 2352,
+        "latency_ms": 0.0042,
+        "usd": 0.01668
+      },
+      {
+        "incident_id": "INC-EVAL-041",
+        "template_id": "public-s3-bucket-pii",
+        "severity": "critical",
+        "prompt_tokens": 978,
+        "completion_tokens": 1440,
+        "total_tokens": 2418,
+        "latency_ms": 0.0104,
+        "usd": 0.016845
+      },
+      {
+        "incident_id": "INC-EVAL-042",
+        "template_id": "azure-ad-impossible-travel",
+        "severity": "critical",
+        "prompt_tokens": 936,
+        "completion_tokens": 1440,
+        "total_tokens": 2376,
+        "latency_ms": 0.0061,
+        "usd": 0.01674
+      },
+      {
+        "incident_id": "INC-EVAL-043",
+        "template_id": "ddos-syn-flood",
+        "severity": "high",
+        "prompt_tokens": 880,
+        "completion_tokens": 1120,
+        "total_tokens": 2000,
+        "latency_ms": 0.0043,
+        "usd": 0.0134
+      },
+      {
+        "incident_id": "INC-EVAL-044",
+        "template_id": "insider-mailbox-export",
+        "severity": "high",
+        "prompt_tokens": 895,
+        "completion_tokens": 1120,
+        "total_tokens": 2015,
+        "latency_ms": 0.0062,
+        "usd": 0.013437
+      },
+      {
+        "incident_id": "INC-EVAL-045",
+        "template_id": "office-vsto-addin",
+        "severity": "high",
+        "prompt_tokens": 1007,
+        "completion_tokens": 1120,
+        "total_tokens": 2127,
+        "latency_ms": 0.0083,
+        "usd": 0.013717
+      },
+      {
+        "incident_id": "INC-EVAL-046",
+        "template_id": "github-pat-leak",
+        "severity": "critical",
+        "prompt_tokens": 941,
+        "completion_tokens": 1440,
+        "total_tokens": 2381,
+        "latency_ms": 0.0072,
+        "usd": 0.016753
+      },
+      {
+        "incident_id": "INC-EVAL-047",
+        "template_id": "ec2-imds-credential-theft",
+        "severity": "critical",
+        "prompt_tokens": 965,
+        "completion_tokens": 1440,
+        "total_tokens": 2405,
+        "latency_ms": 0.0079,
+        "usd": 0.016813
+      },
+      {
+        "incident_id": "INC-EVAL-048",
+        "template_id": "helpdesk-password-reset-abuse",
+        "severity": "high",
+        "prompt_tokens": 930,
+        "completion_tokens": 1120,
+        "total_tokens": 2050,
+        "latency_ms": 0.0066,
+        "usd": 0.013525
+      },
+      {
+        "incident_id": "INC-EVAL-049",
+        "template_id": "oauth-refresh-token-theft",
+        "severity": "high",
+        "prompt_tokens": 894,
+        "completion_tokens": 1120,
+        "total_tokens": 2014,
+        "latency_ms": 0.0039,
+        "usd": 0.013435
+      },
+      {
+        "incident_id": "INC-EVAL-050",
+        "template_id": "malicious-container-image",
+        "severity": "high",
+        "prompt_tokens": 960,
+        "completion_tokens": 1120,
+        "total_tokens": 2080,
+        "latency_ms": 0.0096,
+        "usd": 0.0136
+      },
+      {
+        "incident_id": "INC-EVAL-051",
+        "template_id": "outlook-auto-forward-rule",
+        "severity": "high",
+        "prompt_tokens": 893,
+        "completion_tokens": 1120,
+        "total_tokens": 2013,
+        "latency_ms": 0.0046,
+        "usd": 0.013432
+      },
+      {
+        "incident_id": "INC-EVAL-052",
+        "template_id": "linux-journald-tampering",
+        "severity": "high",
+        "prompt_tokens": 891,
+        "completion_tokens": 1120,
+        "total_tokens": 2011,
+        "latency_ms": 0.0041,
+        "usd": 0.013427
+      },
+      {
+        "incident_id": "INC-EVAL-053",
+        "template_id": "compromised-ci-runner",
+        "severity": "critical",
+        "prompt_tokens": 942,
+        "completion_tokens": 1440,
+        "total_tokens": 2382,
+        "latency_ms": 0.0075,
+        "usd": 0.016755
+      },
+      {
+        "incident_id": "INC-EVAL-054",
+        "template_id": "vpn-new-geography",
+        "severity": "high",
+        "prompt_tokens": 939,
+        "completion_tokens": 1120,
+        "total_tokens": 2059,
+        "latency_ms": 0.0074,
+        "usd": 0.013547
+      },
+      {
+        "incident_id": "INC-EVAL-055",
+        "template_id": "service-account-privileged-command",
+        "severity": "high",
+        "prompt_tokens": 907,
+        "completion_tokens": 1120,
+        "total_tokens": 2027,
+        "latency_ms": 0.0041,
+        "usd": 0.013467
+      },
+      {
+        "incident_id": "INC-EVAL-056",
+        "template_id": "phishing-macro-email",
+        "severity": "high",
+        "prompt_tokens": 1050,
+        "completion_tokens": 1120,
+        "total_tokens": 2170,
+        "latency_ms": 0.0109,
+        "usd": 0.013825
+      },
+      {
+        "incident_id": "INC-EVAL-057",
+        "template_id": "webapp-sqli-ssrf-exploit",
+        "severity": "critical",
+        "prompt_tokens": 968,
+        "completion_tokens": 1440,
+        "total_tokens": 2408,
+        "latency_ms": 0.0091,
+        "usd": 0.01682
+      },
+      {
+        "incident_id": "INC-EVAL-058",
+        "template_id": "confluence-watering-hole",
+        "severity": "high",
+        "prompt_tokens": 960,
+        "completion_tokens": 1120,
+        "total_tokens": 2080,
+        "latency_ms": 0.0066,
+        "usd": 0.0136
+      },
+      {
+        "incident_id": "INC-EVAL-059",
+        "template_id": "npm-supply-chain",
+        "severity": "critical",
+        "prompt_tokens": 991,
+        "completion_tokens": 1440,
+        "total_tokens": 2431,
+        "latency_ms": 0.0102,
+        "usd": 0.016878
+      },
+      {
+        "incident_id": "INC-EVAL-060",
+        "template_id": "usb-autorun-airgap",
+        "severity": "high",
+        "prompt_tokens": 991,
+        "completion_tokens": 1120,
+        "total_tokens": 2111,
+        "latency_ms": 0.0078,
+        "usd": 0.013677
+      },
+      {
+        "incident_id": "INC-EVAL-061",
+        "template_id": "oauth-consent-phish",
+        "severity": "high",
+        "prompt_tokens": 953,
+        "completion_tokens": 1120,
+        "total_tokens": 2073,
+        "latency_ms": 0.0075,
+        "usd": 0.013582
+      },
+      {
+        "incident_id": "INC-EVAL-062",
+        "template_id": "powershell-obfuscated-dropper",
+        "severity": "critical",
+        "prompt_tokens": 1015,
+        "completion_tokens": 1440,
+        "total_tokens": 2455,
+        "latency_ms": 0.0078,
+        "usd": 0.016938
+      },
+      {
+        "incident_id": "INC-EVAL-063",
+        "template_id": "certutil-download-cradle",
+        "severity": "high",
+        "prompt_tokens": 988,
+        "completion_tokens": 1120,
+        "total_tokens": 2108,
+        "latency_ms": 0.0076,
+        "usd": 0.01367
+      },
+      {
+        "incident_id": "INC-EVAL-064",
+        "template_id": "docker-runtime-abuse",
+        "severity": "high",
+        "prompt_tokens": 940,
+        "completion_tokens": 1120,
+        "total_tokens": 2060,
+        "latency_ms": 0.008,
+        "usd": 0.01355
+      },
+      {
+        "incident_id": "INC-EVAL-065",
+        "template_id": "wmi-event-subscription",
+        "severity": "high",
+        "prompt_tokens": 991,
+        "completion_tokens": 1120,
+        "total_tokens": 2111,
+        "latency_ms": 0.008,
+        "usd": 0.013677
+      },
+      {
+        "incident_id": "INC-EVAL-066",
+        "template_id": "registry-run-persistence",
+        "severity": "medium",
+        "prompt_tokens": 987,
+        "completion_tokens": 800,
+        "total_tokens": 1787,
+        "latency_ms": 0.0075,
+        "usd": 0.010468
+      },
+      {
+        "incident_id": "INC-EVAL-067",
+        "template_id": "scheduled-task-persistence",
+        "severity": "medium",
+        "prompt_tokens": 1019,
+        "completion_tokens": 800,
+        "total_tokens": 1819,
+        "latency_ms": 0.0082,
+        "usd": 0.010547
+      },
+      {
+        "incident_id": "INC-EVAL-068",
+        "template_id": "uefi-firmware-implant",
+        "severity": "critical",
+        "prompt_tokens": 949,
+        "completion_tokens": 1440,
+        "total_tokens": 2389,
+        "latency_ms": 0.0068,
+        "usd": 0.016773
+      },
+      {
+        "incident_id": "INC-EVAL-069",
+        "template_id": "cron-backdoor",
+        "severity": "high",
+        "prompt_tokens": 923,
+        "completion_tokens": 1120,
+        "total_tokens": 2043,
+        "latency_ms": 0.0069,
+        "usd": 0.013507
+      },
+      {
+        "incident_id": "INC-EVAL-070",
+        "template_id": "uac-bypass-fodhelper",
+        "severity": "high",
+        "prompt_tokens": 994,
+        "completion_tokens": 1120,
+        "total_tokens": 2114,
+        "latency_ms": 0.008,
+        "usd": 0.013685
+      },
+      {
+        "incident_id": "INC-EVAL-071",
+        "template_id": "k8s-privileged-pod-escape",
+        "severity": "critical",
+        "prompt_tokens": 973,
+        "completion_tokens": 1440,
+        "total_tokens": 2413,
+        "latency_ms": 0.0133,
+        "usd": 0.016833
+      },
+      {
+        "incident_id": "INC-EVAL-072",
+        "template_id": "linux-suid-abuse",
+        "severity": "high",
+        "prompt_tokens": 920,
+        "completion_tokens": 1120,
+        "total_tokens": 2040,
+        "latency_ms": 0.0073,
+        "usd": 0.0135
+      },
+      {
+        "incident_id": "INC-EVAL-073",
+        "template_id": "process-hollowing-svchost",
+        "severity": "critical",
+        "prompt_tokens": 1036,
+        "completion_tokens": 1440,
+        "total_tokens": 2476,
+        "latency_ms": 0.0112,
+        "usd": 0.01699
+      },
+      {
+        "incident_id": "INC-EVAL-074",
+        "template_id": "event-log-cleared",
+        "severity": "high",
+        "prompt_tokens": 967,
+        "completion_tokens": 1120,
+        "total_tokens": 2087,
+        "latency_ms": 0.0075,
+        "usd": 0.013617
+      },
+      {
+        "incident_id": "INC-EVAL-075",
+        "template_id": "disable-edr-tooling",
+        "severity": "critical",
+        "prompt_tokens": 998,
+        "completion_tokens": 1440,
+        "total_tokens": 2438,
+        "latency_ms": 0.0098,
+        "usd": 0.016895
+      },
+      {
+        "incident_id": "INC-EVAL-076",
+        "template_id": "lsass-memory-dump",
+        "severity": "critical",
+        "prompt_tokens": 993,
+        "completion_tokens": 1440,
+        "total_tokens": 2433,
+        "latency_ms": 0.0103,
+        "usd": 0.016883
+      },
+      {
+        "incident_id": "INC-EVAL-077",
+        "template_id": "credential-spray",
+        "severity": "high",
+        "prompt_tokens": 965,
+        "completion_tokens": 1120,
+        "total_tokens": 2085,
+        "latency_ms": 0.0077,
+        "usd": 0.013612
+      },
+      {
+        "incident_id": "INC-EVAL-078",
+        "template_id": "kerberoasting",
+        "severity": "critical",
+        "prompt_tokens": 984,
+        "completion_tokens": 1440,
+        "total_tokens": 2424,
+        "latency_ms": 0.0077,
+        "usd": 0.01686
+      },
+      {
+        "incident_id": "INC-EVAL-079",
+        "template_id": "ad-dcsync",
+        "severity": "critical",
+        "prompt_tokens": 917,
+        "completion_tokens": 1440,
+        "total_tokens": 2357,
+        "latency_ms": 0.0045,
+        "usd": 0.016693
+      },
+      {
+        "incident_id": "INC-EVAL-080",
+        "template_id": "saml-golden-ticket",
+        "severity": "critical",
+        "prompt_tokens": 966,
+        "completion_tokens": 1440,
+        "total_tokens": 2406,
+        "latency_ms": 0.0084,
+        "usd": 0.016815
+      },
+      {
+        "incident_id": "INC-EVAL-081",
+        "template_id": "ldap-bloodhound-discovery",
+        "severity": "medium",
+        "prompt_tokens": 964,
+        "completion_tokens": 800,
+        "total_tokens": 1764,
+        "latency_ms": 0.0077,
+        "usd": 0.01041
+      },
+      {
+        "incident_id": "INC-EVAL-082",
+        "template_id": "smb-share-enumeration",
+        "severity": "medium",
+        "prompt_tokens": 966,
+        "completion_tokens": 800,
+        "total_tokens": 1766,
+        "latency_ms": 0.0076,
+        "usd": 0.010415
+      },
+      {
+        "incident_id": "INC-EVAL-083",
+        "template_id": "pass-the-hash-lateral",
+        "severity": "critical",
+        "prompt_tokens": 967,
+        "completion_tokens": 1440,
+        "total_tokens": 2407,
+        "latency_ms": 0.0076,
+        "usd": 0.016818
+      },
+      {
+        "incident_id": "INC-EVAL-084",
+        "template_id": "rdp-lateral-movement",
+        "severity": "high",
+        "prompt_tokens": 912,
+        "completion_tokens": 1120,
+        "total_tokens": 2032,
+        "latency_ms": 0.0042,
+        "usd": 0.01348
+      },
+      {
+        "incident_id": "INC-EVAL-085",
+        "template_id": "wmi-lateral-execution",
+        "severity": "high",
+        "prompt_tokens": 939,
+        "completion_tokens": 1120,
+        "total_tokens": 2059,
+        "latency_ms": 0.0041,
+        "usd": 0.013547
+      },
+      {
+        "incident_id": "INC-EVAL-086",
+        "template_id": "bulk-pii-download",
+        "severity": "critical",
+        "prompt_tokens": 887,
+        "completion_tokens": 1440,
+        "total_tokens": 2327,
+        "latency_ms": 0.0041,
+        "usd": 0.016618
+      },
+      {
+        "incident_id": "INC-EVAL-087",
+        "template_id": "clipboard-keylogger",
+        "severity": "high",
+        "prompt_tokens": 990,
+        "completion_tokens": 1120,
+        "total_tokens": 2110,
+        "latency_ms": 0.0074,
+        "usd": 0.013675
+      },
+      {
+        "incident_id": "INC-EVAL-088",
+        "template_id": "dns-tunnel-exfil",
+        "severity": "critical",
+        "prompt_tokens": 886,
+        "completion_tokens": 1440,
+        "total_tokens": 2326,
+        "latency_ms": 0.0039,
+        "usd": 0.016615
+      },
+      {
+        "incident_id": "INC-EVAL-089",
+        "template_id": "s3-exfil-cloud-storage",
+        "severity": "critical",
+        "prompt_tokens": 939,
+        "completion_tokens": 1440,
+        "total_tokens": 2379,
+        "latency_ms": 0.0078,
+        "usd": 0.016748
+      },
+      {
+        "incident_id": "INC-EVAL-090",
+        "template_id": "personal-drive-exfil",
+        "severity": "critical",
+        "prompt_tokens": 888,
+        "completion_tokens": 1440,
+        "total_tokens": 2328,
+        "latency_ms": 0.0041,
+        "usd": 0.01662
+      },
+      {
+        "incident_id": "INC-EVAL-091",
+        "template_id": "dga-c2",
+        "severity": "high",
+        "prompt_tokens": 948,
+        "completion_tokens": 1120,
+        "total_tokens": 2068,
+        "latency_ms": 0.0078,
+        "usd": 0.01357
+      },
+      {
+        "incident_id": "INC-EVAL-092",
+        "template_id": "https-c2-beacon",
+        "severity": "critical",
+        "prompt_tokens": 910,
+        "completion_tokens": 1440,
+        "total_tokens": 2350,
+        "latency_ms": 0.0047,
+        "usd": 0.016675
+      },
+      {
+        "incident_id": "INC-EVAL-093",
+        "template_id": "ransomware-encryption",
+        "severity": "critical",
+        "prompt_tokens": 1031,
+        "completion_tokens": 1440,
+        "total_tokens": 2471,
+        "latency_ms": 0.0106,
+        "usd": 0.016977
+      },
+      {
+        "incident_id": "INC-EVAL-094",
+        "template_id": "xmrig-cryptominer",
+        "severity": "medium",
+        "prompt_tokens": 877,
+        "completion_tokens": 800,
+        "total_tokens": 1677,
+        "latency_ms": 0.0041,
+        "usd": 0.010193
+      },
+      {
+        "incident_id": "INC-EVAL-095",
+        "template_id": "bec-wire-fraud",
+        "severity": "critical",
+        "prompt_tokens": 908,
+        "completion_tokens": 1440,
+        "total_tokens": 2348,
+        "latency_ms": 0.0041,
+        "usd": 0.01667
+      },
+      {
+        "incident_id": "INC-EVAL-096",
+        "template_id": "public-s3-bucket-pii",
+        "severity": "critical",
+        "prompt_tokens": 977,
+        "completion_tokens": 1440,
+        "total_tokens": 2417,
+        "latency_ms": 0.01,
+        "usd": 0.016843
+      },
+      {
+        "incident_id": "INC-EVAL-097",
+        "template_id": "azure-ad-impossible-travel",
+        "severity": "critical",
+        "prompt_tokens": 938,
+        "completion_tokens": 1440,
+        "total_tokens": 2378,
+        "latency_ms": 0.0057,
+        "usd": 0.016745
+      },
+      {
+        "incident_id": "INC-EVAL-098",
+        "template_id": "ddos-syn-flood",
+        "severity": "high",
+        "prompt_tokens": 880,
+        "completion_tokens": 1120,
+        "total_tokens": 2000,
+        "latency_ms": 0.0039,
+        "usd": 0.0134
+      },
+      {
+        "incident_id": "INC-EVAL-099",
+        "template_id": "insider-mailbox-export",
+        "severity": "high",
+        "prompt_tokens": 896,
+        "completion_tokens": 1120,
+        "total_tokens": 2016,
+        "latency_ms": 0.0041,
+        "usd": 0.01344
+      },
+      {
+        "incident_id": "INC-EVAL-100",
+        "template_id": "office-vsto-addin",
+        "severity": "high",
+        "prompt_tokens": 1005,
+        "completion_tokens": 1120,
+        "total_tokens": 2125,
+        "latency_ms": 0.0077,
+        "usd": 0.013712
+      },
+      {
+        "incident_id": "INC-EVAL-101",
+        "template_id": "github-pat-leak",
+        "severity": "critical",
+        "prompt_tokens": 941,
+        "completion_tokens": 1440,
+        "total_tokens": 2381,
+        "latency_ms": 0.007,
+        "usd": 0.016753
+      },
+      {
+        "incident_id": "INC-EVAL-102",
+        "template_id": "ec2-imds-credential-theft",
+        "severity": "critical",
+        "prompt_tokens": 963,
+        "completion_tokens": 1440,
+        "total_tokens": 2403,
+        "latency_ms": 0.0076,
+        "usd": 0.016808
+      },
+      {
+        "incident_id": "INC-EVAL-103",
+        "template_id": "helpdesk-password-reset-abuse",
+        "severity": "high",
+        "prompt_tokens": 928,
+        "completion_tokens": 1120,
+        "total_tokens": 2048,
+        "latency_ms": 0.0066,
+        "usd": 0.01352
+      },
+      {
+        "incident_id": "INC-EVAL-104",
+        "template_id": "oauth-refresh-token-theft",
+        "severity": "high",
+        "prompt_tokens": 892,
+        "completion_tokens": 1120,
+        "total_tokens": 2012,
+        "latency_ms": 0.0041,
+        "usd": 0.01343
+      },
+      {
+        "incident_id": "INC-EVAL-105",
+        "template_id": "malicious-container-image",
+        "severity": "high",
+        "prompt_tokens": 959,
+        "completion_tokens": 1120,
+        "total_tokens": 2079,
+        "latency_ms": 0.0089,
+        "usd": 0.013597
+      },
+      {
+        "incident_id": "INC-EVAL-106",
+        "template_id": "outlook-auto-forward-rule",
+        "severity": "high",
+        "prompt_tokens": 897,
+        "completion_tokens": 1120,
+        "total_tokens": 2017,
+        "latency_ms": 0.0042,
+        "usd": 0.013442
+      },
+      {
+        "incident_id": "INC-EVAL-107",
+        "template_id": "linux-journald-tampering",
+        "severity": "high",
+        "prompt_tokens": 889,
+        "completion_tokens": 1120,
+        "total_tokens": 2009,
+        "latency_ms": 0.004,
+        "usd": 0.013422
+      },
+      {
+        "incident_id": "INC-EVAL-108",
+        "template_id": "compromised-ci-runner",
+        "severity": "critical",
+        "prompt_tokens": 940,
+        "completion_tokens": 1440,
+        "total_tokens": 2380,
+        "latency_ms": 0.0075,
+        "usd": 0.01675
+      },
+      {
+        "incident_id": "INC-EVAL-109",
+        "template_id": "vpn-new-geography",
+        "severity": "high",
+        "prompt_tokens": 939,
+        "completion_tokens": 1120,
+        "total_tokens": 2059,
+        "latency_ms": 0.0074,
+        "usd": 0.013547
+      },
+      {
+        "incident_id": "INC-EVAL-110",
+        "template_id": "service-account-privileged-command",
+        "severity": "high",
+        "prompt_tokens": 907,
+        "completion_tokens": 1120,
+        "total_tokens": 2027,
+        "latency_ms": 0.0042,
+        "usd": 0.013467
+      },
+      {
+        "incident_id": "INC-EVAL-111",
+        "template_id": "phishing-macro-email",
+        "severity": "high",
+        "prompt_tokens": 1052,
+        "completion_tokens": 1120,
+        "total_tokens": 2172,
+        "latency_ms": 0.0108,
+        "usd": 0.01383
+      },
+      {
+        "incident_id": "INC-EVAL-112",
+        "template_id": "webapp-sqli-ssrf-exploit",
+        "severity": "critical",
+        "prompt_tokens": 969,
+        "completion_tokens": 1440,
+        "total_tokens": 2409,
+        "latency_ms": 0.0074,
+        "usd": 0.016823
+      },
+      {
+        "incident_id": "INC-EVAL-113",
+        "template_id": "confluence-watering-hole",
+        "severity": "high",
+        "prompt_tokens": 962,
+        "completion_tokens": 1120,
+        "total_tokens": 2082,
+        "latency_ms": 0.0066,
+        "usd": 0.013605
+      },
+      {
+        "incident_id": "INC-EVAL-114",
+        "template_id": "npm-supply-chain",
+        "severity": "critical",
+        "prompt_tokens": 991,
+        "completion_tokens": 1440,
+        "total_tokens": 2431,
+        "latency_ms": 0.0103,
+        "usd": 0.016878
+      },
+      {
+        "incident_id": "INC-EVAL-115",
+        "template_id": "usb-autorun-airgap",
+        "severity": "high",
+        "prompt_tokens": 988,
+        "completion_tokens": 1120,
+        "total_tokens": 2108,
+        "latency_ms": 0.0077,
+        "usd": 0.01367
+      },
+      {
+        "incident_id": "INC-EVAL-116",
+        "template_id": "oauth-consent-phish",
+        "severity": "high",
+        "prompt_tokens": 952,
+        "completion_tokens": 1120,
+        "total_tokens": 2072,
+        "latency_ms": 0.0075,
+        "usd": 0.01358
+      },
+      {
+        "incident_id": "INC-EVAL-117",
+        "template_id": "powershell-obfuscated-dropper",
+        "severity": "critical",
+        "prompt_tokens": 1017,
+        "completion_tokens": 1440,
+        "total_tokens": 2457,
+        "latency_ms": 0.0076,
+        "usd": 0.016942
+      },
+      {
+        "incident_id": "INC-EVAL-118",
+        "template_id": "certutil-download-cradle",
+        "severity": "high",
+        "prompt_tokens": 990,
+        "completion_tokens": 1120,
+        "total_tokens": 2110,
+        "latency_ms": 0.0075,
+        "usd": 0.013675
+      },
+      {
+        "incident_id": "INC-EVAL-119",
+        "template_id": "docker-runtime-abuse",
+        "severity": "high",
+        "prompt_tokens": 939,
+        "completion_tokens": 1120,
+        "total_tokens": 2059,
+        "latency_ms": 0.0076,
+        "usd": 0.013547
+      },
+      {
+        "incident_id": "INC-EVAL-120",
+        "template_id": "wmi-event-subscription",
+        "severity": "high",
+        "prompt_tokens": 987,
+        "completion_tokens": 1120,
+        "total_tokens": 2107,
+        "latency_ms": 0.0078,
+        "usd": 0.013667
+      },
+      {
+        "incident_id": "INC-EVAL-121",
+        "template_id": "registry-run-persistence",
+        "severity": "medium",
+        "prompt_tokens": 988,
+        "completion_tokens": 800,
+        "total_tokens": 1788,
+        "latency_ms": 0.0071,
+        "usd": 0.01047
+      },
+      {
+        "incident_id": "INC-EVAL-122",
+        "template_id": "scheduled-task-persistence",
+        "severity": "medium",
+        "prompt_tokens": 1019,
+        "completion_tokens": 800,
+        "total_tokens": 1819,
+        "latency_ms": 0.0096,
+        "usd": 0.010547
+      },
+      {
+        "incident_id": "INC-EVAL-123",
+        "template_id": "uefi-firmware-implant",
+        "severity": "critical",
+        "prompt_tokens": 949,
+        "completion_tokens": 1440,
+        "total_tokens": 2389,
+        "latency_ms": 0.0067,
+        "usd": 0.016773
+      },
+      {
+        "incident_id": "INC-EVAL-124",
+        "template_id": "cron-backdoor",
+        "severity": "high",
+        "prompt_tokens": 924,
+        "completion_tokens": 1120,
+        "total_tokens": 2044,
+        "latency_ms": 0.0113,
+        "usd": 0.01351
+      },
+      {
+        "incident_id": "INC-EVAL-125",
+        "template_id": "uac-bypass-fodhelper",
+        "severity": "high",
+        "prompt_tokens": 995,
+        "completion_tokens": 1120,
+        "total_tokens": 2115,
+        "latency_ms": 0.0076,
+        "usd": 0.013687
+      },
+      {
+        "incident_id": "INC-EVAL-126",
+        "template_id": "k8s-privileged-pod-escape",
+        "severity": "critical",
+        "prompt_tokens": 975,
+        "completion_tokens": 1440,
+        "total_tokens": 2415,
+        "latency_ms": 0.0103,
+        "usd": 0.016838
+      },
+      {
+        "incident_id": "INC-EVAL-127",
+        "template_id": "linux-suid-abuse",
+        "severity": "high",
+        "prompt_tokens": 921,
+        "completion_tokens": 1120,
+        "total_tokens": 2041,
+        "latency_ms": 0.0073,
+        "usd": 0.013502
+      },
+      {
+        "incident_id": "INC-EVAL-128",
+        "template_id": "process-hollowing-svchost",
+        "severity": "critical",
+        "prompt_tokens": 1038,
+        "completion_tokens": 1440,
+        "total_tokens": 2478,
+        "latency_ms": 0.0109,
+        "usd": 0.016995
+      },
+      {
+        "incident_id": "INC-EVAL-129",
+        "template_id": "event-log-cleared",
+        "severity": "high",
+        "prompt_tokens": 964,
+        "completion_tokens": 1120,
+        "total_tokens": 2084,
+        "latency_ms": 0.0074,
+        "usd": 0.01361
+      },
+      {
+        "incident_id": "INC-EVAL-130",
+        "template_id": "disable-edr-tooling",
+        "severity": "critical",
+        "prompt_tokens": 999,
+        "completion_tokens": 1440,
+        "total_tokens": 2439,
+        "latency_ms": 0.01,
+        "usd": 0.016898
+      },
+      {
+        "incident_id": "INC-EVAL-131",
+        "template_id": "lsass-memory-dump",
+        "severity": "critical",
+        "prompt_tokens": 995,
+        "completion_tokens": 1440,
+        "total_tokens": 2435,
+        "latency_ms": 0.008,
+        "usd": 0.016887
+      },
+      {
+        "incident_id": "INC-EVAL-132",
+        "template_id": "credential-spray",
+        "severity": "high",
+        "prompt_tokens": 963,
+        "completion_tokens": 1120,
+        "total_tokens": 2083,
+        "latency_ms": 0.0075,
+        "usd": 0.013607
+      },
+      {
+        "incident_id": "INC-EVAL-133",
+        "template_id": "kerberoasting",
+        "severity": "critical",
+        "prompt_tokens": 990,
+        "completion_tokens": 1440,
+        "total_tokens": 2430,
+        "latency_ms": 0.0076,
+        "usd": 0.016875
+      },
+      {
+        "incident_id": "INC-EVAL-134",
+        "template_id": "ad-dcsync",
+        "severity": "critical",
+        "prompt_tokens": 913,
+        "completion_tokens": 1440,
+        "total_tokens": 2353,
+        "latency_ms": 0.0045,
+        "usd": 0.016683
+      },
+      {
+        "incident_id": "INC-EVAL-135",
+        "template_id": "saml-golden-ticket",
+        "severity": "critical",
+        "prompt_tokens": 971,
+        "completion_tokens": 1440,
+        "total_tokens": 2411,
+        "latency_ms": 0.0088,
+        "usd": 0.016828
+      },
+      {
+        "incident_id": "INC-EVAL-136",
+        "template_id": "ldap-bloodhound-discovery",
+        "severity": "medium",
+        "prompt_tokens": 963,
+        "completion_tokens": 800,
+        "total_tokens": 1763,
+        "latency_ms": 0.0076,
+        "usd": 0.010408
+      },
+      {
+        "incident_id": "INC-EVAL-137",
+        "template_id": "smb-share-enumeration",
+        "severity": "medium",
+        "prompt_tokens": 970,
+        "completion_tokens": 800,
+        "total_tokens": 1770,
+        "latency_ms": 0.0074,
+        "usd": 0.010425
+      },
+      {
+        "incident_id": "INC-EVAL-138",
+        "template_id": "pass-the-hash-lateral",
+        "severity": "critical",
+        "prompt_tokens": 970,
+        "completion_tokens": 1440,
+        "total_tokens": 2410,
+        "latency_ms": 0.0078,
+        "usd": 0.016825
+      },
+      {
+        "incident_id": "INC-EVAL-139",
+        "template_id": "rdp-lateral-movement",
+        "severity": "high",
+        "prompt_tokens": 913,
+        "completion_tokens": 1120,
+        "total_tokens": 2033,
+        "latency_ms": 0.0043,
+        "usd": 0.013482
+      },
+      {
+        "incident_id": "INC-EVAL-140",
+        "template_id": "wmi-lateral-execution",
+        "severity": "high",
+        "prompt_tokens": 937,
+        "completion_tokens": 1120,
+        "total_tokens": 2057,
+        "latency_ms": 0.0041,
+        "usd": 0.013542
+      },
+      {
+        "incident_id": "INC-EVAL-141",
+        "template_id": "bulk-pii-download",
+        "severity": "critical",
+        "prompt_tokens": 888,
+        "completion_tokens": 1440,
+        "total_tokens": 2328,
+        "latency_ms": 0.0041,
+        "usd": 0.01662
+      },
+      {
+        "incident_id": "INC-EVAL-142",
+        "template_id": "clipboard-keylogger",
+        "severity": "high",
+        "prompt_tokens": 1001,
+        "completion_tokens": 1120,
+        "total_tokens": 2121,
+        "latency_ms": 0.0074,
+        "usd": 0.013702
+      },
+      {
+        "incident_id": "INC-EVAL-143",
+        "template_id": "dns-tunnel-exfil",
+        "severity": "critical",
+        "prompt_tokens": 886,
+        "completion_tokens": 1440,
+        "total_tokens": 2326,
+        "latency_ms": 0.0038,
+        "usd": 0.016615
+      },
+      {
+        "incident_id": "INC-EVAL-144",
+        "template_id": "s3-exfil-cloud-storage",
+        "severity": "critical",
+        "prompt_tokens": 941,
+        "completion_tokens": 1440,
+        "total_tokens": 2381,
+        "latency_ms": 0.0057,
+        "usd": 0.016753
+      },
+      {
+        "incident_id": "INC-EVAL-145",
+        "template_id": "personal-drive-exfil",
+        "severity": "critical",
+        "prompt_tokens": 889,
+        "completion_tokens": 1440,
+        "total_tokens": 2329,
+        "latency_ms": 0.0039,
+        "usd": 0.016623
+      },
+      {
+        "incident_id": "INC-EVAL-146",
+        "template_id": "dga-c2",
+        "severity": "high",
+        "prompt_tokens": 950,
+        "completion_tokens": 1120,
+        "total_tokens": 2070,
+        "latency_ms": 0.0075,
+        "usd": 0.013575
+      },
+      {
+        "incident_id": "INC-EVAL-147",
+        "template_id": "https-c2-beacon",
+        "severity": "critical",
+        "prompt_tokens": 911,
+        "completion_tokens": 1440,
+        "total_tokens": 2351,
+        "latency_ms": 0.0045,
+        "usd": 0.016678
+      },
+      {
+        "incident_id": "INC-EVAL-148",
+        "template_id": "ransomware-encryption",
+        "severity": "critical",
+        "prompt_tokens": 1042,
+        "completion_tokens": 1440,
+        "total_tokens": 2482,
+        "latency_ms": 0.0104,
+        "usd": 0.017005
+      },
+      {
+        "incident_id": "INC-EVAL-149",
+        "template_id": "xmrig-cryptominer",
+        "severity": "medium",
+        "prompt_tokens": 874,
+        "completion_tokens": 800,
+        "total_tokens": 1674,
+        "latency_ms": 0.004,
+        "usd": 0.010185
+      },
+      {
+        "incident_id": "INC-EVAL-150",
+        "template_id": "bec-wire-fraud",
+        "severity": "critical",
+        "prompt_tokens": 907,
+        "completion_tokens": 1440,
+        "total_tokens": 2347,
+        "latency_ms": 0.004,
+        "usd": 0.016668
+      },
+      {
+        "incident_id": "INC-EVAL-151",
+        "template_id": "public-s3-bucket-pii",
+        "severity": "critical",
+        "prompt_tokens": 977,
+        "completion_tokens": 1440,
+        "total_tokens": 2417,
+        "latency_ms": 0.0114,
+        "usd": 0.016843
+      },
+      {
+        "incident_id": "INC-EVAL-152",
+        "template_id": "azure-ad-impossible-travel",
+        "severity": "critical",
+        "prompt_tokens": 934,
+        "completion_tokens": 1440,
+        "total_tokens": 2374,
+        "latency_ms": 0.0056,
+        "usd": 0.016735
+      },
+      {
+        "incident_id": "INC-EVAL-153",
+        "template_id": "ddos-syn-flood",
+        "severity": "high",
+        "prompt_tokens": 880,
+        "completion_tokens": 1120,
+        "total_tokens": 2000,
+        "latency_ms": 0.004,
+        "usd": 0.0134
+      },
+      {
+        "incident_id": "INC-EVAL-154",
+        "template_id": "insider-mailbox-export",
+        "severity": "high",
+        "prompt_tokens": 891,
+        "completion_tokens": 1120,
+        "total_tokens": 2011,
+        "latency_ms": 0.0041,
+        "usd": 0.013427
+      },
+      {
+        "incident_id": "INC-EVAL-155",
+        "template_id": "office-vsto-addin",
+        "severity": "high",
+        "prompt_tokens": 1009,
+        "completion_tokens": 1120,
+        "total_tokens": 2129,
+        "latency_ms": 0.0078,
+        "usd": 0.013722
+      },
+      {
+        "incident_id": "INC-EVAL-156",
+        "template_id": "github-pat-leak",
+        "severity": "critical",
+        "prompt_tokens": 940,
+        "completion_tokens": 1440,
+        "total_tokens": 2380,
+        "latency_ms": 0.0071,
+        "usd": 0.01675
+      },
+      {
+        "incident_id": "INC-EVAL-157",
+        "template_id": "ec2-imds-credential-theft",
+        "severity": "critical",
+        "prompt_tokens": 963,
+        "completion_tokens": 1440,
+        "total_tokens": 2403,
+        "latency_ms": 0.008,
+        "usd": 0.016808
+      },
+      {
+        "incident_id": "INC-EVAL-158",
+        "template_id": "helpdesk-password-reset-abuse",
+        "severity": "high",
+        "prompt_tokens": 927,
+        "completion_tokens": 1120,
+        "total_tokens": 2047,
+        "latency_ms": 0.0068,
+        "usd": 0.013517
+      },
+      {
+        "incident_id": "INC-EVAL-159",
+        "template_id": "oauth-refresh-token-theft",
+        "severity": "high",
+        "prompt_tokens": 892,
+        "completion_tokens": 1120,
+        "total_tokens": 2012,
+        "latency_ms": 0.0041,
+        "usd": 0.01343
+      },
+      {
+        "incident_id": "INC-EVAL-160",
+        "template_id": "malicious-container-image",
+        "severity": "high",
+        "prompt_tokens": 960,
+        "completion_tokens": 1120,
+        "total_tokens": 2080,
+        "latency_ms": 0.009,
+        "usd": 0.0136
+      },
+      {
+        "incident_id": "INC-EVAL-161",
+        "template_id": "outlook-auto-forward-rule",
+        "severity": "high",
+        "prompt_tokens": 895,
+        "completion_tokens": 1120,
+        "total_tokens": 2015,
+        "latency_ms": 0.0043,
+        "usd": 0.013437
+      },
+      {
+        "incident_id": "INC-EVAL-162",
+        "template_id": "linux-journald-tampering",
+        "severity": "high",
+        "prompt_tokens": 889,
+        "completion_tokens": 1120,
+        "total_tokens": 2009,
+        "latency_ms": 0.0039,
+        "usd": 0.013422
+      },
+      {
+        "incident_id": "INC-EVAL-163",
+        "template_id": "compromised-ci-runner",
+        "severity": "critical",
+        "prompt_tokens": 940,
+        "completion_tokens": 1440,
+        "total_tokens": 2380,
+        "latency_ms": 0.0075,
+        "usd": 0.01675
+      },
+      {
+        "incident_id": "INC-EVAL-164",
+        "template_id": "vpn-new-geography",
+        "severity": "high",
+        "prompt_tokens": 937,
+        "completion_tokens": 1120,
+        "total_tokens": 2057,
+        "latency_ms": 0.0069,
+        "usd": 0.013542
+      },
+      {
+        "incident_id": "INC-EVAL-165",
+        "template_id": "service-account-privileged-command",
+        "severity": "high",
+        "prompt_tokens": 909,
+        "completion_tokens": 1120,
+        "total_tokens": 2029,
+        "latency_ms": 0.004,
+        "usd": 0.013472
+      },
+      {
+        "incident_id": "INC-EVAL-166",
+        "template_id": "phishing-macro-email",
+        "severity": "high",
+        "prompt_tokens": 1055,
+        "completion_tokens": 1120,
+        "total_tokens": 2175,
+        "latency_ms": 0.011,
+        "usd": 0.013837
+      },
+      {
+        "incident_id": "INC-EVAL-167",
+        "template_id": "webapp-sqli-ssrf-exploit",
+        "severity": "critical",
+        "prompt_tokens": 969,
+        "completion_tokens": 1440,
+        "total_tokens": 2409,
+        "latency_ms": 0.0072,
+        "usd": 0.016823
+      },
+      {
+        "incident_id": "INC-EVAL-168",
+        "template_id": "confluence-watering-hole",
+        "severity": "high",
+        "prompt_tokens": 967,
+        "completion_tokens": 1120,
+        "total_tokens": 2087,
+        "latency_ms": 0.0066,
+        "usd": 0.013617
+      },
+      {
+        "incident_id": "INC-EVAL-169",
+        "template_id": "npm-supply-chain",
+        "severity": "critical",
+        "prompt_tokens": 989,
+        "completion_tokens": 1440,
+        "total_tokens": 2429,
+        "latency_ms": 0.0101,
+        "usd": 0.016873
+      },
+      {
+        "incident_id": "INC-EVAL-170",
+        "template_id": "usb-autorun-airgap",
+        "severity": "high",
+        "prompt_tokens": 989,
+        "completion_tokens": 1120,
+        "total_tokens": 2109,
+        "latency_ms": 0.0075,
+        "usd": 0.013672
+      },
+      {
+        "incident_id": "INC-EVAL-171",
+        "template_id": "oauth-consent-phish",
+        "severity": "high",
+        "prompt_tokens": 952,
+        "completion_tokens": 1120,
+        "total_tokens": 2072,
+        "latency_ms": 0.0077,
+        "usd": 0.01358
+      },
+      {
+        "incident_id": "INC-EVAL-172",
+        "template_id": "powershell-obfuscated-dropper",
+        "severity": "critical",
+        "prompt_tokens": 1017,
+        "completion_tokens": 1440,
+        "total_tokens": 2457,
+        "latency_ms": 0.0081,
+        "usd": 0.016942
+      },
+      {
+        "incident_id": "INC-EVAL-173",
+        "template_id": "certutil-download-cradle",
+        "severity": "high",
+        "prompt_tokens": 991,
+        "completion_tokens": 1120,
+        "total_tokens": 2111,
+        "latency_ms": 0.0077,
+        "usd": 0.013677
+      },
+      {
+        "incident_id": "INC-EVAL-174",
+        "template_id": "docker-runtime-abuse",
+        "severity": "high",
+        "prompt_tokens": 942,
+        "completion_tokens": 1120,
+        "total_tokens": 2062,
+        "latency_ms": 0.0082,
+        "usd": 0.013555
+      },
+      {
+        "incident_id": "INC-EVAL-175",
+        "template_id": "wmi-event-subscription",
+        "severity": "high",
+        "prompt_tokens": 987,
+        "completion_tokens": 1120,
+        "total_tokens": 2107,
+        "latency_ms": 0.0096,
+        "usd": 0.013667
+      },
+      {
+        "incident_id": "INC-EVAL-176",
+        "template_id": "registry-run-persistence",
+        "severity": "medium",
+        "prompt_tokens": 983,
+        "completion_tokens": 800,
+        "total_tokens": 1783,
+        "latency_ms": 0.0072,
+        "usd": 0.010457
+      },
+      {
+        "incident_id": "INC-EVAL-177",
+        "template_id": "scheduled-task-persistence",
+        "severity": "medium",
+        "prompt_tokens": 1025,
+        "completion_tokens": 800,
+        "total_tokens": 1825,
+        "latency_ms": 0.0079,
+        "usd": 0.010563
+      },
+      {
+        "incident_id": "INC-EVAL-178",
+        "template_id": "uefi-firmware-implant",
+        "severity": "critical",
+        "prompt_tokens": 949,
+        "completion_tokens": 1440,
+        "total_tokens": 2389,
+        "latency_ms": 0.0067,
+        "usd": 0.016773
+      },
+      {
+        "incident_id": "INC-EVAL-179",
+        "template_id": "cron-backdoor",
+        "severity": "high",
+        "prompt_tokens": 923,
+        "completion_tokens": 1120,
+        "total_tokens": 2043,
+        "latency_ms": 0.0069,
+        "usd": 0.013507
+      },
+      {
+        "incident_id": "INC-EVAL-180",
+        "template_id": "uac-bypass-fodhelper",
+        "severity": "high",
+        "prompt_tokens": 994,
+        "completion_tokens": 1120,
+        "total_tokens": 2114,
+        "latency_ms": 0.0075,
+        "usd": 0.013685
+      },
+      {
+        "incident_id": "INC-EVAL-181",
+        "template_id": "k8s-privileged-pod-escape",
+        "severity": "critical",
+        "prompt_tokens": 975,
+        "completion_tokens": 1440,
+        "total_tokens": 2415,
+        "latency_ms": 0.0121,
+        "usd": 0.016838
+      },
+      {
+        "incident_id": "INC-EVAL-182",
+        "template_id": "linux-suid-abuse",
+        "severity": "high",
+        "prompt_tokens": 924,
+        "completion_tokens": 1120,
+        "total_tokens": 2044,
+        "latency_ms": 0.0071,
+        "usd": 0.01351
+      },
+      {
+        "incident_id": "INC-EVAL-183",
+        "template_id": "process-hollowing-svchost",
+        "severity": "critical",
+        "prompt_tokens": 1038,
+        "completion_tokens": 1440,
+        "total_tokens": 2478,
+        "latency_ms": 0.0107,
+        "usd": 0.016995
+      },
+      {
+        "incident_id": "INC-EVAL-184",
+        "template_id": "event-log-cleared",
+        "severity": "high",
+        "prompt_tokens": 965,
+        "completion_tokens": 1120,
+        "total_tokens": 2085,
+        "latency_ms": 0.0072,
+        "usd": 0.013612
+      },
+      {
+        "incident_id": "INC-EVAL-185",
+        "template_id": "disable-edr-tooling",
+        "severity": "critical",
+        "prompt_tokens": 996,
+        "completion_tokens": 1440,
+        "total_tokens": 2436,
+        "latency_ms": 0.0096,
+        "usd": 0.01689
+      },
+      {
+        "incident_id": "INC-EVAL-186",
+        "template_id": "lsass-memory-dump",
+        "severity": "critical",
+        "prompt_tokens": 999,
+        "completion_tokens": 1440,
+        "total_tokens": 2439,
+        "latency_ms": 0.0075,
+        "usd": 0.016898
+      },
+      {
+        "incident_id": "INC-EVAL-187",
+        "template_id": "credential-spray",
+        "severity": "high",
+        "prompt_tokens": 971,
+        "completion_tokens": 1120,
+        "total_tokens": 2091,
+        "latency_ms": 0.0072,
+        "usd": 0.013627
+      },
+      {
+        "incident_id": "INC-EVAL-188",
+        "template_id": "kerberoasting",
+        "severity": "critical",
+        "prompt_tokens": 983,
+        "completion_tokens": 1440,
+        "total_tokens": 2423,
+        "latency_ms": 0.0075,
+        "usd": 0.016858
+      },
+      {
+        "incident_id": "INC-EVAL-189",
+        "template_id": "ad-dcsync",
+        "severity": "critical",
+        "prompt_tokens": 916,
+        "completion_tokens": 1440,
+        "total_tokens": 2356,
+        "latency_ms": 0.0042,
+        "usd": 0.01669
+      },
+      {
+        "incident_id": "INC-EVAL-190",
+        "template_id": "saml-golden-ticket",
+        "severity": "critical",
+        "prompt_tokens": 966,
+        "completion_tokens": 1440,
+        "total_tokens": 2406,
+        "latency_ms": 0.008,
+        "usd": 0.016815
+      },
+      {
+        "incident_id": "INC-EVAL-191",
+        "template_id": "ldap-bloodhound-discovery",
+        "severity": "medium",
+        "prompt_tokens": 963,
+        "completion_tokens": 800,
+        "total_tokens": 1763,
+        "latency_ms": 0.0076,
+        "usd": 0.010408
+      },
+      {
+        "incident_id": "INC-EVAL-192",
+        "template_id": "smb-share-enumeration",
+        "severity": "medium",
+        "prompt_tokens": 971,
+        "completion_tokens": 800,
+        "total_tokens": 1771,
+        "latency_ms": 0.0073,
+        "usd": 0.010427
+      },
+      {
+        "incident_id": "INC-EVAL-193",
+        "template_id": "pass-the-hash-lateral",
+        "severity": "critical",
+        "prompt_tokens": 969,
+        "completion_tokens": 1440,
+        "total_tokens": 2409,
+        "latency_ms": 0.0074,
+        "usd": 0.016823
+      },
+      {
+        "incident_id": "INC-EVAL-194",
+        "template_id": "rdp-lateral-movement",
+        "severity": "high",
+        "prompt_tokens": 910,
+        "completion_tokens": 1120,
+        "total_tokens": 2030,
+        "latency_ms": 0.0042,
+        "usd": 0.013475
+      },
+      {
+        "incident_id": "INC-EVAL-195",
+        "template_id": "wmi-lateral-execution",
+        "severity": "high",
+        "prompt_tokens": 939,
+        "completion_tokens": 1120,
+        "total_tokens": 2059,
+        "latency_ms": 0.004,
+        "usd": 0.013547
+      },
+      {
+        "incident_id": "INC-EVAL-196",
+        "template_id": "bulk-pii-download",
+        "severity": "critical",
+        "prompt_tokens": 886,
+        "completion_tokens": 1440,
+        "total_tokens": 2326,
+        "latency_ms": 0.0386,
+        "usd": 0.016615
+      },
+      {
+        "incident_id": "INC-EVAL-197",
+        "template_id": "clipboard-keylogger",
+        "severity": "high",
+        "prompt_tokens": 994,
+        "completion_tokens": 1120,
+        "total_tokens": 2114,
+        "latency_ms": 0.0077,
+        "usd": 0.013685
+      },
+      {
+        "incident_id": "INC-EVAL-198",
+        "template_id": "dns-tunnel-exfil",
+        "severity": "critical",
+        "prompt_tokens": 886,
+        "completion_tokens": 1440,
+        "total_tokens": 2326,
+        "latency_ms": 0.0038,
+        "usd": 0.016615
+      },
+      {
+        "incident_id": "INC-EVAL-199",
+        "template_id": "s3-exfil-cloud-storage",
+        "severity": "critical",
+        "prompt_tokens": 941,
+        "completion_tokens": 1440,
+        "total_tokens": 2381,
+        "latency_ms": 0.0055,
+        "usd": 0.016753
+      },
+      {
+        "incident_id": "INC-EVAL-200",
+        "template_id": "personal-drive-exfil",
+        "severity": "critical",
+        "prompt_tokens": 889,
+        "completion_tokens": 1440,
+        "total_tokens": 2329,
+        "latency_ms": 0.004,
+        "usd": 0.016623
+      }
+    ],
+    "tokens_per_investigation": {
+      "mean": 2185.91,
+      "median": 2114.0,
+      "p95": 2452,
+      "p99": 2478,
+      "prompt_mean": 955.51,
+      "completion_mean": 1230.4
+    },
+    "usd_per_investigation": {
+      "mean": 0.014693,
+      "median": 0.013685,
+      "p95": 0.01693,
+      "p99": 0.016995
+    },
+    "latency_per_investigation_ms": {
+      "p50": 0.0075,
+      "p95": 0.0113,
+      "p99": 0.0179,
+      "mean": 0.0077
+    }
+  },
+  "all_passed": true
+}
