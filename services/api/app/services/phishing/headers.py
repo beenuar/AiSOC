@@ -104,7 +104,26 @@ _AUTH_CLAUSE = re.compile(r"\b(spf|dkim|dmarc)\s*=\s*([a-z]+)", re.IGNORECASE)
 _RECEIVED_SPF = re.compile(r"^\s*([a-z]+)", re.IGNORECASE)
 #: An address embedded in a display name. Deliberately narrow: it must look
 #: like an address, because "Billing (accounts)" is not impersonation.
-_ADDRESS_IN_NAME = re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+")
+#:
+#: The lookbehind pins every match attempt to the *start* of a local-part
+#: run. Without it the unanchored scan retried from each interior position
+#: of a long run and re-consumed the tail every time — quadratic, measured
+#: at 33 s for a 128 KB display name, which an authenticated reporter
+#: controls and which this module processes synchronously on the event
+#: loop (GHSA-9m2j-23jf-gg3p). Interior starts now fail in O(1), the same
+#: property the leading ``\b`` already gives the other scans in this
+#: package. No match changes: an interior start could only ever find an
+#: address the run-start attempt also finds, because the suffix after the
+#: ``@`` decides both.
+_ADDRESS_IN_NAME = re.compile(r"(?<![\w.+-])[\w.+-]+@[\w-]+\.[\w.-]+")
+
+#: A display name is analysed on its first kilobyte only. RFC 5322 caps a
+#: header line at 998 octets, so a display name beyond this is already
+#: pathological; the cap bounds the scan independently of the pattern's
+#: complexity and keeps the impersonation finding's ``evidence`` — which
+#: embeds the display name verbatim, and is stored and rendered — out of
+#: the megabyte range on a crafted report.
+_MAX_DISPLAY_LEN = 1024
 
 
 @dataclass(frozen=True)
@@ -275,7 +294,7 @@ def analyse_headers(headers: dict[str, str], *, reported_sender: str = "") -> He
             )
         )
 
-    display = _display_name(from_header)
+    display = _display_name(from_header)[:_MAX_DISPLAY_LEN]
     embedded = _ADDRESS_IN_NAME.findall(display)
     impersonated = [a.lower() for a in embedded if a.lower() != from_address]
     if impersonated:
