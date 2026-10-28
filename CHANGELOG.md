@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [20.2.1] - 2026-10-28
+
+### Security
+
+- **ReDoS in phishing header analysis**
+  ([GHSA-9m2j-23jf-gg3p](https://github.com/beenuar/AiSOC/security/advisories/GHSA-9m2j-23jf-gg3p),
+  medium, reported by [q7256](https://github.com/q7256); affects
+  v19.0.0 – v20.2.0). `_ADDRESS_IN_NAME` in
+  `services/api/app/services/phishing/headers.py` was an unanchored scan,
+  so a long `From` display name with no address-like substring was
+  re-consumed from every interior position — quadratic, measured at 33 s
+  for 128 KB and reported at 71 s, and `POST /api/v1/phishing/reports`
+  (authenticated, `cases:write` — the default analyst role) runs it
+  synchronously on the event loop, stalling every other request on the
+  process. Two independent bounds: a `(?<![\w.+-])` lookbehind makes
+  interior starts fail in O(1) with the match set unchanged, and the
+  display name is capped at 1,024 characters before analysis — which also
+  keeps the impersonation finding's stored `evidence` out of the megabyte
+  range on a crafted report. 128 KB now completes in 26 ms, linear. The
+  regression test pins a 1-second budget with ≥30× margin both ways, was
+  demonstrated failing on the pre-fix tree, and a reverted-fix negative
+  control was demonstrated failing again. Every other `re.compile` in the
+  phishing package was audited for the same class; the one suspicious
+  sibling (`campaigns.py` `_OPAQUE`) was measured linear — its leading
+  `\b` already prevents interior-start rescans — and deliberately left
+  unchanged.
+
 ## [20.2.0] - 2026-10-28
 
 ### Security
