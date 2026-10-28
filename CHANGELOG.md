@@ -142,6 +142,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   said the upload was blocked on credentials, while PyPI has been serving
   `aisoc-sandbox` 0.1.0; it also claimed the production stack needs an LLM
   API key, which has not been true since the bundled local model shipped.
+- `.pr-body.md` — a pull-request body draft from the v20.1.0 media close-out
+  (#1492) committed to the repository root by accident — is removed. Nothing
+  referenced it; session scratch does not belong in the tree.
 
 ### Added — gates, so none of the above drifts back
 
