@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [20.2.1] - 2026-10-28
+### Security
+
+- **Dependencies:** `@hono/node-server` 1.19.17 → 2.1.5 across the pnpm
+  workspace, resolving
+  [GHSA-rmxm-3fg6-px4f](https://github.com/advisories/GHSA-rmxm-3fg6-px4f)
+  (CVE-2026-118663, medium): `serveStatic` decoded the request path a
+  second time, letting an encoded path bypass middleware guarding static
+  routes. The only dependent is `@modelcontextprotocol/sdk` (used by
+  `services/mcp`), which declares `^1.19.9 || ^2.0.5`, so the patched
+  major is inside the SDK's own supported range; no first-party code
+  calls `serveStatic`. Shipped by moving the existing `pnpm.overrides`
+  floor from `>=1.19.15 <2` to `>=2.1.3 <3` (Dependabot alert #226).
 
 ### Security
 
