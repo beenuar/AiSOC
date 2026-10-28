@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   calls `serveStatic`. Shipped by moving the existing `pnpm.overrides`
   floor from `>=1.19.15 <2` to `>=2.1.3 <3` (Dependabot alert #226).
 
+## [20.2.1] - 2026-10-28
+
 ### Security
 
 - **ReDoS in phishing header analysis**
