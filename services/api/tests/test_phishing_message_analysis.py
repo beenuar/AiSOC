@@ -19,6 +19,8 @@ can be broken:
 
 from __future__ import annotations
 
+import time
+
 import pytest
 from app.services.phishing.analysis import ArtefactResult, MessageAnalysis, _citations
 from app.services.phishing.headers import AuthResult, analyse_headers
@@ -359,3 +361,41 @@ class TestTheIntakeAdapterFeedsTheAnalysis:
         message = from_graph_message(payload)
         analysis = analyse_headers(message.headers, reported_sender=message.sender)
         assert analysis.failed_methods == ("dmarc", "spf")
+
+
+class TestAdversarialDisplayName:
+    """GHSA-9m2j-23jf-gg3p: an attacker-sized ``From`` display name must not
+    stall the process.
+
+    The reported shape: ``_ADDRESS_IN_NAME`` was an unanchored scan, so a long
+    display name containing no ``@`` was re-consumed from every interior
+    position — quadratic, measured here at 8.4 s for 64 KB and reported at
+    71 s for 128 KB through ``POST /phishing/reports``, which runs this
+    synchronously on the event loop and therefore stalls every other request
+    on the process while it spins. The display name is attacker-sized because
+    nothing bounds a reported message's headers.
+
+    The 1-second budget cannot flap in either direction: the pre-fix cost at
+    128 KB is ~30 s on a fast machine (slower on a runner, so further *over*
+    budget), and the post-fix cost is linear ``parseaddr`` plus a capped scan,
+    ~20 ms on a slow runner — 30× or more of margin both ways.
+    """
+
+    def test_analysis_is_bounded_on_a_long_non_address_display_name(self) -> None:
+        name = "a" * (128 * 1024)
+        started = time.perf_counter()
+        analysis = analyse_headers({"from": f'"{name}" <{PHISH}>'})
+        elapsed = time.perf_counter() - started
+        assert elapsed < 1.0, f"header analysis took {elapsed:.1f}s on a 128 KB display name"
+        # The pathological name embeds no address, so no impersonation finding.
+        assert "display_name_impersonation" not in {f.kind for f in analysis.findings}
+
+    def test_impersonation_still_fires_and_evidence_stays_bounded(self) -> None:
+        """Detection is not traded away, and a crafted name cannot push
+        megabytes into the finding's stored ``evidence``."""
+        embedded = "ceo@victim.example.com"
+        name = f"{embedded} " + "b" * (128 * 1024)
+        analysis = analyse_headers({"from": f'"{name}" <{PHISH}>'})
+        finding = next(f for f in analysis.findings if f.kind == "display_name_impersonation")
+        assert finding.evidence["claimed"] == embedded
+        assert len(finding.evidence["display_name"]) <= 1024
