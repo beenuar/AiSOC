@@ -143,7 +143,7 @@ async def list_rules(
     tenant's own rules, and rules from MSSP-assigned packs (with excluded
     overrides removed). Before #1273 only the last two were read, and since
     nothing in production has ever written a built-in row, a default install
-    answered with an empty list while the engine ran 2,614 rules.
+    answered with an empty list while the engine ran 2,609 rules.
 
     ``X-Total-Count`` carries the number matching the filters, which is not
     the number returned: the response stays a bare array so existing callers

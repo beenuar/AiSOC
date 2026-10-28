@@ -27,7 +27,7 @@ under the rule's deterministic UUID and carrying ``provenance.source_id``, so:
   the rules that run could not be viewed, disabled or tuned.
 
 A read never materialises. A GET that writes a row for every rule it renders
-would put 2,614 rows per tenant in the table on the first page load, and the
+would put 2,609 rows per tenant in the table on the first page load, and the
 table is supposed to hold decisions, not inventory.
 """
 

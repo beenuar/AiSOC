@@ -3742,7 +3742,7 @@ paths:
 
         nothing in production has ever written a built-in row, a default install
 
-        answered with an empty list while the engine ran 2,614 rules.
+        answered with an empty list while the engine ran 2,609 rules.
 
 
         ``X-Total-Count`` carries the number matching the filters, which is not
@@ -4105,7 +4105,7 @@ paths:
 
         This used to read ``detection_rules`` alone and therefore answered with an
 
-        empty list on every install, while fusion loaded and fired 2,614 rules
+        empty list on every install, while fusion loaded and fired 2,609 rules
 
         (#1273). The filters and the page bound are not cosmetic: the whole
 
@@ -4239,7 +4239,7 @@ paths:
 
         built-in''s detail page opens without a row having to exist for it. The
 
-        read never creates one: a GET that materialised would put 2,614 rows per
+        read never creates one: a GET that materialised would put 2,609 rows per
 
         tenant in a table meant to hold decisions.'
       operationId: get_rule_compat_api_v1_detection_rules__rule_id__get
@@ -4400,7 +4400,7 @@ paths:
 
         the ``detection_rules`` table alone and therefore drew an empty heatmap
 
-        over a product shipping ATT&CK mappings for 2,614 loaded rules — the
+        over a product shipping ATT&CK mappings for 2,609 loaded rules — the
 
         strongest possible version of the "blind to everything" answer, and
 

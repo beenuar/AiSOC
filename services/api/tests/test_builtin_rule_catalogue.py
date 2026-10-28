@@ -1,6 +1,6 @@
 """The rules the engine runs have to be the rules the console can see and tune.
 
-Issue #1273: a core install loads 2,614 detection rules into fusion and fires
+Issue #1273: a core install loads 2,609 detection rules into fusion and fires
 them, while `GET /api/v1/rules` and `GET /api/v1/detection/rules` both answer
 with an empty list, because both read the Postgres `detection_rules` table and
 **nothing in production ever writes a built-in row there**. An operator could
@@ -66,7 +66,7 @@ PACKAGED = REPO / "services" / "api" / "app" / "data" / "detections"
 #: regeneration that silently empties one is a failure here rather than a
 #: quieter comparison of two numbers that moved together.
 ARTEFACTS: dict[str, int] = {
-    "detection_ruleset.json": 765,
+    "detection_ruleset.json": 760,
     "detection_ruleset_imported.json": 1770,
     "windowed_ruleset.json": 76,
 }
@@ -76,13 +76,16 @@ ARTEFACTS: dict[str, int] = {
 #: why the loaded windowed count is 73 against a file holding 72.
 PYTHON_RESIDENT_WINDOWED = 3
 
-#: 765 + 1770 stateless, 76 windowed (73 of the 76 file entries plus the three
+#: 760 + 1770 stateless, 76 windowed (73 of the 76 file entries plus the three
 #: above), 3 sequence (the other three file entries). Measured, not assumed —
 #: `test_catalogue_matches_what_fusion_actually_loads` re-derives it by running
 #: fusion's loaders. The 2026-10-12 merge train moved it 2586 -> 2614: +24
 #: native rules (depth 3.4's enrichment inputs) and +4 windowed (depth 7.3's
-#: AitM family).
-FUSION_LOADED_TOTAL = 2614
+#: AitM family). Issue #1545 moved it 2614 -> 2609: five GitHub rules whose
+#: evidence the org audit log cannot carry were retired with reasons
+#: (`enrichment_decisions.py`) and stopped being counted as executable,
+#: which they never were.
+FUSION_LOADED_TOTAL = 2609
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")
@@ -336,7 +339,7 @@ class TestTheConsoleReadsTheLoadedCorpus:
         assert body["missingArtefacts"] == []
 
     async def test_the_page_is_bounded_and_the_total_is_not(self, client) -> None:
-        """2,614 rules serialised is several MB; the header count must still be true."""
+        """2,609 rules serialised is several MB; the header count must still be true."""
         body = (await client.get("/api/v1/detection/rules", params={"limit": 25})).json()
         assert len(body["rules"]) == 25
         assert body["returned"] == 25

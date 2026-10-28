@@ -50,7 +50,7 @@ router = APIRouter(prefix="/detection", tags=["detection_rules"])
 #: A rule from either store. The analytics helpers below read attributes that
 #: a stored row and a compiled-catalogue projection both carry, and they have
 #: to read both: scoping them to ORM rows is what made the MITRE heatmap draw
-#: an empty grid over a library of 2,614 mapped rules.
+#: an empty grid over a library of 2,609 mapped rules.
 RuleLike = DetectionRule | RuleView
 
 
@@ -92,7 +92,7 @@ class FrontendDetectionRule(BaseModel):
 class ListResponse(BaseModel):
     rules: list[FrontendDetectionRule]
     #: Rules matching the request's filters. Not the number returned — the
-    #: library is 2,614 rules on a default install and the page is bounded.
+    #: library is 2,609 rules on a default install and the page is bounded.
     total: int
     #: The whole library before filters, split by origin. The header states
     #: library size; ``total`` states the size of the result.
@@ -278,7 +278,7 @@ async def list_rules_compat(
     """The tenant's effective rule library: the compiled corpus plus its tuning.
 
     This used to read ``detection_rules`` alone and therefore answered with an
-    empty list on every install, while fusion loaded and fired 2,614 rules
+    empty list on every install, while fusion loaded and fired 2,609 rules
     (#1273). The filters and the page bound are not cosmetic: the whole
     library serialised is several megabytes, so an unbounded list would have
     traded an empty page for an unusable one.
@@ -350,7 +350,7 @@ async def get_rule_compat(
 
     Resolves a stored row first and the compiled catalogue second, so a
     built-in's detail page opens without a row having to exist for it. The
-    read never creates one: a GET that materialised would put 2,614 rows per
+    read never creates one: a GET that materialised would put 2,609 rows per
     tenant in a table meant to hold decisions.
     """
     view = await resolve_rule(db, current_user.tenant_id, rule_id)
@@ -611,7 +611,7 @@ class DriftSummary(BaseModel):
     #: Rules the drift heuristics cannot judge. Every heuristic here reads a
     #: column that only operator review and the rule IDE write — confidence,
     #: FP rate, last trigger — and the compiled corpus records none of them.
-    #: Scoring 2,614 built-ins at a placeholder confidence of 0 would fill the
+    #: Scoring 2,609 built-ins at a placeholder confidence of 0 would fill the
     #: inbox with "low confidence, stale" for every rule in the product.
     unscored: int = 0
 
@@ -674,7 +674,7 @@ class ConfidenceSummary(BaseModel):
     lowConfidence: int  # rules below ``DRIFT_LOW_CONFIDENCE_THRESHOLD``
     #: Rules excluded from every figure above because no confidence has ever
     #: been recorded for them. Published rather than dropped: a mean over 3
-    #:   rules beside a library of 2,614 is a different claim from a mean over
+    #:   rules beside a library of 2,609 is a different claim from a mean over
     #: 2,617, and the reader cannot tell which they are looking at otherwise.
     unscored: int = 0
 
@@ -1080,7 +1080,7 @@ async def get_detection_coverage(
 
     Reads the whole effective library, built-ins included. It previously read
     the ``detection_rules`` table alone and therefore drew an empty heatmap
-    over a product shipping ATT&CK mappings for 2,614 loaded rules — the
+    over a product shipping ATT&CK mappings for 2,609 loaded rules — the
     strongest possible version of the "blind to everything" answer, and
     wrong.
     """

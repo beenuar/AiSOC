@@ -2,7 +2,7 @@
 
 `scripts/sync_packaged_detection_rulesets.py --check` is the only thing
 standing between the API image and the state issue #1273 reported: a console
-that lists no detection rules while the engine loads and fires 2,614. A gate
+that lists no detection rules while the engine loads and fires 2,609. A gate
 whose clean verdict has never been shown to be falsifiable is worth nothing,
 and the failure it must catch is a *packaging* one — a file absent from a
 Docker build context — which no handler test can see.
@@ -76,7 +76,7 @@ class TestThePositiveControl:
     def test_a_synced_tree_is_clean(self, tmp_path: pathlib.Path) -> None:
         result = _check(_tree(tmp_path))
         assert result.returncode == 0, result.stderr
-        assert "2614 rules" in result.stdout
+        assert "2609 rules" in result.stdout
 
 
 class TestTheGateCatchesItsOwnAbsence:
