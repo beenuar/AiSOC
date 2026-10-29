@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+- **Dependencies:** `decode-uri-component` 0.5.0 → 0.5.1 in the mobile
+  app's lockfile, resolving
+  [GHSA-qr28-fpjm-wq7f](https://github.com/advisories/GHSA-qr28-fpjm-wq7f)
+  (CVE-2026-118664, high: denial of service on a crafted URI component).
+  The mobile `package.json` already carried a `^0.5.0` override from an
+  earlier advisory; the floor moves to the patched release. Published
+  upstream after `main`'s last audit pass, so every open pull request was
+  red on `security-audit` and `Trivy filesystem` through no change of its
+  own — this lands at the source instead of being suppressed per branch.
+
 - **Dependencies:** `@hono/node-server` 1.19.17 → 2.1.5 across the pnpm
   workspace, resolving
   [GHSA-rmxm-3fg6-px4f](https://github.com/advisories/GHSA-rmxm-3fg6-px4f)
