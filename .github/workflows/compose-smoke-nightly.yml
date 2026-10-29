@@ -111,7 +111,12 @@ jobs:
           probe_http() {
             local url="$1" expect="$2"
             local code
-            code=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            # --location: the console's / answers 307 -> /login by design
+            # (AISOC_MARKETING_HOME, discussion #1549), so the probe follows
+            # redirects and asserts the *final* document's status — which also
+            # proves the login page renders, a stronger check than "anything
+            # answered at /".
+            code=$(curl --silent --location --output /dev/null --write-out '%{http_code}' \
               --max-time 5 "$url" || echo "000")
             [ "$code" = "$expect" ]
           }
