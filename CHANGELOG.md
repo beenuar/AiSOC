@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **The console's root URL now lands an operator on their console.** On a
+  clean self-hosted install, `/` rendered the project's marketing landing
+  page — neither the dashboard nor the login page the operator was looking
+  for (reported in discussion #1549). `/` now redirects to `/login`, which
+  already routes onward: a first run lands on the setup wizard and a
+  signed-in session on `/dashboard`. The marketing page remains the root for
+  deployments that *are* the public project site, by setting
+  `AISOC_MARKETING_HOME` in the running container (runtime outranks the
+  build-time `NEXT_PUBLIC_MARKETING_HOME`, the same relationship
+  `AISOC_DEMO_MODE` has to its build-time twin, because `NEXT_PUBLIC_*` is
+  frozen into a pulled image). The root route is `force-dynamic` so the
+  answer comes from the container's environment on every request, and the
+  decision is pinned in both directions by `apps/web/src/app/page.test.tsx`.
+
 ### Security
 
 - **Dependencies:** `@hono/node-server` 1.19.17 → 2.1.5 across the pnpm

@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
-import dynamic from 'next/dynamic';
+import nextDynamic from 'next/dynamic';
+import { redirect } from 'next/navigation';
 import { docs } from '@/lib/docs';
+import { homeRouteReport } from '@/lib/homeRoute';
 import { getPublicSiteUrl } from '@/lib/site';
 import { velvetFontVariables } from '@/lib/marketing-fonts';
 import { StickyNav } from '@/components/landing/sections/StickyNav';
@@ -11,7 +13,18 @@ import { CONNECTOR_COUNT } from '@/data/connectorCount';
 import { EXECUTABLE_DETECTION_COUNT } from '@/data/corpusStats';
 
 /**
- * AiSOC root (`/`) — marketing landing page.
+ * AiSOC root (`/`) — the console's front door by default, the marketing
+ * landing page on deployments that opt in.
+ *
+ * On a self-hosted install the root redirects to `/login`, which routes
+ * onward by itself (first run → the onboarding wizard, an authenticated
+ * session → `/dashboard`). The marketing sections below render only when the
+ * deployment says it is the public project site (`AISOC_MARKETING_HOME` in
+ * the running container — see `lib/homeRoute.ts`, including why the route is
+ * `force-dynamic`: the answer must come from the container's environment on
+ * every request, not from whatever was compiled into the image). Reported in
+ * discussion #1549 by an operator whose clean server greeted them with a
+ * marketing page.
  *
  * Two sections here were arguments made out of nothing. `DemoEmbed` drew a
  * hand-authored Investigation Ledger — an invented incident id, an invented
@@ -43,43 +56,43 @@ import { EXECUTABLE_DETECTION_COUNT } from '@/data/corpusStats';
  * still honours the toggle, which is what AGENTS.md WS-F1 promised.
  */
 
-const SolutionAgents = dynamic(
+const SolutionAgents = nextDynamic(
   () => import('@/components/landing/sections/SolutionAgents').then((m) => m.SolutionAgents),
 );
-const ProductTour = dynamic(
+const ProductTour = nextDynamic(
   () => import('@/components/landing/sections/ProductTour').then((m) => m.ProductTour),
 );
-const Pillars = dynamic(
+const Pillars = nextDynamic(
   () => import('@/components/landing/sections/Pillars').then((m) => m.Pillars),
 );
-const FeatureGrid = dynamic(
+const FeatureGrid = nextDynamic(
   () => import('@/components/landing/sections/FeatureGrid').then((m) => m.FeatureGrid),
 );
-const ConnectorsMarquee = dynamic(
+const ConnectorsMarquee = nextDynamic(
   () => import('@/components/landing/sections/ConnectorsMarquee').then((m) => m.ConnectorsMarquee),
 );
-const BenchmarkBand = dynamic(
+const BenchmarkBand = nextDynamic(
   () => import('@/components/landing/sections/BenchmarkBand').then((m) => m.BenchmarkBand),
 );
-const DeployOptions = dynamic(
+const DeployOptions = nextDynamic(
   () => import('@/components/landing/sections/DeployOptions').then((m) => m.DeployOptions),
 );
-const OpenSourceMoment = dynamic(
+const OpenSourceMoment = nextDynamic(
   () => import('@/components/landing/sections/OpenSourceMoment').then((m) => m.OpenSourceMoment),
 );
-const HonestLimits = dynamic(
+const HonestLimits = nextDynamic(
   () => import('@/components/landing/sections/HonestLimits').then((m) => m.HonestLimits),
 );
-const PricingTeaser = dynamic(
+const PricingTeaser = nextDynamic(
   () => import('@/components/landing/sections/PricingTeaser').then((m) => m.PricingTeaser),
 );
-const Faq = dynamic(
+const Faq = nextDynamic(
   () => import('@/components/landing/sections/Faq').then((m) => m.Faq),
 );
-const FinalCta = dynamic(
+const FinalCta = nextDynamic(
   () => import('@/components/landing/sections/FinalCta').then((m) => m.FinalCta),
 );
-const Footer = dynamic(
+const Footer = nextDynamic(
   () => import('@/components/landing/sections/Footer').then((m) => m.Footer),
 );
 
@@ -238,7 +251,16 @@ const faqJsonLd = {
   ],
 };
 
+// The home decision reads the running container's environment on every
+// request (see lib/homeRoute.ts). Without this, Next would statically
+// optimise the route at build time and the compiled answer would win on
+// every pulled image — the exact defect runtime-over-build exists to avoid.
+export const dynamic = 'force-dynamic';
+
 export default function HomePage() {
+  if (!homeRouteReport().marketing) {
+    redirect('/login');
+  }
   return (
     <>
       <script

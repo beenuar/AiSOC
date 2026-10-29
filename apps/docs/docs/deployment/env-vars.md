@@ -483,6 +483,7 @@ which is why there is no CORS to configure.
 | `AISOC_AGENTS_URL` | `http://agents:8084` | Agents service (copilot, hunt, playbooks) |
 | `AISOC_REALTIME_URL` | `http://realtime:4000` | Realtime gateway for `/ws/*` and `/sse` |
 | `AISOC_DEMO_MODE` | `false` | Whether this deployment is a demo. Reported at `/api/runtime-config` |
+| `AISOC_MARKETING_HOME` | `false` | When `true`, `/` serves the project's marketing landing page. Default is the console: `/` redirects to `/login`, which routes onward (first run → setup wizard, signed in → dashboard) |
 | `AISOC_CONSOLE_BIND_ADDR` | `127.0.0.1` | Interface the console's host port publishes on |
 | `AISOC_BIND_ADDR` | `127.0.0.1` | Interface **every** host port publishes on, datastores included |
 
@@ -498,6 +499,7 @@ leave them empty and let same-origin proxying handle it, which is the default.
 | `NEXT_PUBLIC_API_URL` | *(empty)* | Absolute API origin for the browser. Empty means same-origin; setting it opts into configuring CORS |
 | `NEXT_PUBLIC_WS_URL` | *(empty)* | Absolute WebSocket origin. Empty derives it from the page's own origin |
 | `NEXT_PUBLIC_DEMO_MODE` | *(empty)* | Compiles the image as a demo build. `AISOC_DEMO_MODE` overrides it at run time |
+| `NEXT_PUBLIC_MARKETING_HOME` | *(empty)* | Compiles the image with the marketing page at `/`. `AISOC_MARKETING_HOME` overrides it at run time |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | — | Must match the realtime service's `VAPID_PUBLIC_KEY` |
 
 See [Single-host deployment](./single-host.md) for the whole path end to end.
