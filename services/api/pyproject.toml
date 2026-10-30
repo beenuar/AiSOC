@@ -135,6 +135,14 @@ aiokafka = ">=0.10,<0.15"
 # consumer. The handler answers 501 now, and declaring this is what makes
 # that 501 clearable rather than permanent.
 python3-saml = ">=1.16,<2"
+# Transitive floors for advisories published after main's last audit pass.
+# graphql-core arrives through strawberry-graphql, pyasn1 through the
+# SAML/crypto stack; neither is imported directly. Pinned here so the
+# resolver cannot fall back to the vulnerable version.
+# graphql-core: CVE-2026-119286 (fixed 3.3.1). pyasn1: CVE-2026-119194/5/6/7
+# (fixed 0.6.5).
+graphql-core = ">=3.3.1,<4"
+pyasn1 = ">=0.6.5,<0.7"
 
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.

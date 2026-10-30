@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [20.4.0] - 2026-10-30
 
+### Security
+
+- **Dependencies:** `graphql-core` floored at **3.3.1**
+  ([CVE-2026-119286](https://nvd.nist.gov/vuln/detail/CVE-2026-119286),
+  high) and `pyasn1` at **0.6.5**
+  ([CVE-2026-119194](https://nvd.nist.gov/vuln/detail/CVE-2026-119194)
+  / 119195 / 119196 / 119197, high) in `services/api`. Both are
+  transitive — `graphql-core` via `strawberry-graphql`, `pyasn1` via the
+  SAML/crypto stack — so the floors are declared directly in the manifest
+  to keep the resolver off the vulnerable versions, and `poetry.lock` moves
+  only those two packages. Published after `main`'s last `security-audit`
+  pass, so they reddened every open pull request through no change of its
+  own; cleared at the source here rather than suppressed per branch.
+
 ### Fixed
 
 - **Activating SSO OIDC no longer locks the administrator out** (reported in
