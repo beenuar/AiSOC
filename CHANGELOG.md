@@ -7,8 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [20.3.0] - 2026-10-30
+
+### Added
+
+- **The BYOK selector can ask a custom endpoint what it serves** (#1543,
+  externally contributed by [vito-bush](https://github.com/vito-bush)).
+  `POST /api/v1/llm/credentials/models` lists the chat-capable models an
+  OpenAI-compatible endpoint publishes at `GET {base}/models`, so the
+  `custom` provider's model no longer has to be a hand-typed id — closing
+  the gap the #1481 review named. Bounded (10 s whole-exchange deadline,
+  2 MB decoded cap, 500 models returned), redirects refused, the air-gap
+  and SSRF guards applied before anything is dialled, and the stored key
+  is sent only to the stored base URL — a form pointing at a changed URL
+  makes a keyless request. Discovery filters a dropdown; the Test button
+  stays the proof a model answers, and the typed id remains for endpoints
+  that publish no list.
+- **Prompt bytes are capped at the egress chokepoint** (#1554, externally
+  contributed by [alexmateescu](https://github.com/alexmateescu)).
+  `AISOC_LLM_MAX_PROMPT_BYTES` (default 240,000) bounds every gateway
+  call inside the same `safe_*` functions the LLM contract already owns:
+  oversized prompts are truncated by water-filling across the non-system
+  messages — largest contributors clipped to a fair share, the system
+  prompt preserved verbatim, every cut marked in the text — instead of
+  being rejected wholesale by the provider's own guard and retried
+  forever.
+
 ### Changed
 
+- **Auto-triage's output ceiling moves 512 → 2,048 tokens** (#1558,
+  externally contributed): verdicts carrying a long rationale were
+  clipped mid-JSON, forcing re-asks or the deterministic fallback. The
+  reliability harness's `MAX_TOKENS` moves with it — the parity test that
+  went red on the one-line bump is the drift guard doing its job — and
+  the published 44/50 → 50/50 figures stay true as statements about the
+  512-era run they measured; the next harness run grades 2,048.
 - **The console's root URL now lands an operator on their console.** On a
   clean self-hosted install, `/` rendered the project's marketing landing
   page — neither the dashboard nor the login page the operator was looking
@@ -22,6 +55,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   frozen into a pulled image). The root route is `force-dynamic` so the
   answer comes from the container's environment on every request, and the
   decision is pinned in both directions by `apps/web/src/app/page.test.tsx`.
+
+### Fixed
+
+- **Five GitHub detection rules could not fire and five more claused on
+  evidence the org audit log cannot carry** (#1547, closing #1545; the
+  external report was substantially correct — measured before coding,
+  1 of 12 GitHub rules fired on real connector output). Four rules
+  expected an unprefixed event type the connector has never emitted; the
+  deploy-key rule matched `deploy_key.create`, an action that does not
+  exist in GitHub's vocabulary (deploy keys log as `public_key.create`,
+  now matched with a repo-qualifier and a negative fixture); wrong action
+  values were re-claused to GitHub's documented audit vocabulary
+  (`repo.access`, `org./repo.register_self_hosted_runner`); the windowed
+  deploy-key rule's `distinct_by` named a key the entries do not carry;
+  and two actions in the connector's severity list do not exist. Five
+  rules whose evidence the audit log cannot carry are quarantined with
+  recorded reasons; one (`ip_is_internal`) became real instead, derived
+  from `src_ip`. A new CI gate replays every GitHub rule through the real
+  connector and real engine — it failed with 11 findings on the pre-fix
+  tree — and the executable count honestly moves **2,535 → 2,530** across
+  every pinned surface, including the technical guide (#1550).
+- **A saved connector that had polled once answered 422 to every
+  test-connection** (#1555, externally contributed): the route merged the
+  stored `connector_config` verbatim into the constructor, and the first
+  recorded `checkpoint` became an unexpected keyword argument. The route
+  now strips scheduler-owned keys through the same `_connector_kwargs`
+  exclusion every other construction site uses — one set, so the next
+  scheduler-only key cannot drift past it — with a route-level regression
+  test that answers 422 on the pre-fix tree.
+- **Fresh chatops deploys crash-looped** (#1556, externally contributed):
+  teams-bot cross-loads slack-bot source at `/slack-bot`, which neither
+  its image nor compose provided — `ModuleNotFoundError` at startup.
+  Compose now mounts the sibling read-only. The published image still
+  cannot boot standalone outside this compose file; #1563 tracks the
+  vendored-copy fix that removes the mount.
+- **Deterministic 400s from the inference gateway are terminal for the
+  fused-alert consumer** (#1554): a request rejected as invalid is
+  rejected because of its bytes, so replaying identical bytes burned
+  retries and pinned the inference machine for every other alert — a
+  live-observed retry storm. Such failures now dead-letter on first
+  sight under their own `triage-terminal` stage, while transient errors
+  keep their full retry ladder (both directions tested).
+- **Playbook agent-event delivery dialled a dead port on every compose
+  deployment** (#1557, externally contributed): the agents service never
+  received `REALTIME_URL`, and its code default names `realtime:3001` —
+  a port the realtime service has never served (compose runs it on
+  4000). Compose now passes `REALTIME_URL` and
+  `AISOC_INVESTIGATION_MAX_SECONDS` through, so `.env` tuning of the
+  investigation wall-clock budget stops being inert; #1564 tracks the
+  code-default correction.
+- The technical guide moved to v1.1 (#1546): the Windows section told
+  operators to run `install.ps1` from an elevated PowerShell, which the
+  installer's own help contradicts; counted figures re-derived; the
+  model-discovery feature documented with its credential scoping.
 
 ### Security
 
