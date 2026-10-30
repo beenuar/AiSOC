@@ -130,7 +130,9 @@ class HuntScheduler:
                 await self._run_hunt(hunt, events)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("hunt.scheduler.run_failed", hunt_id=hunt.id, error=str(exc))
-            finally:
+            else:
+                # Only a completed run advances the cadence. On failure, leave
+                # the hunt due so the next scheduler tick can retry it.
                 self._last_run[hunt.id] = now
 
     async def _run_hunt(self, hunt: HuntDefinition, events: list[dict[str, Any]]) -> None:
