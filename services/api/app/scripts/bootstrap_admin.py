@@ -40,6 +40,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import os
 import secrets
 import string
@@ -50,10 +51,13 @@ from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import func, select
 
 from app.api.v1.dev_auth import DEMO_TENANT_ID
+from app.core.rbac_catalog import sync_user_catalog_role
 from app.core.security import get_password_hash
 from app.db.database import AsyncSessionLocal
 from app.models.tenant import Tenant, User
 from app.services.audit import emit_audit
+
+logger = logging.getLogger(__name__)
 
 # Matches the tenant seeded by migration 001. Reused so a bootstrap on an
 # already-migrated database adopts that tenant rather than creating a second
@@ -278,6 +282,55 @@ async def bootstrap(
     async with AsyncSessionLocal() as session:
         tenant = await _ensure_tenant(session)
 
+        async def _grant_admin_catalog_role(user_id) -> None:
+            """Give the break-glass admin its catalog ``user_roles`` grant.
+
+            The admin is created by this script, which runs *after* migration
+            092's membership backfill, so it is the one account in a seeded
+            tenant with ``users.role = 'admin'`` and no ``user_roles`` row.
+            That is harmless while the tenant holds zero grants —
+            ``resolve_permissions`` uses the static map on a bootstrap tenant —
+            but the first SSO sign-in (or any first grant) flips the tenant to
+            database-backed RBAC, and from that moment an admin with no grant
+            resolves to *zero* permissions and every route answers 403. That is
+            exactly what activating SSO OIDC did to the administrator who set it
+            up (discussion #1568): the SSO user's grant switched the tenant, and
+            the admin — ungranted — was locked out of users, investigations and
+            the alert queue alike.
+
+            Granting the admin here closes it at the source, and because
+            bootstrap runs on every startup it also *heals* a deployment already
+            in that state on the next restart. A no-op when the catalog is not
+            seeded (``sync_user_catalog_role`` logs and returns), which is
+            correct: that tenant stays on the static-map path and the admin
+            needs no row. RLS does not block the write — bootstrap sets no
+            tenant context, and the ``user_roles`` policy admits a NULL context,
+            the same escape under which this script already writes ``users``.
+
+            Best-effort by design: creating the break-glass admin is the
+            critical path and must not be held hostage to a grant write. If the
+            catalog tables are absent entirely (an unmigrated database, or the
+            SQLite schema the unit tests build) the write raises, and the right
+            answer is the same as an unseeded catalog — leave the admin on the
+            static-map path, exactly where it was before this fix, so there is
+            no regression.
+
+            Runs in its *own* session: the admin row is already committed by the
+            time this is called, and a grant failure (a missing catalog, a
+            connection fault) must not be able to corrupt or roll back the
+            caller's transaction. Isolating it means the worst case is a logged
+            skip, never a half-written admin.
+            """
+            try:
+                async with AsyncSessionLocal() as grant_session:
+                    await sync_user_catalog_role(grant_session, tenant_id=tenant.id, user_id=user_id, role_name="admin")
+                    await grant_session.commit()
+            except Exception as exc:  # noqa: BLE001 — hardening must not break admin creation
+                logger.warning(
+                    "bootstrap_admin.catalog_grant_skipped error=%s",
+                    str(exc).replace("\r", "").replace("\n", " ")[:200],
+                )
+
         # Case-insensitive: Postgres `UNIQUE` on `email` is case-sensitive, so
         # `Admin@…` and `admin@…` are two rows, and a second bootstrap would
         # hand out a password for an account the operator does not realise is a
@@ -287,6 +340,10 @@ async def bootstrap(
 
         if user is not None:
             if not reset_password:
+                # Still ensure the grant: this is the path a restart takes
+                # against an already-provisioned admin, which is how a
+                # deployment locked out by an earlier SSO activation heals.
+                await _grant_admin_catalog_role(user.id)
                 return email, False
             previous_role = user.role
             previously_active = user.is_active
@@ -311,6 +368,7 @@ async def bootstrap(
                 },
             )
             await session.commit()
+            await _grant_admin_catalog_role(user.id)
             return email, True
 
         # An administrator under a different address still counts — re-running
@@ -318,6 +376,7 @@ async def bootstrap(
         result = await session.execute(select(User).where(User.role == "admin", User.is_active.is_(True)).limit(1))
         existing_admin = result.scalar_one_or_none()
         if existing_admin is not None and not reset_password:
+            await _grant_admin_catalog_role(existing_admin.id)
             return existing_admin.email, False
 
         administrator = User(
@@ -349,6 +408,7 @@ async def bootstrap(
             },
         )
         await session.commit()
+        await _grant_admin_catalog_role(administrator.id)
         return email, True
 
 

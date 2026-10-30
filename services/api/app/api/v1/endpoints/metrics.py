@@ -899,6 +899,32 @@ def _pct_delta(current: float, previous: float) -> float | None:
     return round(((current - previous) / previous) * 100.0, 2)
 
 
+def _events_of_interest_sql(start, end) -> str:
+    """The lake count query for events that arrived in ``[start, end)``.
+
+    Filters on ``ingest_time`` — when the event *landed in the lake*
+    (``DEFAULT now64()`` in ``clickhouse/001_init.sql``), which is the
+    question an intake funnel asks: of the events that arrived in this
+    window, how many advanced. ``event_time`` is when the event *occurred*,
+    which late or backfilled data pushes outside the window, so it is the
+    wrong clock for an arrival funnel — and it is the column
+    ``usage_metering`` already counts arrivals by.
+
+    There is no ``ingested_at`` column: naming it made this query fail with
+    ClickHouse ``Code: 47, Missing columns: 'ingested_at'`` on every call, so
+    the funnel silently served the Postgres fallback on every deployment with
+    a reachable lake (reported in discussion #1568). A pure builder so the
+    column can be checked against the schema in a test without a live
+    ClickHouse.
+    """
+    return (
+        "SELECT count() AS cnt "
+        "FROM aisoc.raw_events "
+        f"WHERE ingest_time >= toDateTime('{start.strftime('%Y-%m-%d %H:%M:%S')}') "
+        f"AND ingest_time < toDateTime('{end.strftime('%Y-%m-%d %H:%M:%S')}')"
+    )
+
+
 async def _events_of_interest(db, tenant_id, start, end) -> int:
     """Count tenant raw events that landed in the analytical lake.
 
@@ -925,12 +951,7 @@ async def _events_of_interest(db, tenant_id, start, end) -> int:
     except Exception:  # pragma: no cover — defensive
         return await _events_of_interest_from_alerts(db, tenant_id, start, end)
 
-    sql = (
-        "SELECT count() AS cnt "
-        "FROM aisoc.raw_events "
-        f"WHERE ingested_at >= toDateTime('{start.strftime('%Y-%m-%d %H:%M:%S')}') "
-        f"AND ingested_at < toDateTime('{end.strftime('%Y-%m-%d %H:%M:%S')}')"
-    )
+    sql = _events_of_interest_sql(start, end)
 
     try:
         rewrite = rewrite_for_tenant(sql, tenant_id, row_cap=1)

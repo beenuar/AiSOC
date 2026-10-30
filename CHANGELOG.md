@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Activating SSO OIDC no longer locks the administrator out** (reported in
+  discussion #1568). `resolve_permissions` uses the static role map only while
+  a tenant holds zero `user_roles` grants; the first SSO sign-in provisions a
+  user and grants it a role, which flips the tenant to database-backed RBAC,
+  and from that instant the bootstrap admin — created by `bootstrap_admin.py`
+  *after* migration 092's membership backfill, so the one account with
+  `users.role = 'admin'` and no grant — resolved to **zero** permissions and
+  every route answered 403 (users, investigations, the alert queue alike).
+  `bootstrap_admin` now grants the admin its `admin` catalog role on every
+  startup, in an isolated session so it can never disturb admin creation, and
+  as a no-op when the catalog is unseeded. Because it runs on every startup it
+  also heals a deployment already locked out, on the next restart. The
+  resolver's deprovisioning semantics are unchanged and still separately
+  pinned; a live-Postgres test reproduces the lockout and proves the fix.
+- **The alert-funnel's "events of interest" count queried a column the lake
+  does not have.** `_events_of_interest` filtered `aisoc.raw_events` on
+  `ingested_at`, which raised ClickHouse `Code: 47, Missing columns:
+  'ingested_at'` on every call (surfaced alongside #1568), so the funnel
+  silently served its Postgres fallback on every deployment with a reachable
+  lake. It now filters on `ingest_time` — when the event landed, the column
+  `usage_metering` already counts arrivals by — with a test that checks the
+  query's filter columns against the committed ClickHouse DDL so any
+  non-existent column is caught, not only this one.
+
 ## [20.3.0] - 2026-10-30
 
 ### Added
