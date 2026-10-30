@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [20.4.0] - 2026-10-30
+
 ### Fixed
 
 - **Activating SSO OIDC no longer locks the administrator out** (reported in
