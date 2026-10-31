@@ -36,4 +36,6 @@ COPY app/ ./app/
 
 USER nobody
 
-CMD ["python", "-u", "app/bridge.py"]
+# `python -m app` runs app/__main__.py, which the module-reachability gate
+# recognises as the service entry point; it calls bridge.main().
+CMD ["python", "-u", "-m", "app"]
