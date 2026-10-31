@@ -112,6 +112,21 @@ def _reset_calls() -> None:
     FakeClient.calls = []
 
 
+@pytest.fixture(autouse=True)
+def _service_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The credential compose actually delivers to this service.
+
+    Every fetch test runs with it present, because the production defect this
+    file now pins was the *absence* of a delivered credential: the fetch sent
+    `X-Tenant-ID` (a header the API's auth never reads) plus an optional
+    `AISOC_AGENTS_API_KEY` bearer that no compose file, `.env.example` or Helm
+    value delivers — so the business dimension answered 401 on every default
+    deployment and the prompt said "unavailable" forever.
+    """
+    monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "svc-tok-agents")
+    monkeypatch.setenv("AISOC_SERVICE_TOKEN", "svc-tok-shared")
+
+
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: FakeClient) -> None:
     monkeypatch.setattr(module.httpx, "AsyncClient", client)
 
@@ -128,14 +143,55 @@ class TestFetch:
         assert result.threat[0]["actor"] == "Example Group"
         assert not result.partial
 
-    async def test_the_tenant_is_sent(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Scoping is enforced API-side; the caller must identify itself."""
+    async def test_the_request_carries_the_service_credential_shape(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The exact header shape the API's service auth reads, nothing else.
+
+        `get_current_user` resolves a trusted peer from `Authorization: Bearer
+        <service token>` plus `X-AiSOC-Tenant-ID`. The legacy shape this fetch
+        used — `X-Tenant-ID` plus an `AISOC_AGENTS_API_KEY` nothing delivers —
+        authenticated nothing, so the graph's business dimension 401'd on every
+        default deployment. This test failed on that tree.
+        """
         _patch_client(monkeypatch, FakeClient(FULL_PAYLOAD))
         await ContextBundleBuilder()._fetch_incident_context("tenant-a", {"id": "alert-1"})
 
         url, kwargs = FakeClient.calls[0]
         assert "alert-1" in url
-        assert kwargs["headers"]["X-Tenant-ID"] == "tenant-a"
+        headers = kwargs["headers"]
+        assert headers["Authorization"] == "Bearer svc-tok-agents"
+        assert headers["X-AiSOC-Tenant-ID"] == "tenant-a"
+        assert "X-Tenant-ID" not in headers, "the header the API's auth never reads must be gone"
+
+    async def test_the_agents_specific_token_outranks_the_shared_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Same resolution order as `context/identity.py`, which is the one
+        path of this shape proven live end-to-end."""
+        _patch_client(monkeypatch, FakeClient(FULL_PAYLOAD))
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "specific")
+        monkeypatch.setenv("AISOC_SERVICE_TOKEN", "shared")
+        await ContextBundleBuilder()._fetch_incident_context("t", {"id": "a"})
+        assert FakeClient.calls[0][1]["headers"]["Authorization"] == "Bearer specific"
+
+        FakeClient.calls = []
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "")
+        await ContextBundleBuilder()._fetch_incident_context("t", {"id": "a"})
+        assert FakeClient.calls[0][1]["headers"]["Authorization"] == "Bearer shared"
+
+    async def test_no_token_refuses_without_dialing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Unconfigured must read as *unavailable*, never as empty context.
+
+        Raising lets the caller's safe-wrap mark the source failed, so the
+        prompt says "context unavailable, treat as unknown" — the property this
+        file's docstring protects. Returning empty dimensions here would make
+        a missing credential indistinguishable from an estate with genuinely
+        no business context. And it must not dial: an unauthenticated call is
+        a guaranteed 401, which reads as the API rejecting us.
+        """
+        _patch_client(monkeypatch, FakeClient(FULL_PAYLOAD))
+        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "")
+        monkeypatch.setenv("AISOC_SERVICE_TOKEN", "")
+        with pytest.raises(RuntimeError, match="AISOC_AGENTS_SERVICE_TOKEN"):
+            await ContextBundleBuilder()._fetch_incident_context("t", {"id": "a"})
+        assert FakeClient.calls == [], "no credential, no dial"
 
     @pytest.mark.parametrize("key", ["id", "alert_id", "external_id"])
     async def test_alert_id_is_read_from_any_of_the_three_shapes(self, monkeypatch: pytest.MonkeyPatch, key: str) -> None:

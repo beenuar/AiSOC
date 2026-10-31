@@ -530,6 +530,8 @@ async def persist_auto_triage(
     ungrounded: bool | None = None,
     shadow: bool = False,
     llm_exchanges: list[dict[str, Any]] | None = None,
+    business_context: dict[str, Any] | None = None,
+    business_impact: dict[str, Any] | None = None,
 ) -> bool:
     """Durably record an auto-triage outcome (issue #571) in ONE transaction:
 
@@ -686,6 +688,16 @@ async def persist_auto_triage(
                             "findings": findings or [],
                             "proposed_actions": recommendations,
                             "auto_closed": auto_closed,
+                            # Which tenant-authored rules fired, and the cited
+                            # business-impact element (both optional). Until
+                            # now these travelled only in logs and in-process
+                            # counters — invisible to the analyst reading the
+                            # verdict, and gone on restart. Keys are absent
+                            # (not null) when there is nothing to record, so a
+                            # reader can distinguish "no context configured"
+                            # from "an older event predating this field".
+                            **({"business_context": business_context} if business_context else {}),
+                            **({"business_impact": business_impact} if business_impact else {}),
                         }
                     ),
                     first.get("input_hash"),

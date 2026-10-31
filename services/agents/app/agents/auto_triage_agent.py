@@ -102,6 +102,10 @@ _metrics: dict[str, Any] = {
     # the groundedness scorer cannot see, because a marker is not an indicator
     # and would never appear in the evidence text it checks against.
     "kb_citations_unresolvable": 0,
+    # A business_impact element whose citations do not resolve to the rule ids
+    # that fired on this alert — including the fabrication case where no
+    # context was supplied at all. Dropped, counted, never rendered.
+    "business_impact_uncited": 0,
     # Depth plan 1.3. A rationale crediting one of this agent's tools with a
     # result, on a path that called no tool. Counted beside the unresolvable
     # citation it is the sibling of: both are a claim whose provenance resolves
@@ -200,6 +204,13 @@ def _scannable_fields(state: InvestigationState) -> list[tuple[str, Any]]:
     skill = state.tenant_skill or {}
     if skill.get("triage_guidance"):
         fields.append(("tenant_skill.triage_guidance", skill.get("triage_guidance")))
+
+    # Business-context rule ids are console-authored free text that is now
+    # interpolated into the preamble — the same trust class as a disposition's
+    # scope_value, and the same reason: tenant-authored is not operator-typed.
+    bc = state.business_context or {}
+    for index, rule_id in enumerate(bc.get("matched_rule_ids") or []):
+        fields.append((f"business_context.matched_rule_ids[{index}]", rule_id))
 
     return [(name, value) for name, value in fields if isinstance(value, str | int | float | list | dict)]
 
@@ -309,6 +320,19 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     if who:
         preamble.append(sanitize_text(who, max_len=_MAX_CONTEXT_BLOCK_CHARS))
 
+    # What the tenant's business-context rules did to this alert, told to the
+    # model rather than applied silently: a `set_severity` the model cannot
+    # see leaves it explaining a severity nobody chose in the evidence. The
+    # rule ids double as citation anchors for the optional `business_impact`
+    # element, whose instruction is injected HERE — conditionally, never in
+    # the registry-pinned system prompt — so a model with no business context
+    # is never invited to invent an impact statement. Rule ids and severity
+    # values are tenant-authored, so the block takes the same `sanitize_text`
+    # pass as the other first-party preamble blocks.
+    biz = _render_business_context(state.business_context)
+    if biz:
+        preamble.append(sanitize_text(biz, max_len=_MAX_CONTEXT_BLOCK_CHARS))
+
     # Not sanitised again on the way in: the retrieval already capped and
     # sanitised each chunk, and `render_runbooks` fences the result. Running
     # `sanitize_text` over the rendered block would rewrite the nonce markers
@@ -318,6 +342,32 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     if not preamble and not runbooks:
         return telemetry
     return "\n\n".join([*preamble, *([runbooks] if runbooks else []), telemetry])
+
+
+def _render_business_context(bc: dict[str, Any] | None) -> str:
+    """The applied-rules block, or empty when no rule fired.
+
+    Returns the prose the preamble carries plus the conditional invitation to
+    emit ``business_impact``. Absent context returns ``""`` — the caller adds
+    nothing, and the model never sees the element's name.
+    """
+    if not bc or not bc.get("matched_rule_ids"):
+        return ""
+    rule_ids = [str(r) for r in bc["matched_rule_ids"]]
+    lines = ["Business context (tenant-authored rules applied before triage):"]
+    before, after = bc.get("severity_before"), bc.get("severity_after")
+    if before is not None and after is not None and before != after:
+        lines.append(f"- Rules {', '.join(rule_ids)} set severity {before} -> {after}.")
+    else:
+        lines.append(f"- Rules matched: {', '.join(rule_ids)}.")
+    lines.append(
+        "If this business context informs the impact of the alert, you may add an "
+        'optional "business_impact" object to your JSON response: '
+        '{"statement": "<one sentence>", "citations": ["<rule id>"]}. '
+        f"Legal citation values are exactly these rule ids: {', '.join(rule_ids)}. "
+        "Omit the object entirely rather than citing anything else."
+    )
+    return "\n".join(lines)
 
 
 def _close_truncated_json(fragment: str) -> str:
@@ -452,10 +502,25 @@ def _parse_llm_response(text: str) -> dict[str, Any]:
 
     rationale = data.get("rationale", "No rationale provided by LLM.")
 
+    # Optional, and shape-checked only — whether its citations resolve is
+    # decided by the caller, which holds the anchors. A malformed element is
+    # dropped here rather than failing the verdict: the verdict/confidence/
+    # rationale triple is the contract, business_impact is an addendum.
+    business_impact: dict[str, Any] | None = None
+    raw_impact = data.get("business_impact")
+    if isinstance(raw_impact, dict) and isinstance(raw_impact.get("statement"), str):
+        citations = raw_impact.get("citations")
+        if isinstance(citations, list) and all(isinstance(c, str) for c in citations):
+            business_impact = {
+                "statement": raw_impact["statement"][:500],
+                "citations": citations[:10],
+            }
+
     return {
         "verdict": verdict,
         "confidence": confidence,
         "rationale": str(rationale),
+        "business_impact": business_impact,
     }
 
 
@@ -594,6 +659,29 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     state.confidence_basis.extend(citation_basis(state.knowledge_base))
     state.confidence_basis.extend(disposition_basis(state.recent_dispositions))
     state.confidence_basis.extend(identity_basis(state.identity_context))
+
+    # The business-impact element survives only when every citation it carries
+    # resolves to a rule id that actually fired on this alert — the same
+    # discipline as knowledge-base citations, pointing the other way: uncited
+    # (or mis-cited) impact is dropped and counted, never rendered. No context
+    # supplied means the instruction was never injected, so an element arriving
+    # anyway is a fabrication and is dropped by the empty anchor set.
+    impact = result.get("business_impact")
+    if impact:
+        anchors = set((state.business_context or {}).get("matched_rule_ids") or [])
+        cited = set(impact.get("citations") or [])
+        if cited and anchors and cited <= anchors:
+            state.business_impact = impact
+            state.confidence_basis.append(f"Business impact: cites rule(s) {', '.join(sorted(cited))}")
+        else:
+            _metrics["business_impact_uncited"] += 1
+            logger.warning(
+                "auto_triage.business_impact_dropped",
+                incident_id=str(state.incident_id),
+                cited=sorted(cited),
+                anchors=sorted(anchors),
+            )
+
     unresolvable = unresolvable_citations(rationale, state.knowledge_base)
     if unresolvable:
         # The model cited a runbook that was never retrieved. Named rather

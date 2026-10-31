@@ -32,19 +32,24 @@ Author: Beenu Arora <beenu@cyble.com>
 
 from __future__ import annotations
 
+import json
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Final
 from urllib.parse import quote
 
+import structlog
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy import text as sa_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
 from app.models.audit import AuditLog
 from app.models.case import CaseTimeline
+
+logger = structlog.get_logger(__name__)
 
 # ─── Tunables ────────────────────────────────────────────────────────────────
 
@@ -572,12 +577,87 @@ def build_recommended_actions(alert: Alert) -> list[RecommendedAction]:
 # ─── Convenience composite ───────────────────────────────────────────────────
 
 
+class BusinessContextRail(BaseModel):
+    """What the tenant's business-context rules did to this alert, and the
+    verdict's cited impact statement — read from the auto-triage ledger event,
+    which is the only place the pairing is recorded.
+
+    ``None`` on the envelope means no rule fired (or the alert predates the
+    field), never "the measurement is zero": the agents side writes the keys
+    only when a rule matched, so absence here is honest absence.
+    """
+
+    matched_rule_ids: list[str] = Field(default_factory=list)
+    severity_before: str | None = None
+    severity_after: str | None = None
+    impact_statement: str | None = None
+    impact_citations: list[str] = Field(default_factory=list)
+
+
+async def fetch_business_context(db: AsyncSession, alert: Alert) -> BusinessContextRail | None:
+    """The latest auto-triage verdict event for this alert that carries
+    business-context keys.
+
+    ``investigation_runs.case_id`` is TEXT and holds ``str(alert_id)`` for
+    auto-triage runs (``investigation_events`` has no case/alert column of its
+    own, so the join goes through the run). Both tables are filtered by
+    tenant in the query — RLS stays defence-in-depth, not the control.
+    """
+    stmt = sa_text(
+        """
+        SELECT e.payload
+        FROM investigation_events e
+        JOIN investigation_runs r ON r.id = e.run_id
+        WHERE r.tenant_id = :tenant_id
+          AND e.tenant_id = :tenant_id
+          AND r.case_id = :alert_ref
+          AND e.kind LIKE 'auto_triage:%'
+          AND (e.payload -> 'business_context' IS NOT NULL
+               OR e.payload -> 'business_impact' IS NOT NULL)
+        ORDER BY e.created_at DESC
+        LIMIT 1
+        """
+    )
+    try:
+        row = (
+            await db.execute(
+                stmt,
+                {"tenant_id": alert.tenant_id, "alert_ref": str(alert.id)},
+            )
+        ).first()
+    except Exception:  # noqa: BLE001 — the rail must render without this leg
+        logger.warning("alert_rail.business_context_read_failed", alert_id=str(alert.id))
+        return None
+    if row is None:
+        return None
+    payload = row[0]
+    if isinstance(payload, str):
+        try:
+            payload = json.loads(payload)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(payload, dict):
+        return None
+    bc = payload.get("business_context") or {}
+    impact = payload.get("business_impact") or {}
+    if not bc and not impact:
+        return None
+    return BusinessContextRail(
+        matched_rule_ids=[str(r) for r in (bc.get("matched_rule_ids") or [])],
+        severity_before=(str(bc["severity_before"]) if bc.get("severity_before") is not None else None),
+        severity_after=(str(bc["severity_after"]) if bc.get("severity_after") is not None else None),
+        impact_statement=(str(impact["statement"]) if impact.get("statement") else None),
+        impact_citations=[str(c) for c in (impact.get("citations") or [])],
+    )
+
+
 class RailEnvelope(BaseModel):
     """Composite payload returned alongside the alert detail response."""
 
     related_entities: list[RelatedEntity]
     mini_timeline: list[MiniTimelineEvent]
     recommended_actions: list[RecommendedAction]
+    business_context: BusinessContextRail | None = None
 
 
 async def build_rail_envelope(db: AsyncSession, alert: Alert) -> RailEnvelope:
@@ -591,11 +671,13 @@ async def build_rail_envelope(db: AsyncSession, alert: Alert) -> RailEnvelope:
         related_entities=build_related_entities(alert),
         mini_timeline=await build_mini_timeline(db, alert),
         recommended_actions=build_recommended_actions(alert),
+        business_context=await fetch_business_context(db, alert),
     )
 
 
 __all__ = [
     "MAX_TIMELINE_EVENTS",
+    "BusinessContextRail",
     "MiniTimelineEvent",
     "RailEnvelope",
     "RecommendedAction",
@@ -604,4 +686,5 @@ __all__ = [
     "build_rail_envelope",
     "build_recommended_actions",
     "build_related_entities",
+    "fetch_business_context",
 ]
