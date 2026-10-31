@@ -9,6 +9,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Serving-model attribution, end to end.** Every published verdict-eval
+  row had `resolved_models: []` — 72 calls placed, answered, and
+  unattributable, because the only serving-identity reader was the LiteLLM
+  gateway header and the measured runs talked to an OpenAI-compatible
+  endpoint directly. The extractor now reads the gateway header first
+  (*verified*) and the response body's own `model` second
+  (*self-reported*), credited only with evidence it came from the body —
+  langchain falls back to the requested name when the body carries none,
+  and a requested alias is never copied into serving metadata. Scorecards
+  carry a `provenance_status` (`verified` / `self_reported` /
+  `unattributed` / `serving_mismatch` / `no_calls`); a live run whose
+  serving identity mismatches the requested model is refused as that
+  model's performance and preserved as a diagnostic; the benchmark table
+  gained an Attribution column with the five historical rows reading
+  "unverified" rather than receiving invented attribution; and a measured
+  auto-closure precision can no longer be bound to a call whose serving
+  model no party vouched for — a clearing measurement over an unattributed
+  call now **blocks** instead of authorising.
+
+- **Full-cohort and closure accounting in the replay scorer.** Selective
+  malicious recall silently dropped errored cases from its denominator; the
+  scorer now also publishes full-cohort recall over every labelled
+  malicious case with the four buckets that sum to it (caught, abstained,
+  errored, answered-as-negative), the four proposed-closure cuts
+  (malicious closure rate, closure contamination, benign closure coverage,
+  unknown-label share — `closures_executed` pinned at zero because replay
+  executes nothing), request reliability as five visible counts
+  (requested / attempted / completed / failed / unattempted), per-severity
+  segments, and per-source attribution counts.
+
+- **The reflex path reports its stages and its decision contract.**
+  Auto-triage summaries, logs and replay decisions now carry named stage
+  timings (queue delay, business context, context fetch, decide,
+  verification, persist, escalate, approvals, writeback) plus a structured
+  decision contract — verdict, operational disposition, supporting and
+  contradictory decisive claims, groundedness, missing prerequisites, and
+  the escalation reason — assembled from signals that already ran, with
+  `None` for a signal that never ran rather than an empty list pretending
+  the check happened.
+
+- **Retro-hunt rehearsal mode.** `RETRO_HUNT_DRY_RUN` runs every sweep
+  exactly as live (the warehouse scan still consumes the tenant's sweep
+  budget) and withholds every mutation at the write boundary inside
+  `sweep_tenant`: matches come back as recorded proposals, no alert opens,
+  no sighting row lands, and the dedup branch leaves its counters
+  untouched — so a re-hunt can be rehearsed over history with no ability
+  to touch production state.
+
+- **A live-Redis proof for the correlator, and the suite that was wired to
+  nothing.** `integration.yml` gains a `fusion-redis-live` job (keyed on
+  the existing spine filter) running `services/fusion/tests/integration/`
+  against a real server — window expiry, tenant boundaries, restart
+  continuity, per-rule fallback grouping and concurrent-creator
+  convergence — which also gives the windowed engine's claim-protocol
+  suite its first workflow. An all-skipped run is refused rather than
+  green.
+
+- **The verdict model matrix.** `run_model_matrix.py --task verdict`
+  grades the balanced corpus per model through `run_verdict_eval.py`
+  (still a thin collator defining no scoring), records each row's
+  configuration — pins, endpoint, prompt provenance, corpus digest,
+  provenance status, serving models — and the runtime in
+  comparable-but-unidentifying terms, and renders the constant-answer
+  baselines beside the table. The committed verdict scorecard gained the
+  deterministic-fallback baseline row: balanced accuracy exactly at the
+  0.250 constant floor, zero of 36 malicious cases caught — the rules
+  floor every measured model is read against.
+
+- **An annotated unsupported-claim measurement.** Sixteen hand-annotated
+  (rationale, evidence, label) cases measure `score_claim_support` with an
+  exactly-pinned confusion matrix (TP 7, FP 0, FN 1, TN 8), a recorded
+  known miss that must stay missed until the pins move with it, and the
+  annotation-independence limit stated where the number lives. The
+  measurement found and drove a real detector fix: the claim pattern
+  recognised "scheduled scan" while the support keys did not, so an alert
+  whose evidence recorded `scheduled_scan` could state the claim and still
+  be refused support.
+
+### Changed
+
+- **A missing identifier narrows the correlation group instead of widening
+  it.** Neither detection engine has ever emitted `mitre_tactics` (the
+  ruleset carries technique ids only), so every detection alert's
+  correlation key fell back to the literal `unknown` tactic and all of an
+  entity's detection alerts collapsed into one incident per window;
+  entity-less alerts merged tenant-wide. The fallback now scopes to the
+  detection rule with an entity, never groups across rules without one,
+  and groups only exact fingerprint repeats with no identifiers at all.
+  Measured on a fixed detection-shaped cohort: 42.6 % reduction with 36
+  cross-rule incident groups before, 24.5 % with zero after — the honest
+  direction, because the difference was unrelated alerts counted as
+  grouped. The tactic-carrying headline cohort is unchanged at 33.3 %. The
+  correlator's creation race is closed with `SET NX` (concurrent first
+  arrivals converge on one incident instead of orphaning an alert); the
+  narrower merge/merge window is documented, not closed.
+
+- **Verdict scorecards disclose the model-knowledge limit.** Evidence
+  cutoffs constrain supplied context only; each scorecard now records the
+  model's training cutoff when the operator states one and `unknown`
+  otherwise, with the disclosure that pretrained weights may postdate the
+  replayed events.
+
 - **Business context reaches the triage model, and impact statements must
   cite it.** The business-context applier's result used to die in the
   worker's local variable: a tenant `set_severity` mutated the alert

@@ -237,6 +237,14 @@ _SUPPORT_KEYS: dict[ClaimKind, tuple[str, ...]] = {
         "scheduled",
         "scheduled_job",
         "scheduled_task",
+        # The claim pattern recognises "scheduled (scan|job|task|reboot)", so
+        # the support keys must cover the same four nouns — they covered two.
+        # An alert whose evidence recorded `scheduled_scan` could state the
+        # claim the pattern knows and still be refused support by the keys,
+        # found by the annotated measurement in
+        # tests/test_claim_support_measured.py (case CS-15).
+        "scheduled_scan",
+        "scheduled_reboot",
         "planned_change",
     ),
     ClaimKind.CHANGE_RECORD: ("change_ticket", "change_id", "change_number", "ticket_id", "rfc_id", "cr_id"),

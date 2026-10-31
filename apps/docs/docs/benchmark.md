@@ -126,6 +126,7 @@ Corpus: **72 items** in **36 twin pairs** (`verdict_corpus_v1`, digest `sha256:e
 | `llama3:8b` | live | 0.279 | 0.113 | 0.639 / 36 | 0.000 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
 | `qwen2.5:7b-instruct-q4_K_M` | live | 0.260 | 0.032 | 0.083 / 36 | 0.097 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
 | `mistral:7b-instruct-v0.3-q4_K_M` | live | 0.210 | 0.202 | 0.639 / 36 | 0.306 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
+| `deterministic fallback (no model)` | deterministic | 0.250 | 0.000 | 0.000 / 36 | 0.000 | – | 0 | no calls |
 | `any hosted provider (GPT-4o class)` | – | not measured — no funded key exists in this repository, and no hosted provider has ever been exercised | – | – | – | – | 0 | – |
 
 Malicious recall prints the count behind it: a rate over 36 cases is a different claim from the same rate over four, and the figure alone cannot say which. Every measured row placed the model calls shown in the last column; a row that placed none is refused rather than published, because triage answers from a deterministic scorer when a provider fails and the resulting scorecard looks entirely normal.
