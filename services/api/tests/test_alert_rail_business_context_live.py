@@ -88,7 +88,19 @@ def _alert(tenant: uuid.UUID) -> Alert:
     )
 
 
-async def _seed_run_and_event(db, *, tenant: uuid.UUID, alert_id: uuid.UUID, payload: dict, kind: str = "auto_triage:fast") -> None:
+async def _seed_run_and_event(db, *, tenant: uuid.UUID, alert_id: uuid.UUID, payload: dict, kind: str = "triage_verdict") -> None:
+    """Seed exactly the shape `persist_auto_triage` writes.
+
+    `kind` is the literal `'triage_verdict'` and `agent` carries
+    `auto_triage:{tier}` — read off the writer's own INSERT in
+    `services/agents/app/investigator/ledger.py` and pinned there by its
+    recording-pool test. The first version of this seeding invented
+    `kind='auto_triage:fast'`, a shape no real event ever had, which let the
+    reader filter on the same invented shape and ship a rail section that
+    could never render on a real deployment — the test double was more
+    capable than the real writer. Seed the writer's shape, never an assumed
+    one.
+    """
     run_id = uuid.uuid4()
     await db.execute(
         text(
@@ -103,7 +115,7 @@ async def _seed_run_and_event(db, *, tenant: uuid.UUID, alert_id: uuid.UUID, pay
         text(
             """
             INSERT INTO investigation_events (id, run_id, tenant_id, seq, ts, kind, agent, summary, payload, created_at)
-            VALUES (:id, :run_id, :tenant_id, 1, now(), :kind, 'auto_triage', 'verdict', CAST(:payload AS jsonb), now())
+            VALUES (:id, :run_id, :tenant_id, 1, now(), :kind, 'auto_triage:fast', 'verdict', CAST(:payload AS jsonb), now())
             """
         ),
         {"id": uuid.uuid4(), "run_id": run_id, "tenant_id": tenant, "kind": kind, "payload": json.dumps(payload)},

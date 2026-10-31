@@ -69,6 +69,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The rail's business-context leg reads the event the writer actually
+  writes.** Its query filtered `kind LIKE 'auto_triage:%'` while the ledger's
+  verdict INSERT hardcodes `kind = 'triage_verdict'` (the `auto_triage:{tier}`
+  string lives in the `agent` column) — so the section could never render on
+  a real deployment while every suite stayed green, because the live test had
+  seeded the assumed shape rather than the writer's. Found by the end-to-end
+  QA slice (console rule row -> real worker -> real ledger -> rail), fixed,
+  and the literal is now pinned on both sides: the writer's recording-pool
+  test asserts the executed INSERT carries `'triage_verdict'` and the
+  business keys land in the payload, and the reader's live test seeds that
+  same literal.
+
 - **The context graph's business dimension authenticates.** The bundle's
   incident-context fetch sent `X-Tenant-ID` (a header the API's auth never
   reads) with an optional `AISOC_AGENTS_API_KEY` bearer that no compose
