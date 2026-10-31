@@ -577,8 +577,7 @@ def main(argv: list[str] | None = None) -> int:
     print(report["report_markdown"])
     print()
     print(
-        f"verdict-eval: model={model_label} mode={scorecard['mode']} llm_calls={llm_calls} "
-        f"errored={errored} provenance={provenance_status}"
+        f"verdict-eval: model={model_label} mode={scorecard['mode']} llm_calls={llm_calls} errored={errored} provenance={provenance_status}"
     )
 
     if live and provenance_status == STATUS_MIXED_SERVING:

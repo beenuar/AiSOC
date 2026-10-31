@@ -302,7 +302,11 @@ def test_two_runs_over_one_history_produce_identical_decisions_through_the_route
         assert response.status_code == 200
         rows = []
         for decision in response.json()["decisions"]:
+            # Every wall-clock field: latency, its reflex-path stage split,
+            # and the queue delay. All measure the host, not the input.
             decision.pop("latency_ms")
+            decision.pop("stage_timings_ms", None)
+            decision.pop("queue_delay_ms", None)
             rows.append(decision)
         return rows
 

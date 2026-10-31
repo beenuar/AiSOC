@@ -381,7 +381,9 @@ async def sweep_tenant(
             alert_id=existing.alert_id,
             deduplicated=True,
             proposed=True,
-            detail=("DRY RUN — this indicator already has an alert for this tenant; a live sweep would have refreshed its sighting counters."),
+            detail=(
+                "DRY RUN — this indicator already has an alert for this tenant; a live sweep would have refreshed its sighting counters."
+            ),
         )
 
     if existing is not None:

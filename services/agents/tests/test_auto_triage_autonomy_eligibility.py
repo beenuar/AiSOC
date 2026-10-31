@@ -60,9 +60,7 @@ class _FixedReply:
             # The body names the serving model beside its own id, which is
             # what langchain_openai copies into response_metadata when — and
             # only when — the body carried them.
-            response_metadata = (
-                {"model_name": "measured-model-v1", "id": "chatcmpl-test-1"} if attributed else {}
-            )
+            response_metadata = {"model_name": "measured-model-v1", "id": "chatcmpl-test-1"} if attributed else {}
 
         return _Response()
 

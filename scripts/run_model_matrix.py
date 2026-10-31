@@ -383,9 +383,7 @@ def main(argv: list[str] | None = None) -> int:
         ]
     else:
         results = [
-            run_one(model, limit=args.limit, timeout=args.timeout)
-            if live
-            else ModelResult(model, measured=False, error=reason)
+            run_one(model, limit=args.limit, timeout=args.timeout) if live else ModelResult(model, measured=False, error=reason)
             for model in models
         ]
 

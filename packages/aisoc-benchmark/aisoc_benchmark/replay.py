@@ -646,9 +646,7 @@ def score_replay(
     proposed = [
         d
         for d in decisions
-        if not d.get("error")
-        and d.get("verdict") in _AUTO_CLOSABLE_VERDICTS
-        and float(d.get("confidence") or 0.0) >= auto_close_threshold
+        if not d.get("error") and d.get("verdict") in _AUTO_CLOSABLE_VERDICTS and float(d.get("confidence") or 0.0) >= auto_close_threshold
     ]
     score.closures_proposed = len(proposed)
     score.closures_executed = 0  # replay executes nothing, by construction

@@ -30,7 +30,6 @@ import uuid
 
 import pytest
 import pytest_asyncio
-
 from app.models.alert import AlertSeverity, RawAlert
 from app.services.correlator import _CORRELATION_PREFIX, Correlator
 

@@ -128,9 +128,17 @@ class _Handler(BaseHTTPRequestHandler):
 _LATENCY_IN_FINDING = re.compile(r"latency=\d+ms")
 
 
+#: Every field that measures the host rather than the input. `latency_ms` is
+#: the original; `stage_timings_ms` is the reflex-path split of the same wall
+#: clock, and `queue_delay_ms` reads the clock against the envelope. All
+#: three vary between two identical runs on one machine, which is exactly why
+#: they are reported and never graded.
+_WALL_CLOCK_FIELDS = ("latency_ms", "stage_timings_ms", "queue_delay_ms")
+
+
 def comparable(decision: dict[str, Any]) -> dict[str, Any]:
     """A decision with the wall clock taken out, and nothing else."""
-    row = {key: value for key, value in decision.items() if key != "latency_ms"}
+    row = {key: value for key, value in decision.items() if key not in _WALL_CLOCK_FIELDS}
     row["findings"] = [_LATENCY_IN_FINDING.sub("latency=<excluded>", str(f)) for f in row.get("findings") or []]
     return row
 
