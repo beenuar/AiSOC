@@ -236,6 +236,107 @@ class TestTheLedgerWritesIt:
             )
         return executed
 
+    @staticmethod
+    async def _run_with_business(business_context: dict | None, business_impact: dict | None) -> list[tuple[str, tuple]]:
+        """Same recording pool, with the business-context kwargs supplied."""
+        from app.investigator import ledger as ledger_module
+
+        executed: list[tuple[str, tuple]] = []
+        tenant = uuid4()
+
+        class _Conn:
+            async def execute(self, sql: str, *args: Any) -> str:
+                executed.append((sql, args))
+                return "INSERT 0 1"
+
+            async def fetchval(self, *_a: Any, **_k: Any) -> Any:
+                return tenant
+
+            def transaction(self) -> Any:
+                return _Txn()
+
+        class _Txn:
+            async def __aenter__(self) -> None:
+                return None
+
+            async def __aexit__(self, *_a: Any) -> bool:
+                return False
+
+        class _Acquire:
+            async def __aenter__(self) -> _Conn:
+                return _Conn()
+
+            async def __aexit__(self, *_a: Any) -> bool:
+                return False
+
+        class _Pool:
+            def acquire(self) -> _Acquire:
+                return _Acquire()
+
+        async def _pool() -> _Pool:
+            return _Pool()
+
+        async def _resolve(_conn: Any, _ref: str) -> Any:
+            return tenant
+
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(ledger_module, "get_pool", _pool)
+            mp.setattr(ledger_module, "_resolve_tenant_id", _resolve)
+            await ledger_module.persist_auto_triage(
+                run_id=uuid4(),
+                alert_id=str(uuid4()),
+                tenant_ref=str(tenant),
+                alert_summary="s",
+                raw_alert={},
+                tier="L1",
+                verdict="true_positive",
+                confidence=0.9,
+                rationale="because",
+                business_context=business_context,
+                business_impact=business_impact,
+            )
+        return executed
+
+    @staticmethod
+    def _verdict_payload(executed: list[tuple[str, tuple]]) -> dict:
+        """The JSONB payload bound into the verdict-event INSERT."""
+        for sql, args in executed:
+            if "triage_verdict" not in sql:
+                continue
+            for arg in args:
+                if isinstance(arg, str) and '"verdict"' in arg:
+                    return json.loads(arg)
+        raise AssertionError("no verdict-event INSERT with a payload was executed")
+
+    @pytest.mark.asyncio
+    async def test_the_verdict_event_kind_is_the_literal_the_rail_reads(self) -> None:
+        """Cross-service pin, writer side. The rail's business-context leg
+        (`services/api/app/services/alert_rail.py`) filters
+        `kind = 'triage_verdict'`, and its live test seeds that same literal.
+        The reader's first version filtered `kind LIKE 'auto_triage:%'`, a
+        shape no real event ever had, so the rail section could never render
+        on a real deployment while every suite stayed green. If this literal
+        is ever renamed, this test and the rail must move together."""
+        executed = await self._run_with_business(None, None)
+        verdict_inserts = [s for s, _ in executed if "INSERT INTO investigation_events" in s and "'triage_verdict'" in s]
+        assert verdict_inserts, "the verdict event must be written with the literal kind 'triage_verdict'"
+
+    @pytest.mark.asyncio
+    async def test_business_context_and_impact_land_in_the_payload(self) -> None:
+        bc = {"matched_rule_ids": ["dc-critical"], "severity_before": "medium", "severity_after": "critical"}
+        impact = {"statement": "Payment path at risk", "citations": ["dc-critical"]}
+        payload = self._verdict_payload(await self._run_with_business(bc, impact))
+        assert payload["business_context"] == bc
+        assert payload["business_impact"] == impact
+
+    @pytest.mark.asyncio
+    async def test_absent_business_keys_stay_absent_not_null(self) -> None:
+        """Absence is the record that nothing matched — a null would read as
+        an older event predating the field."""
+        payload = self._verdict_payload(await self._run_with_business(None, None))
+        assert "business_context" not in payload
+        assert "business_impact" not in payload
+
     @pytest.mark.asyncio
     async def test_the_verdict_insert_names_both_hash_columns(self) -> None:
         executed = await self._run([])

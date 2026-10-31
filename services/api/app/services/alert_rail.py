@@ -603,6 +603,15 @@ async def fetch_business_context(db: AsyncSession, alert: Alert) -> BusinessCont
     own, so the join goes through the run). Both tables are filtered by
     tenant in the query — RLS stays defence-in-depth, not the control.
     """
+    # `kind = 'triage_verdict'` is the literal the writer uses — the verdict
+    # INSERT in `services/agents/app/investigator/ledger.py` hardcodes it,
+    # with `agent` carrying `auto_triage:{tier}`. The first cut of this query
+    # filtered `kind LIKE 'auto_triage:%'`, a shape no real event has ever
+    # had, so the rail section could never render on a real deployment while
+    # every suite stayed green — the live test had seeded the assumed shape
+    # rather than the writer's. Found by the end-to-end QA slice; the literal
+    # is now pinned on both sides (the writer's recording-pool test and the
+    # live test here, naming the same string).
     stmt = sa_text(
         """
         SELECT e.payload
@@ -611,7 +620,7 @@ async def fetch_business_context(db: AsyncSession, alert: Alert) -> BusinessCont
         WHERE r.tenant_id = :tenant_id
           AND e.tenant_id = :tenant_id
           AND r.case_id = :alert_ref
-          AND e.kind LIKE 'auto_triage:%'
+          AND e.kind = 'triage_verdict'
           AND (e.payload -> 'business_context' IS NOT NULL
                OR e.payload -> 'business_impact' IS NOT NULL)
         ORDER BY e.created_at DESC
