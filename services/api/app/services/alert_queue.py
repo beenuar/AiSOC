@@ -419,9 +419,7 @@ async def resolve_asset_contexts(
         candidates = [
             a
             for a in asset_rows
-            if (a.name or "").lower() in hosts
-            or (a.fqdn or "").lower() in hosts
-            or (ips and set(a.ip_addresses or []) & ips)
+            if (a.name or "").lower() in hosts or (a.fqdn or "").lower() in hosts or (ips and set(a.ip_addresses or []) & ips)
         ]
         if not candidates:
             continue
