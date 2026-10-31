@@ -16,6 +16,7 @@ from app.services.ai_asset_recorder import AiAssetRecorder
 from app.services.alert_enricher import AlertEnricher
 from app.services.alert_outbox import AlertNotificationOutbox
 from app.services.alert_sink import AlertSink
+from app.services.asset_context import AssetContextResolver
 from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.baselines import BaselineStore
 from app.services.confidence import ConfidenceScorer
@@ -104,6 +105,11 @@ async def lifespan(app: FastAPI):
     memory_provider = (
         MemoryPriorProvider() if os.getenv("AISOC_FUSION_MEMORY_NUDGE", "1").strip().lower() not in {"0", "false", "no", "off"} else None
     )
+    # Business-context plan PR-3 — fuse-time asset-context stamp. Same
+    # Postgres this service already connects to (the assets table the console
+    # import writes); unset DATABASE_URL leaves the scorer's factor honestly
+    # reading "unknown (no inventory match)".
+    asset_resolver = AssetContextResolver(settings.database_url) if settings.database_url else None
     engine = FusionEngine(
         dedup,
         correlator,
@@ -112,6 +118,7 @@ async def lifespan(app: FastAPI):
         ueba_cache=ueba_cache,
         chain_grouper=chain_grouper,
         enricher=enricher,
+        asset_resolver=asset_resolver,
         memory_provider=memory_provider,
     )
     # Phase 3.1 — fused alerts land in the Postgres alert store so the spine

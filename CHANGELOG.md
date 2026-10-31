@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Asset criticality reaches fusion confidence and action approval —
+  tighten-only.** Fusion stamps what each alert landed on at fuse time
+  (`enrichments["asset_context"]`, resolved from the tenant's own `assets`
+  inventory by name/FQDN/IP with the highest criticality winning) and the
+  confidence scorer gains a bounded `asset_criticality` factor (weight 0.06,
+  weights rebalanced to keep summing to 1.0) — an absent stamp contributes
+  exactly 0.0 and the rationale row says `unknown (no inventory match)`
+  rather than being omitted, because "we do not know what this host is" is a
+  fact an analyst needs. On the response side, `evaluate_contract` grades a
+  verb one impact rank higher when the target asset is critical/high in the
+  tenant's inventory — never lower, with two deliberate non-raises:
+  READ_ONLY stays READ_ONLY (a read against a domain controller is still a
+  read) and SEVERE never becomes IRREVERSIBLE (context can demand a human,
+  it cannot make an undoable action undoable). The positive control is the
+  point: unknown criticality grades every verb identically, so a deployment
+  with no CMDB loses nothing. Both approval doors thread the resolution;
+  the console's vendored copy stays byte-identical.
+
 ### Security
 
 - **Dependencies:** the Oct-31 `minimatch` / `glob` advisory wave worked

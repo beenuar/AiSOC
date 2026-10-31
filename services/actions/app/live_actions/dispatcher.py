@@ -44,6 +44,7 @@ import structlog
 
 from app.models.action import ActionRequest, ActionType
 from app.services.approval_matrix import evaluate_contract
+from app.services.asset_lookup import asset_criticality_for_target
 from app.services.autonomy_safety import (
     _BLAST_ORDER,
     ACTION_BLAST_RADIUS,
@@ -134,6 +135,10 @@ async def _govern(request: LiveActionRequest, action_type: ActionType) -> Autono
         requested_by=request.requested_by,
     )
     policy = await resolve_tenant_policy(request.tenant_id)
+    # What is this action about to touch? Resolved once per dispatch from the
+    # tenant's own inventory; None (no CMDB, no match, outage) grades exactly
+    # as before. Tighten-only by construction in evaluate_contract.
+    target_criticality = await asset_criticality_for_target(request.tenant_id, request.target)
 
     # A tenant override is a deliberate, explicit instruction for one action
     # type, so it outranks the tier ladder in both directions.
@@ -162,6 +167,7 @@ async def _govern(request: LiveActionRequest, action_type: ActionType) -> Autono
                 f"action type '{action_type.value}' is force-auto by tenant policy",
             ),
             tier_label="L4",
+            asset_criticality=target_criticality,
         )
 
     # Gap-closure Phase 2.3. A tenant that has run this verb's alert classes in
@@ -208,6 +214,7 @@ async def _govern(request: LiveActionRequest, action_type: ActionType) -> Autono
         request,
         decision,
         tier_label=_tier_label(effective_tier),
+        asset_criticality=target_criticality,
     )
 
 
@@ -260,7 +267,12 @@ async def _govern_by_contract_alone(request: LiveActionRequest) -> AutonomyDecis
             f"contract ({contract.impact.value} impact) under tier {policy.tier.name}"
         ),
     )
-    return _apply_capability_contract(request, baseline, tier_label=_tier_label(policy.tier))
+    return _apply_capability_contract(
+        request,
+        baseline,
+        tier_label=_tier_label(policy.tier),
+        asset_criticality=await asset_criticality_for_target(request.tenant_id, request.target),
+    )
 
 
 def _apply_capability_contract(
@@ -268,6 +280,7 @@ def _apply_capability_contract(
     decision: AutonomyDecision,
     *,
     tier_label: str,
+    asset_criticality: str | None = None,
 ) -> AutonomyDecision:
     """Raise the autonomy verdict to whatever the capability contract demands.
 
@@ -311,6 +324,7 @@ def _apply_capability_contract(
         contract=contract,
         confidence=request.confidence,
         tier=tier_label,
+        asset_criticality=asset_criticality,
     )
 
     if verdict.is_blocked:
