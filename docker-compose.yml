@@ -70,6 +70,8 @@ networks:
     driver: bridge
 
 volumes:
+  # ack-clock bridge dedup/nag state (escalations service)
+  escalation-state:
   tempo_data:
   postgres_data:
   redis_data:
@@ -1570,6 +1572,37 @@ services:
   # `ghcr.io/beenuar/aisoc-mcp` package has been published yet and naming one
   # here would tell an operator to pull something that does not exist.
   # `scripts/check_published_images.py` is what catches that.
+  # Ack-clock escalator: Teams cards for unacknowledged CRITICAL cases and a
+  # daily HIGH digest. Opt-in profile — the native outbound-webhook emitters
+  # (services/api enqueue_event) have no production callers yet, so this
+  # service is the interim escalation transport. Enable with
+  #   docker compose --profile escalations up -d
+  # and set AISOC_ESCALATION_TEAMS_URL in .env (a Power Automate Teams webhook).
+  escalations:
+    build:
+      context: ./services/escalations
+    container_name: aisoc-escalations
+    profiles:
+      - escalations
+    environment:
+      # Plain postgresql:// scheme: this service uses psycopg (sync), not asyncpg.
+      DATABASE_URL: postgresql://aisoc_app:${AISOC_APP_DB_PASSWORD:-aisoc_app_dev_secret}@postgres:5432/aisoc
+      AISOC_ESCALATION_TEAMS_URL: ${AISOC_ESCALATION_TEAMS_URL:-}
+      AISOC_CONSOLE_URL: ${AISOC_CONSOLE_URL:-http://localhost:3000}
+      ESC_TICK_SECONDS: 900
+      ESC_CRITICAL_GRACE_MINUTES: 30
+      ESC_CRITICAL_NAG_HOURS: 4
+      ESC_CRITICAL_MAX_NAGS: 3
+      ESC_DIGEST_HOUR_UTC: 8
+    volumes:
+      - escalation-state:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - aisoc
+    restart: unless-stopped
+
   mcp:
     build:
       context: .

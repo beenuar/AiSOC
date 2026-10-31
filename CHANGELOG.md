@@ -21,6 +21,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `priority_basis`; no inventory means severity alone, and the basis says
   so. Proven on live Postgres with a negative control that removes the
   resolver and watches the order collapse.
+- **An opt-in ack-clock escalation bridge** (`services/escalations`, compose
+  profile `escalations`; externally contributed). The native outbound-webhook
+  subsystem is complete but its `enqueue_event` has no production callers, so
+  a CRITICAL case nobody acknowledged produced no notification at all. The
+  bridge watches `aisoc_cases.acknowledged_at`: unacknowledged CRITICAL cases
+  get a Teams card after a grace period with capped re-nags, unacknowledged
+  HIGH cases arrive as one daily digest with a pipeline-health line, and
+  dedup/nag state survives restarts. Deployment-wide by design (one
+  operator-configured webhook; per-tenant routing stays the native
+  subsystem's job, into which this retires when the emitters are wired) and
+  the webhook must be https. The sweep's cross-tenant reads are recorded on
+  the tenant-predicate ratchet with that reasoning, the service is
+  SLO-exempt with its reason, and its status filter is pinned against the
+  case table's own CHECK constraint by test.
 
 ### Security
 
