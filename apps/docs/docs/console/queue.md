@@ -8,6 +8,19 @@ description: The /queue workbench — an opinionated, single-page feed answering
 
 `/queue` is the page a Tier-1 analyst lives on. It exists to answer one question — *"what should I work on next?"* — and it answers it the same way an experienced shift-lead would: alerts already assigned to you first, then critical and high alerts no one has claimed, all of it ordered by SLA due time so the closest-to-breach work surfaces first. Low-priority unassigned alerts are deliberately excluded; those are triaged in bulk on `/alerts`.
 
+Within the same bucket and SLA position, **asset criticality decides**: each
+page of rows is matched against your imported asset inventory (hostname, FQDN
+or IP), and two alerts of equal severity sort by what they landed on — a
+domain controller carrying an exploited vulnerability outranks a meeting-room
+kiosk. Severity is the base and context is a bounded multiplier, so inventory
+can reorder alerts of similar severity and can never invert a severity gap.
+Every row carries `priority_score` and a factor-by-factor `priority_basis`,
+because an ordering you cannot interrogate is one you stop trusting; on a
+tenant with no asset inventory the basis says "severity alone", honestly.
+One stated bound: the refinement applies within a page — the SQL's
+severity-rank order remains the pagination key, so a tie that straddles a
+page boundary is ordered by severity rank, not asset context.
+
 This page documents the bucket model, the SLA timer, the action set, and the API surface that powers the workbench.
 
 ## Where the workbench sits
