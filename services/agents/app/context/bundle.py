@@ -784,9 +784,7 @@ class ContextBundleBuilder:
             # marks the source unavailable, which keeps "no credential" from
             # reading as "no business context". Dialing anyway would be a
             # guaranteed 401 that reads as the API rejecting us.
-            raise RuntimeError(
-                "incident context needs a service credential: set AISOC_AGENTS_SERVICE_TOKEN (or AISOC_SERVICE_TOKEN)"
-            )
+            raise RuntimeError("incident context needs a service credential: set AISOC_AGENTS_SERVICE_TOKEN (or AISOC_SERVICE_TOKEN)")
         headers = {
             "Authorization": f"Bearer {token}",
             "X-AiSOC-Tenant-ID": tenant_id,

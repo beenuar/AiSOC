@@ -30,6 +30,24 @@ that is done differs by source and is described under
 | Outcome priors | Every durable verdict, per evidence signature | A repeat alert matching a trusted prior benign disposition is closed without re-triage |
 | Tenant skills | Authored over the [tenant-skills API](./tenant-skills.md), backtested, activated — there is no console editor yet | Your own investigation approach for alerts of a given shape |
 | Knowledge-base runbooks | Documents you ingested at `/kb` | Excerpts from your runbooks that mention something this alert mentions, with citations |
+| Business-context rules | Authored on `/settings/business-context`, applied post-fusion → pre-triage | The prompt names which of your rules fired and what they changed (for example `severity medium → critical`), so the model never reasons over a severity nobody chose in the evidence |
+
+## Business impact, cited or absent
+
+When one of your business-context rules fired on the alert, the prompt invites
+the model to add one optional element to its verdict: a one-sentence
+`business_impact` statement whose `citations` must name the rule ids that
+fired. The same discipline as runbook citations, pointing the other way:
+
+- A statement citing a rule that did not fire on this alert is dropped and
+  counted (`business_impact_uncited`), never rendered.
+- When no rule fired, the instruction is never injected — a model with no
+  business context never sees the element's name, so it cannot be invited to
+  invent an impact.
+- The surviving statement appears in the Investigation Rail's **Business
+  context** section, beside the rules that fired and the severity mutation
+  they made. No rule fired means the section does not render — absence is
+  honest absence, not a measurement of zero.
 
 ## Knowledge-base runbooks
 

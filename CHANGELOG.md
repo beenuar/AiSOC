@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Business context reaches the triage model, and impact statements must
+  cite it.** The business-context applier's result used to die in the
+  worker's local variable: a tenant `set_severity` mutated the alert
+  silently, the model explained a severity nobody chose in the evidence,
+  and the persisted verdict carried no record of which rules fired. The
+  triage prompt now names the rules that fired and the mutation they made;
+  the verdict may carry one optional `business_impact` sentence whose
+  citations must resolve to those rule ids (uncited or fabricated elements
+  are dropped and counted, never rendered — and the instruction is injected
+  only when context exists, so an uninformed model never sees the element's
+  name); both travel to the ledger event and surface in the Investigation
+  Rail's new **Business context** section, which renders nothing when no
+  rule fired. Rule ids join the injection-scanned prompt channels.
+
+### Fixed
+
+- **The context graph's business dimension authenticates.** The bundle's
+  incident-context fetch sent `X-Tenant-ID` (a header the API's auth never
+  reads) with an optional `AISOC_AGENTS_API_KEY` bearer that no compose
+  file, `.env.example` or Helm value delivers — so the graph's
+  identity/asset/cloud/business/threat dimensions answered 401 on every
+  default deployment and the prompt said "unavailable" forever. It now
+  presents `AISOC_AGENTS_SERVICE_TOKEN` (or `AISOC_SERVICE_TOKEN`) with
+  `X-AiSOC-Tenant-ID`, and an unconfigured token refuses without dialing so
+  the dimension reads *unavailable*, never *empty*. A vestigial copy of the
+  dead credential block was removed from the investigation tool client.
+- **The rule builder could only author rules that never match.** Every
+  field it suggested was prefixed `alert.` against engines that resolve
+  plain dotted paths (`hostname`, `severity`, `raw_event.*`), its starter
+  rule used an invented `target`/`time` structure, it offered a `neq`
+  operator neither engine implements (the term is `ne`) — and the preview
+  endpoint *manufactured* a nested `alert.{target,time}` shape so the
+  broken paths previewed as working and then never fired in production.
+  The suggestion list is now the fused alert's real vocabulary, pinned on
+  both sides (a web test and an api test naming the same literals), and
+  the preview sample is shaped exactly like the alert the worker evaluates
+  (`raw_event` under its real key, not `metadata`).
+
 ### Security
 
 - **Dependencies:** the Oct-30 npm advisory wave cleared across both

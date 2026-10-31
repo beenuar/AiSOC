@@ -306,7 +306,7 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `AISOC_SSRF_ALLOW_HOSTS` | — | Comma-separated **exact** hostnames to admit (no wildcards, no CIDR ranges). A named host skips the IP-range checks, so a single internal webhook or SIEM can be admitted without opening every private range. The cloud-metadata block list still applies — nothing can admit `169.254.169.254` or its siblings. |
 | `AISOC_SSRF_EXTRA_BLOCKED_HOSTS` | — | Comma-separated extra hosts or IPs to deny in addition to the built-in cloud-metadata block list (`169.254.169.254`, `metadata.google.internal`, …). |
 | `AISOC_SIEM_WRITEBACK_ENABLED` | `1` | Whether the triage worker asks the API to project a verdict onto the finding that raised the alert. Off means nothing is attempted. |
-| `AISOC_AGENTS_SERVICE_TOKEN` | — | Shared secret for the API's writeback route. **Unset disables the service path**, so the worker logs a warning and posts nothing rather than failing silently. |
+| `AISOC_AGENTS_SERVICE_TOKEN` | — | Shared secret the agents service presents to the API: the writeback route, identity context, and the context bundle's incident-context fetch (graph identity/asset/cloud/business/threat dimensions) all resolve it before the shared `AISOC_SERVICE_TOKEN`. **Unset disables each service path loudly** — the writeback posts nothing with a warning, and the bundle marks the dimension *unavailable* rather than dialing toward a guaranteed 401, so "no credential" never reads as "no business context". |
 | `AISOC_SIEM_WRITEBACK_TIMEOUT_S` | `20` | Timeout for the writeback call. A timeout is a skipped writeback, never a failed triage. |
 
 ---

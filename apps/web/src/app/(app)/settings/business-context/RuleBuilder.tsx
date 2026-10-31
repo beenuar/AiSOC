@@ -15,22 +15,36 @@
  */
 import { useState } from "react";
 
+// Dotted paths into the fused alert the rule engines actually evaluate
+// (`RawAlert` in services/fusion, applied by services/agents). The previous
+// list prefixed everything with `alert.` and invented a `target`/`time`
+// structure — every suggested clause resolved to None on both engines, so a
+// builder-authored rule could never match anything, in preview or live.
+// `test_rule_vocabulary_resolves.py` (api suite) pins this exact list against
+// RawAlert's real fields; RuleBuilder.test.tsx pins the builder to it.
 const FIELD_SUGGESTIONS = [
-  "alert.target.tag",
-  "alert.target.environment",
-  "alert.severity",
-  "alert.source",
-  "alert.entity.user",
-  "alert.entity.host",
-  "alert.time.is_business_hours",
-  "alert.mitre.technique",
+  "severity",
+  "source",
+  "hostname",
+  "username",
+  "src_ip",
+  "dst_ip",
+  "domain",
+  "tags",
+  "risk_score",
+  "raw_event.env",
 ];
 
+// Operator names are the engines' own terms. The builder used to offer
+// `neq`, which neither engine implements (the term is `ne`) — a "not equals"
+// clause silently never matched, the same defect class as the detection
+// corpus's `neq` operator.
 const OPS: { value: string; label: string }[] = [
   { value: "eq", label: "equals" },
-  { value: "neq", label: "not equals" },
+  { value: "ne", label: "not equals" },
   { value: "in", label: "is one of" },
   { value: "contains", label: "contains" },
+  { value: "startswith", label: "starts with" },
   { value: "gte", label: ">=" },
   { value: "lte", label: "<=" },
 ];

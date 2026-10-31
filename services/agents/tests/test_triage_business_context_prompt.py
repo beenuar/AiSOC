@@ -84,9 +84,7 @@ class TestParse:
 
     def test_malformed_shapes_are_dropped_without_failing_the_verdict(self) -> None:
         for impact in ('"just a string"', '{"citations": ["a"]}', '{"statement": "s", "citations": "a"}'):
-            out = _parse_llm_response(
-                '{"verdict": "benign", "confidence": 0.8, "rationale": "r", "business_impact": ' + impact + "}"
-            )
+            out = _parse_llm_response('{"verdict": "benign", "confidence": 0.8, "rationale": "r", "business_impact": ' + impact + "}")
             assert out["verdict"] == "benign"
             assert out["business_impact"] is None
 
