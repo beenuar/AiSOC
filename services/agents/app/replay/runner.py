@@ -181,6 +181,19 @@ class ReplayDecision:
     tool_calls: int = 0
     resolved_models: list[str] = field(default_factory=list)
 
+    #: Calls each attribution source vouched for on this decision:
+    #: ``{"gateway_header": n, "response_body": m}``. Empty when calls were
+    #: placed and nobody named the server — which is a different fact from
+    #: "no call was placed", and the grader needs both to compute an honest
+    #: run-level provenance status.
+    attribution_sources: dict[str, int] = field(default_factory=dict)
+
+    #: The alert's severity, carried for the per-severity miss breakdown. A
+    #: miss on a critical alert and a miss on an info alert are different
+    #: findings, and a grader that cannot segment by severity reports one
+    #: number for both.
+    severity: str | None = None
+
     #: Model calls this decision actually placed, priced or not.
     #:
     #: The one number that separates "the model answered" from "the
@@ -219,6 +232,8 @@ class ReplayDecision:
             "evidence": self.evidence,
             "tool_calls": self.tool_calls,
             "resolved_models": list(self.resolved_models),
+            "attribution_sources": dict(self.attribution_sources),
+            "severity": self.severity,
             "llm_calls": self.llm_calls,
             "tokens": self.tokens,
             "measured_usd": self.measured_usd,
@@ -378,6 +393,7 @@ class ReplayRunner:
             expected_disposition=finding.disposition,
             vendor_disposition=finding.vendor_disposition,
             labelled=finding.is_labelled,
+            severity=finding.severity,
         )
 
         try:
@@ -425,6 +441,7 @@ class ReplayRunner:
         decision.estimated_usd = cost.get("estimated_usd")
         decision.unpriced_calls = int(cost.get("unpriced_calls") or 0)
         decision.resolved_models = [str(m) for m in (cost.get("resolved_models") or [])]
+        decision.attribution_sources = {str(k): int(v) for k, v in (cost.get("attribution_sources") or {}).items()}
         # Every call the tracker saw, however it was priced. Summed from the
         # three priced/unpriced buckets rather than read off one of them: a
         # local model is unpriced, a hosted one is measured, and a harness

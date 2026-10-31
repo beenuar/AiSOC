@@ -215,6 +215,11 @@ def _cost_payload(cost: CostSummary, tokens: int) -> dict[str, Any]:
         "estimated_calls": cost.estimated_calls,
         "unpriced_calls": cost.unpriced_calls,
         "resolved_models": list(cost.resolved_models),
+        # Who vouched for each resolved model, as per-source call counts.
+        # Travels beside the names because the names alone cannot say whether
+        # the gateway spoke (verified) or the endpoint named itself
+        # (self-reported) — see app/core/model_attribution.py.
+        "attribution_sources": dict(cost.attribution_sources),
         "tokens": tokens,
     }
 

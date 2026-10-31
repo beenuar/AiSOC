@@ -65,7 +65,8 @@ from typing import Any
 
 import structlog
 
-from app.core.gateway_cost import GatewayCost, extract_gateway_cost, extract_resolved_model
+from app.core.gateway_cost import GatewayCost, extract_gateway_cost
+from app.core.model_attribution import ATTRIBUTION_GATEWAY_HEADER, extract_serving_attribution
 from app.core.schema_bootstrap import ensure_columns, ensure_table
 
 logger = structlog.get_logger()
@@ -184,9 +185,17 @@ class CallRecord:
     latency_ms: float
     cost_usd: float | None = None
     cost_source: str = UNPRICED
-    #: What the gateway resolved ``model`` to, when it said. The alias asked
-    #: for is not the model billed, and only this answers "billed for what".
+    #: The model that actually served the call, when some party named it. The
+    #: alias asked for is not the model billed, and only this answers "billed
+    #: for what". Never a copy of ``model``: an unattributed call keeps
+    #: ``None`` here — see :mod:`app.core.model_attribution`.
     resolved_model: str | None = None
+    #: Who named ``resolved_model``: ``gateway_header`` (the gateway said what
+    #: it routed to — verified), ``response_body`` (the serving endpoint named
+    #: itself — self-reported), or ``None`` when nobody did.
+    attribution_source: str | None = None
+    #: The backend's configuration fingerprint, when it published one.
+    system_fingerprint: str | None = None
     #: Correlates with the gateway's own ``/spend/logs`` entry.
     call_id: str | None = None
     tool: str | None = None
@@ -198,7 +207,9 @@ class CallRecord:
         if gateway is not None:
             self.cost_usd = gateway.cost_usd
             self.cost_source = GATEWAY
-            self.resolved_model = self.resolved_model or gateway.resolved_model
+            if self.resolved_model is None and gateway.resolved_model:
+                self.resolved_model = gateway.resolved_model
+                self.attribution_source = self.attribution_source or ATTRIBUTION_GATEWAY_HEADER
             self.call_id = self.call_id or gateway.call_id
             return
         # No gateway figure. An estimate is allowed only against a concrete
@@ -239,11 +250,20 @@ class CostSummary:
     estimated_calls: int = 0
     unpriced_calls: int = 0
 
-    #: What the gateway resolved the aliases to, when it said. Empty means no
-    #: model call was placed on this run, which is the honest answer for the
-    #: deterministic tier and is a different fact from "an unknown model".
-    #: Replay records it per decision so a report names the model it graded.
+    #: The serving models some party named, when any did. Empty means either
+    #: no model call was placed on this run — the honest answer for the
+    #: deterministic tier — or calls were placed and nobody named the server,
+    #: which ``attribution_sources`` distinguishes. Replay records it per
+    #: decision so a report names the model it graded.
     resolved_models: tuple[str, ...] = ()
+
+    #: How many calls each attribution source vouched for:
+    #: ``{"gateway_header": n, "response_body": m}``. Empty when no call was
+    #: attributed. The counts are what lets a run-level provenance status be
+    #: computed honestly — "72 calls, 72 attributed by the body" is a
+    #: different claim from "72 calls, none attributed", and ``resolved_models``
+    #: alone cannot carry the difference.
+    attribution_sources: dict[str, int] = field(default_factory=dict)
 
     @classmethod
     def from_tracker(cls, tracker: CostTracker) -> CostSummary:
@@ -254,6 +274,7 @@ class CostSummary:
             estimated_calls=tracker.estimated_call_count,
             unpriced_calls=tracker.unpriced_call_count,
             resolved_models=tracker.resolved_models,
+            attribution_sources=tracker.attribution_sources,
         )
 
 
@@ -509,6 +530,8 @@ class CostTracker:
         step: str | None = None,
         gateway_cost: GatewayCost | None = None,
         resolved_model: str | None = None,
+        attribution_source: str | None = None,
+        system_fingerprint: str | None = None,
     ) -> CallRecord:
         rec = CallRecord(
             model=model,
@@ -519,6 +542,8 @@ class CostTracker:
             step=step,
             gateway_cost=gateway_cost,
             resolved_model=resolved_model,
+            attribution_source=attribution_source,
+            system_fingerprint=system_fingerprint,
         )
         self._records.append(rec)
         logger.info(
@@ -587,8 +612,17 @@ class CostTracker:
 
     @property
     def resolved_models(self) -> tuple[str, ...]:
-        """Models the gateway said it billed, sorted. Empty when no call was placed."""
+        """Serving models some party named, sorted. Empty when none was attributed."""
         return tuple(sorted({r.resolved_model for r in self._records if r.resolved_model}))
+
+    @property
+    def attribution_sources(self) -> dict[str, int]:
+        """Calls vouched for by each attribution source. Empty when none was."""
+        counts: dict[str, int] = {}
+        for r in self._records:
+            if r.resolved_model and r.attribution_source:
+                counts[r.attribution_source] = counts.get(r.attribution_source, 0) + 1
+        return counts
 
     def summary(self) -> dict:
         """The run's spend, with the provenance of every figure in it.
@@ -619,6 +653,7 @@ class CostTracker:
             "call_count": len(self._records),
             "models": list({r.model for r in self._records}),
             "resolved_models": sorted({r.resolved_model for r in self._records if r.resolved_model}),
+            "attribution_sources": self.attribution_sources,
         }
 
     async def flush(self) -> None:
@@ -697,6 +732,12 @@ def record_llm_call(
     if tracker is None:
         return None
     prompt_tokens, completion_tokens = _extract_token_usage(response)
+    # One extraction decides the serving identity for both the cost record and
+    # the attribution fields, so the two cannot disagree about who answered.
+    # The gateway header outranks the body inside the extractor; the body is
+    # credited only with evidence it was parsed, never as a copy of the
+    # requested name — see app/core/model_attribution.py.
+    attribution = extract_serving_attribution(response, requested=model)
     return tracker.record(
         model=model,
         prompt_tokens=prompt_tokens,
@@ -705,5 +746,7 @@ def record_llm_call(
         tool=tool,
         step=step,
         gateway_cost=extract_gateway_cost(response),
-        resolved_model=extract_resolved_model(response),
+        resolved_model=attribution.serving_model,
+        attribution_source=attribution.source,
+        system_fingerprint=attribution.system_fingerprint,
     )
