@@ -783,13 +783,14 @@ jobs:
       # Fusion's fuse-time asset-context resolver: the name/FQDN/IP match,
       # the highest-criticality tie-break and the tenant predicate are schema
       # facts a fake pool would invent. The file's import closure is kept
-      # deliberately tiny (pydantic + structlog + asyncpg) so this job can run
+      # deliberately tiny (pydantic + pydantic-settings + structlog + asyncpg,
+      # the last two because fusion's conftest imports app.core.config) so this job can run
       # it without fusion's full dependency set.
       - name: Fusion asset-context resolver matches real inventory (live Postgres)
         working-directory: services/fusion
         env:
           MSSP_ISOLATION_REQUIRED: '1'
-        run: pip install --quiet pydantic structlog && python -m pytest tests/test_asset_context_live.py -v --tb=short
+        run: pip install --quiet pydantic pydantic-settings structlog && python -m pytest tests/test_asset_context_live.py -v --tb=short
 
       # 060_rls_coverage.sql takes RLS from 31 of 95 tenant-scoped tables to
       # every one of them bar a documented exclusion. A migration that adds 49
