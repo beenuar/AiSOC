@@ -1016,6 +1016,65 @@ jobs:
   # condition is on the steps instead, so the expensive half — a Postgres, an
   # S3 endpoint, a full dump-and-restore — is skipped when the diff touches
   # none of it, and the verdict still arrives.
+  fusion-redis-live:
+    # The fusion correlator and the windowed engine's claim protocol, against
+    # a real Redis. Both have in-memory doubles in the unit suite, and both
+    # rest on properties only the server has: `SET NX` deciding exactly one
+    # winner between concurrent creators, TTL-driven window expiry, and the
+    # owner-checked claim scripts. A single-threaded double passes those by
+    # construction — the more-capable-than-reality shape — so the suites at
+    # services/fusion/tests/integration/ existed and ran in no workflow,
+    # which is the other recurring shape: a live suite that is decoration
+    # until something sets its env var. This job is that something. The
+    # Kafka/Postgres-legged tests in the same directory skip here, visibly,
+    # and run under the spine job's full stack instead.
+    name: Fusion correlator + windowed claims (live Redis)
+    needs: changes
+    if: needs.changes.outputs.spine == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      # The deliberately tiny closure, proven locally: the correlator chain
+      # needs pydantic(+settings, via app.core.config which conftest imports),
+      # redis and structlog; the windowed engine adds nothing; the sibling
+      # Kafka/Postgres live tests import aiokafka/asyncpg/httpx/cryptography
+      # at module level and then skip without their stores.
+      - name: Install fusion live-test dependencies
+        run: >-
+          pip install --quiet
+          "pytest>=8,<9" "pytest-asyncio>=1.0,<2.0"
+          "redis>=5" structlog "pydantic>=2" pydantic-settings
+          asyncpg aiokafka httpx cryptography
+
+      - name: Correlator + windowed claims against the real server
+        working-directory: services/fusion
+        env:
+          AISOC_TEST_REDIS: redis://127.0.0.1:6379/0
+        run: |
+          set -euo pipefail
+          python -m pytest tests/integration/ -q -p no:cacheprovider 2>&1 | tee /tmp/fusion-live.log
+          # A run in which everything skipped is a configuration failure
+          # wearing a green tick — the one outcome this job must refuse.
+          grep -Eq "[1-9][0-9]* passed" /tmp/fusion-live.log \
+            || { echo "::error::no live fusion test actually ran — the Redis leg is misconfigured"; exit 1; }
+
   backup-restore:
     name: Backup → destroy → restore (Postgres via S3)
     runs-on: ubuntu-latest

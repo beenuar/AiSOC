@@ -182,20 +182,140 @@ def test_entity_precedence_is_src_ip_then_hostname() -> None:
 
 
 def test_alerts_without_a_tactic_do_not_all_collapse_together() -> None:
-    """`correlation_key()` falls back to the literal "unknown" for both
-    entity and tactic. Two unrelated alerts each missing one field still
-    differ on the other; two missing both would merge, which is worth
-    knowing rather than discovering in production."""
+    """A missing identifier narrows the group instead of widening it.
+
+    The previous fallback substituted the literal "unknown", and since
+    neither detection engine sets `mitre_tactics`, every detection alert on
+    one entity collapsed into one incident per window regardless of rule —
+    and alerts with no entity merged tenant-wide. This file pinned that as
+    "current behaviour, pinned so a change to it is deliberate"; this is the
+    deliberate change.
+    """
     a = RawAlert(tenant_id=TENANT, source="s", title="a", hostname="ws-1")
     b = RawAlert(tenant_id=TENANT, source="s", title="b", hostname="ws-2")
     assert a.correlation_key() != b.correlation_key()
 
-    bare_a = RawAlert(tenant_id=TENANT, source="s", title="a")
-    bare_b = RawAlert(tenant_id=TENANT, source="s", title="b")
-    assert bare_a.correlation_key() == bare_b.correlation_key(), (
-        "two alerts with no entity and no tactic share a key and will merge; "
-        "this is current behaviour, pinned so a change to it is deliberate"
+    # Same entity, no tactic: grouping is per detection rule. The same rule
+    # firing repeatedly is the storm correlation exists for; two different
+    # rules are not known to be one incident and no longer merge.
+    storm_1 = RawAlert(tenant_id=TENANT, source="s", title="a", hostname="ws-1", rule_id="r-1")
+    storm_2 = RawAlert(tenant_id=TENANT, source="s", title="b", hostname="ws-1", rule_id="r-1")
+    other_rule = RawAlert(tenant_id=TENANT, source="s", title="c", hostname="ws-1", rule_id="r-2")
+    assert storm_1.correlation_key() == storm_2.correlation_key()
+    assert storm_1.correlation_key() != other_rule.correlation_key()
+    assert storm_1.correlation_key() == f"{TENANT}:ws-1:rule:r-1"
+
+    # No entity: never groups across rules, and never tenant-wide.
+    bare_a = RawAlert(tenant_id=TENANT, source="s", title="a", rule_id="r-1")
+    bare_b = RawAlert(tenant_id=TENANT, source="s", title="b", rule_id="r-2")
+    assert bare_a.correlation_key() != bare_b.correlation_key()
+    assert bare_a.correlation_key() == f"{TENANT}:no-entity:rule:r-1:no-tactic"
+
+    # No entity and no rule: zero evidence of relatedness groups nothing but
+    # exact repeats of one shape (the dedup fingerprint).
+    blank_a = RawAlert(tenant_id=TENANT, source="s", title="a")
+    blank_b = RawAlert(tenant_id=TENANT, source="s", title="b")
+    assert blank_a.correlation_key() != blank_b.correlation_key(), (
+        "two alerts with no entity, no tactic and no rule carry no evidence of being related; merging them buries one under the other"
     )
+    repeat = RawAlert(tenant_id=TENANT, source="s", title="a")
+    assert blank_a.correlation_key() == repeat.correlation_key(), "an exact repeat of the same shape still groups"
+
+
+#: The detection-shaped measurement. Both detection engines emit alerts with
+#: a rule_id and NO mitre_tactics, so this stream — not the tactic-carrying
+#: one above — is the shape the fallback governs. Measured on this fixed
+#: cohort before and after the fallback landed (same stream, same window,
+#: real `correlation_key()` both times):
+#:
+#:   before  574 incidents, 42.6 % reduction, 36 incident-groups spanning
+#:           more than one rule, every no-entity alert merged tenant-wide
+#:   after   755 incidents, 24.5 % reduction, 0 cross-rule groups
+#:
+#: The reduction went DOWN and that is the honest direction: the difference
+#: was unrelated alerts being counted as grouped. Review-work reduction is
+#: only worth having over groups that are actually related.
+DETECTION_STREAM_REDUCTION_PCT = 24.5
+
+DETECTION_RULES = [f"det-rule-{i:02d}" for i in range(14)]
+
+
+def build_detection_stream(size: int = STREAM_SIZE) -> list[tuple[datetime, RawAlert]]:
+    """Detection-engine-shaped alerts: rule_id set, no tactics, ~4% entity-less."""
+    start = datetime(2026, 9, 22, 8, 0, tzinfo=UTC)
+    stream: list[tuple[datetime, RawAlert]] = []
+    for n in range(size):
+        rule = DETECTION_RULES[_seeded(n, "rule", len(DETECTION_RULES))]
+        host: str | None
+        if n % 25 == 0:
+            host = None
+            offset = timedelta(minutes=_seeded(n, "ne-time", 240))
+        elif n % 10 < 4:
+            host = f"ws-{_seeded(n, 'burst-host', 12):03d}"
+            offset = timedelta(minutes=_seeded(n, "burst-time", 45))
+        else:
+            host = f"ws-{_seeded(n, 'wide-host', 400):03d}"
+            offset = timedelta(minutes=_seeded(n, "wide-time", 1440))
+        stream.append(
+            (
+                start + offset,
+                RawAlert(
+                    tenant_id=TENANT,
+                    source="synthetic",
+                    title=f"alert {n}",
+                    hostname=host,
+                    severity=AlertSeverity.MEDIUM,
+                    rule_id=rule,
+                    mitre_tactics=[],
+                ),
+            )
+        )
+    return stream
+
+
+def _group_members(stream: list[tuple[datetime, RawAlert]], window: timedelta = WINDOW) -> dict[tuple[str, datetime], list[RawAlert]]:
+    """Alerts by the incident-group they land in under the real key + window."""
+    open_at: dict[str, datetime] = {}
+    members: dict[tuple[str, datetime], list[RawAlert]] = {}
+    for when, alert in sorted(stream, key=lambda pair: pair[0]):
+        key = alert.correlation_key()
+        opened = open_at.get(key)
+        if opened is None or when - opened > window:
+            open_at[key] = when
+        members.setdefault((key, open_at[key]), []).append(alert)
+    return members
+
+
+def test_detection_shaped_stream_reduction_and_purity() -> None:
+    """The measurement for the alerts the fallback actually governs.
+
+    Three properties, each a claim the published figure rests on:
+
+    * the reduction matches the published constant, so the number in prose
+      cannot drift from the measurement;
+    * no incident group spans more than one detection rule — cross-rule
+      merges were exactly the unrelated-collapse this fallback removes;
+    * every alert is accounted for: group sizes sum to the stream size, so
+      nothing vanished into the grouping.
+    """
+    stream = build_detection_stream()
+    members = _group_members(stream)
+    incidents = len(members)
+    reduction = 1 - (incidents / len(stream))
+
+    print(f"\n[eval] detection-shaped reduction (real correlation_key): {len(stream)} alerts -> {incidents} incidents = {reduction:.1%}")
+
+    assert round(reduction * 100, 1) == DETECTION_STREAM_REDUCTION_PCT, (
+        f"detection-shaped reduction is now {reduction:.1%} but DETECTION_STREAM_REDUCTION_PCT says "
+        f"{DETECTION_STREAM_REDUCTION_PCT} % — update the constant and the published surfaces together"
+    )
+
+    cross_rule = [group for group in members.values() if len({a.rule_id for a in group}) > 1]
+    assert not cross_rule, (
+        f"{len(cross_rule)} incident group(s) span more than one detection rule; the conservative fallback exists to make that impossible"
+    )
+
+    assert sum(len(group) for group in members.values()) == len(stream), "every alert resolves to exactly one group; nothing may vanish"
 
 
 def test_the_stream_is_reproducible() -> None:
