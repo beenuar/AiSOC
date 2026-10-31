@@ -36470,6 +36470,14 @@ components:
           - mine
           - unassigned
           title: Bucket
+        priority_score:
+          type: integer
+          title: Priority Score
+          default: 0
+        priority_basis:
+          additionalProperties: true
+          type: object
+          title: Priority Basis
       type: object
       required:
       - id

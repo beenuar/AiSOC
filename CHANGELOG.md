@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Asset criticality orders the investigation queue.** The priority scorer
+  (severity as base, asset criticality / exploited-vulnerability / internet
+  exposure as bounded multipliers) existed with zero callers, so two alerts
+  of equal severity — one on a domain controller, one on a meeting-room
+  display — arrived in the order they were raised. `build_queue` now
+  resolves each page against the tenant's own `assets` inventory in two
+  batched queries (hostname/FQDN/IP-overlap match; `is_exploited AND NOT
+  remediated` as the KEV signal) and orders within (bucket, SLA) by the
+  score. Every row carries `priority_score` and a factor-by-factor
+  `priority_basis`; no inventory means severity alone, and the basis says
+  so. Proven on live Postgres with a negative control that removes the
+  resolver and watches the order collapse.
+
 ### Security
 
 - **Dependencies:** the Oct-31 `minimatch` / `glob` advisory wave worked

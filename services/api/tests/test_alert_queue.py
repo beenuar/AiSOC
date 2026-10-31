@@ -508,13 +508,20 @@ class TestBuildQueue:
         rows: list[tuple[Any, int, datetime]] | None = None,
         tenant_overrides: list[Any] | None = None,
     ) -> MagicMock:
-        """Wire a session with the queue's 4-call execute pattern.
+        """Wire a session with the queue's execute pattern.
 
         Call order inside ``build_queue``:
           1) ``load_sla_targets``     → ``scalars().all()`` on tenant SLA config
           2) ``mine_count``           → ``scalar_one()``
           3) ``unassigned_count``     → ``scalar_one()``
           4) main projection query    → ``.all()`` of row tuples
+          5) asset match (only when a page alert carries hosts/ips)
+             → ``scalars().all()``; empty here, so the vulnerability
+             query never fires and priority falls back to severity
+             alone. The asset-aware ordering itself is exercised
+             against real Postgres in
+             ``test_alert_queue_priority_live.py`` — a mock that
+             answered the array-overlap match would prove nothing.
         """
         db = MagicMock()
         db.execute = AsyncMock(
@@ -523,6 +530,7 @@ class TestBuildQueue:
                 _scalar_one_result(mine_count),
                 _scalar_one_result(unassigned_count),
                 _rows_all_result(rows or []),
+                _scalars_all_result([]),
             ]
         )
         return db
@@ -703,6 +711,11 @@ class TestBuildQueue:
         assert item.sla_breached is False
         # Countdown is in the future, so > 0.
         assert item.sla_remaining_seconds > 0
+        # No asset inventory in this harness, so priority is severity alone
+        # (critical base 900) and the basis says exactly that.
+        assert item.priority_score == 900
+        assert item.priority_basis["base"] == 900
+        assert item.priority_basis["rationale"] == []
         # Age is positive (first_seen was 10 minutes ago).
         assert item.age_seconds >= 0
         # Asset chip pulls host first.
