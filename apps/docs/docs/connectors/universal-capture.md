@@ -132,6 +132,7 @@ The bundled templates ship with the `services/ingest` binary and are loaded at s
 | `email-forwarded` | Inbound-email relays + the Email Inbox connector |
 | `microsoft-defender-email` | Defender for Office 365 alert emails forwarded as text |
 | `github-security-advisory` | GitHub security advisory webhooks |
+| `agentmetry` | [Agentmetry](agentmetry.md) AI coding-agent telemetry — routine tool calls stay in the lake, its correlated detections are promoted with severity and ATT&CK ids preserved |
 
 Adding a template is a single YAML file plus an entry in `ALLOWED_TEMPLATE_IDS` on the API service — see `services/api/app/api/v1/inbox.py`. Templates are validated at load time; a bad map blocks startup rather than silently dropping events.
 
