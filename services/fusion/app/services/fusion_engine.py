@@ -125,6 +125,7 @@ class FusionEngine:
         ueba_cache: UebaSignalCache | None = None,
         chain_grouper: AttackChainGrouper | None = None,
         enricher: AlertEnricher | None = None,
+        asset_resolver: Any = None,
         memory_provider: Any = None,
     ) -> None:
         self._dedup = deduplicator
@@ -141,6 +142,10 @@ class FusionEngine:
         self._chain_grouper = chain_grouper
         # Wave 1 — fuse-time TI/vuln enrichment (optional; None = no enrichment).
         self._enricher = enricher
+        # Business-context plan PR-3 — fuse-time asset-context stamp for the
+        # scorer's asset_criticality factor (optional; None = factor reads
+        # "unknown"). `app.services.asset_context.AssetContextResolver`.
+        self._asset_resolver = asset_resolver
         # Confidence + explainability is intrinsic to a fused alert — every
         # alert leaves the engine with a high/med/low label and an evidence
         # chain. The scorer is pure / stateless so we instantiate a default.
@@ -208,6 +213,19 @@ class FusionEngine:
                     fused.enrichments.update(enrichments)
             except Exception as exc:
                 logger.warning("fuse_enrichment_failed", error=str(exc))
+
+        # --- Step 2.6: Asset context (business-context plan, PR-3) ---
+        # Stamp what the alert landed on BEFORE the scorer reads it, same
+        # contract as the TI stamp above: the scorer stays a pure projection,
+        # and a resolver miss/outage leaves the honest "unknown (no inventory
+        # match)" factor in place.
+        if self._asset_resolver is not None:
+            try:
+                asset_ctx = await self._asset_resolver.resolve(alert)
+                if asset_ctx:
+                    fused.enrichments["asset_context"] = asset_ctx
+            except Exception as exc:
+                logger.warning("fuse_asset_context_failed", error=str(exc))
 
         # --- Step 3: ML scoring ---
         try:

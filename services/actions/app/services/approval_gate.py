@@ -46,6 +46,7 @@ from app.live_actions.capability_contracts import contract_for_action_type
 from app.live_actions.contract import ApprovalRequirement
 from app.models.action import ActionRequest, ActionStatus, BlastRadius
 from app.services.approval_matrix import DEFAULT_TIER, evaluate_contract
+from app.services.asset_lookup import asset_criticality_for_target
 
 logger = structlog.get_logger()
 
@@ -143,6 +144,7 @@ async def apply_matrix(
         contract=contract,
         confidence=request.confidence,
         tier=await _resolve_tier(request.tenant_id),
+        asset_criticality=await asset_criticality_for_target(request.tenant_id, request.target),
     )
 
     if decision.is_blocked:

@@ -27,13 +27,14 @@ Factors and weights
 ================== ====== ==========================================
 factor              w     signal
 ================== ====== ==========================================
-severity           0.20   alert severity (critical / high / med / low)
-ml_anomaly         0.18   IsolationForest anomaly_score (0–1)
-ml_priority        0.18   LightGBM priority_score (0–1)
+severity           0.18   alert severity (critical / high / med / low)
+ml_anomaly         0.17   IsolationForest anomaly_score (0–1)
+ml_priority        0.17   LightGBM priority_score (0–1)
 mitre_coverage     0.14   number of mapped MITRE techniques
-threat_intel       0.16   enrichment hits (TI feed match)
+threat_intel       0.15   enrichment hits (TI feed match)
 upstream_risk      0.08   raw_alert.risk_score (0–1, vendor-provided)
-ioc_density        0.06   distinct populated IOC fields
+ioc_density        0.05   distinct populated IOC fields
+asset_criticality  0.06   tenant asset inventory (fuse-time stamp)
 ================== ====== ==========================================
 
 Sum of weights = 1.0. The factor list is *also* what's persisted on the
@@ -68,13 +69,26 @@ HIGH_THRESHOLD = 0.70
 LOW_THRESHOLD = 0.40
 
 # Factor weights — keep summing to 1.0 if you tweak.
-WEIGHT_SEVERITY = 0.20
-WEIGHT_ML_ANOMALY = 0.18
-WEIGHT_ML_PRIORITY = 0.18
+WEIGHT_SEVERITY = 0.18
+WEIGHT_ML_ANOMALY = 0.17
+WEIGHT_ML_PRIORITY = 0.17
 WEIGHT_MITRE = 0.14
-WEIGHT_THREAT_INTEL = 0.16
+WEIGHT_THREAT_INTEL = 0.15
 WEIGHT_UPSTREAM_RISK = 0.08
-WEIGHT_IOC_DENSITY = 0.06
+WEIGHT_IOC_DENSITY = 0.05
+WEIGHT_ASSET_CRITICALITY = 0.06
+
+# What the asset the alert landed on contributes. Unknown — no inventory, no
+# match — is exactly 0.0: the absence of a CMDB row is not evidence in either
+# direction, and the factor row says "unknown" rather than being omitted,
+# because "we do not know what this host is" is a fact an analyst needs.
+_ASSET_CRITICALITY_CONTRIBUTION = {
+    "critical": 1.0,
+    "high": 0.5,
+    "medium": 0.0,
+    "low": -0.3,
+    "none": -0.5,
+}
 
 _SEVERITY_CONTRIBUTION = {
     AlertSeverity.CRITICAL: 1.0,
@@ -279,7 +293,23 @@ class ConfidenceScorer:
             )
         )
 
-        # 8. Institutional memory nudge (Wave 1) — a bounded ±MEMORY_CAP
+        # 8. Asset criticality (business-context plan, PR-3). Read from the
+        # fuse-time stamp (`enrichments["asset_context"]`), never queried
+        # here — the scorer stays a pure projection.
+        asset_ctx = (fused.enrichments or {}).get("asset_context")
+        criticality = str(asset_ctx.get("criticality", "")).lower() if isinstance(asset_ctx, dict) else ""
+        asset_contribution = _ASSET_CRITICALITY_CONTRIBUTION.get(criticality, 0.0)
+        rationale.append(
+            ConfidenceFactor(
+                factor="asset_criticality",
+                label="Asset criticality",
+                value=(criticality or "unknown (no inventory match)"),
+                contribution=asset_contribution,
+                weight=WEIGHT_ASSET_CRITICALITY,
+            )
+        )
+
+        # 9. Institutional memory nudge (Wave 1) — a bounded ±MEMORY_CAP
         # adjustment from the distilled per-signature prior. A signature the
         # analysts have repeatedly corrected to benign pulls new alerts of that
         # signature down; one repeatedly confirmed nudges up. Unknown

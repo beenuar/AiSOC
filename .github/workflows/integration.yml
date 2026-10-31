@@ -105,6 +105,7 @@ jobs:
           set -euo pipefail
 
           spine_paths='services/ingest/ services/fusion/ services/realtime/ docker-compose.yml scripts/integration/ .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py .github/workflows/integration.yml'
           migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py .github/workflows/integration.yml'
           migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py .github/workflows/integration.yml'
           # backup_crypt.py was missing from the old filter, and it is where
@@ -781,6 +782,17 @@ jobs:
           MSSP_ISOLATION_REQUIRED: '1'
         run: pip install --quiet pytest pytest-asyncio && python -m pytest tests/test_mssp_portfolio_isolation.py -v --tb=short
 
+      # Fusion's fuse-time asset-context resolver: the name/FQDN/IP match,
+      # the highest-criticality tie-break and the tenant predicate are schema
+      # facts a fake pool would invent. The file's import closure is kept
+      # deliberately tiny (pydantic + pydantic-settings + structlog + asyncpg,
+      # the last two because fusion's conftest imports app.core.config) so this job can run
+      # it without fusion's full dependency set.
+      - name: Fusion asset-context resolver matches real inventory (live Postgres)
+        working-directory: services/fusion
+        env:
+          MSSP_ISOLATION_REQUIRED: '1'
+        run: pip install --quiet pydantic pydantic-settings structlog && python -m pytest tests/test_asset_context_live.py -v --tb=short
       # The Investigation Rail's business-context leg joins
       # investigation_events through investigation_runs (case_id TEXT = alert
       # id) — schema facts only this job can check, including that another
