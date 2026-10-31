@@ -47,3 +47,31 @@ This file is session scratch: it tracks lane state so interrupted work can resum
 ### Final state
 - Merged origin/main @ df369dfd (#1578) combining CHANGELOG sides; all suites green post-merge: fusion 1058, agents 2193, api 5022, benchmark 101, root gates OK.
 - Containers: feedback-redis (63790) can be removed; feedback-pg never needed.
+
+### Residual gaps recorded from the full audit-leg reports (post-delivery addendum)
+
+Confirmed by the completed exploration legs after the main report; none alters a
+shipped change, all belong on the unresolved-limitations record:
+
+- `ModelRouter`/`build_router` and `cost_aware_cascade` (app/routing/) have zero
+  production callers — dynamic stronger-model escalation is static gateway
+  config today; the "exists unwired" shape, recorded not fixed.
+- `sources_from_ledger` (copilot_grounding.py) is implemented and tested with no
+  production caller, so copilot citations validate against console-supplied
+  context only, never immutable tenant-scoped ledger rows.
+- `evidence_completeness` (app/eval/agent_quality.py) is a real measure wired
+  into run_evals with **no corpus declaring `expected_evidence`** — it honestly
+  renders "no referent"; reference completeness therefore remains unmeasured
+  (the new annotated corpus measures unsupported-claim rate, a different axis).
+- Retro-hunt sightings record `feed_source` + `intel_first_seen_at` but no
+  intelligence-version/catalog-version identifier.
+- Replay's time axis is `closed_at` (analyst close) with context stores cut on
+  recorded times — a reasonable occurrence-vs-availability proxy, not explicit
+  ingestion-time modelling (retro-hunt models the distinction; replay proxies it).
+- Policy rows carry no version column; closure decisions persist source +
+  threshold + reason, not a policy revision id. Eligibility's full provenance
+  dict reaches the ledger as a rendered basis string, not structured columns.
+- Closed this addendum: scorecards now record the production-pinned sampling
+  block (temperature/max_tokens/json_mode), imported from the reliability
+  harness so three surfaces share one declaration; the verdict matrix carries
+  it per row.

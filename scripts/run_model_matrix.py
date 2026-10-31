@@ -216,6 +216,7 @@ def run_one_verdict(model: str, *, api_base: str, timeout: int) -> ModelResult:
         "api_base": api_base,
         "pins": [f"AISOC_MODEL_PIN_{role.upper()}" for role in ("triage", "investigation", "report", "recon", "summary", "copilot")],
         "prompt": card.get("prompt"),
+        "sampling": card.get("sampling"),
         "corpus_digest": card.get("corpus_digest"),
         "provenance_status": card.get("provenance_status"),
         "resolved_models": card.get("resolved_models"),

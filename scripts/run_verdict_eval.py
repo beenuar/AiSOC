@@ -464,6 +464,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    from measure_triage_reliability import MAX_TOKENS, TEMPERATURE
     from score_replay_set import CorpusNotGradeable, grade
 
     model_label = "deterministic" if args.deterministic else args.model
@@ -498,6 +499,19 @@ def main(argv: list[str] | None = None) -> int:
         # eligibility matches on the prompt's version and content hash, so a
         # scorecard that does not name them can authorise nothing.
         "prompt": prompt_provenance(),
+        # The sampling the production triage call pins (`make_chat_model("triage",
+        # temperature=0.0, max_tokens=2048, json_output=True)`). Imported from the
+        # reliability harness rather than retyped, so the three surfaces that state
+        # these values — the call site, that harness, and this scorecard — share
+        # one declaration and drift together loudly instead of apart silently.
+        # Two scorecards sampled differently are not comparable, and until now
+        # nothing a reader could open said how a row was sampled.
+        "sampling": {
+            "temperature": TEMPERATURE,
+            "max_tokens": MAX_TOKENS,
+            "json_mode": True,
+            "source": "production triage call site (app/agents/auto_triage_agent.py), held in step by the reliability harness",
+        },
         # What the model's own weights may already contain. The replay freeze
         # and the leak check constrain the *supplied* context; they cannot
         # establish that pretrained weights hold no knowledge postdating the
