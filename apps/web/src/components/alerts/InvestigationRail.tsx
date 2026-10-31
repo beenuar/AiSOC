@@ -40,6 +40,7 @@ import { format, formatDistanceToNow } from 'date-fns';
 import {
   alertsApi,
   type Alert,
+  type BusinessContextRail,
   type MiniTimelineEvent,
   type RecommendedAction,
   type RelatedEntity,
@@ -147,6 +148,7 @@ export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) 
         ) : (
           <>
             <AutomatedTriageSection alert={alert} />
+            <BusinessContextSection ctx={alert.businessContext ?? null} />
             <NarrativeSection narrative={alert.narrative ?? null} />
             <RelatedEntitiesSection entities={alert.relatedEntities ?? []} />
             <MiniTimelineSection events={alert.miniTimeline ?? []} />
@@ -551,6 +553,44 @@ function TimelineRow({ event }: { event: MiniTimelineEvent }) {
         <p className="mt-0.5 text-[10px] text-gray-600">by {event.actor}</p>
       )}
     </li>
+  );
+}
+
+function BusinessContextSection({ ctx }: { ctx: BusinessContextRail | null }) {
+  // Null means no tenant rule fired on this alert (or it predates the field).
+  // Render nothing rather than an empty shell — absence here is honest
+  // absence, not a measurement of zero.
+  if (!ctx || ctx.matchedRuleIds.length === 0) return null;
+  const mutated =
+    ctx.severityBefore && ctx.severityAfter && ctx.severityBefore !== ctx.severityAfter;
+  return (
+    <section className="px-4 py-4 border-t border-gray-800/60">
+      <SectionHeader title="Business context" count={ctx.matchedRuleIds.length} />
+      <div className="border border-gray-800/60 bg-gray-900/40 rounded-lg p-2.5 space-y-1.5">
+        <p className="text-xs text-gray-400">
+          Tenant rules applied before triage:{' '}
+          <span className="font-mono text-gray-200">{ctx.matchedRuleIds.join(', ')}</span>
+        </p>
+        {mutated && (
+          <p className="text-xs text-gray-400">
+            Severity{' '}
+            <span className="font-mono text-gray-300">{ctx.severityBefore}</span>
+            {' → '}
+            <span className="font-mono text-amber-300">{ctx.severityAfter}</span>
+          </p>
+        )}
+        {ctx.impactStatement && (
+          <p className="text-sm text-gray-200">
+            {ctx.impactStatement}
+            {ctx.impactCitations.length > 0 && (
+              <span className="ml-1 text-[10px] font-mono text-gray-500">
+                [cites: {ctx.impactCitations.join(', ')}]
+              </span>
+            )}
+          </p>
+        )}
+      </div>
+    </section>
   );
 }
 
