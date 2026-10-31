@@ -43,6 +43,7 @@
   "overrides": {
     "qs": "^6.16.0",
     "proxy-addr": ">=2.0.8",
-    "body-parser": ">=2.4.0 <3"
+    "body-parser": ">=2.4.0 <3",
+    "minimatch@>=9.0.0": ">=11.0.1"
   }
 }
