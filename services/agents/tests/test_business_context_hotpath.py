@@ -145,6 +145,71 @@ async def test_worker_severity_mutation_flows_into_triage(tmp_path, monkeypatch)
     assert "prod-bump" in result["business_context_rules"]
 
 
+async def test_matched_rules_reach_the_state_and_the_ledger(tmp_path, monkeypatch):
+    """The applier's result must not die in the worker's local variable.
+
+    Until this change `bc_matched` travelled only in logs and counters: the
+    prompt never learned a tenant rule had set the severity it was reasoning
+    over, and the persisted verdict carried no record of which rules fired.
+    Asserts both ends: the state the agent reads, and the kwargs the ledger
+    write receives (recorded independently, never by re-asking the worker).
+    """
+    monkeypatch.setattr("app.workers.fused_alert_consumer.resolve_llm_config", _fake_llm_config_unavailable())
+    captured_states = []
+    real_build = __import__("app.workers.fused_alert_consumer", fromlist=["build_state"]).build_state
+
+    def _spy_build(message):
+        state = real_build(message)
+        captured_states.append(state)
+        return state
+
+    monkeypatch.setattr("app.workers.fused_alert_consumer.build_state", _spy_build)
+
+    persisted: list[dict] = []
+
+    async def _spy_persist(**fields):
+        persisted.append(fields)
+        return True
+
+    monkeypatch.setattr("app.workers.triage_persistence.ledger_module.persist_auto_triage", _spy_persist)
+
+    f = tmp_path / "rules.yaml"
+    f.write_text(_RULES_YAML)
+    worker = FusedAlertTriageWorker(bootstrap_servers="unused", business_context=BusinessContextApplier(rules_file=str(f)))
+    result = await worker.triage(_fused(env="production", severity="medium"))
+
+    assert result is not None
+    state = captured_states[-1]
+    assert state.business_context is not None
+    assert "prod-bump" in state.business_context["matched_rule_ids"]
+    assert state.business_context["severity_before"] == "medium"
+    assert state.business_context["severity_after"] == "critical"
+
+    assert persisted, "the verdict write must have happened"
+    assert persisted[-1].get("business_context") == state.business_context
+
+
+async def test_no_match_keeps_the_state_field_empty(tmp_path, monkeypatch):
+    """No rule fired => no block in the prompt and nothing persisted —
+    "no context configured" must stay distinguishable from "rules matched"."""
+    monkeypatch.setattr("app.workers.fused_alert_consumer.resolve_llm_config", _fake_llm_config_unavailable())
+    captured_states = []
+    real_build = __import__("app.workers.fused_alert_consumer", fromlist=["build_state"]).build_state
+
+    def _spy_build(message):
+        state = real_build(message)
+        captured_states.append(state)
+        return state
+
+    monkeypatch.setattr("app.workers.fused_alert_consumer.build_state", _spy_build)
+
+    f = tmp_path / "rules.yaml"
+    f.write_text(_RULES_YAML)
+    worker = FusedAlertTriageWorker(bootstrap_servers="unused", business_context=BusinessContextApplier(rules_file=str(f)))
+    await worker.triage(_fused(env="staging"))
+    assert captured_states[-1].business_context is None
+
+
 async def test_worker_without_business_context_is_unaffected(monkeypatch):
     monkeypatch.setattr("app.workers.fused_alert_consumer.resolve_llm_config", _fake_llm_config_unavailable())
     worker = FusedAlertTriageWorker(bootstrap_servers="unused")  # no applier
