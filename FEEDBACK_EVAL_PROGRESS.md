@@ -13,16 +13,16 @@ This file is session scratch: it tracks lane state so interrupted work can resum
 
 ## Phase status
 
-- [ ] §1 Baseline audit + gap table
+- [x] §1 Baseline audit + gap table (in final report)
 - [x] §2 Model attribution provenance + decision safeguards (attribution module; eligibility binds measurements to attributed serving identity; scorecard provenance_status + refuse-to-advertise on serving_mismatch; benchmark table Attribution column)
-- [ ] §3 Reflex path observability + bounded verification
-- [ ] §4 Historical replay vs re-hunting separation
-- [ ] §5 Evaluation data + metric definitions (precision/recall/confusion/closure)
-- [ ] §6 Alert reduction through production path
-- [ ] §7 Model suitability matrix (offline harness; live only if creds exist)
-- [ ] §8 Evidence references + adversarial checks
-- [ ] §9 Tests, reports, documentation
-- [ ] §10 Final report
+- [x] §3 Stage timings + queue delay + decision contract on worker/replay/logs
+- [x] §4 Retro-hunt dry-run mode at the write boundary; model-knowledge disclosure on scorecards (freeze machinery pre-existing, verified)
+- [x] §5 Full-cohort recall + 4 closure cuts + reliability counts + per-severity in scorer; deterministic baseline row published
+- [x] §6 Conservative fallback key (before 42.6%/36 cross-rule → after 24.5%/0); SET NX creation race fixed; live-Redis suite + CI job
+- [x] §7 --task verdict matrix + runtime/config records; live rows NOT MEASURED (no project credential; harness tooling key deliberately not spent)
+- [x] §8 Annotated claim-support measurement (TP7 FP0 FN1 TN8 pinned; found+fixed scheduled_scan support-key gap); bundles/ledger verified pre-existing
+- [x] §9 benchmark.md (attribution column + mechanism + third reduction figure), CHANGELOG, gates green, main merged (#1578 combined)
+- [x] §10 Final report delivered in session summary
 
 ## Notes / decisions
 
@@ -43,3 +43,7 @@ This file is session scratch: it tracks lane state so interrupted work can resum
 - eligibility recorded pre-resolution alias (fixed this session: serving identity now).
 - run_model_matrix records no sampling/context/hardware (§7 todo).
 - measure_triage_reliability.py REPAIRED since withdrawal (imports registry; test imports it).
+
+### Final state
+- Merged origin/main @ df369dfd (#1578) combining CHANGELOG sides; all suites green post-merge: fusion 1058, agents 2193, api 5022, benchmark 101, root gates OK.
+- Containers: feedback-redis (63790) can be removed; feedback-pg never needed.

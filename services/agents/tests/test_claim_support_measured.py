@@ -118,7 +118,9 @@ CASES: tuple[AnnotatedCase, ...] = (
     # ── Supported or claim-free rationales (the detector must not flag) ───
     AnnotatedCase(
         case_id="CS-08",
-        rationale="The rule counts distinct destination ports and this source contacted 1024 of them, which is the condition it was written for.",
+        rationale=(
+            "The rule counts distinct destination ports and this source contacted 1024 of them, which is the condition it was written for."
+        ),
         evidence={"src_ip": "198.51.100.14", "ports_contacted": 1024},
         unsupported_claim=False,
         annotation_note="Reasons from the telemetry; asserts no decisive claim.",
@@ -136,7 +138,9 @@ CASES: tuple[AnnotatedCase, ...] = (
         evidence={"src_ip": "192.0.2.33", "ports_contacted": 400},
         unsupported_claim=False,
         annotation_note="Sanctioned-tooling claim supported by first-party context, not the payload.",
-        supporting_context="Analysts have repeatedly confirmed: 192.0.2.0/24 is the sanctioned internal scanner subnet (authorized scanner).",
+        supporting_context=(
+            "Analysts have repeatedly confirmed: 192.0.2.0/24 is the sanctioned internal scanner subnet (authorized scanner)."
+        ),
     ),
     AnnotatedCase(
         case_id="CS-11",
