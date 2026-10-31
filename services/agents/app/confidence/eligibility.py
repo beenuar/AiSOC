@@ -169,6 +169,11 @@ class EligibilityDecision:
     record: PerformanceRecord | None = None
     #: Whether the *caller's* posture lets an unmeasured configuration close.
     require_measured: bool = False
+    #: Who vouched that the evaluated model served the call this decision is
+    #: about: ``gateway_header``, ``response_body``, or ``None`` when no
+    #: party did. Recorded so a reviewed closure names the strength of its
+    #: own attribution.
+    model_attribution: str | None = None
 
     @property
     def measured(self) -> bool:
@@ -198,6 +203,7 @@ class EligibilityDecision:
             "state": self.state.value,
             "allows_auto_close": self.allows_auto_close,
             "reason": self.reason,
+            "model_attribution": self.model_attribution,
             "auto_close_precision": self.precision,
             "samples": record.samples if record else None,
             "model": record.model if record else None,
@@ -269,8 +275,20 @@ def evaluate_eligibility(
     records: tuple[PerformanceRecord, ...] | None = None,
     now_iso: str | None = None,
     require_measured: bool | None = None,
+    model_attribution: str | None = None,
 ) -> EligibilityDecision:
-    """Decide whether measured performance licenses closing this alert unattended."""
+    """Decide whether measured performance licenses closing this alert unattended.
+
+    ``model_attribution`` is who vouched that ``model`` actually served this
+    call — ``gateway_header``, ``response_body``, or ``None`` when no party
+    did (see :mod:`app.core.model_attribution`). It gates the *binding* of a
+    measurement to the call, not the measurement's existence: a matching row
+    cannot authorise a closure when nothing says the measured model is the
+    one that answered, because a gateway re-pointing the alias is exactly
+    the drift a measurement-gated closure exists to catch. With no matching
+    row the state stays UNMEASURED whatever the attribution, or the strict
+    posture would stop meaning anything.
+    """
     strict = require_measured if require_measured is not None else _require_measured_from_env()
     rows = load_records() if records is None else records
     now = datetime.fromisoformat(now_iso) if now_iso else datetime.now(UTC)
@@ -282,6 +300,7 @@ def evaluate_eligibility(
             state=Eligibility.UNMEASURED,
             reason="no model identity was resolved for this run, so no measurement can be matched to it",
             require_measured=strict,
+            model_attribution=model_attribution,
         )
 
     candidates = [
@@ -318,6 +337,7 @@ def evaluate_eligibility(
             reason=f"the only matching measurement is stale: taken {age:.0f} days ago, ceiling {MAX_AGE_DAYS}",
             record=record,
             require_measured=strict,
+            model_attribution=model_attribution,
         )
     if record.samples < MIN_SAMPLES:
         return EligibilityDecision(
@@ -325,6 +345,7 @@ def evaluate_eligibility(
             reason=f"the matching measurement covers {record.samples} sample(s), below the minimum of {MIN_SAMPLES}",
             record=record,
             require_measured=strict,
+            model_attribution=model_attribution,
         )
     if record.auto_close_precision < MIN_AUTO_CLOSE_PRECISION:
         return EligibilityDecision(
@@ -335,14 +356,34 @@ def evaluate_eligibility(
             ),
             record=record,
             require_measured=strict,
+            model_attribution=model_attribution,
+        )
+
+    if model_attribution is None:
+        # The measurement clears every bar and still cannot be used: nothing
+        # vouched that the measured model served this call. BLOCKED rather
+        # than UNMEASURED, because a measurement exists and the defect is
+        # the binding — and the record travels on the decision so the
+        # withheld authorisation names what it could not bind.
+        return EligibilityDecision(
+            state=Eligibility.BLOCKED,
+            reason=(
+                f"a clearing measurement exists for {model!r}, and this call's serving identity is "
+                "unverified — no gateway header or response body named the model that answered, so "
+                "the measurement cannot be bound to the call"
+            ),
+            record=record,
+            require_measured=strict,
+            model_attribution=None,
         )
 
     return EligibilityDecision(
         state=Eligibility.ELIGIBLE,
         reason=(
             f"measured auto-closure precision {record.auto_close_precision:.3f} over {record.samples} closures "
-            f"({record.measured_at}, {record.measured_by or 'unrecorded'})"
+            f"({record.measured_at}, {record.measured_by or 'unrecorded'}; serving identity by {model_attribution})"
         ),
         record=record,
         require_measured=strict,
+        model_attribution=model_attribution,
     )

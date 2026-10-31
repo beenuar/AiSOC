@@ -48,6 +48,7 @@ from app.context.identity import render_for_prompt as render_identity
 from app.context.knowledge_base import citation_basis, unresolvable_citations
 from app.context.knowledge_base import render_for_prompt as render_runbooks
 from app.context.organisation_memory import render_for_prompt
+from app.core.model_attribution import extract_serving_attribution
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
@@ -583,6 +584,13 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
             ],
         )
         raw_text = response.content
+        requested_model = getattr(llm, "model_name", None) or getattr(llm, "model", None)
+        # Who actually served the call, by the strongest party that said:
+        # the gateway's header, or the endpoint naming itself in the body.
+        # Never a copy of the requested alias — an unattributed call records
+        # exactly that, and the eligibility gate below treats it as a
+        # serving identity no measurement can be bound to.
+        attribution = extract_serving_attribution(response, requested=str(requested_model or ""))
         # Recorded before parsing, so a verdict that fails to parse still
         # leaves behind what the model was asked and what it said. The
         # ledger carries this onto the run (issue #1276): auto-triage is
@@ -591,7 +599,10 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         state.record_llm_exchange(
             agent="auto_triage",
             purpose="triage.classify",
-            model=getattr(llm, "model_name", None) or getattr(llm, "model", None),
+            model=requested_model,
+            serving_model=attribution.serving_model,
+            serving_attribution=attribution.source,
+            system_fingerprint=attribution.system_fingerprint,
             prompt=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": alert_context},
@@ -763,14 +774,26 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # by default and denied under AISOC_AUTONOMY_REQUIRE_MEASURED=1. The
     # verdict is recorded on the basis either way: "not measured" belongs in
     # front of whoever reviews the closure.
+    # Evaluated against the serving identity when some party vouched for one,
+    # because that is the thing a measurement names: a scorecard graded
+    # llama3.1:8b must not authorise closures served by whatever the gateway
+    # re-pointed the alias to since. Unattributed calls fall back to the
+    # requested name so the UNMEASURED default is unchanged — and the
+    # attribution travels into the decision, where a *matching* measurement
+    # with no attribution blocks rather than binds.
     autonomy = eligibility.evaluate_eligibility(
-        model=getattr(llm, "model_name", None) or getattr(llm, "model", None),
+        model=attribution.serving_model or requested_model,
         prompt_version=_triage_prompt().version,
         prompt_sha256=_triage_prompt().sha256,
         tenant_context=str(state.tenant_id) if getattr(state, "tenant_id", None) else "default",
         alert_class=_alert_class_of(state),
+        model_attribution=attribution.source,
     )
     state.confidence_basis.append(f"auto_closure_safety={autonomy.render_precision()} ({autonomy.state.value}: {autonomy.reason})")
+    state.confidence_basis.append(
+        f"serving_model={attribution.serving_model or 'unattributed'}"
+        f" (requested: {requested_model or 'unrecorded'}; attribution: {attribution.source or 'none'})"
+    )
     if should_auto_close and not autonomy.allows_auto_close:
         _metrics["autonomy_not_earned"] += 1
         should_auto_close = False

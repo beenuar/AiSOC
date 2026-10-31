@@ -40,21 +40,37 @@ CLEAN_RATIONALE = (
 
 
 class _FixedReply:
-    def __init__(self, payload: dict[str, object]) -> None:
+    """A stub endpoint that, like every real one, names the model it served.
+
+    ``attributed=False`` strips the response metadata — the shape of a
+    response whose serving identity no party vouched for, which is what a
+    measurement must refuse to bind to.
+    """
+
+    def __init__(self, payload: dict[str, object], *, attributed: bool = True) -> None:
         self._payload = payload
+        self._attributed = attributed
         self.model_name = "measured-model-v1"
 
     async def ainvoke(self, _messages, **_kwargs):  # noqa: ANN001, ANN202
+        attributed = self._attributed
+
         class _Response:
             content = json.dumps(self._payload)
+            # The body names the serving model beside its own id, which is
+            # what langchain_openai copies into response_metadata when — and
+            # only when — the body carried them.
+            response_metadata = (
+                {"model_name": "measured-model-v1", "id": "chatcmpl-test-1"} if attributed else {}
+            )
 
         return _Response()
 
 
 @pytest.fixture
 def pin_model(monkeypatch: pytest.MonkeyPatch):
-    def _pin(payload: dict[str, object]) -> None:
-        monkeypatch.setattr(auto_triage_agent, "make_chat_model", lambda *a, **k: _FixedReply(payload))
+    def _pin(payload: dict[str, object], *, attributed: bool = True) -> None:
+        monkeypatch.setattr(auto_triage_agent, "make_chat_model", lambda *a, **k: _FixedReply(payload, attributed=attributed))
 
         async def _passthrough(llm, messages, **kwargs):  # noqa: ANN001, ANN202
             return await llm.ainvoke(messages, **kwargs)
@@ -175,6 +191,47 @@ async def test_a_clearing_measurement_closes_and_says_what_it_rested_on(
 
     assert out.status is AgentStatus.COMPLETED
     assert any("auto_closure_safety=0.980" in b for b in out.confidence_basis)
+    # The closure names the serving identity it rested on and who vouched
+    # for it — the record a disputed auto-close is explained from.
+    assert any("serving_model=measured-model-v1" in b for b in out.confidence_basis)
+
+
+async def test_a_measurement_cannot_bind_to_an_unattributed_call(
+    pin_model, authorized_closure_tenant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Missing serving-model identity withholds a closure the measurement allowed.
+
+    Same clearing measurement as the positive control above; the only change
+    is a response whose metadata names no serving model — the shape of a
+    call the gateway may have re-pointed since the measurement was taken.
+    The measurement must not be bound to it.
+    """
+    prompt = auto_triage_agent._triage_prompt()
+    state = _state()
+    row = PerformanceRecord.from_dict(
+        {
+            "model": "measured-model-v1",
+            "prompt_name": "triage.system",
+            "prompt_version": prompt.version,
+            "prompt_sha256": prompt.sha256,
+            "tenant_context": str(state.tenant_id),
+            "alert_class": None,
+            "samples": 500,
+            "auto_close_precision": 0.98,
+            "corpus_digest": "sha256:" + "0" * 64,
+            "code_revision": "0" * 40,
+            "measured_at": "2026-10-20T00:00:00+00:00",
+            "measured_by": "test",
+        }
+    )
+    monkeypatch.setattr(eligibility, "load_records", lambda: (row,))
+    pin_model(_closeable(), attributed=False)
+
+    out = await auto_triage_agent.run_auto_triage(state)
+
+    assert out.status is not AgentStatus.COMPLETED
+    assert any("unverified" in f or "cannot be bound" in f for f in out.findings)
+    assert any("serving_model=unattributed" in b for b in out.confidence_basis)
 
 
 async def test_eligibility_never_grants_a_closure_the_verdict_withheld(pin_model, monkeypatch: pytest.MonkeyPatch) -> None:

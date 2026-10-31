@@ -116,15 +116,21 @@ def grade(
     dataset: str,
     commit: str,
     synthetic: bool,
+    requested_total: int | None = None,
 ) -> dict[str, Any]:
     """Score a labelled set and return a publishable report.
 
     `synthetic` is required rather than inferred. The spec says to label
     synthetic sets as synthetic, and a flag that defaults either way
     would eventually be wrong silently.
+
+    `requested_total` is how many items the caller asked the run to grade.
+    When given, the score carries the requested/attempted/completed/failed/
+    unattempted counts, so a partial run cannot publish a headline over the
+    subset it reached without the gap showing.
     """
     assert_gradeable(decisions)
-    score = score_replay(decisions)
+    score = score_replay(decisions, requested_total=requested_total)
 
     return {
         "model": model,
