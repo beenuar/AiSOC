@@ -1,6 +1,9 @@
+import re
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from app.bridge import (
+    OPEN_STATUSES,
     Case,
     NagState,
     crit_payload,
@@ -8,6 +11,23 @@ from app.bridge import (
     should_escalate_critical,
     should_send_digest,
 )
+
+
+def test_open_statuses_are_real_members_of_the_cases_check_constraint():
+    """The first draft filtered on "open", a status aisoc_cases has never had —
+    a filter member that can never match is invisible at runtime, so this pins
+    OPEN_STATUSES against the migration's own CHECK clause. It also pins the
+    one deliberate exclusion set: everything we leave out must be terminal."""
+    migration = (
+        # parents[2] is services/ — this file sits at services/escalations/tests/.
+        Path(__file__).resolve().parents[2] / "api" / "migrations" / "012_case_management.sql"
+    ).read_text(encoding="utf-8")
+    m = re.search(r"status\s+TEXT[^)]*CHECK \(status IN \(([^)]+)\)\)", migration)
+    assert m, "could not locate the aisoc_cases status CHECK in migration 012"
+    vocabulary = set(re.findall(r"'([a-z_]+)'", m.group(1)))
+    assert set(OPEN_STATUSES) <= vocabulary, f"OPEN_STATUSES not in the CHECK vocabulary: {set(OPEN_STATUSES) - vocabulary}"
+    assert vocabulary - set(OPEN_STATUSES) == {"resolved", "closed"}, "a non-terminal status is missing from OPEN_STATUSES"
+
 
 NOW = datetime(2026, 10, 31, 9, 0, tzinfo=UTC)
 

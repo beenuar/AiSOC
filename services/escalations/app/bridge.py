@@ -3,7 +3,7 @@
 The platform's outbound webhook subsystem (services/api/app/services/
 outbound_webhooks.py) is complete but not yet wired: enqueue_event has no
 production callers. Until it is, this service fills the gap by watching the
-platform's OWN ack clock (aisoc_cases.acknowledged_at / ack_due_at) and
+platform's OWN ack clock (aisoc_cases.acknowledged_at) and
 posting escalations to a Microsoft Teams Power Automate workflow (or any
 generic JSON webhook):
 
@@ -14,6 +14,23 @@ generic JSON webhook):
     summary (failed investigations / dead-letters in the last 24h).
 
 Dedup and nag state live in a JSON file so restarts never double-send.
+
+Two deliberate semantics, stated so nobody infers better ones:
+
+* **"Acknowledged" means `acknowledged_at` was written** — today the console's
+  acknowledge action and a war-room join write it (`war_room.py` stamps it
+  with COALESCE). A case merely being edited, assigned or moved along the
+  status ladder does NOT stop the clock; that is the point of an ack clock.
+* **The sweep is deployment-wide, not per-tenant.** Every tenant's
+  unacknowledged cases escalate to the one operator-configured webhook,
+  because this bridge is a deployment-level pager, not a tenant notification
+  channel — per-tenant routing is exactly what the native outbound-webhook
+  subsystem does once its emitters are wired, and what this service retires
+  into. On a multi-tenant deployment that means case titles from every tenant
+  reach one channel: run it only where the operators of that channel are
+  cleared to see every tenant, or not at all. The cross-tenant reads are
+  recorded on `scripts/check_tenant_query_predicates.py`'s ratchet with this
+  reasoning.
 """
 
 from __future__ import annotations
@@ -31,7 +48,10 @@ from psycopg.rows import dict_row
 # --- configuration (env) ------------------------------------------------------
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 TEAMS_URL = os.environ.get("AISOC_ESCALATION_TEAMS_URL", "")
-CONSOLE_URL = os.environ.get("AISOC_CONSOLE_URL", "https://soc.c8r-tech.com")
+# Deployment-neutral default: the console's own default address. A specific
+# deployment's hostname here is how one install's URL ends up inside
+# another's escalation cards.
+CONSOLE_URL = os.environ.get("AISOC_CONSOLE_URL", "http://localhost:3000")
 TICK_SECONDS = int(os.environ.get("ESC_TICK_SECONDS", "900"))
 ACK_GRACE_MINUTES = int(os.environ.get("ESC_CRITICAL_GRACE_MINUTES", "30"))
 CRIT_NAG_HOURS = int(os.environ.get("ESC_CRITICAL_NAG_HOURS", "4"))
@@ -39,7 +59,15 @@ CRIT_MAX_NAGS = int(os.environ.get("ESC_CRITICAL_MAX_NAGS", "3"))
 DIGEST_HOUR_UTC = int(os.environ.get("ESC_DIGEST_HOUR_UTC", "8"))
 STATE_FILE = os.environ.get("ESC_STATE_FILE", "/data/escalation-state.json")
 
-OPEN_STATUSES = ("new", "open", "investigating", "triaged")
+# Exactly the non-terminal members of aisoc_cases' status CHECK constraint
+# (migration 012_case_management.sql:
+# new|triaged|investigating|contained|resolved|closed).
+# "open" is not in that vocabulary — a filter member that can never match —
+# and "contained" is included deliberately: containment can be automated,
+# and the ack clock measures whether a human has acknowledged, not whether
+# automation has acted. test_ladder.py pins this tuple against the
+# migration's own CHECK clause so the two cannot drift apart silently.
+OPEN_STATUSES = ("new", "triaged", "investigating", "contained")
 
 
 def log(msg: str) -> None:
@@ -57,7 +85,6 @@ class Case:
 
     @property
     def url(self) -> str:
-        return f"{CONSOLE_URL}/cases/{self.id}"
         return f"{CONSOLE_URL}/cases/{self.id}"
 
     @property
@@ -132,8 +159,27 @@ def save_state(state: dict) -> None:
 # --- IO ----------------------------------------------------------------------
 def post(url: str, payload: dict) -> int:
     req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST")
-    with urllib.request.urlopen(req, timeout=15) as resp:
+    # The URL is operator-supplied configuration (AISOC_ESCALATION_TEAMS_URL),
+    # validated https-only at startup by require_https_webhook() — never
+    # tenant- or request-derived, so the SSRF surface the audit rule
+    # (python.lang.security.audit.dynamic-urllib-use-detected) exists for does
+    # not apply. Bare nosemgrep because the fully-qualified id exceeds the
+    # line limit; this is the module's only urlopen.
+    with urllib.request.urlopen(req, timeout=15) as resp:  # nosemgrep
         return resp.status
+
+
+def require_https_webhook(url: str) -> str:
+    """Refuse a webhook target that is not https.
+
+    The value is operator-set, but a typo'd `http://` would send case titles
+    in cleartext and a `file://`/`ftp://` scheme would make urlopen do
+    something else entirely. Failing at startup names the problem while the
+    operator is still looking at the deployment.
+    """
+    if not url.startswith("https://"):
+        raise SystemExit(f"AISOC_ESCALATION_TEAMS_URL must be https:// (got scheme of {url.split(':', 1)[0]!r})")
+    return url
 
 
 def fetch_unacked(cur, severity: str) -> list[Case]:
@@ -156,7 +202,11 @@ def pipeline_health(cur) -> str:
     bits = []
     try:
         n = cur.execute(
-            "SELECT count(*) AS n FROM aisoc_investigation_runs WHERE status = 'failed' AND created_at > now() - interval '24 hours'"
+            # The ledger table is `investigation_runs` (migration 008) — there
+            # is no `aisoc_`-prefixed variant, and the first draft queried one,
+            # which this try/except would have converted into a permanent
+            # "n/a" that read like a healthy pipeline with no failures.
+            "SELECT count(*) AS n FROM investigation_runs WHERE status = 'failed' AND created_at > now() - interval '24 hours'"
         ).fetchone()["n"]
         bits.append(f"investigation failures 24h: {n}")
     except Exception:
@@ -199,6 +249,7 @@ def tick(state: dict) -> None:
 def main() -> None:
     if not TEAMS_URL:
         raise SystemExit("AISOC_ESCALATION_TEAMS_URL is required")
+    require_https_webhook(TEAMS_URL)
     if not DATABASE_URL:
         raise SystemExit("DATABASE_URL is required")
     log(f"escalation bridge up: tick={TICK_SECONDS}s grace={ACK_GRACE_MINUTES}m digest_hour={DIGEST_HOUR_UTC}Z console={CONSOLE_URL}")

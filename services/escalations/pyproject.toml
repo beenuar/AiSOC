@@ -1,16 +1,23 @@
-[tool.poetry]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
 name = "aisoc-escalations"
 version = "0.1.0"
-description = "Ack-clock escalation bridge: Teams escalations for unacknowledged CRITICAL/HIGH cases while native outbound webhook emitters are unwired."
-authors = ["c8r-tech"]
+description = "Ack-clock escalation bridge: Teams escalations for unacknowledged CRITICAL/HIGH cases while the native outbound-webhook emitters are unwired."
+requires-python = ">=3.11"
+dependencies = [
+    # The service's only dependency. Sync psycopg on purpose: one query burst
+    # every ESC_TICK_SECONDS from a single loop needs no event loop, and a
+    # second async stack in a sidecar is surface without a payoff.
+    "psycopg[binary]>=3.2,<4",
+]
 
-[tool.poetry.dependencies]
-python = "^3.11"
-psycopg = {version = "^3.2", extras = ["binary"]}
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0"
-
-[build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+[tool.pytest.ini_options]
+testpaths = ["tests"]
