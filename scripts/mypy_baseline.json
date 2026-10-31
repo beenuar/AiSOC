@@ -1,9 +1,9 @@
 {
   "(environment)": {
     "flags": "--no-color-output --no-error-summary --no-site-packages --no-incremental",
-    "mypy": "2.3.1",
+    "mypy": "2.4.1",
     "mypy_major": "2",
-    "python": "3.14"
+    "python": "3.11"
   },
   "(unmanaged)": {
     "plugins/mttr-widget/plugin.py": {
@@ -491,6 +491,7 @@
       "union-attr": 16
     }
   },
+  "services/escalations": {},
   "services/fusion": {
     "tests/test_consumer_dlq.py": {
       "arg-type": 1

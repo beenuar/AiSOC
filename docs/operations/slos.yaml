@@ -103,5 +103,11 @@ services:
 exempt:
   demo-producer:
     reason: Demo-only synthetic event generator; not a production service.
+  escalations:
+    reason: >-
+      Opt-in ack-clock notification bridge (profile `escalations`): a
+      single polling loop with no service endpoint to measure, designed to
+      retire when the native outbound-webhook emitters are wired. Its own
+      failure mode (a missed tick) is logged and retried next tick.
   osquery-extensions:
     reason: Build-time Go virtual-table library shipped with the osquery agent; no service endpoint.

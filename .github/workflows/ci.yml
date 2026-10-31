@@ -1844,6 +1844,7 @@ jobs:
         service:
           - actions
           - connectors
+          - escalations
           - mesh
           - osquery-tls
           - slack-bot

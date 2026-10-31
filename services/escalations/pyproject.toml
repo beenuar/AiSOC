@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "aisoc-escalations"
+version = "0.1.0"
+description = "Ack-clock escalation bridge: Teams escalations for unacknowledged CRITICAL/HIGH cases while the native outbound-webhook emitters are unwired."
+requires-python = ">=3.11"
+dependencies = [
+    # The service's only dependency. Sync psycopg on purpose: one query burst
+    # every ESC_TICK_SECONDS from a single loop needs no event loop, and a
+    # second async stack in a sidecar is surface without a payoff.
+    "psycopg[binary]>=3.2,<4",
+]
+
+[project.optional-dependencies]
+# Test-only, same shape as the other wave-2 services so the CI matrix can
+# install from the lock and run pytest + the coverage gate. No
+# pytest-asyncio: every test here is a pure synchronous decision-logic check.
+dev = ["pytest>=9,<10", "pytest-cov>=5,<8"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["app"]
+branch = true
+
+# Coverage floor for the CI gate (`pytest --cov-config=pyproject.toml
+# --cov=app`). The suite covers the pure decision logic — the escalation
+# ladder, the digest day-gate, payload shape, and the status vocabulary
+# pinned against the migration — which is the half worth unit-testing; the
+# IO half (psycopg fetches, the webhook POST, the tick loop) needs a live
+# DB and webhook and is exercised in the service's own integration run, not
+# here. Floor set a few points below the measured baseline so branch-
+# execution variance cannot red main; raise it as the suite grows, never
+# lower without a written reason.
+[tool.coverage.report]
+fail_under = 38
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.:",
+]

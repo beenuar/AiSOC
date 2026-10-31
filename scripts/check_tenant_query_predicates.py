@@ -810,6 +810,24 @@ RATCHET: dict[str, str] = {
         "omitted the predicate would be flagged there. Entry is keyed on this table, so an "
         "unscoped statement on any other table in this module still fails"
     ),
+    # -- escalations bridge: a deployment-level pager, not a tenant channel ----
+    # The opt-in ack-clock bridge (profile `escalations`) sweeps every tenant's
+    # unacknowledged cases to ONE operator-configured webhook by design: it is
+    # the interim transport while the native outbound-webhook emitters (which
+    # do per-tenant routing) have no production callers, and it retires when
+    # they are wired. The deployment-wide read is the feature, documented in
+    # the service README with the multi-tenant caveat. No route handler can
+    # reach these — the service has no server at all, only a polling loop.
+    "services/escalations/app/bridge.py::fetch_unacked::aisoc_cases": (
+        "deployment-level escalation sweep across tenants to one operator webhook; "
+        "per-tenant routing is the native outbound-webhook subsystem's job, which this bridges until wired"
+    ),
+    "services/escalations/app/bridge.py::pipeline_health::aisoc_dead_letters": (
+        "deployment-wide health count (dead letters in 24h) for the daily digest; a per-tenant count would misstate pipeline health"
+    ),
+    "services/escalations/app/bridge.py::pipeline_health::investigation_runs": (
+        "deployment-wide health count (failed investigations in 24h) for the daily digest, same reasoning as the dead-letter count"
+    ),
 }
 
 #: Raising this is a deliberate act with a diff attached. Appending to RATCHET
@@ -913,7 +931,7 @@ RATCHET: dict[str, str] = {
 # *stricter*: the statement that had to be fixed rather than recorded,
 # `fetch_enabled_connectors` called from a request handler, is absent from the
 # list because the route now uses a sibling that filters in SQL.
-MAX_RATCHET = 77
+MAX_RATCHET = 80
 
 
 # ---------------------------------------------------------------------------
