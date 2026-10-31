@@ -106,6 +106,7 @@ def test_score_attaches_complete_rationale(scorer: ConfidenceScorer) -> None:
         "threat_intel",
         "upstream_risk",
         "ioc_density",
+        "asset_criticality",
     }
 
 
@@ -327,3 +328,39 @@ def test_score_clamped_to_unit_interval(scorer: ConfidenceScorer) -> None:
     )
     scored = scorer.score(extreme)
     assert 0.0 <= scored.confidence_score <= 1.0
+
+
+# ─── Asset criticality (business-context plan, PR-3) ─────────────────────────
+
+
+def test_asset_criticality_reads_the_fuse_time_stamp(scorer: ConfidenceScorer) -> None:
+    """A critical asset pushes the score up; the factor names the match."""
+    fused = _fused(_alert())
+    fused.enrichments["asset_context"] = {"criticality": "critical", "matched": "prod-dc-01"}
+    scored = scorer.score(fused)
+    factor = next(f for f in scored.confidence_rationale if f.factor == "asset_criticality")
+    assert factor.contribution == 1.0
+    assert factor.value == "critical"
+
+    baseline = scorer.score(_fused(_alert()))
+    assert scored.confidence_score > baseline.confidence_score
+
+
+def test_no_inventory_match_is_unknown_not_zero_evidence(scorer: ConfidenceScorer) -> None:
+    """Absent stamp: contribution exactly 0.0 and the row SAYS unknown —
+    "we do not know what this host is" is a fact an analyst needs, so the
+    factor is rendered rather than omitted."""
+    scored = scorer.score(_fused(_alert()))
+    factor = next(f for f in scored.confidence_rationale if f.factor == "asset_criticality")
+    assert factor.contribution == 0.0
+    assert factor.value == "unknown (no inventory match)"
+
+
+def test_low_criticality_pulls_down_but_is_bounded(scorer: ConfidenceScorer) -> None:
+    fused = _fused(_alert())
+    fused.enrichments["asset_context"] = {"criticality": "low", "matched": "kiosk-7"}
+    scored = scorer.score(fused)
+    factor = next(f for f in scored.confidence_rationale if f.factor == "asset_criticality")
+    assert factor.contribution == -0.3
+    # Bounded: weight 0.06, so the full swing is ±0.03 on the score.
+    assert factor.weight == 0.06
