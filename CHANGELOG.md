@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **Dependencies:** the Oct-30 npm advisory wave cleared across both
+  lockfiles. Root: `follow-redirects` floored at **1.16.2**
+  ([GHSA-mrwp-f3q8-3g9p](https://github.com/advisories/GHSA-mrwp-f3q8-3g9p),
+  high) and `joi` at **17.13.9**
+  ([GHSA-4528-x5fx-h6hg](https://github.com/advisories/GHSA-4528-x5fx-h6hg),
+  high) — both already carried overrides from earlier waves, so the existing
+  floors move rather than new keys landing (a duplicate key in
+  `pnpm.overrides` is silently discarded by last-key-wins, which is exactly
+  how a first attempt at this fix produced an unchanged lockfile). Mobile:
+  `node-forge` overridden to **1.4.1+** (resolves 1.4.2), clearing five high
+  and three low advisories
+  ([GHSA-7wch-p9px-956x](https://github.com/advisories/GHSA-7wch-p9px-956x)
+  et al., all fixed in 1.4.1). Published after `main`'s last audit pass, so
+  they reddened the push-event `Security Audit` at the v20.4.0 release
+  commit through no change of its own.
+
 ## [20.4.0] - 2026-10-30
 
 ### Security
