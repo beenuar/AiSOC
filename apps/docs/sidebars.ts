@@ -90,6 +90,7 @@ const sidebars: SidebarsConfig = {
         "connectors/otlp-logs",
         "connectors/kafka-input",
         "connectors/osquery-extensions",
+        "connectors/agentmetry",
         "connectors/abnormal_security",
         "connectors/ai-gateway",
         "connectors/auditd",

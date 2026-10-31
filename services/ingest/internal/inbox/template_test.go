@@ -127,6 +127,40 @@ severity_map:
 	}
 }
 
+func TestRegistry_Load_NormalisesClassMapKeysAndDropsClasslessOverrides(t *testing.T) {
+	// class_map keys get the SeverityMap treatment (lowercase, trimmed),
+	// and an override that names no positive class_uid is dropped at load:
+	// stamping class_uid 0 would publish an event no promoter branch can
+	// reach, which is worse than falling back to the declared default.
+	dir := t.TempDir()
+	writeTemplate(t, dir, "split.yaml", `
+class_uid: 6003
+class_name: API Activity
+class_field: action.type
+class_map:
+  " Detection ":
+    class_uid: 2001
+    class_name: Security Finding
+  broken:
+    class_name: No Class UID
+field_map: {}
+`)
+	r := NewRegistry()
+	if err := r.Load(dir); err != nil {
+		t.Fatalf("Load failed: %v", err)
+	}
+	tmpl, err := r.Get("split")
+	if err != nil {
+		t.Fatalf("Get(split) failed: %v", err)
+	}
+	if got, ok := tmpl.ClassMap["detection"]; !ok || got.ClassUID != 2001 {
+		t.Errorf("' Detection ' not folded to lowercase key: %#v", tmpl.ClassMap)
+	}
+	if _, ok := tmpl.ClassMap["broken"]; ok {
+		t.Errorf("override without class_uid should be dropped: %#v", tmpl.ClassMap)
+	}
+}
+
 func TestRegistry_Load_SkipsMalformedYAMLWithoutFailingTheRest(t *testing.T) {
 	// One typo in pagerduty.yaml must not take down opsgenie.yaml — that's
 	// what makes the registry safe to populate from a community-contributed

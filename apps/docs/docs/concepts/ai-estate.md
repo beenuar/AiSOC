@@ -33,7 +33,8 @@ different things and collapsing them loses the distinction:
 | Template | OCSF class | Carries |
 |----------|-----------|---------|
 | `ai-runtime` | `6003` | Routine model and tool activity: which model, which tool, token counts, latency, the requesting principal. |
-| `ai-finding` | `6003` | A guardrail or classifier fired: injection attempt, jailbreak, refusal, sensitive-data match. Promoted to an alert. |
+| `ai-finding` | `2001` | A guardrail or classifier fired: injection attempt, jailbreak, refusal, sensitive-data match. Promoted to an alert. |
+| `agentmetry` | `6003` / `2001` | [Agentmetry](../connectors/agentmetry.md) coding-agent telemetry — one URL for both kinds, split per event: routine tool calls land at `6003`, its correlated detections at `2001`. |
 
 Routine activity is not alerted on. It is the baseline that makes a finding
 interpretable — a single refused prompt means little; a refused prompt from a
@@ -54,6 +55,11 @@ Dependency-free, so adding it does not change your dependency tree.
 
 **The inbox webhook** takes whatever your platform already emits, mapped
 through a template. See [universal capture](../connectors/universal-capture.md).
+For AI *coding* agents specifically — Claude Code, Cursor, Codex, Copilot and
+the MCP servers behind them — the open-source
+[Agentmetry](../connectors/agentmetry.md) sensor captures tool calls through
+the agents' own hooks and pushes them here through its bundled template,
+correlated detections included.
 
 ### Prompts are hashed by default
 

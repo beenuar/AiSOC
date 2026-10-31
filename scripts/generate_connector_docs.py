@@ -425,6 +425,11 @@ SIDEBAR_PREAMBLE = (
     "connectors/kafka-input",
     # Not a connector, so the generated list below does not cover it.
     "connectors/osquery-extensions",
+    # A push-side inbox template rather than a connector: Agentmetry's own
+    # webhook sink POSTs to /v1/inbox/{token}, so there is no schema() for
+    # the generated list below to pick up and the page has to be named here
+    # or it drops out of navigation on the next regeneration.
+    "connectors/agentmetry",
 )
 
 SIDEBAR_START = "// BEGIN GENERATED CONNECTOR LIST"

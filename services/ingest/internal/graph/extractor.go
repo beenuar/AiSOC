@@ -754,8 +754,12 @@ func extractAIEstate(ev *Event, ocsf map[string]interface{}) {
 	kind, externalID, displayName, vendor := "", "", "", ""
 
 	switch sourceType {
-	case "ai-runtime", "ai-finding":
-		// The SDK and gateway path: actor.process.name is the agent id.
+	case "ai-runtime", "ai-finding", "agentmetry":
+		// The SDK and gateway path, plus the Agentmetry inbox template,
+		// which maps the coding agent's name onto the same slots
+		// (agent.name → actor.process.name, actor.id → actor.user.name,
+		// host_id → src_endpoint.hostname) precisely so this projection
+		// and the fusion asset recorder see one shape.
 		externalID = getString(ocsf, "actor.process.name")
 		displayName = getString(ocsf, "actor.process.path")
 		base := processBaseName(displayName)

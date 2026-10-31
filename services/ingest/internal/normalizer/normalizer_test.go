@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/beenuar/aisoc/services/ingest/internal/attck"
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
 )
 
@@ -955,5 +956,81 @@ func TestSplunkEnterpriseIsNotAFindingClass(t *testing.T) {
 	}
 	if sp.classUID/1000 != findingsCategory {
 		t.Errorf("splunk is class %d; a notable has already passed Splunk's correlation and must always promote", sp.classUID)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Exported technique helpers (Discussion #1577). TechniqueIDsFromPaths feeds
+// the inbox template path (technique_fields), EnrichTechniqueIDs is the one
+// block-builder both paths share — so these tests pin the contract the
+// Agentmetry template depends on: carry vendor-supplied ATT&CK ids as
+// supplied, refuse anything that is not an ATT&CK technique id.
+// ---------------------------------------------------------------------------
+
+func TestTechniqueIDsFromPathsValidatesShapeAndDeduplicates(t *testing.T) {
+	payload := map[string]interface{}{
+		"detection": map[string]interface{}{
+			// A tactic id, an ATLAS id and a non-string must all be
+			// refused; the duplicate and the lowercase spelling must fold.
+			"technique_ids": []interface{}{"T1552.004", "TA0006", "AML.T0098", "T1552.004", 42, "t1071.001"},
+		},
+		"tool": map[string]interface{}{
+			"mitre": map[string]interface{}{"technique_id": "T1071.001"},
+		},
+	}
+	ids := TechniqueIDsFromPaths(payload, []string{"detection.technique_ids", "tool.mitre.technique_id"})
+	if len(ids) != 2 || ids[0] != "T1552.004" || ids[1] != "T1071.001" {
+		t.Errorf("ids = %v, want [T1552.004 T1071.001]", ids)
+	}
+}
+
+func TestTechniqueIDsFromPathsToleratesMissingAndMisshapenPaths(t *testing.T) {
+	payload := map[string]interface{}{
+		"detection": "not-a-map",
+	}
+	if ids := TechniqueIDsFromPaths(payload, []string{"detection.technique_ids", "absent.path"}); len(ids) != 0 {
+		t.Errorf("ids = %v, want none from misshapen payloads", ids)
+	}
+}
+
+func TestEnrichTechniqueIDsSaysWhichIdsTheCorpusConfirmed(t *testing.T) {
+	// The issue #1244 contract, now shared with the inbox path: a
+	// well-formed id is always carried, and `verified` says whether the
+	// corpus confirmed it. TestNewLoadsTheCatalogueAtBoot loads the real
+	// corpus into this process when the CDN is reachable, so both corpus
+	// states are legitimate here — each branch asserts its own contract
+	// rather than skipping (the connector-path skip variant already
+	// exists in issue_1244_test.go).
+	enriched := EnrichTechniqueIDs([]string{"T1552.004"})
+	if len(enriched) != 1 {
+		t.Fatalf("enriched = %v, want one entry", enriched)
+	}
+	if enriched[0]["technique_id"] != "T1552.004" {
+		t.Errorf("technique_id = %v", enriched[0]["technique_id"])
+	}
+	verified, ok := enriched[0]["verified"].(bool)
+	if !ok {
+		t.Fatalf("verified missing or not a bool: %#v", enriched[0])
+	}
+	if attck.Loaded() {
+		if !verified {
+			t.Errorf("corpus is loaded but T1552.004 (Private Keys) was not confirmed: %#v", enriched[0])
+		}
+		if name, _ := enriched[0]["technique_name"].(string); name == "" {
+			t.Errorf("confirmed entry carries no technique_name: %#v", enriched[0])
+		}
+	} else {
+		if verified {
+			t.Errorf("verified = true without a loaded corpus: %#v", enriched[0])
+		}
+		if _, present := enriched[0]["technique_name"]; present {
+			t.Errorf("unconfirmed entry must not invent a technique_name: %#v", enriched[0])
+		}
+	}
+}
+
+func TestEnrichTechniqueIDsEmptyInputYieldsNoBlock(t *testing.T) {
+	if enriched := EnrichTechniqueIDs(nil); len(enriched) != 0 {
+		t.Errorf("enriched = %v, want empty", enriched)
 	}
 }

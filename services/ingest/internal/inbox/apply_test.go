@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/attck"
 )
 
 // Apply is the workhorse of the universal-capture path: every webhook
@@ -264,6 +266,138 @@ func TestApply_MetadataAlwaysCarriesProductIdentity(t *testing.T) {
 	}
 	if meta["version"] != "1.1.0" {
 		t.Errorf("metadata.version = %v, want 1.1.0", meta["version"])
+	}
+}
+
+func TestApply_ClassMapRoutesEventKindsToDifferentClasses(t *testing.T) {
+	// One webhook URL can carry routine activity and correlated findings
+	// (Agentmetry posts both through one sink). The class split is what
+	// decides promotion — category 2 is always promoted, category 6 stays
+	// in the lake — so it has to be per event, keyed on a payload field.
+	tmpl := &Template{
+		ID:         "split",
+		ClassUID:   6003,
+		ClassName:  "API Activity",
+		ClassField: "action.type",
+		ClassMap: map[string]ClassOverride{
+			"detection": {ClassUID: 2001, ClassName: "Security Finding"},
+		},
+	}
+
+	finding := tmpl.Apply(map[string]any{
+		"action": map[string]any{"type": "detection"},
+	}, "tenant", "ref", "2026-05-08T12:30:00Z")
+	if finding["class_uid"] != 2001 || finding["class_name"] != "Security Finding" {
+		t.Errorf("detection kind not rerouted: class_uid=%v class_name=%v", finding["class_uid"], finding["class_name"])
+	}
+	if finding["category_uid"] != 2 {
+		t.Errorf("category_uid = %v, want 2 — the override must move the category too", finding["category_uid"])
+	}
+
+	activity := tmpl.Apply(map[string]any{
+		"action": map[string]any{"type": "tool_called"},
+	}, "tenant", "ref", "2026-05-08T12:30:00Z")
+	if activity["class_uid"] != 6003 || activity["category_uid"] != 6 {
+		t.Errorf("unmapped kind must keep the default class: class_uid=%v category_uid=%v",
+			activity["class_uid"], activity["category_uid"])
+	}
+}
+
+func TestApply_ClassMapMatchesCaseInsensitively(t *testing.T) {
+	// Same contract as SeverityMap: the registry lowercases keys at load
+	// time and Apply folds the payload value, so a vendor that capitalises
+	// the kind still routes.
+	tmpl := &Template{
+		ID:         "split",
+		ClassUID:   6003,
+		ClassName:  "API Activity",
+		ClassField: "kind",
+		ClassMap: map[string]ClassOverride{
+			"detection": {ClassUID: 2001, ClassName: "Security Finding"},
+		},
+	}
+	out := tmpl.Apply(map[string]any{"kind": "  Detection  "}, "tenant", "ref", "2026-05-08T12:30:00Z")
+	if out["class_uid"] != 2001 {
+		t.Errorf("class_uid = %v, want 2001 (case-insensitive kind match)", out["class_uid"])
+	}
+}
+
+func TestApply_ClassMapIgnoresMissingAndNonStringKinds(t *testing.T) {
+	tmpl := &Template{
+		ID:         "split",
+		ClassUID:   6003,
+		ClassName:  "API Activity",
+		ClassField: "action.type",
+		ClassMap: map[string]ClassOverride{
+			"detection": {ClassUID: 2001, ClassName: "Security Finding"},
+		},
+	}
+	for name, payload := range map[string]map[string]any{
+		"field absent":    {},
+		"field not a map": {"action": "detection"},
+		"kind not string": {"action": map[string]any{"type": 7}},
+	} {
+		out := tmpl.Apply(payload, "tenant", "ref", "2026-05-08T12:30:00Z")
+		if out["class_uid"] != 6003 {
+			t.Errorf("%s: class_uid = %v, want the 6003 default", name, out["class_uid"])
+		}
+	}
+}
+
+func TestApply_TechniqueFieldsPublishTheConnectorPathBlock(t *testing.T) {
+	// technique_fields is the inbox counterpart of the connector path's
+	// technique carry: shape-validated ids only, list and scalar sources,
+	// deduplicated, ATLAS and tactic ids refused. Entries carry the
+	// issue #1244 contract — an unconfirmed vendor assertion is carried
+	// with verified:false, never dropped; a corpus-confirmed one reads
+	// verified:true. Nothing in this package loads the corpus today, but
+	// the assertion branches on its state rather than assuming, so a
+	// future test that loads it cannot make this one order-dependent.
+	tmpl := &Template{
+		ID:        "techniques",
+		ClassUID:  2001,
+		ClassName: "Security Finding",
+		TechniqueFields: []string{
+			"detection.technique_ids",
+			"tool.mitre.technique_id",
+		},
+	}
+	out := tmpl.Apply(map[string]any{
+		"detection": map[string]any{
+			"technique_ids": []any{"T1552.004", "T1071.001", "TA0006", "AML.T0098", "T1552.004", 42},
+		},
+		"tool": map[string]any{"mitre": map[string]any{"technique_id": "t1071.001"}},
+	}, "tenant", "ref", "2026-05-08T12:30:00Z")
+
+	block, ok := out["mitre_attck"].([]map[string]any)
+	if !ok {
+		t.Fatalf("mitre_attck missing or wrong type: %T", out["mitre_attck"])
+	}
+	var ids []string
+	for _, entry := range block {
+		id, _ := entry["technique_id"].(string)
+		ids = append(ids, id)
+		verified, vOK := entry["verified"].(bool)
+		if !vOK {
+			t.Errorf("entry %v: verified missing or not a bool: %#v", id, entry)
+			continue
+		}
+		if verified != attck.Loaded() {
+			t.Errorf("entry %v: verified = %v with corpus loaded = %v", id, verified, attck.Loaded())
+		}
+	}
+	if len(ids) != 2 || ids[0] != "T1552.004" || ids[1] != "T1071.001" {
+		t.Errorf("ids = %v, want [T1552.004 T1071.001] — deduplicated, shape-validated, no tactic or ATLAS ids", ids)
+	}
+}
+
+func TestApply_NoTechniqueFieldsMeansNoBlock(t *testing.T) {
+	// Templates that declare no technique paths keep their exact previous
+	// behaviour: nothing scans the payload.
+	tmpl := newTestTemplate()
+	out := tmpl.Apply(map[string]any{"techniques": []any{"T1059.001"}}, "tenant", "ref", "2026-05-08T12:30:00Z")
+	if _, ok := out["mitre_attck"]; ok {
+		t.Errorf("mitre_attck populated without technique_fields: %v", out["mitre_attck"])
 	}
 }
 
