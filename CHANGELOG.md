@@ -9,22 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- **Dependencies:** the Oct-31 `minimatch` / `glob` advisory wave cleared
+- **Dependencies:** the Oct-31 `minimatch` / `glob` advisory wave worked
   across all three npm lockfiles (root pnpm, `apps/mobile` pnpm,
-  `services/realtime` npm). `minimatch` is floored at **11.0.1** (resolves
-  11.0.3) for
+  `services/realtime` npm). Both overrides are **range-scoped to `>=9.0.0`**,
+  which is the crux of the fix rather than a detail: `minimatch` floors at
+  **11.0.1** (resolves 11.0.3) for
   [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249)
-  (CVE-2026-118764, medium — globparts-amplification ReDoS, CWE-405); the
-  advisory's vulnerable range is every prior major, so the override is a
-  blanket floor rather than range-scoped. `glob` is floored at **14.0.2**
-  (resolves 14.0.3) for
+  (CVE-2026-118764, medium — globparts-amplification ReDoS) and `glob` at
+  **14.0.2** (resolves 14.0.3) for
   [GHSA-3g3m-2fjr-6pw4](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)
-  (medium), but **range-scoped to `glob@>=9.0.0`** so the non-vulnerable
-  legacy `glob@7.2.3` (callback API) is left untouched rather than dragged
-  across four majors. The two are coherent: `glob@14` depends on
-  `minimatch@^11`. Verified: no `minimatch <11` or `glob` in `[9, 14.0.1]`
-  remains in any lockfile, all three frozen installs pass, and
-  `services/realtime` builds clean on the new versions.
+  (medium) — but the legacy `glob@7.2.3` (not vulnerable; <9) and its
+  `minimatch@3.1.5` are left in place, because `glob@7 + minimatch@11` is
+  broken (a blanket minimatch floor forced that pairing and broke
+  react-native 0.81's iOS codegen with a `charAt` TypeError). The
+  still-`<11` `minimatch` copies that remain (3.1.5, 5.1.9) are all
+  **lint/build tooling** — eslint 9 and its plugins, `@redocly/openapi-core`,
+  `glob@7` via react-native/expo codegen, `test-exclude`, `serve-handler` —
+  none shipped in a runtime bundle, none fed attacker-controlled patterns,
+  and none upgradable without breaking the toolchain that pins them;
+  tracked for a tolerable-risk dismissal pending upstream support. Verified:
+  all three frozen installs pass and `services/realtime` (the one runtime
+  service touched) builds clean on `minimatch@11`.
 
 - **Dependencies:** the Oct-30 npm advisory wave cleared across both
   lockfiles. Root: `follow-redirects` floored at **1.16.2**
