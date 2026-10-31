@@ -1316,6 +1316,20 @@ export interface RecommendedAction {
   risk?: string | null;
 }
 
+/**
+ * What the tenant's business-context rules did to this alert before triage,
+ * plus the verdict's cited impact statement — read from the auto-triage
+ * ledger event. Absent (not empty) when no rule fired: the backend writes
+ * the keys only on a match, so absence is honest absence.
+ */
+export interface BusinessContextRail {
+  matchedRuleIds: string[];
+  severityBefore?: string | null;
+  severityAfter?: string | null;
+  impactStatement?: string | null;
+  impactCitations: string[];
+}
+
 export interface Alert {
   id: string;
   title: string;
@@ -1362,6 +1376,7 @@ export interface Alert {
   relatedEntities?: RelatedEntity[];
   miniTimeline?: MiniTimelineEvent[];
   recommendedActions?: RecommendedAction[];
+  businessContext?: BusinessContextRail | null;
   // ─── Automated triage ────────────────────────────────────────────────────
   //
   // `services/agents` auto-triages every fused alert and writes the verdict
@@ -1532,6 +1547,24 @@ function normalizeAlert(raw: unknown): Alert {
       }))
     : undefined;
 
+  // Business-context rail leg. Snake-case is what the API sends; camel kept
+  // as a fallback for the same reason the other envelope fields keep one.
+  const bcRaw = (r.business_context ?? r.businessContext) as Record<string, unknown> | null | undefined;
+  const businessContext: BusinessContextRail | null =
+    bcRaw && typeof bcRaw === "object"
+      ? {
+          matchedRuleIds: Array.isArray(bcRaw.matched_rule_ids ?? bcRaw.matchedRuleIds)
+            ? ((bcRaw.matched_rule_ids ?? bcRaw.matchedRuleIds) as unknown[]).map(String)
+            : [],
+          severityBefore: (bcRaw.severity_before ?? bcRaw.severityBefore ?? null) as string | null,
+          severityAfter: (bcRaw.severity_after ?? bcRaw.severityAfter ?? null) as string | null,
+          impactStatement: (bcRaw.impact_statement ?? bcRaw.impactStatement ?? null) as string | null,
+          impactCitations: Array.isArray(bcRaw.impact_citations ?? bcRaw.impactCitations)
+            ? ((bcRaw.impact_citations ?? bcRaw.impactCitations) as unknown[]).map(String)
+            : [],
+        }
+      : null;
+
   const recommendedRaw =
     r.recommended_actions ?? r.recommendedActions ?? r.ai_recommendations ?? r.aiRecommendations;
   let recommendedActions: RecommendedAction[] | undefined;
@@ -1616,6 +1649,7 @@ function normalizeAlert(raw: unknown): Alert {
     relatedEntities,
     miniTimeline,
     recommendedActions,
+    businessContext,
     aiScore: pickNum("ai_score", "aiScore"),
     aiSummary: pickStr("ai_summary", "aiSummary"),
     // `?? null` and not `?? undefined`: the column is nullable because NULL
