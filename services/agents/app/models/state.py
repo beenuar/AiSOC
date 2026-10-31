@@ -110,6 +110,20 @@ class InvestigationState(BaseModel):
     # `{"skill_id": ..., "version": N, "ref": "id@vN", "owner": ...}`.
     tenant_skill: dict[str, Any] | None = None
 
+    # What the tenant's business-context rules did to this alert before triage
+    # (services/agents workers/business_context). Carried on the state so the
+    # prompt can tell the model a mutation happened and the verdict can cite
+    # the rule ids that caused it — a `set_severity` the model cannot see is a
+    # provenance hole in every downstream explanation.
+    # `{"matched_rule_ids": [...], "severity_before": ..., "severity_after": ...}`.
+    business_context: dict[str, Any] | None = None
+
+    # The verdict's business-impact element, kept only when every citation it
+    # carries resolves to supplied context (rule ids, identity accounts). An
+    # uncited impact statement is dropped, not rendered — same discipline as
+    # knowledge-base citations. `{"statement": str, "citations": [...]}`.
+    business_impact: dict[str, Any] | None = None
+
     # Knowledge-base runbook chunks retrieved for this alert, as
     # `app.context.knowledge_base.RunbookRetrieval.as_state()` renders them:
     # the chunks, the markers a citation resolves through, and what the

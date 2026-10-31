@@ -86,7 +86,14 @@ class TestParser:
 
     def test_a_well_formed_response_is_unaffected(self) -> None:
         raw = '{"verdict": "benign", "confidence": 0.95, "rationale": "scheduled scan"}'
-        assert _parse_llm_response(raw) == {"verdict": "benign", "confidence": 0.95, "rationale": "scheduled scan"}
+        assert _parse_llm_response(raw) == {
+            "verdict": "benign",
+            "confidence": 0.95,
+            "rationale": "scheduled scan",
+            # Absent from the reply: present in the contract as None so the
+            # caller never needs a key-existence check.
+            "business_impact": None,
+        }
 
     def test_a_fenced_response_is_still_unfenced_first(self) -> None:
         raw = '```json\n{"verdict": "benign", "confidence": 0.5, "rationale": "x"}\n```'

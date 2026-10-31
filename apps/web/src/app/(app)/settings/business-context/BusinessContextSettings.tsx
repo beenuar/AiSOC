@@ -35,25 +35,28 @@ const STARTER_YAML = `# Business context rules — YAML.
 # Each rule mutates a fused alert before it reaches the triage agent.
 # Supported actions: set_severity, route_to, tag, suppress.
 #
+# Fields are dotted paths into the fused alert: severity, source,
+# hostname, username, src_ip, dst_ip, domain, tags, risk_score, and
+# raw_event.<vendor field> for anything the connector carried through.
+#
 # Hit "Save" to apply; the live preview re-runs automatically on every
 # keystroke (debounced) so you can see the impact on your last 50
 # alerts before committing.
 rules:
-  - id: prod-iam-during-business-hours
-    description: Wake tier-2 for any prod IAM touch during business hours.
+  - id: prod-host-escalation
+    description: Production hosts carry the business; treat hits there as critical.
     priority: 10
     when:
       all:
-        - field: alert.target.tag
-          op: eq
-          value: prod
-        - field: alert.time.is_business_hours
-          op: eq
-          value: true
+        - field: hostname
+          op: startswith
+          value: prod-
+        - field: severity
+          op: in
+          value: [medium, high]
     then:
       set_severity: critical
-      route_to: tier2
-      tag: business-hours-prod
+      tag: prod-asset
 `;
 
 export function BusinessContextSettings() {

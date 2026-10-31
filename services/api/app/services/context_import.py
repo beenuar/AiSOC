@@ -106,7 +106,10 @@ def _enum(value: Any, allowed: tuple[str, ...]) -> str | None:
     """Normalise an enum-ish field, rejecting rather than guessing.
 
     A criticality of "very important" must not silently become tier-1: the
-    autonomy policy reads this field, so a wrong value is a wrong decision.
+    triage prompt and the incident-context traversal carry this field to the
+    model, so a wrong value misleads every downstream judgement. (The
+    numeric consumers — confidence, queue priority, approval impact — are
+    wired by the business-context plan's PR-2/PR-3.)
     """
     if not isinstance(value, str):
         return None
@@ -322,9 +325,9 @@ async def _import_applications(session: Any, tenant_id: str, records: list[Any],
 
         criticality = _enum(record.get("criticality"), CRITICALITY)
         if record.get("criticality") and criticality is None:
-            # Rejected rather than coerced: the autonomy policy reads this
-            # field, so "very important" silently becoming tier-1 is a wrong
-            # decision, not a cosmetic one.
+            # Rejected rather than coerced: this field reaches the triage
+            # prompt and the graph traversal, so "very important" silently
+            # becoming tier-1 is a wrong decision, not a cosmetic one.
             report.reject(
                 "application",
                 str(app_id),

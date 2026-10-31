@@ -657,6 +657,18 @@ class FusedAlertTriageWorker:
             logger.warning("auto_triage_worker.unprocessable", keys=sorted(message.keys()) if isinstance(message, dict) else None)
             return None
 
+        if bc_matched:
+            # Carried on the state so (a) the prompt can say a tenant rule
+            # mutated what the model is reasoning over — a silent set_severity
+            # is a provenance hole — and (b) the ledger persists which rules
+            # fired, which until now travelled only in logs and in-process
+            # counters, invisible to the analyst reading the verdict.
+            state.business_context = {
+                "matched_rule_ids": list(bc_matched),
+                "severity_before": bc.severity_before,
+                "severity_after": bc.severity_after,
+            }
+
         governor = get_governor()
         fingerprint = governor.evidence_fingerprint(str(state.tenant_id), state.raw_alert)
 
@@ -1378,6 +1390,8 @@ class FusedAlertTriageWorker:
             rationale=rationale,
             findings=list(state.findings),
             proposed_actions=recommendations,
+            business_context=state.business_context,
+            business_impact=state.business_impact,
             auto_closed=state.status is AgentStatus.COMPLETED,
             iterations=state.iteration_count,
             tokens=tokens,

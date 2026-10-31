@@ -25,12 +25,16 @@ Endpoints
 Persistence story
 -----------------
 
-v1 of T3.5 keeps the parsed rule set in the
-:class:`BusinessContextEngine` process singleton. A
-``# TODO(T3.5-followup)`` is wired in :func:`_persist_for` for the
-``aisoc_business_context_rule_sets`` migration that adds JSONB +
-versioning. Keeping persistence to a single helper means swapping in
-the DB-backed store is a one-file change.
+Rule sets persist as JSONB + YAML source on
+``aisoc_business_context_rule_sets`` (one row per tenant, ``version``
+bumped on every save) via :func:`_persist_for`. The
+:class:`BusinessContextEngine` process singleton is only the parsed
+cache in front of that row — a restart or another replica re-reads
+Postgres, and the auto-triage worker loads the same row per tenant
+(``services/agents`` ``_load_tenant_rules``), so a saved rule applies
+to triage on every deployment. An earlier revision of this module kept
+rules only in the process dict; that is the defect this note used to
+describe as a TODO, not the current state.
 
 Feature flag
 ------------
@@ -52,6 +56,7 @@ tenant-admin concern.
 
 from __future__ import annotations
 
+import json
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -147,10 +152,11 @@ class UpdateRuleRequest(BaseModel):
 class PreviewRequest(BaseModel):
     yaml: str = Field(..., max_length=_MAX_YAML_BYTES)
     alerts: list[dict[str, Any]] = Field(default_factory=list)
-    """Optional alert sample. When empty, the endpoint pulls the last
-    50 alerts off ``aisoc_alerts``; when non-empty, the supplied
-    alerts are used verbatim (useful for the editor's "preview against
-    these three illustrative alerts" power-user flow).
+    """Optional alert sample. When empty, the endpoint pulls the tenant's
+    last 50 rows from ``alerts``, shaped like the fused alert the worker
+    evaluates; when non-empty, the supplied alerts are used verbatim
+    (useful for the editor's "preview against these three illustrative
+    alerts" power-user flow).
     """
 
 
@@ -374,13 +380,13 @@ async def _fetch_sample_alerts(
         result = await db.execute(
             text(
                 """
-                SELECT id, severity, title,
+                SELECT id, severity, title, description, risk_score,
                        connector_type AS source,
                        affected_ips->>0  AS src_ip,
                        affected_hosts->>0 AS hostname,
                        affected_users->>0 AS username,
                        tags,
-                       raw_event AS metadata
+                       raw_event
                 FROM alerts
                 WHERE tenant_id = CAST(:tenant_id AS uuid)
                 ORDER BY created_at DESC
@@ -401,27 +407,32 @@ async def _fetch_sample_alerts(
     out: list[dict[str, Any]] = []
     for row in rows:
         d = dict(row)
-        meta = d.pop("metadata", None) or {}
-        # Promote the common fields the rule grammar references onto the
-        # top level so authors can write `field: alert.severity` rather
-        # than `field: alert.metadata.severity`.
+        raw_event = d.pop("raw_event", None) or {}
+        if isinstance(raw_event, str):
+            try:
+                raw_event = json.loads(raw_event)
+            except (TypeError, ValueError):
+                raw_event = {}
+        # Shape the sample exactly like the fused alert the worker evaluates
+        # (`RawAlert.model_dump()`): top-level fields plus `raw_event.*`,
+        # nothing else. This used to manufacture a nested
+        # `alert.{severity, target, time}` structure that exists on no fused
+        # alert — so a rule written against the suggested `alert.*` paths
+        # previewed as matching and then never fired in production, which is
+        # the one failure mode a preview exists to prevent.
         out.append(
             {
                 "id": str(d.get("id")),
                 "severity": d.get("severity"),
                 "title": d.get("title"),
+                "description": d.get("description"),
                 "source": d.get("source"),
                 "src_ip": d.get("src_ip"),
                 "hostname": d.get("hostname"),
                 "username": d.get("username"),
+                "risk_score": d.get("risk_score"),
                 "tags": list(d.get("tags") or []),
-                "alert": {
-                    "severity": d.get("severity"),
-                    "source": d.get("source"),
-                    "target": (meta.get("target") if isinstance(meta, dict) else {}) or {},
-                    "time": (meta.get("time") if isinstance(meta, dict) else {}) or {},
-                },
-                "metadata": meta,
+                "raw_event": raw_event if isinstance(raw_event, dict) else {},
             }
         )
     return out

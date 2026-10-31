@@ -154,8 +154,8 @@ class TestValidation:
         assert report.rejected and "malformed id" in report.rejected[0]["reason"]
 
     async def test_an_unrecognised_criticality_is_rejected_not_coerced(self) -> None:
-        """The autonomy policy reads this field, so a wrong value is a wrong
-        decision rather than a cosmetic one."""
+        """This field reaches the triage prompt and the graph traversal, so
+        a wrong value is a wrong decision rather than a cosmetic one."""
         session = FakeSession()
         report = await import_context(
             TENANT,
