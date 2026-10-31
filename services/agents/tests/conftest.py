@@ -46,8 +46,20 @@ class AmbientDatabaseUse(BaseException):
 
 @pytest.fixture(autouse=True)
 def _reset_agent_singletons():
-    from app.core.cost_governor import reset_governor
-    from app.llm.contract import _RESPONSE_CACHE
+    # Lazy and tolerant of an absent LLM stack: `integration.yml`'s migrations
+    # job runs single live-Postgres files (e.g. the business-context tenant
+    # rules leg) under a deliberately tiny dependency set that has no
+    # langchain. An environment where `app.llm.contract` cannot import has no
+    # response cache or governor singleton to reset — there is nothing to
+    # bleed between tests — so the guard steps aside rather than erroring
+    # every test at setup. In the full suite the import succeeds and the
+    # reset behaves exactly as before.
+    try:
+        from app.core.cost_governor import reset_governor
+        from app.llm.contract import _RESPONSE_CACHE
+    except ImportError:
+        yield
+        return
 
     reset_governor()
     _RESPONSE_CACHE.clear()
