@@ -769,12 +769,28 @@ class ContextBundleBuilder:
             return IncidentContextDimensions()
 
         api_url = os.getenv("AISOC_API_URL", "http://api:8000")
-        headers = {"X-Tenant-ID": tenant_id}
-        api_key = os.getenv("AISOC_AGENTS_API_KEY", "").strip()
-        if api_key:
-            # The route authenticates via get_current_user (JWT or DB-backed
-            # aisoc_ API key); an unauthenticated call gets 401.
-            headers["Authorization"] = f"Bearer {api_key}"
+        # The service-credential shape `get_current_user` actually resolves:
+        # `Authorization: Bearer <service token>` plus `X-AiSOC-Tenant-ID`.
+        # This fetch used to send `X-Tenant-ID` (a header the API's auth never
+        # reads) with an optional `AISOC_AGENTS_API_KEY` bearer that no compose
+        # file, `.env.example` or Helm value delivers — so the graph's business
+        # dimension answered 401 on every default deployment and the prompt
+        # rendered "unavailable" forever. Same fix class as
+        # `tools/investigation.py`; same token resolution order as
+        # `context/identity.py`, the one path of this shape proven live.
+        token = os.getenv("AISOC_AGENTS_SERVICE_TOKEN", "").strip() or os.getenv("AISOC_SERVICE_TOKEN", "").strip()
+        if not token:
+            # Raise rather than return empty dimensions: the caller's safe-wrap
+            # marks the source unavailable, which keeps "no credential" from
+            # reading as "no business context". Dialing anyway would be a
+            # guaranteed 401 that reads as the API rejecting us.
+            raise RuntimeError(
+                "incident context needs a service credential: set AISOC_AGENTS_SERVICE_TOKEN (or AISOC_SERVICE_TOKEN)"
+            )
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "X-AiSOC-Tenant-ID": tenant_id,
+        }
         async with httpx.AsyncClient(timeout=self.per_source_timeout) as client:
             response = await client.get(
                 f"{api_url}/api/v1/graph/incident-context/{alert_id}",
