@@ -87,30 +87,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whose evidence recorded `scheduled_scan` could state the claim and still
   be refused support.
 
-### Changed
-
-- **A missing identifier narrows the correlation group instead of widening
-  it.** Neither detection engine has ever emitted `mitre_tactics` (the
-  ruleset carries technique ids only), so every detection alert's
-  correlation key fell back to the literal `unknown` tactic and all of an
-  entity's detection alerts collapsed into one incident per window;
-  entity-less alerts merged tenant-wide. The fallback now scopes to the
-  detection rule with an entity, never groups across rules without one,
-  and groups only exact fingerprint repeats with no identifiers at all.
-  Measured on a fixed detection-shaped cohort: 42.6 % reduction with 36
-  cross-rule incident groups before, 24.5 % with zero after — the honest
-  direction, because the difference was unrelated alerts counted as
-  grouped. The tactic-carrying headline cohort is unchanged at 33.3 %. The
-  correlator's creation race is closed with `SET NX` (concurrent first
-  arrivals converge on one incident instead of orphaning an alert); the
-  narrower merge/merge window is documented, not closed.
-
-- **Verdict scorecards disclose the model-knowledge limit.** Evidence
-  cutoffs constrain supplied context only; each scorecard now records the
-  model's training cutoff when the operator states one and `unknown`
-  otherwise, with the disclosure that pretrained weights may postdate the
-  replayed events.
-
+- **Asset criticality reaches fusion confidence and action approval —
+  tighten-only.** Fusion stamps what each alert landed on at fuse time
+  (`enrichments["asset_context"]`, resolved from the tenant's own `assets`
+  inventory by name/FQDN/IP with the highest criticality winning) and the
+  confidence scorer gains a bounded `asset_criticality` factor (weight 0.06,
+  weights rebalanced to keep summing to 1.0) — an absent stamp contributes
+  exactly 0.0 and the rationale row says `unknown (no inventory match)`
+  rather than being omitted, because "we do not know what this host is" is a
+  fact an analyst needs. On the response side, `evaluate_contract` grades a
+  verb one impact rank higher when the target asset is critical/high in the
+  tenant's inventory — never lower, with two deliberate non-raises:
+  READ_ONLY stays READ_ONLY (a read against a domain controller is still a
+  read) and SEVERE never becomes IRREVERSIBLE (context can demand a human,
+  it cannot make an undoable action undoable). The positive control is the
+  point: unknown criticality grades every verb identically, so a deployment
+  with no CMDB loses nothing. Both approval doors thread the resolution;
+  the console's vendored copy stays byte-identical.
 - **Business context reaches the triage model, and impact statements must
   cite it.** The business-context applier's result used to die in the
   worker's local variable: a tenant `set_severity` mutated the alert
@@ -151,6 +144,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the tenant-predicate ratchet with that reasoning, the service is
   SLO-exempt with its reason, and its status filter is pinned against the
   case table's own CHECK constraint by test.
+
+### Changed
+
+- **A missing identifier narrows the correlation group instead of widening
+  it.** Neither detection engine has ever emitted `mitre_tactics` (the
+  ruleset carries technique ids only), so every detection alert's
+  correlation key fell back to the literal `unknown` tactic and all of an
+  entity's detection alerts collapsed into one incident per window;
+  entity-less alerts merged tenant-wide. The fallback now scopes to the
+  detection rule with an entity, never groups across rules without one,
+  and groups only exact fingerprint repeats with no identifiers at all.
+  Measured on a fixed detection-shaped cohort: 42.6 % reduction with 36
+  cross-rule incident groups before, 24.5 % with zero after — the honest
+  direction, because the difference was unrelated alerts counted as
+  grouped. The tactic-carrying headline cohort is unchanged at 33.3 %. The
+  correlator's creation race is closed with `SET NX` (concurrent first
+  arrivals converge on one incident instead of orphaning an alert); the
+  narrower merge/merge window is documented, not closed.
+
+- **Verdict scorecards disclose the model-knowledge limit.** Evidence
+  cutoffs constrain supplied context only; each scorecard now records the
+  model's training cutoff when the operator states one and `unknown`
+  otherwise, with the disclosure that pretrained weights may postdate the
+  replayed events.
 
 ### Fixed
 

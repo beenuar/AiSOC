@@ -344,11 +344,24 @@ def evaluate(
     )
 
 
+#: The one-rank impact raise a critical/high asset applies. READ_ONLY and
+#: SEVERE are deliberately absent — see ``evaluate_contract``'s docstring —
+#: and IRREVERSIBLE cannot be raised further by construction.
+_IMPACT_RAISE_ONE_RANK: dict[ActionImpact, ActionImpact] = {
+    ActionImpact.LOW: ActionImpact.MODERATE,
+    ActionImpact.MODERATE: ActionImpact.HIGH,
+    ActionImpact.HIGH: ActionImpact.SEVERE,
+}
+
+_ASSET_TIGHTEN_CRITICALITIES = frozenset({"critical", "high"})
+
+
 def evaluate_contract(
     *,
     contract: _Contract,
     confidence: float | None,
     tier: str,
+    asset_criticality: str | None = None,
 ) -> ApprovalDecision:
     """Grade a capability contract. **The one place a door may decide.**
 
@@ -374,10 +387,44 @@ def evaluate_contract(
     ``services/actions/tests/test_approval_doors_agree.py`` sweeps both live
     doors over every capability, tier and confidence band to catch it if one
     does.
+
+    ``asset_criticality`` (business-context plan, PR-3) is the criticality of
+    the asset the action would touch, resolved from the tenant's own
+    inventory by the door that has it. **Tighten-only**: a ``critical`` or
+    ``high`` asset grades the verb at one impact rank higher, and nothing
+    here can ever lower a requirement. Unknown — no inventory, no match,
+    ``None`` — grades exactly as before, so a deployment with no CMDB keeps
+    every verb it had (the positive control in
+    ``test_asset_criticality_tightens.py``). Two deliberate non-raises:
+    ``READ_ONLY`` stays ``READ_ONLY``, because a read against a domain
+    controller is still a read and queueing pure reads is the regression the
+    doors-agree work exists to prevent; and ``SEVERE`` stays ``SEVERE``,
+    because ``IRREVERSIBLE`` is a factual property of the verb — context can
+    demand a human, it cannot make an undoable action undoable.
     """
-    return evaluate(
-        impact=contract.impact,
+    graded_impact = contract.impact
+    criticality = (asset_criticality or "").strip().lower()
+    if criticality in _ASSET_TIGHTEN_CRITICALITIES:
+        raised = _IMPACT_RAISE_ONE_RANK.get(contract.impact)
+        if raised is not None:
+            graded_impact = raised
+
+    decision = evaluate(
+        impact=graded_impact,
         declared_approval=contract.approval,
         confidence=confidence,
         tier=tier,
     )
+    if graded_impact is not contract.impact:
+        return ApprovalDecision(
+            requirement=decision.requirement,
+            reason=(
+                f"{decision.reason} Impact graded {graded_impact.value} rather than the declared "
+                f"{contract.impact.value}: the target asset's criticality is {criticality} in the "
+                "tenant's own inventory, and asset context may raise a requirement, never lower it."
+            ),
+            impact=decision.impact,
+            confidence=decision.confidence,
+            tier=decision.tier,
+        )
+    return decision
