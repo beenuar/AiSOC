@@ -194,6 +194,17 @@ class ReplayDecision:
     #: number for both.
     severity: str | None = None
 
+    #: Where the reflex path spent its time on this decision, by named stage
+    #: (milliseconds). Latency is still reported and never graded; the stage
+    #: split is what turns "slow" into "the context fetch, not the model".
+    stage_timings_ms: dict[str, float] = field(default_factory=dict)
+
+    #: The decision as the structured contract the worker now assembles:
+    #: operational disposition, supporting and contradictory evidence,
+    #: missing prerequisites, escalation reason. Carried verbatim so the
+    #: grader and the report read the same shape a reviewer does.
+    decision_contract: dict[str, Any] = field(default_factory=dict)
+
     #: Model calls this decision actually placed, priced or not.
     #:
     #: The one number that separates "the model answered" from "the
@@ -234,6 +245,8 @@ class ReplayDecision:
             "resolved_models": list(self.resolved_models),
             "attribution_sources": dict(self.attribution_sources),
             "severity": self.severity,
+            "stage_timings_ms": dict(self.stage_timings_ms),
+            "decision_contract": dict(self.decision_contract),
             "llm_calls": self.llm_calls,
             "tokens": self.tokens,
             "measured_usd": self.measured_usd,
@@ -458,4 +471,6 @@ class ReplayRunner:
         # move, so the comment and the code contradicted each other, and the
         # day triage gained a tool the report would have kept saying zero.
         decision.tool_calls = _tool_calls_recorded(summary.get("ledger") or [])
+        decision.stage_timings_ms = {str(k): float(v) for k, v in (summary.get("stage_timings_ms") or {}).items()}
+        decision.decision_contract = dict(summary.get("decision_contract") or {})
         return decision

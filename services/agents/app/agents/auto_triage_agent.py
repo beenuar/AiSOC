@@ -736,6 +736,10 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
         state.raw_alert,
         supporting_context=render_for_prompt(state.organisation_memory),
     )
+    # As structure, not only as the basis strings below: the decision
+    # contract reports supporting and contradictory evidence as lists a
+    # machine can read, and the strings alone cannot be split back apart.
+    state.claim_review = claim_support.as_dict()
 
     state.add_finding(f"Auto-triage: verdict={verdict}, confidence={confidence:.2f}, latency={elapsed_ms}ms")
     state.add_finding(f"Auto-triage rationale: {rationale}")

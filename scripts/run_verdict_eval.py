@@ -382,6 +382,17 @@ def main(argv: list[str] | None = None) -> int:
         help="key for that endpoint; local servers accept any non-empty string",
     )
     parser.add_argument("--corpus", type=Path, default=CORPUS)
+    parser.add_argument(
+        "--model-knowledge-cutoff",
+        default=None,
+        help=(
+            "the model's published training-data cutoff (e.g. 2023-12), when the vendor states one. "
+            "Recorded on the scorecard; left 'unknown' when not given. This bounds what the WEIGHTS "
+            "may already know: the replay freeze constrains supplied context only, and a model whose "
+            "training data postdates the corpus events may recognise them from pretraining rather "
+            "than infer them from evidence — a limit every historical-predictive claim carries."
+        ),
+    )
     parser.add_argument("--out", type=Path, help="write the scorecard JSON here")
     parser.add_argument("--decisions-out", type=Path, help="write the per-item decisions here (stays local by default)")
     parser.add_argument("--tenant-id", default="00000000-0000-0000-0000-0000000000de")
@@ -487,6 +498,20 @@ def main(argv: list[str] | None = None) -> int:
         # eligibility matches on the prompt's version and content hash, so a
         # scorecard that does not name them can authorise nothing.
         "prompt": prompt_provenance(),
+        # What the model's own weights may already contain. The replay freeze
+        # and the leak check constrain the *supplied* context; they cannot
+        # establish that pretrained weights hold no knowledge postdating the
+        # corpus events, so a historical-predictive reading of this scorecard
+        # is bounded by this field — and "unknown" is the honest default,
+        # never an implied "before the events".
+        "model_knowledge": {
+            "release_or_training_cutoff": args.model_knowledge_cutoff or "unknown",
+            "stated_by": "operator" if args.model_knowledge_cutoff else None,
+            "disclosure": (
+                "Evidence cutoffs constrain supplied context only; they do not establish that the "
+                "model's pretrained weights contain no knowledge later than the events replayed."
+            ),
+        },
         "context_configuration": context_configuration(decisions),
         # The three numbers that decide whether the rest is worth reading.
         "llm_calls_placed": llm_calls,

@@ -124,6 +124,14 @@ class InvestigationState(BaseModel):
     # knowledge-base citations. `{"statement": str, "citations": [...]}`.
     business_impact: dict[str, Any] | None = None
 
+    #: The claim-support review behind the verdict, as structure rather than
+    #: only as basis strings: which decisive claims the evidence supported,
+    #: which it did not, and which it contradicted
+    #: (``ClaimSupportResult.as_dict()``). ``None`` on paths that never score
+    #: claims — the deterministic tier, memory suppression — which is a
+    #: different fact from "scored and found nothing".
+    claim_review: dict[str, Any] | None = None
+
     # Knowledge-base runbook chunks retrieved for this alert, as
     # `app.context.knowledge_base.RunbookRetrieval.as_state()` renders them:
     # the chunks, the markers a citation resolves through, and what the

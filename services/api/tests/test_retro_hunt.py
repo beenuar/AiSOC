@@ -209,6 +209,168 @@ async def _budget(row: _FakeSettings, *, now: datetime) -> bool:
     return await _consume_budget(cast(AsyncSession, None), cast(RetroHuntSettings, row), now=now)
 
 
+# ------------------------------------------------------------- dry-run mode
+
+
+class _SpySession:
+    """A session double that records every write it is asked to make.
+
+    A spy rather than a richer fake, because the property under test *is* the
+    write boundary: an evaluation sweep must record proposals and mutate
+    nothing, and the honest way to assert "mutated nothing" is a counter that
+    would have caught the mutation — the same shape as ShadowTriageWriter.
+    """
+
+    def __init__(self, *, existing_sighting: Any = None) -> None:
+        self.added: list[Any] = []
+        self.flushed = 0
+        self._existing = existing_sighting
+
+    async def get(self, *_: Any, **__: Any) -> None:
+        return None
+
+    async def execute(self, *_: Any, **__: Any) -> Any:
+        existing = self._existing
+
+        class _Result:
+            def scalar_one_or_none(self) -> Any:
+                return existing
+
+        return _Result()
+
+    def add(self, obj: Any) -> None:
+        self.added.append(obj)
+
+    async def flush(self) -> None:
+        self.flushed += 1
+
+
+def _matched_outcome() -> SweepOutcome:
+    return SweepOutcome(
+        indicator_type="ip",
+        value="203.0.113.7",
+        lookback_days=90,
+        lake=LakeSweepResult(
+            indicator_type="ip",
+            value="203.0.113.7",
+            checked=True,
+            sightings=4,
+            first_sighting_at="2026-08-01T00:00:00+00:00",
+            last_sighting_at="2026-08-03T00:00:00+00:00",
+            columns_searched=("src_endpoint_ip",),
+            connector_types=["aws_cloudtrail"],
+            hosts=["ws-1"],
+            users=[],
+        ),
+        federated=FederatedSweepResult(checked=False, unavailable_reason="not enabled for this tenant"),
+    )
+
+
+def _enabled_settings() -> _FakeSettings:
+    row = _FakeSettings(max_sweeps_per_hour=10, max_sweeps_per_day=10)
+    row.enabled = True  # type: ignore[attr-defined]
+    row.lookback_days = 90  # type: ignore[attr-defined]
+    row.include_federated = False  # type: ignore[attr-defined]
+    return row
+
+
+@pytest.mark.asyncio
+async def test_dry_run_records_the_proposal_and_writes_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Evaluation mode: the sweep runs, the alert is proposed, nothing lands.
+
+    The guard sits at the mutation boundary inside `sweep_tenant` — not in a
+    prompt, not in the caller — so a dry run is *technically unable* to open
+    an alert or a sighting row whatever the caller does next.
+    """
+    from app.services.retro_hunt import service as service_module
+
+    async def _fake_sweep(*_: Any, **__: Any) -> SweepOutcome:
+        return _matched_outcome()
+
+    monkeypatch.setattr(service_module, "sweep_indicator", _fake_sweep)
+
+    db = _SpySession()
+    report = await service_module.sweep_tenant(
+        cast(AsyncSession, db),
+        tenant_id=TENANT,
+        indicator=IntelIndicator(indicator_type="ip", value="203.0.113.7", feed_source="feodo"),
+        settings_row=cast(RetroHuntSettings, _enabled_settings()),
+        dry_run=True,
+    )
+
+    assert report.outcome == "swept"
+    assert report.matched
+    assert report.proposed, "a dry-run match is a proposal, never an executed open"
+    assert report.alert_id is None
+    assert report.proposed_alert is not None
+    assert report.proposed_alert["idempotency_key"] == alert_idempotency_key("ip", "203.0.113.7")
+    assert report.proposed_alert["total_sightings"] == 4
+    assert db.added == [], "a dry run must write no alert and no sighting row"
+    assert db.flushed == 0
+
+
+@pytest.mark.asyncio
+async def test_dry_run_does_not_mutate_an_existing_sighting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The dedup branch updates times_seen/last_matched_at in a real sweep;
+    an evaluation re-running history must leave even those counters alone."""
+    from app.services.retro_hunt import service as service_module
+
+    async def _fake_sweep(*_: Any, **__: Any) -> SweepOutcome:
+        return _matched_outcome()
+
+    monkeypatch.setattr(service_module, "sweep_indicator", _fake_sweep)
+
+    @dataclass
+    class _Sighting:
+        alert_id: uuid.UUID
+        times_seen: int = 3
+        last_matched_at: datetime | None = None
+        sightings: int = 1
+        last_sighting_at: Any = None
+        matched_surfaces: Any = None
+        updated_at: Any = None
+
+    existing = _Sighting(alert_id=uuid.uuid4())
+    db = _SpySession(existing_sighting=existing)
+
+    report = await service_module.sweep_tenant(
+        cast(AsyncSession, db),
+        tenant_id=TENANT,
+        indicator=IntelIndicator(indicator_type="ip", value="203.0.113.7", feed_source="feodo"),
+        settings_row=cast(RetroHuntSettings, _enabled_settings()),
+        dry_run=True,
+    )
+
+    assert report.proposed and report.deduplicated
+    assert report.alert_id == existing.alert_id, "the proposal names the record it would have refreshed"
+    assert existing.times_seen == 3, "a dry run must not advance the sighting counters"
+    assert existing.last_matched_at is None
+    assert db.added == []
+
+
+@pytest.mark.asyncio
+async def test_a_real_sweep_still_opens_the_alert(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The negative control for the dry-run guard: the same sweep without
+    dry_run adds the alert and the sighting row through the same session."""
+    from app.services.retro_hunt import service as service_module
+
+    async def _fake_sweep(*_: Any, **__: Any) -> SweepOutcome:
+        return _matched_outcome()
+
+    monkeypatch.setattr(service_module, "sweep_indicator", _fake_sweep)
+
+    db = _SpySession()
+    report = await service_module.sweep_tenant(
+        cast(AsyncSession, db),
+        tenant_id=TENANT,
+        indicator=IntelIndicator(indicator_type="ip", value="203.0.113.7", feed_source="feodo"),
+        settings_row=cast(RetroHuntSettings, _enabled_settings()),
+    )
+
+    assert report.matched and not report.proposed
+    assert len(db.added) == 2, "a live sweep adds the alert and the sighting row"
+
+
 @pytest.mark.asyncio
 async def test_budget_refuses_once_the_hourly_allowance_is_spent() -> None:
     row = _FakeSettings()
