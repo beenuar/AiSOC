@@ -4,7 +4,7 @@ Session-scratch progress file for the community-feedback brief (reflex behaviour
 analysis, precision/recall, alert reduction, evidence references, model suitability).
 This file is session scratch: it tracks lane state so interrupted work can resume.
 
-- Branch: `feat/feedback-eval-hardening` (worktree `/Users/beenu/Desktop/AiSOC-feedback-eval`)
+- Branch: `feat/feedback-eval-hardening` (its own worktree of the shared git dir)
 - Base: `origin/main` @ `828ff9c5` (PR #1575 merge; #1576 in history; #1578 expected to merge mid-task — re-fetch+merge before finalizing)
 - Constraints: NO push / NO merge / NO PR — local commits only. Never enable model-driven auto-closure.
 - Sibling lane: bizctx (PR #1578) owns services/fusion confidence.py+asset_context.py+fusion_engine.py,

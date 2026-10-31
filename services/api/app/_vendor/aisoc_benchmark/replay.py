@@ -198,11 +198,48 @@ class ReplayScore:
     graded: int = 0
     abstained: int = 0
 
+    # ---- request reliability: five counts, nothing vanishes --------------
+    #
+    # `requested_total` is what the caller asked the run to grade — the corpus
+    # size — and is `None` when the caller did not say, in which case
+    # `unattempted` is unknown rather than zero. A run that stopped a third
+    # of the way through must not publish a headline over the two-thirds it
+    # never reached without the gap showing, and "failed" (triage refused or
+    # crashed) is kept apart from "completed" because a failure that stops
+    # the run cannot disappear from the headline.
+    requested_total: int | None = None
+    attempted: int = 0
+    completed: int = 0
+    failed: int = 0
+    unattempted: int | None = None
+
     # ---- the number an operator is deciding on ---------------------------
     malicious_support: int = 0
     malicious_recall: float | None = None
     malicious_recall_ci: tuple[float, float] | None = None
     malicious_precision: float | None = None
+
+    # ---- the same recall over the full cohort -----------------------------
+    #
+    # `malicious_recall` above is *selective*: it is computed over labelled
+    # decisions that did not error, so it answers "how good are the answers
+    # it managed to give". A run that crashed on half the malicious cases
+    # would quietly drop them from that denominator. The full-cohort figure
+    # keeps every labelled malicious case — abstained, errored, all of it —
+    # and the split of the misses is published as counts: an abstention or an
+    # error retains the alert for a human (an operational safety outcome, not
+    # a correct classification), while a malicious case answered with an
+    # auto-closeable verdict reached nobody.
+    malicious_support_full: int = 0
+    malicious_recall_full_cohort: float | None = None
+    malicious_abstained: int = 0
+    malicious_errored: int = 0
+    #: Malicious cases that stayed in front of a human: abstained + errored
+    #: (both retain the alert) — distinct from caught, and from closed-away.
+    malicious_reached_review: int = 0
+    #: Malicious cases the agent answered with a non-malicious verdict. The
+    #: dangerous direction: these reached nobody.
+    malicious_closed_as_negative: int = 0
     #: Malicious cases the agent did not call malicious, as a count and a
     #: rate. Derivable from the confusion matrix and from `1 - recall`,
     #: and published as its own field anyway: a false negative is a
@@ -260,6 +297,32 @@ class ReplayScore:
     auto_close_considered: int = 0
     auto_close_correct: int = 0
     auto_close_precision: float | None = None
+
+    # ---- the four closure cuts, over *proposed* closures -------------------
+    #
+    # Replay executes nothing: every closure here is what the stated policy
+    # *would have* closed, and `closures_executed` is pinned at zero so a
+    # simulated closure can never read as a production outcome. Unlike
+    # `auto_close_*` above (computed over labelled, answered decisions only),
+    # the proposed-closure population spans every decision including the
+    # unlabeled ones, because the unknown-label share among closures is one of
+    # the four questions.
+    #
+    # * `malicious_closure_rate` — malicious items closed / all labelled
+    #   malicious (full cohort). The catastrophic direction, and a measured
+    #   0.0 here is a counted zero, not an absence.
+    # * `closure_contamination` — malicious closed / closures with known truth.
+    # * `benign_closure_coverage` — benign-family items closed / all labelled
+    #   benign-family items ("benign-family" = the three non-malicious truth
+    #   classes). What the closure policy actually absorbs.
+    # * `closure_unknown_share` — closures with no truth label / all closures.
+    closures_proposed: int = 0
+    closures_executed: int = 0
+    malicious_closed_count: int = 0
+    malicious_closure_rate: float | None = None
+    closure_contamination: float | None = None
+    benign_closure_coverage: float | None = None
+    closure_unknown_share: float | None = None
     #: Share of labelled decisions the agent routed to a human instead of
     #: deciding. The same population as `abstention_rate`, named the way an
     #: operator sizing a queue thinks about it.
@@ -286,6 +349,10 @@ class ReplayScore:
     hallucinated_examples: list[str] = field(default_factory=list)
     per_rule: list[SegmentScore] = field(default_factory=list)
     per_source: list[SegmentScore] = field(default_factory=list)
+    #: Misses by severity. A miss on a critical alert and a miss on an info
+    #: alert are different findings; one number for both hides the one that
+    #: matters.
+    per_severity: list[SegmentScore] = field(default_factory=list)
 
     # ---- cost and latency, reported not scored ---------------------------
     total_tokens: int = 0
@@ -307,6 +374,13 @@ class ReplayScore:
     #: deterministic fallback when a provider is unreachable and a run that
     #: measured nothing otherwise looks entirely normal.
     llm_calls: int = 0
+    #: Calls each attribution source vouched for, summed across decisions:
+    #: ``{"gateway_header": n, "response_body": m}``. ``models`` says who
+    #: served; this says on whose account, which is what separates *verified*
+    #: attribution (the gateway spoke) from *self-reported* (the endpoint
+    #: named itself) from none at all. The run-level provenance status is
+    #: computed by the caller, which knows the requested model.
+    attribution_sources: dict[str, int] = field(default_factory=dict)
 
     # ---- provenance ------------------------------------------------------
     bootstrap_resamples: int = BOOTSTRAP_RESAMPLES
@@ -478,6 +552,7 @@ def score_replay(
     bootstrap_resamples: int = BOOTSTRAP_RESAMPLES,
     bootstrap_seed: int = BOOTSTRAP_SEED,
     auto_close_threshold: float = DEFAULT_AUTO_CLOSE_THRESHOLD,
+    requested_total: int | None = None,
 ) -> ReplayScore:
     """Grade a replay run's decisions against the analysts' own labels.
 
@@ -508,6 +583,19 @@ def score_replay(
     score.errored = len(errored)
     score.unlabeled = len(usable) - len(labelled)
     score.labelled = len(labelled)
+
+    # ---- request reliability ----------------------------------------------
+    #
+    # `attempted` is what reached the grader; `requested_total` is what the
+    # caller asked for, when it said. The difference is work the run never
+    # reached — a partial run's gap, visible rather than silently absent. A
+    # negative difference is a caller error and is clamped to the honest
+    # reading (nothing unattempted) rather than published as negative work.
+    score.requested_total = requested_total
+    score.attempted = len(decisions)
+    score.completed = len(usable)
+    score.failed = len(errored)
+    score.unattempted = max(0, requested_total - len(decisions)) if requested_total is not None else None
 
     # Hallucination spans every decision that produced reasoning, answered or
     # not, and errored or not: an agent that invented an address before
@@ -543,6 +631,51 @@ def score_replay(
     score.time_to_verdict_p95_ms = score.p95_latency_ms
     score.models = sorted({str(m) for d in decisions for m in (d.get("resolved_models") or [])})
     score.llm_calls = sum(int(d.get("llm_calls") or 0) for d in decisions)
+    attribution: dict[str, int] = {}
+    for decision in decisions:
+        for source, count in (decision.get("attribution_sources") or {}).items():
+            attribution[str(source)] = attribution.get(str(source), 0) + int(count or 0)
+    score.attribution_sources = dict(sorted(attribution.items()))
+
+    # ---- the four closure cuts, over proposed closures ---------------------
+    #
+    # Spans every decision, including the unlabeled, because the unknown-label
+    # share among closures is one of the four questions. Errored decisions
+    # cannot be closures (a refusal retains the alert), and an abstention is
+    # not in the closable verdict set, so neither needs excluding by hand.
+    proposed = [
+        d
+        for d in decisions
+        if not d.get("error") and d.get("verdict") in _AUTO_CLOSABLE_VERDICTS and float(d.get("confidence") or 0.0) >= auto_close_threshold
+    ]
+    score.closures_proposed = len(proposed)
+    score.closures_executed = 0  # replay executes nothing, by construction
+    known_truth = [d for d in proposed if d.get("labelled") and d.get("expected_disposition") in GRADED_DISPOSITIONS]
+    malicious_closed = [d for d in known_truth if d.get("expected_disposition") == MALICIOUS]
+    score.malicious_closed_count = len(malicious_closed)
+    score.closure_contamination = _ratio(len(malicious_closed), len(known_truth))
+    score.closure_unknown_share = _ratio(len(proposed) - len(known_truth), len(proposed))
+
+    labelled_full = [d for d in decisions if d.get("labelled") and d.get("expected_disposition") in GRADED_DISPOSITIONS]
+    malicious_full = [d for d in labelled_full if d.get("expected_disposition") == MALICIOUS]
+    benign_family_full = [d for d in labelled_full if d.get("expected_disposition") != MALICIOUS]
+    score.malicious_closure_rate = _ratio(len(malicious_closed), len(malicious_full))
+    benign_closed = [d for d in known_truth if d.get("expected_disposition") != MALICIOUS]
+    score.benign_closure_coverage = _ratio(len(benign_closed), len(benign_family_full))
+
+    # ---- full-cohort malicious recall ---------------------------------------
+    #
+    # Over every labelled malicious case, errored included. Each case lands in
+    # exactly one of four buckets — caught, abstained, errored, or answered
+    # with a non-malicious verdict — and the buckets sum to the denominator,
+    # so nothing vanishes.
+    score.malicious_support_full = len(malicious_full)
+    caught_full = sum(1 for d in malicious_full if not d.get("error") and d.get("verdict") == MALICIOUS)
+    score.malicious_recall_full_cohort = _ratio(caught_full, len(malicious_full))
+    score.malicious_errored = sum(1 for d in malicious_full if d.get("error"))
+    score.malicious_abstained = sum(1 for d in malicious_full if not d.get("error") and _is_abstention(d))
+    score.malicious_reached_review = score.malicious_abstained + score.malicious_errored
+    score.malicious_closed_as_negative = len(malicious_full) - caught_full - score.malicious_reached_review
 
     if not labelled:
         score.headline_withheld_reason = (
@@ -678,6 +811,7 @@ def score_replay(
 
     score.per_rule = _segment(labelled, "rule_id")
     score.per_source = _segment(labelled, "vendor")
+    score.per_severity = _segment(labelled, "severity")
     return score
 
 
@@ -710,6 +844,16 @@ def _ms(value: float | None) -> str:
     return "not measured" if value is None else f"{value:,.0f} ms"
 
 
+def _attribution(score: ReplayScore) -> str:
+    """Who vouched for the serving models, as per-source call counts."""
+    if not score.attribution_sources:
+        if score.llm_calls:
+            return f"none of the {score.llm_calls} call(s) was attributed by any party"
+        return "no call was placed, so there is nothing to attribute"
+    parts = [f"{source}: {count}" for source, count in sorted(score.attribution_sources.items())]
+    return f"{sum(score.attribution_sources.values())} of {score.llm_calls} call(s) attributed ({', '.join(parts)})"
+
+
 def _models(score: ReplayScore) -> str:
     """Which model answered, distinguishing the two ways of not knowing.
 
@@ -736,9 +880,13 @@ def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = 
     """
     lines: list[str] = ["# Replay evaluation", ""]
 
+    unattempted = "unknown — the caller did not say how many were requested" if score.unattempted is None else str(score.unattempted)
+    requested = "not stated" if score.requested_total is None else str(score.requested_total)
     lines += [
         "## What was graded",
         "",
+        f"- Requested: {requested}. Attempted: {score.attempted}. Completed: {score.completed}. "
+        f"Failed: {score.failed}. Unattempted: {unattempted}",
         f"- Decisions replayed: {score.decisions}",
         f"- Carried an analyst label: {score.labelled}",
         f"- Unlabelled, excluded from accuracy: {score.unlabeled}",
@@ -751,6 +899,24 @@ def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = 
         f"- Recall: {_pct(score.malicious_recall)} (95% CI {_interval(score.malicious_recall_ci)})",
         f"- Recall, Wilson 95% interval: {_interval(score.malicious_recall_wilson)}",
         f"- Precision: {_pct(score.malicious_precision)}",
+        "",
+        "## Full cohort",
+        "",
+        "Selective recall above is over answered-or-abstained labelled cases; a run",
+        "that errored on a malicious case dropped it from that denominator. The",
+        "full-cohort figure keeps every labelled malicious case. The buckets sum",
+        "to the denominator, so nothing vanishes.",
+        "",
+        f"- Malicious cases, full cohort: {score.malicious_support_full}",
+        f"- Recall, full cohort: {_pct(score.malicious_recall_full_cohort)}",
+        f"- Abstained (retained for a human): {score.malicious_abstained}",
+        f"- Errored (retained for a human): {score.malicious_errored}",
+        f"- Reached review one way or the other: {score.malicious_reached_review}",
+        f"- Answered with a non-malicious verdict (reached nobody): {score.malicious_closed_as_negative}",
+        "",
+        "An abstention or an error retains the alert — an operational safety",
+        "outcome, not a correct classification, and it is counted as a miss in",
+        "both recall figures.",
         "",
         "## Headline accuracy",
         "",
@@ -790,6 +956,16 @@ def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = 
         "have closed by itself. Nothing above the threshold reports no figure",
         "rather than a zero, which would read as closing things and getting",
         "them all wrong.",
+        "",
+        "## Proposed closures",
+        "",
+        f"- Proposed: {score.closures_proposed}. Executed: {score.closures_executed} "
+        "(replay executes nothing; every closure here is what the stated policy would have closed)",
+        f"- Malicious closure rate: {_pct(score.malicious_closure_rate)} "
+        f"({score.malicious_closed_count} of {score.malicious_support_full} labelled malicious)",
+        f"- Closure contamination: {_pct(score.closure_contamination)} (malicious among closures with known truth)",
+        f"- Benign closure coverage: {_pct(score.benign_closure_coverage)} (benign-family items the policy would absorb)",
+        f"- Unknown-label share among closures: {_pct(score.closure_unknown_share)}",
         "",
         "## Time to verdict",
         "",
@@ -839,6 +1015,7 @@ def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = 
     breakdowns: tuple[tuple[str, list[SegmentScore]], ...] = (
         ("Per rule", score.per_rule),
         ("Per source", score.per_source),
+        ("Per severity", score.per_severity),
     )
     for title, segments in breakdowns:
         lines += ["", f"## {title}", "", "| Key | Answered | Accuracy | Malicious | Malicious recall |", "|---|---|---|---|---|"]
@@ -861,6 +1038,7 @@ def format_replay_report(score: ReplayScore, *, method: dict[str, Any] | None = 
         f"p95 {'not measured' if score.p95_latency_ms is None else f'{score.p95_latency_ms:.0f} ms'}",
         f"- Model calls placed: {score.llm_calls}",
         f"- Models: {_models(score)}",
+        f"- Attribution: {_attribution(score)}",
         "",
         "## Method",
         "",

@@ -71,6 +71,7 @@ from typing import Any
 from app.core.gateway_cost import RESOLVED_MODEL_HEADER, response_headers
 
 __all__ = [
+    "ADVERTISABLE_STATUSES",
     "ATTRIBUTION_GATEWAY_HEADER",
     "ATTRIBUTION_RESPONSE_BODY",
     "STATUS_MIXED_SERVING",

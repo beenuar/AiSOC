@@ -1078,7 +1078,7 @@ jobs:
           pip install --quiet
           "pytest>=8,<9" "pytest-asyncio>=1.0,<2.0"
           "redis>=5" structlog "pydantic>=2" pydantic-settings
-          asyncpg aiokafka httpx cryptography
+          asyncpg aiokafka httpx "cryptography>=46,<51"
 
       - name: Correlator + windowed claims against the real server
         working-directory: services/fusion
