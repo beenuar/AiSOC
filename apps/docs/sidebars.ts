@@ -30,6 +30,7 @@ const sidebars: SidebarsConfig = {
         "concepts/ai-estate",
         "concepts/ai-estate-discovery",
         "concepts/groundedness",
+        "concepts/real-vs-synthetic",
         "concepts/live-actions",
         "concepts/retro-hunts",
         "concepts/hunting-agent",

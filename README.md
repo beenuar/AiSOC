@@ -6,8 +6,8 @@
 
 **An open-source, self-hostable AI Security Operations Center.** It ingests your security telemetry, detects and correlates threats, investigates them with AI agents whose reasoning is fully auditable, and proposes responses a human approves.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT) [![Version](https://img.shields.io/badge/version-20.4.0-f59e0b?style=flat-square)](CHANGELOG.md) [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
-[![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC) [![Technical Guide](https://img.shields.io/badge/Technical%20Guide-26%20page%20PDF-dc2626?style=flat-square)](https://raw.githubusercontent.com/beenuar/AiSOC/main/apps/web/public/papers/aisoc-technical-guide.pdf)
+[![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg?style=flat-square)](https://opensource.org/licenses/MIT) [![Version](https://img.shields.io/badge/version-21.0.0-f59e0b?style=flat-square)](CHANGELOG.md) [![CI](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/ci.yml?branch=main&label=CI&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/ci.yml)
+[![CodeQL](https://img.shields.io/github/actions/workflow/status/beenuar/AiSOC/codeql.yml?branch=main&label=CodeQL&style=flat-square)](https://github.com/beenuar/AiSOC/actions/workflows/codeql.yml) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/beenuar/AiSOC/badge)](https://securityscorecards.dev/viewer/?uri=github.com/beenuar/AiSOC) [![Technical Guide](https://img.shields.io/badge/Technical%20Guide-27%20page%20PDF-dc2626?style=flat-square)](https://raw.githubusercontent.com/beenuar/AiSOC/main/apps/web/public/papers/aisoc-technical-guide.pdf)
 
 **[Technical Guide (PDF)](https://raw.githubusercontent.com/beenuar/AiSOC/main/apps/web/public/papers/aisoc-technical-guide.pdf)** · [Docs](https://beenuar.github.io/AiSOC/) · [Architecture](docs/architecture/README.md) · [What actually works](docs/audit/REPOSITORY_REALITY.md) · [Discussions](https://github.com/beenuar/AiSOC/discussions)
 
@@ -159,17 +159,15 @@ exercised here** — there is no funded key, so per-model rows read *not measure
 Vulnerabilities catalog — public, no API key — into the console's Threat Intelligence page: the one
 thing in a fresh install that is neither synthetic nor yours.
 
-## Real vs synthetic data
+## Evaluation, reflex and replay
 
-| Kind | Where | How you can tell |
-|---|---|---|
-| **Real** | Your connectors and the ingest API | `is_synthetic = false` (the default) |
-| **Real, and not yours** | The CISA KEV feed on the Threat Intelligence page | Every row carries `source: cisa-kev`; it is the public catalog, unmodified |
-| **Sample** | The wizard's **Load sample data** | Source column reads `AiSOC`; RFC 5737 / RFC 2606 reserved addresses only |
-| **Demo** | `make demo` | `is_synthetic = true`, labelled in the console |
-| **Benchmark / fixtures** | `services/agents/tests/eval_data/`, `**/tests/` | Published rows carry `substrate: true`; fixtures never ship in an image |
+The published numbers carry their own provenance. ([methodology](https://beenuar.github.io/AiSOC/docs/benchmark) · [real vs synthetic data](https://beenuar.github.io/AiSOC/docs/concepts/real-vs-synthetic))
 
-**Production never silently falls back to synthetic data.** An unreachable backend makes the console name the failure rather than invent an investigation, and an unmeasured figure reads *not measured*, never `0`. It was not always so: [the reality audit](docs/audit/REPOSITORY_REALITY.md) has each case.
+- **Every verdict scorecard names the model that actually served it** — gateway-attested or self-reported, with an explicit provenance status. A run with missing attribution, zero real calls or a deterministic fallback cannot be advertised as a named model's performance, and a measurement that cannot be bound to an attributed call cannot authorize closures.
+- **Denominators are published, and the uncomfortable direction wins.** Full-cohort recall keeps abstentions and failures in the malicious denominator; closure claims ship with their contamination rate; alert reduction has three labelled figures (75.3% legacy grouping, 33.3% production key, 24.5% on a detection-shaped cohort after a missing identifier was fixed to *narrow* the group instead of widening it). Unmeasured reads *not measured*, never `0`.
+- **The reflex path is observable** — nine named stages from queue delay to verification, and a decision contract carrying supporting evidence, contradictory evidence, missing prerequisites and the escalation reason.
+- **Replay is time-frozen; re-hunting is labelled.** Historical replay enforces evidence cutoffs in the retrieval queries (never by prompt), discloses the model-knowledge limit, and cannot execute real actions — the mutation boundary is the write adapter. Applying new intelligence to old telemetry is a distinct, rehearsable mode, and its discoveries are never counted as predictions at the original event time.
+- **Model suitability is per task.** The matrix grades each configured model on the same locked evidence against a deterministic baseline floor (balanced accuracy exactly 0.250); unfunded rows read *not measured*, with one-command reproduction against any local OpenAI-compatible endpoint.
 
 ## AI agents
 
