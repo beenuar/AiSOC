@@ -69,6 +69,21 @@ Pre-allocated exclusive blocks, claimed at lane start so two lanes cannot pick
 the same number: Lane D holds migrations **142–145** and ADR **0020**. A
 reserved number that is not used is released by striking it here at lane
 close, never by a second lane assuming it is free.
+| 0018 | ADR | Lane B / 1.6 | 2026-11-01 | `docs/decisions/0018-ip-class-dataset-provenance.md` |
+| 130 | migration | Lane B / 1.6 | 2026-11-01 | `services/api/migrations/130_alert_ip_class.sql` |
+| 131 | migration | Lane B / 1.3 | 2026-11-01 | `services/api/migrations/131_workforce_context.sql` |
+| 132 | migration | Lane B / 8.3 | 2026-11-01 | `services/api/migrations/132_tenant_enrichment_providers.sql` |
+| 133 | migration | Lane B / 8.1 | 2026-11-01 | `services/api/migrations/133_cloud_security_findings.sql` |
+
+Lane B holds an exclusive pre-allocated block: migrations `130`-`137` and ADR
+`0018`. Numbers `134`-`137` are reserved and unused unless an item below
+claims one here first.
+
+Highest at kickoff: migration `123`, ADR `0014`. Next free outside Lane B's
+block: migration `124`, ADR `0016`.
+
+Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
+ADR `0016`.
 
 ## Phase 0: Kickoff
 
@@ -223,6 +238,56 @@ this is an observation with its evidence attached.
 - [~] **7.4** AI rule pack — four of the listed targets shipped and replayed
       ([#1585](https://github.com/beenuar/AiSOC/pull/1585)); the rest need a
       producer or 7.3's baselines, each recorded below.
+### D3 - Three of the five anonymizer classes have no redistributable source
+
+Item 1.6 names five classes and anticipates that one of them (residential
+proxies) may have no redistributable source. Measured, **three** do not.
+
+The widely cited community list of VPN and datacentre ranges was the obvious
+candidate and was refused on the licence, not on the data: its repository
+carries no licence file at all. Recorded as a command rather than as a claim,
+because this is the kind of statement that goes stale:
+
+    $ curl -s -o /dev/null -w "%{http_code}" \
+        https://raw.githubusercontent.com/X4BNet/lists_vpn/main/LICENSE
+    404
+
+An MIT-licensed repository cannot redistribute data whose terms nobody can
+read. Commercial anonymizer feeds exist and are licensed per deployment,
+which makes them a per-tenant credential rather than something to commit.
+
+So `vpn`, `public_proxy` and `residential_proxy` ship with zero records and
+are tenant-supplied only; `tor_exit` and `hosting_provider` ship populated.
+The docs page says this in a table and in prose, the ADR records the
+alternatives, and the claim-matrix row leads with it.
+
+### D4 - Tenant-supplied class lists are designed and not built
+
+The fallback the plan names for an uncovered class is a tenant-supplied
+list. It is **not implemented**, and three classes are therefore unavailable
+rather than empty-by-choice. Said plainly in
+`apps/docs/docs/operations/ip-classification.md` under "What is not here
+yet" rather than implied to exist.
+
+The design, recorded so the next lane does not re-derive it:
+
+* the stamper is in Go at ingest and has no per-tenant database access, so
+  the per-tenant layer belongs in fusion, where the tenant is known;
+* `services/fusion/app/services/tenant_overlay.py` is the extension point.
+  It already loads per-tenant rows from Postgres with hot reload and already
+  exposes exactly this shape in `derived_allowlist_fields(event)` and
+  `derived_identity_fields(event)`: per-tenant derived fields applied at
+  match time;
+* it needs a tenant-scoped table (CIDR, class, author, reason) with RLS, a
+  third source in `TenantOverlay._fetch` (whose signature is a 2-tuple
+  today and would become a 3-tuple), an `ip_class` applied only where the
+  global dataset had no answer, and an API route plus a settings surface so
+  something writes the table. A table fusion reads and nothing writes is the
+  same defect as a table the console writes and nothing reads.
+
+Not done because landing 1.6 and 1.3 unblocks Lane C, and a half-wired
+per-tenant path would have been worse than an honest gap. Nothing shipped
+depends on it; the three classes simply carry no records.
 
 ## Item log
 
@@ -715,3 +780,65 @@ half would key it on whatever field happened to be present, which is how
 short-lived credentials and least-privilege tool scopes first, then baselines
 keyed on them (tools, resources, volume, token spend, hours) reading the
 existing `cost_telemetry.py` rather than a second meter.
+### 1.6 Anonymizer and hosting classes at ingest - Lane B
+
+**Reproduced.** A Go test driving the real `Normalize` entry point, not the
+classifier in isolation, so that a classifier package with passing unit
+tests and no caller could not satisfy it. On the pre-change tree:
+
+    internal/normalizer/ipclass_stamp_test.go:68:20:
+      act.Location.IPClass undefined (type activity.Location has no field)
+
+Nothing in the tree classified an address, and no dataset existed to
+classify from.
+
+**Shipped.**
+
+| Piece | Where |
+|---|---|
+| Downloader | `scripts/fetch_ip_class_dataset.py` |
+| Pinned snapshot | `services/ingest/internal/activity/ipclass/data/` (21,726 records) |
+| Go classifier | `services/ingest/internal/activity/ipclass/ipclass.go`, embedded |
+| Production caller | `activity.Project` -> `stampIPClass`, so every caller gets it |
+| Python loader | `scripts/ip_class_dataset.py`, vendored to `services/fusion/app/services/ip_class.py` |
+| Live -> matcher | `DetectionEngine._with_activity_location` lifts the nested stamp flat |
+| Replay -> matcher | `ip_class_fields` in both copies of the derived-field lockstep |
+| Lake | 3 columns, `001_init.sql` and lake migration `005_ip_class` in lockstep |
+| Alert | migration `130`, fusion `RawAlert`, promoter, `_INSERT_SQL`, API `AlertResponse` |
+| Console | `SourceAddressClassSection` on the investigation rail |
+| Gate | `scripts/check_ip_class_dataset.py`, wired in `ci.yml` twice |
+| Decision | ADR `0018` |
+| Docs | `apps/docs/docs/operations/ip-classification.md`, in the sidebar |
+
+**Negative control.** Removing the single `stampIPClass(&act.Location)` call
+from `Project`, leaving the fields and the dataset in place:
+
+    --- FAIL: TestNormalizeStampsAnonymizerClass/tor_exit_relay
+        ip 2.56.10.36: ip_class = "", want "tor_exit"
+    --- FAIL: TestNormalizeStampsAnonymizerClass/cloud_hosting_range
+        ip 1.178.1.0: ip_class = "", want "hosting_provider"
+
+Restored, the suite passes again.
+
+**Numbers, from the generators.**
+
+| Figure | Value | Source |
+|---|---|---|
+| Dataset records | 21,726 | `check_ip_class_dataset.py` |
+| `tor_exit` records | 1,228 | same |
+| `hosting_provider` records | 20,498 | same |
+| Sources | 8 | same |
+| Classes shipped | 2 of 5 | same (see D3) |
+| Go/Python parity sample | 400 addresses, 0 disagreements | same |
+| Claim matrix | 334/329/5 -> **335/330/5** | `check_claim_gate_matrix.py` |
+
+**Scorecard and reduction suite.** Not re-run: this item adds a field that no
+shipped rule matches on yet (Lane C's 2.1 is what will), changes no
+correlation key, no confidence input and no priority input, and the fusion
+suite's 1,065 tests pass unchanged. Recorded as a deliberate judgement
+rather than an omission; Lane C's first rule reading `ip_class` is the PR
+that has to carry the delta.
+
+**Deviations:** D3 (three classes have no redistributable source), D4
+(tenant-supplied lists designed, not built).
+

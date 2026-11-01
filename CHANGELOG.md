@@ -105,6 +105,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scoped to terminal states only, because an ITSM moving a ticket from
   Resolved back to In Progress is a real transition this product should
   mirror.
+- **Anonymizer and hosting classes stamped on public addresses at ingest**
+  (depth plan wave 2, item 1.6). An event's source address now carries
+  `tor_exit` or `hosting_provider` where a pinned local dataset has a record
+  for it, along with the dataset version that answered.
+
+  What was absent: nothing in the tree classified an address at all. The
+  reproduction was a Go test driving the real `Normalize` entry point, which
+  failed to compile because `activity.Location` had no such field.
+
+  How it works: the dataset is embedded in the ingest binary, so CORE and an
+  air-gapped install classify with no enrichment service and no network call
+  of any kind. It is built by `scripts/fetch_ip_class_dataset.py` from the
+  Tor Project's own bulk exit list (CC BY 3.0 US) and from seven cloud
+  providers' own published range endpoints, with per-source provenance,
+  terms link and upstream digest recorded in the manifest. The snapshot is
+  21,726 records: 1,228 `tor_exit` and 20,498 `hosting_provider`.
+
+  **Three of the five classes ship with no records.** `vpn`, `public_proxy`
+  and `residential_proxy` have no redistributable source - the widely cited
+  community list carries no licence file at all, verified as a 404 on its
+  default branch - so they are tenant-supplied only and tenant-supplied
+  lists are not yet implemented. An unclassified address therefore means the
+  dataset had no entry and never that the address is ordinary: the column is
+  NULL, the rail renders nothing, and no surface says "not an anonymizer".
+  Reasoning and alternatives in ADR 0018.
+
+  Carried end to end: three ClickHouse columns (fresh-volume DDL and lake
+  migration `005_ip_class` moved together, because a column added to one
+  alone lands on new deployments and silently not on existing ones), two
+  `alerts` columns (migration 130), the alert API response, and a rail
+  section that renders only when there is a class to show.
+
+  The gate that keeps it fixed: `scripts/check_ip_class_dataset.py` runs the
+  Go classifier and the Python one over 400 sampled addresses and requires
+  identical answers. They answer in different places - Go stamps live events
+  at ingest, Python classifies committed fixtures during detection replay -
+  and if they disagreed, a rule matching `ip_class` would pass its fixtures
+  and never fire on real traffic. A missing Go toolchain fails the gate
+  rather than reporting "not checked", because a gate that skips silently is
+  indistinguishable from one that passed.
 
 ## [21.0.0] - 2026-10-31
 

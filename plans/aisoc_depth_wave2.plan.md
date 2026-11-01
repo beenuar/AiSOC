@@ -31,7 +31,7 @@ todos:
     status: pending
   - id: p1-6-anonymizer-classes
     content: "Phase 1.6: VPN, Tor, proxy and hosting-provider classes stamped at ingest from a pinned local dataset with its version recorded"
-    status: pending
+    status: in_progress
   - id: p2-1-content-depth
     content: "Phase 2.1: depth 3.6 as specified (at least 800 executable cloud, identity, SaaS and code conditions) with the scenario families listed in this plan"
     status: pending
