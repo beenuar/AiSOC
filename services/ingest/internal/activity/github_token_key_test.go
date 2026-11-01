@@ -7,20 +7,25 @@ import (
 	"testing"
 )
 
-// The GitHub token join key crosses a language boundary, and the two sides
-// normalise differently by default.
+// The GitHub token join key is derived in exactly one place, and this is it.
 //
 // Go writes `hashed_token` into the session projection with
 // `strings.TrimSpace` and no case folding, because the value is a digest and
 // case is significant. Python's `services/fusion/app/services/baselines.py`
 // resolves nearly every other field through a helper that lowercases, which
-// is right for a username and wrong for this. Routing the token through that
-// helper would produce a baseline key that never joins to the session this
-// package wrote — on every GitHub event, silently, with no error anywhere.
+// is right for a username and wrong for this.
 //
-// This file and `services/fusion/tests/test_github_token_key_parity.py` read
-// the same committed fixture and assert the same output, so neither side can
-// change the normalisation alone.
+// There is deliberately no second derivation to agree with. An earlier
+// version of this comment pointed at a cross-language parity test, and that
+// test was deleted with the design it pinned: two components deriving one
+// session key agree until the next vendor-schema change and then disagree in
+// silence. `resolve_sub_principal` now *reads* `activity.session` through
+// `_session_credential_key`, and `scripts/check_session_projection.py` is the
+// gate that refuses the shortcut back.
+//
+// So the fixture below guards the single derivation rather than a parity:
+// change the normalisation here and every consumer of the projection moves
+// with it, which is the property that replaced the parity test.
 const tokenKeyFixture = "testdata/github_token_key.json"
 
 type tokenKeyCase struct {

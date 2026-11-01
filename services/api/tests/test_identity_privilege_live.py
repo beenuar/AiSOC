@@ -41,6 +41,7 @@ from app.services.identity_privilege_store import (
     save_privilege,
     usage_for_principal,
 )
+from live_rls import bind_tenant
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -130,14 +131,17 @@ async def test_point_in_time_read_returns_the_tier_that_was_true_then(db) -> Non
     invisible on inspection: a live-row read returns a number that looks
     exactly as plausible as the right one.
     """
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("domain_admin"), principal_label="alice")
     await db.commit()
     # Supersede: the same principal is demoted five days later.
+    await bind_tenant(db, TENANT)
     await db.execute(
         text("UPDATE identity_privilege_facts SET valid_from = :t0 WHERE tenant_id = :t AND valid_until IS NULL"),
         {"t0": T0, "t": TENANT},
     )
     await db.commit()
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("standard"), principal_label="alice")
     await db.commit()
 
@@ -163,8 +167,10 @@ async def test_point_in_time_read_returns_the_tier_that_was_true_then(db) -> Non
 @pytest.mark.asyncio
 async def test_an_event_before_the_first_collection_has_no_fact(db) -> None:
     """No covering version must return None, never the nearest one."""
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("admin"), principal_label="alice")
     await db.commit()
+    await bind_tenant(db, TENANT)
     await db.execute(
         text("UPDATE identity_privilege_facts SET valid_from = :t WHERE tenant_id = :tid"),
         {"t": T1, "tid": TENANT},
@@ -178,6 +184,7 @@ async def test_an_event_before_the_first_collection_has_no_fact(db) -> None:
 @pytest.mark.asyncio
 async def test_tags_round_trip_as_tri_state(db) -> None:
     """NULL must come back as None. False and None are different facts."""
+    await bind_tenant(db, TENANT)
     await save_privilege(
         db,
         tenant_id=TENANT,
@@ -199,6 +206,7 @@ async def test_tags_round_trip_as_tri_state(db) -> None:
 @pytest.mark.asyncio
 async def test_label_and_id_both_resolve(db) -> None:
     """An alert carries whichever handle its connector emitted."""
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("elevated"), principal_label="alice@example.com")
     await db.commit()
     now = _read_time()
@@ -212,6 +220,7 @@ async def test_label_and_id_both_resolve(db) -> None:
 
 @pytest.mark.asyncio
 async def test_another_tenants_facts_are_invisible(db) -> None:
+    await bind_tenant(db, OTHER_TENANT)
     await save_privilege(db, tenant_id=OTHER_TENANT, privilege=_privilege("domain_admin"), principal_label="alice")
     await db.commit()
 
@@ -223,8 +232,10 @@ async def test_another_tenants_facts_are_invisible(db) -> None:
 @pytest.mark.asyncio
 async def test_an_unchanged_rederivation_does_not_open_a_version(db) -> None:
     """Otherwise "when did this privilege last change" answers "hourly"."""
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("admin"), principal_label="alice")
     await db.commit()
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("admin"), principal_label="alice")
     await db.commit()
 
@@ -238,6 +249,7 @@ async def test_an_unchanged_rederivation_does_not_open_a_version(db) -> None:
 
     # And a real change does open one, which is the control for the above:
     # a store that never wrote a second row would also pass the assertion.
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("standard"), principal_label="alice")
     await db.commit()
     count_after = (
@@ -252,9 +264,11 @@ async def test_an_unchanged_rederivation_does_not_open_a_version(db) -> None:
 @pytest.mark.asyncio
 async def test_two_live_rows_are_refused_by_the_database(db) -> None:
     """The invariant is enforced in Postgres, not by every writer remembering."""
+    await bind_tenant(db, TENANT)
     await save_privilege(db, tenant_id=TENANT, privilege=_privilege("admin"), principal_label="alice")
     await db.commit()
 
+    await bind_tenant(db, TENANT)
     with pytest.raises(Exception) as excinfo:
         await db.execute(
             text(
@@ -283,6 +297,7 @@ async def test_usage_distinguishes_unmeasured_from_unused(db) -> None:
     assert empty.unused({"s3:GetObject", "s3:PutObject"}) is None
 
     now = datetime.now(tz=UTC)
+    await bind_tenant(db, TENANT)
     await record_usage(
         db,
         tenant_id=TENANT,
@@ -304,6 +319,7 @@ async def test_usage_upsert_keeps_the_widest_observed_span(db) -> None:
     """A later window must not shorten what was already observed."""
     now = datetime.now(tz=UTC)
     first, last = now - timedelta(days=20), now - timedelta(days=10)
+    await bind_tenant(db, TENANT)
     await record_usage(
         db,
         tenant_id=TENANT,
@@ -313,6 +329,7 @@ async def test_usage_upsert_keeps_the_widest_observed_span(db) -> None:
         window_start=now - timedelta(days=30),
         window_end=now,
     )
+    await bind_tenant(db, TENANT)
     await record_usage(
         db,
         tenant_id=TENANT,
@@ -344,6 +361,7 @@ async def test_the_tier_read_from_the_store_actually_moves_the_queue_score(db) -
     Without this the other tests prove a well-built table nobody consumes,
     which is the exact shape this phase exists to close.
     """
+    await bind_tenant(db, TENANT)
     await save_privilege(
         db,
         tenant_id=TENANT,

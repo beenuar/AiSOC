@@ -22,6 +22,7 @@ import pytest_asyncio
 from app.services.access_review_store import acknowledge, list_findings, run_review, summary
 from app.services.identity_privilege import IdentityPrivilege, PrivilegeTags
 from app.services.identity_privilege_store import record_usage, save_privilege
+from live_rls import bind_tenant
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -74,6 +75,7 @@ async def db():
 
 
 async def _seed_admin(db, tenant_id=TENANT, *, principal: str = ADMIN_ARN) -> None:
+    await bind_tenant(db, tenant_id)
     await save_privilege(
         db,
         tenant_id=tenant_id,
@@ -93,6 +95,7 @@ async def _seed_admin(db, tenant_id=TENANT, *, principal: str = ADMIN_ARN) -> No
 async def _seed_usage(db, *, principal: str = ADMIN_ARN, days_ago: int, action: str = "s3:GetObject") -> None:
     now = datetime.now(tz=UTC)
     when = now - timedelta(days=days_ago)
+    await bind_tenant(db, TENANT)
     await record_usage(
         db,
         tenant_id=TENANT,
@@ -107,6 +110,7 @@ async def _seed_usage(db, *, principal: str = ADMIN_ARN, days_ago: int, action: 
 
 @pytest.mark.asyncio
 async def test_a_review_with_no_posture_is_nothing_reviewed_not_a_clean_bill(db) -> None:
+    await bind_tenant(db, TENANT)
     result = await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
 
@@ -123,6 +127,7 @@ async def test_a_review_with_no_posture_is_nothing_reviewed_not_a_clean_bill(db)
 async def test_unmeasured_usage_suppresses_the_usage_findings(db) -> None:
     """No lake means no unused-access, dormancy or right-sizing findings."""
     await _seed_admin(db)
+    await bind_tenant(db, TENANT)
     result = await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
 
@@ -135,6 +140,7 @@ async def test_unmeasured_usage_suppresses_the_usage_findings(db) -> None:
     # Negative control: give the same principal measured usage with the
     # grants unexercised, and the suppressed findings appear.
     await _seed_usage(db, days_ago=200)
+    await bind_tenant(db, TENANT)
     await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
     kinds_after = {f["kind"] for f in await list_findings(db, tenant_id=TENANT)}
@@ -147,6 +153,7 @@ async def test_a_nightly_rerun_updates_rather_than_duplicates(db) -> None:
     await _seed_admin(db)
     await _seed_usage(db, days_ago=200)
     for _ in range(3):
+        await bind_tenant(db, TENANT)
         await run_review(db, tenant_id=TENANT, provider="aws")
         await db.commit()
 
@@ -170,11 +177,13 @@ async def test_a_finding_that_stops_reproducing_is_retired(db) -> None:
     """A page listing a permission somebody removed is a page nobody opens."""
     await _seed_admin(db)
     await _seed_usage(db, days_ago=200)
+    await bind_tenant(db, TENANT)
     await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
     assert {f["kind"] for f in await list_findings(db, tenant_id=TENANT)} >= {"dormant_admin"}
 
     # The admin is demoted and starts being used: both findings should go.
+    await bind_tenant(db, TENANT)
     await save_privilege(
         db,
         tenant_id=TENANT,
@@ -189,6 +198,7 @@ async def test_a_finding_that_stops_reproducing_is_retired(db) -> None:
         principal_label="root-ish",
     )
     await _seed_usage(db, days_ago=1)
+    await bind_tenant(db, TENANT)
     await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
 
@@ -198,6 +208,7 @@ async def test_a_finding_that_stops_reproducing_is_retired(db) -> None:
 @pytest.mark.asyncio
 async def test_another_tenants_findings_are_invisible_and_unacknowledgeable(db) -> None:
     await _seed_admin(db, OTHER_TENANT)
+    await bind_tenant(db, OTHER_TENANT)
     await run_review(db, tenant_id=OTHER_TENANT, provider="aws")
     await db.commit()
 
@@ -207,16 +218,20 @@ async def test_another_tenants_findings_are_invisible_and_unacknowledgeable(db) 
 
     # A 404 rather than a 403: the route must not be an existence oracle
     # over another tenant's finding ids.
+    await bind_tenant(db, TENANT)
     assert await acknowledge(db, tenant_id=TENANT, finding_id=uuid.UUID(theirs[0]["id"]), user_id=USER) is None
 
 
 @pytest.mark.asyncio
 async def test_acknowledgement_records_the_person_and_hides_the_row(db) -> None:
     await _seed_admin(db)
+    await bind_tenant(db, TENANT)
     await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
     open_rows = await list_findings(db, tenant_id=TENANT)
     assert open_rows
+
+    await bind_tenant(db, TENANT)
 
     updated = await acknowledge(
         db,
@@ -241,11 +256,15 @@ async def test_acknowledgement_records_the_person_and_hides_the_row(db) -> None:
 async def test_an_acknowledgement_survives_the_next_run(db) -> None:
     """Otherwise a nightly review un-acknowledges everything every night."""
     await _seed_admin(db)
+    await bind_tenant(db, TENANT)
     await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
     first = await list_findings(db, tenant_id=TENANT)
+    await bind_tenant(db, TENANT)
     await acknowledge(db, tenant_id=TENANT, finding_id=uuid.UUID(first[0]["id"]), user_id=USER)
     await db.commit()
+
+    await bind_tenant(db, TENANT)
 
     await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
@@ -261,6 +280,7 @@ async def test_summary_distinguishes_never_run_from_reviewed(db) -> None:
     assert "not a clean bill of health" in never["note"]
 
     await _seed_admin(db)
+    await bind_tenant(db, TENANT)
     await run_review(db, tenant_id=TENANT, provider="aws")
     await db.commit()
 

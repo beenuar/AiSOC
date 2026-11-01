@@ -22,6 +22,7 @@ import pytest
 import pytest_asyncio
 from app.services.identity_resolution import IdentityLink, ResolutionResult, resolve_links
 from app.services.identity_resolution_store import cluster_for, decide_link, links_for, save_links
+from live_rls import bind_tenant
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -80,7 +81,9 @@ def _weak(left: str, right: str) -> IdentityLink:
 @pytest.mark.asyncio
 async def test_a_pair_is_stored_once_however_it_was_discovered(db) -> None:
     """The ordered-pair CHECK, which a writer could otherwise bypass."""
+    await bind_tenant(db, TENANT)
     await save_links(db, tenant_id=TENANT, result=_result(_strong("aws:z", "okta:a")), mirror_to_graph=False)
+    await bind_tenant(db, TENANT)
     await save_links(db, tenant_id=TENANT, result=_result(_strong("okta:a", "aws:z")), mirror_to_graph=False)
     await db.commit()
 
@@ -88,7 +91,10 @@ async def test_a_pair_is_stored_once_however_it_was_discovered(db) -> None:
     assert count == 1
 
     # Negative control: the constraint is real, not merely respected by the
-    # writer. An out-of-order insert must be refused by the database.
+    # writer. An out-of-order insert must be refused by the database — and
+    # refused by the CHECK, so the insert has to get past RLS first or the
+    # assertion below passes on the wrong error.
+    await bind_tenant(db, TENANT)
     with pytest.raises(Exception) as excinfo:
         await db.execute(
             text("INSERT INTO identity_links (tenant_id, left_key, right_key, confidence, rule) VALUES (:t, 'zzz', 'aaa', 0.99, 'manual')"),
@@ -102,6 +108,7 @@ async def test_a_pair_is_stored_once_however_it_was_discovered(db) -> None:
 @pytest.mark.asyncio
 async def test_weak_links_are_stored_and_returned_but_not_walked(db) -> None:
     """Three weak hops must not merge what no single rule would join."""
+    await bind_tenant(db, TENANT)
     await save_links(
         db,
         tenant_id=TENANT,
@@ -117,6 +124,7 @@ async def test_weak_links_are_stored_and_returned_but_not_walked(db) -> None:
 
     # Positive control: the walk works at all. Without this, a cluster_for
     # that always returned [] would pass the assertion above.
+    await bind_tenant(db, TENANT)
     await save_links(db, tenant_id=TENANT, result=_result(_strong("a:1", "z:9")), mirror_to_graph=False)
     await db.commit()
     assert await cluster_for(db, tenant_id=TENANT, key="a:1") == ["z:9"]
@@ -125,6 +133,7 @@ async def test_weak_links_are_stored_and_returned_but_not_walked(db) -> None:
 @pytest.mark.asyncio
 async def test_a_strong_chain_does_traverse(db) -> None:
     """Transitivity over strong links is intended and must actually work."""
+    await bind_tenant(db, TENANT)
     await save_links(
         db,
         tenant_id=TENANT,
@@ -139,6 +148,7 @@ async def test_a_strong_chain_does_traverse(db) -> None:
 async def test_the_walk_is_bounded(db) -> None:
     """A bounded wrong answer is recoverable; an unbounded one is not."""
     chain = [_strong(f"n:{i}", f"n:{i + 1}") for i in range(6)]
+    await bind_tenant(db, TENANT)
     await save_links(db, tenant_id=TENANT, result=_result(*chain), mirror_to_graph=False)
     await db.commit()
 
@@ -150,10 +160,13 @@ async def test_the_walk_is_bounded(db) -> None:
 
 @pytest.mark.asyncio
 async def test_a_human_decision_overrides_the_rule_both_ways(db) -> None:
+    await bind_tenant(db, TENANT)
     await save_links(db, tenant_id=TENANT, result=_result(_weak("a:1", "b:2")), mirror_to_graph=False)
     await db.commit()
     weak = (await links_for(db, tenant_id=TENANT, key="a:1"))[0]
     assert weak["merged"] is False
+
+    await bind_tenant(db, TENANT)
 
     confirmed = await decide_link(db, tenant_id=TENANT, link_id=uuid.UUID(weak["id"]), decision="confirmed", user_id=USER)
     await db.commit()
@@ -165,9 +178,11 @@ async def test_a_human_decision_overrides_the_rule_both_ways(db) -> None:
     assert await cluster_for(db, tenant_id=TENANT, key="a:1") == ["b:2"]
 
     # And the other direction: rejecting a strong link removes it from the walk.
+    await bind_tenant(db, TENANT)
     await save_links(db, tenant_id=TENANT, result=_result(_strong("a:1", "c:3")), mirror_to_graph=False)
     await db.commit()
     strong = next(link for link in await links_for(db, tenant_id=TENANT, key="a:1") if link["right"] == "c:3")
+    await bind_tenant(db, TENANT)
     await decide_link(db, tenant_id=TENANT, link_id=uuid.UUID(strong["id"]), decision="rejected", user_id=USER)
     await db.commit()
     assert "c:3" not in await cluster_for(db, tenant_id=TENANT, key="a:1")
@@ -175,6 +190,7 @@ async def test_a_human_decision_overrides_the_rule_both_ways(db) -> None:
 
 @pytest.mark.asyncio
 async def test_another_tenants_links_are_invisible(db) -> None:
+    await bind_tenant(db, OTHER_TENANT)
     await save_links(db, tenant_id=OTHER_TENANT, result=_result(_strong("a:1", "b:2")), mirror_to_graph=False)
     await db.commit()
 
@@ -203,6 +219,7 @@ async def test_the_resolver_and_the_store_agree_end_to_end(db) -> None:
             {"source": "workspace", "id": "alice@contoso.com"},
         ]
     )
+    await bind_tenant(db, TENANT)
     await save_links(db, tenant_id=TENANT, result=result, mirror_to_graph=False)
     await db.commit()
 
