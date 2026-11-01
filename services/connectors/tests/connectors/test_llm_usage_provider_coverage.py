@@ -26,6 +26,7 @@ import httpx
 import pytest
 import respx
 from app.connectors.llm_usage import LlmUsageConnector
+
 pytestmark = pytest.mark.asyncio
 
 _LADDER = {"info", "low", "medium", "high", "critical"}
@@ -106,11 +107,10 @@ _GH_AUDIT = [
     },
 ]
 
+
 @respx.mock
 async def test_github_copilot_reads_org_audit_log():
-    route = respx.get(url__regex=r"https://api\.github\.com/orgs/acme/audit-log.*").mock(
-        return_value=httpx.Response(200, json=_GH_AUDIT)
-    )
+    route = respx.get(url__regex=r"https://api\.github\.com/orgs/acme/audit-log.*").mock(return_value=httpx.Response(200, json=_GH_AUDIT))
 
     c = LlmUsageConnector(provider="github_copilot", api_key="ghp_x", organization="acme")
     assert (await c.test_connection())["success"] is True
@@ -120,7 +120,11 @@ async def test_github_copilot_reads_org_audit_log():
     assert route.called
     # The audit-log API filters server-side; asking for everything and
     # discarding client-side would pull an org's entire audit stream.
-    assert "action:copilot" in str(route.calls[-1].request.url)
+    # Read the decoded parameter rather than the raw URL: httpx
+    # percent-encodes the colon, so a substring check on the URL asserts the
+    # encoding rather than the filter.
+    phrase = dict(httpx.URL(str(route.calls[-1].request.url)).params)["phrase"]
+    assert phrase.startswith("action:copilot")
     assert events[0]["event_type"] == "github_copilot.copilot.swe_agent_mcp_config_updated"
 
 
@@ -157,9 +161,7 @@ async def test_m365_copilot_reads_management_activity_api_and_filters_non_ai_rec
     respx.get(url__regex=r"https://manage\.office\.com/api/v1\.0/[^/]+/activity/feed/subscriptions/content.*").mock(
         return_value=httpx.Response(200, json=_M365_BLOBS)
     )
-    respx.get("https://manage.office.com/api/v1.0/t/activity/feed/audit/blob-1").mock(
-        return_value=httpx.Response(200, json=_M365_CONTENT)
-    )
+    respx.get("https://manage.office.com/api/v1.0/t/activity/feed/audit/blob-1").mock(return_value=httpx.Response(200, json=_M365_CONTENT))
 
     c = LlmUsageConnector(provider="microsoft_copilot", api_key="bearer-token", tenant="t")
     assert (await c.test_connection())["success"] is True
@@ -254,7 +256,5 @@ async def test_every_declared_provider_is_reachable_from_the_schema():
     A provider offered in the console wizard that the constructor rejects is
     a connector a tenant can save and never poll.
     """
-    options = {
-        o["value"] for f in LlmUsageConnector.schema().fields if f.name == "provider" for o in (f.options or [])
-    }
+    options = {o["value"] for f in LlmUsageConnector.schema().fields if f.name == "provider" for o in (f.options or [])}
     assert options == set(LlmUsageConnector.PROVIDERS)
