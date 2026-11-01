@@ -345,6 +345,29 @@ async def attach_ledger_citations(
 
 _SECTIONS = (("what", "What"), ("how", "How"), ("where", "Where"), ("when", "When"))
 
+#: ADR-0015 requires this, in these words, on every rendering of a hunt report.
+#:
+#: The ADR's reasoning: AiSOC federates to the SIEM rather than replacing it,
+#: so a scheduled search that emails a PDF is "exactly the surface a reader
+#: mistakes for a compliance report". A hunt report is a record of a query
+#: somebody ran over a window somebody chose. It is not evidence of coverage,
+#: it is not a retention artefact, and it does not say that what it did not
+#: find was not there.
+#:
+#: A constant rather than a literal in the template so the renderer, the
+#: email subject and the gate that checks for it cannot drift apart — the
+#: defect the digest path already shipped once with two renderers.
+HUNTING_OUTPUT_LABEL = "HUNTING OUTPUT"
+
+#: Why the label is there, in the document rather than only in the ADR. A
+#: banner reading only "HUNTING OUTPUT" tells a reader what the page is
+#: called; this tells them what it does not claim.
+_CLASSIFICATION_NOTE = (
+    "This is the result of a hunt query over a chosen window. It is not a compliance artefact "
+    "and not a record of retention or coverage: finding nothing here does not mean nothing "
+    "happened, only that this query over this window matched nothing."
+)
+
 
 def render_html(row: dict[str, Any], *, product_name: str = "AiSOC") -> str:
     """A self-contained, print-ready page. The same HTML the PDF is made from.
@@ -385,7 +408,7 @@ def render_html(row: dict[str, Any], *, product_name: str = "AiSOC") -> str:
 
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
-<title>{escape(str(row.get("title", "Hunt report")))}</title>
+<title>{HUNTING_OUTPUT_LABEL} — {escape(str(row.get("title", "Hunt report")))}</title>
 <style>
   body {{ font-family: Arial, Helvetica, sans-serif; margin: 2.5rem; color: #111; line-height: 1.5; }}
   h1 {{ font-size: 1.5rem; margin-bottom: 0.25rem; }}
@@ -396,8 +419,15 @@ def render_html(row: dict[str, Any], *, product_name: str = "AiSOC") -> str:
   li {{ margin-bottom: .3rem; font-size: .9rem; }}
   .kind {{ display: inline-block; min-width: 9rem; color: #555; }}
   code {{ background: #f3f3f3; padding: 0 .25rem; }}
+  .classification {{ border: 1px solid #b45309; background: #fffbeb; color: #78350f;
+                     padding: .6rem .8rem; border-radius: 4px; margin-bottom: 1.25rem;
+                     font-size: .85rem; }}
+  .classification strong {{ letter-spacing: .08em; }}
 </style></head>
 <body>
+  <div class="classification">
+    <strong>{HUNTING_OUTPUT_LABEL}</strong> — {escape(_CLASSIFICATION_NOTE)}
+  </div>
   <h1>{escape(str(row.get("title", "Hunt report")))}</h1>
   <p class="meta">{escape(product_name)} · {escape(str(row.get("source_kind", "")))} ·
      {int(row.get("match_count") or 0)} match(es) ·

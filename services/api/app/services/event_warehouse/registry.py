@@ -35,6 +35,7 @@ from app.models.saved_hunt import SavedHunt
 
 from .base import EventWarehouseProvider, UnsupportedTranslation
 from .elasticsearch import ElasticsearchProvider
+from .lake import LakeProvider
 from .splunk import SplunkProvider
 
 logger = logging.getLogger(__name__)
@@ -49,9 +50,17 @@ logger = logging.getLogger(__name__)
 # on ``Settings``. It could not be selected and could not run, while
 # ``available_providers()`` reported it as a supported warehouse. Adding a
 # real one is a `register_provider` call plus a UDM translator.
+#
+# The lake is last on purpose (wave 2, Phase 5.2). A tenant who has
+# connected a SIEM has years of history AiSOC never ingested; answering from
+# the lake instead would be a quieter and narrower answer to the same
+# question. It is reached when nothing the tenant connected can answer —
+# which until 5.2 was the silent `return 0` that read as "your hunt found
+# nothing" on every deployment whose data lives only in AiSOC's own store.
 SUPPORTED_PROVIDERS: list[EventWarehouseProvider] = [
     ElasticsearchProvider(),
     SplunkProvider(),
+    LakeProvider(),
 ]
 
 
@@ -134,6 +143,14 @@ def resolve_provider(
 
     for provider in translatable:
         if connected_types.intersection(provider.connector_types):
+            return provider
+
+    # A provider declaring no connector types needs no connected warehouse:
+    # its store is deployment configuration, the same for every tenant. The
+    # lake is the only one today. Checked after the connector-backed chain so
+    # a tenant's own SIEM always wins — see the SUPPORTED_PROVIDERS comment.
+    for provider in translatable:
+        if not provider.connector_types:
             return provider
 
     wanted = sorted({t for p in translatable for t in p.connector_types})
