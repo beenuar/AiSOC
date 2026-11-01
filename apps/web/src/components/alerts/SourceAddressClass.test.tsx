@@ -15,7 +15,7 @@
  * without a network call.
  */
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 const swrState = vi.hoisted(() => ({
   data: undefined as unknown,
@@ -51,6 +51,19 @@ vi.mock('next/link', () => ({
 import { InvestigationRail } from './InvestigationRail';
 import type { Alert } from '@/lib/api';
 
+/**
+ * Render the rail and switch to the Details face.
+ *
+ * The rail opens on the story view; every structured section, including
+ * this one, lives behind the Details tab. Asserting without the click
+ * would pass only if the section were on the story face, which would be
+ * the wrong place for it.
+ */
+function renderDetails() {
+  render(<InvestigationRail alertId="ALERT-IPCLASS-1" onClose={vi.fn()} />);
+  fireEvent.click(screen.getByRole('tab', { name: 'Details' }));
+}
+
 function envelope(extra: Partial<Alert>): Alert {
   return {
     id: 'ALERT-IPCLASS-1',
@@ -76,14 +89,14 @@ describe('source address class on the investigation rail', () => {
       srcIpClass: 'tor_exit',
       srcIpClassDatasetVersion: '2026.11.01',
     });
-    render(<InvestigationRail alertId="ALERT-IPCLASS-1" onClose={vi.fn()} />);
+    renderDetails();
     expect(screen.getByText('Tor exit relay')).toBeInTheDocument();
     expect(screen.getByText(/dataset 2026\.11\.01/)).toBeInTheDocument();
   });
 
   it('renders nothing at all when the dataset had no entry', () => {
     swrState.data = envelope({});
-    render(<InvestigationRail alertId="ALERT-IPCLASS-1" onClose={vi.fn()} />);
+    renderDetails();
     expect(screen.queryByText('Source address')).not.toBeInTheDocument();
     // The specific regression: an absent class must never become a
     // reassurance. Any wording telling the analyst the address is clean is
@@ -96,7 +109,7 @@ describe('source address class on the investigation rail', () => {
     // class. Dropping the chip over a cosmetic gap would lose a true
     // finding.
     swrState.data = envelope({ srcIpClass: 'hosting_provider' });
-    render(<InvestigationRail alertId="ALERT-IPCLASS-1" onClose={vi.fn()} />);
+    renderDetails();
     expect(screen.getByText('Hosting provider')).toBeInTheDocument();
     expect(screen.queryByText(/^dataset /)).not.toBeInTheDocument();
   });
@@ -105,7 +118,7 @@ describe('source address class on the investigation rail', () => {
     // An unrecognised value on a security surface reads as a finding nobody
     // can explain; `normalizeAlert` drops it, and the rail must too.
     swrState.data = envelope({ srcIpClass: 'something_new' as Alert['srcIpClass'] });
-    render(<InvestigationRail alertId="ALERT-IPCLASS-1" onClose={vi.fn()} />);
+    renderDetails();
     expect(screen.queryByText('Source address')).not.toBeInTheDocument();
   });
 });
