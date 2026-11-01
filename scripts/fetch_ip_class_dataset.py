@@ -173,9 +173,32 @@ SOURCES: tuple[Source, ...] = (
 )
 
 
+def _declared_urls() -> frozenset[str]:
+    """Exactly the URLs the source table names, and nothing else.
+
+    The strongest guard available here, and stronger than a scheme
+    allow-list: this script fetches a fixed, reviewed set of endpoints, so
+    an address that is not one of them is not a configuration mistake, it
+    is a bug. `urllib` honours `file://`, which is what the scanner rule
+    exists to ask about; a URL that has to be in this set cannot be one.
+    """
+    return frozenset(source.url for source in SOURCES)
+
+
 def _fetch(url: str) -> bytes:
+    if url not in _declared_urls():
+        raise RuntimeError(
+            f"refusing to fetch {url!r}: it is not one of the source URLs declared in SOURCES. "
+            "This script reaches a fixed, reviewed set of endpoints and nothing else."
+        )
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})  # noqa: S310
-    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
+    # The URL is checked against the declared source set immediately above,
+    # which is the condition the rule exists to ask for and is tighter than
+    # the scheme check it would settle for. The rule matches on the call
+    # shape and cannot see a guard, so the suppression is scoped to this one
+    # line: any *other* urlopen added to this file still fails the scan.
+    # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
+    with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310 - URL checked above
         if response.status != 200:
             raise RuntimeError(f"{url} answered HTTP {response.status}")
         return response.read()
