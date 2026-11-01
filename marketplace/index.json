@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-28T19:50:45Z",
+  "generated": "2026-11-01T18:36:37Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,32 +20,32 @@
     }
   ],
   "stats": {
-    "total": 7183,
+    "total": 7222,
     "playbooks": 88,
     "playbook_packs": 63,
-    "detections": 7015,
+    "detections": 7054,
     "plugins": 80,
-    "verified": 1062,
+    "verified": 1101,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1062
+      "stable": 1101
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 901
+      "stable": 940
     },
-    "executable": 2698,
-    "quarantined": 4485,
-    "executable_detections": 2530,
-    "reference_only_detections": 4485,
+    "executable": 2781,
+    "quarantined": 4441,
+    "executable_detections": 2613,
+    "reference_only_detections": 4441,
     "not_a_detection": 168
   },
   "mitre_coverage": {
-    "unique_techniques": 391,
+    "unique_techniques": 392,
     "techniques": {
       "T1001.003": 1,
       "T1003": 21,
@@ -129,7 +129,7 @@
       "T1069": 3,
       "T1069.001": 12,
       "T1069.002": 11,
-      "T1070": 17,
+      "T1070": 20,
       "T1070.001": 3,
       "T1070.002": 1,
       "T1070.003": 6,
@@ -141,11 +141,11 @@
       "T1071.004": 10,
       "T1072": 4,
       "T1074.001": 4,
-      "T1078": 50,
+      "T1078": 54,
       "T1078.001": 5,
       "T1078.002": 7,
       "T1078.003": 3,
-      "T1078.004": 49,
+      "T1078.004": 64,
       "T1082": 13,
       "T1083": 9,
       "T1087": 10,
@@ -155,20 +155,20 @@
       "T1090": 16,
       "T1090.001": 4,
       "T1090.002": 1,
-      "T1090.003": 9,
+      "T1090.003": 13,
       "T1091": 1,
       "T1095": 4,
-      "T1098": 48,
-      "T1098.001": 19,
-      "T1098.003": 8,
+      "T1098": 52,
+      "T1098.001": 23,
+      "T1098.003": 15,
       "T1098.004": 6,
-      "T1098.005": 1,
+      "T1098.005": 3,
       "T1098.007": 1,
       "T1102": 5,
       "T1102.002": 1,
       "T1105": 49,
       "T1106": 6,
-      "T1110": 18,
+      "T1110": 21,
       "T1110.001": 5,
       "T1110.002": 1,
       "T1110.003": 2,
@@ -177,7 +177,7 @@
       "T1113": 7,
       "T1114": 1,
       "T1114.001": 1,
-      "T1114.002": 1,
+      "T1114.002": 2,
       "T1114.003": 3,
       "T1115": 3,
       "T1119": 3,
@@ -195,10 +195,10 @@
       "T1134.003": 3,
       "T1134.004": 1,
       "T1135": 7,
-      "T1136": 2,
+      "T1136": 3,
       "T1136.001": 11,
       "T1136.002": 3,
-      "T1136.003": 2,
+      "T1136.003": 4,
       "T1137": 4,
       "T1137.002": 1,
       "T1137.003": 1,
@@ -213,7 +213,7 @@
       "T1195.001": 2,
       "T1195.002": 6,
       "T1197": 13,
-      "T1199": 11,
+      "T1199": 17,
       "T1200": 3,
       "T1201": 3,
       "T1202": 26,
@@ -253,10 +253,11 @@
       "T1484": 1,
       "T1484.001": 7,
       "T1484.002": 3,
-      "T1485": 29,
+      "T1485": 30,
       "T1486": 11,
       "T1489": 10,
       "T1490": 20,
+      "T1491": 1,
       "T1491.001": 2,
       "T1496": 4,
       "T1497.001": 1,
@@ -273,12 +274,12 @@
       "T1518.001": 2,
       "T1525": 8,
       "T1526": 2,
-      "T1528": 8,
+      "T1528": 16,
       "T1529": 3,
-      "T1530": 31,
-      "T1531": 7,
+      "T1530": 37,
+      "T1531": 9,
       "T1535": 1,
-      "T1537": 7,
+      "T1537": 15,
       "T1539": 6,
       "T1542.001": 3,
       "T1542.003": 1,
@@ -314,7 +315,7 @@
       "T1548.003": 2,
       "T1548.004": 1,
       "T1550": 6,
-      "T1550.001": 3,
+      "T1550.001": 5,
       "T1550.002": 6,
       "T1550.003": 3,
       "T1550.004": 1,
@@ -331,16 +332,16 @@
       "T1553.004": 9,
       "T1553.005": 5,
       "T1554": 3,
-      "T1555": 8,
+      "T1555": 9,
       "T1555.001": 4,
       "T1555.003": 9,
       "T1555.004": 3,
       "T1555.005": 1,
-      "T1556": 43,
+      "T1556": 50,
       "T1556.001": 1,
       "T1556.003": 1,
       "T1556.004": 1,
-      "T1556.006": 16,
+      "T1556.006": 20,
       "T1556.007": 2,
       "T1556.009": 1,
       "T1557": 2,
@@ -364,7 +365,7 @@
       "T1562.008": 11,
       "T1562.012": 2,
       "T1563.002": 2,
-      "T1564": 7,
+      "T1564": 8,
       "T1564.001": 3,
       "T1564.002": 2,
       "T1564.003": 6,
@@ -373,12 +374,12 @@
       "T1564.008": 2,
       "T1565": 2,
       "T1565.001": 3,
-      "T1566": 5,
+      "T1566": 6,
       "T1566.001": 15,
       "T1566.002": 2,
-      "T1567": 16,
+      "T1567": 19,
       "T1567.001": 1,
-      "T1567.002": 15,
+      "T1567.002": 16,
       "T1568.002": 2,
       "T1569": 1,
       "T1569.002": 29,
@@ -425,7 +426,7 @@
       "T1614.001": 2,
       "T1615": 4,
       "T1620": 4,
-      "T1621": 5,
+      "T1621": 6,
       "T1622": 1,
       "T1647": 1,
       "T1649": 4,
@@ -439,8 +440,8 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2400,
-    "unique_techniques_all_rules": 494,
+    "total_with_mitre": 2483,
+    "unique_techniques_all_rules": 493,
     "techniques_all_rules": {
       "T1001.003": 2,
       "T1003": 51,
@@ -450,7 +451,7 @@
       "T1003.004": 13,
       "T1003.005": 9,
       "T1003.006": 13,
-      "T1003.008": 5,
+      "T1003.008": 4,
       "T1005": 18,
       "T1006": 1,
       "T1007": 11,
@@ -458,11 +459,11 @@
       "T1010": 2,
       "T1011": 1,
       "T1012": 24,
-      "T1014": 8,
+      "T1014": 6,
       "T1016": 20,
       "T1016.001": 1,
       "T1018": 42,
-      "T1020": 12,
+      "T1020": 10,
       "T1020.001": 1,
       "T1021": 26,
       "T1021.001": 34,
@@ -473,7 +474,7 @@
       "T1021.006": 22,
       "T1021.007": 5,
       "T1025": 3,
-      "T1027": 103,
+      "T1027": 102,
       "T1027.001": 3,
       "T1027.002": 1,
       "T1027.003": 5,
@@ -490,12 +491,12 @@
       "T1036.002": 5,
       "T1036.003": 36,
       "T1036.004": 2,
-      "T1036.005": 21,
+      "T1036.005": 20,
       "T1036.006": 1,
       "T1036.007": 3,
       "T1036.008": 3,
       "T1036.009": 2,
-      "T1037": 3,
+      "T1037": 2,
       "T1037.001": 5,
       "T1037.002": 2,
       "T1037.004": 3,
@@ -514,9 +515,9 @@
       "T1053": 22,
       "T1053.001": 1,
       "T1053.002": 12,
-      "T1053.003": 21,
+      "T1053.003": 20,
       "T1053.005": 58,
-      "T1053.006": 6,
+      "T1053.006": 5,
       "T1053.007": 2,
       "T1055": 56,
       "T1055.001": 11,
@@ -531,7 +532,7 @@
       "T1056.001": 4,
       "T1056.002": 4,
       "T1057": 8,
-      "T1059": 122,
+      "T1059": 121,
       "T1059.001": 243,
       "T1059.002": 11,
       "T1059.003": 41,
@@ -547,7 +548,7 @@
       "T1069.001": 29,
       "T1069.002": 35,
       "T1069.003": 4,
-      "T1070": 35,
+      "T1070": 36,
       "T1070.001": 8,
       "T1070.002": 1,
       "T1070.003": 13,
@@ -556,18 +557,18 @@
       "T1070.006": 6,
       "T1070.008": 7,
       "T1071": 14,
-      "T1071.001": 54,
+      "T1071.001": 53,
       "T1071.002": 1,
       "T1071.003": 3,
       "T1071.004": 24,
       "T1072": 9,
       "T1074": 3,
       "T1074.001": 6,
-      "T1078": 133,
+      "T1078": 136,
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 12,
-      "T1078.004": 102,
+      "T1078.004": 112,
       "T1082": 49,
       "T1083": 28,
       "T1087": 21,
@@ -577,15 +578,15 @@
       "T1090": 29,
       "T1090.001": 8,
       "T1090.002": 3,
-      "T1090.003": 11,
+      "T1090.003": 15,
       "T1091": 5,
       "T1095": 8,
-      "T1098": 95,
-      "T1098.001": 29,
+      "T1098": 98,
+      "T1098.001": 32,
       "T1098.002": 6,
-      "T1098.003": 37,
-      "T1098.004": 12,
-      "T1098.005": 8,
+      "T1098.003": 40,
+      "T1098.004": 10,
+      "T1098.005": 10,
       "T1098.007": 1,
       "T1102": 17,
       "T1102.001": 4,
@@ -593,7 +594,7 @@
       "T1102.003": 2,
       "T1105": 118,
       "T1106": 11,
-      "T1110": 57,
+      "T1110": 60,
       "T1110.001": 18,
       "T1110.002": 1,
       "T1110.003": 45,
@@ -602,8 +603,8 @@
       "T1113": 16,
       "T1114": 6,
       "T1114.001": 7,
-      "T1114.002": 16,
-      "T1114.003": 13,
+      "T1114.002": 13,
+      "T1114.003": 11,
       "T1115": 11,
       "T1119": 8,
       "T1120": 2,
@@ -625,7 +626,7 @@
       "T1136": 11,
       "T1136.001": 32,
       "T1136.002": 7,
-      "T1136.003": 25,
+      "T1136.003": 27,
       "T1137": 11,
       "T1137.002": 2,
       "T1137.003": 1,
@@ -639,9 +640,9 @@
       "T1190": 177,
       "T1195": 23,
       "T1195.001": 3,
-      "T1195.002": 17,
+      "T1195.002": 16,
       "T1197": 23,
-      "T1199": 16,
+      "T1199": 19,
       "T1200": 13,
       "T1201": 14,
       "T1202": 45,
@@ -655,8 +656,8 @@
       "T1210": 13,
       "T1211": 4,
       "T1212": 8,
-      "T1213": 10,
-      "T1213.002": 2,
+      "T1213": 9,
+      "T1213.002": 1,
       "T1213.003": 6,
       "T1216": 14,
       "T1216.001": 2,
@@ -688,12 +689,12 @@
       "T1484": 13,
       "T1484.001": 16,
       "T1484.002": 7,
-      "T1485": 84,
+      "T1485": 83,
       "T1485.001": 2,
       "T1486": 27,
       "T1489": 38,
       "T1490": 48,
-      "T1491": 2,
+      "T1491": 3,
       "T1491.001": 4,
       "T1495": 1,
       "T1496": 15,
@@ -717,12 +718,12 @@
       "T1518.001": 7,
       "T1525": 9,
       "T1526": 11,
-      "T1528": 28,
+      "T1528": 35,
       "T1529": 16,
-      "T1530": 50,
-      "T1531": 20,
+      "T1530": 55,
+      "T1531": 22,
       "T1535": 6,
-      "T1537": 23,
+      "T1537": 26,
       "T1538": 1,
       "T1539": 7,
       "T1542": 1,
@@ -731,7 +732,7 @@
       "T1542.005": 1,
       "T1543": 25,
       "T1543.001": 8,
-      "T1543.002": 5,
+      "T1543.002": 4,
       "T1543.003": 60,
       "T1543.004": 4,
       "T1546": 15,
@@ -754,7 +755,7 @@
       "T1547.003": 2,
       "T1547.004": 4,
       "T1547.005": 4,
-      "T1547.006": 16,
+      "T1547.006": 15,
       "T1547.008": 2,
       "T1547.009": 4,
       "T1547.010": 6,
@@ -762,12 +763,12 @@
       "T1547.014": 3,
       "T1547.015": 3,
       "T1548": 35,
-      "T1548.001": 12,
+      "T1548.001": 10,
       "T1548.002": 76,
-      "T1548.003": 39,
+      "T1548.003": 38,
       "T1548.004": 1,
       "T1550": 14,
-      "T1550.001": 5,
+      "T1550.001": 7,
       "T1550.002": 7,
       "T1550.003": 9,
       "T1550.004": 2,
@@ -776,7 +777,7 @@
       "T1552.002": 7,
       "T1552.003": 3,
       "T1552.004": 14,
-      "T1552.005": 3,
+      "T1552.005": 2,
       "T1552.006": 7,
       "T1552.007": 9,
       "T1553": 4,
@@ -786,17 +787,17 @@
       "T1553.004": 13,
       "T1553.005": 11,
       "T1554": 10,
-      "T1555": 13,
+      "T1555": 14,
       "T1555.001": 7,
       "T1555.003": 15,
       "T1555.004": 6,
       "T1555.005": 5,
-      "T1556": 74,
+      "T1556": 79,
       "T1556.001": 1,
       "T1556.002": 3,
       "T1556.003": 1,
       "T1556.004": 3,
-      "T1556.006": 29,
+      "T1556.006": 33,
       "T1556.007": 2,
       "T1556.009": 1,
       "T1557": 13,
@@ -816,16 +817,16 @@
       "T1561.001": 2,
       "T1561.002": 4,
       "T1562": 28,
-      "T1562.001": 137,
+      "T1562.001": 128,
       "T1562.002": 13,
       "T1562.003": 2,
       "T1562.004": 18,
       "T1562.006": 4,
-      "T1562.007": 8,
-      "T1562.008": 33,
+      "T1562.007": 7,
+      "T1562.008": 30,
       "T1562.012": 5,
       "T1563.002": 4,
-      "T1564": 14,
+      "T1564": 15,
       "T1564.001": 10,
       "T1564.002": 4,
       "T1564.003": 11,
@@ -833,22 +834,21 @@
       "T1564.006": 3,
       "T1564.008": 5,
       "T1565": 3,
-      "T1565.001": 11,
+      "T1565.001": 10,
       "T1565.002": 3,
       "T1566": 30,
       "T1566.001": 52,
-      "T1566.002": 14,
-      "T1566.003": 1,
-      "T1567": 34,
+      "T1566.002": 13,
+      "T1567": 35,
       "T1567.001": 2,
-      "T1567.002": 23,
+      "T1567.002": 24,
       "T1568": 1,
       "T1568.001": 2,
       "T1568.002": 4,
       "T1569": 5,
       "T1569.001": 1,
       "T1569.002": 50,
-      "T1570": 10,
+      "T1570": 9,
       "T1571": 9,
       "T1572": 38,
       "T1573": 7,
@@ -857,7 +857,7 @@
       "T1574.001": 95,
       "T1574.002": 4,
       "T1574.005": 2,
-      "T1574.006": 10,
+      "T1574.006": 9,
       "T1574.007": 2,
       "T1574.008": 1,
       "T1574.009": 1,
@@ -916,7 +916,7 @@
       "T1615": 5,
       "T1619": 1,
       "T1620": 6,
-      "T1621": 25,
+      "T1621": 26,
       "T1622": 1,
       "T1647": 2,
       "T1649": 22,
@@ -948,20 +948,17 @@
         "T1003.002": 1,
         "T1003.003": 2,
         "T1003.006": 3,
-        "T1003.008": 2,
+        "T1003.008": 1,
         "T1011": 1,
-        "T1014": 2,
         "T1018": 5,
-        "T1020": 2,
         "T1021": 1,
         "T1021.001": 2,
         "T1021.002": 7,
         "T1021.004": 1,
         "T1021.006": 3,
-        "T1027": 5,
+        "T1027": 4,
         "T1030": 1,
-        "T1036.005": 1,
-        "T1037": 2,
+        "T1037": 1,
         "T1037.001": 1,
         "T1037.002": 1,
         "T1037.004": 2,
@@ -974,77 +971,76 @@
         "T1052": 2,
         "T1052.001": 1,
         "T1053.001": 1,
-        "T1053.003": 5,
+        "T1053.003": 4,
         "T1053.005": 4,
-        "T1053.006": 2,
+        "T1053.006": 1,
         "T1055": 2,
         "T1055.001": 1,
         "T1055.012": 1,
         "T1056.001": 1,
-        "T1059": 9,
+        "T1059": 8,
         "T1059.001": 5,
         "T1059.002": 3,
         "T1059.004": 8,
         "T1059.005": 1,
         "T1068": 3,
         "T1069.003": 1,
-        "T1070": 3,
+        "T1070": 4,
         "T1070.001": 3,
         "T1070.002": 1,
         "T1070.003": 2,
         "T1071": 4,
-        "T1071.001": 10,
+        "T1071.001": 9,
         "T1071.004": 6,
         "T1074.001": 1,
-        "T1078": 42,
+        "T1078": 45,
         "T1078.001": 4,
         "T1078.002": 3,
         "T1078.003": 2,
-        "T1078.004": 42,
+        "T1078.004": 52,
         "T1083": 2,
         "T1087.001": 2,
         "T1087.002": 5,
         "T1087.004": 3,
         "T1090": 3,
-        "T1090.003": 6,
+        "T1090.003": 10,
         "T1095": 3,
-        "T1098": 36,
-        "T1098.001": 24,
-        "T1098.003": 11,
-        "T1098.004": 8,
-        "T1098.005": 1,
+        "T1098": 39,
+        "T1098.001": 27,
+        "T1098.003": 14,
+        "T1098.004": 6,
+        "T1098.005": 3,
         "T1098.007": 1,
         "T1105": 3,
-        "T1110": 9,
+        "T1110": 12,
         "T1110.001": 4,
         "T1110.003": 5,
         "T1110.004": 4,
         "T1112": 1,
         "T1113": 2,
-        "T1114.002": 5,
-        "T1114.003": 5,
+        "T1114.002": 2,
+        "T1114.003": 3,
         "T1127.001": 1,
         "T1133": 13,
         "T1134": 1,
         "T1135": 3,
         "T1136": 3,
         "T1136.001": 5,
-        "T1136.003": 3,
+        "T1136.003": 5,
         "T1140": 1,
         "T1176": 1,
         "T1185": 1,
         "T1190": 30,
         "T1195": 2,
         "T1195.001": 1,
-        "T1195.002": 10,
+        "T1195.002": 9,
         "T1197": 1,
-        "T1199": 15,
+        "T1199": 18,
         "T1204": 2,
         "T1204.001": 1,
         "T1204.002": 5,
         "T1212": 2,
-        "T1213": 3,
-        "T1213.002": 1,
+        "T1213": 2,
         "T1213.003": 1,
         "T1218": 1,
         "T1218.003": 1,
@@ -1059,10 +1055,11 @@
         "T1482": 1,
         "T1484.001": 2,
         "T1484.002": 3,
-        "T1485": 29,
+        "T1485": 28,
         "T1486": 8,
         "T1489": 2,
         "T1490": 7,
+        "T1491": 1,
         "T1496": 2,
         "T1498": 4,
         "T1498.001": 2,
@@ -1070,16 +1067,16 @@
         "T1499": 1,
         "T1505.003": 3,
         "T1525": 8,
-        "T1528": 6,
-        "T1530": 40,
-        "T1531": 5,
+        "T1528": 13,
+        "T1530": 45,
+        "T1531": 7,
         "T1535": 1,
-        "T1537": 10,
+        "T1537": 13,
         "T1539": 4,
         "T1542.001": 1,
         "T1543": 1,
         "T1543.001": 4,
-        "T1543.002": 3,
+        "T1543.002": 2,
         "T1543.003": 3,
         "T1543.004": 2,
         "T1546.002": 1,
@@ -1094,39 +1091,39 @@
         "T1547.001": 4,
         "T1547.004": 1,
         "T1547.005": 2,
-        "T1547.006": 6,
+        "T1547.006": 5,
         "T1547.010": 1,
         "T1547.015": 2,
         "T1548": 2,
-        "T1548.001": 6,
+        "T1548.001": 4,
         "T1548.002": 4,
-        "T1548.003": 3,
+        "T1548.003": 2,
         "T1548.004": 1,
         "T1550": 4,
-        "T1550.001": 1,
+        "T1550.001": 3,
         "T1550.002": 2,
         "T1550.003": 1,
         "T1550.004": 1,
         "T1552": 2,
         "T1552.001": 12,
         "T1552.004": 2,
-        "T1552.005": 2,
+        "T1552.005": 1,
         "T1552.007": 1,
         "T1553": 1,
         "T1553.001": 5,
         "T1553.002": 1,
         "T1553.004": 2,
         "T1554": 1,
-        "T1555": 1,
+        "T1555": 2,
         "T1555.001": 5,
         "T1555.003": 3,
         "T1555.004": 1,
         "T1555.005": 1,
-        "T1556": 43,
+        "T1556": 48,
         "T1556.001": 1,
         "T1556.003": 1,
         "T1556.004": 1,
-        "T1556.006": 15,
+        "T1556.006": 19,
         "T1556.007": 2,
         "T1556.009": 1,
         "T1557": 2,
@@ -1139,31 +1136,30 @@
         "T1560.001": 3,
         "T1561.002": 1,
         "T1562": 5,
-        "T1562.001": 40,
+        "T1562.001": 31,
         "T1562.004": 7,
         "T1562.006": 2,
-        "T1562.007": 1,
-        "T1562.008": 14,
+        "T1562.008": 11,
         "T1562.012": 2,
+        "T1564": 1,
         "T1564.001": 1,
         "T1564.008": 2,
-        "T1565.001": 4,
+        "T1565.001": 3,
         "T1565.002": 1,
         "T1566": 3,
         "T1566.001": 2,
-        "T1566.002": 2,
-        "T1566.003": 1,
-        "T1567": 13,
-        "T1567.002": 7,
+        "T1566.002": 1,
+        "T1567": 14,
+        "T1567.002": 8,
         "T1568.001": 2,
         "T1568.002": 2,
-        "T1570": 3,
+        "T1570": 2,
         "T1572": 9,
         "T1573": 1,
         "T1573.002": 7,
         "T1574": 1,
         "T1574.002": 4,
-        "T1574.006": 3,
+        "T1574.006": 2,
         "T1578.002": 1,
         "T1580": 1,
         "T1583.001": 4,
@@ -1177,7 +1173,7 @@
         "T1611": 25,
         "T1612": 1,
         "T1620": 2,
-        "T1621": 5,
+        "T1621": 6,
         "T1647": 1,
         "T1656": 1,
         "T1659": 1
@@ -32787,6 +32783,610 @@
       "sha256": "761239d214b8c504f62eeb0e33e934af5cd33f73012bf827fe9dc7dd504090c6"
     },
     {
+      "id": "det-application-087",
+      "type": "detection",
+      "name": "Slack App Installed With Broad Read Scopes",
+      "description": "A newly installed app that can read message history or files. The scope list is the clause; the install alone is routine.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1528",
+        "T1199"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-app-installed-broad-read-scopes.yaml",
+      "sha256": "1e5127954ff04b65262b47ae9e9e6f5b87bb373a1ec8268b2271d70b1cecf55c"
+    },
+    {
+      "id": "det-application-088",
+      "type": "detection",
+      "name": "Slack App Scopes Expanded After Install",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Scopes Expanded After Install'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1528"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-app-scopes-expanded.yaml",
+      "sha256": "58a929dbf90c9b41f35e246b5bbd6d9c2b19fb47aad5be5bacf228b1aed08f39"
+    },
+    {
+      "id": "det-application-089",
+      "type": "detection",
+      "name": "Slack App Uninstalled",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Uninstalled'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "application",
+      "mitre_techniques": [
+        "T1070"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-app-uninstalled.yaml",
+      "sha256": "f7bb440e426e220310455e681833a205a6ac649aa2cc9aefc16e416f864ccc18"
+    },
+    {
+      "id": "det-application-090",
+      "type": "detection",
+      "name": "Slack External Shared Channel Connected",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack External Shared Channel Connected'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1199"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-external-shared-channel-connected.yaml",
+      "sha256": "c8dbcdb1c16fc44b434a50edecf5a7799b97c0fcb3164efc26e0216d5cae0c0a"
+    },
+    {
+      "id": "det-application-091",
+      "type": "detection",
+      "name": "Slack Organisation Export Started",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Organisation Export Started'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1530",
+        "T1567"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-org-export-started.yaml",
+      "sha256": "949cc300f96ecbf8614a8d32cc8f9b8a50e4d358575997fc535aa2a7c3352134"
+    },
+    {
+      "id": "det-application-092",
+      "type": "detection",
+      "name": "Slack Role Changed To Organisation Owner",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed To Organisation Owner'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-role-change-to-owner.yaml",
+      "sha256": "27c33178bb313acab83701fbbec8358d5552413bf12b389a804cfd625d9b787a"
+    },
+    {
+      "id": "det-application-093",
+      "type": "detection",
+      "name": "Slack Role Changed To Workspace Admin",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed To Workspace Admin'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-role-change-to-admin.yaml",
+      "sha256": "7a5e7410ebd4757cf2382b16a2b5e86f6c4f379750164de5d9627a6278694289"
+    },
+    {
+      "id": "det-application-094",
+      "type": "detection",
+      "name": "Slack Single Sign-On Setting Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Single Sign-On Setting Changed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-sso-setting-changed.yaml",
+      "sha256": "2b2557a9ff3d1548042441e64e1a7c28743984fe66d5128838acd56ac38785e0"
+    },
+    {
+      "id": "det-application-095",
+      "type": "detection",
+      "name": "Slack Two-Factor Policy Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Two-Factor Policy Changed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1556.006"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-two-factor-policy-changed.yaml",
+      "sha256": "29f826d2a1eeb69ac9ca2a8624a0982625371de32fdd1b1c6056ccf2aa02e7a6"
+    },
+    {
+      "id": "det-application-096",
+      "type": "detection",
+      "name": "Slack Session Invalidation Disabled",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Session Invalidation Disabled'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-session-invalidation-disabled.yaml",
+      "sha256": "2477be206fd98f90ff192af11b898f8cc0dc8ea88965769bdf2fe49db192ac40"
+    },
+    {
+      "id": "det-application-097",
+      "type": "detection",
+      "name": "Slack Message Deletion Permission Widened",
+      "description": "Letting members delete messages removes the record an investigation reads.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1070"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-message-deletion-allowed.yaml",
+      "sha256": "ee903f88bdb1c610b71415522d9c4bb994b5b69a000e8d26474380e111f4aac4"
+    },
+    {
+      "id": "det-application-098",
+      "type": "detection",
+      "name": "Slack Channel Converted To Private",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Channel Converted To Private'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "application",
+      "mitre_techniques": [
+        "T1564"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-channel-converted-to-private.yaml",
+      "sha256": "58697493e99a966cc9520ec18a6302b1eb84080f5f5e280f7dee856710962bd2"
+    },
+    {
+      "id": "det-application-099",
+      "type": "detection",
+      "name": "Slack Guest Account Created",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Guest Account Created'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1136.003"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-guest-created.yaml",
+      "sha256": "b0e2b9a9833d2c744c45d96ab5a53254a5d57d4c217a529dc1d0c1ec86b15e36"
+    },
+    {
+      "id": "det-application-100",
+      "type": "detection",
+      "name": "Slack Workspace Public URL Updated",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Workspace Public URL Updated'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1491"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-public-url-updated.yaml",
+      "sha256": "1558c867a482c656733f1d39cf62c1705cdd17c69b54d39d0735b4617082682e"
+    },
+    {
+      "id": "det-application-101",
+      "type": "detection",
+      "name": "Slack File Downloaded From An Anonymizing Network",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack File Downloaded From An Anonymizing Network'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1530"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-file-downloaded-from-anonymizer.yaml",
+      "sha256": "e6935bcc3e8c3e6d0dcc0d0c04559dcfc7c2b2548d70f540dfbf0936d5c2de94"
+    },
+    {
+      "id": "det-application-102",
+      "type": "detection",
+      "name": "Salesforce Connected Application Installed",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Connected Application Installed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1528",
+        "T1199"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-connected-app-installed.yaml",
+      "sha256": "95c4f9fefa3fa94fe134ead2921947f086e17a9a92f09699dbb6eb274cb53da2"
+    },
+    {
+      "id": "det-application-103",
+      "type": "detection",
+      "name": "Salesforce Connected Application Updated",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Connected Application Updated'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1528"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-connected-app-updated.yaml",
+      "sha256": "9fb5a0dcfbf4a07d810a24f8a17a3417a151422070e745a7df0ac5609f5317c0"
+    },
+    {
+      "id": "det-application-104",
+      "type": "detection",
+      "name": "Salesforce Administrator Signed In As Another User",
+      "description": "`DelegateUser` on the record names the administrator who assumed the identity, which is the field an investigation needs and the connector now lifts.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-login-as-user.yaml",
+      "sha256": "04f0d601bacf2e0166f048e61e746ab865693cd356df9385536aae7d4099722f"
+    },
+    {
+      "id": "det-application-105",
+      "type": "detection",
+      "name": "Salesforce Permission Set Assigned",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Permission Set Assigned'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-permission-set-assigned.yaml",
+      "sha256": "3005c50447d6f26a8ed5cafe12828814d2f62fbd2b0122a8161f1b7ffce13a54"
+    },
+    {
+      "id": "det-application-106",
+      "type": "detection",
+      "name": "Salesforce Permission Set Created",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Permission Set Created'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-permission-set-created.yaml",
+      "sha256": "366f7db6ba811e3ec1bb7750da64dad8346334e08add98f0eb38f8d79ffde392"
+    },
+    {
+      "id": "det-application-107",
+      "type": "detection",
+      "name": "Salesforce User Profile Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce User Profile Changed'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-profile-changed.yaml",
+      "sha256": "a20dd2577a08061d40b40e51fdda44bb448a57cc481844c63f4080193625883c"
+    },
+    {
+      "id": "det-application-108",
+      "type": "detection",
+      "name": "Salesforce Data Export Run",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Data Export Run'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1530",
+        "T1567"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-data-export-scheduled.yaml",
+      "sha256": "90702d18d0f54dd894582d1968257ce4acae5632743876b18320a8e4e50b2282"
+    },
+    {
+      "id": "det-application-109",
+      "type": "detection",
+      "name": "Salesforce Login Policy Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Login Policy Changed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-login-policy-changed.yaml",
+      "sha256": "f2c953a8eed380838bb73c828091297eea66dd80730b0e81ba12ee59e1a0d51d"
+    },
+    {
+      "id": "det-application-110",
+      "type": "detection",
+      "name": "Salesforce Certificate Inserted",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Certificate Inserted'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "log_source": "salesforce",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/sfdc-certificate-inserted.yaml",
+      "sha256": "c1e1c16e837a1b5047776c198ec5cff8272b3f2bad9f1eb073c8cf841991e02d"
+    },
+    {
       "id": "det-cloud-001",
       "type": "detection",
       "name": "AWS Root Account Console Login",
@@ -37572,939 +38172,34 @@
     {
       "id": "det-cloud-191",
       "type": "detection",
-      "name": "AWS GuardDuty \u2014 UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration",
-      "description": "Detects GuardDuty HIGH-severity finding that EC2 instance credentials (obtained via the IMDS) were used from an IP address outside of AWS \u2014 a strong signal of instance metadata theft and subsequent exfiltration of the temporary credentials to an attacker-controlled host. GuardDuty generates this when the calling IP is publicly routable and does not belong to the originating EC2 instance's region.",
+      "name": "GCP Apps Script Project Created By A User Principal",
+      "description": "Apps Script creates its own projects through its service account. A user principal doing it under the same `sys-` prefix is impersonating that path.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
         "tlp.white"
       ],
-      "severity": "critical",
+      "severity": "high",
       "category": "cloud",
       "mitre_techniques": [
-        "T1552.005",
         "T1078.004",
-        "T1071.001"
+        "T1098.001"
       ],
-      "log_source": "aws",
-      "playbook": "tpl-credential-access",
+      "log_source": "gcp",
+      "playbook": "tpl-privilege-escalation",
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/aws-guardduty-instance-credential-exfiltration.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "29aa1c2b59ff2bee1e06c48c544733c54368587f8a096a66f4f4d34924980513"
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/gcp-apps-script-project-created-by-user.yaml",
+      "sha256": "3b5758cab146050074725d0f1d66d0458ddef659b52a71249c73c4f8e1085304"
     },
     {
       "id": "det-cloud-192",
       "type": "detection",
-      "name": "M365 Exchange Transport Rule Redirects Mail Externally",
-      "description": "Detects creation or modification of an Exchange Online transport rule that redirects or forwards mail to an external domain. Commonly abused in BEC attacks to silently siphon conversations.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.003",
-        "T1020"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-collection",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-transport-rule-external-redirect.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "215fbfcac3956290208c555b77c1361b0d39dfb81a4f9dad069cfa72ffe831fc"
-    },
-    {
-      "id": "det-cloud-193",
-      "type": "detection",
-      "name": "M365 Exchange Mailbox Audit Bypass Enabled",
-      "description": "AuditBypassEnabled was set to True on a mailbox, suppressing all audit logging for that account. Threat actors use this to operate invisibly in a compromised mailbox.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.008"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-audit-bypass-enabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "4df3afbb3c0e981e8cee675748d69e8db9de13990f539c23386cc7dbb7da7d35"
-    },
-    {
-      "id": "det-cloud-194",
-      "type": "detection",
-      "name": "M365 eDiscovery Compliance Search Across All Mailboxes",
-      "description": "A compliance search targeting all mailboxes was created via eDiscovery or Purview. This is a common precursor to mass email exfiltration via New-ComplianceSearchAction -Export.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.002",
-        "T1530"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-collection",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-ediscovery-search-all-mailboxes.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "f12894760ec5e52b2a7cba9642885e327fcfe0e7e87abaf02c7d209d831ad4a4"
-    },
-    {
-      "id": "det-cloud-195",
-      "type": "detection",
-      "name": "M365 eDiscovery Search Results Exported",
-      "description": "Results from a compliance search were exported. When paired with a broad compliance search this represents confirmed data exfiltration through M365 native tooling.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.002",
-        "T1567"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-exfiltration",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-ediscovery-export.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "09b946101b219788b0c6648be4922251bf1cef3d44960a5a93bf6be5637b1c12"
-    },
-    {
-      "id": "det-cloud-196",
-      "type": "detection",
-      "name": "M365 SharePoint External Sharing Enabled at Org Level",
-      "description": "SharePoint Online tenant sharing capability was changed to allow sharing with anonymous or new external users. This broadens the blast radius of any future data exposure.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1537",
-        "T1213.002"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-exfiltration",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-org.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "2da5cb5d1a02eee158ae717a9c1d29762591150d949e9a81273c37bd4817a979"
-    },
-    {
-      "id": "det-cloud-197",
-      "type": "detection",
-      "name": "M365 SharePoint Site Collection Admin Granted to External User",
-      "description": "Detects an external (guest) user being granted site collection administrator rights on a SharePoint Online site. External admins can access all site content and modify permissions.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1098.003"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-sharepoint-site-admin-external-user.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "09649fd087f6f64d4e75dd16da84f05ec985361a16c4ec62eb2e0e02a878a5f1"
-    },
-    {
-      "id": "det-cloud-198",
-      "type": "detection",
-      "name": "M365 Teams External Access Domain Allow-Listed",
-      "description": "Detects modification of the Teams external access policy to allow federation with a new domain. Threat actors social-engineer admins or use compromised accounts to open federation for phishing or data exfiltration via Teams chat.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1199"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-initial-access",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-teams-external-access-domain-added.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "3e1b486a949e52d16891c0bba42603d19a694628304832ced6e6c405f2141b82"
-    },
-    {
-      "id": "det-cloud-199",
-      "type": "detection",
-      "name": "M365 Teams Custom App Sideloading Enabled",
-      "description": "The Teams app permission policy was changed to allow sideloading of custom apps. Malicious Teams apps can harvest tokens, exfiltrate chat data, and impersonate users.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1195.002"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-execution",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-teams-app-sideloading-enabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "13f4aef2eb39cb648263e4deac822372082ffd0acfcb24dafe2eb0e9fb4b964a"
-    },
-    {
-      "id": "det-cloud-200",
-      "type": "detection",
-      "name": "M365 Defender Safe Attachments Policy Disabled",
-      "description": "A Safe Attachments policy was disabled or its action set to Allow. Disabling detonation-based attachment scanning exposes the org to weaponized document delivery.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-defender-safe-attachments-policy-disabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "a6b97d4083fd8812243e724f7d8d21e36cc2e356c7bf150025404397e352aa9a"
-    },
-    {
-      "id": "det-cloud-201",
-      "type": "detection",
-      "name": "M365 Defender Safe Links Policy Disabled",
-      "description": "A Safe Links policy was disabled or URL scanning turned off. This removes time-of-click URL protection and allows deferred phishing links to reach users unchecked.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-defender-safe-links-policy-disabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "0ce7dde53ec8beaa809fc02c21ac57526f46dc3c61cf97f9e8a17c08989b5bfa"
-    },
-    {
-      "id": "det-cloud-202",
-      "type": "detection",
-      "name": "M365 Defender Anti-Phishing Policy Weakened",
-      "description": "An anti-phishing policy had impersonation protection or spoof intelligence disabled. This lowers the barrier for BEC and brand-impersonation phishing campaigns.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001",
-        "T1566.002"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-defender-antiphish-policy-weakened.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "ed97cd1000ae208a88c8a36c06764865ad14dec6afd1fa62630a412b354e4813"
-    },
-    {
-      "id": "det-cloud-203",
-      "type": "detection",
-      "name": "M365 Purview DLP Policy Disabled",
-      "description": "A Data Loss Prevention policy was disabled in Microsoft Purview. Disabling DLP removes the guardrails that prevent sensitive data from leaving the tenant via email, Teams, or SharePoint.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001",
-        "T1537"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-purview-dlp-policy-disabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "aef46c896137cf0cb35ff7fbaf317021ac89ebd4205c47d67de1f5b7e732337a"
-    },
-    {
-      "id": "det-cloud-204",
-      "type": "detection",
-      "name": "M365 Purview Sensitivity Label Removed From Document",
-      "description": "A sensitivity label was downgraded or removed from a document in SharePoint or OneDrive. This may indicate an attempt to bypass DLP controls before exfiltrating classified content.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1565.001",
-        "T1537"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-purview-sensitivity-label-removed.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and it compares two fields, which the matcher cannot do",
-      "sha256": "b094fce10a81a09bc2c3ef72e8160ec95e4c63fd57b297bb6ef81a96881db230"
-    },
-    {
-      "id": "det-cloud-205",
-      "type": "detection",
-      "name": "M365 Purview Retention Policy Deleted",
-      "description": "A retention or preservation policy was deleted. Removing retention enables permanent deletion of email and documents that may be relevant to legal holds or incident investigations.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1485",
-        "T1070"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-impact",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-purview-retention-policy-deleted.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "505e188a4c183d55cc70bb69d1a24c41f85cb9b9f30aa80c94d77ebc0ba8c25c"
-    },
-    {
-      "id": "det-cloud-206",
-      "type": "detection",
-      "name": "M365 Power Platform DLP Connector Policy Modified",
-      "description": "A Power Platform data policy was modified to reclassify or unblock connectors. Moving connectors out of the blocked group allows low-code flows to exfiltrate data via HTTP, Dropbox, or other external services.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001",
-        "T1537"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-power-platform-dlp-policy-modified.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "af8b22c8b854dedb448253121410fc5d7dcdb772743064139b9cd6957535a20e"
-    },
-    {
-      "id": "det-cloud-207",
-      "type": "detection",
-      "name": "M365 Power Automate Flow Shared With External User",
-      "description": "A Power Automate flow was shared with an external (guest) user. External users with flow access can trigger automations that read mailboxes, access SharePoint, or call Graph API on behalf of internal identities.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1078.004",
-        "T1199"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-power-automate-flow-shared-externally.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "de5a1be2b16bb2ba4992cd496ac7492fc2086dba78075be3d888923da99b1563"
-    },
-    {
-      "id": "det-cloud-208",
-      "type": "detection",
-      "name": "M365 Entra ID Conditional Access Policy Disabled",
-      "description": "A Conditional Access policy was set to report-only or disabled. Disabling CA policies removes MFA enforcement, device compliance checks, or location-based access controls for the tenant.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001",
-        "T1556"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-entra-conditional-access-policy-disabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "bd47435a28fe8468641e25d921c1dff5e8c85cae3cf2d12f1a346cbcb27c0781"
-    },
-    {
-      "id": "det-cloud-209",
-      "type": "detection",
-      "name": "M365 Entra PIM Global Admin Role Activated",
-      "description": "A user activated the Global Administrator role via Privileged Identity Management. While PIM is a legitimate workflow, Global Admin activation should be rare and audited since it grants unrestricted tenant access.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1078.004",
-        "T1098.003"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-privilege-escalation",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-entra-pim-role-activated-global-admin.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "5407b6a2868633d56297f8913478f88fe65f8f829fb3c5f27e2d607f2f835faa"
-    },
-    {
-      "id": "det-cloud-210",
-      "type": "detection",
-      "name": "M365 Entra Cross-Tenant Access Policy Changed",
-      "description": "An inbound or outbound cross-tenant access policy was created or modified. Misconfigured policies can allow external tenants to access internal resources or bypass B2B trust boundaries.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1199",
-        "T1078.004"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-initial-access",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-entra-cross-tenant-access-policy-changed.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "eb7d30fb93c1f22daf1daed18cd59798138e80ef8a436f72fb95bd9439938d33"
-    },
-    {
-      "id": "det-cloud-211",
-      "type": "detection",
-      "name": "M365 OAuth App Accessing Mailbox via Graph API",
-      "description": "An OAuth application accessed a mailbox through Microsoft Graph with application-level (not delegated) permissions. Compromised OAuth apps with Mail.Read or Mail.ReadWrite can silently exfiltrate email at scale.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.002",
-        "T1528"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-collection",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-oauth-app-mailbox-access.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and it compares two fields, which the matcher cannot do",
-      "sha256": "56d366bafd97708f0a0b4921a2522a9bab8c71d7247334e1a5fbdf7a43e939a5"
-    },
-    {
-      "id": "det-cloud-212",
-      "type": "detection",
-      "name": "Azure Key Vault Purge Protection Disabled",
-      "description": "Purge protection was disabled on an Azure Key Vault. Without purge protection, soft-deleted secrets, keys, and certificates can be permanently destroyed before the retention period expires, enabling evidence destruction.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1485",
-        "T1070"
-      ],
-      "log_source": "azure",
-      "playbook": "tpl-impact",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/azure-key-vault-purge-protection-disabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "71140349d8025ee571dfbb3a9acecd6485d6cd0858bd1a91b0c98c20355f70ab"
-    },
-    {
-      "id": "det-cloud-213",
-      "type": "detection",
-      "name": "Azure Elevated Access to Manage All Subscriptions",
-      "description": "A Global Admin activated elevated access at the management group root, granting User Access Administrator over every Azure subscription in the tenant. This is the single most powerful escalation in Azure and should be extremely rare.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1078.004",
-        "T1098.003"
-      ],
-      "log_source": "azure",
-      "playbook": "tpl-privilege-escalation",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/azure-management-group-elevated-access.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "4fa3a1afbf2cd40fe3adfdcd158d7e04287cc6c664c334acdf8c6cd2d133151f"
-    },
-    {
-      "id": "det-cloud-214",
-      "type": "detection",
-      "name": "Azure Defender for Cloud Plan Disabled",
-      "description": "A Microsoft Defender for Cloud plan (Servers, Storage, SQL, etc.) was set to Free tier, removing threat detection and advanced security for that resource type across the subscription.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001"
-      ],
-      "log_source": "azure",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/azure-defender-for-cloud-plan-disabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "c64c6512766a81317895892cabd5e729d1216ab12c43593645de641241a24333"
-    },
-    {
-      "id": "det-cloud-215",
-      "type": "detection",
-      "name": "GCP Organization Policy Constraint Removed",
-      "description": "An organization policy constraint was deleted or reset to default. Removing constraints like domain-restricted sharing or uniform bucket-level access weakens tenant-wide security guardrails.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001"
-      ],
-      "log_source": "gcp",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/gcp-org-policy-constraint-removed.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "2d7e2a49b591a257703184413ba6946adb08a420903f290fd3bb374a2ba0330f"
-    },
-    {
-      "id": "det-cloud-216",
-      "type": "detection",
-      "name": "GCP VPC Firewall Rule Allows All Ingress",
-      "description": "A firewall rule was created or updated to allow ingress from 0.0.0.0/0 on all ports or a wide port range. This exposes compute instances to the public internet without restriction.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.007"
-      ],
-      "log_source": "gcp",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/gcp-vpc-firewall-rule-allow-all-ingress.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "7fc08306ad6515d120b95f090dfc7fcc5c15d3bbabbba39e49ea8eeb1a653d46"
-    },
-    {
-      "id": "det-cloud-217",
-      "type": "detection",
-      "name": "GCP Cloud Armor Security Policy Removed",
-      "description": "A Cloud Armor security policy was deleted from a backend service. This removes WAF rules, DDoS protection, and geo-blocking controls from the exposed endpoint.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.001"
-      ],
-      "log_source": "gcp",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/gcp-cloud-armor-policy-removed.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "060abb731ffb4b68c1501227670f0fa1edca579a6866cb9e3fa9c01c43ebd9d5"
-    },
-    {
-      "id": "det-cloud-218",
-      "type": "detection",
-      "name": "GCP Audit Log Sink Deleted",
-      "description": "A Cloud Logging sink was deleted. Sinks route audit logs to BigQuery, Cloud Storage, or SIEM destinations. Deleting a sink creates a blind spot in the security monitoring pipeline.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.008"
-      ],
-      "log_source": "gcp",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/gcp-audit-log-sink-deleted.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "14f24f1c7de39157932ecf668d64d40cdfc2026738f3e8555b27201cdb46a6fc"
-    },
-    {
-      "id": "det-cloud-219",
-      "type": "detection",
-      "name": "M365 eDiscovery Compliance Search Created",
-      "description": "Detects creation of an eDiscovery compliance search in Microsoft Purview. Insider threats and compromised admin accounts abuse eDiscovery to search and export mailbox contents at scale.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.002",
-        "T1213"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-collection",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-ediscovery-search-created.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "50619cd3e7dfb25f8bbca95938dfca75f617ae055b68998cb6c2346c61a26f3b"
-    },
-    {
-      "id": "det-cloud-220",
-      "type": "detection",
-      "name": "M365 Exchange Inbound Connector From Untrusted Domain",
-      "description": "Detects creation of an Exchange Online inbound connector that accepts mail from a specific external sender domain. Adversaries create connectors to bypass spam filters for phishing infrastructure.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1566"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-initial-access",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-mail-connector-external-domain.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "ce67cbd869fad6c155cdc27faa3275ef1450953626d7c032475b1511271f332f"
-    },
-    {
-      "id": "det-cloud-221",
-      "type": "detection",
-      "name": "M365 Exchange Transport Rule Redirects Mail Externally",
-      "description": "A transport rule was created or modified to redirect or BCC mail to an external domain. Attackers use this for persistent email exfiltration that survives password resets.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1114.003",
-        "T1020"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-collection",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-exchange-transport-rule-redirect-external.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition negates a regex or an unbound reference",
-      "sha256": "4b0cf80e43f4da0d0148278d703ffb937dba49f06ee21c37793920ae56ce88b3"
-    },
-    {
-      "id": "det-cloud-222",
-      "type": "detection",
-      "name": "M365 SharePoint External Sharing Enabled Tenant-Wide",
-      "description": "Detects tenant-level SharePoint sharing policy changed to allow external or anonymous sharing. Widens the data-loss attack surface across all sites.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1567",
-        "T1537"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-exfiltration",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-sharepoint-external-sharing-enabled-tenant.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "9bd7aba8a5e59d2658b3f125ae4ba9d7e95ac94eee4327d6559f67141d11888f"
-    },
-    {
-      "id": "det-cloud-223",
-      "type": "detection",
-      "name": "M365 SharePoint Site Collection Admin Added",
-      "description": "A new site collection administrator was added. Site collection admins bypass item-level permissions and can access all content including OneDrive for Business sites.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1098.003"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-sharepoint-site-collection-admin-added.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "e7dac644a32b20459c7e174f097a6f5d1f6f5653969c5bc4933933c6b96ba894"
-    },
-    {
-      "id": "det-cloud-224",
-      "type": "detection",
-      "name": "M365 Teams External Access Policy Enabled",
-      "description": "Teams external access was changed to allow federation with all external domains or specific unblocked domains. Attackers leverage external access to phish internal users via Teams chat.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1566.003"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-initial-access",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-teams-external-access-enabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "95a4acf2dd427339d1fa252fc2007b40c985e4129f24fcffe92d61c979d8ab7b"
-    },
-    {
-      "id": "det-cloud-225",
-      "type": "detection",
-      "name": "M365 Unified Audit Log Disabled",
-      "description": "Detects disabling of the Microsoft 365 unified audit log. Attackers disable auditing early in a compromise to erase their trail across Exchange, SharePoint, Teams, and Entra ID.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "critical",
-      "category": "cloud",
-      "mitre_techniques": [
-        "T1562.008"
-      ],
-      "log_source": "m365",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/m365-unified-audit-log-disabled.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "14ae9bec42ead205c4dfa341a1419c23c47774ca6913cc8be763439421c4f18c"
-    },
-    {
-      "id": "det-cloud-226",
-      "type": "detection",
-      "name": "AWS IAM UpdateAccessKey On Privileged Principal",
-      "description": "AiSOC v1 curated detection. Triggers on the cloud signal described by 'AWS IAM UpdateAccessKey On Privileged Principal'. Watch the 1 documented false-positive case before tuning.",
+      "name": "GCP IAM Policy Set On An Apps Script System Project",
+      "description": "AiSOC v1 curated detection. Triggers on the cloud signal described by 'GCP IAM Policy Set On An Apps Script System Project'. Watch the 1 documented false-positive case before tuning.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
@@ -38515,16 +38210,66 @@
       "mitre_techniques": [
         "T1098.001"
       ],
-      "log_source": "aws",
-      "playbook": "tpl-persistence",
+      "log_source": "gcp",
+      "playbook": "tpl-privilege-escalation",
       "verified": true,
       "source": "core",
       "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/cloud/aws-iam-update-access-key-privileged.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "833fc90559fbc4f18f02cc5217c5f58667e43c8598cdb0ccb418d76ff43e9091"
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/gcp-sys-project-iam-policy-set.yaml",
+      "sha256": "836df897fbfef5fb9e87aa1cbf0583a86e2a262438cd0a709b15f87229e6f45f"
+    },
+    {
+      "id": "det-cloud-193",
+      "type": "detection",
+      "name": "GCP Service Account Key Created Under An Apps Script Project",
+      "description": "A downloadable key minted under the Apps Script folder is a long-lived credential in a project nobody audits.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1098.001",
+        "T1528"
+      ],
+      "log_source": "gcp",
+      "playbook": "tpl-credential-access",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/gcp-sys-project-sa-key-created.yaml",
+      "sha256": "66b6f869c71a533df4213f8cef90c07b5b2ef301bedf8c441f2a1178567fef35"
+    },
+    {
+      "id": "det-cloud-194",
+      "type": "detection",
+      "name": "GCP Apps Script User Agent On A Non-Script Service",
+      "description": "AiSOC v1 curated detection. Triggers on the cloud signal described by 'GCP Apps Script User Agent On A Non-Script Service'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "gcp",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/gcp-apps-script-user-agent-outside-service.yaml",
+      "sha256": "a30391b2bed81b455d61c65d5aaa894bd849b87f8eb87c48cc79429b2f0310ea"
     },
     {
       "id": "det-data-exfil-001",
@@ -39036,6 +38781,737 @@
       "path": "detections/data-exfil/secrets-mass-fetch.yaml",
       "quarantine_reason": "superseded by the windowed rule wd-secrets-mass-fetch; this stateless form named a counter no source emits",
       "sha256": "e2f3de8ee0b6bdd78836cf9dc35490c76c5d9f5e0f158087e355207386012328"
+    },
+    {
+      "id": "det-data-exfil-021",
+      "type": "detection",
+      "name": "Workspace Email Monitor Created On A Mailbox",
+      "description": "An email monitor copies a mailbox to another address. Created outside a recorded legal process it is covert mail collection.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1114.002"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/gws-email-monitor-created.yaml",
+      "sha256": "9eccdfdfb8665dfa9374f80f85b36e6e03a101b829d92a3fb09108f02d05d3f7"
+    },
+    {
+      "id": "det-data-exfil-022",
+      "type": "detection",
+      "name": "Workspace Drive Document Opened To Anyone With The Link",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Workspace Drive Document Opened To Anyone With The Link'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/gws-drive-visibility-opened-publicly.yaml",
+      "sha256": "d2d10b75addf85315971feb62b09be31cf80cb5d1e9a51b8ed1c3149dac9e50d"
+    },
+    {
+      "id": "det-data-exfil-023",
+      "type": "detection",
+      "name": "Workspace Drive Access Granted Outside The Domain",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Workspace Drive Access Granted Outside The Domain'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537",
+        "T1567.002"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/gws-drive-external-access-granted.yaml",
+      "sha256": "c45fdff89645819df696ee2ea377c01b1a14ed34b67a702e324e71f0ad96bec0"
+    },
+    {
+      "id": "det-data-exfil-024",
+      "type": "detection",
+      "name": "Workspace Drive Link Sharing Created",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Workspace Drive Link Sharing Created'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/gws-drive-link-sharing-created.yaml",
+      "sha256": "e7fdcd84e0f201d991f45db0b558324f43065fd6f8b216d70dbbbb70e6bc6cb4"
+    },
+    {
+      "id": "det-data-exfil-025",
+      "type": "detection",
+      "name": "Workspace Shared Drive Settings Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Workspace Shared Drive Settings Changed'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/gws-shared-drive-settings-weakened.yaml",
+      "sha256": "ed0e263aa00cacd5fa574a1db56908b6947ca96df1cb2b1c783d45355a9c296b"
+    },
+    {
+      "id": "det-data-exfil-026",
+      "type": "detection",
+      "name": "Box Shared Link Set To Open Access",
+      "description": "Box records the resulting access level under `additional_details.shared_link.access`, which is two levels down and was invisible until the connector lifted it.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-shared-link-opened-publicly.yaml",
+      "sha256": "740f68d6d12824dd06bf75fa4d79f4192e5fa829a278ebcfa2b74ec0476f5770"
+    },
+    {
+      "id": "det-data-exfil-027",
+      "type": "detection",
+      "name": "Box Shared Link Created On An Item",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box Shared Link Created On An Item'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-item-shared-link-created.yaml",
+      "sha256": "dfdd9a402c45bb9f6020d6daf3b07619af8314a4218c709c51caadeb1ba13d1c"
+    },
+    {
+      "id": "det-data-exfil-028",
+      "type": "detection",
+      "name": "Box External Collaboration Invite Blocked By Shield",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box External Collaboration Invite Blocked By Shield'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1199"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-external-collab-invite-blocked.yaml",
+      "sha256": "6eacc87154a449ed802dcbd3749194eecb2447214427e9492529e9372a4cd868"
+    },
+    {
+      "id": "det-data-exfil-029",
+      "type": "detection",
+      "name": "Box External Collaboration Invite From An Abnormal Location",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box External Collaboration Invite From An Abnormal Location'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1199",
+        "T1078.004"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-external-collab-abnormal-location.yaml",
+      "sha256": "34f3157ff8682718b5447ca52a71ba760f76fa9f4a7f3ef997e344daa1b3a8f5"
+    },
+    {
+      "id": "det-data-exfil-030",
+      "type": "detection",
+      "name": "Box Shield Alert Raised",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box Shield Alert Raised'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1530"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-shield-alert.yaml",
+      "sha256": "761421bd634055d4fcab3abfadd18bae6d7587d06ac9fe816252677801b454bb"
+    },
+    {
+      "id": "det-data-exfil-031",
+      "type": "detection",
+      "name": "Box Role Changed To Administrator",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box Role Changed To Administrator'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-admin-role-granted.yaml",
+      "sha256": "ae797985ee958e25c5981190052b1046fb141401f6da3fd3a7d1b796a1060313"
+    },
+    {
+      "id": "det-data-exfil-032",
+      "type": "detection",
+      "name": "Box Application Public Key Added",
+      "description": "A public key added to a Box application authorises a new JWT signer, which is server-to-server persistence that no user sign-in reveals.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1098.001",
+        "T1528"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-app-public-key-added.yaml",
+      "sha256": "6705951a41385e64e1196ae2182813653451e069532c20240d48688885fe8855"
+    },
+    {
+      "id": "det-data-exfil-033",
+      "type": "detection",
+      "name": "Box Application Public Key Deleted",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box Application Public Key Deleted'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1070"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-app-public-key-deleted.yaml",
+      "sha256": "2709feb1bed4541bb58c3b4732b9c7009d3ac3a954f99187b0c6a785ca244880"
+    },
+    {
+      "id": "det-data-exfil-034",
+      "type": "detection",
+      "name": "Box Sign-In From An Anonymizing Or Hosting Network",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box Sign-In From An Anonymizing Or Hosting Network'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1090.003"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-login-from-anonymizer.yaml",
+      "sha256": "7af959027854067b28bcef9328d222d4b888e114f28fe8a9aeb84accd828100a"
+    },
+    {
+      "id": "det-data-exfil-035",
+      "type": "detection",
+      "name": "Box User Deleted",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box User Deleted'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1531"
+      ],
+      "log_source": "box",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/box-user-deleted.yaml",
+      "sha256": "020ce154e17557c9e94c977000e74892b9da627464aeb6c7e7959f8447f50e2a"
+    },
+    {
+      "id": "det-data-exfil-036",
+      "type": "detection",
+      "name": "Dropbox Shared Link Audience Changed To Public",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Shared Link Audience Changed To Public'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-link-audience-changed-to-public.yaml",
+      "sha256": "09561e8efd8f28564f6c3fb643256701ec176197bbbed2045e6b16b4dbde79b9"
+    },
+    {
+      "id": "det-data-exfil-037",
+      "type": "detection",
+      "name": "Dropbox Shared Content Downloaded",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Shared Content Downloaded'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1530"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-shared-content-downloaded.yaml",
+      "sha256": "d9109eda1d5f592d3649f8bb99978b048500f72b98a294640ec71b78e185d7e3"
+    },
+    {
+      "id": "det-data-exfil-038",
+      "type": "detection",
+      "name": "Dropbox Shared Content Member Removed",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Shared Content Member Removed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1531"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-shared-content-member-removed.yaml",
+      "sha256": "905d8e11732f20ffa001b37a1f7507ecde4ff071b433906a61b7610aaab2ac89"
+    },
+    {
+      "id": "det-data-exfil-039",
+      "type": "detection",
+      "name": "Dropbox Team Invite Link Created",
+      "description": "An invite link lets anyone holding it join the team, which is persistence that survives the original account being disabled.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1136.003"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-team-invite-link-created.yaml",
+      "sha256": "5fcb927dce988da583a9f5ebe78f8214a64deae2fd0f05db9fa9b2e29bcaa7ab"
+    },
+    {
+      "id": "det-data-exfil-040",
+      "type": "detection",
+      "name": "Dropbox Member Admin Role Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Member Admin Role Changed'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-admin-role-changed.yaml",
+      "sha256": "b41733d0b3965d33ffb6b2f2e29009b54a2d847a75bb41990083052bee22710d"
+    },
+    {
+      "id": "det-data-exfil-041",
+      "type": "detection",
+      "name": "Dropbox Single Sign-On Policy Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Single Sign-On Policy Changed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-sso-policy-changed.yaml",
+      "sha256": "d63077141ffc1e22fd46b526a3edc416e71b0e74bf69618761700c24d1188b57"
+    },
+    {
+      "id": "det-data-exfil-042",
+      "type": "detection",
+      "name": "Dropbox Application Linked To The Team",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Application Linked To The Team'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1528",
+        "T1199"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-app-linked-to-team.yaml",
+      "sha256": "8106feb4983ed588269e9f78457c8511b08ba438299aeadb8c48154c39d86611"
+    },
+    {
+      "id": "det-data-exfil-043",
+      "type": "detection",
+      "name": "Dropbox Team Folder Status Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Team Folder Status Changed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1485"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-team-folder-status-changed.yaml",
+      "sha256": "4db6c0e4f5bd1a04ccbc4b04635b452ffe11771459e0d672e2faeb3f010da90e"
+    },
+    {
+      "id": "det-data-exfil-044",
+      "type": "detection",
+      "name": "Dropbox External Password Unmasked",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox External Password Unmasked'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1555"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-credential-access",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-external-password-unmasked.yaml",
+      "sha256": "e89fae99cb2d51bc1c63a96e9cd36c5b56c70bfe712c67c1f3bda867228ada98"
+    },
+    {
+      "id": "det-data-exfil-045",
+      "type": "detection",
+      "name": "Dropbox Device Linked From An Anonymizing Network",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Dropbox Device Linked From An Anonymizing Network'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "dropbox",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/dropbox-device-linked-from-anonymizer.yaml",
+      "sha256": "50c1e762fa75aee4642e54a7bea0c972c74b5f23a4d863aac0d07c9ab52bf3f4"
+    },
+    {
+      "id": "det-data-exfil-046",
+      "type": "detection",
+      "name": "Snowflake Query Returned A Very Large Row Count",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Snowflake Query Returned A Very Large Row Count'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1530"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/snowflake-bulk-rows-produced.yaml",
+      "sha256": "837bd613b73b648171347f0433344ef7fb179511ddd336f17ad8dc56dd657d58"
+    },
+    {
+      "id": "det-data-exfil-047",
+      "type": "detection",
+      "name": "Snowflake Data Unloaded To A Stage",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Snowflake Data Unloaded To A Stage'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1537",
+        "T1567"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/snowflake-unload-to-stage.yaml",
+      "sha256": "9d33da4f55f46f23c5aecd29b75e9fcf3646e3d2da7e4ea2477a6225f772ef9d"
+    },
+    {
+      "id": "det-data-exfil-048",
+      "type": "detection",
+      "name": "Snowflake Privilege Granted",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Snowflake Privilege Granted'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/snowflake-grant-executed.yaml",
+      "sha256": "33765e3993e4f7a6819ace742898cde115958cf42352e034f8695219b9092e66"
+    },
+    {
+      "id": "det-data-exfil-049",
+      "type": "detection",
+      "name": "Snowflake User Created",
+      "description": "AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Snowflake User Created'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "data-exfil",
+      "mitre_techniques": [
+        "T1136"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-persistence",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/data-exfil/snowflake-create-user.yaml",
+      "sha256": "5e36358a27c43c9e4af2e1d272e7b466177f777a13df0c460c9c472a95849574"
     },
     {
       "id": "det-endpoint-001",
@@ -46451,236 +46927,6 @@
       "sha256": "18b93db3069367e70fa77f6292d5e4b230e83990aec11e4a62a9b0091e688742"
     },
     {
-      "id": "det-endpoint-297",
-      "type": "detection",
-      "name": "Sensitive System File Modified (FIM)",
-      "description": "A file in a sensitive system path (/etc/passwd, /etc/shadow, /etc/sudoers, /etc/crontab, /etc/hosts, /etc/ssh/sshd_config, /etc/ld.so.*)  was created, deleted, or modified as reported by osquery file_events via the AiSOC FIM pipeline.  Adversaries commonly target these files for credential theft (T1003.008), persistence (T1037, T1053.003), lateral movement, and privilege escalation (T1548.001).",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white",
-        "data_source.osquery",
-        "data_source.fim"
-      ],
-      "severity": "high",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1003.008",
-        "T1037",
-        "T1053.003",
-        "T1548.001"
-      ],
-      "log_source": "osquery",
-      "playbook": "tpl-credential-access",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/fim-sensitive-file-modified.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "d861c681fecf762ce35106851ac9d09109cb2a4e6b669328099dc257bc03b520"
-    },
-    {
-      "id": "det-endpoint-298",
-      "type": "detection",
-      "name": "Executable Dropped in World-Writable Directory (FIM)",
-      "description": "An osquery file_events CREATED event was recorded for a file with a common executable extension (.sh, .py, .pl, .rb, .elf, .bin, no extension + executable path) under a world-writable path (/tmp, /var/tmp, /dev/shm, /run/shm). This is a classic indicator of malware staging, web shell deployment, or attacker tool transfer (T1027, T1059, T1036.005).",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white",
-        "data_source.osquery",
-        "data_source.fim"
-      ],
-      "severity": "medium",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1027",
-        "T1059",
-        "T1036.005",
-        "T1570"
-      ],
-      "log_source": "osquery",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/fim-binary-dropped-writable-dir.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "c37dd8bdd73d02ff869d7881f0df6c90b2c95e81a049759609acce8a55b2880b"
-    },
-    {
-      "id": "det-endpoint-299",
-      "type": "detection",
-      "name": "LD_PRELOAD / ld.so.preload Tampered (FIM)",
-      "description": "The dynamic linker preload file /etc/ld.so.preload or any shared library under /etc/ld.so.conf.d/ was created or modified, as detected by osquery file_events via the AiSOC FIM pipeline.  Attackers use ld.so.preload to inject arbitrary shared libraries into every process at startup, achieving rootkit-level stealth, credential capture, or privilege escalation (T1574.006 \u2013 Dynamic Linker Hijacking).",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white",
-        "data_source.osquery",
-        "data_source.fim"
-      ],
-      "severity": "critical",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1574.006",
-        "T1014",
-        "T1548.001"
-      ],
-      "log_source": "osquery",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/fim-ld-preload-modified.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, and its condition reads a dotted path (`properties.x`) that the matcher cannot traverse",
-      "sha256": "15cc0e7973c14c07107148a2aea67542ae4b474eea58b32e267e3f787850b37c"
-    },
-    {
-      "id": "det-endpoint-300",
-      "type": "detection",
-      "name": "SSH authorized_keys File Modified (FIM)",
-      "description": "An osquery file_events event recorded a change (CREATED, UPDATED, or ATTRIBUTES_MODIFIED) to any ~/.ssh/authorized_keys file across the fleet. Adversaries add their own public keys to authorized_keys files to establish persistent SSH backdoors that survive password resets and remain invisible to normal login monitoring (T1098.004 \u2013 Account Manipulation: SSH Authorized Keys).",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white",
-        "data_source.osquery",
-        "data_source.fim"
-      ],
-      "severity": "high",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1098.004",
-        "T1078",
-        "T1136"
-      ],
-      "log_source": "osquery",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/fim-ssh-authorized-keys-changed.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "1de890844fed73dc3e00ca82b9daec0961389b821fabb15f6850a2c23b214117"
-    },
-    {
-      "id": "det-endpoint-301",
-      "type": "detection",
-      "name": "Sudoers Tampering Via auditd Watch",
-      "description": "Triggers when the AiSOC auditd profile (profiles/auditd/aisoc.rules)\nrecords a write to /etc/sudoers or any file under /etc/sudoers.d/.\nPivots on the auditd_key field exposed by services/connectors/app/connectors/auditd.py\nso the rule fires regardless of which syscall (open, openat, rename, etc.)\nproduced the event. Sudoers changes are extremely high-signal in steady-state\nand are the most reliable indicator of attacker-driven privilege escalation\nshort of a full root shell.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1548.003",
-        "T1098"
-      ],
-      "log_source": "linux",
-      "playbook": "tpl-privilege-escalation",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/linux-auditd-sudoers-tampering.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "7c4507119d38682dd78cf60c83d5650e3e6f9889f4eace6bf4fe81e92fbbc606"
-    },
-    {
-      "id": "det-endpoint-302",
-      "type": "detection",
-      "name": "SSH Config Or Authorized Keys Tampering Via auditd Watch",
-      "description": "Triggers when the AiSOC auditd profile records a write to /etc/ssh/sshd_config,\n/etc/ssh/sshd_config.d/, or /root/.ssh/authorized_keys. Pivots on the\nauditd_key field so the rule fires for any modify-class syscall (open, openat,\nrename, link, unlink) without needing a per-syscall companion rule.\nSSH config + root authorized_keys are the two most common backdoor footholds\non Linux servers; production hosts should see zero modifications outside of\nconfig-management runs.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "high",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1098.004",
-        "T1556"
-      ],
-      "log_source": "linux",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/linux-auditd-ssh-config-tampering.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "b4f701336587e0b01f4fde83ac0396bae97d85f80435b479807ddd3f9ee49da5"
-    },
-    {
-      "id": "det-endpoint-303",
-      "type": "detection",
-      "name": "Kernel Module Load Or Unload Via auditd Watch",
-      "description": "Triggers when the AiSOC auditd profile records init_module / finit_module /\ndelete_module syscalls or execution of /sbin/insmod, /sbin/rmmod, /sbin/modprobe.\nPivots on auditd_key so the rule fires regardless of how the kernel module\nprimitive was invoked. Loadable kernel modules are the standard delivery\nvehicle for Linux rootkits (Diamorphine, Reptile, Symbiote, etc.); legitimate\nmodule loads are dominated by boot-time systemd-modules-load.service and\nfilesystem drivers and should be easy to allowlist by parent process.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1547.006",
-        "T1014"
-      ],
-      "log_source": "linux",
-      "playbook": "tpl-defense-evasion",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/linux-auditd-kernel-module-load.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "ebf35d0b79a0d3f7d3f4fc4cb6bdc11433084d8fa5078ffe6e9ce34c6ac9b1c3"
-    },
-    {
-      "id": "det-endpoint-304",
-      "type": "detection",
-      "name": "Systemd Unit Persistence Via auditd Watch",
-      "description": "Triggers when the AiSOC auditd profile records a write under\n/etc/systemd/system/ or /lib/systemd/system/. Pivots on auditd_key so the\nrule fires for any modify-class syscall on a unit file without a per-syscall\ncompanion rule. Dropping a .service or .timer file under these directories is\nthe canonical Linux persistence technique post-foothold; legitimate writes\nare dominated by package managers and configuration-management agents and\nshould be straightforward to allowlist.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "medium",
-      "category": "endpoint",
-      "mitre_techniques": [
-        "T1543.002",
-        "T1053.006"
-      ],
-      "log_source": "linux",
-      "playbook": "tpl-persistence",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": false,
-      "executable": false,
-      "path": "detections/endpoint/linux-auditd-systemd-persistence.yaml",
-      "quarantine_reason": "authored as YAML with no Python spec, so the engine never loaded it; no connector is known to emit its fields, so translating it would add a rule that cannot fire",
-      "sha256": "b218cf7f622cada1ffe15670d2be810a1f7ea992698162c3e0e941c6536faf1f"
-    },
-    {
       "id": "det-identity-001",
       "type": "detection",
       "name": "Authentication Brute-Force Burst",
@@ -50711,6 +50957,664 @@
       "executable": true,
       "path": "detections/identity/ident-jamf-mdm-policy-mfa-removed.yaml",
       "sha256": "62de472661a8a42be692bdade4275974c1d122b213417403002c15e2614321f6"
+    },
+    {
+      "id": "det-identity-161",
+      "type": "detection",
+      "name": "Workspace Recovery Email Changed By The Account Holder",
+      "description": "The recovery address moved from the user's own session. Taken before a password reset it makes the reset survive the owner noticing.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1098.005",
+        "T1556"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-recovery-email-edited.yaml",
+      "sha256": "3eebb40e9985f7d4196c8de7fedbc1c42bcb52090418c0d4c3e7fcdbc0fc841e"
+    },
+    {
+      "id": "det-identity-162",
+      "type": "detection",
+      "name": "Workspace Recovery Phone Changed By The Account Holder",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Recovery Phone Changed By The Account Holder'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1098.005",
+        "T1556"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-recovery-phone-edited.yaml",
+      "sha256": "473cca4744bb147ac142b3b8717d970a4262b87816c6b83e4876784426aac23e"
+    },
+    {
+      "id": "det-identity-163",
+      "type": "detection",
+      "name": "Workspace 2-Step Verification Turned Off By The Account Holder",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace 2-Step Verification Turned Off By The Account Holder'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1556.006"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-2sv-disabled-by-user.yaml",
+      "sha256": "6b90f68fd3b806840302394af2272e5605266c3a71875dc6cc58549dd5a25a08"
+    },
+    {
+      "id": "det-identity-164",
+      "type": "detection",
+      "name": "Workspace 2-Step Verification Removed By An Administrator",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace 2-Step Verification Removed By An Administrator'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1556.006"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-2sv-unenrolled-by-admin.yaml",
+      "sha256": "b07dd06673b15d77185862489eddcd3f2559f5922b93dc604fc425a20f6a138b"
+    },
+    {
+      "id": "det-identity-165",
+      "type": "detection",
+      "name": "Workspace Strong Authentication Enforcement Relaxed",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Strong Authentication Enforcement Relaxed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1556.006"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-strong-auth-enforcement-relaxed.yaml",
+      "sha256": "ab16f4e22411356bf09031de3c47376449967c26215fbed9798339dd30346327"
+    },
+    {
+      "id": "det-identity-166",
+      "type": "detection",
+      "name": "Workspace Sign-In From An Anonymizing Or Hosting Network",
+      "description": "A successful sign-in from an address the pinned ingest dataset classes as VPN, Tor, proxy or hosting. The class and its dataset version travel on the alert.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1090.003"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-reauth-from-anonymizer.yaml",
+      "sha256": "8e5c2aa5dd5109f9e616976badb17706ed6d6f6a408223195f6add09db538ba8"
+    },
+    {
+      "id": "det-identity-167",
+      "type": "detection",
+      "name": "Workspace Suspicious Sign-In Flagged By Google",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Suspicious Sign-In Flagged By Google'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-suspicious-login-flagged.yaml",
+      "sha256": "856ef54e7c93e457920e7bcfeb0ae1ff7cba6741379087aab7a90fc295d684fa"
+    },
+    {
+      "id": "det-identity-168",
+      "type": "detection",
+      "name": "Workspace Suspicious Programmatic Sign-In",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Suspicious Programmatic Sign-In'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1550.001"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-suspicious-programmatic-login.yaml",
+      "sha256": "e1ee898e5473de9b14d4751e5cd65d568c010563cc369f60aed5b80b1c31d0a4"
+    },
+    {
+      "id": "det-identity-169",
+      "type": "detection",
+      "name": "Workspace Sign-In From A Less Secure Application",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Sign-In From A Less Secure Application'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-less-secure-app-login.yaml",
+      "sha256": "b09d0ea17ba19b63f0ad6bbe09980d9a06a9c728af995940a8a457f10d347002"
+    },
+    {
+      "id": "det-identity-170",
+      "type": "detection",
+      "name": "Workspace Government-Backed Attack Warning",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Government-Backed Attack Warning'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1566"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-gov-attack-warning.yaml",
+      "sha256": "f8f2c85f62cd5aad0e323d784eaa725358d64aebfd4824d04991339ecd9b4511"
+    },
+    {
+      "id": "det-identity-171",
+      "type": "detection",
+      "name": "Workspace Account Disabled After A Leaked Password",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Account Disabled After A Leaked Password'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-account-disabled-password-leak.yaml",
+      "sha256": "251b716eb9ea008d7e84718f503c77ff0fb60f28480f21b20ba532c230e9cb6c"
+    },
+    {
+      "id": "det-identity-172",
+      "type": "detection",
+      "name": "Workspace OAuth Grant Of Mail Or Drive Scopes",
+      "description": "A consent grant carrying a mailbox or drive scope. The scope list is the clause; a grant without one is an ordinary sign-in-with-Google.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1550.001",
+        "T1528"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-oauth-grant-mail-or-drive-scope.yaml",
+      "sha256": "e75cc55df068aeedf5e392b62a8ac9ee6f3ef67c22e3767c6a79514c42308460"
+    },
+    {
+      "id": "det-identity-173",
+      "type": "detection",
+      "name": "Workspace Super-Admin Privilege Granted",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Super-Admin Privilege Granted'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-super-admin-granted.yaml",
+      "sha256": "13b34ceacbdf63b37eec19bf719b4acacbeb899819f11c148447c0e8d6da37af"
+    },
+    {
+      "id": "det-identity-174",
+      "type": "detection",
+      "name": "Workspace Delegated Admin Privileges Assigned",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Delegated Admin Privileges Assigned'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-delegated-admin-granted.yaml",
+      "sha256": "4ab13612f2611df409521e9545a499b0b8df0973a1cc2960a158f6885efcae33"
+    },
+    {
+      "id": "det-identity-175",
+      "type": "detection",
+      "name": "Workspace Administrator Role Assigned",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Administrator Role Assigned'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-admin-role-assigned.yaml",
+      "sha256": "c1c7930c3619c7e9e5ced925ddb1a33171717b1843abca01fd166824b3049af2"
+    },
+    {
+      "id": "det-identity-176",
+      "type": "detection",
+      "name": "Workspace Managed Mobile Device Reported Compromised",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Managed Mobile Device Reported Compromised'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "google-workspace",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/gws-mobile-device-compromised.yaml",
+      "sha256": "338c87bf3af1cba46a26be28db9b2de7febe385ad76f29500d3d5c003843ec2d"
+    },
+    {
+      "id": "det-identity-177",
+      "type": "detection",
+      "name": "Snowflake Password-Only Sign-In Succeeded",
+      "description": "Snowflake states both factors on every LOGIN_HISTORY row, so a password-only success is a fact rather than an inference.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/snowflake-login-single-factor-service-user.yaml",
+      "sha256": "e6055437bb8f2292573ece671dd656aec693953db0376097273231a49f4b377f"
+    },
+    {
+      "id": "det-identity-178",
+      "type": "detection",
+      "name": "Snowflake Sign-In Failed With Incorrect Credentials",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Snowflake Sign-In Failed With Incorrect Credentials'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1110"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/snowflake-login-failed-bad-credentials.yaml",
+      "sha256": "172c62114ffd58269c52d762d55b034e2dfcbe0ebb22152c60d5d1c016cdb260"
+    },
+    {
+      "id": "det-identity-179",
+      "type": "detection",
+      "name": "Snowflake Sign-In From An Anonymizing Or Hosting Network",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Snowflake Sign-In From An Anonymizing Or Hosting Network'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004",
+        "T1090.003"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/snowflake-login-from-anonymizer.yaml",
+      "sha256": "8fe3fc99defad32b4440833565debf6c84f4cd401cf8eeef4d6c8d2276abfba3"
+    },
+    {
+      "id": "det-identity-180",
+      "type": "detection",
+      "name": "Snowflake Sign-In From A Programmatic Driver",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by 'Snowflake Sign-In From A Programmatic Driver'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "snowflake",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/snowflake-driver-change-for-user.yaml",
+      "sha256": "3356073a14e46233f9d20496af827cd73b2cae6f177189648d92515f75a34e4e"
+    },
+    {
+      "id": "det-identity-181",
+      "type": "detection",
+      "name": "1Password Sign-In Failed On Credentials",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by '1Password Sign-In Failed On Credentials'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1110"
+      ],
+      "log_source": "onepassword",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/1p-credentials-failed.yaml",
+      "sha256": "35a47968acd58f3aba3497a1f02790690c93d838e58042234ed1b95556fa6ce3"
+    },
+    {
+      "id": "det-identity-182",
+      "type": "detection",
+      "name": "1Password Sign-In Failed On Second Factor",
+      "description": "The credential was right and the factor was not, which separates a password-guessing attempt from one that already holds the password.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1621",
+        "T1110"
+      ],
+      "log_source": "onepassword",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/1p-mfa-failed.yaml",
+      "sha256": "6d083dd72b551a763cf2ac891c4402d51556547c70e3e661705ca30a46af4c2a"
+    },
+    {
+      "id": "det-identity-183",
+      "type": "detection",
+      "name": "1Password Sign-In Blocked By The Account Firewall",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by '1Password Sign-In Blocked By The Account Firewall'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "log_source": "onepassword",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/1p-firewall-blocked.yaml",
+      "sha256": "9d037042dab4e69a5adfcf6f0b33d9968a88d448c6c9e9f2d1d422a17b2d8bd6"
+    },
+    {
+      "id": "det-identity-184",
+      "type": "detection",
+      "name": "1Password Sign-In Succeeded From A Firewall-Reported Address",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by '1Password Sign-In Succeeded From A Firewall-Reported Address'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "log_source": "onepassword",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/1p-firewall-reported-success.yaml",
+      "sha256": "1f3bca8fefb5bc3b8b4b30b214268eab4f5720ef3f4b6376da798d5fae42b12a"
+    },
+    {
+      "id": "det-identity-185",
+      "type": "detection",
+      "name": "1Password Sign-In Refused For An Outdated Client",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by '1Password Sign-In Refused For An Outdated Client'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "log_source": "onepassword",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/1p-modern-version-failed.yaml",
+      "sha256": "0223f0e6a0075d7a73d1c8a93034d6b0e4e9af27fda2f5b88b920414bdebb859"
+    },
+    {
+      "id": "det-identity-186",
+      "type": "detection",
+      "name": "1Password Sign-In From An Anonymizing Or Hosting Network",
+      "description": "AiSOC v1 curated detection. Triggers on the identity signal described by '1Password Sign-In From An Anonymizing Or Hosting Network'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1078",
+        "T1090.003"
+      ],
+      "log_source": "onepassword",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/1p-signin-from-anonymizer.yaml",
+      "sha256": "54d3ecb5bc26353c83c7e2484b92adb1fb98898561bb3808300fcf2b6245e153"
     },
     {
       "id": "det-network-001",
