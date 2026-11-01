@@ -89,6 +89,7 @@ from app.models.action import ActionRequest, ActionStatus, ActionType
 
 from . import registry
 from .capability_contracts import apply_contract
+from .cloud_saas_arms import CLOUD_SAAS_EXECUTORS
 from .executor import LiveActionExecutor
 from .investigation_reads import (
     AWSLookupCloudAudit,
@@ -1166,6 +1167,10 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     # the registry could not reach. SentinelOne exposed seven
     # operations and one was wired; Entra six and one.
     *VENDOR_BREADTH_EXECUTORS,
+    # Wave-2 Phase 6.1 (depth 5.5). Cloud, SaaS, code-platform and gateway
+    # containment: the half of the estate where the response surface
+    # stopped at "open a ticket for the cloud team".
+    *CLOUD_SAAS_EXECUTORS,
     # Endpoint
     CrowdStrikeIsolateHost,
     DefenderIsolateHost,

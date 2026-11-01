@@ -135,5 +135,32 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "notify",
         # AUDIT
         "read_audit_trail",
+        # CLOUD IDENTITY (wave-2 Phase 6.1 / depth 5.5). The non-human half
+        # of the directory, plus the instance-level quarantine that works
+        # without an EDR agent. See the matching block in
+        # services/connectors/app/connectors/base.py for why each is its
+        # own verb rather than a flag on an existing one.
+        "deactivate_access_key",
+        "reactivate_access_key",
+        "disable_service_identity",
+        "enable_service_identity",
+        "get_cloud_identity",
+        "get_oauth_grants",
+        "quarantine_instance",
+        "release_instance",
+        "restore_role_sessions",
+        "restore_token",
+        "revoke_oauth_grant",
+        "revoke_role_sessions",
+        # CODE PLATFORM
+        "disable_workflow",
+        "enable_workflow",
+        "get_secret_scanning_alerts",
+        "remove_org_member",
+        "restore_org_member",
+        "revoke_deploy_key",
+        # SECURE WEB GATEWAY
+        "allow_url",
+        "block_url",
     }
 )
