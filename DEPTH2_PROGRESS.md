@@ -344,3 +344,161 @@ scorecard and the one most sensitive to a single sampled token.
 
 Nothing here is published to the scoreboard: the project's headline row is
 `llama3.1:8b-instruct-q4_K_M` at 0.357, which this host cannot run.
+
+### 1.2 Access review and right-sizing — shipped
+
+**Reproduced first.** `services/api/tests/test_access_review_reproduction.py`
+failed 7/7: no module in the tree compared granted with used, and a grep for
+`access_review`, `right-sizing`, `best_fit_role` or `dormant_admin` across
+`services/` and `apps/web/src` matched only Lane A's own 1.1 files.
+
+**What shipped.** `access_review.py` (pure), `access_review_store.py`,
+migration **125**, five routes behind `compliance:read`, and a console page
+at `/access-review` with a sidebar entry. Six finding kinds, each with a
+required `object_hint` and `recommendation` — a read-only review whose
+findings do not name the object to change leaves the reviewer with the hard
+half of the work, which is why reviews do not happen.
+
+**The honesty property this item turns on.** Usage-dependent findings are
+suppressed *wholesale* when `UsageOverlay.measured` is false, not emitted
+with a caveat. A caveat on "revoke this" is read by nobody, and the finding
+is wrong in the direction that costs an outage. `best_fit_role` returns
+`None` for the same reason, and also when no built-in covers the used set —
+recommending a role that does not cover something a principal actually used
+is a recommendation to cause an outage, which is the one error a
+right-sizing feature must not make.
+
+Three distinct empty states, because only one of them is good news:
+`never_run`, `nothing_reviewed` (a review over zero principals) and
+`no_findings` (a review over a real inventory). Rendering all three as
+"0 findings" presents an estate nobody looked at as an estate with nothing
+wrong.
+
+**Negative controls.** Eight live-Postgres tests: unmeasured usage suppresses
+the usage findings *and then the same principal with measured usage produces
+them*; three runs produce one row *and the run table proves three runs
+happened*; a finding that stops reproducing is retired; an acknowledgement
+survives the next run; another tenant's finding cannot be acknowledged
+(404, not 403, so the route is not an existence oracle).
+
+**Defect found while building.** The retire query hit the recorded
+`:name::type` bind-cast trap — SQLAlchemy's regex backtracks one character
+over a Postgres cast, so `:principals::text[]` declared a parameter named
+`principal`. Seven of eight live tests failed with a syntax error. Spelled
+`CAST(:principals AS text[])`; `check_text_bind_casts.py` stays green.
+
+### 1.4 Sub-principal baselines — shipped
+
+**Reproduced first.**
+`services/fusion/tests/test_sub_principal_baselines_reproduction.py` failed
+7/7. `baselines.py` kept a baseline per *principal* plus one volume
+baseline per OAuth app; a token, a service account and an AI agent were all
+folded into the human's baseline, which is backwards for the case these
+baselines exist to catch.
+
+**What shipped.** In `baselines.py` itself, as the plan requires — not a new
+store. `api_token`, `oauth_app`, `service_account` and `ai_agent` become
+subjects of their own, with four signals: acting outside its own baseline, a
+machine cadence turning interactive, a new ASN within an hour of the token
+first appearing, and reactivation after 60 days idle. All seven new fields
+are in `DERIVED_FIELDS`, so a rule can clause on them.
+
+**`classify_cadence` tests interactive first, and the order is the
+classifier.** A person working 09:00–17:00 produces consecutive active hours
+whose gaps are almost all 1, which is indistinguishable from an hourly cron
+by regularity alone. What separates them is that a person calls several
+times within one hour and a timer does not, so the repeat count has to be
+consulted before the regularity is. The first implementation checked
+regularity first and classified a human as `scheduled`.
+
+**The cross-language contract, and the second defect it caught.** The GitHub
+join key is written by Go (`session.go`, `strings.TrimSpace`, no case
+folding) and consumed by Python, whose general field helper lowercases —
+correct for a username, wrong for a base64 digest, and the obvious
+implementation is the broken one. Both sides now read one committed fixture,
+`services/ingest/internal/activity/testdata/github_token_key.json`, and it
+immediately found a *second* divergence nobody had looked for: Go requires a
+string type, while the Python side coerced a numeric `hashed_token` into
+`"12345"` — a baseline key Go never writes. Go: 8 subtests pass. Python: 9
+assertions pass, including a negative control that fails if the resolver
+ever starts folding case.
+
+**Gate caught drift.** `check_detection_fields.py` keeps its own mirror of
+`DERIVED_FIELDS` and `test_baselines.py` compares the two in both
+directions; it failed on the seven new fields, which is the gate working.
+
+### 1.5 What changed before this alert — shipped
+
+**Reproduced first.**
+`services/api/tests/test_change_timeline_reproduction.py` failed 5/5.
+
+**What shipped.** `change_timeline.py` joins versioned posture (what the
+estate looked like, complete for collected providers) with audit events (who
+did it, complete for ingested sources). Both are kept because a timeline
+from one alone is missing either the attribution or the coverage. Six change
+kinds over a closed action vocabulary — an unfamiliar action is not returned
+rather than guessed into a kind, because a reader cannot tell a guessed
+classification from a known one.
+
+`ChangeTimeline.measured` distinguishes "read both sources and found
+nothing" from "could not read either". An empty list with no such field
+turns a lake outage into evidence of a quiet week.
+
+**Wiring.** Registered as the typed pivot `changes_before_alert` and in the
+agents tool registry, reaching the API through the same `/investigate/query`
+door the privilege tool uses. The lake table is `aisoc.raw_events`, already
+declared ClickHouse-owned in `check_raw_sql_columns.py`'s `UNMIGRATED_TABLES`,
+so no new declaration was needed — verified by running the gate.
+
+### 3.1 Identity resolution — shipped
+
+**Reproduced first.**
+`services/api/tests/test_identity_resolution_reproduction.py` failed 7/7.
+
+**What shipped.** `identity_resolution.py` (pure) over all six sources the
+plan names, `identity_resolution_store.py`, and migration **128**. Eight
+rules, each carrying its own confidence, the evidence that produced it, and
+a `merged` flag derived from one threshold.
+
+**The failure mode designed against is a wrong link, not a missing one.** A
+wrong merge makes the identity look *richer*, not broken, and nothing
+downstream can detect it. The three canonical wrong merges are refused and
+each has a test: `alice@example.com` against `alice@contoso.com` (stored as
+a visible weak link, never merged), `admin` against `admin` (not even
+returned as weak — it would fill a review page with noise that reads as
+near-misses), and a shared role mailbox (demoted rather than treated as a
+verified address match).
+
+`MERGE_THRESHOLD` is 0.90 because the two errors are asymmetric: a missed
+link costs an analyst one pivot by hand, a wrong link silently attributes
+one person's alerts to another.
+
+**Both stores, one read interface.** Postgres for CORE per ADR-0010,
+`SAME_PERSON` edges mirrored to the graph for `full`, and reads come from
+Postgres only — a read that preferred the graph would answer differently on
+the two profiles for reasons no operator could see. Only merge-strength
+links are mirrored, because a weak edge in the graph gets walked by every
+traversal whose author did not know to filter it.
+
+**Negative controls.** Seven live-Postgres tests. The ordered-pair CHECK is
+exercised with a deliberate out-of-order insert that must be refused by the
+database; the weak-chain test is paired with a strong link proving the walk
+works at all; the bounded walk is compared at two depths; a human decision
+is tested in *both* directions (confirm promotes a weak link, reject demotes
+a strong one, neither touches `confidence`).
+
+### Measurements for 1.2, 1.4, 1.5 and 3.1
+
+Alert reduction re-run after all four: **33.3 %** (1000 → 667) and
+**24.5 %** (1000 → 755) — identical to the Phase 0 baseline.
+
+The verdict scorecard was **not** re-run for this batch, and the reason is
+stated rather than skipped: none of these four changes what the triage
+prompt contains on the eval corpus. 1.2 is a separate console surface with
+no triage caller; 1.4 adds fields to fusion's derived namespace that no
+corpus alert carries; 1.5 and 3.1 add tools the model may call, and the
+harness places no service token, so both return "could not read" exactly as
+the privilege tool did in the 1.1 measurement — where the prompt was proved
+byte-identical. A re-run would re-measure the same sampling noise at ~17
+minutes per pass. If a later lane wires any of these into the prompt by
+default, the scorecard has to move with it.
