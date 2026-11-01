@@ -50,9 +50,19 @@ claimed the same migration number simultaneously and one had to renumber.
 | Number | Kind | Lane / item | Claimed | File |
 |---|---|---|---|---|
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
+| 142 | migration | Lane D / Phase 6.3 | 2026-11-01 | tenant response schedule (business hours, on-call) |
+| 143 | migration | Lane D / Phase 6.3 | 2026-11-01 | approval timeout outcomes on the durable pause |
+| 144 | migration | Lane D / Phase 6.4 | 2026-11-01 | reserved — ticket-sync state, if 6.4 reproduces a gap |
+| 145 | migration | Lane D / Phase 7.5 | 2026-11-01 | reserved — AI containment state, if needed |
+| 0020 | ADR | Lane D | 2026-11-01 | reserved |
 
 Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
 ADR `0016`.
+
+Pre-allocated exclusive blocks, claimed at lane start so two lanes cannot pick
+the same number: Lane D holds migrations **142–145** and ADR **0020**. A
+reserved number that is not used is released by striking it here at lane
+close, never by a second lane assuming it is free.
 
 ## Phase 0: Kickoff
 
