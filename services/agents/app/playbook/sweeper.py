@@ -78,15 +78,29 @@ async def sweep_once() -> dict[str, int]:
     # stage came due in the same tick as its TTL should escalate, not be
     # cancelled with no outcome for the run to read.
     verifications = await engine.resume_due_verifications()
-    expired = await playbook_pause.expire_due()
-    if resumed or verifications or expired:
+    # Wave-2 6.3. One statement expires the due pauses and hands back what
+    # each one declared about its deadline, because the declaration lives
+    # on a row the expiry stops being `waiting` — a separate read would
+    # come after it and find nothing. An approval that declared `rollback`
+    # or `contain` has something the platform must do about nobody
+    # answering; `stay_paused` declares that it does not, and is the
+    # default, so every existing playbook is unaffected.
+    expired = await playbook_pause.expire_due_returning()
+    timeouts = await engine.run_timeout_outcomes(expired)
+    if resumed or verifications or expired or timeouts:
         logger.info(
-            "playbook_sweeper: resumed %d wait(s), finished %d verification(s), expired %d pause(s)",
+            "playbook_sweeper: resumed %d wait(s), finished %d verification(s), ran %d timeout outcome(s), expired %d pause(s)",
             len(resumed),
             len(verifications),
+            len(timeouts),
             len(expired),
         )
-    return {"resumed": len(resumed), "verifications": len(verifications), "expired": len(expired)}
+    return {
+        "resumed": len(resumed),
+        "verifications": len(verifications),
+        "timeout_outcomes": len(timeouts),
+        "expired": len(expired),
+    }
 
 
 async def run_forever(*, interval_seconds: float | None = None) -> None:

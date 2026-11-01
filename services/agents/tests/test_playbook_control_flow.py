@@ -570,13 +570,18 @@ class TestWaitsAreActuallyResumed:
             called.append("verify")
             return []
 
-        async def _expire(**kwargs: Any) -> list[str]:
+        async def _expire(**kwargs: Any) -> list[dict[str, Any]]:
             called.append("expire")
+            return []
+
+        async def _timeouts(expired: list[dict[str, Any]]) -> list[str]:
+            called.append("timeouts")
             return []
 
         monkeypatch.setattr(engine_mod, "resume_due_waits", _resume)
         monkeypatch.setattr(engine_mod, "resume_due_verifications", _verifications)
-        monkeypatch.setattr(engine_mod.playbook_pause, "expire_due", _expire)
+        monkeypatch.setattr(engine_mod.playbook_pause, "expire_due_returning", _expire)
+        monkeypatch.setattr(engine_mod, "run_timeout_outcomes", _timeouts)
 
         counts = await sweeper.sweep_once()
         # Resume before expire: a pause whose timer came due in the same
@@ -584,8 +589,14 @@ class TestWaitsAreActuallyResumed:
         # verification sweep sits in the same half for the same reason — a
         # question whose stage came due should escalate rather than be
         # cancelled with no outcome for the run to read.
-        assert called == ["resume", "verify", "expire"]
-        assert counts == {"resumed": 1, "verifications": 0, "expired": 0}
+        #
+        # Wave-2 6.3 collapsed the expiry and the declaration read into one
+        # `UPDATE ... RETURNING`, so the expiry runs first and the timeout
+        # outcomes act on what it handed back. A separate read could only
+        # come after the rows stopped being `waiting`, and would find
+        # nothing. Asserted as a position because that is the property.
+        assert called == ["resume", "verify", "expire", "timeouts"]
+        assert counts == {"resumed": 1, "verifications": 0, "timeout_outcomes": 0, "expired": 0}
 
     async def test_the_sweeper_survives_a_failing_pass(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """A sweeper that dies on one bad pass stops resuming everything."""
