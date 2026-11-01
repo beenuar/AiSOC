@@ -162,5 +162,10 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         # SECURE WEB GATEWAY
         "allow_url",
         "block_url",
+        # AI ESTATE (wave-2 Phase 7.5 / depth 6.6)
+        "demote_role",
+        "remove_workspace_member",
+        "restore_spend_cap",
+        "set_spend_cap",
     }
 )

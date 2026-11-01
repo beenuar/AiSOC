@@ -21,6 +21,11 @@ does not move anyone's patch target.
 
 from __future__ import annotations
 
+from app.clients.ai_provider_clients import (
+    AIGatewayClient,
+    AnthropicAdminClient,
+    OpenAIAdminClient,
+)
 from app.clients.aws_cloudtrail_client import AWSCloudTrailClient
 from app.clients.aws_iam_client import AWSIAMClient
 from app.clients.aws_security_groups import AWSSecurityGroupsClient
@@ -377,8 +382,11 @@ def _netskope_client(params: dict) -> NetskopeClient | None:
 
 
 __all__ = [
+    "AI_GATEWAY_CLIENT_PARAM_KEYS",
+    "ANTHROPIC_ADMIN_CLIENT_PARAM_KEYS",
     "AWS_IAM_CLIENT_PARAM_KEYS",
     "GCP_IAM_CLIENT_PARAM_KEYS",
+    "OPENAI_ADMIN_CLIENT_PARAM_KEYS",
     "GITHUB_CLIENT_PARAM_KEYS",
     "NETSKOPE_CLIENT_PARAM_KEYS",
     "ONEPASSWORD_CLIENT_PARAM_KEYS",
@@ -386,12 +394,15 @@ __all__ = [
     "SLACK_ADMIN_CLIENT_PARAM_KEYS",
     "SNOWFLAKE_CLIENT_PARAM_KEYS",
     "ZSCALER_CLIENT_PARAM_KEYS",
+    "_ai_gateway_client",
+    "_anthropic_admin_client",
     "_aws_client",
     "_aws_iam_client",
     "_gcp_iam_client",
     "_github_client",
     "_netskope_client",
     "_onepassword_client",
+    "_openai_admin_client",
     "_salesforce_client",
     "_slack_admin_client",
     "_snowflake_client",
@@ -410,3 +421,38 @@ __all__ = [
     "_panos_client",
     "_s1_client",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Wave-2 Phase 7.5 factories (AI estate)
+# ---------------------------------------------------------------------------
+
+OPENAI_ADMIN_CLIENT_PARAM_KEYS = ("openai_admin_key",)
+
+
+def _openai_admin_client(params: dict) -> OpenAIAdminClient | None:
+    admin_key = params.get("openai_admin_key")
+    if not admin_key:
+        return None
+    return OpenAIAdminClient(admin_key=admin_key)
+
+
+ANTHROPIC_ADMIN_CLIENT_PARAM_KEYS = ("anthropic_admin_key",)
+
+
+def _anthropic_admin_client(params: dict) -> AnthropicAdminClient | None:
+    admin_key = params.get("anthropic_admin_key")
+    if not admin_key:
+        return None
+    return AnthropicAdminClient(admin_key=admin_key)
+
+
+AI_GATEWAY_CLIENT_PARAM_KEYS = ("ai_gateway_url", "ai_gateway_master_key")
+
+
+def _ai_gateway_client(params: dict) -> AIGatewayClient | None:
+    base_url = params.get("ai_gateway_url")
+    master_key = params.get("ai_gateway_master_key")
+    if not (base_url and master_key):
+        return None
+    return AIGatewayClient(base_url=base_url, master_key=master_key)

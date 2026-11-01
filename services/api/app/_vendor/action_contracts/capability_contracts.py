@@ -1247,6 +1247,79 @@ _PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
 
 CAPABILITY_CONTRACTS.update(_PHASE61_CONTRACTS)
 
+#: Wave-2 Phase 7.5 (depth 6.6): containment for the AI estate.
+#:
+#: Three verbs, and the reason they are verbs of their own rather than
+#: flags on `disable_user` is the blast radius. Demoting a compromised
+#: project owner stops them minting provider keys and leaves their work
+#: intact; removing them from a workspace takes their access to everything
+#: in it; capping spend stops a runaway agent without touching anybody's
+#: membership at all. Collapsing those into one verb would force the
+#: widest action every time.
+_PHASE75_CONTRACTS: dict[str, CapabilityContract] = {
+    "demote_role": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="demote_role",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Lowers a principal's role on a provider or workspace. Its own "
+            "reverse, because the operation is 'set the role' and the "
+            "rollback is setting it back — a separate promote verb would be "
+            "a second way to grant privilege, which is not a thing to add "
+            "for symmetry's sake."
+        ),
+    ),
+    "remove_workspace_member": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Takes a person out of an AI workspace, with no route back the "
+            "platform owns: re-adding somebody is an invitation they have "
+            "to accept. The route-back rule exists to bound *autonomous* "
+            "damage, so the coherent posture is a human who accepts the "
+            "irreversibility knowingly rather than an analyst approval over "
+            "a rollback that does not exist. demote_role is the reversible "
+            "action for the same situation and is the one to reach for "
+            "first."
+        ),
+    ),
+    "set_spend_cap": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_spend_cap",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Caps what one key may spend. The softest containment in this "
+            "block: a key spending anomalously is not necessarily a key in "
+            "an attacker's hands, and a cap stops the bleeding without "
+            "breaking anything that is behaving."
+        ),
+    ),
+    "restore_spend_cap": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="set_spend_cap",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Puts a budget back. The caller supplies the figure; this verb never guesses what a key used to be allowed.",
+    ),
+}
+
+CAPABILITY_CONTRACTS.update(_PHASE75_CONTRACTS)
+
 
 def apply_contract(cls: type) -> type:
     """Class decorator: stamp the capability's contract onto an executor.

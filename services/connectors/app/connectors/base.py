@@ -282,6 +282,22 @@ class Capability(str, Enum):
     BLOCK_URL = "block_url"
     ALLOW_URL = "allow_url"
 
+    # AI ESTATE — containment for a model provider, its memberships and the
+    # gateway in front of it. Depth 6.6: the inventory could score a
+    # provider key's exposure and nothing could act on it, so a key found
+    # in a public repository was a finding with a recommendation.
+    #
+    # Demotion and removal are separate verbs because they are separate
+    # decisions: demoting a compromised project owner stops them minting
+    # keys and leaves their work intact, which is a far narrower action.
+    DEMOTE_ROLE = "demote_role"
+    REMOVE_WORKSPACE_MEMBER = "remove_workspace_member"
+    # Only a gateway offers this. Neither OpenAI's nor Anthropic's public
+    # admin API exposes a budget this platform can set, which is recorded
+    # in ai_provider_clients.py rather than left as a verb with no arm.
+    SET_SPEND_CAP = "set_spend_cap"
+    RESTORE_SPEND_CAP = "restore_spend_cap"
+
 
 # Ordered groupings used by the UI to render checkbox groups. The agent
 # tools endpoint (``GET /api/v1/agents/tools``) returns the same grouping

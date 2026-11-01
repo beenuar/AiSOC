@@ -70,8 +70,10 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # half of the estate the response surface had never reached — no AWS
     # key or role-session containment, no GCP or Azure service identity, no
     # GitHub, Slack, Salesforce, Snowflake or 1Password, and no gateway
-    # verb for a single URL.
-    assert count == 151
+    # verb for a single URL. Plus 14 from wave-2 Phase 7.5: AI-estate
+    # containment, where the inventory could score a provider key's
+    # exposure and nothing could act on it.
+    assert count == 165
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -86,7 +88,17 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
     pairs = {(d.vendor_id, d.capability) for d in descriptors}
 
     expected = {
+        ("ai_gateway", "get_cloud_identity"),
+        ("ai_gateway", "restore_spend_cap"),
+        ("ai_gateway", "restore_token"),
+        ("ai_gateway", "revoke_token"),
+        ("ai_gateway", "set_spend_cap"),
         ("aisoc_direct", "osquery_live_query"),
+        ("anthropic", "demote_role"),
+        ("anthropic", "get_cloud_identity"),
+        ("anthropic", "remove_workspace_member"),
+        ("anthropic", "restore_token"),
+        ("anthropic", "revoke_token"),
         ("aws", "deactivate_access_key"),
         ("aws", "disable_user"),
         ("aws", "enable_user"),
@@ -194,6 +206,10 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("onepassword", "disable_user"),
         ("onepassword", "enable_user"),
         ("onepassword", "get_cloud_identity"),
+        ("openai", "demote_role"),
+        ("openai", "get_cloud_identity"),
+        ("openai", "remove_workspace_member"),
+        ("openai", "revoke_token"),
         ("osctrl", "osquery_live_query"),
         ("pagerduty", "create_ticket"),
         ("pagerduty", "notify"),
@@ -267,7 +283,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 151
+    assert count == 165
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:
