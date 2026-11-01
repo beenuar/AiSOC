@@ -61,6 +61,12 @@ logger = structlog.get_logger(__name__)
 #: that they have to go and ask somebody about.
 REVOKE_POLICY_NAME = "AWSRevokeOlderSessions"
 
+#: AWS's own managed deny-everything policy. Used rather than an inline
+#: policy of our own so an operator reading the user in the console sees a
+#: name AWS documents, and so the rollback is a detach that cannot
+#: accidentally remove a policy the customer wrote.
+DENY_ALL_POLICY_ARN = "arn:aws:iam::aws:policy/AWSDenyAll"
+
 _IAM_API_VERSION = "2010-05-08"
 _EC2_API_VERSION = "2016-11-15"
 _ALGORITHM = "AWS4-HMAC-SHA256"
@@ -220,6 +226,42 @@ class AWSIAMClient:
             if "AccessKeyId" in entry:
                 keys.append(entry)
         return keys
+
+    # ------------------------------------------------------------------
+    # IAM user containment
+    # ------------------------------------------------------------------
+    #
+    # There is no "disable this IAM user" API. The documented containment
+    # is to attach the AWS-managed ``AWSDenyAll`` policy, which denies
+    # everything regardless of what else the user holds, and detaching it
+    # is an exact rollback — the user's own policies were never touched.
+    #
+    #   https://docs.aws.amazon.com/IAM/latest/APIReference/API_AttachUserPolicy.html
+    #   https://docs.aws.amazon.com/IAM/latest/APIReference/API_DetachUserPolicy.html
+    #   https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListAttachedUserPolicies.html
+
+    async def attach_deny_all(self, *, user_name: str) -> dict[str, Any]:
+        await self._call(
+            service="iam",
+            params={"Action": "AttachUserPolicy", "UserName": user_name, "PolicyArn": DENY_ALL_POLICY_ARN},
+        )
+        return {"user_name": user_name, "policy_arn": DENY_ALL_POLICY_ARN, "attached": True}
+
+    async def detach_deny_all(self, *, user_name: str) -> dict[str, Any]:
+        await self._call(
+            service="iam",
+            params={"Action": "DetachUserPolicy", "UserName": user_name, "PolicyArn": DENY_ALL_POLICY_ARN},
+        )
+        return {"user_name": user_name, "policy_arn": DENY_ALL_POLICY_ARN, "attached": False}
+
+    async def list_attached_user_policies(self, *, user_name: str) -> list[str]:
+        """``ListAttachedUserPolicies``, reduced to the policy ARNs.
+
+        The probe for the two above: the effect of the containment is the
+        presence of one ARN in this list, which is directly readable.
+        """
+        root = await self._call(service="iam", params={"Action": "ListAttachedUserPolicies", "UserName": user_name})
+        return [text for element in root.iter() if _local(element.tag) == "PolicyArn" and (text := (element.text or "").strip())]
 
     # ------------------------------------------------------------------
     # Role sessions

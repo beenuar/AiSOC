@@ -474,3 +474,31 @@ class AzureEntraClient:
             resp.raise_for_status()
             logger.info("entra.oauth2_grant.deleted", grant_id=grant_id)
             return {"success": True, "action": "revoke_oauth_grant", "grant_id": grant_id}
+
+    async def remove_service_principal_password(self, service_principal_id: str, key_id: str) -> dict[str, Any]:
+        """``POST /servicePrincipals/{id}/removePassword``: drop one secret.
+
+        The narrow containment for a leaked application secret: the
+        identity keeps working on its other credentials, and the one that
+        leaked stops. Irreversible by construction — Graph never returns a
+        removed secret and ``addPassword`` mints a new value, so the
+        contract declares no rollback instead of naming one that would
+        hand back a different credential and call it a restore.
+
+        Reference: https://learn.microsoft.com/en-us/graph/api/serviceprincipal-removepassword
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.post(
+                f"{_GRAPH}/servicePrincipals/{service_principal_id}/removePassword",
+                headers=self._headers(),
+                json={"keyId": key_id},
+            )
+            resp.raise_for_status()
+            logger.info("entra.remove_sp_password.success", service_principal_id=service_principal_id, key_id=key_id)
+            return {
+                "success": True,
+                "action": "revoke_token",
+                "service_principal_id": service_principal_id,
+                "key_id": key_id,
+            }

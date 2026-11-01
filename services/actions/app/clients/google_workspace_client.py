@@ -414,3 +414,23 @@ class GoogleWorkspaceClient:
             "revoked_code_ids": revoked,
             "count": len(revoked),
         }
+
+    async def get_user(self, user_email: str) -> dict[str, Any]:
+        """Directory record for one account. The read behind the suspend probe.
+
+        Reference: https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/get
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(f"{_DIRECTORY}/users/{user_email}", headers=self._headers())
+            resp.raise_for_status()
+            body = resp.json()
+        return {
+            "id": body.get("id"),
+            "primary_email": body.get("primaryEmail"),
+            "suspended": bool(body.get("suspended", False)),
+            "archived": bool(body.get("archived", False)),
+            "is_admin": bool(body.get("isAdmin", False)),
+            "is_enforced_in_2sv": bool(body.get("isEnforcedIn2Sv", False)),
+            "last_login_time": body.get("lastLoginTime"),
+        }
