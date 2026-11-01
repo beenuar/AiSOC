@@ -66,6 +66,13 @@ class RawAlert(BaseModel):
     file_hash: str | None = None
     domain: str | None = None
     url: str | None = None
+    # Anonymizer or hosting class of `src_ip`, stamped at ingest from a
+    # pinned local dataset (depth plan wave 2, 1.6), with the dataset version
+    # that answered. None means the dataset had no entry, which is the
+    # ordinary case: three of the five classes ship with no records and are
+    # tenant-supplied. None must render as unknown, never as "not a VPN".
+    src_ip_class: str | None = None
+    src_ip_class_dataset_version: str | None = None
 
     # MITRE ATT&CK
     mitre_tactics: list[str] = Field(default_factory=list)

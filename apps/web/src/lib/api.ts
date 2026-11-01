@@ -1257,6 +1257,34 @@ export interface AlertIOC {
 
 export type ConfidenceLabel = "high" | "medium" | "low";
 
+/**
+ * The closed set of anonymizer and hosting classes ingest can stamp.
+ * Mirrors `ALL_CLASSES` in `scripts/ip_class_dataset.py` and the dataset
+ * manifest; a value outside it is dropped rather than rendered, because an
+ * unrecognised class on a security surface reads as a finding nobody can
+ * explain.
+ */
+export type IpClass =
+  | "vpn"
+  | "tor_exit"
+  | "public_proxy"
+  | "residential_proxy"
+  | "hosting_provider";
+
+const IP_CLASSES: readonly IpClass[] = [
+  "vpn",
+  "tor_exit",
+  "public_proxy",
+  "residential_proxy",
+  "hosting_provider",
+];
+
+function asIpClass(value: unknown): IpClass | undefined {
+  return typeof value === "string" && (IP_CLASSES as readonly string[]).includes(value)
+    ? (value as IpClass)
+    : undefined;
+}
+
 export interface ConfidenceFactor {
   factor: string;
   label: string;
@@ -1363,6 +1391,17 @@ export interface Alert {
    */
   confidenceScore?: number;
   confidenceRationale?: ConfidenceFactor[];
+  /**
+   * Anonymizer or hosting class of the source address, stamped at ingest
+   * from a pinned local dataset. Absent means the dataset had no entry,
+   * which is the ordinary case: three of the five classes ship with no
+   * records because no redistributable source for them exists. Render
+   * absence as nothing at all, never as a reassuring "not an anonymizer".
+   */
+  srcIpClass?: IpClass;
+  /** Version of the dataset that produced `srcIpClass`. Shown beside the
+   *  chip because the dataset is refreshed and a class has to be datable. */
+  srcIpClassDatasetVersion?: string;
   ledgerRunId?: string;
   /** Analyst-corrected verdict (Tier 1.5 override loop). */
   disposition?: "true_positive" | "false_positive" | "benign" | "escalate" | null;
@@ -1643,6 +1682,11 @@ function normalizeAlert(raw: unknown): Alert {
     confidenceLabel: (r.confidence_label ?? r.confidenceLabel) as ConfidenceLabel | undefined,
     confidenceScore,
     confidenceRationale,
+    srcIpClass: asIpClass(r.src_ip_class ?? r.srcIpClass),
+    srcIpClassDatasetVersion: pickStr(
+      "src_ip_class_dataset_version",
+      "srcIpClassDatasetVersion",
+    ),
     ledgerRunId: pickStr("ledger_run_id", "ledgerRunId"),
     disposition: (r.disposition ?? null) as Alert["disposition"],
     narrative: (r.narrative as string | null | undefined) ?? null,
