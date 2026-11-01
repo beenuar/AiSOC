@@ -95,7 +95,8 @@ INSERT INTO alerts (
     connector_id, connector_type, source_event_ids, ocsf_class_uid,
     rule_id, rule_name, external_id,
     affected_hosts, affected_users, affected_ips,
-    session_id, session_key_kind, originating_human
+    session_id, session_key_kind, originating_human,
+    src_ip_class, src_ip_class_dataset_version
 )
 SELECT
     $1, $2, $3, $4, $5, 'new',
@@ -105,7 +106,8 @@ SELECT
     $18, $19, $20::jsonb, $21,
     $22, $23, $24,
     $25::jsonb, $26::jsonb, $27::jsonb,
-    $28, $29, $30
+    $28, $29, $30,
+    $31, $32
 WHERE NOT EXISTS (
     SELECT 1 FROM alerts WHERE tenant_id = $2 AND dedup_hash = $11::text
 )
@@ -368,6 +370,8 @@ def _insert_args(fused: FusedAlert) -> tuple[Any, ...]:
         fused.session_id,
         fused.session_key_kind,
         fused.originating_human,
+        alert.src_ip_class,
+        alert.src_ip_class_dataset_version,
     )
 
 

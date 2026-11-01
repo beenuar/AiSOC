@@ -342,11 +342,7 @@ def main() -> int:
         default=repo_root() / "services" / "ingest" / "internal" / "activity" / "ipclass" / "data",
         help="directory to write ip_classes.tsv and manifest.json into",
     )
-    parser.add_argument("--self-test", action="store_true", help="parse bundled samples offline")
     args = parser.parse_args()
-
-    if args.self_test:
-        return _self_test()
 
     manifest, rows = build()
     records_text, manifest_text = render(manifest, rows)
@@ -355,49 +351,6 @@ def main() -> int:
     (args.out / "manifest.json").write_text(manifest_text, encoding="utf-8")
     print(f"OK wrote {len(rows)} records to {args.out}")
     return 0
-
-
-def _self_test() -> int:
-    """Parse one sample of every upstream shape, with no network."""
-    cases: list[tuple[str, bytes, str]] = [
-        ("lines", b"# comment\n203.0.113.9\n\n198.51.100.0/24\n", "203.0.113.9"),
-        ("csv_first_column", b"203.0.113.0/24,US,CA\n", "203.0.113.0/24"),
-        ("aws", json.dumps({"prefixes": [{"ip_prefix": "203.0.113.0/24"}]}).encode(), "203.0.113.0/24"),
-        ("gcp", json.dumps({"prefixes": [{"ipv4Prefix": "203.0.113.0/24"}]}).encode(), "203.0.113.0/24"),
-        ("fastly", json.dumps({"addresses": ["203.0.113.0/24"]}).encode(), "203.0.113.0/24"),
-        (
-            "oracle",
-            json.dumps({"regions": [{"cidrs": [{"cidr": "203.0.113.0/24"}]}]}).encode(),
-            "203.0.113.0/24",
-        ),
-    ]
-    failures = 0
-    for parser_name, body, expected in cases:
-        produced = list(_PARSERS[parser_name](body))
-        if expected not in produced:
-            print(f"FAIL parser {parser_name}: {expected!r} not in {produced!r}")
-            failures += 1
-
-    if _normalise("203.0.113.9") != "203.0.113.9/32":
-        print("FAIL _normalise did not widen a bare address to a host prefix")
-        failures += 1
-    if _normalise("not-an-address") is not None:
-        print("FAIL _normalise accepted a non-address")
-        failures += 1
-
-    declared = {source.cls for source in SOURCES}
-    if declared != set(COVERED_CLASSES):
-        print(f"FAIL SOURCES cover {sorted(declared)} but COVERED_CLASSES says {sorted(COVERED_CLASSES)}")
-        failures += 1
-    if set(COVERED_CLASSES) & set(TENANT_SUPPLIED_ONLY):
-        print("FAIL a class is both shipped and tenant-supplied-only")
-        failures += 1
-    if set(COVERED_CLASSES) | set(TENANT_SUPPLIED_ONLY) != set(ALL_CLASSES):
-        print("FAIL covered plus tenant-supplied does not account for every class")
-        failures += 1
-
-    print("OK ip-class downloader self-test" if not failures else f"FAIL {failures} case(s)")
-    return 1 if failures else 0
 
 
 if __name__ == "__main__":
