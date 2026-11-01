@@ -1068,17 +1068,19 @@ jobs:
           python-version: '3.11'
           cache: pip
 
-      # The deliberately tiny closure, proven locally: the correlator chain
-      # needs pydantic(+settings, via app.core.config which conftest imports),
-      # redis and structlog; the windowed engine adds nothing; the sibling
-      # Kafka/Postgres live tests import aiokafka/asyncpg/httpx/cryptography
-      # at module level and then skip without their stores.
-      - name: Install fusion live-test dependencies
-        run: >-
-          pip install --quiet
-          "pytest>=8,<9" "pytest-asyncio>=1.0,<2.0"
-          "redis>=5" structlog "pydantic>=2" pydantic-settings
-          asyncpg aiokafka httpx "cryptography>=46,<51"
+      # The service's committed lock, not a hand-picked closure. This job
+      # runs the whole tests/integration/ suite, and the install-parity gate
+      # is right to hold a whole-suite run to the lock: a tiny closure
+      # re-resolves inside the declared ranges, so the versions it grades
+      # need not be the versions services/fusion/Dockerfile installs — and a
+      # missing optional dependency (clickhouse-driver) silently grades the
+      # `except ImportError` fallback where production grades the real path.
+      - name: Install fusion's locked dependency set
+        run: |
+          set -euo pipefail
+          python3 -m venv $RUNNER_TEMP/.venv-fusion
+          python3 scripts/service_requirements.py fusion --locked > /tmp/fusion.lock.txt
+          $RUNNER_TEMP/.venv-fusion/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/fusion.lock.txt
 
       - name: Correlator + windowed claims against the real server
         working-directory: services/fusion
@@ -1086,7 +1088,7 @@ jobs:
           AISOC_TEST_REDIS: redis://127.0.0.1:6379/0
         run: |
           set -euo pipefail
-          python -m pytest tests/integration/ -q -p no:cacheprovider 2>&1 | tee /tmp/fusion-live.log
+          $RUNNER_TEMP/.venv-fusion/bin/python -m pytest tests/integration/ -q -p no:cacheprovider 2>&1 | tee /tmp/fusion-live.log
           # A run in which everything skipped is a configuration failure
           # wearing a green tick — the one outcome this job must refuse.
           grep -Eq "[1-9][0-9]* passed" /tmp/fusion-live.log \
