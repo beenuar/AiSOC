@@ -196,6 +196,17 @@ DECISIONS: dict[str, Refusal] = {
         "files, not hunks. Content inspection is GitHub secret scanning's job; "
         "surfacing its alerts is connector work, not a rewrite of this rule.",
     ),
+    "identity/ident-github-pat-classic-created-with-broad-scopes": Refusal(
+        NEEDS_EXTERNAL_SOURCE,
+        "classic-PAT creation never reaches the org audit log — the documented "
+        "personal_access_token.* lifecycle covers fine-grained tokens — and no "
+        "audit entry carries a created token's scopes: the common `token_scopes` "
+        "field describes the token that authenticated the API call, not the token "
+        "being created. Briefly un-retired on the strength of the gate reporting "
+        "`scopes` resolvable; that field reaches the namespace from llm_usage.py "
+        "and from no GitHub path at all, which is the blind spot the gate's "
+        "product scoping now closes.",
+    ),
     "identity/app-token-broad-default": Refusal(
         NEEDS_CONNECTOR_FIELD,
         "integration_installation.create entries carry the app's name but not its "

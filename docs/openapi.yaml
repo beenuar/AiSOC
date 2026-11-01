@@ -21388,6 +21388,45 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-chat-compliance/sync:
+    post:
+      tags:
+      - ai-estate
+      summary: Sync Now
+      description: 'Collect now, for this tenant.
+
+
+        This route is the production caller the collector, client and
+
+        classifier never had. Until it existed the four tables migration 146
+
+        creates could only ever be empty, and the events page read "nothing
+
+        here" on a tenant that had configured collection and switched it on --
+
+        which reads as no AI-chat risk rather than as nothing having looked.
+
+
+        Write-permissioned deliberately: a sync spends a tenant''s provider
+
+        quota and writes rows, so it is not a read.
+
+
+        Partial failure is reported, never swallowed. A directory call that
+
+        403s still leaves the activity records that were written, and the
+
+        reason lands on both this response and the config row''s ``lastError``.'
+      operationId: sync_now_api_v1_ai_chat_compliance_sync_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SyncResponse'
+      security:
+      - HTTPBearer: []
   /api/v1/ai-chat-compliance/events:
     get:
       tags:
@@ -40237,6 +40276,42 @@ components:
       required:
       - reason
       title: SuppressRequest
+    SyncResponse:
+      properties:
+        users:
+          type: integer
+          title: Users
+        projects:
+          type: integer
+          title: Projects
+        events:
+          type: integer
+          title: Events
+        contentLabels:
+          type: integer
+          title: Contentlabels
+        chatsSkipped:
+          type: integer
+          title: Chatsskipped
+        contentUnavailable:
+          type: boolean
+          title: Contentunavailable
+        errors:
+          items:
+            type: string
+          type: array
+          title: Errors
+      type: object
+      required:
+      - users
+      - projects
+      - events
+      - contentLabels
+      - chatsSkipped
+      - contentUnavailable
+      - errors
+      title: SyncResponse
+      description: What one collection run did.
     SyncResult:
       properties:
         posted:
