@@ -112,7 +112,7 @@ jobs:
           # rail legs) were inert: their live tests only ran when something
           # *else* in the surviving list changed. This is the union of all
           # three lists; the next lane extends it rather than re-assigning.
-          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py .github/workflows/integration.yml'
           # backup_crypt.py was missing from the old filter, and it is where
           # every byte of the AES-256-GCM implementation lives — so a change
           # to the encryption itself did not run the gate that proves the
@@ -841,6 +841,18 @@ jobs:
         env:
           MSSP_ISOLATION_REQUIRED: '1'
         run: python -m pytest tests/test_identity_privilege_live.py -v --tb=short
+
+      # Depth 2 wave 2, 1.2. The review's properties are all schema facts:
+      # the unique index that turns a nightly re-run into an update rather
+      # than a ninetieth copy of one sentence, the NOT IN delete that
+      # retires a finding somebody fixed, an acknowledgement surviving the
+      # next run, and the tenant predicate on every statement including the
+      # acknowledgement write.
+      - name: Access review de-duplicates, retires and stays tenant-scoped (live Postgres)
+        working-directory: services/api
+        env:
+          MSSP_ISOLATION_REQUIRED: '1'
+        run: python -m pytest tests/test_access_review_live.py -v --tb=short
 
       # 060_rls_coverage.sql takes RLS from 31 of 95 tenant-scoped tables to
       # every one of them bar a documented exclusion. A migration that adds 49

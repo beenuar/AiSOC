@@ -11900,6 +11900,208 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/kinds:
+    get:
+      tags:
+      - access-review
+      summary: The finding kinds this review can produce
+      description: 'Published so the console can render a filter without hardcoding
+        a copy.
+
+
+        A second list in the frontend is how a kind ends up filterable on one
+
+        surface and invisible on the other; this repository has that defect on
+
+        record in the playbook editor''s step-type union.'
+      operationId: list_kinds_api_v1_access_review_kinds_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Kinds Api V1 Access Review Kinds Get
+      security:
+      - HTTPBearer: []
+  /api/v1/access-review/summary:
+    get:
+      tags:
+      - access-review
+      summary: Review state and counts, with an honest empty state
+      operationId: review_summary_api_v1_access_review_summary_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: provider
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Review Summary Api V1 Access Review Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/findings:
+    get:
+      tags:
+      - access-review
+      summary: Open access-review findings
+      operationId: list_findings_api_v1_access_review_findings_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: provider
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: include_acknowledged
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Acknowledged
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Findings Api V1 Access Review Findings Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/run:
+    post:
+      tags:
+      - access-review
+      summary: Recompute the review from current posture and usage
+      description: 'Recompute. Reads only — no vendor object is touched by this call.
+
+
+        Guarded by ``compliance:read`` rather than a write permission on
+
+        purpose: the only thing it writes is this tenant''s own review rows, and
+
+        requiring a write scope would put the review behind a permission an
+
+        auditor is deliberately not given.'
+      operationId: run_review_api_v1_access_review_run_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: provider
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Provider
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Run Review Api V1 Access Review Run Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/findings/{finding_id}/acknowledge:
+    post:
+      tags:
+      - access-review
+      summary: Acknowledge a finding
+      description: 'Record that a person decided this one is fine.
+
+
+        A 404 rather than a 403 for a finding belonging to another tenant: a
+
+        403 would make this route an existence oracle over every tenant''s
+
+        finding ids, and a genuine miss is byte-identical to a cross-tenant
+
+        attempt from the caller''s side either way.'
+      operationId: acknowledge_api_v1_access_review_findings__finding_id__acknowledge_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: finding_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Finding Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcknowledgeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Acknowledge Api V1 Access Review Findings  Finding
+                  Id  Acknowledge Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/identity/effective-permissions/providers:
     get:
       tags:
@@ -22328,6 +22530,15 @@ paths:
       - HTTPBearer: []
 components:
   schemas:
+    AcknowledgeRequest:
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+          title: Note
+          default: ''
+      type: object
+      title: AcknowledgeRequest
     ActionCount:
       properties:
         action:

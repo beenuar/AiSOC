@@ -7507,3 +7507,110 @@ export const caseDepthApi = {
       body: JSON.stringify({ values }),
     }),
 };
+
+// ── Access review (depth plan wave 2, 1.2) ─────────────────────────────────
+//
+// Read-only. Every route below computes or reads findings; none of them
+// changes a vendor object, and the only write is a reviewer acknowledging a
+// finding, which is state about the review rather than about the estate.
+
+export interface AccessReviewFinding {
+  id: string;
+  run_id: string;
+  kind: string;
+  provider: string;
+  principal_id: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  title: string;
+  detail: string;
+  /** The object a person should go and change. Never empty. */
+  object_hint: string;
+  recommendation: string;
+  /** Null when usage was not measured, or when no built-in role is smaller. */
+  best_fit_role: string | null;
+  evidence: Record<string, unknown>;
+  /**
+   * False when no usage data backed this finding. Usage-dependent kinds are
+   * suppressed entirely in that case, so a false here marks the weaker
+   * non-usage findings for what they are.
+   */
+  usage_measured: boolean;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  acknowledged_note: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+export interface AccessReviewProviderState {
+  provider: string;
+  run_state: "nothing_reviewed" | "no_findings" | "findings" | "failed";
+  reviewed_principals: number;
+  usage_measured_for: number;
+  finding_count: number;
+  window_start: string | null;
+  window_end: string | null;
+  note: string | null;
+  last_run_at: string | null;
+}
+
+export interface AccessReviewSummary {
+  /**
+   * `never_run` is a distinct state from a run that found nothing, and the
+   * page renders them differently on purpose: an estate nobody looked at
+   * must not read as an estate with nothing wrong.
+   */
+  state: "never_run" | "reviewed";
+  open_findings: number;
+  providers: AccessReviewProviderState[];
+  note?: string;
+}
+
+export interface AccessReviewKind {
+  kind: string;
+  title: string;
+  severity: string;
+  object_hint: string;
+  recommendation: string;
+  needs_usage: boolean;
+}
+
+export const accessReviewApi = {
+  async kinds(): Promise<{ kinds: AccessReviewKind[] }> {
+    return request<{ kinds: AccessReviewKind[] }>("/api/v1/access-review/kinds");
+  },
+
+  async summary(provider?: string): Promise<AccessReviewSummary> {
+    const query = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+    return request<AccessReviewSummary>(`/api/v1/access-review/summary${query}`);
+  },
+
+  async findings(params: {
+    provider?: string;
+    kind?: string;
+    includeAcknowledged?: boolean;
+  } = {}): Promise<{ items: AccessReviewFinding[]; count: number }> {
+    const search = new URLSearchParams();
+    if (params.provider) search.set("provider", params.provider);
+    if (params.kind) search.set("kind", params.kind);
+    if (params.includeAcknowledged) search.set("include_acknowledged", "true");
+    const query = search.toString();
+    return request<{ items: AccessReviewFinding[]; count: number }>(
+      `/api/v1/access-review/findings${query ? `?${query}` : ""}`,
+    );
+  },
+
+  async run(provider: string): Promise<AccessReviewSummary & { run_id: string }> {
+    return request<AccessReviewSummary & { run_id: string }>(
+      `/api/v1/access-review/run?provider=${encodeURIComponent(provider)}`,
+      { method: "POST" },
+    );
+  },
+
+  async acknowledge(findingId: string, note: string): Promise<AccessReviewFinding> {
+    return request<AccessReviewFinding>(
+      `/api/v1/access-review/findings/${encodeURIComponent(findingId)}/acknowledge`,
+      { method: "POST", body: JSON.stringify({ note }) },
+    );
+  },
+};

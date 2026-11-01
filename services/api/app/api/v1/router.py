@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     access_conditions,
+    access_review,
     admin_users,
     agent_tools,
     agents,
@@ -237,6 +238,7 @@ api_router.include_router(replay.public_router)
 # Resolves "what can principal X actually do?" across AWS / Azure / GCP /
 # Okta / Google Workspace and caches the result as :EFFECTIVE_PERMISSION
 # edges in Neo4j. Backs apps/web/src/app/(app)/identity/permissions.
+api_router.include_router(access_review.router)
 api_router.include_router(effective_permissions.router)
 
 # Signed email-approval links (T3.6). Unauthenticated by necessity — the
