@@ -25,12 +25,13 @@ import uuid
 from datetime import UTC, datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser, require_permission
+from app.api.v1.endpoints.alert_writeback import service_token_valid
 from app.api.v1.endpoints.auth import get_current_user
 from app.db.database import get_db
 from app.models.posture import PostureFinding, PostureScanRun
@@ -100,14 +101,33 @@ class SuppressRequest(BaseModel):
 
 
 class PostureSummary(BaseModel):
-    total: int
-    critical: int
-    high: int
-    medium: int
-    low: int
-    open: int
-    resolved: int
-    suppressed: int
+    """Counts, and whether they mean anything.
+
+    Until depth-2 item 8.1 this model was eight bare integers over a table
+    whose only writer was the hand-called route above, so every deployment
+    that had never POSTed a finding by hand read a confident
+    ``total: 0, critical: 0`` — which says "your cloud estate is clean" about
+    an estate nobody has looked at.
+
+    ``collected`` is the discriminator. It is derived from
+    ``posture_scan_runs``, which a collector writes on every poll including a
+    poll that found nothing, so "nobody has collected" and "collected, and the
+    estate is clean" stop being the same answer. When it is false the counts
+    are ``None`` rather than ``0``: a renderer cannot accidentally display an
+    absent measurement as a reassuring number.
+    """
+
+    collected: bool
+    last_collected_at: str | None = None
+    sources: list[str] = Field(default_factory=list)
+    total: int | None = None
+    critical: int | None = None
+    high: int | None = None
+    medium: int | None = None
+    low: int | None = None
+    open: int | None = None
+    resolved: int | None = None
+    suppressed: int | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -206,13 +226,37 @@ async def get_summary(
     db: AsyncSession = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> PostureSummary:
+    runs = (
+        (
+            await db.execute(
+                select(PostureScanRun)
+                .where(PostureScanRun.tenant_id == current_user.tenant_id)
+                .order_by(PostureScanRun.started_at.desc())
+                .limit(50)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
     q = select(PostureFinding).where(PostureFinding.tenant_id == current_user.tenant_id)
     if cloud_provider:
         q = q.where(PostureFinding.cloud_provider == cloud_provider)
     result = await db.execute(q)
     findings = list(result.scalars().all())
 
+    # A hand-POSTed finding is evidence that somebody collected, even though
+    # no run row exists for it. Without this an operator who uses the REST
+    # route — the only writer this table had for its whole life — would be
+    # told their own findings do not count as a measurement.
+    if not runs and not findings:
+        return PostureSummary(collected=False)
+
+    last = max((r.started_at for r in runs), default=None)
     return PostureSummary(
+        collected=True,
+        last_collected_at=last.isoformat() if last else None,
+        sources=sorted({str(r.source) for r in runs}),
         total=len(findings),
         critical=sum(1 for f in findings if f.severity == "critical"),
         high=sum(1 for f in findings if f.severity == "high"),
@@ -221,6 +265,117 @@ async def get_summary(
         open=sum(1 for f in findings if f.status == "open"),
         resolved=sum(1 for f in findings if f.status == "resolved"),
         suppressed=sum(1 for f in findings if f.status == "suppressed"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Internal: posture context for a verdict
+# ---------------------------------------------------------------------------
+
+
+class ResourceFinding(BaseModel):
+    finding_class: str
+    severity: str
+    rule_title: str
+    resource_name: str | None
+    resource_type: str
+    source: str
+    cloud_provider: str
+    first_detected_at: str
+    matched_key: str
+
+
+class ResourceFindingsResponse(BaseModel):
+    """What is already known to be wrong with the resources an alert touched.
+
+    ``collected`` carries the same discriminator as the summary, for the same
+    reason: an empty ``findings`` list on a tenant with no CNAPP connected
+    means "nobody has looked", and a prompt that renders that as "no findings
+    on this resource" has told the model something false.
+    """
+
+    collected: bool
+    findings: list[ResourceFinding] = Field(default_factory=list)
+    matched_resources: int = 0
+
+
+@router.get(
+    "/resource-findings",
+    response_model=ResourceFindingsResponse,
+    include_in_schema=False,
+    summary="Cloud-security findings on these resources, for the agents service",
+)
+async def resource_findings_for_triage(
+    tenant_id: uuid.UUID,
+    resources: Annotated[list[str], Query()],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=25)] = 5,
+    x_aisoc_service_token: Annotated[str | None, Header()] = None,
+) -> ResourceFindingsResponse:
+    """Posture context keyed on the resource, for triage.
+
+    Depth-2 item 8.1. Distinct from ``/findings`` above, which is the console's
+    tenant-wide list: this answers the one question a verdict has, which is
+    whether the resource in front of it is already known to be misconfigured
+    or already carrying a runtime detection.
+
+    Service-token only, and ``tenant_id`` is the scope rather than a narrowing
+    of one, for the same reasons as the sibling internal routes. The resource
+    keys come from the alert, which is attacker-influenced text, so they are
+    only ever bound as parameters and are matched against a stored array —
+    never interpolated, and never used to widen the tenant predicate.
+    """
+    if not service_token_valid(x_aisoc_service_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="this route is reachable only by an AiSOC service holding the shared service token",
+        )
+
+    keys = sorted({r.strip().lower() for r in resources if r and r.strip()})[:25]
+
+    collected = bool((await db.execute(select(PostureScanRun.id).where(PostureScanRun.tenant_id == tenant_id).limit(1))).first())
+    if not keys:
+        return ResourceFindingsResponse(collected=collected)
+
+    rows = (
+        (
+            await db.execute(
+                select(PostureFinding)
+                .where(
+                    PostureFinding.tenant_id == tenant_id,
+                    PostureFinding.status == "open",
+                    PostureFinding.resource_keys.overlap(keys),
+                )
+                .order_by(PostureFinding.last_seen_at.desc())
+                .limit(limit)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    findings: list[ResourceFinding] = []
+    for row in rows:
+        stored = [str(k) for k in (row.resource_keys or [])]
+        matched = next((k for k in stored if k in keys), "")
+        findings.append(
+            ResourceFinding(
+                finding_class=str(row.finding_class),
+                severity=str(row.severity),
+                rule_title=str(row.rule_title),
+                resource_name=row.resource_name,
+                resource_type=str(row.resource_type),
+                source=str(row.source),
+                cloud_provider=str(row.cloud_provider),
+                first_detected_at=row.first_detected_at.isoformat(),
+                matched_key=matched,
+            )
+        )
+
+    return ResourceFindingsResponse(
+        collected=collected or bool(findings),
+        findings=findings,
+        matched_resources=len({f.matched_key for f in findings if f.matched_key}),
     )
 
 
