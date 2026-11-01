@@ -87,8 +87,13 @@ class TestTheGateOnlyRaises:
             require_human_without_on_call=True,
             freeze_active=True,
         )
-        for impact in ActionImpact:
-            for declared in ApprovalRequirement:
+        # Materialised rather than iterated bare: CodeQL does not resolve
+        # EnumMeta.__iter__ through the `(str, Enum)` form and reported both
+        # loops as py/non-iterable-in-for-loop at error severity. They are
+        # iterable — 6 and 4 members — so this is the same assertion over
+        # the same members, written so the analysis can see it too.
+        for impact in list(ActionImpact):
+            for declared in list(ApprovalRequirement):
                 before = evaluate(impact=impact, declared_approval=declared, confidence=1.0, tier="L4")
                 after = apply_schedule(before, schedule, now=SUNDAY_NIGHT)
                 if before.requirement is not ApprovalRequirement.AUTOMATIC:

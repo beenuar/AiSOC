@@ -688,7 +688,7 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
       {
         key: 'choices',
         label: 'Allowed answers',
-        kind: 'list',
+        kind: 'string_list',
         required: true,
         placeholder: 'scheduled_job, interactive_use',
         help:
@@ -698,7 +698,7 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
       {
         key: 'context_keys',
         label: 'Evidence to include',
-        kind: 'list',
+        kind: 'string_list',
         required: false,
         placeholder: 'alert, _step_enrich',
         help:
@@ -708,7 +708,7 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
       {
         key: 'on_invalid',
         label: 'Fallback branch (step id)',
-        kind: 'text',
+        kind: 'string',
         required: true,
         placeholder: 'escalate-to-analyst',
         help:

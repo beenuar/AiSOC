@@ -263,9 +263,12 @@ const STEP_TYPE_TO_INTEGRATION: Record<StepType, IntegrationType | null> = {
   loop:                null,
   // Not runnable at all — see `STEP_SCHEMAS.approval`.
   approval:            null,
-  // Depth 5.4. The prompt goes out through the same governed `notify`
-  // arms, so the integration a verification needs is the destination.
-  ask_model:           'Decision',
+  // Depth 5.4. `ask_model` puts a bounded question to the model, which is
+  // the same bucket `investigate` and `enrich` sit in; a bucket of its own
+  // would have been a ninth badge for the integration those already name.
+  ask_model:           'AI Analysis',
+  // A verification's prompt goes out through the same governed `notify`
+  // arms, so the integration it needs is the destination.
   verify_user:         'Notification',
 };
 

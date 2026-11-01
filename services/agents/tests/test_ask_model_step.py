@@ -151,7 +151,7 @@ class TestTheFallbackIsAlwaysTaken:
         async def _boom(*_args, **_kwargs):
             raise RuntimeError("provider 503")
 
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _boom)
         record = await ask_model.ask(_config(), {"alert": "anything"}, dry_run=False)
         assert record["next_step_id"] == "escalate"
@@ -159,14 +159,14 @@ class TestTheFallbackIsAlwaysTaken:
         assert "provider 503" in record["reason"]
 
     async def test_an_off_list_answer_takes_the_fallback(self, monkeypatch) -> None:
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _model_returning('{"answer": "something_else"}'))
         record = await ask_model.ask(_config(), {"alert": "anything"}, dry_run=False)
         assert record["next_step_id"] == "escalate"
         assert record["fallback_taken"] is True
 
     async def test_a_valid_answer_takes_its_declared_branch(self, monkeypatch) -> None:
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _model_returning('{"answer": "scheduled_job", "reason": "cron"}'))
         record = await ask_model.ask(_config(), {"alert": "anything"}, dry_run=False)
         assert record["answer"] == "scheduled_job"
@@ -191,7 +191,7 @@ class TestTheAnswerIsLedgered:
     pytestmark = pytest.mark.asyncio
 
     async def test_the_record_carries_the_question_and_the_decision(self, monkeypatch) -> None:
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _model_returning('{"answer": "interactive_use", "reason": "typed at 14:03"}'))
         record = await ask_model.ask(_config(), {"alert": "anything"}, dry_run=False)
 
@@ -202,7 +202,7 @@ class TestTheAnswerIsLedgered:
         assert record["raw_answer"]
 
     async def test_an_oversized_reply_is_truncated_in_the_record(self, monkeypatch) -> None:
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _model_returning("x" * 50_000))
         record = await ask_model.ask(_config(), {"alert": "anything"}, dry_run=False)
         assert len(record["raw_answer"]) <= ask_model.MAX_RAW_ANSWER_CHARS
@@ -264,7 +264,7 @@ class TestTheStepCannotAct:
             raise AssertionError("ask_model reached the action bridge")
 
         monkeypatch.setattr("app.playbook.engine.action_bridge.dispatch_step", _tripwire)
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _model_returning('{"answer": "isolate_host"}'))
 
         playbook = Playbook(
@@ -293,7 +293,7 @@ class TestTheEngineBranchesOnTheAnswer:
     pytestmark = pytest.mark.asyncio
 
     async def test_a_valid_answer_jumps_to_its_branch(self, monkeypatch) -> None:
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _model_returning('{"answer": "scheduled_job"}'))
 
         playbook = Playbook(
@@ -315,7 +315,7 @@ class TestTheEngineBranchesOnTheAnswer:
         assert ran == ["ask", "benign"], f"expected the branch to skip escalate, got {ran}"
 
     async def test_an_invalid_answer_jumps_to_the_declared_fallback(self, monkeypatch) -> None:
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         monkeypatch.setattr("app.llm.safe_ainvoke", _model_returning("sorry, I cannot help with that"))
 
         playbook = Playbook(
@@ -337,7 +337,7 @@ class TestTheEngineBranchesOnTheAnswer:
         assert ran == ["ask", "escalate"], f"expected the fallback branch, got {ran}"
 
     async def test_a_misconfigured_step_fails_the_run_rather_than_deciding(self, monkeypatch) -> None:
-        monkeypatch.setattr(ask_model, "_model_factory", lambda: object())
+        monkeypatch.setattr(ask_model, "_model_factory", object)
         playbook = Playbook(
             name="no fallback declared",
             steps=[
