@@ -594,6 +594,18 @@ jobs:
         run: python3 scripts/check_alert_reduction_claims.py --self-test
       - name: Verify the retracted alert-reduction figure stays retracted
         run: python3 scripts/check_alert_reduction_claims.py --check
+      # Wave-2 plan 4.6. The three outcomes a buyer asks for first can only be
+      # measured by replaying somebody's real closed alerts, no design partner
+      # has offered a window, and all three are recorded as *not measured*.
+      # This gate is what stops that record becoming a number — including the
+      # worse version, a `0`, which reads as "measured and reduced nothing".
+      # It reads the state off the replay page rather than carrying its own
+      # copy, so publishing a real measurement retires the prohibition without
+      # anyone editing the gate.
+      - name: Customer-outcome claims — self-test
+        run: python3 scripts/check_outcome_claims.py --self-test
+      - name: No customer-outcome figure nobody measured
+        run: python3 scripts/check_outcome_claims.py
       # `llms.txt` is the machine-first summary crawlers and LLM-backed tools
       # read instead of the rendered docs nav, so a stale figure there is
       # consumed with no human in the loop to sanity-check it. It is generated
