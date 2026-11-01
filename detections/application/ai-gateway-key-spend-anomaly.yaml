@@ -1,4 +1,4 @@
-id: det-application-090
+id: det-application-094
 name: AI Gateway Key Spend Far Above Its Own Baseline
 description: 'The same question asked of the key rather than the agent, and the two are not the same incident:
   a leaked key driving inference from outside the estate moves the key''s baseline while every agent on

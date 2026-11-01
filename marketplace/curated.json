@@ -1,31 +1,31 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T11:33:03Z",
+  "generated": "2026-11-01T19:23:05Z",
   "stats": {
-    "considered": 2510,
-    "eligible": 2499,
-    "selected": 487,
+    "considered": 2514,
+    "eligible": 2503,
+    "selected": 489,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
     "unique_techniques": 137,
     "selected_by_tier": {
       "imported": 163,
-      "native": 324
+      "native": 326
     },
     "selected_by_severity": {
-      "critical": 99,
-      "high": 260,
+      "critical": 100,
+      "high": 261,
       "low": 16,
       "medium": 112
     },
     "selected_by_category": {
-      "application": 30,
+      "application": 33,
       "cloud": 152,
       "data-exfil": 12,
       "endpoint": 219,
-      "identity": 65,
+      "identity": 64,
       "network": 9
     }
   },
@@ -344,6 +344,7 @@
         "det-application-063",
         "det-application-069",
         "det-application-073",
+        "det-application-089",
         "det-cloud-001",
         "det-cloud-003",
         "det-cloud-004",
@@ -405,7 +406,6 @@
         "det-cloud-078",
         "det-cloud-079",
         "det-cloud-081",
-        "det-cloud-083",
         "det-cloud-087",
         "det-cloud-091",
         "det-cloud-092",
@@ -457,7 +457,8 @@
         "det-application-073",
         "det-application-075",
         "det-application-080",
-        "det-application-088",
+        "det-application-089",
+        "det-application-092",
         "det-cloud-001",
         "det-cloud-007",
         "det-cloud-014",
@@ -527,7 +528,6 @@
         "det-identity-020",
         "det-identity-021",
         "det-identity-022",
-        "det-identity-023",
         "det-identity-027",
         "det-identity-031",
         "det-identity-034",
@@ -554,7 +554,7 @@
     },
     "supply-chain": {
       "label": "Supply Chain",
-      "count": 35,
+      "count": 37,
       "rule_ids": [
         "det-application-006",
         "det-application-014",
@@ -567,6 +567,8 @@
         "det-application-054",
         "det-application-057",
         "det-application-059",
+        "det-application-087",
+        "det-application-088",
         "det-cloud-014",
         "det-cloud-040",
         "det-cloud-048",
@@ -603,8 +605,8 @@
         "det-application-023",
         "det-application-049",
         "det-application-056",
-        "det-application-089",
-        "det-application-090",
+        "det-application-093",
+        "det-application-094",
         "det-cloud-037",
         "det-cloud-080",
         "det-cloud-082",
@@ -739,7 +741,7 @@
     "T1136.002": 1,
     "T1187": 3,
     "T1190": 11,
-    "T1195": 1,
+    "T1195": 2,
     "T1195.001": 1,
     "T1195.002": 5,
     "T1199": 10,
@@ -792,7 +794,7 @@
     "T1558.002": 1,
     "T1558.003": 2,
     "T1560.001": 3,
-    "T1562.001": 5,
+    "T1562.001": 6,
     "T1562.004": 2,
     "T1562.008": 7,
     "T1563.002": 1,
@@ -1500,7 +1502,83 @@
       "has_executable_body": true
     },
     {
+      "id": "det-application-087",
+      "name": "Copilot Content Exclusion Changed",
+      "path": "detections/application/llm-copilot-content-exclusion-changed.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "critical",
+      "mitre_techniques": [
+        "T1562.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 1.0,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:critical(+0.150)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "github_copilot",
+      "has_executable_body": true
+    },
+    {
       "id": "det-application-088",
+      "name": "Hosted Coding Agent MCP Server List Changed",
+      "path": "detections/application/llm-copilot-agent-mcp-config-changed.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1195"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "supply-chain"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "github_copilot",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-089",
+      "name": "AI Application Consented a Write Scope",
+      "path": "detections/application/llm-ai-app-granted-write-scope.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1098.001"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "entra_consent",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-092",
       "name": "Guardrail Violations Rose Sharply for One AI Agent",
       "path": "detections/application/ai-agent-guardrail-violation-rate.yaml",
       "tier": "native",
@@ -1525,7 +1603,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-application-089",
+      "id": "det-application-093",
       "name": "AI Agent Spend Far Above Its Own Baseline",
       "path": "detections/application/ai-agent-token-spend-anomaly.yaml",
       "tier": "native",
@@ -1551,7 +1629,7 @@
       "has_executable_body": true
     },
     {
-      "id": "det-application-090",
+      "id": "det-application-094",
       "name": "AI Gateway Key Spend Far Above Its Own Baseline",
       "path": "detections/application/ai-gateway-key-spend-anomaly.yaml",
       "tier": "native",
@@ -7581,32 +7659,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-023",
-      "name": "OAuth App Granted Broad Scopes by User",
-      "path": "detections/identity/oauth-broad-scope-grant.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "google-workspace",
       "has_executable_body": true
     },
     {

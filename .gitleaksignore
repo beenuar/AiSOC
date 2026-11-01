@@ -32,14 +32,11 @@
 # of the form det-application-085. Nothing in this file is a secret; the
 # heuristic is firing on the slug, not on the value.
 #
-# These fingerprints pin a *line number*, so any commit that adds a rule
-# shifts the ones below it and silently invalidates their entries — the
-# exact rot the note above describes. The fix is to correct the numbers,
-# never to drop an entry or relax the job, and the set must be re-derived
-# with the allow-list **removed** (the way the job's own control step runs
-# it). Deriving it with a stale allow-list in place under-counts, because
-# some findings are suppressed by coincidence where an old line number
-# happens to match a new finding.
+# Wave-2 7.4 added four rules, which shifted every line below them and
+# invalidated five fingerprints — the exact rot the note above describes, so
+# the line numbers were corrected rather than the entries dropped. One entry
+# is genuinely new: `llm-copilot-bulk-resource-access` trips the heuristic on
+# the word "access", for the same reason as its neighbours.
 detections/rule-ids.lock.json:generic-api-key:5
 detections/rule-ids.lock.json:generic-api-key:7
 detections/rule-ids.lock.json:generic-api-key:8
@@ -51,10 +48,11 @@ detections/rule-ids.lock.json:generic-api-key:43
 detections/rule-ids.lock.json:generic-api-key:57
 detections/rule-ids.lock.json:generic-api-key:58
 detections/rule-ids.lock.json:generic-api-key:69
-detections/rule-ids.lock.json:generic-api-key:71
-detections/rule-ids.lock.json:generic-api-key:86
-detections/rule-ids.lock.json:generic-api-key:845
-detections/rule-ids.lock.json:generic-api-key:858
+detections/rule-ids.lock.json:generic-api-key:72
+detections/rule-ids.lock.json:generic-api-key:74
+detections/rule-ids.lock.json:generic-api-key:90
+detections/rule-ids.lock.json:generic-api-key:849
+detections/rule-ids.lock.json:generic-api-key:862
 
 # Positive test fixture for the `jwt-none-alg` detection rule. This file is
 # *expected* to contain a JWT with `alg: none` because the detection engine

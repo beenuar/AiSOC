@@ -1,4 +1,4 @@
-id: det-application-089
+id: det-application-093
 name: AI Agent Spend Far Above Its Own Baseline
 description: Cost is the signal that notices an agent being used for something other than its job — an
   exfiltration loop, a stolen credential driving inference, or a prompt that has started recursing. It

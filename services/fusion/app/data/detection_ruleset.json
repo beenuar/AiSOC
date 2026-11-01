@@ -1,5 +1,5 @@
 {
-  "count": 764,
+  "count": 768,
   "rules": [
     {
       "category": "application",
@@ -1180,6 +1180,75 @@
     },
     {
       "category": "application",
+      "id": "det-application-087",
+      "match_when": {
+        "event_type_endswith": ".copilot.content_exclusion_changed"
+      },
+      "mitre": [
+        "T1562.001"
+      ],
+      "name": "Copilot Content Exclusion Changed",
+      "product": "github_copilot",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "llm-copilot-content-exclusion-changed"
+    },
+    {
+      "category": "application",
+      "id": "det-application-088",
+      "match_when": {
+        "event_type_endswith": ".copilot.swe_agent_mcp_config_updated"
+      },
+      "mitre": [
+        "T1195"
+      ],
+      "name": "Hosted Coding Agent MCP Server List Changed",
+      "product": "github_copilot",
+      "service": "audit",
+      "severity": "high",
+      "slug": "llm-copilot-agent-mcp-config-changed"
+    },
+    {
+      "category": "application",
+      "id": "det-application-089",
+      "match_when": {
+        "event_type_endswith": ".consent_to_application",
+        "granted_scopes_has_any": [
+          "Mail.ReadWrite",
+          "Mail.Send",
+          "Files.ReadWrite.All",
+          "Sites.ReadWrite.All",
+          "Directory.ReadWrite.All",
+          "User.ReadWrite.All"
+        ]
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "AI Application Consented a Write Scope",
+      "product": "entra_consent",
+      "service": "audit",
+      "severity": "high",
+      "slug": "llm-ai-app-granted-write-scope"
+    },
+    {
+      "category": "application",
+      "id": "det-application-090",
+      "match_when": {
+        "accessed_resource_count_gte": 25,
+        "event_type_endswith": ".CopilotInteraction"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "AI Assistant Interaction Touched Many Resources at Once",
+      "product": "microsoft_copilot",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "llm-copilot-bulk-resource-access"
+    },
+    {
+      "category": "application",
       "id": "det-application-078",
       "match_when": {
         "event_type_endswith": ".project.archived"
@@ -1306,7 +1375,7 @@
     },
     {
       "category": "application",
-      "id": "det-application-087",
+      "id": "det-application-091",
       "match_when": {
         "baseline_agent_tool_rarity_gte": 0.95,
         "tool_name_in": [
@@ -1333,7 +1402,7 @@
     },
     {
       "category": "application",
-      "id": "det-application-088",
+      "id": "det-application-092",
       "match_when": {
         "baseline_agent_volume_z_gte": 3.0,
         "outcome": "blocked"
@@ -1349,7 +1418,7 @@
     },
     {
       "category": "application",
-      "id": "det-application-089",
+      "id": "det-application-093",
       "match_when": {
         "baseline_agent_token_spend_z_gte": 4.0
       },
@@ -1364,7 +1433,7 @@
     },
     {
       "category": "application",
-      "id": "det-application-090",
+      "id": "det-application-094",
       "match_when": {
         "baseline_gateway_key_token_spend_z_gte": 4.0
       },

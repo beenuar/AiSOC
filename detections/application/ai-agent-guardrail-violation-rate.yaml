@@ -1,4 +1,4 @@
-id: det-application-088
+id: det-application-092
 name: Guardrail Violations Rose Sharply for One AI Agent
 description: A single agent is being blocked far more often than its own history. One guardrail violation
   is noise — a user phrasing something awkwardly — while a rise against that agent's own baseline is someone
