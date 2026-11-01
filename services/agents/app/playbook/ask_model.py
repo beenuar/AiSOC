@@ -47,8 +47,6 @@ import logging
 from dataclasses import dataclass
 from typing import Any
 
-from app.llm.prompt_registry import prompt_text
-
 from .bounds import clamp_timeout
 
 logger = logging.getLogger("aisoc.playbook.ask_model")
@@ -263,6 +261,7 @@ async def ask(config: AskModelStepConfig, context: dict[str, Any], *, dry_run: b
 
     try:
         from app.llm import safe_ainvoke  # noqa: PLC0415 - deferred: heavy module
+        from app.llm.prompt_registry import prompt_text  # noqa: PLC0415 - deferred: same package
 
         # Every call from this service goes through safe_ainvoke, which
         # enforces the LLM input contract. The AST gate that proves no
