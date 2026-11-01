@@ -123,6 +123,7 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 | Vendor fields nested under `raw_event` are visible to detections | (implied by the detection corpus) | `ci.yml` fusion tests (`test_detection_field_namespace.py` — 663 of 825 loaded rules referenced an invisible field before this; both the stateless and windowed engines now merge the payload identically) | core | GATED | - |
 | A connector's alerts are attributed to that connector, not to Splunk | `apps/docs/docs/connectors/` | `ci.yml` ingest tests (`TestUnknownConnectorFallbackIsVendorNeutralAndPromotable` — the lenient fallback borrowed the `splunk_enterprise` profile, mis-attributing 26 connectors and, being category 4 with an empty severity map, making their events unpromotable) | core | GATED | - |
 | Customer AI estate: routine agent activity is not auto-promoted to an alert | README (AI estate), `packages/aisoc-ai-sdk/README.md` | `ci.yml` ingest tests (`TestAiRuntimeActivityIsNotAFinding` + `TestAiGuardrailFindingIsAlwaysPromotable` — asserts the 6003/2001 split in both directions, since all-2001 floods the queue with an agent's normal operation and all-6003 leaves a detected injection silent in the lake) | core | GATED | - |
+| Agentmetry coding-agent telemetry lands split — routine tool calls in the lake, correlated detections as alerts with severity and ATT&CK ids preserved | `apps/docs/docs/connectors/agentmetry.md`; GitHub Discussion #1577 | `ci.yml` ingest tests (`agentmetry_test.go` — real captured canonical v1.2.0 events through the real embedded template: class_map routes `action.type: detection` onto 2001 while tool calls stay 6003; the critical tier maps to severity_id 5 and never collapses into high; supplied technique ids are carried as supplied and ATLAS ids are refused from ATT&CK-typed fields while preserved in evidence; `TestGenericJsonLandsAgentmetryEventsButFlattensThem` pins what the generic-json path loses, which is the template's reason to exist) + `ci.yml` fusion tests (`test_ai_asset_recorder.py` — an agentmetry event yields a coding-agent sighting with person and device) + `ci.yml` ingest tests (graph `ai_estate_test.go` — the agentmetry source_type produces an AIAsset node with OPERATES and HOSTS edges) | core | GATED | the live leg (a running Agentmetry orchestrator POSTing to a running AiSOC over the network) is stated as unverified in the docs page rather than claimed |
 | AI prompt content does not leave the customer's process by default | `packages/aisoc-ai-sdk/README.md` | `ai-sdk.yml` (`test_ai_sdk.py` — hashed capture asserts no content is transmitted while still reporting which secret shapes were present; masked/full are opt-in per client) | core | GATED | - |
 | The AI SDK never breaks or blocks the host application | `packages/aisoc-ai-sdk/README.md` | `ai-sdk.yml` (transport failure, full queue and unconfigured endpoint all assert a dropped span rather than a raise; a zero-runtime-dependency check stops the package pulling a transport library into a customer's resolution) | core | GATED | - |
 | Every MCP tool call is accounted for | `services/mcp/README.md` | `ci.yml` MCP vitest (`telemetry.test.ts` — records successes and refusals, transmits argument keys but never values, bounds its buffer, and never raises on an unreachable inbox; the README previously claimed an audit trail the server did not emit and the API's audit middleware does not cover for read tools) | core | GATED | - |
@@ -345,8 +346,8 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 ## Summary
 
-- Total: 334
-- GATED: 329
+- Total: 335
+- GATED: 330
 - PARTIAL: 5
 - NO GATE: 0
 

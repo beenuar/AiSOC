@@ -22,6 +22,14 @@ import (
 // a different template.
 var ErrTemplateNotFound = errors.New("inbox template not registered")
 
+// ClassOverride redirects an event onto a different OCSF class when the
+// template's ClassField carries a matching value. Both halves travel
+// together so the published event stays self-describing.
+type ClassOverride struct {
+	ClassUID  int    `yaml:"class_uid"`
+	ClassName string `yaml:"class_name"`
+}
+
 // Template defines how a vendor-specific JSON payload maps onto an OCSF
 // event. Each YAML file in services/ingest/internal/normalizer/templates/
 // produces one Template; the filename stem (without .yaml) is the
@@ -49,6 +57,36 @@ type Template struct {
 	// Activity overrides the default activity_id (1 = "Create") — useful
 	// for auth events where vendor traffic is mostly login/logout.
 	ActivityID int `yaml:"activity_id,omitempty"`
+
+	// ClassField / ClassMap route individual events onto a different OCSF
+	// class by the value at one payload path. They exist for sensors that
+	// push routine activity and correlated findings through one webhook
+	// URL (Agentmetry posts both to one sink): the activity belongs in a
+	// non-Findings class the promoter leaves in the lake, while a finding
+	// belongs at category 2, which is always promoted. Without the split a
+	// single-class template either floods the alert queue with the
+	// sensor's normal operation or leaves its detections silent in the
+	// lake — the exact pair of failure modes the ai-runtime / ai-finding
+	// template split documents.
+	//
+	// ClassUID / ClassName above remain the default for any event whose
+	// ClassField value has no ClassMap entry, so an unrecognised or absent
+	// kind degrades to the template's declared class rather than being
+	// dropped. Keys are normalised to lower-case at load time, the same
+	// contract as SeverityMap.
+	ClassField string                   `yaml:"class_field,omitempty"`
+	ClassMap   map[string]ClassOverride `yaml:"class_map,omitempty"`
+
+	// TechniqueFields — payload dot-paths that may carry MITRE ATT&CK
+	// technique ids, as a single string or a list of strings. Ids are
+	// validated by shape, deduplicated, and published as the same
+	// `mitre_attck` block the connector path emits (corpus-confirmed ids
+	// verified:true, well-formed unconfirmed ids carried verified:false).
+	// The inbox path maps only declared fields — it never scans the
+	// payload — so a template has to name where its vendor carries
+	// technique ids or they are dropped, which is how every inbox
+	// template behaved before this field existed.
+	TechniqueFields []string `yaml:"technique_fields,omitempty"`
 
 	// FieldMap projects vendor JSON paths onto OCSF JSON paths. Both
 	// sides use dot notation; arrays are addressed with `[N]`.
@@ -114,6 +152,21 @@ func (r *Registry) parse(name string, raw []byte) bool {
 			normalised[strings.ToLower(strings.TrimSpace(k))] = v
 		}
 		t.SeverityMap = normalised
+	}
+	// Normalise class-map keys the same way, and drop an override that
+	// names no class: silently stamping class_uid 0 would publish an event
+	// no promoter branch can ever reach, which is worse than falling back
+	// to the template's declared default.
+	if len(t.ClassMap) > 0 {
+		normalised := make(map[string]ClassOverride, len(t.ClassMap))
+		for k, v := range t.ClassMap {
+			if v.ClassUID <= 0 {
+				log.Warn().Str("template", name).Str("class_map_key", k).Msg("inbox: class_map entry without a positive class_uid ignored")
+				continue
+			}
+			normalised[strings.ToLower(strings.TrimSpace(k))] = v
+		}
+		t.ClassMap = normalised
 	}
 
 	r.mu.Lock()

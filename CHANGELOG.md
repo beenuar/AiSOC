@@ -87,6 +87,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   whose evidence recorded `scheduled_scan` could state the claim and still
   be refused support.
 
+- **Agentmetry ingest template: AI coding-agent activity as an input**
+  (GitHub Discussion #1577). [Agentmetry](https://github.com/blitzcrieg1/agentmetry)
+  records the tool calls Claude Code, Cursor, Codex and Copilot make through
+  their own hooks and correlates them into ATT&CK/ATLAS-mapped detections;
+  its webhook sink posts one canonical JSON event per request, routine
+  activity and detections down one URL. The discussion asked whether
+  generic-json "should land" them — checked against the real template with
+  real captured events: they land, but severity flattens to Unknown on every
+  event including critical detections (generic-json reads a top-level
+  `severity`; theirs lives at `action.outcome` / `detection.severity`),
+  every routine tool call is promoted to an alert (class 2001 is always
+  promoted — one busy agent is a queue flood), and titles, technique ids and
+  the event timestamp are lost. The bundled `agentmetry` template fixes
+  exactly that: the template language gains `class_field`/`class_map` (one
+  URL, per-event-kind class: tool calls stay 6003 API Activity in the lake,
+  `action.type: detection` routes to 2001 Security Finding, always promoted)
+  and `technique_fields` (vendor-supplied ATT&CK ids carried as supplied
+  through the same `mitre_attck` block the connector path emits, shared via
+  the newly exported `EnrichTechniqueIDs`/`TechniqueIDsFromPaths`; ATLAS
+  `AML.T****` ids are preserved in evidence fields and refused from
+  ATT&CK-typed ones, matching Agentmetry's own warning). The five-tier
+  severity ladder survives end to end — critical maps to its own tier,
+  never high. Agentmetry-observed coding agents feed the AI-estate
+  inventory and graph (`agentmetry` joins the `ai-runtime`/`ai-finding`
+  source-type branch in both consumers), the template is mintable from the
+  console catalog, and the docs page states plainly what was verified
+  against captured events versus what remains unexercised live. Also fixes
+  the `ai-estate.md` table row that claimed `ai-finding` is class 6003 —
+  the template is and was 2001.
+
 - **Asset criticality reaches fusion confidence and action approval —
   tighten-only.** Fusion stamps what each alert landed on at fuse time
   (`enrichments["asset_context"]`, resolved from the tenant's own `assets`

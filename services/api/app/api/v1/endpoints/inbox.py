@@ -99,6 +99,11 @@ ALLOWED_TEMPLATE_IDS: tuple[str, ...] = (
     # and the SDK had no reachable endpoint to point at.
     "ai-runtime",
     "ai-finding",
+    # Agentmetry (github.com/blitzcrieg1/agentmetry) — coding-agent tool
+    # calls and correlated detections through one webhook sink. One
+    # template for both kinds: its class_map routes action.type=detection
+    # onto 2001 while routine activity stays at 6003 (Discussion #1577).
+    "agentmetry",
     # Kubernetes apiserver audit, inbox path. The dedicated route
     # POST /v1/ingest/k8s-audit/{tenant_id} is preferred and is what the
     # connector docs lead with, but both those docs and
@@ -357,6 +362,17 @@ _TEMPLATE_CATALOG: dict[str, dict[str, str]] = {
         "description": (
             "Prompt injection, excessive agency, sensitive-data egress and other "
             "guardrail hits. Always promoted to an alert, so mint this separately from ai-runtime."
+        ),
+        "category": "ai",
+    },
+    "agentmetry": {
+        "label": "Agentmetry (AI coding agents)",
+        "description": (
+            "Canonical events from Agentmetry, the open-source sensor for AI coding agents "
+            "(Claude Code, Cursor, Codex, Copilot and MCP servers behind its proxy). One URL "
+            "carries both routine tool calls (kept in the lake for hunting) and its correlated "
+            "detections, which are always promoted to alerts with their severity and "
+            "ATT&CK technique ids preserved. Point AGENTMETRY_AUDIT_WEBHOOK_URL at the minted URL."
         ),
         "category": "ai",
     },

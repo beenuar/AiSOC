@@ -1,0 +1,106 @@
+# Agentmetry — AI coding-agent activity and correlated detections.
+#
+# Agentmetry (github.com/blitzcrieg1/agentmetry, Apache-2.0) is an open-source
+# sensor for AI coding agents: it records each tool call Claude Code, Cursor,
+# Codex and Copilot make through their own hooks, plus every call through MCP
+# servers wrapped by its proxy, correlates sequences into detections mapped to
+# MITRE ATT&CK and ATLAS, and forwards one canonical JSON event per POST
+# (schema v1.2.0, AGENTMETRY_AUDIT_WEBHOOK_FORMAT=canonical, the default).
+#
+# One template for both event kinds, because their webhook sink has one URL —
+# and the kinds deliberately land in different OCSF classes, the same split
+# ai-runtime.yaml / ai-finding.yaml encode:
+#
+#   * Routine activity (action.type: tool_called, session_start, ...) is 6003
+#     API Activity. Category 6, so should_promote() leaves it in the lake to
+#     be hunted — a coding agent emits an event per tool call, and promoting
+#     each one floods the queue with the agent's normal operation.
+#   * A correlated detection (action.type: detection) is 2001 Security
+#     Finding via class_map. Category 2, always promoted: Agentmetry's own
+#     rule engine already judged the sequence worth a human's attention, the
+#     same reasoning that puts a Splunk notable at 2001 — a medium detection
+#     must not be silently dropped for missing a severity bar.
+#
+# Severity reads detection.severity, not action.outcome. On detection events
+# the two carry the same word (critical | high | medium | low); on activity
+# events action.outcome is an outcome (success | denied | error | pending),
+# and routing it through the severity ladder would stamp "success" into a
+# severity column. Activity events carry no vendor severity and surface as
+# Unknown, which is honest — the detections are the severity-bearing stream.
+#
+# ATT&CK technique ids arrive pre-mapped by the sensor (detection.technique_ids
+# on findings, tool.mitre.technique_id on tool calls) and are carried as
+# supplied via technique_fields, never re-inferred. ATLAS ids (AML.T****) are
+# deliberately NOT lifted into mitre_attck: the shape check admits only
+# T####(.###), and Agentmetry's own docs warn that an ATLAS id in an
+# ATT&CK-typed field corrupts any rollup that groups by technique. The inbox
+# path retains no unmapped payload, so each ATLAS id is carried in its own
+# evidence field instead — preserved for the analyst, invisible to ATT&CK
+# rollups.
+id: agentmetry
+vendor_name: Agentmetry
+product_name: Agentmetry
+class_uid: 6003
+class_name: API Activity
+activity_id: 1
+class_field: action.type
+class_map:
+  detection:
+    class_uid: 2001
+    class_name: Security Finding
+field_map:
+  # Identity. agent.name is the AI tool itself (cursor, claude, codex) —
+  # actor.process.name is where the AI-estate inventory and graph read the
+  # agent from; actor.id is the human account the agent acted for.
+  agent.name: actor.process.name
+  actor.id: actor.user.name
+  host_id: src_endpoint.hostname
+  source.app: finding.evidence.source_app
+  # What was invoked (absent on detection events, present on activity).
+  tool.name: activity_name
+  tool.qualified: finding.evidence.tool_qualified
+  action.outcome: status_detail
+  model.id: metadata.product.feature.name
+  model.provider: cloud.provider
+  # Correlation and dedup. event_id is Agentmetry's per-event UUID — the
+  # stable vendor id; correlation_id groups one agent session.
+  event_id: finding.uid
+  correlation_id: finding.evidence.session_id
+  # The correlated finding (action.type: detection only).
+  detection.title: finding.title
+  detection.summary: finding.desc
+  detection.rule_id: finding.related_events.id
+  # Provenance without content: the tool-argument digest, the DLP rule that
+  # matched, and the raw command when the operator opted into command logging.
+  tool.input_hash: finding.evidence.input_sha256
+  tool.command: finding.evidence.command
+  dlp.rule_id: finding.evidence.dlp_rule_id
+  # MITRE ATLAS ids, in evidence fields — never in mitre_attck (see header).
+  # Two sources, two destinations, because a field map with two sources on
+  # one destination resolves in Go map iteration order, which is random.
+  detection.atlas.technique_id: finding.evidence.atlas_technique_id
+  tool.atlas.technique_id: finding.evidence.tool_atlas_technique_id
+severity_field: detection.severity
+severity_map:
+  # Agentmetry's detection ladder is exactly critical | high | medium | low
+  # (SEVERITY_RANK in their detection/models.py). The extra keys are the
+  # house five-tier ladder so a future vendor value maps instead of
+  # surfacing Unknown. critical stays a distinct fifth tier — it must never
+  # collapse into high.
+  info: 1
+  informational: 1
+  low: 2
+  medium: 3
+  warning: 3
+  high: 4
+  critical: 5
+  fatal: 6
+technique_fields:
+  - detection.technique_ids
+  - tool.mitre.technique_id
+time_field: timestamp_utc
+message_field: detection.title
+constants:
+  source_type: agentmetry
+  metadata.product.vendor_name: Agentmetry
+  metadata.product.name: Agentmetry

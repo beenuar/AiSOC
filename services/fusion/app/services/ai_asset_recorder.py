@@ -13,6 +13,11 @@ rather than by guessing from field presence:
 
 * ``ai-runtime`` and ``ai-finding`` — the SDK and gateway telemetry. These
   name the agent, the model, the MCP server and the human it acted for.
+  ``agentmetry`` rides the same branch: its inbox template maps the coding
+  agent onto the identical slots (``agent.name`` → ``actor.process.name``,
+  ``actor.id`` → ``actor.user.name``, ``host_id`` →
+  ``src_endpoint.hostname``) precisely so this recorder and the graph
+  projection read one shape.
 * ``llm_usage`` provider audit events — these name a provider key and the
   account that minted it, and nothing about any device.
 * OCSF Process Activity (class 1007) carrying a known coding-agent or MCP
@@ -372,7 +377,7 @@ def classify(message: dict[str, Any]) -> list[_Sighting]:
     source_type = _text(ocsf.get("source_type")) or _text(_nested(ocsf, "metadata", "product", "name")) or ""
     out: list[_Sighting] = []
 
-    if source_type in ("ai-runtime", "ai-finding", "AI Runtime", "AI Guardrail"):
+    if source_type in ("ai-runtime", "ai-finding", "agentmetry", "AI Runtime", "AI Guardrail"):
         out.extend(_from_ai_telemetry(tenant_id, ocsf, now))
     elif source_type in ("llm_usage", "AI / LLM Usage Audit"):
         out.extend(_from_provider_audit(tenant_id, ocsf, now))

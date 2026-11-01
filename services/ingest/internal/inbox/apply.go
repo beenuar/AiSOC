@@ -3,6 +3,8 @@ package inbox
 import (
 	"strings"
 	"time"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/normalizer"
 )
 
 // Apply projects a vendor JSON payload onto an OCSF event using the
@@ -19,6 +21,23 @@ func (t *Template) Apply(payload map[string]any, tenantID, connectorRef, receive
 	ocsf["class_name"] = t.ClassName
 	if t.ClassUID > 0 {
 		ocsf["category_uid"] = t.ClassUID / 1000
+	}
+
+	// Per-event class override. A sensor that pushes routine activity and
+	// correlated findings through one URL needs them in different OCSF
+	// categories — the promoter always promotes category 2 and leaves
+	// category 6 in the lake — and the event kind is a payload field, not
+	// a property of the token. An event whose kind has no entry keeps the
+	// template's declared class, so an unknown kind degrades to the
+	// default rather than vanishing.
+	if t.ClassField != "" && len(t.ClassMap) > 0 {
+		if kind := getNestedString(payload, t.ClassField); kind != "" {
+			if o, ok := t.ClassMap[strings.ToLower(strings.TrimSpace(kind))]; ok {
+				ocsf["class_uid"] = o.ClassUID
+				ocsf["class_name"] = o.ClassName
+				ocsf["category_uid"] = o.ClassUID / 1000
+			}
+		}
 	}
 	if t.ActivityID != 0 {
 		ocsf["activity_id"] = t.ActivityID
@@ -96,6 +115,19 @@ func (t *Template) Apply(payload map[string]any, tenantID, connectorRef, receive
 	// Constants — stamped last so they win over any field-map collision.
 	for k, v := range t.Constants {
 		setNested(ocsf, k, v)
+	}
+
+	// MITRE ATT&CK technique ids the vendor supplied, carried as supplied.
+	// Same block and same contract as the connector path in
+	// normalizer.Normalize: shape-validated ids only (an ATLAS AML.T****
+	// or a tactic TA#### id never enters an ATT&CK-typed field), enriched
+	// with name/tactics when the corpus confirms them and carried
+	// verified:false when it cannot.
+	if len(t.TechniqueFields) > 0 {
+		ids := normalizer.TechniqueIDsFromPaths(payload, t.TechniqueFields)
+		if enriched := normalizer.EnrichTechniqueIDs(ids); len(enriched) > 0 {
+			ocsf["mitre_attck"] = enriched
+		}
 	}
 
 	ocsf["tenant_uid"] = tenantID

@@ -47,6 +47,52 @@ func hasEdge(ev *Event, relType RelType, from, to NodeLabel) bool {
 	return false
 }
 
+// agentmetryEvent is built from the field map in
+// internal/normalizer/templates/agentmetry.yaml, the same way aiRuntimeEvent
+// mirrors ai-runtime.yaml: agent.name lands on actor.process.name, actor.id
+// on actor.user.name, host_id on src_endpoint.hostname.
+func agentmetryEvent() map[string]interface{} {
+	return map[string]interface{}{
+		"class_uid":   float64(6003),
+		"source_type": "agentmetry",
+		"actor": map[string]interface{}{
+			"process": map[string]interface{}{"name": "claude"},
+			"user":    map[string]interface{}{"name": "dev_01"},
+		},
+		"src_endpoint": map[string]interface{}{"hostname": "dev-mbp-7.local"},
+		"metadata": map[string]interface{}{
+			"product": map[string]interface{}{"feature": map[string]interface{}{"name": "claude"}},
+		},
+	}
+}
+
+func TestAgentmetryEventProducesAnAssetLinkedToPersonAndDevice(t *testing.T) {
+	// Discussion #1577: Agentmetry telemetry arrives through its inbox
+	// template, and the AI-estate projection must see those coding agents
+	// or the inventory stays blind to exactly the activity source the
+	// template adds.
+	ev := ExtractFromOCSF("evt-agt", "tenant-a", "inbox:agentmetry", agentmetryEvent())
+	if ev == nil {
+		t.Fatal("expected a graph projection, got nil")
+	}
+	asset := findNode(ev, NodeAIAsset)
+	if asset == nil {
+		t.Fatal("no AIAsset node emitted for an agentmetry event")
+	}
+	if got := asset.Properties["kind"]; got != "coding_agent" {
+		t.Errorf("kind = %v, want coding_agent (claude is in the match table)", got)
+	}
+	if got := asset.Properties["vendor"]; got != "Anthropic" {
+		t.Errorf("vendor = %v, want Anthropic", got)
+	}
+	if !hasEdge(ev, RelOperates, NodeUser, NodeAIAsset) {
+		t.Error("no (:User)-[:OPERATES]->(:AIAsset) edge")
+	}
+	if !hasEdge(ev, RelHosts, NodeEndpoint, NodeAIAsset) {
+		t.Error("no (:Endpoint)-[:HOSTS]->(:AIAsset) edge")
+	}
+}
+
 func TestAIRuntimeEventProducesAnAssetLinkedToPersonAndDevice(t *testing.T) {
 	ev := ExtractFromOCSF("evt-1", "tenant-a", "ai_gateway", aiRuntimeEvent())
 	if ev == nil {

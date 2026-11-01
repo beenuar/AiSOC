@@ -110,6 +110,43 @@ def ocsf_native_process_event(name: str, hostname: str = "ada-mbp") -> dict[str,
 # ---------------------------------------------------------------------------
 
 
+def agentmetry_event(**overrides: Any) -> dict[str, Any]:
+    """An ``agentmetry`` event as its inbox template emits it.
+
+    Field placement follows ``agentmetry.yaml`` (Discussion #1577):
+    ``agent.name`` lands on ``actor.process.name``, ``actor.id`` on
+    ``actor.user.name``, ``host_id`` on ``src_endpoint.hostname`` and
+    ``model.id`` on ``metadata.product.feature.name`` — the same slots the
+    AI SDK templates use, which is what lets one recorder branch serve both.
+    """
+    ocsf: dict[str, Any] = {
+        "class_uid": 6003,
+        "class_name": "API Activity",
+        "source_type": "agentmetry",
+        "activity_name": "Read",
+        "severity_id": 0,
+        "actor": {"process": {"name": "claude"}, "user": {"name": "dev_01"}},
+        "src_endpoint": {"hostname": "dev-mbp-7.local"},
+        "metadata": {"product": {"vendor_name": "Agentmetry", "name": "Agentmetry", "feature": {"name": "claude"}}},
+        "cloud": {"provider": "claude"},
+    }
+    ocsf.update(overrides)
+    return {"tenant_id": TENANT, "ocsf_event": ocsf}
+
+
+def test_agentmetry_event_yields_a_coding_agent_linked_to_person_and_device():
+    # Discussion #1577: coding-agent telemetry pushed through the
+    # agentmetry inbox template must reach the AI-estate inventory, or the
+    # console stays blind to exactly the activity source the template adds.
+    sightings = classify(agentmetry_event())
+    agents = [s for s in sightings if s.kind == "coding_agent"]
+    assert len(agents) == 1, f"want one coding agent, got {sightings}"
+    agent = agents[0]
+    assert agent.vendor == "Anthropic"
+    assert agent.principal == "dev_01"
+    assert agent.device == "dev-mbp-7.local"
+
+
 def test_runtime_event_yields_a_coding_agent_linked_to_person_and_device():
     sightings = classify(runtime_event())
     agents = [s for s in sightings if s.kind == "coding_agent"]

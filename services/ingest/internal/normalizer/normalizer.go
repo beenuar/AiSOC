@@ -922,25 +922,7 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 	// it up loses information we were handed. `verified` says which is which
 	// so a reader is never told an unconfirmed id was confirmed.
 	if techIDs := extractTechniqueIDs(raw.Payload); len(techIDs) > 0 {
-		var enriched []map[string]interface{}
-		for _, tid := range techIDs {
-			if tech := attck.Lookup(tid); tech != nil {
-				enriched = append(enriched, map[string]interface{}{
-					"technique_id":   tech.ID,
-					"technique_name": tech.Name,
-					"tactic_ids":     tech.TacticIDs,
-					"tactic_names":   tech.TacticNames,
-					"url":            tech.URL,
-					"verified":       true,
-				})
-				continue
-			}
-			enriched = append(enriched, map[string]interface{}{
-				"technique_id": tid,
-				"verified":     false,
-			})
-		}
-		if len(enriched) > 0 {
+		if enriched := EnrichTechniqueIDs(techIDs); len(enriched) > 0 {
 			ocsf["mitre_attck"] = enriched
 		}
 	}
@@ -984,6 +966,75 @@ func (n *Normalizer) Normalize(raw *RawEvent) (*NormalizedEvent, error) {
 		NormalizationVersion:  n.version,
 		NormalizationWarnings: warnings,
 	}, nil
+}
+
+// EnrichTechniqueIDs builds the `mitre_attck` block from already-validated
+// technique ids. Corpus-confirmed ids carry the technique name, tactics and
+// URL with verified:true; a well-formed id the corpus cannot confirm is
+// carried with verified:false, because dropping a vendor's assertion over a
+// failed lookup loses information we were handed (issue #1244). Factored out
+// of Normalize so the inbox template path publishes the identical block —
+// one shape for fusion's _mitre() to read, however the event arrived.
+func EnrichTechniqueIDs(ids []string) []map[string]interface{} {
+	var enriched []map[string]interface{}
+	for _, tid := range ids {
+		if tech := attck.Lookup(tid); tech != nil {
+			enriched = append(enriched, map[string]interface{}{
+				"technique_id":   tech.ID,
+				"technique_name": tech.Name,
+				"tactic_ids":     tech.TacticIDs,
+				"tactic_names":   tech.TacticNames,
+				"url":            tech.URL,
+				"verified":       true,
+			})
+			continue
+		}
+		enriched = append(enriched, map[string]interface{}{
+			"technique_id": tid,
+			"verified":     false,
+		})
+	}
+	return enriched
+}
+
+// TechniqueIDsFromPaths collects ATT&CK technique ids from the given payload
+// dot-paths, each holding a single string or a list of strings, validated by
+// shape and deduplicated in encounter order.
+//
+// This is the inbox-template counterpart of extractTechniqueIDs below: the
+// template path maps only fields a template declares, so the template names
+// the exact paths its vendor uses (Agentmetry carries a list at
+// detection.technique_ids and a single id at tool.mitre.technique_id) rather
+// than scanning the flat candidate-key list a pushed payload uses. The shape
+// check is the same one, which is what keeps a MITRE ATLAS id (AML.T****) or
+// a tactic id (TA####) out of an ATT&CK-typed field on both paths.
+func TechniqueIDsFromPaths(payload map[string]interface{}, paths []string) []string {
+	seen := map[string]struct{}{}
+	var results []string
+	appendID := func(candidate string) {
+		tid := normalizeTechniqueID(candidate)
+		if tid == "" {
+			return
+		}
+		if _, dup := seen[tid]; dup {
+			return
+		}
+		seen[tid] = struct{}{}
+		results = append(results, tid)
+	}
+	for _, path := range paths {
+		switch v := getNestedField(payload, path).(type) {
+		case string:
+			appendID(v)
+		case []interface{}:
+			for _, item := range v {
+				if s, ok := item.(string); ok {
+					appendID(s)
+				}
+			}
+		}
+	}
+	return results
 }
 
 // extractTechniqueIDs scans common fields in a raw payload for ATT&CK technique IDs.
