@@ -2,6 +2,13 @@
 
 from app.db.database import Base
 from app.models.ai_asset import AiAsset
+from app.models.ai_chat_compliance import (
+    AiChatAuditEvent,
+    AiChatComplianceConfig,
+    AiChatContentLabel,
+    AiChatProject,
+    AiChatUser,
+)
 from app.models.alert import Alert
 from app.models.asset import AlertAssetCorrelation, Asset, AssetVulnerability
 from app.models.branding import OrgBrandAsset, OrgBranding
@@ -104,6 +111,11 @@ __all__ = [
     "TenantLlmCredential",
     "McpServer",
     "AiAsset",
+    "AiChatAuditEvent",
+    "AiChatComplianceConfig",
+    "AiChatContentLabel",
+    "AiChatProject",
+    "AiChatUser",
     "PasskeyCredential",
     "PasskeyChallenge",
     "OnCallStatus",
