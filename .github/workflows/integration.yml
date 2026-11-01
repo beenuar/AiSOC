@@ -112,7 +112,7 @@ jobs:
           # rail legs) were inert: their live tests only ran when something
           # *else* in the surviving list changed. This is the union of all
           # three lists; the next lane extends it rather than re-assigning.
-          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py tests/isolation/test_root_cause_findings_live.py .github/workflows/integration.yml'
           # backup_crypt.py was missing from the old filter, and it is where
           # every byte of the AES-256-GCM implementation lives — so a change
           # to the encryption itself did not run the gate that proves the
@@ -858,6 +858,28 @@ jobs:
             || { echo "::error::the occurrence live suite did not report any passing test"; exit 1; }
           ! grep -qE 'skipped' /tmp/occurrences.log \
             || { echo "::error::the occurrence live suite skipped a test; its DSNs must both be set"; exit 1; }
+
+      # Phase 3.3, second half. Three statements a stub accepts and Postgres
+      # does not: the ON CONFLICT upsert on the (resource, technique,
+      # principal) unique index; the recount's correlated subquery, which
+      # orders severity by the five-tier ladder explicitly because
+      # alphabetical order puts `critical` below `medium`; and
+      # COUNT(DISTINCT connector_type), recomputed rather than incremented so
+      # a redelivery cannot turn two vendors into three.
+      - name: Several vendors reporting one root cause are one finding (live Postgres)
+        working-directory: services/fusion
+        env:
+          MSSP_ISOLATION_REQUIRED: '1'
+          ISOLATION_ROOT_CAUSE_DSN: postgresql://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
+          # aisoc-db-role: owner — fixtures only. The suite creates scratch tenants, which the DML-only runtime role cannot. The code under test reads ISOLATION_ROOT_CAUSE_DSN above, which is the NOBYPASSRLS runtime role, so the RLS assertion is judged under the policy it really runs under.
+          ISOLATION_ROOT_CAUSE_ADMIN_DSN: postgresql://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+        run: |
+          set -euo pipefail
+          python -m pytest ../../tests/isolation/test_root_cause_findings_live.py -v --tb=short -rs | tee /tmp/rootcause.log
+          grep -qE '^[0-9]+ passed' /tmp/rootcause.log \
+            || { echo "::error::the root-cause live suite did not report any passing test"; exit 1; }
+          ! grep -qE 'skipped' /tmp/rootcause.log \
+            || { echo "::error::the root-cause live suite skipped a test; its DSNs must both be set"; exit 1; }
 
       # 060_rls_coverage.sql takes RLS from 31 of 95 tenant-scoped tables to
       # every one of them bar a documented exclusion. A migration that adds 49

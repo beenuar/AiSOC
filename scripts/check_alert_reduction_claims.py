@@ -80,6 +80,10 @@ _PINNED = re.compile(r"^PUBLISHED_REDUCTION_PCT\s*=\s*(?P<pct>\d+(?:\.\d+)?)\s*$
 #: leave the other free to drift, which is how a published number goes stale
 #: silently.
 _PINNED_DEDUP = re.compile(r"^REPEAT_STREAM_DEDUP_PCT\s*=\s*(?P<pct>\d+(?:\.\d+)?)\s*$", re.MULTILINE)
+#: Phase 3.3's second half. A third row, a third pin: three reductions
+#: over overlapping inputs, and every one of them has to be bound to the
+#: measurement that produced it or it goes stale in silence.
+_PINNED_CROSS_VENDOR = re.compile(r"^CROSS_VENDOR_REDUCTION_PCT\s*=\s*(?P<pct>\d+(?:\.\d+)?)\s*$", re.MULTILINE)
 
 #: The legacy figure, in every spelling a surface has used for it.
 LEGACY_FIGURE = re.compile(r"\b75\.3\s*%|\b0\.753\b")
@@ -98,6 +102,16 @@ def published_reduction_pct() -> float:
     match = _PINNED.search(REAL_MEASUREMENT.read_text(encoding="utf-8"))
     if match is None:
         raise SystemExit(f"{Path(sys.argv[0]).name}: no PUBLISHED_REDUCTION_PCT in {REAL_MEASUREMENT.relative_to(REPO_ROOT)}")
+    return float(match.group("pct"))
+
+
+def published_cross_vendor_pct() -> float:
+    """Phase 3.3's cross-vendor figure, read from the test that measures it."""
+    if not REAL_MEASUREMENT.is_file():
+        raise SystemExit(f"{Path(sys.argv[0]).name}: {REAL_MEASUREMENT} missing — nothing pins the cross-vendor figure")
+    match = _PINNED_CROSS_VENDOR.search(REAL_MEASUREMENT.read_text(encoding="utf-8"))
+    if match is None:
+        raise SystemExit(f"{Path(sys.argv[0]).name}: no CROSS_VENDOR_REDUCTION_PCT in {REAL_MEASUREMENT.relative_to(REPO_ROOT)}")
     return float(match.group("pct"))
 
 
@@ -309,15 +323,30 @@ def _dedup_violations(files: dict[Path, str]) -> list[str]:
             "services/fusion/tests/test_alert_reduction_real.py measures."
         )
 
-    # The two reductions must stay separately labelled. A page that quoted
-    # their sum would be publishing a number no suite measures, over a
-    # denominator that counts some inputs twice.
-    combined = published_reduction_pct() + dedup_pct
-    if real_figure_pattern(combined).search(text):
+    cross_vendor_pct = published_cross_vendor_pct()
+    if not real_figure_pattern(cross_vendor_pct).search(text):
         found.append(
-            f"{rel}: quotes {combined:g}%, the sum of the correlation and repeat-folding figures. "
-            "They reduce different things over overlapping inputs and must never be added."
+            f"{rel}: does not quote {cross_vendor_pct:g}%, which is what CROSS_VENDOR_REDUCTION_PCT in "
+            "services/fusion/tests/test_alert_reduction_real.py measures."
         )
+
+    # The three reductions must stay separately labelled. A page quoting any
+    # of their sums would be publishing a number no suite measures, over a
+    # denominator that counts some inputs twice or three times — which is
+    # exactly what the retracted 75.3 % figure was.
+    correlation_pct = published_reduction_pct()
+    sums = {
+        round(correlation_pct + dedup_pct, 4): "correlation + repeat folding",
+        round(correlation_pct + cross_vendor_pct, 4): "correlation + cross-vendor",
+        round(dedup_pct + cross_vendor_pct, 4): "repeat folding + cross-vendor",
+        round(correlation_pct + dedup_pct + cross_vendor_pct, 4): "all three",
+    }
+    for combined, label in sums.items():
+        if real_figure_pattern(combined).search(text):
+            found.append(
+                f"{rel}: quotes {combined:g}%, the sum of {label}. They reduce different things "
+                "over overlapping inputs and must never be added."
+            )
     return found
 
 
