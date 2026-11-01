@@ -1,3 +1,4 @@
+import { AiChatCompliancePanel } from "@/components/ai-estate/AiChatCompliancePanel";
 import AiEstateView from "@/components/ai-estate/AiEstateView";
 
 export const metadata = {
@@ -6,5 +7,10 @@ export const metadata = {
 };
 
 export default function AiEstatePage() {
-  return <AiEstateView />;
+  return (
+    <div className="space-y-6">
+      <AiEstateView />
+      <AiChatCompliancePanel />
+    </div>
+  );
 }

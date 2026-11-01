@@ -854,7 +854,16 @@ jobs:
           pip install --quiet pydantic pydantic-settings structlog
           python -m pytest ../../tests/isolation/test_alert_occurrences_live.py -v --tb=short -rs | tee /tmp/occurrences.log
           # A skipped live suite reports the same word as a passing one.
-          grep -qE '^[0-9]+ passed' /tmp/occurrences.log \
+          #
+          # The count is NOT anchored to the start of the line: pytest writes
+          # its summary as `===== 6 passed in 0.67s =====`, so `^[0-9]+` never
+          # matched and this guard reddened a run in which all six tests
+          # passed. A guard that fails on a healthy suite is worse than no
+          # guard, because the documented remedy becomes "ignore it".
+          #
+          # `[1-9][0-9]*` rather than `[0-9]+`, so a run that collected
+          # nothing and reported `0 passed` is still a failure.
+          grep -qE '[1-9][0-9]* passed' /tmp/occurrences.log \
             || { echo "::error::the occurrence live suite did not report any passing test"; exit 1; }
           ! grep -qE 'skipped' /tmp/occurrences.log \
             || { echo "::error::the occurrence live suite skipped a test; its DSNs must both be set"; exit 1; }
