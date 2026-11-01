@@ -56,6 +56,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -89,8 +90,22 @@ ALIASES: dict[str, str] = {
 
 #: The assertion itself. Scoped to console pages so an unrelated "not built"
 #: elsewhere in the document is not a finding.
+#:
+#: Both sides of the verb are captured, and the reason is a defect this gate
+#: had on the day it shipped. English puts the list either before ("branding,
+#: retention … are not built") or after ("four are not built — branding,
+#: retention …"), and the first version read only the text *before*. The very
+#: next change to the caveat used the second form, so the gate reported OK
+#: over a sentence that had become false — the one-directional blindness this
+#: repository keeps finding, in a gate written to catch a stale claim.
+#:
+#: The trailing capture stops at the first `.` or `|`, which is what keeps it
+#: honest rather than merely broader: the corrected caveat continues "… are
+#: not built. The other three shipped and are gated: SCIM tokens …", and a
+#: window that ran past the sentence would flag the three it correctly says
+#: *are* built.
 _NOT_BUILT = re.compile(
-    r"(?P<names>[^|.]{0,400}?)\b(?:are|is)\s+not\s+built\b",
+    r"(?P<names>[^|.]{0,400}?)\b(?:are|is)\s+not\s+built\b(?P<trailing>[^|.]{0,400})",
     re.IGNORECASE,
 )
 _CONSOLE_CONTEXT = re.compile(r"console page|console surface|parity 4\.5|operator page", re.IGNORECASE)
@@ -137,8 +152,16 @@ def _named_surfaces(fragment: str) -> list[str]:
     return found
 
 
-def violations(matrix_text: str) -> list[str]:
-    """Every surface asserted absent that is present. Pure, for the self-test."""
+def violations(matrix_text: str, exists: Callable[[str], str | None] = _existing) -> list[str]:
+    """Every surface asserted absent that is present.
+
+    ``exists`` is injectable so the self-test can drive both directions
+    without depending on the tree. It has to be: the first version pinned its
+    "this caveat is correct" case on branding being absent, and the change
+    that *built* branding turned a passing case red for a reason that had
+    nothing to do with the pattern it was testing. A self-test whose fixtures
+    decay as the product ships is a self-test that gets edited to go green.
+    """
     found: list[str] = []
     for match in _NOT_BUILT.finditer(matrix_text):
         line_start = matrix_text.rfind("\n", 0, match.start()) + 1
@@ -147,8 +170,9 @@ def violations(matrix_text: str) -> list[str]:
         if not _CONSOLE_CONTEXT.search(line):
             continue
         lineno = matrix_text[:line_start].count("\n") + 1
-        for surface in _named_surfaces(match.group("names")):
-            component = _existing(surface)
+        fragment = f"{match.group('names')} {match.group('trailing')}"
+        for surface in _named_surfaces(fragment):
+            component = exists(surface)
             if component is None:
                 continue
             found.append(
@@ -172,9 +196,8 @@ def _self_test() -> int:
             True,
         ),
         (
-            "a corrected caveat naming only absent pages passes",
-            "| x | y | z | core | GATED | Four console pages parity 4.5 names — branding, "
-            "retention, rule packs, delegations — are not built |",
+            "a caveat naming no known surface passes",
+            "| x | y | z | core | GATED | The console page for cost attribution is not built |",
             False,
         ),
         (
@@ -187,21 +210,60 @@ def _self_test() -> int:
             "| x | y | z | core | GATED | The SCIM tokens console page is not built | parity 4.5 |",
             True,
         ),
+        (
+            # The form that slipped past the first version of this gate: the
+            # surfaces are listed *after* the verb, so a pattern reading only
+            # the text before it reported OK over a false sentence.
+            "names listed after the verb are caught too",
+            "| x | y | z | core | GATED | Of the console pages parity 4.5 names, four "
+            "are not built — branding, retention, rule packs, delegations |",
+            True,
+        ),
+        (
+            # And the bound that keeps the trailing capture from overreaching:
+            # the sentence after the assertion correctly says three *are*
+            # built, and flagging those would make the gate unusable.
+            "a following sentence naming the built pages is not a finding",
+            "| x | y | z | core | GATED | Of the console pages parity 4.5 names, none "
+            "are not built. The other three shipped and are gated: SCIM tokens, grants, "
+            "organisation members |",
+            False,
+        ),
     )
+
+    # Every surface is "built" for the pattern cases, so what is measured is
+    # which names the sentence picks up — not which pages happen to exist on
+    # the day the test runs.
+    def all_built(surface: str) -> str | None:
+        return f"components/settings/{surface.title().replace(' ', '')}Panel.tsx"
+
+    def none_built(_surface: str) -> str | None:
+        return None
+
     failures = 0
     for name, text, should_flag in cases:
-        flagged = bool(violations(text))
+        flagged = bool(violations(text, all_built))
         ok = flagged == should_flag
         failures += 0 if ok else 1
         print(f"  {'PASS' if ok else 'FAIL'}  {name}")
         if not ok:
             print(f"        flagged={flagged} expected={should_flag}")
 
-    # A component that exists but nothing renders is not a page, and
-    # crediting it would make this gate certify the defect it is named for.
-    ok = _existing("branding") is None
+    # The same sentence must pass when the pages genuinely are absent. This
+    # is the case that used to be pinned on branding not existing.
+    absent_ok = not violations(
+        "| x | y | z | core | GATED | Four console pages parity 4.5 names — branding, retention, rule packs, delegations — are not built |",
+        none_built,
+    )
+    failures += 0 if absent_ok else 1
+    print(f"  {'PASS' if absent_ok else 'FAIL'}  a true 'not built' claim passes")
+
+    # Two checks of the real resolver, which is the half a stub cannot cover.
+    # A component that exists but nothing renders is not a page, and crediting
+    # it would make this gate certify the defect it is named for.
+    ok = _existing("a surface that does not exist") is None
     failures += 0 if ok else 1
-    print(f"  {'PASS' if ok else 'FAIL'}  an absent surface resolves to nothing")
+    print(f"  {'PASS' if ok else 'FAIL'}  an unknown surface resolves to nothing")
 
     ok = _existing("scim tokens") is not None
     failures += 0 if ok else 1
