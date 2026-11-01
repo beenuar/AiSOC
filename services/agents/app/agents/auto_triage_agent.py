@@ -44,6 +44,8 @@ from app.confidence.claim_support import score_claim_support
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
+from app.context.privilege import basis as privilege_basis
+from app.context.privilege import render_for_prompt as render_privilege
 from app.context.identity import render_for_prompt as render_identity
 from app.context.knowledge_base import citation_basis, unresolvable_citations
 from app.context.knowledge_base import render_for_prompt as render_runbooks
@@ -320,6 +322,15 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     who = render_identity(state.identity_context)
     if who:
         preamble.append(sanitize_text(who, max_len=_MAX_CONTEXT_BLOCK_CHARS))
+
+    # What that principal could do when it acted (depth 2 wave 2, 1.1).
+    # First-party like the block above -- it is the platform's own derivation
+    # over a posture snapshot, not vendor text -- but sanitised anyway,
+    # because the principal *name* inside it came from a connector and is
+    # attacker-influenceable on exactly the alerts where it matters.
+    can_do = render_privilege(state.privilege_context)
+    if can_do:
+        preamble.append(sanitize_text(can_do, max_len=_MAX_CONTEXT_BLOCK_CHARS))
 
     # What the tenant's business-context rules did to this alert, told to the
     # model rather than applied silently: a `set_severity` the model cannot
@@ -670,6 +681,10 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     state.confidence_basis.extend(citation_basis(state.knowledge_base))
     state.confidence_basis.extend(disposition_basis(state.recent_dispositions))
     state.confidence_basis.extend(identity_basis(state.identity_context))
+    # Depth 2 wave 2, 1.1. Every line here names the tool that produced
+    # it, so an auditor can match the claim to a `tool_call` row rather
+    # than taking the prompt's word for it.
+    state.confidence_basis.extend(privilege_basis(state.privilege_context))
 
     # The business-impact element survives only when every citation it carries
     # resolves to a rule id that actually fired on this alert — the same
