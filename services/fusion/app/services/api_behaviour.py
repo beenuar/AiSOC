@@ -216,9 +216,7 @@ class ApiBehaviourProfiler:
                     if total >= self._min_requests:
                         signals.append(ApiSignal("unknown_parameter", endpoint, name, total))
                 elif known_types[name] != observed_type and total >= self._min_requests:
-                    signals.append(
-                        ApiSignal("parameter_type_change", endpoint, f"{name}: {known_types[name]} -> {observed_type}", total)
-                    )
+                    signals.append(ApiSignal("parameter_type_change", endpoint, f"{name}: {known_types[name]} -> {observed_type}", total))
             await self._redis.expire(params_key, TTL_SECONDS)
 
             if status:

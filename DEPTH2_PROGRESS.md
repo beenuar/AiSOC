@@ -333,3 +333,170 @@ that has to carry the delta.
 **Deviations:** D3 (three classes have no redistributable source), D4
 (tenant-supplied lists designed, not built).
 
+
+### Phase 2 Detection depth — Lane C
+
+**Status.** 2.1 partial (the content target is not met and the gate says so),
+2.2, 2.3, 2.4 and 2.5 shipped. Five pull-request-sized commits on
+`depth2/lane-c-detection`.
+
+#### 2.1 Content depth — PARTIAL, 569 of 800
+
+**Reproduced first.** The depth plan's own counting rule (products grouped
+into cloud / identity / SaaS / code) measured **443** on the base commit
+`4bb84f0`, against the plan's note of "about 358". The difference is the
+grouping, not the tree: the first depth plan grouped `log_source` values out
+of `marketplace/index.json`, which carries no `log_source` for the 1,770
+imported rules. The grouping is now pinned in code in
+`scripts/project_stats.py::SCENARIO_GROUPS` so the figure stops being
+re-derivable two ways, and every product outside the four groups is printed
+as `other` rather than dropped, so the breakdown and the headline reconcile.
+
+**Measured: 443 → 569.** `make stats` publishes it, `--check` ratchets it at
+the floor and prints the 231-rule shortfall against 800 on every run. The
+gate does **not** assert 800; a gate asserting a number the tree does not
+have is simply red, and the claim-matrix row is PARTIAL with the
+return-to-GATED condition stated.
+
+**Why the target was not reached.** Closing it needs roughly 380 more rules
+concentrated in GCP (+81), Azure including Entra (+76), Kubernetes (+23),
+GitHub and GitLab (+29) and the SaaS sources at their 20-rule minimums. The
+rules shipped here were held to the standard the plan sets — every one
+replayed through its real connector and the real engine and observed to fire
+— and that standard, not the authoring, is the cost. Writing the remainder
+without it would have raised the number and lowered what it means.
+
+**What shipped.** 86 executable rules in six declared families:
+`workspace-takeover` (21), `third-party-access` (24), `saas-data-movement`
+(24), `saas-authentication-abuse` (10), `apps-script-impersonation` (4),
+`long-horizon-identity` (4, from 2.2) and `api-behaviour` (3, from 2.4). The
+family is declared on the spec and travels into the artefact the engine
+loads, so the console and `make stats` read one string rather than guessing
+from a slug.
+
+**The enabling work was connector-side, and it is the finding of this item.**
+Seven connectors were dropping the fields their own rules would need,
+because the engine flattens `raw_event` exactly one level and the vendors
+nest two or three deep: Slack's signing-in address is `context.ip_address`
+and an app's scopes are `entity.app.scopes`; Workspace puts the OAuth scopes
+a consent granted and the visibility a share opened inside
+`events[].parameters`, and `events` is a *list*; a Cloud Audit method is
+`protoPayload.methodName`. `scripts/check_connector_field_lift.py` pins 36
+lifted fields and, run against a detached worktree at the pre-fix commit,
+exits 1 naming **35 of the 36**.
+
+**Refused, with reasons.**
+
+| Refused | Reason |
+|---|---|
+| The plan's "recovery email or phone changed, then the password, within minutes" as a single rule | A sequence, and the windowed engine counts without ordering. 24 rules were already refused on that ground. Routed to 2.3, where the pair accumulates and the finding lists both halves in arrival order |
+| Zoom's 20-rule minimum | No Zoom connector exists in the tree. The plan lists Zoom among "SaaS sources with a connector"; the tree disagrees and the tree wins |
+| ServiceNow's 20-rule minimum | The connector reads the `incident` table only. Platform-audit detections (`sys_audit`, role grants, ACL changes) have no source until the connector collects them |
+| Workspace app-specific-password, mailbox-delegation and recovery-change *admin* variants | Could not confirm the activity names against Google's reference. `scripts/vendor_event_vocabulary.py` would have rejected them, which is the gate working |
+
+**Not vacuous, proven twice.** Reverting one connector lift reds 15 Slack
+rules in `check_scenario_family_alignment.py`; an invented action name
+(`slack.app_install` for `slack.app_installed`) is rejected by the
+vocabulary arm, which is the `deploy_key.create` defect class.
+
+**A defect found on the way.** Allocating ids for the new rules collided
+with **44 orphan YAML files** left by an earlier generation run — ids no
+spec owns, which `generate_detections.py` has never deleted. Harmless until
+the lock reissues the number, and then not: `detection_truth_table.py`
+classifies a file as executable by asking whether its id is in the engine's
+set, so two files sharing one id are counted twice. Four collided
+immediately and the truth table published **2,617 against an engine loading
+2,613**. Deleted, with `scripts/check_detection_yaml_orphans.py` refusing
+both an unowned id and a duplicated one.
+
+**Counts moved together:** executable 2,530 → **2,620**; on disk 7,015 →
+**7,061**. README, `REPOSITORY_REALITY.md`, the claim matrix, `llms.txt`,
+`llms-full.txt`, the truth table, corpus stats and the marketplace index.
+Unreachable rules unchanged at the floor of **2**.
+
+#### 2.2 Long-horizon identity attacks — shipped
+
+`services/fusion/app/services/long_horizon_identity.py` accumulates distinct
+source ASNs, countries and IPs per account per day over 30 days, on the
+baseline store rather than the windowed engine exactly as the plan requires.
+The discriminator is the shape, not the count: an attack widens the set of
+networks that *fail* while the succeeding set stays small, a traveller
+widens both. Folded into the namespace by `evaluate_async`; four rules read
+it. Absent-not-zero throughout — an account with fewer than three active
+days publishes no key, and the ratio is *undefined* rather than enormous
+when no success was observed, so a dormant account cannot fire it.
+
+**Thresholds are a rationale, not a measurement, and say so.**
+`scripts/derive_long_horizon_thresholds.py` surveyed 502 events across both
+telemetry corpora and found **0** carrying an account, a source network and
+an outcome together, so it refuses to publish a derived number and writes
+`measured: false` with the return-to-measured condition.
+
+#### 2.3 Weak-signal aggregation — shipped
+
+`services/fusion/app/services/weak_signals.py`. Eleven signal kinds
+accumulate per session and per principal inside an hour; past a strength
+threshold they become one finding listing every contributor and its weight.
+The plan's invariant — one geography or ASN change alone is never a finding
+— is a property of the weight table asserted by a test over *every* weight,
+so a future signal added above the threshold fails rather than ships.
+`MIN_DISTINCT_KINDS` stops one noisy integration repeating its way past it,
+and strength counts each kind once plus a small increment for repeats so
+forty copies of one risk event cannot outscore a four-kind sequence.
+Severity is the strongest contributor on the five-tier ladder; confidence is
+a separate 0–100.
+
+**The threshold is a rationale, not a calibration.**
+`scripts/calibrate_weak_signals.py` loads all 72 balanced corpus items (36
+malicious, 36 benign) and refuses to publish a sweep: the corpus carries
+vendor alert *evidence* while every signal here is produced by fusion's
+enrichment, so all 72 score 0.0. Publishing `recall 0.0000` would have
+stated "the aggregator detects nothing" having measured "this corpus carries
+none of its inputs". See D5.
+
+#### 2.4 API behaviour — shipped
+
+`services/fusion/app/services/api_behaviour.py` templates request paths,
+learns parameter names, coarse value types and status codes per template,
+and raises unknown-parameter, type-change and identifier-enumeration
+signals. Off by default per tenant, checked before any store call. Three
+rules read it. Templating is conservative in both directions and a test pins
+both: identifiers are replaced, words are not, however unusual they look.
+
+#### 2.5 Detection engineering agent — shipped as the missing half
+
+The governed flow already existed end to end (propose, evaluate, backtest,
+decide with a separate approver, promote). What it never had was a reason to
+start. `services/api/app/services/detection_coverage_gaps.py` ranks gaps
+against the connectors **this tenant** has enabled, joining two things the
+tree already knew and nothing had joined. Exposed read-only at
+`GET /api/v1/detection-proposals/coverage-gaps`.
+
+It deliberately does not write a proposal: ranking a gap and drafting a rule
+are different authorities, and the drafting path's separate-approver
+requirement would be meaningless if the ranker could reach past it. A test
+proves the compiled corpus is readable *from the API service* — a zero there
+would report every connected source as uncovered, which is the most alarming
+possible way to be broken.
+
+### D5 — two thresholds this phase publishes are rationales, not measurements
+
+Both derivation scripts refuse rather than publish a number. 2.2's has no
+corpus carrying an account, a source network and an outcome together; 2.3's
+has a balanced corpus of the right size whose items carry vendor alert
+evidence rather than enriched events, so every one scores zero on a
+mechanism that reads fusion's enrichment output.
+
+The shape is worth recording because the second is the more dangerous: the
+sweep *runs*, over 72 correctly-labelled items, and produces `recall
+0.0000` at every threshold. Published, a reader concludes the aggregator was
+graded and failed. Both artefacts carry `measured: false`, the reason, and
+the condition that returns them to measured.
+
+### D6 — the depth plan's SaaS minimums name two sources the tree cannot feed
+
+Depth 3.6 lists Zoom among "every SaaS source with a connector"; there is no
+Zoom connector. ServiceNow has one, but it reads the `incident` table only,
+so the platform-audit events a detection would clause on are not collected.
+Both minimums are refused rather than met with rules nothing can feed, and
+both are named in the 2.1 refusal table above.

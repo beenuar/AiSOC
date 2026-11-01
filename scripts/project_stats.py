@@ -402,7 +402,11 @@ def _render(stats: dict) -> str:
         f"  Cloud/identity/SaaS/code       {sc['total']}  "
         f"(cloud {g['cloud']}, identity {g['identity']}, saas {g['saas']}, code {g['code']}"
         f"; {sc['other']} rules are none of the four, {sc['unclassified']} windowed rules carry no product)"
-        + (f"  [{SCENARIO_TARGET - sc['total']} short of the {SCENARIO_TARGET} target]" if sc["total"] < SCENARIO_TARGET else "  [target met]"),
+        + (
+            f"  [{SCENARIO_TARGET - sc['total']} short of the {SCENARIO_TARGET} target]"
+            if sc["total"] < SCENARIO_TARGET
+            else "  [target met]"
+        ),
         f"  YAML files under detections/   {stats['detections_yaml_files']}  (the extra {playbook_yaml} are response playbooks, not rules)",
         f"  Services in repo               {stats['services_in_repo']}",
     ]

@@ -74,9 +74,7 @@ RATIONALE_THRESHOLDS: dict[str, float] = {
 
 def _usable(event: dict[str, Any]) -> bool:
     return (
-        any(event.get(f) for f in ACCOUNT_FIELDS)
-        and any(event.get(f) for f in NETWORK_FIELDS)
-        and any(f in event for f in OUTCOME_FIELDS)
+        any(event.get(f) for f in ACCOUNT_FIELDS) and any(event.get(f) for f in NETWORK_FIELDS) and any(f in event for f in OUTCOME_FIELDS)
     )
 
 

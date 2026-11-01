@@ -93,7 +93,9 @@ def _gws(application: str, event_name: str, parameters: list[dict[str, Any]] | N
     }
 
 
-def _gcp(method: str, service: str, project: str = "example-prod", principal: str = "user@example.com", agent: str = "google-cloud-sdk") -> dict[str, Any]:
+def _gcp(
+    method: str, service: str, project: str = "example-prod", principal: str = "user@example.com", agent: str = "google-cloud-sdk"
+) -> dict[str, Any]:
     """A Cloud Audit log entry, in the shape Cloud Logging exports it."""
     return {
         "logName": f"projects/{project}/logs/cloudaudit.googleapis.com%2Factivity",
@@ -121,7 +123,11 @@ def _slack(action: str, entity: dict[str, Any] | None = None) -> dict[str, Any]:
         "action": action,
         "actor": {"type": "user", "user": {"id": "W0000001", "name": "alice", "email": "alice@example.com", "team": "T0000001"}},
         "entity": entity or {"type": "user", "user": {"id": "W0000002", "name": "bob"}},
-        "context": {"location": {"type": "enterprise", "id": "E0001", "name": "Example", "domain": "example"}, "ua": "Mozilla/5.0", "ip_address": "203.0.113.5"},
+        "context": {
+            "location": {"type": "enterprise", "id": "E0001", "name": "Example", "domain": "example"},
+            "ua": "Mozilla/5.0",
+            "ip_address": "203.0.113.5",
+        },
     }
 
 
@@ -185,7 +191,13 @@ def _box(event_type: str, additional: dict[str, Any] | None = None) -> dict[str,
         "event_type": event_type,
         "ip_address": "203.0.113.5",
         "created_by": {"type": "user", "id": "11", "name": "Alice", "login": "alice@example.com"},
-        "source": {"item_type": "file", "item_id": "f1", "item_name": "forecast.xlsx", "parent": {"id": "0"}, "owned_by": {"login": "alice@example.com"}},
+        "source": {
+            "item_type": "file",
+            "item_id": "f1",
+            "item_name": "forecast.xlsx",
+            "parent": {"id": "0"},
+            "owned_by": {"login": "alice@example.com"},
+        },
         "additional_details": additional or {},
     }
 
@@ -196,7 +208,16 @@ def _dropbox(tag: str) -> dict[str, Any]:
         "timestamp": "2026-11-01T10:00:00Z",
         "event_category": {".tag": "sharing"},
         "event_type": {".tag": tag, "description": tag.replace("_", " ")},
-        "actor": {".tag": "user", "user": {".tag": "team_member", "account_id": "a1", "display_name": "Alice", "email": "alice@example.com", "team_member_id": "m1"}},
+        "actor": {
+            ".tag": "user",
+            "user": {
+                ".tag": "team_member",
+                "account_id": "a1",
+                "display_name": "Alice",
+                "email": "alice@example.com",
+                "team_member_id": "m1",
+            },
+        },
         "origin": {"geo_location": {"ip_address": "203.0.113.5", "city": "Austin", "country": "US"}, "access_method": {".tag": "end_user"}},
         "assets": [{".tag": "file", "path": {"contextual": "/forecast.xlsx"}}],
     }
@@ -212,13 +233,25 @@ def _onepassword(category: str, signin_type: str | None = None) -> dict[str, Any
         "type": signin_type or category,
         "country": "US",
         "target_user": {"uuid": "u1", "email": "alice@example.com", "name": "Alice"},
-        "client": {"app_name": "1Password for Mac", "app_version": "8.10.0", "platform_name": "macOS", "os_name": "macOS", "ip_address": "203.0.113.5"},
+        "client": {
+            "app_name": "1Password for Mac",
+            "app_version": "8.10.0",
+            "platform_name": "macOS",
+            "os_name": "macOS",
+            "ip_address": "203.0.113.5",
+        },
     }
 
 
-_GWS_DRIVE_VISIBILITY = [{"name": "visibility", "value": "public_on_the_web"}, {"name": "doc_title", "value": "Forecast"}]
-_GWS_DRIVE_EXTERNAL = [{"name": "visibility", "value": "shared_externally"}, {"name": "target_user", "value": "outsider@example.net"}]
-_GWS_OAUTH_SCOPES = [
+_GWS_DRIVE_VISIBILITY: list[dict[str, Any]] = [
+    {"name": "visibility", "value": "public_on_the_web"},
+    {"name": "doc_title", "value": "Forecast"},
+]
+_GWS_DRIVE_EXTERNAL: list[dict[str, Any]] = [
+    {"name": "visibility", "value": "shared_externally"},
+    {"name": "target_user", "value": "outsider@example.net"},
+]
+_GWS_OAUTH_SCOPES: list[dict[str, Any]] = [
     {"name": "client_id", "value": "100000000000.apps.googleusercontent.com"},
     {"name": "app_name", "value": "Unvetted Exporter"},
     {"name": "scope", "multiValue": ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/calendar"]},
@@ -252,15 +285,57 @@ PROOF_EVENTS: dict[str, tuple[str, dict[str, Any], dict[str, Any]]] = {
     "gws-shared-drive-settings-weakened": ("google_workspace", _gws("drive", "shared_drive_settings_change"), {}),
     "gws-mobile-device-compromised": ("google_workspace", _gws("mobile", "DEVICE_COMPROMISED_EVENT"), {}),
     # ---- apps-script-impersonation ------------------------------------
-    "gcp-apps-script-project-created-by-user": ("gcp_cloud_audit", _gcp("CreateProject", "cloudresourcemanager.googleapis.com", "sys-01234567890123456789"), {}),
-    "gcp-sys-project-iam-policy-set": ("gcp_cloud_audit", _gcp("SetIamPolicy", "cloudresourcemanager.googleapis.com", "sys-01234567890123456789"), {}),
-    "gcp-sys-project-sa-key-created": ("gcp_cloud_audit", _gcp("google.iam.admin.v1.CreateServiceAccountKey", "iam.googleapis.com", "sys-01234567890123456789"), {}),
-    "gcp-apps-script-user-agent-outside-service": ("gcp_cloud_audit", _gcp("CreateProject", "cloudresourcemanager.googleapis.com", "sys-01234567890123456789", agent="Mozilla/5.0 (compatible) apps-script"), {}),
+    "gcp-apps-script-project-created-by-user": (
+        "gcp_cloud_audit",
+        _gcp("CreateProject", "cloudresourcemanager.googleapis.com", "sys-01234567890123456789"),
+        {},
+    ),
+    "gcp-sys-project-iam-policy-set": (
+        "gcp_cloud_audit",
+        _gcp("SetIamPolicy", "cloudresourcemanager.googleapis.com", "sys-01234567890123456789"),
+        {},
+    ),
+    "gcp-sys-project-sa-key-created": (
+        "gcp_cloud_audit",
+        _gcp("google.iam.admin.v1.CreateServiceAccountKey", "iam.googleapis.com", "sys-01234567890123456789"),
+        {},
+    ),
+    "gcp-apps-script-user-agent-outside-service": (
+        "gcp_cloud_audit",
+        _gcp(
+            "CreateProject", "cloudresourcemanager.googleapis.com", "sys-01234567890123456789", agent="Mozilla/5.0 (compatible) apps-script"
+        ),
+        {},
+    ),
     # ---- third-party-access -------------------------------------------
-    "slack-app-installed-broad-read-scopes": ("slack_audit", _slack("app_installed", {"type": "app", "app": {"id": "A1", "name": "Unvetted Exporter", "is_distributed": False, "scopes": ["files:read", "chat:write"]}}), {}),
-    "slack-app-scopes-expanded": ("slack_audit", _slack("app_scopes_expanded", {"type": "app", "app": {"id": "A1", "name": "Exporter", "scopes": ["files:read"]}}), {}),
+    "slack-app-installed-broad-read-scopes": (
+        "slack_audit",
+        _slack(
+            "app_installed",
+            {
+                "type": "app",
+                "app": {"id": "A1", "name": "Unvetted Exporter", "is_distributed": False, "scopes": ["files:read", "chat:write"]},
+            },
+        ),
+        {},
+    ),
+    "slack-app-scopes-expanded": (
+        "slack_audit",
+        _slack("app_scopes_expanded", {"type": "app", "app": {"id": "A1", "name": "Exporter", "scopes": ["files:read"]}}),
+        {},
+    ),
     "slack-app-uninstalled": ("slack_audit", _slack("app_uninstalled", {"type": "app", "app": {"id": "A1", "name": "Exporter"}}), {}),
-    "slack-external-shared-channel-connected": ("slack_audit", _slack("external_shared_channel_connected", {"type": "channel", "channel": {"id": "C1", "name": "partners", "privacy": "public", "is_shared": True, "is_org_shared": False}}), {}),
+    "slack-external-shared-channel-connected": (
+        "slack_audit",
+        _slack(
+            "external_shared_channel_connected",
+            {
+                "type": "channel",
+                "channel": {"id": "C1", "name": "partners", "privacy": "public", "is_shared": True, "is_org_shared": False},
+            },
+        ),
+        {},
+    ),
     "slack-org-export-started": ("slack_audit", _slack("organization_export_started"), {}),
     "slack-role-change-to-owner": ("slack_audit", _slack("role_change_to_owner"), {}),
     "slack-role-change-to-admin": ("slack_audit", _slack("role_change_to_admin"), {}),
@@ -268,10 +343,24 @@ PROOF_EVENTS: dict[str, tuple[str, dict[str, Any], dict[str, Any]]] = {
     "slack-two-factor-policy-changed": ("slack_audit", _slack("pref.two_factor_auth_changed"), {}),
     "slack-session-invalidation-disabled": ("slack_audit", _slack("user_session_invalidation_disabled"), {}),
     "slack-message-deletion-allowed": ("slack_audit", _slack("pref.allow_message_deletion"), {}),
-    "slack-channel-converted-to-private": ("slack_audit", _slack("channel_converted_to_private", {"type": "channel", "channel": {"id": "C1", "name": "secrets", "privacy": "private", "is_shared": False, "is_org_shared": False}}), {}),
+    "slack-channel-converted-to-private": (
+        "slack_audit",
+        _slack(
+            "channel_converted_to_private",
+            {
+                "type": "channel",
+                "channel": {"id": "C1", "name": "secrets", "privacy": "private", "is_shared": False, "is_org_shared": False},
+            },
+        ),
+        {},
+    ),
     "slack-guest-created": ("slack_audit", _slack("guest_created"), {}),
     "slack-public-url-updated": ("slack_audit", _slack("workspace_public_url_updated"), {}),
-    "slack-file-downloaded-from-anonymizer": ("slack_audit", _slack("file_downloaded", {"type": "file", "file": {"id": "F1", "name": "forecast.xlsx", "filetype": "xlsx"}}), {"ip_class": "vpn"}),
+    "slack-file-downloaded-from-anonymizer": (
+        "slack_audit",
+        _slack("file_downloaded", {"type": "file", "file": {"id": "F1", "name": "forecast.xlsx", "filetype": "xlsx"}}),
+        {"ip_class": "vpn"},
+    ),
     "sfdc-connected-app-installed": ("salesforce", _sfdc("insertConnectedApplication", "Connected Apps"), {}),
     "sfdc-connected-app-updated": ("salesforce", _sfdc("updatedConnectedApplication", "Connected Apps"), {}),
     "sfdc-login-as-user": ("salesforce", _sfdc("suOrgAdminLogin", "Login As User"), {}),
@@ -308,7 +397,11 @@ PROOF_EVENTS: dict[str, tuple[str, dict[str, Any], dict[str, Any]]] = {
     "snowflake-create-user": ("snowflake", _snowflake_query("CREATE_USER"), {}),
     # ---- saas-authentication-abuse ------------------------------------
     "snowflake-login-single-factor-service-user": ("snowflake", _snowflake_login(), {}),
-    "snowflake-login-failed-bad-credentials": ("snowflake", _snowflake_login(IS_SUCCESS="NO", ERROR_CODE="390100", ERROR_MESSAGE="Incorrect username or password was specified."), {}),
+    "snowflake-login-failed-bad-credentials": (
+        "snowflake",
+        _snowflake_login(IS_SUCCESS="NO", ERROR_CODE="390100", ERROR_MESSAGE="Incorrect username or password was specified."),
+        {},
+    ),
     "snowflake-login-from-anonymizer": ("snowflake", _snowflake_login(), {"ip_class": "hosting_provider"}),
     "snowflake-driver-change-for-user": ("snowflake", _snowflake_login(REPORTED_CLIENT_TYPE="JDBC_DRIVER"), {}),
     "1p-credentials-failed": ("onepassword", _onepassword("credentials_failed", "password_secret_bad"), {}),
@@ -350,7 +443,6 @@ def check(specs: list[tuple[str, dict[str, Any]]], proofs: dict[str, tuple[str, 
     """Every problem that stops a scenario-family rule being proven."""
     sys.path.insert(0, str(ROOT / "services" / "fusion"))
     from app.services.detection_matcher import matches  # noqa: PLC0415 — package collision, see module docstring
-
     from vendor_event_vocabulary import unknown_names  # noqa: PLC0415 — scripts/ sibling
 
     problems: list[str] = []
@@ -359,13 +451,18 @@ def check(specs: list[tuple[str, dict[str, Any]]], proofs: dict[str, tuple[str, 
     for category, spec in covered:
         slug = str(spec["slug"])
         if slug not in proofs:
-            problems.append(f"{category}/{slug}: no proof entry. Add a real-shaped vendor payload to PROOF_EVENTS so the rule is proven against the connector, not against a copy of itself.")
+            problems.append(
+                f"{category}/{slug}: no proof entry. Add a real-shaped vendor payload to "
+                "PROOF_EVENTS so the rule is proven against the connector, not against a copy of itself."
+            )
 
     # Vocabulary: a name the vendor does not publish can never arrive.
     for category, spec in covered:
         product = (spec["log_source"] or {}).get("product", "")
         for bad in unknown_names(product, spec["match_when"]):
-            problems.append(f"{category}/{spec['slug']}: {bad!r} is not in {product}'s published vocabulary (scripts/vendor_event_vocabulary.py)")
+            problems.append(
+                f"{category}/{spec['slug']}: {bad!r} is not in {product}'s published vocabulary (scripts/vendor_event_vocabulary.py)"
+            )
 
     provable = [(c, s) for c, s in covered if str(s["slug"]) in proofs]
     if not provable:

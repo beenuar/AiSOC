@@ -12,7 +12,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from app.services.long_horizon_identity import (
     DERIVED_FIELDS,
     LongHorizonIdentityStore,

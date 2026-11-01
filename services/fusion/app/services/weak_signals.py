@@ -150,9 +150,7 @@ class WeakFinding:
             "severity": self.severity,
             "confidence": self.confidence,
             "window_seconds": WINDOW_SECONDS,
-            "contributing_signals": [
-                {"kind": s.kind, "detail": s.detail, "weight": s.weight, "at": s.at} for s in self.signals
-            ],
+            "contributing_signals": [{"kind": s.kind, "detail": s.detail, "weight": s.weight, "at": s.at} for s in self.signals],
         }
 
 

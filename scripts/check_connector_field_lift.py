@@ -61,8 +61,20 @@ LIFTS: dict[str, dict[str, Any]] = {
             "date_create": 1791368400,
             "action": "app_installed",
             "actor": {"type": "user", "user": {"id": "WADMIN0001", "name": "admin", "email": "admin@example.com", "team": "T1234ABCD"}},
-            "entity": {"type": "app", "app": {"id": "A0123ABCD", "name": "Unvetted Exporter", "is_distributed": False, "scopes": ["files:read", "channels:history"]}},
-            "context": {"location": {"type": "enterprise", "id": "E1701", "name": "Example", "domain": "example"}, "ua": "Mozilla/5.0", "ip_address": "203.0.113.22"},
+            "entity": {
+                "type": "app",
+                "app": {
+                    "id": "A0123ABCD",
+                    "name": "Unvetted Exporter",
+                    "is_distributed": False,
+                    "scopes": ["files:read", "channels:history"],
+                },
+            },
+            "context": {
+                "location": {"type": "enterprise", "id": "E1701", "name": "Example", "domain": "example"},
+                "ua": "Mozilla/5.0",
+                "ip_address": "203.0.113.22",
+            },
         },
         "require": {
             "event_type": "slack.app_installed",
@@ -128,7 +140,13 @@ LIFTS: dict[str, dict[str, Any]] = {
             "type": "credentials_failed",
             "country": "US",
             "target_user": {"uuid": "u1", "email": "user@example.com", "name": "User"},
-            "client": {"app_name": "1Password for Mac", "app_version": "8.10.0", "platform_name": "macOS", "os_name": "macOS", "ip_address": "203.0.113.5"},
+            "client": {
+                "app_name": "1Password for Mac",
+                "app_version": "8.10.0",
+                "platform_name": "macOS",
+                "os_name": "macOS",
+                "ip_address": "203.0.113.5",
+            },
         },
         "require": {
             "event_type": "onepassword.signin.credentials_failed",
@@ -172,7 +190,13 @@ LIFTS: dict[str, dict[str, Any]] = {
             "event_type": "SHARE",
             "ip_address": "203.0.113.5",
             "created_by": {"type": "user", "id": "11", "name": "User", "login": "user@example.com"},
-            "source": {"item_type": "file", "item_id": "f1", "item_name": "salaries.xlsx", "parent": {"id": "0"}, "owned_by": {"login": "owner@example.com"}},
+            "source": {
+                "item_type": "file",
+                "item_id": "f1",
+                "item_name": "salaries.xlsx",
+                "parent": {"id": "0"},
+                "owned_by": {"login": "owner@example.com"},
+            },
             "additional_details": {"shared_link": {"access": "open"}},
         },
         "require": {
@@ -230,7 +254,9 @@ def check(lifts: dict[str, dict[str, Any]]) -> list[str]:
         ns = namespace(normalized)
         for field, expected in lifts[emitter]["require"].items():
             if field not in ns:
-                problems.append(f"{emitter}: {field!r} never reaches the engine namespace — a rule clausing on it reads None and cannot fire")
+                problems.append(
+                    f"{emitter}: {field!r} never reaches the engine namespace — a rule clausing on it reads None and cannot fire"
+                )
             elif ns[field] != expected:
                 problems.append(f"{emitter}: {field!r} is {ns[field]!r}, expected {expected!r}")
     return problems

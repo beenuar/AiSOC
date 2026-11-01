@@ -76,7 +76,8 @@ def _envelope(item: dict[str, Any]) -> dict[str, Any]:
     The corpus id carries the answer in its suffix, so nothing derived from
     it reaches the extractor. Only the alert envelope is passed.
     """
-    evidence = item.get("evidence") if isinstance(item.get("evidence"), dict) else {}
+    raw_evidence = item.get("evidence")
+    evidence: dict[str, Any] = raw_evidence if isinstance(raw_evidence, dict) else {}
     # `decisive_evidence` is the analyst's stated reason for the verdict and
     # is held out from the model by the corpus's own contract; the id
     # encodes the label in its -B / -M suffix. Neither reaches the
@@ -118,8 +119,12 @@ def calibrate() -> dict[str, Any]:
             by_kind[signal.kind] = by_kind.get(signal.kind, 0) + 1
         return sum(SIGNAL_WEIGHTS.get(k, 0.0) * (1.0 + 0.1 * min(c - 1, 3)) for k, c in by_kind.items())
 
-    malicious_strengths = [strength(i) for i in malicious]
-    benign_strengths = [strength(i) for i in benign]
+    # `sweep` below is a list of dicts whose values are floats and ints;
+    # mypy reads the literal's value type as `float` and the returned
+    # mapping as `dict[str, Any]`, so the list is annotated rather than
+    # inferred.
+    malicious_strengths: list[float] = [strength(i) for i in malicious]
+    benign_strengths: list[float] = [strength(i) for i in benign]
 
     if not any(malicious_strengths) and not any(benign_strengths):
         # Every item scored zero. That is not "the aggregator detects
@@ -148,7 +153,7 @@ def calibrate() -> dict[str, Any]:
             ),
         }
 
-    sweep = []
+    sweep: list[dict[str, Any]] = []
     for step in range(0, 61):
         threshold = step / 10.0
         fired_malicious = sum(1 for s in malicious_strengths if s >= threshold)

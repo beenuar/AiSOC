@@ -10,7 +10,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from app.services.weak_signals import (
     MIN_DISTINCT_KINDS,
     SIGNAL_WEIGHTS,
@@ -118,7 +117,12 @@ async def test_the_refused_ordered_pair_lands_here() -> None:
     aggregator = WeakSignalAggregator(FakeRedis())
     now = time.time()
     recovery = {"event_type": "workspace.login.recovery_email_edit", "actor_email": "victim@example.com", "session_id": "s9"}
-    password = {"event_type": "workspace.login.password_edit", "actor_email": "victim@example.com", "session_id": "s9", "ip_class": "tor_exit"}
+    password = {
+        "event_type": "workspace.login.password_edit",
+        "actor_email": "victim@example.com",
+        "session_id": "s9",
+        "ip_class": "tor_exit",
+    }
 
     assert await aggregator.observe("t1", recovery, now=now) == []
     findings = await aggregator.observe("t1", password, now=now + 60)

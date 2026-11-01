@@ -106,7 +106,10 @@ WORKSPACE_TAKEOVER: list[dict] = [
         when={"event_type": "workspace.login.recovery_email_edit"},
         fp=["Staff member correcting their own recovery address", FP_ONBOARD],
         playbook="tpl-account-takeover",
-        description="The recovery address moved from the user's own session. Taken before a password reset it makes the reset survive the owner noticing.",
+        description=(
+            "The recovery address moved from the user's own session. Taken before a password reset it makes the reset survive the owner "
+            "noticing."
+        ),
     ),
     F(
         family="workspace-takeover",
@@ -173,7 +176,10 @@ WORKSPACE_TAKEOVER: list[dict] = [
         fp=["Corporate VPN egress classified as a hosting provider", FP_PENTEST],
         playbook="tpl-account-takeover",
         neg_field="ip_class",
-        description="A successful sign-in from an address the pinned ingest dataset classes as VPN, Tor, proxy or hosting. The class and its dataset version travel on the alert.",
+        description=(
+            "A successful sign-in from an address the pinned ingest dataset classes as VPN, Tor, proxy or hosting. The class and its "
+            "dataset version travel on the alert."
+        ),
     ),
     F(
         family="workspace-takeover",
@@ -253,7 +259,10 @@ WORKSPACE_TAKEOVER: list[dict] = [
         fp=["Approved integration from the organisation's allow-list"],
         playbook="tpl-account-takeover",
         neg_field="param_scope",
-        description="A consent grant carrying a mailbox or drive scope. The scope list is the clause; a grant without one is an ordinary sign-in-with-Google.",
+        description=(
+            "A consent grant carrying a mailbox or drive scope. The scope list is the clause; a grant without one is an ordinary sign-in- "
+            "with-Google."
+        ),
     ),
     F(
         family="workspace-takeover",
@@ -267,7 +276,9 @@ WORKSPACE_TAKEOVER: list[dict] = [
         when={"event_type": "workspace.admin.create_email_monitor"},
         fp=["Legal hold or investigation with a recorded authorisation"],
         playbook="tpl-exfiltration",
-        description="An email monitor copies a mailbox to another address. Created outside a recorded legal process it is covert mail collection.",
+        description=(
+            "An email monitor copies a mailbox to another address. Created outside a recorded legal process it is covert mail collection."
+        ),
     ),
     F(
         family="workspace-takeover",
@@ -407,7 +418,10 @@ APPS_SCRIPT: list[dict] = [
         fp=["Platform engineer reproducing an Apps Script project deliberately"],
         playbook="tpl-privilege-escalation",
         neg_field="actor_is_service_account",
-        description="Apps Script creates its own projects through its service account. A user principal doing it under the same `sys-` prefix is impersonating that path.",
+        description=(
+            "Apps Script creates its own projects through its service account. A user principal doing it under the same `sys-` prefix is "
+            "impersonating that path."
+        ),
     ),
     F(
         family="apps-script-impersonation",
@@ -485,7 +499,9 @@ THIRD_PARTY_ACCESS: list[dict] = [
         fp=["Approved integration from the organisation's allow-list"],
         playbook="tpl-triage",
         neg_field="app_scopes",
-        description="A newly installed app that can read message history or files. The scope list is the clause; the install alone is routine.",
+        description=(
+            "A newly installed app that can read message history or files. The scope list is the clause; the install alone is routine."
+        ),
     ),
     F(
         family="third-party-access",
@@ -709,7 +725,10 @@ THIRD_PARTY_ACCESS: list[dict] = [
         when={"event_type": "salesforce.suOrgAdminLogin"},
         fp=["Support engineer reproducing a reported defect with the user's consent"],
         playbook="tpl-account-takeover",
-        description="`DelegateUser` on the record names the administrator who assumed the identity, which is the field an investigation needs and the connector now lifts.",
+        description=(
+            "`DelegateUser` on the record names the administrator who assumed the identity, which is the field an investigation needs and "
+            "the connector now lifts."
+        ),
     ),
     F(
         family="third-party-access",
@@ -812,7 +831,10 @@ SAAS_DATA_MOVEMENT: list[dict] = [
         fp=["Public asset published deliberately"],
         playbook="tpl-exfiltration",
         neg_field="shared_link_access",
-        description="Box records the resulting access level under `additional_details.shared_link.access`, which is two levels down and was invisible until the connector lifted it.",
+        description=(
+            "Box records the resulting access level under `additional_details.shared_link.access`, which is two levels down and was "
+            "invisible until the connector lifted it."
+        ),
     ),
     F(
         family="saas-data-movement",
@@ -891,7 +913,10 @@ SAAS_DATA_MOVEMENT: list[dict] = [
         when={"event_type": "box.APPLICATION_PUBLIC_KEY_ADDED"},
         fp=["Scheduled key rotation for a sanctioned integration"],
         playbook="tpl-persistence",
-        description="A public key added to a Box application authorises a new JWT signer, which is server-to-server persistence that no user sign-in reveals.",
+        description=(
+            "A public key added to a Box application authorises a new JWT signer, which is server-to-server persistence that no user "
+            "sign-in reveals."
+        ),
     ),
     F(
         family="saas-data-movement",
@@ -984,7 +1009,9 @@ SAAS_DATA_MOVEMENT: list[dict] = [
         when={"event_type": "dropbox.team_member_create_team_invite_link"},
         fp=["Bulk onboarding with an approved invite link"],
         playbook="tpl-persistence",
-        description="An invite link lets anyone holding it join the team, which is persistence that survives the original account being disabled.",
+        description=(
+            "An invite link lets anyone holding it join the team, which is persistence that survives the original account being disabled."
+        ),
     ),
     F(
         family="saas-data-movement",
@@ -1146,7 +1173,9 @@ SAAS_AUTHENTICATION_ABUSE: list[dict] = [
         fp=["Service user that cannot hold a second factor and is restricted by network policy instead"],
         playbook="tpl-account-takeover",
         neg_field="mfa_satisfied",
-        description="Snowflake states both factors on every LOGIN_HISTORY row, so a password-only success is a fact rather than an inference.",
+        description=(
+            "Snowflake states both factors on every LOGIN_HISTORY row, so a password-only success is a fact rather than an inference."
+        ),
     ),
     F(
         family="saas-authentication-abuse",
@@ -1215,7 +1244,10 @@ SAAS_AUTHENTICATION_ABUSE: list[dict] = [
         when={"event_type": "onepassword.signin.mfa_failed"},
         fp=["Clock drift on a time-based code generator"],
         playbook="tpl-account-takeover",
-        description="The credential was right and the factor was not, which separates a password-guessing attempt from one that already holds the password.",
+        description=(
+            "The credential was right and the factor was not, which separates a password-guessing attempt from one that already holds the "
+            "password."
+        ),
     ),
     F(
         family="saas-authentication-abuse",

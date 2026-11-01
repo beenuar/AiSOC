@@ -5,7 +5,6 @@ from __future__ import annotations
 import time
 
 import pytest
-
 from app.services.api_behaviour import (
     DERIVED_FIELDS,
     ApiBehaviourProfiler,
@@ -125,9 +124,7 @@ async def test_enumeration_across_templated_identifiers() -> None:
         now = time.time()
         signals: list = []
         for identifier in range(12):
-            signals = await profiler.observe(
-                "t1", {"http_path": f"/api/users/{identifier}", "src_ip": "203.0.113.5"}, now=now
-            )
+            signals = await profiler.observe("t1", {"http_path": f"/api/users/{identifier}", "src_ip": "203.0.113.5"}, now=now)
         kinds = [s.kind for s in signals]
         assert "identifier_enumeration" in kinds
     finally:

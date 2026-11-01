@@ -44,7 +44,7 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import and_, or_, select, text, update
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.config import settings
@@ -54,6 +54,7 @@ from app.models.detection_proposal import (
 )
 from app.models.detection_rule import DetectionRule
 from app.services.backtest import backtest_rule, fetch_lake_events
+from app.services.detection_coverage_gaps import rank_gaps
 from app.services.detection_eval import evaluate_candidate_rule
 from app.services.github import create_detection_pr
 
@@ -409,6 +410,46 @@ def body_has_detection_logic(rule_body: str | None) -> bool:
         if stripped and not stripped.startswith("#"):
             return True
     return False
+
+
+@router.get("/coverage-gaps")
+async def list_coverage_gaps(
+    current_user: Annotated[AuthUser, Depends(require_permission("rules:read"))],
+    db: DBSession,
+    limit: int = Query(default=50, ge=1, le=500),
+) -> dict[str, Any]:
+    """Rank what this tenant's connected sources are not covered for.
+
+    Depth 2 wave 2 item 2.5. The governed proposal flow below already runs
+    end to end; what it lacked was a reason to start, so coverage grew
+    wherever attention fell. This supplies the ranking and nothing else —
+    it writes no proposal, because ranking a gap and drafting a rule are
+    different authorities and the drafting path's approver requirement
+    would be meaningless if the ranker could reach past it.
+
+    Read-only, scoped to the caller's own tenant. A tenant that has
+    connected nothing has no gaps rather than a catalogue of everything
+    AiSOC could in principle detect.
+    """
+    _ensure_dac_enabled()
+    rows = await db.execute(
+        text("SELECT connector_type FROM connectors WHERE tenant_id = CAST(:tenant AS uuid) AND enabled = TRUE"),
+        {"tenant": str(current_user.tenant_id)},
+    )
+    connected = sorted({str(r[0]) for r in rows.fetchall() if r[0]})
+    gaps = rank_gaps(connected)
+    return {
+        "connected_connectors": connected,
+        "gaps": [gap.as_dict() for gap in gaps[:limit]],
+        "total_gaps": len(gaps),
+        # Stated rather than implied: a tenant with no connected source has
+        # no gaps, and an empty list must not read as "fully covered".
+        "note": (
+            "Gaps are ranked only for connectors this tenant has enabled. An empty list means "
+            "nothing is connected, or every connected source meets the per-source minimum — it "
+            "is not a statement that coverage is complete."
+        ),
+    }
 
 
 @router.get("", response_model=list[ProposalResponse])

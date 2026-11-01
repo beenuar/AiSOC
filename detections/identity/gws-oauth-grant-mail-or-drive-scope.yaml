@@ -1,7 +1,7 @@
 id: det-identity-172
 name: Workspace OAuth Grant Of Mail Or Drive Scopes
 description: A consent grant carrying a mailbox or drive scope. The scope list is the clause; a grant
-  without one is an ordinary sign-in-with-Google.
+  without one is an ordinary sign-in- with-Google.
 version: 1.0.0
 severity: high
 tags:

@@ -99,7 +99,10 @@ def check() -> list[str]:
         # Imported Sigma rules keep their upstream id and are not in the lock.
         if rule_id.startswith("det-") and rule_id not in locked:
             for path in paths:
-                problems.append(f"{path.relative_to(ROOT)} carries {rule_id}, which no spec owns — stale output from an earlier generation run; delete it")
+                problems.append(
+                    f"{path.relative_to(ROOT)} carries {rule_id}, which no spec owns — "
+                    "stale output from an earlier generation run; delete it"
+                )
     return problems
 
 
