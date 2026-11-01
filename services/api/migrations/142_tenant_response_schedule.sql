@@ -75,18 +75,28 @@ CREATE TABLE IF NOT EXISTS aisoc_tenant_response_windows (
 CREATE INDEX IF NOT EXISTS idx_response_windows_tenant
     ON aisoc_tenant_response_windows (tenant_id, weekday);
 
+-- FORCE, not merely ENABLE: the owner is the role that runs migrations, and
+-- an owner walks straight past a policy that is only enabled.
 ALTER TABLE aisoc_tenant_response_schedules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aisoc_tenant_response_schedules FORCE  ROW LEVEL SECURITY;
 ALTER TABLE aisoc_tenant_response_windows   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE aisoc_tenant_response_windows   FORCE  ROW LEVEL SECURITY;
 
+-- The `OR current_tenant_id() IS NULL` arm is the one the schedulers need.
+-- The sweep that fires an approval deadline runs on a connection that binds
+-- no tenant, by design — a per-tenant pass needs a list of tenants, and a
+-- tenant missing from it has deadlines that never fire. Without this arm
+-- that sweep reads zero rows and reports success, which is the silent
+-- failure this whole table exists to prevent.
 DROP POLICY IF EXISTS tenant_isolation_response_schedules ON aisoc_tenant_response_schedules;
 CREATE POLICY tenant_isolation_response_schedules ON aisoc_tenant_response_schedules
-    USING (tenant_id = current_tenant_id())
-    WITH CHECK (tenant_id = current_tenant_id());
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL);
 
 DROP POLICY IF EXISTS tenant_isolation_response_windows ON aisoc_tenant_response_windows;
 CREATE POLICY tenant_isolation_response_windows ON aisoc_tenant_response_windows
-    USING (tenant_id = current_tenant_id())
-    WITH CHECK (tenant_id = current_tenant_id());
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL);
 
 COMMENT ON TABLE aisoc_tenant_response_schedules IS
     'Per-tenant time gates on automatic response. Conditions raise an approval requirement and never lower one; a tenant with no row here is unaffected.';

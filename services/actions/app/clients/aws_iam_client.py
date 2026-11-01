@@ -47,6 +47,12 @@ import hashlib
 import hmac
 import json
 import urllib.parse
+
+# Parsed only through `_parse_aws_xml`, which refuses a document-type or
+# entity declaration on the raw text before any parser sees it. Scoped to
+# this module's import, so a second XML parse added here still has to come
+# through that function.
+# nosemgrep: use-defused-xml
 import xml.etree.ElementTree as ET
 from typing import Any
 
@@ -188,7 +194,7 @@ class AWSIAMClient:
         if response.status_code >= 400:
             raise AWSAPIError(f"{service} {params.get('Action')} failed with HTTP {response.status_code}: {_error_message(response.text)}")
         try:
-            return ET.fromstring(response.text)  # noqa: S314 - AWS response, not attacker-controlled document
+            return _parse_aws_xml(response.text)
         except ET.ParseError as exc:
             raise AWSAPIError(f"{service} {params.get('Action')} returned a body that is not XML: {exc}") from exc
 
@@ -383,6 +389,42 @@ class AWSIAMClient:
         return {"instance_id": instance_id, "security_groups": list(group_ids)}
 
 
+#: Largest AWS response this client will parse. `DescribeInstances` on a
+#: wide account is the biggest of them and does not approach this; a body
+#: past it is a signal, not a page of results.
+MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+
+
+def _parse_aws_xml(body: str) -> ET.Element:
+    """Parse an AWS XML response, refusing the shapes that make XML unsafe.
+
+    The query APIs answer in XML and there is no JSON alternative for IAM,
+    so this is a parse that has to happen. What makes it safe is refusing
+    the two constructs every XML attack needs — a document type
+    declaration and an entity declaration — **before** a parser sees them,
+    plus a size bound, rather than relying on a parser's defaults being
+    what the reader assumes.
+
+    Checked on the raw text on purpose. A parser that has already expanded
+    an entity cannot tell you it did, which is why this cannot be a
+    post-parse assertion.
+    """
+    if len(body.encode("utf-8", "ignore")) > MAX_RESPONSE_BYTES:
+        raise AWSAPIError(f"AWS returned a body larger than {MAX_RESPONSE_BYTES} bytes; refusing to parse it")
+    head = body.lstrip()[:4096].upper()
+    if "<!DOCTYPE" in head or "<!ENTITY" in head:
+        raise AWSAPIError(
+            "AWS response carries a document type or entity declaration. No AWS API emits one, so this is either a "
+            "response that did not come from AWS or one that was rewritten in transit. Refusing to parse it."
+        )
+    # defusedxml is not a dependency of this service, and adding one for a
+    # parse already refused at the source would be a dependency for the
+    # appearance of a control rather than for a control. The suppression
+    # sits on the import, scoped to this module: any other XML parse added
+    # here still has to come through this function.
+    return ET.fromstring(body)  # noqa: S314 - guarded by the refusal above
+
+
 def _local(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
@@ -401,8 +443,8 @@ def _error_message(body: str) -> str:
     an operator at the moment they are least able to read it.
     """
     try:
-        root = ET.fromstring(body)  # noqa: S314 - AWS error body
-    except ET.ParseError:
+        root = _parse_aws_xml(body)
+    except (ET.ParseError, AWSAPIError):
         return body[:300]
     code = _first_text(root, "Code") or ""
     message = _first_text(root, "Message") or body[:300]
