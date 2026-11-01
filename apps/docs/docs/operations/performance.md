@@ -200,6 +200,40 @@ three-node control plane. The comparison is indicative, not a scaling law:
 kind nodes are containers on the same kernel, so this is not two machines'
 worth of hardware.
 
+## Fusion hot path, in process, 2026-11-01
+
+The deterministic per-event work that turns an ingest-normalized OCSF event
+into a fusion `RawAlert`. This is the CPU-bound stage on the critical
+ingest-to-alert path, measured by `scripts/perf/throughput_harness.py` driving
+the real `promote_normalized_event` over a synthetic corpus — no broker, no
+database, no network.
+
+Published here because the pull-request gate asserts a floor against it, and
+until this section existed that floor related to nothing: `perf.yml` passed
+`--assert-floor 1000` under a comment claiming "a >200x margin below the
+measured number", where the measured number appeared nowhere a reader could
+check. A threshold has to be derived from a published figure or it is not a
+gate.
+
+| | |
+|---|---|
+| Events | 20,000 |
+| Promoted | 13,334 |
+| Promote rate | **140,692 events/s** |
+| Per-event p50 | 8.67 µs |
+| Per-event p95 | 9.37 µs |
+| Per-event p99 | 15.17 µs |
+| Machine | Apple M5 Max, 18 cores, macOS 25.5.0 (arm64) |
+| Commit | `4e6c79305` |
+
+**This is not a pipeline figure and must not be quoted as one.** It is two to
+three orders of magnitude above the end-to-end numbers above, because it
+measures one function rather than ingest, a broker, a consumer and a database.
+The figure it bounds is a regression in that function — an I/O call slipping
+onto the promote hot path is the canonical case — and nothing else.
+
+**Not an SLO,** on the same terms as every other row on this page.
+
 ## Failure injection: killing a fusion replica mid-stream
 
 `scripts/chaos/fusion_restart.py`, run against the Kubernetes deployment above
@@ -240,16 +274,28 @@ For Kubernetes, see [Reference HA deployment](./ha-deployment.md).
 
 `.github/workflows/perf.yml` runs three things:
 
-1. the in-process fusion hot-path harness with a generous regression floor;
+1. the in-process fusion hot-path harness, with a floor **20x below** the
+   promote rate published above;
 2. the storage cost model drift check;
 3. this end-to-end harness against a Compose stack, nightly and on demand,
-   with a floor far below the figures above.
+   with a floor 7.3x below the published drain rate and a latency ceiling
+   19.2x above the published p95.
+
+Only the first two run on a pull request. The end-to-end job boots Kafka,
+Postgres, ingest and fusion and is too slow for that, so it is nightly and on
+demand — which makes the in-process floor the only throughput assertion most
+changes are graded against.
 
 The floors exist to catch a catastrophic regression, such as an I/O call
 appearing on the promotion hot path. They are deliberately not set near the
 measured values: GitHub runners are shared, throttled and noisy, and a gate
-that fires on runner jitter gets disabled within a week. **A passing perf job
-is not evidence that any number on this page still holds on your hardware.**
+that fires on runner jitter gets disabled within a week. They are also not
+arbitrary constants, which is the other way to get this wrong and the way
+this page got it wrong for longer: every floor above is a stated multiple of
+a figure published on this page, and `tests/test_perf_gate_is_related_to_the_claims.py`
+parses both the workflow and this page and fails if either ratio drifts.
+**A passing perf job is not evidence that any number on this page still holds
+on your hardware.**
 
 ## Scaling on lag
 
@@ -302,11 +348,24 @@ spec:
         valueLocation: "suggested_replicas"
 ```
 
-## No cloud-hardware run exists yet, and that is a gap
+## Neither a cloud-hardware run nor a managed-cluster run exists yet, and both are gaps
+
+Two separate things are missing and they are easy to read as one, because the
+page carries a Kubernetes table that is neither of them.
 
 The depth plan asks for a run on stated cloud hardware, aiming at a
 sustained 5,000 events/s through detection at p95 under 2 seconds on one
-documented instance size.
+documented instance size. It separately asks for one run on a **managed**
+Kubernetes cluster — EKS, GKE or AKS.
+
+**No managed-cluster run exists.** The three-node Kubernetes table above is
+`kind`, and that section already says what `kind` is not: three containers on
+one kernel on the same laptop. A managed cluster differs in every dimension
+that would make the run worth having — real nodes, a control plane somebody
+else operates, a CNI, real inter-node network, and storage classes backed by
+cloud volumes. What is needed to close it is a cluster, not code: the Helm
+chart installs all of CORE and `helm.yml` proves it on `kind` on every pull
+request, so the same `values-ha.yaml` plus a kubeconfig produces the row.
 
 **Not measured.** Every figure on this page comes from a laptop — one
 18-core Apple-silicon host and one 6-CPU Linux VM on it — or from a kind

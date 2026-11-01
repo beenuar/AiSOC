@@ -4,10 +4,11 @@ name: Performance + cost
 #
 #   throughput — runs the fusion hot-path throughput harness over a
 #                deterministic synthetic corpus and asserts a GENEROUS
-#                regression floor (a >200x margin below the measured number).
-#                It fires only on a catastrophic regression (e.g. an I/O call
-#                slipping onto the promote hot path), never on runner jitter.
-#                It is a regression floor, not a production SLO.
+#                regression floor, derived from the figure the page publishes
+#                for that harness (20x below it). It fires only on a
+#                catastrophic regression (e.g. an I/O call slipping onto the
+#                promote hot path), never on runner jitter. It is a regression
+#                floor, not a production SLO.
 #   cost-model — regenerates the storage $/TB worked example and fails if the
 #                committed docs/decisions/storage-cost-model.json is stale, so
 #                the number ADR-0005 cites can never silently drift.
@@ -69,9 +70,28 @@ jobs:
           python-version: '3.11'
       - name: Install promoter deps
         run: pip install --quiet pydantic pydantic-settings structlog
+      # Derived from the published figure, not picked. The page's hot-path
+      # section measured 140,692 events/s, so:
+      #
+      #   floor = 7,000 events/s  -> 20.1x below the published rate
+      #
+      # The previous `1000` sat 140x below it, under a comment claiming a
+      # ">200x margin below the measured number" — a measured number that
+      # appeared nowhere, so nobody could check either figure or say what
+      # regression the gate would catch. This is the only throughput gate that
+      # runs on a pull request (the end-to-end job below is nightly), so it was
+      # also the one that mattered most.
+      #
+      # 20x is wider than the 8x the end-to-end job uses, deliberately: this is
+      # a single-threaded Python microbenchmark and a shared, throttled runner
+      # is further from an 18-core laptop on that than on a container pipeline
+      # whose ceiling is a broker. Still bounded, and bounded by the claim.
+      #
+      # tests/test_perf_gate_is_related_to_the_claims.py parses this file and
+      # the published page and fails if the ratio drifts, in either direction.
       - name: Run throughput harness (generous floor)
         run: |
-          python3 scripts/perf/throughput_harness.py --events 20000 --assert-floor 1000 --json | tee /tmp/throughput.json
+          python3 scripts/perf/throughput_harness.py --events 20000 --assert-floor 7000 --json | tee /tmp/throughput.json
       - name: Publish throughput summary
         if: always()
         run: |
