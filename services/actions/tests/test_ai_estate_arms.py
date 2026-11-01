@@ -98,7 +98,7 @@ class TestEveryArmIsGraded:
 
         for name, declared in FACTORY_KEY_TUPLES.items():
             tree = ast.parse(inspect.getsource(getattr(factories, name)).lstrip())
-            read = {
+            read: set[str] = {
                 node.args[0].value
                 for node in ast.walk(tree)
                 if isinstance(node, ast.Call)
@@ -108,6 +108,7 @@ class TestEveryArmIsGraded:
                 and node.func.value.id == "params"
                 and node.args
                 and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
             }
             assert read == set(declared), f"{name}: reads {sorted(read)}, declares {sorted(declared)}"
 

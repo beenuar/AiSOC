@@ -296,3 +296,171 @@ enforced rather than assumed: a test asserts no new verb above `read_only` is
 - GitHub deploy keys: deletion is not platform-reversible, because the host
   stores only the public half and re-adding needs key material AiSOC never
   holds.
+
+### 6.2 Plain-language playbooks and a bounded model step — done
+
+**Reproduced first, and half of it did not reproduce.** Depth 5.6's
+drafter already exists: `services/agents/app/playbook/nl_drafter.py` turns a
+sentence into a playbook, validates it against both the Pydantic model and
+`schemas/playbook.schema.json`, falls back to a deterministic substrate when
+no model is configured, and lands it with `enabled=false` so the editor is
+the gate. `POST /playbooks/draft-from-nl` wraps it. Nothing there needed
+building. The one part of 5.6 that does not exist is "previews it against a
+chosen past alert" — see D3.
+
+What this plan **adds** did reproduce: there was no step type that asks the
+model a bounded question, and `StepType` had 26 members with no way to
+express a decision the author did not want to make themselves.
+
+**The change.** `ask_model`: a closed answer set written by the author, a
+required `on_invalid` fallback branch, and a branch id taken from the
+author's own map rather than from the model's text. Five surfaces in sync,
+held by `scripts/check_playbook_schema_parity.py`, which reports
+`schema 27 | StepType 27 | runnable 27 | packages/types 27` and scans every
+`.ts`/`.tsx` file for a sixth vocabulary rather than naming the files it
+knows about.
+
+**"Cannot call a verb" is pinned by a test that tries.** Three layers: the
+step is routed through `_CONTROL_FLOW` rather than `_HANDLERS` (which is
+where `action_bridge` is reached); an AST test asserts the module imports
+nothing that can dispatch; and `test_the_step_cannot_dispatch_a_verb` makes
+the model answer with the name of a containment verb, replaces the bridge
+with a tripwire that fails the test if called, and asserts the step decided
+nothing — because a verb name is just an invalid answer here.
+
+**Negative controls.** Removing `ask_model` from `_CONTROL_FLOW` fails three
+branch tests; deleting the enum-membership check in `parse_answer` fails
+three answer-validation tests.
+
+### 6.3 Time gates and timeouts — done
+
+**Reproduced.** `approval_rules.evaluate()` took impact, declared approval,
+confidence and tier, and nothing else — there was no way for a tenant to say
+"not at three in the morning". And `pause.expire_due` had exactly one
+behaviour: mark the pause `expired` and log it, so every approval in the
+product behaved identically at its deadline.
+
+**The change.** `ResponseSchedule` + `apply_schedule` in `approval_rules.py`
+(vendored byte-identically into the API), migration 142 for the per-tenant
+schedule and its windows with RLS, and migration 143 for the pause row's
+declared timeout outcome.
+
+**The direction is the property, and it is asserted rather than described.**
+`test_it_never_produces_an_automatic_decision` sweeps every `ActionImpact` ×
+`ApprovalRequirement` pair and asserts the schedule never lowers one. The
+positive control (`test_inside_business_hours_leaves_it_automatic`) is the
+one that catches a gate stuck closed, which reads as working caution.
+
+**One statement, not two.** The first cut read the declared outcomes in a
+separate cross-tenant sweep before `expire_due`. That was a second statement
+racing the first and would have taken the tenant-predicate ratchet from 80
+to 81 — which the gate refuses, correctly. Collapsing both into one
+`UPDATE ... RETURNING` removes the race, removes the ordering hazard, and
+moves the ratchet entry rather than adding one.
+
+**Negative controls.** Letting `apply_schedule` touch a non-automatic
+decision, or emit AUTOMATIC, fails six tests; treating `on_call_now = None`
+as cover fails the one test named for it.
+
+### 6.4 Ticket sync — verified, and one direction was broken
+
+**The outbound direction already works and needed no change.** Driven end to
+end for the first time — the production `push_case` and `push_status_change`
+routes, the production Jira and ServiceNow connectors, and a mock HTTP
+server returning recorded vendor shapes — all five assertions passed on the
+first run: a case mints an issue carrying the `aisoc-case-<id>` label the
+return leg resolves by, a ServiceNow incident carries its correlation id, a
+status change patches the existing ticket rather than minting a second one,
+a vendor refusal is a 502 that does not forward the vendor's body, and a
+connector without the capability is refused.
+
+**The inbound direction had a defect that four correct unit tests could not
+see**, because each mocks the next layer: `case_fanout` patches
+`httpx.AsyncClient`, the connectors push routes are exercised by nothing,
+`test_push_capabilities.py` patches `httpx.AsyncClient` with a `MagicMock`,
+and the inbound test mocks the database session. A chain of four correct
+unit tests is not a loop.
+
+The defect: the idempotency check was `new_status == ref_row.status`, an
+exact equality. Jira `Done` maps to the **intermediate** `resolved`, so a
+case a human had closed in AiSOC was moved backwards out of its terminal
+state by an ordinary redelivery — and Jira retries up to five times while
+ServiceNow retries until it gets a 2xx. No unusual sequence was needed, only
+a close followed by a retry.
+
+**The fix** refuses an inbound status that would move a case out of a
+terminal state, scoped to terminal states only: an ITSM moving a ticket from
+Resolved back to In Progress is a real transition this product should
+mirror, and only at `closed` is a retry indistinguishable from a reopen.
+
+**Negative control.** Reverting the guard fails two tests, including the
+redelivery test that found it.
+
+### 7.5 AI containment — done
+
+**Reproduced.** `ai_inventory.py` scores a provider key's exposure and
+`llm_usage` reads OpenAI and Anthropic audit logs. Zero arms could act on
+any of it, so a provider key found in a public repository was a finding with
+a recommendation and no verb.
+
+**The change.** 14 arms across OpenAI, Anthropic and an AI gateway: key
+revocation, role demotion, workspace removal, spend caps, and the reads
+behind them. Arms **151 → 165** over **64 verbs across 37 vendors**.
+
+**The property this phase turns on: three providers, three different answers
+to "can this be undone", carried honestly.** OpenAI deletes a project key,
+so that arm declares no rollback. Anthropic deactivates one, so it has a
+real platform reverse and is the reason `restore_token` exists as a verb at
+all. A gateway block is a documented pair. One `revoke_token` contract
+claiming a platform rollback because Anthropic can would have given the
+rollback path a route back it does not have on the other two.
+
+**Two things deliberately not duplicated, each pinned by a test.** AI OAuth
+grant revocation reuses the Workspace, Entra and Okta arms from 6.1, because
+an AI application's grant is an ordinary consent and a fourth arm would be a
+second code path to the same vendor endpoint. Agent process kill reuses the
+EDR `kill_process` arms, because the agent is a process on a host.
+
+**A recorded vendor limitation.** Neither OpenAI's nor Anthropic's public
+admin API exposes a budget this platform can set, so `set_spend_cap` has
+exactly one vendor arm and `test_no_spend_cap_arm_exists_for_a_provider_that_has_no_budget_api`
+says so.
+
+**The kill-switch playbook** ships `enabled: false`, asks the bounded
+question *before* the approval rather than after it, and the approval
+declares its timeout outcome: if nobody answers within two hours the gateway
+key's spend cap goes to zero, which is the narrow containment rather than
+the wide one. It is not `services/actions/app/services/kill_switch.py`,
+which is the platform-wide autonomy stop and is not an agent control.
+
+### D3 — Depth 5.6's "preview against a chosen past alert" is still open
+
+The drafter produces a schema-valid draft and lands it disabled, and
+`alert_trigger.py` previews playbooks when an alert fires. What does not
+exist is the affordance 5.6 names: pick a past alert, and see what this
+draft *would* have done against it. `POST /playbooks/draft-from-nl` takes a
+prompt and nothing else.
+
+Recorded rather than built here because it needs a surface this lane does
+not own — the draft endpoint would have to resolve a historical alert into a
+trigger context, which is the console's alert reader rather than the
+playbook engine. The bounded-step half of 6.2, which is what this plan adds
+to 5.6, is complete.
+
+### D4 — The new verbs carry a recorded verification gap, not a probe
+
+Every client added in 6.1 and 7.5 implements its read-back, and none of them
+is reachable from `PostActionVerifier`, because that registry is keyed on
+`ActionType` and these are live-action capabilities with no `ActionType` —
+the same gap `unisolate_host` has carried since it was built.
+
+Closing it properly means either adding 24 `ActionType` members (each of
+which the contract gate then requires a legacy executor for, by design) or
+re-keying the verifier on capability strings. Both are larger than this
+lane's scope and neither should be done by widening an exemption list.
+
+The consequence is enforced rather than left implicit: a test asserts no new
+verb above `read_only` is `AUTOMATIC`, so unverifiable means not autonomous,
+and the read-backs ship as dispatchable read verbs (`get_cloud_identity`,
+`get_oauth_grants`, `get_secret_scanning_alerts`) so a playbook can read the
+effect even though governance does not treat the verb as self-verifying.

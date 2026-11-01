@@ -94,13 +94,13 @@ todos:
     status: completed
   - id: p6-2-plain-language-playbooks
     content: "Phase 6.2: depth 5.6 as specified, plus a bounded 'ask the model' step type that branches on a schema-valid answer and cannot act"
-    status: pending
+    status: completed
   - id: p6-3-time-gates-timeouts
     content: "Phase 6.3: business-hours conditions in approval rules and declared timeout outcomes (pause, rollback, or a named limited containment)"
-    status: pending
+    status: completed
   - id: p6-4-ticket-sync
     content: "Phase 6.4: verify Jira and ServiceNow two-way sync end to end; finish whichever direction is missing"
-    status: pending
+    status: completed
   - id: p7-1-provider-coverage
     content: "Phase 7.1: depth 6.3 as specified, plus enterprise chat compliance logs stored as labels and bounded snippets only"
     status: pending
@@ -115,7 +115,7 @@ todos:
     status: pending
   - id: p7-5-ai-containment
     content: "Phase 7.5: depth 6.6 as specified, plus role demotion, workspace removal and spend caps where the provider API allows"
-    status: pending
+    status: completed
   - id: p8-1-cnapp-depth
     content: "Phase 8.1: CNAPP connector depth beyond issues (vulnerabilities, configuration findings, secrets, runtime detections) used as triage context"
     status: pending

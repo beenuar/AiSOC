@@ -310,7 +310,8 @@ class AIGatewayClient:
             timeout=self._timeout,
             label="AI gateway key info",
         )
-        info = body.get("info") if isinstance(body.get("info"), dict) else body
+        nested = body.get("info")
+        info: dict[str, Any] = nested if isinstance(nested, dict) else body
         return {
             "blocked": bool(info.get("blocked", False)),
             "max_budget": info.get("max_budget"),
