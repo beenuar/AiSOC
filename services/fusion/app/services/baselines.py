@@ -591,7 +591,10 @@ class BaselineStore:
                         out[f"baseline_{kind}_token_spend_z"] = round(spend, 4)
 
         group = _first_present(event, PEER_GROUP_FIELDS) if principal else None
-        if group is not None:
+        # `principal` is re-tested rather than relied on through `group`:
+        # the implication holds, but it holds three lines away and a type
+        # checker cannot see it — and neither can the next reader.
+        if group is not None and principal:
             # The member's own hourly volume is the quantity compared across
             # the group. Rarity is not comparable between principals — one
             # person's rare action is another's routine — but "how much does

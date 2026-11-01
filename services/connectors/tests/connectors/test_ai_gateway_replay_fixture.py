@@ -25,7 +25,15 @@ from app.connectors.ai_gateway import AIGatewayConnector
 
 FIXTURES = pathlib.Path(__file__).resolve().parents[3] / "fusion" / "tests" / "fixtures" / "ai_gateway"
 
-GW = {"base_url": "https://gw.example.com", "api_key": "k"}
+
+def _connector() -> AIGatewayConnector:
+    """Constructed explicitly rather than splatted from a dict.
+
+    `**GW` on a `dict[str, str]` cannot type-check against a constructor
+    that also takes a bool, and silencing that would hide a real
+    signature change behind an ignore.
+    """
+    return AIGatewayConnector(base_url="https://gw.example.com", api_key="k")
 
 
 def _span(**overrides) -> dict:
@@ -67,7 +75,7 @@ CASES: dict[str, dict] = {
 
 @pytest.mark.parametrize("name", sorted(CASES))
 def test_fixture_matches_the_connector_output(name: str):
-    rendered = AIGatewayConnector(**GW).normalize(CASES[name])
+    rendered = _connector().normalize(CASES[name])
     path = FIXTURES / name
 
     if os.environ.get("AISOC_REGENERATE_FIXTURES") == "1":
