@@ -215,6 +215,29 @@ not, that is a real first-run defect for the most common conflict there is
 and belongs in its own fix with a negative control. Until that run exists,
 this is an observation with its evidence attached.
 
+### D5 — Lane F did not reach eleven of its sixteen items, and this is where they stand
+
+Recorded rather than left implicit. Lane F covered 4.2–4.6, 5.1–5.5, 9.1–9.5
+and 3.2–3.3. Five landed (3.2, 3.3 first half, 5.2, 4.6, 9.2/9.4 records);
+eleven did not. The reproduction work for each was done before the lane ran
+out of time, so what follows is **measured state, not a guess**, and is worth
+more to whoever picks them up than a fresh grep would be.
+
+| Item | Measured state on this tree | What is actually left to build |
+|---|---|---|
+| **3.3** second half | first half shipped | Cross-vendor root-cause collapse (migration 152 is claimed and unused). `alerts.external_id` is the natural anchor; `parent_alert_id` / `child_alert_ids` / `is_merged` have existed since migration 042 with **no writer**, so check that vocabulary before minting a new one. |
+| **4.2** reviewer pass | not started | The decision contract is assembled by `reflex_observability.decision_contract` and is **not persisted** — absent from `persist_auto_triage`'s 24 kwargs. A reviewer pass needs it durable first. Closure is chokepointed at `closure/authorization.authorize_auto_closure`, so a reviewer cannot reach closure by accident. Ship only if it moves balanced accuracy or auto-close precision without lowering malicious recall. |
+| **4.3** questions + rules | not started | Both engines are in grammar lockstep today. Operators are `eq/ne/lt/lte/gt/gte/contains/startswith/endswith/in/not_in/exists/not_exists`; **`neq` is not one** and a rule using it silently never matches. Migration 154 is claimed and unused. |
+| **4.4** precedent + re-triage | **verified, not built** | See D3. Precedent reaches triage by two routes but matches only on exact fingerprint or rule/entity string; `semantic_memory.py` is a complete Qdrant recall with provenance that the triage path never touches. Re-triage is genuinely absent, and `run_id` is `uuid5(alert_row_id:WORKFLOW_VERSION)` with `ON CONFLICT (run_id, seq) DO NOTHING`, so a naive re-triage writes **nothing** — it needs a re-triage discriminator in the run id, and seq 0/1 are taken. |
+| **4.5** vendor evidence | **verified, not built** | See D3. `investigation_reads.py` exists with 5 verbs over 7 vendors. Two real gaps: no GuardDuty finding-read verb (the alias resolves GuardDuty to a CloudTrail read), and `run_auto_triage` has **no tool channel at all** and says so in a comment, so a vendor alert that auto-triages never pulls vendor evidence. A deterministic context fetch, like `_attach_identity_context`, is a better shape than a tool channel: the ledger citation is then real because the fetch happened. |
+| **5.1** hunt from a report | not started | Every piece exists separately: `ssrf_guard.validate_outbound_url` (**a validator, not a fetcher — it does not bound response size**, so 5.1 must add its own `max_bytes` and timeout), `EvidenceEnvelope.wrap` for nonce fences (use it, not `wrap_untrusted`), and the closed hunt schema in `hunt/plan.py` with `hunt_plan_sql.py` binding every value as a parameter. Migration 155 is claimed and unused. |
+| **5.3** explorer | **partly exists** | The Data Explorer exists and already shows the generated query; `/graph?entity=` pivot exists. Missing: CSV export, cross-filters and a per-entity view. One latent bug to fix while there: `ExploreView.tsx` assigns `res.esql` into a field labelled `SQL` and runs it through `lakeApi.sql` (ClickHouse). |
+| **5.4** software inventory | **absent** | No connector reads a code-platform SBOM API. `packs/aisoc-inventory-baseline.yaml` queries `deb_packages`, `rpm_packages` and `homebrew_packages` — but **not** the Windows `programs` table — and **nothing consumes the results**. `assets` and `asset_vulnerabilities` are host-level; there is no package-level table. Migration 156 is claimed and unused. |
+| **5.5** retro-hunt at scale | **absent** | The retro-hunt subsystem is substantial and sweeps two stores with honest failure states. `scripts/perf/` is ingest/throughput oriented; nothing measures sweep cost against indicator volume. Needs recorded hardware. |
+| **9.1** voice | **absent** | `voice.ts` is an interface with no recogniser and no screen (see D4). `expo-local-authentication` is already installed and `app/approval/[id].tsx` already names the exact action in its biometric prompt, which is the 9.1 requirement. `@react-native-voice/voice` is **already denied** by `check_no_audio_egress.py` as cloud-capable — an on-device package must be added *and* allowlisted, with the self-test extended, since the self-test is what makes that gate non-vacuous. |
+| **9.3** i18n | **absent** | Nothing at all: no library, no `messages/`, no RTL, no gate. Scope is the five surfaces gap-closure 13.4 names (~690 strings), not the whole console (~72k lines). Note parity 4.7's axe-core extension targets the **same five surfaces**, so the two share a blast radius. |
+| **9.5** operator pages | **2 of 6 built; the matrix row is stale** | SCIM tokens **is built** (`ScimTokensPanel.tsx`, wired at `SettingsView.tsx:424`) and organisation members is built, but the claim row at `CLAIM_TO_GATE_MATRIX.md:299` still lists both as not built. Branding, retention, rule packs, delegations and the console over-limit state are genuinely absent. The enforcement bullet of parity 4.5 is already GATED and done. |
+
 ### D3 — Four Lane F items did not reproduce as the plan describes them
 
 Recorded under the "reproduce before building" rule: a grep is a hint, and
