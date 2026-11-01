@@ -1,0 +1,4 @@
+{
+  "event_type": "workspace.drive.change_user_access",
+  "param_visibility": "shared_externally"
+}

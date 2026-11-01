@@ -1,0 +1,25 @@
+id: det-identity-172
+name: Workspace OAuth Grant Of Mail Or Drive Scopes
+description: A consent grant carrying a mailbox or drive scope. The scope list is the clause; a grant
+  without one is an ordinary sign-in-with-Google.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1550.001
+- mitre.attack.t1528
+- tlp.white
+category: identity
+log_source:
+  product: google-workspace
+  service: token
+detection:
+  condition: |
+    event_type == "workspace.token.authorize"
+    AND param_scope HAS_ANY ["https://www.googleapis.com/auth/gmail.readonly", "https://www.googleapis.com/auth/gmail.modify", "https://mail.google.com/", "https://www.googleapis.com/auth/drive", "https://www.googleapis.com/auth/drive.readonly"]
+false_positives:
+- Approved integration from the organisation's allow-list
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

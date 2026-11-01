@@ -1,0 +1,23 @@
+id: det-application-103
+name: Salesforce Connected Application Updated
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Connected
+  Application Updated'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1528
+- tlp.white
+category: application
+log_source:
+  product: salesforce
+  service: setup-audit
+detection:
+  condition: |
+    event_type == "salesforce.updatedConnectedApplication"
+false_positives:
+- Vendor-published update applied during a maintenance window
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -340,6 +340,14 @@ class GCPCloudAuditConnector(BaseConnector):
             "caller_user_agent": request_meta.get("callerSuppliedUserAgent"),
             "principal_subject": auth_info.get("principalSubject"),
             "service_account_delegation": bool(auth_info.get("serviceAccountDelegationInfo")),
+            # Whether a service or a person acted is the discriminating
+            # clause of the Apps Script family: that service creates its own
+            # projects, so a *user* creating one under the same system folder
+            # is borrowing the folder's trust. Google's service accounts all
+            # live under `.gserviceaccount.com`, which is a property of the
+            # address rather than a guess, so the connector states it rather
+            # than leaving every rule to re-derive it from a suffix test.
+            "actor_is_service_account": actor.endswith(".gserviceaccount.com"),
             "status_code": status.get("code"),
             "operation_succeeded": succeeded,
             "raw_event": raw,

@@ -1,0 +1,25 @@
+id: det-cloud-193
+name: GCP Service Account Key Created Under An Apps Script Project
+description: A downloadable key minted under the Apps Script folder is a long-lived credential in a project
+  nobody audits.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.001
+- mitre.attack.t1528
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: iam
+detection:
+  condition: |
+    method_name == "google.iam.admin.v1.CreateServiceAccountKey"
+    AND project_id STARTSWITH "sys-"
+false_positives:
+- Documented migration off Apps Script
+playbook: tpl-credential-access
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

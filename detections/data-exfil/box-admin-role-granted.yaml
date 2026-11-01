@@ -1,0 +1,24 @@
+id: det-data-exfil-031
+name: Box Role Changed To Administrator
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box Role Changed
+  To Administrator'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.003
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.ROLE_CHANGE_TO_ADMIN"
+false_positives:
+- Planned administrator onboarding
+- First-time provisioning / new-user onboarding
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

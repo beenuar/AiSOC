@@ -1,0 +1,5 @@
+{
+  "event_type": "snowflake.login",
+  "ip_class": "__benign__",
+  "is_success": true
+}

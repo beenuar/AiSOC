@@ -1,5 +1,5 @@
 {
-  "count": 760,
+  "count": 843,
   "rules": [
     {
       "category": "application",
@@ -1318,6 +1318,406 @@
       "service": "runtime",
       "severity": "low",
       "slug": "ai-agent-tool-call-failed-repeatedly"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-087",
+      "match_when": {
+        "app_scopes_has_any": [
+          "files:read",
+          "channels:history",
+          "groups:history",
+          "im:history"
+        ],
+        "event_type": "slack.app_installed"
+      },
+      "mitre": [
+        "T1528",
+        "T1199"
+      ],
+      "name": "Slack App Installed With Broad Read Scopes",
+      "product": "slack",
+      "service": "audit",
+      "severity": "high",
+      "slug": "slack-app-installed-broad-read-scopes"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-088",
+      "match_when": {
+        "event_type": "slack.app_scopes_expanded"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "Slack App Scopes Expanded After Install",
+      "product": "slack",
+      "service": "audit",
+      "severity": "high",
+      "slug": "slack-app-scopes-expanded"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-089",
+      "match_when": {
+        "event_type": "slack.app_uninstalled"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "Slack App Uninstalled",
+      "product": "slack",
+      "service": "audit",
+      "severity": "low",
+      "slug": "slack-app-uninstalled"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-090",
+      "match_when": {
+        "event_type": "slack.external_shared_channel_connected"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Slack External Shared Channel Connected",
+      "product": "slack",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "slack-external-shared-channel-connected"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-091",
+      "match_when": {
+        "event_type": "slack.organization_export_started"
+      },
+      "mitre": [
+        "T1530",
+        "T1567"
+      ],
+      "name": "Slack Organisation Export Started",
+      "product": "slack",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "slack-org-export-started"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-092",
+      "match_when": {
+        "event_type": "slack.role_change_to_owner"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Slack Role Changed To Organisation Owner",
+      "product": "slack",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "slack-role-change-to-owner"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-093",
+      "match_when": {
+        "event_type": "slack.role_change_to_admin"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Slack Role Changed To Workspace Admin",
+      "product": "slack",
+      "service": "audit",
+      "severity": "high",
+      "slug": "slack-role-change-to-admin"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-094",
+      "match_when": {
+        "event_type": "slack.pref.sso_setting_changed"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Slack Single Sign-On Setting Changed",
+      "product": "slack",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "slack-sso-setting-changed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-095",
+      "match_when": {
+        "event_type": "slack.pref.two_factor_auth_changed"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Slack Two-Factor Policy Changed",
+      "product": "slack",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "slack-two-factor-policy-changed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-096",
+      "match_when": {
+        "event_type": "slack.user_session_invalidation_disabled"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Slack Session Invalidation Disabled",
+      "product": "slack",
+      "service": "audit",
+      "severity": "high",
+      "slug": "slack-session-invalidation-disabled"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-097",
+      "match_when": {
+        "event_type": "slack.pref.allow_message_deletion"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "Slack Message Deletion Permission Widened",
+      "product": "slack",
+      "service": "audit",
+      "severity": "high",
+      "slug": "slack-message-deletion-allowed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-098",
+      "match_when": {
+        "event_type": "slack.channel_converted_to_private"
+      },
+      "mitre": [
+        "T1564"
+      ],
+      "name": "Slack Channel Converted To Private",
+      "product": "slack",
+      "service": "audit",
+      "severity": "low",
+      "slug": "slack-channel-converted-to-private"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-099",
+      "match_when": {
+        "event_type": "slack.guest_created"
+      },
+      "mitre": [
+        "T1136.003"
+      ],
+      "name": "Slack Guest Account Created",
+      "product": "slack",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "slack-guest-created"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-100",
+      "match_when": {
+        "event_type": "slack.workspace_public_url_updated"
+      },
+      "mitre": [
+        "T1491"
+      ],
+      "name": "Slack Workspace Public URL Updated",
+      "product": "slack",
+      "service": "audit",
+      "severity": "high",
+      "slug": "slack-public-url-updated"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-101",
+      "match_when": {
+        "event_type": "slack.file_downloaded",
+        "ip_class_in": [
+          "vpn",
+          "tor_exit",
+          "public_proxy",
+          "hosting_provider"
+        ]
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "Slack File Downloaded From An Anonymizing Network",
+      "product": "slack",
+      "service": "audit",
+      "severity": "high",
+      "slug": "slack-file-downloaded-from-anonymizer"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-102",
+      "match_when": {
+        "event_type": "salesforce.insertConnectedApplication"
+      },
+      "mitre": [
+        "T1528",
+        "T1199"
+      ],
+      "name": "Salesforce Connected Application Installed",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-connected-app-installed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-103",
+      "match_when": {
+        "event_type": "salesforce.updatedConnectedApplication"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "Salesforce Connected Application Updated",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-connected-app-updated"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-104",
+      "match_when": {
+        "event_type": "salesforce.suOrgAdminLogin"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Salesforce Administrator Signed In As Another User",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-login-as-user"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-105",
+      "match_when": {
+        "event_type": "salesforce.PermSetAssign"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Salesforce Permission Set Assigned",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-permission-set-assigned"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-106",
+      "match_when": {
+        "event_type": "salesforce.PermSetCreate"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Salesforce Permission Set Created",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-permission-set-created"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-107",
+      "match_when": {
+        "event_type": "salesforce.changedProfile"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Salesforce User Profile Changed",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-profile-changed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-108",
+      "match_when": {
+        "event_type": "salesforce.dataExport"
+      },
+      "mitre": [
+        "T1530",
+        "T1567"
+      ],
+      "name": "Salesforce Data Export Run",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-data-export-scheduled"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-109",
+      "match_when": {
+        "event_type": "salesforce.loginPolicyChanged"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Salesforce Login Policy Changed",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-login-policy-changed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-110",
+      "match_when": {
+        "event_type": "salesforce.insertCertificate"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Salesforce Certificate Inserted",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-certificate-inserted"
     },
     {
       "category": "cloud",
@@ -4208,6 +4608,78 @@
       "slug": "cloud-org-rootmail-modified"
     },
     {
+      "category": "cloud",
+      "family": "apps-script-impersonation",
+      "id": "det-cloud-191",
+      "match_when": {
+        "actor_is_service_account": false,
+        "method_name": "CreateProject",
+        "project_id_startswith": "sys-"
+      },
+      "mitre": [
+        "T1078.004",
+        "T1098.001"
+      ],
+      "name": "GCP Apps Script Project Created By A User Principal",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "high",
+      "slug": "gcp-apps-script-project-created-by-user"
+    },
+    {
+      "category": "cloud",
+      "family": "apps-script-impersonation",
+      "id": "det-cloud-192",
+      "match_when": {
+        "method_name": "SetIamPolicy",
+        "project_id_startswith": "sys-"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP IAM Policy Set On An Apps Script System Project",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "high",
+      "slug": "gcp-sys-project-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "apps-script-impersonation",
+      "id": "det-cloud-193",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.CreateServiceAccountKey",
+        "project_id_startswith": "sys-"
+      },
+      "mitre": [
+        "T1098.001",
+        "T1528"
+      ],
+      "name": "GCP Service Account Key Created Under An Apps Script Project",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "critical",
+      "slug": "gcp-sys-project-sa-key-created"
+    },
+    {
+      "category": "cloud",
+      "family": "apps-script-impersonation",
+      "id": "det-cloud-194",
+      "match_when": {
+        "actor_is_service_account": false,
+        "caller_user_agent_contains": "apps-script",
+        "method_name": "CreateProject"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "GCP Apps Script User Agent On A Non-Script Service",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "medium",
+      "slug": "gcp-apps-script-user-agent-outside-service"
+    },
+    {
       "category": "data-exfil",
       "id": "det-data-exfil-003",
       "match_when": {
@@ -4425,6 +4897,495 @@
       "service": "session",
       "severity": "medium",
       "slug": "vpn-large-download-foreign"
+    },
+    {
+      "category": "data-exfil",
+      "family": "workspace-takeover",
+      "id": "det-data-exfil-021",
+      "match_when": {
+        "event_type": "workspace.admin.create_email_monitor"
+      },
+      "mitre": [
+        "T1114.002"
+      ],
+      "name": "Workspace Email Monitor Created On A Mailbox",
+      "product": "google-workspace",
+      "service": "admin",
+      "severity": "critical",
+      "slug": "gws-email-monitor-created"
+    },
+    {
+      "category": "data-exfil",
+      "family": "workspace-takeover",
+      "id": "det-data-exfil-022",
+      "match_when": {
+        "event_type": "workspace.drive.change_document_visibility",
+        "param_visibility_in": [
+          "people_with_link",
+          "public_on_the_web"
+        ]
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Workspace Drive Document Opened To Anyone With The Link",
+      "product": "google-workspace",
+      "service": "drive",
+      "severity": "high",
+      "slug": "gws-drive-visibility-opened-publicly"
+    },
+    {
+      "category": "data-exfil",
+      "family": "workspace-takeover",
+      "id": "det-data-exfil-023",
+      "match_when": {
+        "event_type": "workspace.drive.change_user_access",
+        "param_visibility": "shared_externally"
+      },
+      "mitre": [
+        "T1537",
+        "T1567.002"
+      ],
+      "name": "Workspace Drive Access Granted Outside The Domain",
+      "product": "google-workspace",
+      "service": "drive",
+      "severity": "high",
+      "slug": "gws-drive-external-access-granted"
+    },
+    {
+      "category": "data-exfil",
+      "family": "workspace-takeover",
+      "id": "det-data-exfil-024",
+      "match_when": {
+        "event_type": "workspace.drive.create_link_sharing"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Workspace Drive Link Sharing Created",
+      "product": "google-workspace",
+      "service": "drive",
+      "severity": "medium",
+      "slug": "gws-drive-link-sharing-created"
+    },
+    {
+      "category": "data-exfil",
+      "family": "workspace-takeover",
+      "id": "det-data-exfil-025",
+      "match_when": {
+        "event_type": "workspace.drive.shared_drive_settings_change"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Workspace Shared Drive Settings Changed",
+      "product": "google-workspace",
+      "service": "drive",
+      "severity": "medium",
+      "slug": "gws-shared-drive-settings-weakened"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-026",
+      "match_when": {
+        "event_type": "box.SHARE",
+        "shared_link_access": "open"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Box Shared Link Set To Open Access",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-shared-link-opened-publicly"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-027",
+      "match_when": {
+        "event_type": "box.ITEM_SHARED_LINK"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Box Shared Link Created On An Item",
+      "product": "box",
+      "service": "events",
+      "severity": "medium",
+      "slug": "box-item-shared-link-created"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-028",
+      "match_when": {
+        "event_type": "box.SHIELD_EXTERNAL_COLLAB_INVITE_BLOCKED"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Box External Collaboration Invite Blocked By Shield",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-external-collab-invite-blocked"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-029",
+      "match_when": {
+        "event_type": "box.SHIELD_EXTERNAL_COLLAB_INVITE_ABNORMAL_LOCATION"
+      },
+      "mitre": [
+        "T1199",
+        "T1078.004"
+      ],
+      "name": "Box External Collaboration Invite From An Abnormal Location",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-external-collab-abnormal-location"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-030",
+      "match_when": {
+        "event_type": "box.SHIELD_ALERT"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "Box Shield Alert Raised",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-shield-alert"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-031",
+      "match_when": {
+        "event_type": "box.ROLE_CHANGE_TO_ADMIN"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Box Role Changed To Administrator",
+      "product": "box",
+      "service": "events",
+      "severity": "critical",
+      "slug": "box-admin-role-granted"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-032",
+      "match_when": {
+        "event_type": "box.APPLICATION_PUBLIC_KEY_ADDED"
+      },
+      "mitre": [
+        "T1098.001",
+        "T1528"
+      ],
+      "name": "Box Application Public Key Added",
+      "product": "box",
+      "service": "events",
+      "severity": "critical",
+      "slug": "box-app-public-key-added"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-033",
+      "match_when": {
+        "event_type": "box.APPLICATION_PUBLIC_KEY_DELETED"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "Box Application Public Key Deleted",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-app-public-key-deleted"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-034",
+      "match_when": {
+        "event_type": "box.USER_LOGIN",
+        "ip_class_in": [
+          "vpn",
+          "tor_exit",
+          "public_proxy",
+          "hosting_provider"
+        ]
+      },
+      "mitre": [
+        "T1078.004",
+        "T1090.003"
+      ],
+      "name": "Box Sign-In From An Anonymizing Or Hosting Network",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-login-from-anonymizer"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-035",
+      "match_when": {
+        "event_type": "box.DELETE_USER"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Box User Deleted",
+      "product": "box",
+      "service": "events",
+      "severity": "medium",
+      "slug": "box-user-deleted"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-036",
+      "match_when": {
+        "event_type": "dropbox.shared_content_change_link_audience_to_public"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Dropbox Shared Link Audience Changed To Public",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "high",
+      "slug": "dropbox-link-audience-changed-to-public"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-037",
+      "match_when": {
+        "event_type": "dropbox.shared_content_download"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "Dropbox Shared Content Downloaded",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "medium",
+      "slug": "dropbox-shared-content-downloaded"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-038",
+      "match_when": {
+        "event_type": "dropbox.shared_content_remove_member"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Dropbox Shared Content Member Removed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "medium",
+      "slug": "dropbox-shared-content-member-removed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-039",
+      "match_when": {
+        "event_type": "dropbox.team_member_create_team_invite_link"
+      },
+      "mitre": [
+        "T1136.003"
+      ],
+      "name": "Dropbox Team Invite Link Created",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "high",
+      "slug": "dropbox-team-invite-link-created"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-040",
+      "match_when": {
+        "event_type": "dropbox.member_change_admin_role"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Dropbox Member Admin Role Changed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "critical",
+      "slug": "dropbox-admin-role-changed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-041",
+      "match_when": {
+        "event_type": "dropbox.sso_change_policy"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Dropbox Single Sign-On Policy Changed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "critical",
+      "slug": "dropbox-sso-policy-changed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-042",
+      "match_when": {
+        "event_type": "dropbox.app_link_team"
+      },
+      "mitre": [
+        "T1528",
+        "T1199"
+      ],
+      "name": "Dropbox Application Linked To The Team",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "high",
+      "slug": "dropbox-app-linked-to-team"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-043",
+      "match_when": {
+        "event_type": "dropbox.team_folder_change_status"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Dropbox Team Folder Status Changed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "medium",
+      "slug": "dropbox-team-folder-status-changed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-044",
+      "match_when": {
+        "event_type": "dropbox.account_external_password_unmask"
+      },
+      "mitre": [
+        "T1555"
+      ],
+      "name": "Dropbox External Password Unmasked",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "critical",
+      "slug": "dropbox-external-password-unmasked"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-045",
+      "match_when": {
+        "event_type": "dropbox.device_link_success",
+        "ip_class_in": [
+          "vpn",
+          "tor_exit",
+          "public_proxy",
+          "hosting_provider"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Dropbox Device Linked From An Anonymizing Network",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "high",
+      "slug": "dropbox-device-linked-from-anonymizer"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-046",
+      "match_when": {
+        "event_type": "snowflake.query.select",
+        "rows_produced_gt": 1000000
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "Snowflake Query Returned A Very Large Row Count",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "medium",
+      "slug": "snowflake-bulk-rows-produced"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-047",
+      "match_when": {
+        "query_type": "UNLOAD"
+      },
+      "mitre": [
+        "T1537",
+        "T1567"
+      ],
+      "name": "Snowflake Data Unloaded To A Stage",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snowflake-unload-to-stage"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-048",
+      "match_when": {
+        "query_type": "GRANT"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Snowflake Privilege Granted",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snowflake-grant-executed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-049",
+      "match_when": {
+        "query_type": "CREATE_USER"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "Snowflake User Created",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snowflake-create-user"
     },
     {
       "category": "endpoint",
@@ -12084,6 +13045,463 @@
       "service": "audit",
       "severity": "high",
       "slug": "ident-jamf-mdm-policy-mfa-removed"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-161",
+      "match_when": {
+        "event_type": "workspace.login.recovery_email_edit"
+      },
+      "mitre": [
+        "T1098.005",
+        "T1556"
+      ],
+      "name": "Workspace Recovery Email Changed By The Account Holder",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "high",
+      "slug": "gws-recovery-email-edited"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-162",
+      "match_when": {
+        "event_type": "workspace.login.recovery_phone_edit"
+      },
+      "mitre": [
+        "T1098.005",
+        "T1556"
+      ],
+      "name": "Workspace Recovery Phone Changed By The Account Holder",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "high",
+      "slug": "gws-recovery-phone-edited"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-163",
+      "match_when": {
+        "event_type": "workspace.login.2sv_disable"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Workspace 2-Step Verification Turned Off By The Account Holder",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "critical",
+      "slug": "gws-2sv-disabled-by-user"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-164",
+      "match_when": {
+        "event_type": "workspace.admin.unenroll_user_from_strong_auth"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Workspace 2-Step Verification Removed By An Administrator",
+      "product": "google-workspace",
+      "service": "admin",
+      "severity": "critical",
+      "slug": "gws-2sv-unenrolled-by-admin"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-165",
+      "match_when": {
+        "event_type": "workspace.admin.allow_strong_authentication"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Workspace Strong Authentication Enforcement Relaxed",
+      "product": "google-workspace",
+      "service": "admin",
+      "severity": "high",
+      "slug": "gws-strong-auth-enforcement-relaxed"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-166",
+      "match_when": {
+        "event_type": "workspace.login.login_success",
+        "ip_class_in": [
+          "vpn",
+          "tor_exit",
+          "public_proxy",
+          "hosting_provider"
+        ]
+      },
+      "mitre": [
+        "T1078.004",
+        "T1090.003"
+      ],
+      "name": "Workspace Sign-In From An Anonymizing Or Hosting Network",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "high",
+      "slug": "gws-reauth-from-anonymizer"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-167",
+      "match_when": {
+        "event_type": "workspace.login.suspicious_login"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Workspace Suspicious Sign-In Flagged By Google",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "medium",
+      "slug": "gws-suspicious-login-flagged"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-168",
+      "match_when": {
+        "event_type": "workspace.login.suspicious_programmatic_login"
+      },
+      "mitre": [
+        "T1078.004",
+        "T1550.001"
+      ],
+      "name": "Workspace Suspicious Programmatic Sign-In",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "high",
+      "slug": "gws-suspicious-programmatic-login"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-169",
+      "match_when": {
+        "event_type": "workspace.login.suspicious_login_less_secure_app"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Workspace Sign-In From A Less Secure Application",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "medium",
+      "slug": "gws-less-secure-app-login"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-170",
+      "match_when": {
+        "event_type": "workspace.login.gov_attack_warning"
+      },
+      "mitre": [
+        "T1566"
+      ],
+      "name": "Workspace Government-Backed Attack Warning",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "critical",
+      "slug": "gws-gov-attack-warning"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-171",
+      "match_when": {
+        "event_type": "workspace.login.account_disabled_password_leak"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Workspace Account Disabled After A Leaked Password",
+      "product": "google-workspace",
+      "service": "login",
+      "severity": "high",
+      "slug": "gws-account-disabled-password-leak"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-172",
+      "match_when": {
+        "event_type": "workspace.token.authorize",
+        "param_scope_has_any": [
+          "https://www.googleapis.com/auth/gmail.readonly",
+          "https://www.googleapis.com/auth/gmail.modify",
+          "https://mail.google.com/",
+          "https://www.googleapis.com/auth/drive",
+          "https://www.googleapis.com/auth/drive.readonly"
+        ]
+      },
+      "mitre": [
+        "T1550.001",
+        "T1528"
+      ],
+      "name": "Workspace OAuth Grant Of Mail Or Drive Scopes",
+      "product": "google-workspace",
+      "service": "token",
+      "severity": "high",
+      "slug": "gws-oauth-grant-mail-or-drive-scope"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-173",
+      "match_when": {
+        "event_type": "workspace.admin.grant_admin_privilege"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Workspace Super-Admin Privilege Granted",
+      "product": "google-workspace",
+      "service": "admin",
+      "severity": "critical",
+      "slug": "gws-super-admin-granted"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-174",
+      "match_when": {
+        "event_type": "workspace.admin.delegate_admin_privileges"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Workspace Delegated Admin Privileges Assigned",
+      "product": "google-workspace",
+      "service": "admin",
+      "severity": "high",
+      "slug": "gws-delegated-admin-granted"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-175",
+      "match_when": {
+        "event_type": "workspace.admin.assign_role"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Workspace Administrator Role Assigned",
+      "product": "google-workspace",
+      "service": "admin",
+      "severity": "high",
+      "slug": "gws-admin-role-assigned"
+    },
+    {
+      "category": "identity",
+      "family": "workspace-takeover",
+      "id": "det-identity-176",
+      "match_when": {
+        "event_type": "workspace.mobile.device_compromised_event"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Workspace Managed Mobile Device Reported Compromised",
+      "product": "google-workspace",
+      "service": "mobile",
+      "severity": "high",
+      "slug": "gws-mobile-device-compromised"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-177",
+      "match_when": {
+        "event_type": "snowflake.login",
+        "first_auth_factor": "PASSWORD",
+        "is_success": true,
+        "mfa_satisfied": false
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Snowflake Password-Only Sign-In Succeeded",
+      "product": "snowflake",
+      "service": "login-history",
+      "severity": "medium",
+      "slug": "snowflake-login-single-factor-service-user"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-178",
+      "match_when": {
+        "error_code": "390100",
+        "event_type": "snowflake.login",
+        "is_success": false
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Snowflake Sign-In Failed With Incorrect Credentials",
+      "product": "snowflake",
+      "service": "login-history",
+      "severity": "low",
+      "slug": "snowflake-login-failed-bad-credentials"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-179",
+      "match_when": {
+        "event_type": "snowflake.login",
+        "ip_class_in": [
+          "vpn",
+          "tor_exit",
+          "public_proxy",
+          "hosting_provider"
+        ],
+        "is_success": true
+      },
+      "mitre": [
+        "T1078.004",
+        "T1090.003"
+      ],
+      "name": "Snowflake Sign-In From An Anonymizing Or Hosting Network",
+      "product": "snowflake",
+      "service": "login-history",
+      "severity": "high",
+      "slug": "snowflake-login-from-anonymizer"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-180",
+      "match_when": {
+        "client_type": "JDBC_DRIVER",
+        "event_type": "snowflake.login",
+        "is_success": true
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Snowflake Sign-In From A Programmatic Driver",
+      "product": "snowflake",
+      "service": "login-history",
+      "severity": "low",
+      "slug": "snowflake-driver-change-for-user"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-181",
+      "match_when": {
+        "event_type": "onepassword.signin.credentials_failed"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "1Password Sign-In Failed On Credentials",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-credentials-failed"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-182",
+      "match_when": {
+        "event_type": "onepassword.signin.mfa_failed"
+      },
+      "mitre": [
+        "T1621",
+        "T1110"
+      ],
+      "name": "1Password Sign-In Failed On Second Factor",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "high",
+      "slug": "1p-mfa-failed"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-183",
+      "match_when": {
+        "event_type": "onepassword.signin.firewall_failed"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Sign-In Blocked By The Account Firewall",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-firewall-blocked"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-184",
+      "match_when": {
+        "event_type": "onepassword.signin.firewall_reported_success"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Sign-In Succeeded From A Firewall-Reported Address",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "high",
+      "slug": "1p-firewall-reported-success"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-185",
+      "match_when": {
+        "event_type": "onepassword.signin.modern_version_failed"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Sign-In Refused For An Outdated Client",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "low",
+      "slug": "1p-modern-version-failed"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-186",
+      "match_when": {
+        "event_type": "onepassword.signin.success",
+        "ip_class_in": [
+          "vpn",
+          "tor_exit",
+          "public_proxy",
+          "hosting_provider"
+        ]
+      },
+      "mitre": [
+        "T1078",
+        "T1090.003"
+      ],
+      "name": "1Password Sign-In From An Anonymizing Or Hosting Network",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "high",
+      "slug": "1p-signin-from-anonymizer"
     },
     {
       "category": "network",

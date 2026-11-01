@@ -1,0 +1,6 @@
+{
+  "event_type": "workspace.token.authorize",
+  "param_scope": [
+    "__benign__"
+  ]
+}

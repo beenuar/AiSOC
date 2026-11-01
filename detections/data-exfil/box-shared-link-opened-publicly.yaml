@@ -1,0 +1,24 @@
+id: det-data-exfil-026
+name: Box Shared Link Set To Open Access
+description: Box records the resulting access level under `additional_details.shared_link.access`, which
+  is two levels down and was invisible until the connector lifted it.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.SHARE"
+    AND shared_link_access == "open"
+false_positives:
+- Public asset published deliberately
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

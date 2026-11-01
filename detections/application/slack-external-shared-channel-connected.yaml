@@ -1,0 +1,23 @@
+id: det-application-090
+name: Slack External Shared Channel Connected
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack External
+  Shared Channel Connected'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: application
+log_source:
+  product: slack
+  service: audit
+detection:
+  condition: |
+    event_type == "slack.external_shared_channel_connected"
+false_positives:
+- Partner collaboration opened deliberately
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

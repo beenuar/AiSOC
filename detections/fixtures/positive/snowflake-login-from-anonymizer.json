@@ -1,0 +1,5 @@
+{
+  "event_type": "snowflake.login",
+  "ip_class": "vpn",
+  "is_success": true
+}

@@ -1,0 +1,23 @@
+id: det-identity-170
+name: Workspace Government-Backed Attack Warning
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Government-Backed
+  Attack Warning'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1566
+- tlp.white
+category: identity
+log_source:
+  product: google-workspace
+  service: login
+detection:
+  condition: |
+    event_type == "workspace.login.gov_attack_warning"
+false_positives:
+- Google has issued the warning in error, which is rare enough to treat as true until shown otherwise
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

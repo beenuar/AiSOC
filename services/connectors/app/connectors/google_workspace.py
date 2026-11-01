@@ -366,6 +366,35 @@ class GoogleWorkspaceConnector(BaseConnector):
         # have it, but login/admin/drive almost always do.
         ip_address = raw.get("ipAddress")
 
+        # The Reports API puts everything that distinguishes one activity
+        # from another inside `events[].parameters` — the OAuth scopes a
+        # consent granted, the role an admin assigned, the visibility a
+        # share opened, the address a forward was pointed at. `events` is a
+        # list, so the engine's one-level `raw_event` flatten cannot reach
+        # any of it and a rule clausing on a scope or a role read None.
+        #
+        # Each parameter is lifted under `param_<name lowercased>`, keeping
+        # Google's own names rather than inventing a mapping that would have
+        # to be maintained against an API that keeps adding activities.
+        # `multiValue` and `boolValue` are preserved as a list and a bool so
+        # `_has_any` and an equality clause both work.
+        params: dict[str, Any] = {}
+        for parameter in primary_event.get("parameters") or []:
+            if not isinstance(parameter, dict):
+                continue
+            name = parameter.get("name")
+            if not isinstance(name, str) or not name:
+                continue
+            if "multiValue" in parameter:
+                value: Any = parameter.get("multiValue")
+            elif "boolValue" in parameter:
+                value = parameter.get("boolValue")
+            elif "intValue" in parameter:
+                value = parameter.get("intValue")
+            else:
+                value = parameter.get("value")
+            params[f"param_{name.lower()}"] = value
+
         return {
             "source": self.connector_id,
             "external_id": (raw.get("id") or {}).get("uniqueQualifier", ""),
@@ -376,7 +405,10 @@ class GoogleWorkspaceConnector(BaseConnector):
             "actor_email": actor if "@" in actor else None,
             "src_ip": ip_address,
             "application": application,
+            "event_name": event_name,
+            "event_name_type": primary_event.get("type"),
             "event_type": (f"workspace.{application}.{event_name}".lower() if application and event_name else "workspace.audit"),
+            **params,
             "raw_event": raw,
             "created_at": (raw.get("id") or {}).get("time"),
         }
