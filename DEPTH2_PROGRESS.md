@@ -50,9 +50,29 @@ claimed the same migration number simultaneously and one had to renumber.
 | Number | Kind | Lane / item | Claimed | File |
 |---|---|---|---|---|
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
+| 151–158 | migration | Lane F (analyst: 3.2, 3.3, 4.x, 5.x, 9.x) | 2026-11-01 | reserved block, see below |
+| 0022 | ADR | Lane F | 2026-11-01 | reserved |
 
 Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
 ADR `0016`.
+
+### Lane F block (exclusive, pre-allocated)
+
+Lane F holds migrations `151`–`158` and ADR `0022`. The block is pre-allocated
+rather than taken from the next-free counter so that Lane F's many items cannot
+collide with lanes A, B, D and E, which take theirs sequentially. Files as they
+land:
+
+| Number | File | Item |
+|---|---|---|
+| 151 | `services/api/migrations/151_alert_occurrences.sql` | 3.3 linked occurrences |
+| 152 | `services/api/migrations/152_root_cause_findings.sql` | 3.3 cross-vendor root cause |
+| 153 | `services/api/migrations/153_attack_stories.sql` | 3.2 stories |
+| 154 | `services/api/migrations/154_triage_questions.sql` | 4.3 questions |
+| 155 | `services/api/migrations/155_hunt_source_reports.sql` | 5.1 source reports |
+| 156 | `services/api/migrations/156_software_inventory.sql` | 5.4 inventory |
+| 157 | unused | — |
+| 158 | unused | — |
 
 ## Phase 0: Kickoff
 
