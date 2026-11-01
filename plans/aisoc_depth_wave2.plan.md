@@ -127,7 +127,7 @@ todos:
     status: pending
   - id: p8-4-scale-evidence
     content: "Phase 8.4: first depth plan 4.4 cloud-hardware run and 4.5 managed-cluster run, published or recorded as blocked"
-    status: pending
+    status: completed
   - id: p9-1-voice-that-acts
     content: "Phase 9.1: build on-device voice input behind the existing voice.ts interface, then read-back and voice approval of a pending response with biometric step-up; no audio leaves the device"
     status: pending

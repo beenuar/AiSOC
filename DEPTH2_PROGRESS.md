@@ -42,6 +42,22 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 | 9.6 remainder (device evidence) | wave 2 Phase 9.2 | maintainer-blocked at hand-over |
 | Phase 10 close | wave 2 Phase 10 | wave 2's Phase 10 closes both |
 
+## Lane B status (sources: 1.3, 1.6, 8.1 to 8.4)
+
+| Item | State | Where |
+|---|---|---|
+| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
+| 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
+| 8.1 CNAPP depth | not started, gap reproduced | item log |
+| 8.2 NDR connectors | not started; ExtraHop buildable, Corelight blocked | item log |
+| 8.3 Enrichment per tenant, cited | not started, gap reproduced | item log |
+| 8.4 Scale and deployment evidence | **blocked, recorded with exactly what is needed** | item log |
+
+Every row above has its reproduction recorded in the item log as a command
+or a failing test, including the ones that were not built: a gap nobody
+reproduced is a rumour, and the three not-started items are written up so
+the next lane starts from evidence rather than from the plan's prose.
+
 ## Migration and ADR numbers claimed
 
 Claim a number here, push the claim, then write the file. Two lanes once
@@ -312,6 +328,140 @@ the test asserting the scheduler calls it is the equivalent control.
 
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
+
+### 8.1 CNAPP depth - Lane B - NOT STARTED, gap reproduced
+
+**Reproduced, recorded as commands rather than asserted.**
+
+`services/connectors/app/connectors/wiz.py` declares exactly one GraphQL
+operation, `query IssuesTable`. There is no vulnerability query, no
+configuration-finding query, no secrets query and no runtime-detection
+query. The four sibling cloud-security connectors each read one endpoint
+and it is their alert stream in every case:
+
+| Connector | The one read it makes |
+|---|---|
+| `orca` | two `GET`s against the alerts API |
+| `prisma_cloud` | two `POST`s against the search API |
+| `lacework` | `GET /api/v2/Alerts` |
+| `sysdig` | `GET /api/v1/secureEvents` |
+
+So the gap is real on all five and is as the plan describes it.
+
+**What remains, scoped:** extend the Wiz connector to vulnerabilities,
+configuration findings, secrets and runtime detections where the vendor API
+offers them; record the same depth check for the other four; surface the
+findings as **triage context keyed on the resource the alert touched**,
+not as alerts by default. The triage-context half is the part that needs a
+design decision rather than a read: a CNAPP finding on a resource is an
+input to a verdict about an event on that resource, which means a lookup
+keyed on resource identity at triage time, in the shape
+`services/agents/app/context/identity.py` uses for principals.
+
+**Risk the plan already names:** Wiz's newer GraphQL surfaces are behind a
+customer tenant. Verify each field against the vendor's current public
+reference before writing it, and record BLOCKED rather than inventing a
+payload shape, exactly as D5 does for Workday and Kandji.
+
+### 8.2 NDR connectors - Lane B - NOT STARTED, one half blocked
+
+**Reproduced.** `ls services/connectors/app/connectors/ | grep -iE
+"extrahop|corelight"` returns nothing. The two network connectors that
+exist are `zeek_suricata` and `darktrace`.
+
+**Reference availability, measured 2026-11-01:**
+
+| Vendor | Public reference | Verdict |
+|---|---|---|
+| ExtraHop RevealX 360 | `https://docs.extrahop.com/current/rest-api-guide/` answers **200** | buildable |
+| Corelight | `https://docs.corelight.com/` answers **401** | **BLOCKED** |
+
+So ExtraHop is a build and Corelight is not. **Corelight needs** either a
+documentation account, or one recorded (redacted) detection payload plus the
+endpoint and auth shape, before an honest mock can be written. Corelight's
+*Zeek output* is open and is already covered by the `zeek_suricata`
+connector, which is a different thing from the sensor's own detection API
+and must not be passed off as it.
+
+### 8.3 Enrichment per tenant, cited - Lane B - NOT STARTED, gap reproduced
+
+**Reproduced, and the gap is wider than the plan states.**
+
+`services/enrichment` is a **Go** service, not Python. Measured on this
+tree:
+
+  * `grep -c tenant` over `internal/enricher/enricher.go` and
+    `internal/config/config.go` returns **0** and **0**. There is no
+    per-tenant dimension anywhere in the service, so per-tenant opt-in is
+    absent rather than partial.
+  * No reference to the credential vault anywhere under
+    `services/enrichment/`. Keys are per-deployment environment variables.
+  * `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` are parsed in `config.go` lines
+    59-60, assigned to struct fields at lines 92-93, and **read by nothing
+    else in the service**. The plan's "reads and never enforces" reproduces
+    exactly.
+  * `URLSCAN_API_KEY` is a config field (`config.go:71`) with no client.
+  * No enrichment result is cited in the ledger.
+
+**What remains, and the one design decision it needs.** The per-tenant
+opt-in is a console settings surface with the tenant's own key in the
+credential vault, which `services/api` owns the write path for. A Go
+service cannot hold that write path, so either the enrichment service
+learns to read vault tokens through a vendored read-path `decrypt_dict`
+(the pattern `services/connectors` already uses), or the fan-out moves
+behind an API route that resolves the tenant's credentials first. That
+choice should be made explicitly rather than discovered during
+implementation.
+
+The rate limiter needs a test that proves it **refuses**, per the brief: a
+limiter asserted only on the allowed path is indistinguishable from no
+limiter.
+
+### 8.4 Scale and deployment evidence - Lane B - **BLOCKED**, which is the correct outcome
+
+The plan's own text allows for this: "published with hardware, date and
+commit, **or recorded as blocked with exactly what is needed**". Both halves
+are blocked on hardware nobody here has, and neither is blocked on code.
+
+**4.4, the cloud-hardware run.** Already stated honestly on
+`apps/docs/docs/operations/performance.md` under "No cloud-hardware run
+exists yet, and that is a gap", re-read on 2026-11-01 and still accurate.
+Every figure on that page comes from an 18-core Apple-silicon laptop, a
+6-CPU Linux VM on it, or a kind cluster on the same machine. The target is
+a sustained 5,000 events/s through detection at p95 under 2 s on one
+documented instance size.
+
+**Needed:** a cloud account and one named instance type. Nothing else. The
+harness already records the hardware fingerprint, the load shape and the
+commit into every result file, and `scripts/check_perf_results.py` already
+refuses a result that drops any of them. The command that produces the row
+is published on that page and is reproduced here so this entry stands alone:
+
+```bash
+python3 scripts/perf/load_harness.py \
+    --target compose --events 500000 --workers 32 --batch 100 \
+    --alert-every 100 --target-eps 5000 --drain-timeout 1800 \
+    --assert-benign-alert-rate-max 0.001 \
+    --out docs/perf/results/<date>-<instance-type>-realistic-mix.json
+```
+
+**4.5, the managed-cluster run.** The only cluster evidence in the tree is
+the three-node **kind** run of 2026-09-27, and the page already says what
+that does and does not prove: "kind nodes are containers on the same
+kernel, so this is not two machines' worth of anything". A kind run is not
+a managed-cluster run and must not be published as one.
+
+**Needed:** a managed Kubernetes cluster (EKS, GKE or AKS) with at least
+three worker nodes and a load balancer, plus permission to install the
+chart into it. The first depth plan recorded the same requirement as
+maintainer action M3; this entry carries it forward rather than restating
+it as new.
+
+**What was deliberately not done:** no figure was produced by extrapolation
+from the laptop runs. A laptop VM's disk, network and CPU scheduling are not
+an instance type's, and a number derived that way becomes a promise nobody
+can keep. "Not measured" with the exact requirement is the honest record,
+and it is the record this item asks for.
 
 ### 1.3 HR and device context - Lane B
 
