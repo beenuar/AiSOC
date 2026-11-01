@@ -121,7 +121,7 @@ todos:
     status: pending
   - id: p8-2-ndr
     content: "Phase 8.2: NDR connectors (ExtraHop RevealX 360, Corelight) with detections ingested and metadata read verbs for evidence pulls"
-    status: pending
+    status: in_progress
   - id: p8-3-enrichment-providers
     content: "Phase 8.3: existing enrichment providers made per-tenant opt-in with vault-held keys, rate limits applied, results cited in the ledger; add the URLScan client and a credential-exposure source"
     status: pending

@@ -28,6 +28,7 @@ from app.clients.cloudflare_client import CloudflareClient
 from app.clients.cortex_xdr_client import CortexXdrClient
 from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
 from app.clients.defender_client import DefenderClient
+from app.clients.extrahop_client import ExtraHopClient
 from app.clients.fortigate_client import FortiGateClient
 from app.clients.gmail_client import GmailClient
 from app.clients.google_workspace_client import GoogleWorkspaceClient
@@ -70,6 +71,27 @@ def _cloudtrail_client(params: dict) -> AWSCloudTrailClient | None:
         secret_access_key=str(secret_key),
         region=str(params.get("aws_region") or "us-east-1"),
         session_token=params.get("aws_session_token"),
+    )
+
+
+def _extrahop_client(params: dict) -> ExtraHopClient | None:
+    """Build a RevealX 360 read client from request-scoped credentials.
+
+    All three are required: the host is per tenant (it is the API Endpoint
+    shown on the RevealX 360 API Access page), and the id and secret are an
+    OAuth2 client-credentials pair. An API key is deliberately not accepted,
+    because the vendor states it is not compatible with the RevealX 360 REST
+    API and accepting one would produce a 401 that reads as a wrong secret.
+    """
+    host = params.get("extrahop_api_host")
+    client_id = params.get("extrahop_client_id")
+    client_secret = params.get("extrahop_client_secret")
+    if not (host and client_id and client_secret):
+        return None
+    return ExtraHopClient(
+        api_host=str(host),
+        client_id=str(client_id),
+        client_secret=str(client_secret),
     )
 
 

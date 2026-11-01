@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T08:24:55Z",
+  "generated": "2026-11-01T09:05:45Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,29 +20,29 @@
     }
   ],
   "stats": {
-    "total": 7186,
+    "total": 7187,
     "playbooks": 88,
     "playbook_packs": 63,
     "detections": 7015,
-    "plugins": 83,
-    "verified": 1065,
+    "plugins": 84,
+    "verified": 1066,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1065
+      "stable": 1066
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
       "stable": 901
     },
-    "executable": 2701,
+    "executable": 2702,
     "quarantined": 4485,
     "executable_detections": 2530,
     "reference_only_detections": 4485,
-    "not_a_detection": 171
+    "not_a_detection": 172
   },
   "mitre_coverage": {
     "unique_techniques": 391,
@@ -238890,6 +238890,32 @@
       "tier": "stable",
       "path": "plugins/exabeam/plugin.yaml",
       "sha256": "2bcdcb6c79a650e66ecde73ad68d7dc45899165bf4b3d3920eaef83cfe4ab3f0"
+    },
+    {
+      "id": "extrahop",
+      "type": "plugin",
+      "name": "ExtraHop RevealX 360 Connector",
+      "description": "Network detections from ExtraHop RevealX 360. The vendor's own risk bands are preserved end to end: red 80-99 maps to high, orange 31-79 to medium and yellow 1-30 to low, and no detection is ever promoted to critical because ExtraHop publishes no fourth band. Read-only; nothing here changes a detection's status or assignee.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "ndr",
+        "network",
+        "detections",
+        "extrahop",
+        "revealx"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/extrahop.py",
+      "min_aisoc_version": "21.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/extrahop/plugin.yaml",
+      "sha256": "e379ba0c1f631e434cd22eab778f09993c98e85acffa0d483b8ef982a8cd7951"
     },
     {
       "id": "falco",

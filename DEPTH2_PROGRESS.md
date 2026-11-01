@@ -49,7 +49,7 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 | 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
 | 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
 | 8.1 CNAPP depth | not started, gap reproduced | item log |
-| 8.2 NDR connectors | not started; ExtraHop buildable, Corelight blocked | item log |
+| 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR for `depth2/lane-b-ndr` |
 | 8.3 Enrichment per tenant, cited | not started, gap reproduced | item log |
 | 8.4 Scale and deployment evidence | **blocked, recorded with exactly what is needed** | item log |
 
@@ -327,6 +327,32 @@ that every *alias target* is declared -- not that every connector has a
 profile. The context path is the scheduler's `_sync_workforce_context`, and
 the test asserting the scheduler calls it is the equivalent control.
 
+### D8 - Corelight is blocked on documentation nobody can read
+
+Item 8.2 names two NDR connectors. ExtraHop RevealX 360 is built; Corelight
+is not, and the reason is outside the repository.
+
+Measured 2026-11-01:
+
+    $ curl -sL -o /dev/null -w "%{http_code}" https://docs.corelight.com/
+    401
+
+There is no public API reference, so there is no document from which an
+honest mock payload can be written, and the plan's own rule for exactly
+this case is to record it rather than invent one.
+
+**Needed, specifically:** a Corelight documentation account, **or** one
+recorded (redacted) detection payload together with the endpoint path and
+the authentication shape the sensor expects.
+
+One thing that must not be mistaken for closing it. Corelight's **Zeek
+output** is open, and `services/connectors/app/connectors/zeek_suricata.py`
+already ingests it. That is a different thing from the sensor's own
+detection API: Zeek logs are network telemetry, and a Corelight detection
+has passed Corelight's correlation. Shipping the first while the item asks
+for the second, and calling the item done, would be the kind of
+substitution this plan exists to catch.
+
 ### D7 - Zero check runs was a conflicted PR, not a saturated pool, and the two look identical from outside
 
 **Corrected.** This entry first recorded the wrong cause, and the
@@ -375,6 +401,80 @@ before.
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
 
+### 8.2 NDR connectors - Lane B - ExtraHop shipped, Corelight blocked
+
+**Reproduced, in the two places this item can be wired wrong.** The
+connector half:
+
+    ModuleNotFoundError: No module named 'app.connectors.extrahop'
+
+The ingest half, which is the one that fails quietly:
+
+    extrahop_profile_test.go:22: extrahop has no connectorProfiles entry;
+      its detections would fall to the lenient 4001 fallback and never
+      promote
+
+and the normalizer saying so itself in the same run:
+
+    {"level":"warn","connector_type":"extrahop",
+     "message":"Using generic profile for unknown connector"}
+
+**Shipped.** All seven registration surfaces plus the ingest profile:
+
+| Surface | Where |
+|---|---|
+| Registry class | `ExtraHopConnector` in `_CONNECTOR_CLASSES` |
+| `schema()` with `secret=True` | `client_secret` only; asserted by test |
+| Marketplace manifest | `plugins/extrahop/plugin.yaml`, index regenerated |
+| Docs page | `apps/docs/docs/connectors/extrahop.md`, sidebar entry `connectors/extrahop` |
+| Count gate | regenerated, not edited: 90 -> **91** |
+| Scheduler polling | `test_scheduler.py` asserts a non-null `next_run_time` |
+| Severity ladder | three bands, no invented `critical` |
+| **Ingest profile** | `connectorProfiles["extrahop"]`, class 2001 / category 2 |
+| Read verbs | `lookup_network_flows`, `lookup_network_device` |
+
+**The severity decision, because a reviewer will ask why this connector
+never emits critical.** ExtraHop publishes three risk bands and no fourth.
+From the vendor's own detections page, verbatim: the icon is "color coded
+by severity as red (80-99), orange (31-79), or yellow (1-30)". The same
+page draws the contrast itself, because CrowdStrike detections in the same
+view use red for *Critical* while ExtraHop's red is just 80-99.
+
+So 80-99 maps to `high` and stops. Promoting it would assert a tier the
+vendor does not publish, which is the mirror of collapsing a vendor's real
+`critical` into `high`. Promotion does not depend on it: class 2001 is
+category 2 and promotes unconditionally.
+
+**Negative control.** Removing the `connectorProfiles["extrahop"]` entry
+fails all three Go tests and the normalizer logs `Using generic profile for
+unknown connector`. Restored, they pass.
+
+**Numbers, from the generators.**
+
+| Figure | Value | Source |
+|---|---|---|
+| Registered connectors | 90 -> **91** | `generate_connector_count.py --check` |
+| Conformance matrix | 91/91 | `connector_conformance.py` |
+| Marketplace plugins | 83 -> **84** | `build_marketplace.py` |
+| Executor arms | 97 -> **99** | `check_action_contract.py` |
+| Claim matrix | 336/331/5 -> **337/332/5** | `check_claim_gate_matrix.py` |
+
+**A real defect the contract gate caught, from the previous item.**
+`check_action_contract.py` compares the connectors `Capability` enum
+against `KNOWN_CAPABILITIES` in the actions service in both directions, and
+reported that `pull_workforce` and `pull_device_inventory` -- added by 1.3
+-- were missing from the mirror. Fixed here rather than left, because the
+gate is right: the two sets are mirrors and a one-way addition is drift.
+
+**No live suite was added**, and that is a decision rather than an
+omission. There is no containerised ExtraHop to stand up, so a job in
+`integration.yml` would have nothing to drive; the tests run in the
+ordinary `ci.yml` jobs against a mock transport and recorded vendor shapes.
+What that does not prove is stated in the claim-matrix row: no live tenant
+has been exercised.
+
+**Deviation:** D8 (Corelight blocked on 401 documentation).
+
 ### 8.1 CNAPP depth - Lane B - NOT STARTED, gap reproduced
 
 **Reproduced, recorded as commands rather than asserted.**
@@ -408,26 +508,6 @@ keyed on resource identity at triage time, in the shape
 customer tenant. Verify each field against the vendor's current public
 reference before writing it, and record BLOCKED rather than inventing a
 payload shape, exactly as D5 does for Workday and Kandji.
-
-### 8.2 NDR connectors - Lane B - NOT STARTED, one half blocked
-
-**Reproduced.** `ls services/connectors/app/connectors/ | grep -iE
-"extrahop|corelight"` returns nothing. The two network connectors that
-exist are `zeek_suricata` and `darktrace`.
-
-**Reference availability, measured 2026-11-01:**
-
-| Vendor | Public reference | Verdict |
-|---|---|---|
-| ExtraHop RevealX 360 | `https://docs.extrahop.com/current/rest-api-guide/` answers **200** | buildable |
-| Corelight | `https://docs.corelight.com/` answers **401** | **BLOCKED** |
-
-So ExtraHop is a build and Corelight is not. **Corelight needs** either a
-documentation account, or one recorded (redacted) detection payload plus the
-endpoint and auth shape, before an honest mock can be written. Corelight's
-*Zeek output* is open and is already covered by the `zeek_suricata`
-connector, which is a different thing from the sensor's own detection API
-and must not be passed off as it.
 
 ### 8.3 Enrichment per tenant, cited - Lane B - NOT STARTED, gap reproduced
 

@@ -105,6 +105,16 @@ class Capability(str, Enum):
     PIVOT_HASH = "pivot_hash"
     PIVOT_DOMAIN = "pivot_domain"
 
+    #: Depth plan wave 2, 8.2. Network evidence for a vendor-originated
+    #: alert: the flow and protocol records involving one address, and the
+    #: devices an NDR appliance has discovered at it. Declared here because
+    #: this enum and `KNOWN_CAPABILITIES` in services/actions are mirrors of
+    #: one another and a gate compares them in both directions; no connector
+    #: in this service implements them, because the executor lives where the
+    #: vendor credentials and the capability contract do.
+    LOOKUP_NETWORK_FLOWS = "lookup_network_flows"
+    LOOKUP_NETWORK_DEVICE = "lookup_network_device"
+
     # ENRICH — return contextual reputation / metadata for a single entity.
     ENRICH_USER = "enrich_user"
     ENRICH_HOST = "enrich_host"

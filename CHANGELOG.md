@@ -9,6 +9,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **ExtraHop RevealX 360 network detections, with the vendor's own risk
+  bands intact** (depth plan wave 2, item 8.2). Detections arrive as alerts
+  on a schedule, and two read-only verbs -- `lookup_network_flows` and
+  `lookup_network_device` -- let an investigation pull the flows and the
+  device record around one address.
+
+  What was absent: no NDR connector beyond Zeek/Suricata and Darktrace. The
+  reproduction had two halves, because this is an item that can be wired
+  wrong in two places. The connector half was an import error. The ingest
+  half was quieter and worse: with no `connectorProfiles` entry the
+  normalizer logs `Using generic profile for unknown connector`, files the
+  event at `class_uid: 4001`, and `should_promote()` then drops every
+  mid-band detection. The connector would have polled successfully,
+  reported healthy and produced an empty queue.
+
+  **This connector never emits `critical`, deliberately.** ExtraHop
+  publishes three risk bands and no fourth; from the vendor's own
+  documentation the score is "color coded by severity as red (80-99),
+  orange (31-79), or yellow (1-30)". Promoting the top band would assert a
+  tier the vendor does not publish, which is the same defect as collapsing
+  a vendor's real `critical` into `high`, in the other direction. Nothing
+  is lost: these are OCSF Security Findings at category 2, which promote
+  regardless of severity.
+
+  A read that could not happen is not an empty result. RevealX 360 record
+  search needs a cloud recordstore with Premium Investigation, and a
+  deployment without one gets a refusal naming the reason rather than a
+  list of no flows -- because an investigation reporting an address was
+  quiet when nothing was ever searched has stated a fact it did not
+  establish.
+
+  The gate that keeps it fixed is the ingest profile test, proven against
+  the pre-fix tree: removing the profile fails all three assertions and the
+  normalizer logs the generic-profile warning again.
+
+  **Not built:** Corelight. Its documentation answers 401, so no honest
+  mock payload can be written. Recorded as blocked with exactly what it
+  needs rather than substituting the Zeek-log connector that already
+  exists, which reads different data for a different purpose.
+
+### Added
+
 - **HR and managed-device context, kept current by a connector on a
   schedule** (depth plan wave 2, item 1.3). Three new connectors --
   BambooHR, Rippling and Microsoft Intune -- feed employment status, start

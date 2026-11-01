@@ -31,10 +31,12 @@ import structlog
 
 from app.clients.aws_cloudtrail_client import CloudTrailLookupError
 from app.clients.defender_client import _HUNT_TEMPLATES
+from app.clients.extrahop_client import ExtraHopReadError
 from app.clients.factories import (
     _cloudtrail_client,
     _cs_client,
     _entra_client,
+    _extrahop_client,
     _gmail_client,
     _gws_client,
     _m365_mail_client,
@@ -984,4 +986,138 @@ class GmailSearchMailboxes(LiveActionExecutor):
             LiveActionStatus.SUCCEEDED,
             f"{len(matches)} matching message(s) in {target}",
             details={"executed": True, "mailbox": target, "matches": matches, "match_count": len(matches)},
+        )
+
+
+@apply_contract
+class ExtraHopLookupNetworkFlows(LiveActionExecutor):
+    """Depth plan wave 2, 8.2: network evidence for a vendor-originated alert.
+
+    The NDR connector polls detections on a schedule. This answers a
+    question about one address at investigation time, which is what depth
+    4.5 needs: triage on an NDR or EDR alert can pull the flows around the
+    address instead of asserting around the gap.
+    """
+
+    vendor_id = "extrahop"
+    capability = "lookup_network_flows"
+    description = "Retrieve flow and protocol records involving one address from ExtraHop RevealX 360."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        address = str(request.target or params.get("address") or "").strip()
+        if request.dry_run:
+            return _preview(self, request, address, "ExtraHop RevealX 360")
+
+        if not address:
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "no address supplied",
+                error="lookup_network_flows needs an address; it searches the client, server, sender and receiver roles for it",
+            )
+
+        client = _extrahop_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "ExtraHop RevealX 360")
+
+        try:
+            records = await client.search_flows(
+                address,
+                hours=int(params.get("hours", 1)),
+                limit=int(params.get("limit", 100)),
+                record_types=params.get("record_types") or None,
+            )
+        except ExtraHopReadError as exc:
+            # FAILED and not an empty result. A deployment with no
+            # recordstore answers here, and an investigation concluding an
+            # address was quiet when nothing was ever searched is worse than
+            # one that says it could not check.
+            logger.warning("lookup_network_flows.failed", vendor="extrahop", error=str(exc))
+            return _result(self, request, LiveActionStatus.FAILED, "RevealX 360 record search failed", error=str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("lookup_network_flows.failed", vendor="extrahop", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "RevealX 360 record search failed",
+                error=f"RevealX 360 record search failed: {exc}",
+            )
+
+        peers = sorted({str(r.get("serverAddr")) for r in records if r.get("serverAddr")})
+        return _result(
+            self,
+            request,
+            LiveActionStatus.SUCCEEDED,
+            f"{len(records)} network record(s) involving {address}",
+            details={
+                "found": bool(records),
+                "address": address,
+                "count": len(records),
+                "records": records,
+                "peer_addresses": peers[:25],
+            },
+        )
+
+
+@apply_contract
+class ExtraHopLookupNetworkDevice(LiveActionExecutor):
+    """What the NDR appliance has discovered at one address."""
+
+    vendor_id = "extrahop"
+    capability = "lookup_network_device"
+    description = "Retrieve the devices ExtraHop RevealX 360 has discovered at one address."
+    requires_credentials = True
+
+    async def execute(self, request: LiveActionRequest) -> LiveActionResult:
+        params: dict[str, Any] = request.params or {}
+        address = str(request.target or params.get("address") or "").strip()
+        if request.dry_run:
+            return _preview(self, request, address, "ExtraHop RevealX 360")
+
+        if not address:
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "no address supplied",
+                error="lookup_network_device needs an address",
+            )
+
+        client = _extrahop_client(params)
+        if client is None:
+            return _missing_credentials(self, request, "ExtraHop RevealX 360")
+
+        try:
+            devices = await client.search_devices(address, limit=int(params.get("limit", 50)))
+        except ExtraHopReadError as exc:
+            logger.warning("lookup_network_device.failed", vendor="extrahop", error=str(exc))
+            return _result(self, request, LiveActionStatus.FAILED, "RevealX 360 device search failed", error=str(exc))
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("lookup_network_device.failed", vendor="extrahop", error=str(exc))
+            return _result(
+                self,
+                request,
+                LiveActionStatus.FAILED,
+                "RevealX 360 device search failed",
+                error=f"RevealX 360 device search failed: {exc}",
+            )
+
+        return _result(
+            self,
+            request,
+            LiveActionStatus.SUCCEEDED,
+            f"{len(devices)} device(s) discovered at {address}",
+            details={
+                "found": bool(devices),
+                "address": address,
+                "count": len(devices),
+                "devices": devices,
+                # Surfaced rather than buried in the list: a device the
+                # appliance flags critical changes what an analyst does next.
+                "any_critical": any(d.get("critical") for d in devices),
+            },
         )

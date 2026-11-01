@@ -100,6 +100,8 @@ from .investigation_reads import (
     DefenderLookupEndpointTelemetry,
     DefenderUnisolateHost,
     EntraGetUserActivity,
+    ExtraHopLookupNetworkDevice,
+    ExtraHopLookupNetworkFlows,
     GmailSearchMailboxes,
     GoogleWorkspaceGetUserActivity,
     M365SearchMailboxes,
@@ -1153,6 +1155,8 @@ _BUILTIN_ADAPTERS: tuple[type[LiveActionExecutor], ...] = (
     EntraGetUserActivity,
     GoogleWorkspaceGetUserActivity,
     AWSLookupCloudAudit,
+    ExtraHopLookupNetworkDevice,
+    ExtraHopLookupNetworkFlows,
     DefenderLookupEndpointTelemetry,
     # Depth 7.1. The read every mailbox-remediation verb depends on: a
     # purge takes a per-mailbox message id, and only a search maps one

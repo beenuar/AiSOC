@@ -137,9 +137,7 @@ class TestSeverityLadder:
     @pytest.mark.asyncio
     async def test_each_published_band_maps_to_its_tier(self, risk_score: int, expected: str) -> None:
         detection = {**_DETECTION, "risk_score": risk_score}
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=_handler([detection])
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=_handler([detection]))
         assert (await connector.fetch_alerts())[0]["severity"] == expected
 
     @pytest.mark.asyncio
@@ -150,9 +148,7 @@ class TestSeverityLadder:
         direction. Promotion does not depend on it: the ingest profile files
         these at class 2001, category 2, which promotes unconditionally."""
         detection = {**_DETECTION, "risk_score": 99}
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=_handler([detection])
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=_handler([detection]))
         assert (await connector.fetch_alerts())[0]["severity"] != "critical"
 
     @pytest.mark.asyncio
@@ -161,18 +157,14 @@ class TestSeverityLadder:
         be our judgement rather than the vendor's; emitting nothing leaves
         severity_id 0 and the category-2 profile still promotes it."""
         detection = {k: v for k, v in _DETECTION.items() if k != "risk_score"}
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=_handler([detection])
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=_handler([detection]))
         assert "severity" not in (await connector.fetch_alerts())[0]
 
 
 class TestNormalizedEnvelope:
     @pytest.mark.asyncio
     async def test_the_vendor_record_is_under_raw_event(self) -> None:
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=_handler([_DETECTION])
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=_handler([_DETECTION]))
         event = (await connector.fetch_alerts())[0]
         assert "raw" not in event, "the canonical envelope key is raw_event; `raw` misses the canonical check"
         assert event["raw_event"]["id"] == 4211
@@ -182,9 +174,7 @@ class TestNormalizedEnvelope:
         """The profile's field map reads these lowercase canonical keys, not
         raw vendor field names. A key the connector does not emit is a column
         the profile cannot map, and nothing fails loudly when it is absent."""
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=_handler([_DETECTION])
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=_handler([_DETECTION]))
         event = (await connector.fetch_alerts())[0]
         assert event["external_id"] == "4211"
         assert event["title"] == "Suspicious SMB Session Activity"
@@ -198,9 +188,7 @@ class TestNormalizedEnvelope:
         """Getting this backwards puts the attacker's address in the column
         an analyst reads as the asset under attack, and containment would
         then name the wrong machine."""
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=_handler([_DETECTION])
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=_handler([_DETECTION]))
         event = (await connector.fetch_alerts())[0]
         assert event["src_ip"] == "10.4.1.9"
         assert event["dst_ip"] == "10.4.2.7"
@@ -210,9 +198,7 @@ class TestWindowAndPaging:
     @pytest.mark.asyncio
     async def test_the_window_is_sent_as_the_documented_millisecond_epoch(self) -> None:
         capture: dict = {}
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=_handler([], capture=capture)
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=_handler([], capture=capture))
         await connector.fetch_alerts(since_seconds=600)
         import json
 
@@ -235,8 +221,6 @@ class TestWindowAndPaging:
                 return httpx.Response(200, json={"access_token": "t", "expires_in": 3600})
             return httpx.Response(503, json={"error": "unavailable"})
 
-        connector = ExtraHopConnector(
-            api_host="https://h", client_id="a", client_secret="b", transport=httpx.MockTransport(handle)
-        )
+        connector = ExtraHopConnector(api_host="https://h", client_id="a", client_secret="b", transport=httpx.MockTransport(handle))
         with pytest.raises(httpx.HTTPStatusError):
             await connector.fetch_alerts()

@@ -191,6 +191,39 @@ var connectorProfiles = map[string]connectorProfile{
 			"critical": 5, "high": 4, "medium": 3, "low": 2, "info": 1, "informational": 1,
 		},
 	},
+	// extrahop — ExtraHop RevealX 360 network detections (depth plan wave 2,
+	// item 8.2). Class 2001 (Security Finding, category 2) for the same
+	// reason the `splunk` profile above is: an NDR detection has already
+	// passed the vendor's own correlation, so the fusion promoter promotes
+	// it regardless of severity rather than dropping a mid-band detection.
+	//
+	// The field map reads the connector's own canonical envelope keys, not
+	// raw vendor field names: `fetch_alerts` normalises before publishing,
+	// so a map keyed on `risk_score` or `participants` would read nothing.
+	//
+	// Three severity entries and no `critical`, because ExtraHop publishes
+	// three risk bands and no fourth: red 80-99, orange 31-79, yellow 1-30.
+	// Adding a `critical` here would assert a tier the vendor never set,
+	// which is the mirror of collapsing a vendor's real `critical` into
+	// `high`. A detection with no risk score at all carries no severity
+	// key, scores severity_id 0, and still promotes on category.
+	"extrahop": {
+		product:   OcsfProduct{Name: "RevealX 360", VendorName: "ExtraHop"},
+		classUID:  2001,
+		className: "Security Finding",
+		fieldMap: map[string]string{
+			"title":       "message",
+			"description": "finding.desc",
+			"external_id": "finding.uid",
+			"src_ip":      "src_endpoint.ip",
+			"dst_ip":      "dst_endpoint.ip",
+			"hostname":    "device.name",
+			"created_at":  "time",
+		},
+		severityMap: map[string]int{
+			"high": 4, "medium": 3, "low": 2, "info": 1,
+		},
+	},
 	"okta_system_log": {
 		product:   OcsfProduct{Name: "Okta System Log", VendorName: "Okta"},
 		classUID:  3002,

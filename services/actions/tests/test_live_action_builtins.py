@@ -65,8 +65,10 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # read verbs (SentinelOne agents and threats, Defender alerts, Entra
     # sign-ins, Google Workspace login audit) and two verbs whose subject is
     # neither a host nor a principal (AWS CloudTrail lookup, Defender
-    # endpoint-telemetry search).
-    assert count == 89
+    # endpoint-telemetry search). Plus 2 from depth plan wave 2 item 8.2:
+    # the two NDR read verbs, whose subject is a network address rather than
+    # a host or a principal, so neither fits an existing verb.
+    assert count == 91
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -136,6 +138,9 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("google_workspace", "get_user_activity"),
         ("aws", "lookup_cloud_audit"),
         ("defender", "lookup_endpoint_telemetry"),
+        # Depth plan wave 2, 8.2: network evidence for a vendor alert.
+        ("extrahop", "lookup_network_flows"),
+        ("extrahop", "lookup_network_device"),
         ("okta", "reset_password"),
         ("okta", "suspend_session"),
         ("pagerduty", "create_ticket"),
@@ -213,7 +218,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 89
+    assert count == 91
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:
