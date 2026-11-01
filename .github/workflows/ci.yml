@@ -1497,6 +1497,18 @@ jobs:
         # test file that does not exist.
         run: python3 scripts/check_action_contract.py
 
+      - name: Gate executor arm count (depth 5.5 / wave-2 6.1)
+        # The figure had been quoted three ways: a loose grep over
+        # live_actions/ also matches reverse_capability= arguments and
+        # reports 22 arms more than exist. This counts by the plan's
+        # declared rule — class-level `capability = "..."` declarations —
+        # and cross-checks it against builtins._BUILTIN_ADAPTERS, so a
+        # class that declares a capability and never registers cannot pad
+        # the headline while answering executor_not_found at dispatch. The
+        # artefact it compares against is generated; `--write` regenerates
+        # it and a hand edit fails here.
+        run: python3 scripts/check_executor_arm_count.py --check
+
       - name: Gate investigation depth (Pillar 2)
         # run_with_tools shipped working, guarded and instrumented with zero
         # production callers, so the platform's deepest capability was

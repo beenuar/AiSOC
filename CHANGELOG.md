@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Response reaches the cloud, SaaS and code-platform estate.** The live
+  action surface covered hosts, user sessions, mail, network blocks, SIEM
+  and tickets, and stopped there: an AWS key in an attacker's hands, a
+  compromised GCP service account, a leaked GitHub token, a Slack or
+  Salesforce or Snowflake or 1Password account under someone else's
+  control, or a phishing page on a shared host all ended with "open a
+  ticket for the cloud team". Measured before the change by the new gate,
+  the tree carried **89 executor arms over 39 verbs**; it now carries
+  **151 over 60 verbs across 34 vendors**, including AWS access-key
+  deactivation, role-session revocation keyed on `aws:TokenIssueTime`,
+  agentless instance quarantine and IAM-user containment; GCP and Entra
+  service-identity containment; Workspace, Entra and Okta OAuth-grant and
+  application-password revocation; GitHub member, deploy-key and workflow
+  containment plus credential revocation through GitHub's own revocation
+  API; Slack, Salesforce, Snowflake and 1Password user and session
+  containment; and single-URL blocks at Cloudflare Gateway, Zscaler and
+  Netskope. Each verb declares a capability contract, and the conservative
+  answer wins at verb level rather than the most capable vendor's:
+  `revoke_token` declares no platform rollback because GitHub states a
+  revoked credential cannot be reactivated, even though GCP can re-enable
+  a key — which has its own verb an operator dispatches deliberately.
+  Verification is a **recorded gap, not a claim**: every client here has a
+  real read-back and `PostActionVerifier` is keyed on `ActionType`, which
+  live-action capabilities do not have, so none of these verbs is
+  automatic at any confidence and the read-backs ship as dispatchable read
+  verbs instead.
+- **An arm count that cannot be quoted three ways.**
+  `scripts/check_executor_arm_count.py` counts by the declared rule —
+  class-level `capability = "..."` declarations under
+  `services/actions/app/live_actions/` — rather than the looser grep that
+  also matches `reverse_capability` arguments and reports 22 arms that do
+  not exist. It cross-checks the declared set against
+  `builtins._BUILTIN_ADAPTERS` **in both directions**, so a class that
+  declares a capability and never registers cannot pad the headline while
+  answering `executor_not_found` at dispatch. The artefact at
+  `docs/audit/executor-arms.json` is generated, and a hand edit fails the
+  gate. `make stats` now carries the line.
+
 ## [21.0.0] - 2026-10-31
 
 ### BREAKING

@@ -161,7 +161,11 @@ async def _run(
             request,
             LiveActionStatus.FAILED,
             f"{vendor} credentials not configured",
-            error=(f"{vendor} credentials are not configured, so {executor.capability} was not attempted. This is not a statement about the target."),
+            error=(
+                f"{vendor} credentials are not configured, so "
+                f"{executor.capability} was not attempted. This is not a "
+                f"statement about the target."
+            ),
         )
 
     try:
@@ -344,7 +348,14 @@ class AwsDisableUser(LiveActionExecutor):
     _credential_keys = AWS_IAM_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "AWS", _aws_iam_client, lambda c, t, p: c.attach_deny_all(user_name=t), "AWSDenyAll attached to IAM user {target}")
+        return await _run(
+            self,
+            request,
+            "AWS",
+            _aws_iam_client,
+            lambda c, t, p: c.attach_deny_all(user_name=t),
+            "AWSDenyAll attached to IAM user {target}",
+        )
 
 
 @apply_contract
@@ -356,7 +367,14 @@ class AwsEnableUser(LiveActionExecutor):
     _credential_keys = AWS_IAM_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "AWS", _aws_iam_client, lambda c, t, p: c.detach_deny_all(user_name=t), "AWSDenyAll detached from IAM user {target}")
+        return await _run(
+            self,
+            request,
+            "AWS",
+            _aws_iam_client,
+            lambda c, t, p: c.detach_deny_all(user_name=t),
+            "AWSDenyAll detached from IAM user {target}",
+        )
 
 
 @apply_contract
@@ -442,7 +460,9 @@ class GcpRevokeToken(LiveActionExecutor):
 class GcpRestoreToken(LiveActionExecutor):
     vendor_id = "gcp"
     capability = "restore_token"
-    description = "Re-enable a disabled service-account key. GCP disables rather than destroys, which is why this verb can exist here and nowhere else."
+    description = (
+        "Re-enable a disabled service-account key. GCP disables rather than destroys, which is why this verb exists here and nowhere else."
+    )
     requires_credentials = True
     _credential_keys = GCP_IAM_CLIENT_PARAM_KEYS
 
@@ -485,7 +505,9 @@ class EntraDisableServiceIdentity(LiveActionExecutor):
     _credential_keys = ENTRA_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Entra", _entra_client, lambda c, t, p: c.disable_service_principal(t), "service principal {target} disabled")
+        return await _run(
+            self, request, "Entra", _entra_client, lambda c, t, p: c.disable_service_principal(t), "service principal {target} disabled"
+        )
 
 
 @apply_contract
@@ -497,7 +519,9 @@ class EntraEnableServiceIdentity(LiveActionExecutor):
     _credential_keys = ENTRA_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Entra", _entra_client, lambda c, t, p: c.enable_service_principal(t), "service principal {target} enabled")
+        return await _run(
+            self, request, "Entra", _entra_client, lambda c, t, p: c.enable_service_principal(t), "service principal {target} enabled"
+        )
 
 
 @apply_contract
@@ -509,7 +533,9 @@ class EntraRevokeOAuthGrant(LiveActionExecutor):
     _credential_keys = ENTRA_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Entra", _entra_client, lambda c, t, p: c.delete_oauth2_permission_grant(t), "OAuth grant {target} revoked")
+        return await _run(
+            self, request, "Entra", _entra_client, lambda c, t, p: c.delete_oauth2_permission_grant(t), "OAuth grant {target} revoked"
+        )
 
 
 @apply_contract
@@ -540,7 +566,9 @@ class EntraGetCloudIdentity(LiveActionExecutor):
     _credential_keys = ENTRA_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Entra", _entra_client, lambda c, t, p: c.get_service_principal(t), "read service principal {target}")
+        return await _run(
+            self, request, "Entra", _entra_client, lambda c, t, p: c.get_service_principal(t), "read service principal {target}"
+        )
 
 
 @apply_contract
@@ -593,14 +621,18 @@ class GoogleWorkspaceGetOAuthGrants(LiveActionExecutor):
     _credential_keys = GWS_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Google Workspace", _gws_client, lambda c, t, p: c.list_oauth_tokens(t), "read OAuth grants for {target}")
+        return await _run(
+            self, request, "Google Workspace", _gws_client, lambda c, t, p: c.list_oauth_tokens(t), "read OAuth grants for {target}"
+        )
 
 
 @apply_contract
 class GoogleWorkspaceRevokeToken(LiveActionExecutor):
     vendor_id = "google_workspace"
     capability = "revoke_token"
-    description = "Delete a user's application-specific passwords — the credential that survives a suspension because it predates 2-step verification."
+    description = (
+        "Delete a user's application-specific passwords: the credential that survives a suspension because it predates 2-step verification."
+    )
     requires_credentials = True
     _credential_keys = GWS_CLIENT_PARAM_KEYS
 
@@ -624,7 +656,9 @@ class GoogleWorkspaceGetCloudIdentity(LiveActionExecutor):
     _credential_keys = GWS_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Google Workspace", _gws_client, lambda c, t, p: c.get_user(t), "read directory record for {target}")
+        return await _run(
+            self, request, "Google Workspace", _gws_client, lambda c, t, p: c.get_user(t), "read directory record for {target}"
+        )
 
 
 # ─── Okta ────────────────────────────────────────────────────────────────────
@@ -818,7 +852,9 @@ def _github_revocation_client(params: dict[str, Any]) -> GitHubClient:
 class GitHubRevokeToken(LiveActionExecutor):
     vendor_id = "github"
     capability = "revoke_token"
-    description = "Revoke leaked GitHub credentials through the platform's revocation API. Irreversible: GitHub cannot reactivate a revoked credential."
+    description = (
+        "Revoke leaked GitHub credentials through the revocation API. Irreversible: GitHub cannot reactivate a revoked credential."
+    )
     requires_credentials = False
     #: Empty, and deliberately so. The endpoint this arm calls refuses an
     #: authenticated request, so there is no credential to strip — and a
@@ -1000,7 +1036,9 @@ class SalesforceRevokeSession(LiveActionExecutor):
     _credential_keys = SALESFORCE_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Salesforce", _salesforce_client, lambda c, t, p: c.revoke_sessions(t), "sessions revoked for {target}")
+        return await _run(
+            self, request, "Salesforce", _salesforce_client, lambda c, t, p: c.revoke_sessions(t), "sessions revoked for {target}"
+        )
 
 
 @apply_contract
@@ -1012,7 +1050,14 @@ class SalesforceGetCloudIdentity(LiveActionExecutor):
     _credential_keys = SALESFORCE_CLIENT_PARAM_KEYS
 
     async def execute(self, request: LiveActionRequest) -> LiveActionResult:
-        return await _run(self, request, "Salesforce", _salesforce_client, lambda c, t, p: c.resolve_user_login(t), "read Salesforce login state for {target}")
+        return await _run(
+            self,
+            request,
+            "Salesforce",
+            _salesforce_client,
+            lambda c, t, p: c.resolve_user_login(t),
+            "read Salesforce login state for {target}",
+        )
 
 
 # ─── Snowflake ───────────────────────────────────────────────────────────────

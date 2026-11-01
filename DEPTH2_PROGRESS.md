@@ -209,3 +209,90 @@ this is an observation with its evidence attached.
 
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
+
+### 6.1 Verb breadth — done
+
+**What failed before.** `scripts/check_executor_arm_count.py --check` on the
+pre-change tree:
+
+```
+executor-arm-count: FAIL
+  89 executor arms over 39 verbs; the plan's floor is 150. Counted by the
+  declared rule (class-level `capability = "..."`), not the looser grep that
+  also matches reverse_capability arguments.
+```
+
+That is the reproduction, and it is also the fix for a second defect: the
+figure had been published three ways. The loose grep reports 111 because it
+counts `reverse_capability=` arguments, which are declarations *about* a verb
+rather than arms of it.
+
+**The change.** 62 new arms across AWS, GCP, Entra, Google Workspace, Okta,
+GitHub, Slack, Salesforce, Snowflake, 1Password, Cloudflare Gateway, Zscaler
+and Netskope, with 20 new verbs in the `Capability` enum and the
+`KNOWN_CAPABILITIES` mirror, a capability contract each, and nine new or
+extended vendor clients. Every endpoint was verified against the vendor's
+current public reference and every URL committed in a module docstring was
+fetched and required to answer 200 first — which caught two errors before any
+code was written: `admin.users.setInactive` does not exist (404), so Slack
+containment is removal plus `admin.users.assign`; and
+`developer.salesforce.com` answers 403 to every non-browser request, so the
+Salesforce citations are the `help.salesforce.com` pages carrying the same
+semantics.
+
+**Measurement.** 89 arms / 39 verbs → **151 arms / 60 verbs / 34 vendors**,
+by the plan's declared rule, read from the generated artefact
+`docs/audit/executor-arms.json`.
+
+**Negative controls, all five run and recorded.**
+
+1. Dropping `NetskopeAllowDomain` from `CLOUD_SAAS_EXECUTORS` while leaving
+   the class in place: the gate exits 1 naming it as a declaration that "counts
+   towards the arm total and answers executor_not_found at dispatch" — the
+   padding shape the cross-check exists for.
+2. Raising `REQUIRED_ARMS` to 152: the gate exits 1 on the floor.
+3. Making `_run` call the client factory on the dry-run path: 62 of 62
+   `test_dry_run_never_constructs_a_client` cases fail.
+4. Renaming a keyword in one arm's client call (`user_name=` → `username=`):
+   the autospec'd double raises `missing a required argument: 'user_name'` and
+   the signature test fails — which is the defect class that shipped twice
+   (`SearchSIEMExecutor`, `CreateNotableEventExecutor`) because simulation mode
+   never constructs the client.
+5. Adding the Authorization header to GitHub's credential-revocation call:
+   `test_github_credential_revocation_sends_no_authorization` fails. GitHub
+   documents that an authenticated request there returns 403, so without this
+   the leaked token stays live while an operator debugs a missing scope.
+
+**Wiring, per the seven-point rule.** Enum member and `KNOWN_CAPABILITIES`
+mirror for all 20 new verbs (`check_action_contract.py` compares them);
+contract per verb, declared on the verb and not the vendor; executor wired to
+a real client method with a `create_autospec` signature test covering every one
+of the 62; credential tuple per arm re-derived from the factory's source by
+`ast` and graded behaviourally; verification recorded as a gap with its reason
+rather than claimed (see below); rollback where the vendor allows it and the
+limitation recorded where it does not; `KNOWN_ORPHANS` unchanged at 7 and not
+raised — no new verb was added to it.
+
+**The verification gap, recorded rather than papered over.**
+`PostActionVerifier` is keyed on `ActionType`, and these are live-action
+capabilities with no `ActionType`, so the probe registry cannot be reached for
+them — the same gap `unisolate_host` has carried since it was built. Every one
+of these clients *does* implement its read-back, and those read-backs ship as
+dispatchable read verbs (`get_cloud_identity`, `get_oauth_grants`,
+`get_secret_scanning_alerts`), so a playbook can read the effect even though
+governance does not treat the verb as self-verifying. The consequence is
+enforced rather than assumed: a test asserts no new verb above `read_only` is
+`AUTOMATIC`, because unverifiable means not autonomous.
+
+**Vendor limitations recorded, not worked around.**
+
+- Microsoft 365 application passwords: Graph publishes no endpoint for them,
+  so there is no M365 arm for that half of the plan's "Workspace and M365
+  OAuth-grant and app-password revocation". The Workspace half ships
+  (`asps.delete`); the M365 half is absent because the API is.
+- 1Password: no `revoke_token` arm. The SCIM bridge sees no user-issued API
+  tokens, and the Connect and Service Account tokens that exist are managed
+  outside it with no documented revocation endpoint. Suspension stops sessions.
+- GitHub deploy keys: deletion is not platform-reversible, because the host
+  stores only the public half and re-adding needs key material AiSOC never
+  holds.

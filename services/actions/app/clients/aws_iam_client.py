@@ -158,7 +158,9 @@ class AWSIAMClient:
         headers = {
             "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
             "X-Amz-Date": amz_date,
-            "Authorization": (f"{_ALGORITHM} Credential={self._access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"),
+            "Authorization": (
+                f"{_ALGORITHM} Credential={self._access_key_id}/{credential_scope}, SignedHeaders={signed_headers}, Signature={signature}"
+            ),
         }
         if self._session_token:
             headers["X-Amz-Security-Token"] = self._session_token

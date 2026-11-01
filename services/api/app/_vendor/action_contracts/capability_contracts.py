@@ -1008,7 +1008,10 @@ _PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
         required_permission=_IDENTITY,
         has_verification_probe=False,
         verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
-        note="Removes only the revocation policy this platform wrote. A rollback that could delete any inline policy on any role is an escalation primitive wearing a rollback's clothes.",
+        note=(
+            "Removes only the revocation policy this platform wrote. A rollback that could delete any inline policy on any role is an "
+            "escalation primitive wearing a rollback's clothes."
+        ),
     ),
     # ── Cloud identity: service identities ─────────────────────────────────
     "disable_service_identity": CapabilityContract(
@@ -1034,7 +1037,10 @@ _PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
         required_permission=_IDENTITY,
         has_verification_probe=False,
         verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
-        note="The route back for the most disruptive identity verb. It exists because a containment whose reverse resolves to nothing is not a containment anybody will enable.",
+        note=(
+            "The route back for the most disruptive identity verb. It exists because a containment whose reverse resolves to nothing is "
+            "not a containment anybody will enable."
+        ),
     ),
     # ── Cloud identity: tokens and grants ──────────────────────────────────
     "revoke_token": CapabilityContract(
@@ -1140,7 +1146,10 @@ _PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
         required_permission=_IDENTITY,
         has_verification_probe=False,
         verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
-        note="Removes a person from an organisation and all its teams. The reverse re-invites them, which restores access rather than restoring the session — the user has to accept.",
+        note=(
+            "Removes a person from an organisation and all its teams. The reverse re-invites them, which restores access rather than "
+            "restoring the session — the user has to accept."
+        ),
     ),
     "restore_org_member": CapabilityContract(
         impact=ActionImpact.MODERATE,
@@ -1150,7 +1159,10 @@ _PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
         required_permission=_IDENTITY,
         has_verification_probe=False,
         verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
-        note="Re-invites at the role the caller names, defaulting to member. Re-inviting at admin by default would make a rollback an escalation.",
+        note=(
+            "Re-invites at the role the caller names, defaulting to member. Re-inviting at admin by default would make a rollback an "
+            "escalation."
+        ),
     ),
     "revoke_deploy_key": CapabilityContract(
         impact=ActionImpact.HIGH,
@@ -1175,7 +1187,10 @@ _PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
         required_permission=_CONTAIN,
         has_verification_probe=False,
         verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
-        note="Stops a CI workflow running. The containment for a tampered pipeline, and the thing that stops a team shipping, which is why it is not automatic.",
+        note=(
+            "Stops a CI workflow running. The containment for a tampered pipeline, and the thing that stops a team shipping, which is why "
+            "it is not automatic."
+        ),
     ),
     "enable_workflow": CapabilityContract(
         impact=ActionImpact.MODERATE,

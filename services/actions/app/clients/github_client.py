@@ -186,7 +186,9 @@ class GitHubClient:
         if not credentials:
             raise ValueError("no credentials supplied; refusing to call the revocation endpoint with an empty list")
         if len(credentials) > MAX_CREDENTIALS_PER_REVOKE:
-            raise ValueError(f"{len(credentials)} credentials exceeds GitHub's documented ceiling of {MAX_CREDENTIALS_PER_REVOKE} per request")
+            raise ValueError(
+                f"{len(credentials)} credentials exceeds GitHub's documented ceiling of {MAX_CREDENTIALS_PER_REVOKE} per request"
+            )
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.post(
                 f"{self._base}/credentials/revoke",

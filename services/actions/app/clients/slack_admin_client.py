@@ -78,7 +78,9 @@ class SlackAdminClient:
     def _resolve_team(self, team_id: str | None) -> str:
         resolved = team_id or self._team_id
         if not resolved:
-            raise ValueError("team_id is required by admin.users.remove and admin.users.assign; set it on the connector or pass it per call")
+            raise ValueError(
+                "team_id is required by admin.users.remove and admin.users.assign; set it on the connector or pass it per call"
+            )
         return resolved
 
     async def remove_user(self, user_id: str, *, team_id: str | None = None) -> dict[str, Any]:

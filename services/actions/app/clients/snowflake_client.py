@@ -105,7 +105,11 @@ class SnowflakeClient:
         # may not have finished is not containment, so this is a failure
         # rather than a success with a caveat nobody reads.
         if response.status_code == 202:
-            raise SnowflakeAPIError(f"Snowflake accepted the statement asynchronously (handle {body.get('statementHandle')}); this client needs a completed result to report an effect")
+            raise SnowflakeAPIError(
+                f"Snowflake accepted the statement asynchronously (handle "
+                f"{body.get('statementHandle')}); this client needs a completed "
+                f"result to report an effect"
+            )
         return body
 
     async def set_user_disabled(self, user: str, *, disabled: bool) -> dict[str, Any]:
@@ -138,7 +142,11 @@ class SnowflakeClient:
         except ValueError as exc:
             raise SnowflakeAPIError(f"DESCRIBE USER returned columns {columns}, which do not include PROPERTY and VALUE") from exc
 
-        properties = {str(row[property_index]).upper(): row[value_index] for row in (body.get("data") or []) if len(row) > max(property_index, value_index)}
+        properties = {
+            str(row[property_index]).upper(): row[value_index]
+            for row in (body.get("data") or [])
+            if len(row) > max(property_index, value_index)
+        }
         disabled_raw = str(properties.get("DISABLED", "")).strip().lower()
         return {
             "user": name,

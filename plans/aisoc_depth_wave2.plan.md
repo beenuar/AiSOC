@@ -91,7 +91,7 @@ todos:
     status: pending
   - id: p6-1-verb-breadth
     content: "Phase 6.1: depth 5.5 as specified (at least 150 arms, cloud and SaaS containment first)"
-    status: pending
+    status: completed
   - id: p6-2-plain-language-playbooks
     content: "Phase 6.2: depth 5.6 as specified, plus a bounded 'ask the model' step type that branches on a schema-valid answer and cannot act"
     status: pending

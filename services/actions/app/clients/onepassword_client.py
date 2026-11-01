@@ -74,14 +74,24 @@ class OnePasswordClient:
         if not resources:
             raise OnePasswordAPIError(f"no 1Password account matches {email!r}")
         row = resources[0]
-        return {"id": row.get("id"), "user_name": row.get("userName"), "active": bool(row.get("active", True)), "display_name": row.get("displayName")}
+        return {
+            "id": row.get("id"),
+            "user_name": row.get("userName"),
+            "active": bool(row.get("active", True)),
+            "display_name": row.get("displayName"),
+        }
 
     async def get_user(self, user_id_or_email: str) -> dict[str, Any]:
         """The read behind the suspension probe."""
         if "@" in user_id_or_email:
             return await self.find_user(user_id_or_email)
         body = await self._request("GET", f"/Users/{user_id_or_email}")
-        return {"id": body.get("id"), "user_name": body.get("userName"), "active": bool(body.get("active", True)), "display_name": body.get("displayName")}
+        return {
+            "id": body.get("id"),
+            "user_name": body.get("userName"),
+            "active": bool(body.get("active", True)),
+            "display_name": body.get("displayName"),
+        }
 
     async def set_active(self, user_id_or_email: str, *, active: bool) -> dict[str, Any]:
         """SCIM ``PATCH`` of the ``active`` attribute.
