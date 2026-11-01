@@ -206,7 +206,8 @@ this is an observation with its evidence attached.
 - [x] **7.1** Provider coverage (depth 6.3) plus enterprise AI-chat
       compliance logs stored as labels and bounded snippets only.
       [#1585](https://github.com/beenuar/AiSOC/pull/1585).
-- [ ] **7.2** Hosted agents and repository AI artefacts as new asset kinds.
+- [x] **7.2** Hosted agents and repository AI artefacts as new asset kinds.
+      [#1585](https://github.com/beenuar/AiSOC/pull/1585).
 - [ ] **7.3** Agent identity and per-agent baselines (depth 6.4 / parity 6.7).
 - [ ] **7.4** AI rule pack (depth 6.5 plus this plan's additions).
 
@@ -285,3 +286,61 @@ ordinary audit-log reference, so no honest mock can be written from it. The
 second is a one-line migration. **Blocked, with exactly what is needed:** a
 reachable public reference for the OpenAI Compliance API, or a recorded
 payload from a customer tenant.
+
+### 7.2 — Hosted agents and repository AI artefacts
+
+**What already existed, and was therefore not rebuilt.** The whole asset
+table, the one `score_risk`, the tri-state `sanctioned`, the console page and
+its "not learned" rendering, and the recorder's three discovery sources. 7.2
+widened two constraints and added two producers; it changed no scoring.
+
+**Reproduced gap.** `.laneE/repro_7x.py` against the base commit:
+`AI_ASSET_KINDS` held six values, `hosted_agent present: False`,
+`repo artefact kind present: False`. Migration 110's CHECK constraint rejected
+a seventh kind deliberately, so this is that refusal answered by a reviewed
+migration rather than by dropping the constraint.
+
+**What shipped.** Migration 147 (two kinds, two discovery sources, a
+repository expression index), `ai_repo_scan.py`, `hosted_agents.py`, the
+generated `_vendor/ai_instruction_rules.py` with its sync gate wired into
+`ci.yml`, and the console's kind list and source-limitation copy.
+
+**Wiring proof — the single scorer.** `score_risk` gained three signals
+(`unvetted_mcp_server`, `instruction_injection`, `unpinned_skill_source`) and
+both producers emit `attributes` keyed to what it already reads (`tools`,
+`mcp_servers`, `skills`), so neither needs a special case and no second
+scorer exists. `DEVICELESS_KINDS` is shared between the model and the scorer
+so the four kinds with no device are not charged for lacking one.
+
+**Wiring proof — the injection channel.** Repository instruction text and a
+hosted agent's system prompt both pass `scan_instruction_text` at capture.
+The patterns are generated from the agents guard's own `_RULES` table, so the
+scanner and the triage guard cannot disagree about the same text; only
+pattern *names* are stored, never the matching span. Proven in both
+directions: a hostile instruction file is flagged and scores higher, an
+ordinary one is flagged by nothing and scores exactly 0 with an empty reason
+list.
+
+**Negative controls.** Clean twins on every signal (clean instruction file,
+clean hosted agent, vetted MCP server, every deviceless kind) each score 0
+with no reasons, so every delta is attributable to one field. The vendored
+rule table's `--check` fails against a stale copy, and the generator fails if
+an excluded rule name leaves the guard.
+
+**Two defects found while building it, both recorded rather than quietly
+fixed.** `path.lstrip("./")` strips the leading dot of a dotfolder, which
+would have turned most of the scan off silently — caught because the
+classification test enumerates real paths instead of two examples. And a
+committed JWT-shaped literal in the 7.1 test, which the repository's secret
+scan correctly refused.
+
+**Measurement delta.** No change to the executable-detection figure.
+
+### D4 — One hosted-agent provider, for the same reason as D3
+
+`GET /v1/agents` is the one provider hosted-agent list with a complete public
+reference. The GitHub Copilot coding agent is reachable only through its
+audit events (`copilot.swe_agent_*`), which 7.1 now ingests but which are
+events rather than an inventory; `docs.github.com/en/rest/copilot/copilot-agents`
+is a 404. **Blocked, with exactly what is needed:** a published REST reference
+for a second provider's hosted-agent list, or a recorded response from one.
