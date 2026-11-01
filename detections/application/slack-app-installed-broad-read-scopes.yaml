@@ -1,4 +1,4 @@
-id: det-application-087
+id: det-application-200
 name: Slack App Installed With Broad Read Scopes
 description: A newly installed app that can read message history or files. The scope list is the clause;
   the install alone is routine.

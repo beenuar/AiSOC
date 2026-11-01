@@ -76,7 +76,7 @@ class TestThePositiveControl:
     def test_a_synced_tree_is_clean(self, tmp_path: pathlib.Path) -> None:
         result = _check(_tree(tmp_path))
         assert result.returncode == 0, result.stderr
-        assert "2609 rules" in result.stdout
+        assert "2613 rules" in result.stdout
 
 
 class TestTheGateCatchesItsOwnAbsence:

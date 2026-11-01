@@ -1,4 +1,4 @@
-id: det-application-089
+id: det-application-202
 name: Slack App Uninstalled
 description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Uninstalled'.
   Watch the 1 documented false-positive case before tuning.

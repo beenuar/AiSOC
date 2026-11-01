@@ -1,4 +1,4 @@
-id: det-application-088
+id: det-application-201
 name: Slack App Scopes Expanded After Install
 description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Scopes
   Expanded After Install'. Watch the 1 documented false-positive case before tuning.

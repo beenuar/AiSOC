@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T19:25:56Z",
+  "generated": "2026-11-01T19:29:59Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,27 +20,27 @@
     }
   ],
   "stats": {
-    "total": 7567,
+    "total": 7571,
     "playbooks": 88,
     "playbook_packs": 63,
-    "detections": 7399,
+    "detections": 7403,
     "plugins": 80,
-    "verified": 1446,
+    "verified": 1450,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1446
+      "stable": 1450
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 1285
+      "stable": 1289
     },
-    "executable": 3126,
+    "executable": 3130,
     "quarantined": 4441,
-    "executable_detections": 2958,
+    "executable_detections": 2962,
     "reference_only_detections": 4441,
     "not_a_detection": 168
   },
@@ -160,7 +160,7 @@
       "T1091": 1,
       "T1095": 4,
       "T1098": 102,
-      "T1098.001": 38,
+      "T1098.001": 39,
       "T1098.002": 2,
       "T1098.003": 22,
       "T1098.004": 9,
@@ -211,7 +211,7 @@
       "T1185": 3,
       "T1187": 3,
       "T1190": 42,
-      "T1195": 3,
+      "T1195": 4,
       "T1195.001": 2,
       "T1195.002": 6,
       "T1197": 13,
@@ -278,7 +278,7 @@
       "T1526": 2,
       "T1528": 25,
       "T1529": 3,
-      "T1530": 42,
+      "T1530": 43,
       "T1531": 34,
       "T1535": 1,
       "T1537": 40,
@@ -361,7 +361,7 @@
       "T1560.001": 12,
       "T1561.002": 1,
       "T1562": 26,
-      "T1562.001": 31,
+      "T1562.001": 32,
       "T1562.004": 11,
       "T1562.006": 2,
       "T1562.008": 17,
@@ -443,7 +443,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2828,
+    "total_with_mitre": 2832,
     "unique_techniques_all_rules": 494,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -585,7 +585,7 @@
       "T1091": 5,
       "T1095": 8,
       "T1098": 148,
-      "T1098.001": 47,
+      "T1098.001": 48,
       "T1098.002": 8,
       "T1098.003": 47,
       "T1098.004": 13,
@@ -641,7 +641,7 @@
       "T1187": 12,
       "T1189": 4,
       "T1190": 180,
-      "T1195": 23,
+      "T1195": 24,
       "T1195.001": 3,
       "T1195.002": 16,
       "T1197": 23,
@@ -723,7 +723,7 @@
       "T1526": 11,
       "T1528": 44,
       "T1529": 16,
-      "T1530": 60,
+      "T1530": 61,
       "T1531": 47,
       "T1535": 6,
       "T1537": 51,
@@ -820,7 +820,7 @@
       "T1561.001": 2,
       "T1561.002": 4,
       "T1562": 49,
-      "T1562.001": 128,
+      "T1562.001": 129,
       "T1562.002": 13,
       "T1562.003": 2,
       "T1562.004": 22,
@@ -1014,7 +1014,7 @@
         "T1090.003": 13,
         "T1095": 3,
         "T1098": 89,
-        "T1098.001": 42,
+        "T1098.001": 43,
         "T1098.002": 2,
         "T1098.003": 21,
         "T1098.004": 9,
@@ -1040,7 +1040,7 @@
         "T1176": 1,
         "T1185": 1,
         "T1190": 33,
-        "T1195": 2,
+        "T1195": 3,
         "T1195.001": 1,
         "T1195.002": 9,
         "T1197": 1,
@@ -1077,7 +1077,7 @@
         "T1505.003": 3,
         "T1525": 10,
         "T1528": 22,
-        "T1530": 50,
+        "T1530": 51,
         "T1531": 32,
         "T1535": 1,
         "T1537": 38,
@@ -1145,7 +1145,7 @@
         "T1560.001": 3,
         "T1561.002": 1,
         "T1562": 26,
-        "T1562.001": 31,
+        "T1562.001": 32,
         "T1562.004": 11,
         "T1562.006": 2,
         "T1562.008": 17,
@@ -32797,34 +32797,33 @@
     {
       "id": "det-application-087",
       "type": "detection",
-      "name": "Slack App Installed With Broad Read Scopes",
-      "description": "A newly installed app that can read message history or files. The scope list is the clause; the install alone is routine.",
+      "name": "Copilot Content Exclusion Changed",
+      "description": "Content exclusion is the control that stops a coding assistant reading the paths an organisation has declared off limits \u2014 key material, customer data, anything it has decided a model must not see. A change to it is a change to that boundary, and it is made in a settings page rather than in a pull request, so nothing else reviews it.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
         "tlp.white"
       ],
-      "severity": "high",
+      "severity": "critical",
       "category": "application",
       "mitre_techniques": [
-        "T1528",
-        "T1199"
+        "T1562.001"
       ],
-      "log_source": "slack",
-      "playbook": "tpl-triage",
+      "log_source": "github_copilot",
+      "playbook": "tpl-defense-evasion",
       "verified": true,
       "source": "core",
       "tier": "stable",
       "enabled": true,
       "executable": true,
-      "path": "detections/application/slack-app-installed-broad-read-scopes.yaml",
-      "sha256": "1e5127954ff04b65262b47ae9e9e6f5b87bb373a1ec8268b2271d70b1cecf55c"
+      "path": "detections/application/llm-copilot-content-exclusion-changed.yaml",
+      "sha256": "ad2fc1761551c349da3e0d4416b793be44f1327da87be83710e7d3db157a754c"
     },
     {
       "id": "det-application-088",
       "type": "detection",
-      "name": "Slack App Scopes Expanded After Install",
-      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Scopes Expanded After Install'. Watch the 1 documented false-positive case before tuning.",
+      "name": "Hosted Coding Agent MCP Server List Changed",
+      "description": "The MCP server list decides what a hosted coding agent can reach and what it is told. Adding a server is adding a party that can instruct the agent, which is a scope change rather than a settings change \u2014 and the agent runs on the provider's infrastructure, so no endpoint control sees the result.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
@@ -32833,48 +32832,48 @@
       "severity": "high",
       "category": "application",
       "mitre_techniques": [
-        "T1528"
+        "T1195"
       ],
-      "log_source": "slack",
-      "playbook": "tpl-triage",
+      "log_source": "github_copilot",
+      "playbook": "tpl-supply-chain",
       "verified": true,
       "source": "core",
       "tier": "stable",
       "enabled": true,
       "executable": true,
-      "path": "detections/application/slack-app-scopes-expanded.yaml",
-      "sha256": "58a929dbf90c9b41f35e246b5bbd6d9c2b19fb47aad5be5bacf228b1aed08f39"
+      "path": "detections/application/llm-copilot-agent-mcp-config-changed.yaml",
+      "sha256": "60b791340bd9a87c52bd32b9a6ec812a82fd8196b97d0ed410b67f09de6c9263"
     },
     {
       "id": "det-application-089",
       "type": "detection",
-      "name": "Slack App Uninstalled",
-      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Uninstalled'. Watch the 1 documented false-positive case before tuning.",
+      "name": "AI Application Consented a Write Scope",
+      "description": "A consent grant handing an AI application the ability to change a mailbox, a drive, a site or the directory itself. The read equivalent is an exposure; this one can act. The decisive field is the granted scope, which the connector lifts out of the free-text consent property \u2014 a grant whose scopes stay buried is indistinguishable from one that was granted nothing.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
         "tlp.white"
       ],
-      "severity": "low",
+      "severity": "high",
       "category": "application",
       "mitre_techniques": [
-        "T1070"
+        "T1098.001"
       ],
-      "log_source": "slack",
-      "playbook": "tpl-triage",
+      "log_source": "entra_consent",
+      "playbook": "tpl-privilege-escalation",
       "verified": true,
       "source": "core",
       "tier": "stable",
       "enabled": true,
       "executable": true,
-      "path": "detections/application/slack-app-uninstalled.yaml",
-      "sha256": "f7bb440e426e220310455e681833a205a6ac649aa2cc9aefc16e416f864ccc18"
+      "path": "detections/application/llm-ai-app-granted-write-scope.yaml",
+      "sha256": "4892734be4afbfbe4afc7c3a9a2a2cad0ab0f33c027ffeb968d9d89e6ed3b9bf"
     },
     {
       "id": "det-application-090",
       "type": "detection",
-      "name": "Slack External Shared Channel Connected",
-      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack External Shared Channel Connected'. Watch the 1 documented false-positive case before tuning.",
+      "name": "AI Assistant Interaction Touched Many Resources at Once",
+      "description": "One assistant turn that read a large number of distinct resources. An assistant with a user's full grant is an exfiltration path that authenticates as that user and looks like ordinary application traffic; volume in a single interaction is the shape that separates answering a question from sweeping a drive.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
@@ -32883,17 +32882,17 @@
       "severity": "medium",
       "category": "application",
       "mitre_techniques": [
-        "T1199"
+        "T1530"
       ],
-      "log_source": "slack",
-      "playbook": "tpl-triage",
+      "log_source": "microsoft_copilot",
+      "playbook": "tpl-data-exfil",
       "verified": true,
       "source": "core",
       "tier": "stable",
       "enabled": true,
       "executable": true,
-      "path": "detections/application/slack-external-shared-channel-connected.yaml",
-      "sha256": "c8dbcdb1c16fc44b434a50edecf5a7799b97c0fcb3164efc26e0216d5cae0c0a"
+      "path": "detections/application/llm-copilot-bulk-resource-access.yaml",
+      "sha256": "b1b664f05eb77501b1f895c6749dde3c88d1fbcb3e223e6c02416c26f397fad9"
     },
     {
       "id": "det-application-091",
@@ -35623,6 +35622,107 @@
       "executable": true,
       "path": "detections/application/sfdc-login-as-partner.yaml",
       "sha256": "e15017d81de2e147ff023e5bcc5567269e50c8a7fb7de7b93ab88b4d54576fb3"
+    },
+    {
+      "id": "det-application-200",
+      "type": "detection",
+      "name": "Slack App Installed With Broad Read Scopes",
+      "description": "A newly installed app that can read message history or files. The scope list is the clause; the install alone is routine.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1528",
+        "T1199"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-app-installed-broad-read-scopes.yaml",
+      "sha256": "efc76ba120edc56c4c8e2cc6137f68bca9a81ab2fb301443340925be2b312e9b"
+    },
+    {
+      "id": "det-application-201",
+      "type": "detection",
+      "name": "Slack App Scopes Expanded After Install",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Scopes Expanded After Install'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1528"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-app-scopes-expanded.yaml",
+      "sha256": "2f7d90f1a7495ed41e66f8bf464c164fa2bb1675d6e0539831560009ab44f114"
+    },
+    {
+      "id": "det-application-202",
+      "type": "detection",
+      "name": "Slack App Uninstalled",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Uninstalled'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "low",
+      "category": "application",
+      "mitre_techniques": [
+        "T1070"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-app-uninstalled.yaml",
+      "sha256": "2a2a96d6fcab021a840742de030d52afcad6cb217ada33fee28273affa0b1076"
+    },
+    {
+      "id": "det-application-203",
+      "type": "detection",
+      "name": "Slack External Shared Channel Connected",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack External Shared Channel Connected'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1199"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-external-shared-channel-connected.yaml",
+      "sha256": "498a7879bdc18c5ebb18f3096ca1ce53e9aba56d7672593a75a86d31df6c8848"
     },
     {
       "id": "det-cloud-001",

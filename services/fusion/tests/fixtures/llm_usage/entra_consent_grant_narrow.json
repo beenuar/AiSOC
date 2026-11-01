@@ -1,0 +1,45 @@
+{
+  "actor": "carol@example.com",
+  "actor_email": "carol@example.com",
+  "application_id": "app-1",
+  "application_name": "Acme AI Notetaker",
+  "category": "saas",
+  "created_at": "2026-10-30T09:15:00Z",
+  "description": "provider=entra_consent; event_type=entra_consent.consent_to_application; actor=carol@example.com",
+  "event_type": "entra_consent.consent_to_application",
+  "external_id": "a-2",
+  "granted_scopes": [
+    "User.Read"
+  ],
+  "provider": "entra_consent",
+  "raw_event": {
+    "activityDateTime": "2026-10-30T09:15:00Z",
+    "activityDisplayName": "Consent to application",
+    "application_id": "app-1",
+    "application_name": "Acme AI Notetaker",
+    "granted_scopes": [
+      "User.Read"
+    ],
+    "id": "a-2",
+    "initiatedBy": {
+      "user": {
+        "userPrincipalName": "carol@example.com"
+      }
+    },
+    "targetResources": [
+      {
+        "displayName": "Acme AI Notetaker",
+        "id": "app-1",
+        "modifiedProperties": [
+          {
+            "displayName": "ConsentAction.Permissions",
+            "newValue": "Scope: User.Read"
+          }
+        ]
+      }
+    ]
+  },
+  "severity": "high",
+  "source": "llm_usage",
+  "title": "Entra consent audit: consent_to_application"
+}

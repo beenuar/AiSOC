@@ -1,4 +1,4 @@
-id: det-application-090
+id: det-application-203
 name: Slack External Shared Channel Connected
 description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack External
   Shared Channel Connected'. Watch the 1 documented false-positive case before tuning.
