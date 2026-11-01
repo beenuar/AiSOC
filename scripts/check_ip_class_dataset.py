@@ -191,11 +191,17 @@ def _sample_addresses() -> list[str]:
 
 
 def check_go_python_parity() -> tuple[list[str], bool]:
-    """Returns (problems, checked)."""
+    """Returns (problems, checked).
+
+    A missing Go toolchain is a **failure**, not a skip. A gate that reports
+    "not checked" and exits 0 is indistinguishable from one that passed, and
+    that shape has cost this repository several months of false confidence.
+    A caller that genuinely cannot run Go passes `--skip-go` and says so.
+    """
     import ip_class_dataset as loader  # noqa: PLC0415
 
     if subprocess.run(["which", "go"], capture_output=True, check=False).returncode != 0:  # noqa: S603, S607
-        return [], False
+        return ["no Go toolchain here, so the Go/Python parity probe could not run; pass --skip-go to accept that"], True
 
     addresses = _sample_addresses()
     if not addresses:
@@ -262,7 +268,8 @@ def main() -> int:
     problems += check_vendored_copy()
 
     go_checked = False
-    if "--skip-go" not in sys.argv:
+    skipped_go = "--skip-go" in sys.argv
+    if not skipped_go:
         go_problems, go_checked = check_go_python_parity()
         problems += go_problems
 
@@ -281,7 +288,11 @@ def main() -> int:
     )
     print(
         "   Go/Python parity: "
-        + (f"checked over {PARITY_SAMPLE} sampled addresses" if go_checked else "NOT CHECKED (no Go toolchain here)")
+        + (
+            f"checked over {PARITY_SAMPLE} sampled addresses"
+            if go_checked
+            else "NOT CHECKED -- --skip-go was passed, so this run proves nothing about the two readers agreeing"
+        )
     )
     if not re.fullmatch(r"\d{4}\.\d{2}\.\d{2}", manifest["version"]):
         print(f"   note: version {manifest['version']!r} is not the YYYY.MM.DD shape the downloader writes")

@@ -1280,6 +1280,26 @@ jobs:
           python3 scripts/check_raw_sql_columns.py --self-test
           python3 scripts/check_raw_sql_columns.py
 
+      # The anonymizer and hosting dataset has two readers in two languages:
+      # Go classifies live events at ingest, Python classifies committed
+      # fixtures during detection replay. If they disagree, a rule matching
+      # `ip_class` passes its fixtures and never fires on real traffic --
+      # the trap depth plan wave 2 item 1.6 names explicitly. The gate runs
+      # both over a sample of the dataset and requires identical answers, and
+      # also holds the downloader and the committed manifest to the same
+      # source list so the snapshot stays refreshable and auditable.
+      - name: Verify the IP classification dataset is intact and refreshable
+        # `--skip-go` here and not in go-build: this job has no Go toolchain,
+        # and a gate that reports "not checked" over a missing tool is the
+        # silent-skip shape this repository keeps finding. The Go/Python
+        # parity half runs in `Go — Build & Vet` below, where Go exists, and
+        # the gate refuses to run its probe silently: without `--skip-go` and
+        # without Go it fails rather than passing.
+        run: |
+          python3 scripts/check_ip_class_dataset.py --self-test
+          python3 scripts/check_ip_class_dataset.py --skip-go
+          python3 scripts/sync_vendored_ip_class.py --check
+
       # The four alembic chains have to be invoked by something. They were
       # not: every container command was a plain `uvicorn`, so the
       # documented quickstart booted two services with no tables and no RLS
@@ -2100,6 +2120,15 @@ jobs:
         run: |
           cd services/${{ matrix.service }}
           go test ./... -count=1
+
+      # Two classifiers answer the same question in two languages: Go stamps
+      # live events at ingest, Python classifies committed fixtures during
+      # detection replay. If they disagree, a rule matching `ip_class` passes
+      # its fixtures and never fires on real traffic. This is the only job
+      # with both toolchains, so the parity probe runs here.
+      - name: IP classification -- Go and Python must answer identically
+        if: matrix.service == 'ingest'
+        run: python3 scripts/check_ip_class_dataset.py
 
   # ──────────────────────────────────────────────
   # Go SDKs (`packages/plugin-sdk-go`, `packages/sdk-go`)
