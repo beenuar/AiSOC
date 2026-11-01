@@ -74,6 +74,7 @@ PRODUCT_EMITTER: dict[str, str] = {
     "m365": "m365_audit",
     "okta": "okta",
     "atlassian": "confluence_audit",
+    "aws": "aws_cloudtrail",
 }
 
 #: Fields the engine derives at evaluate time rather than reading off the

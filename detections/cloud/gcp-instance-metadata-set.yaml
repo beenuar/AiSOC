@@ -1,7 +1,7 @@
 id: det-cloud-228
 name: GCP Compute Instance Metadata Set
-description: Instance metadata carries the startup script and the SSH keys, so a metadata write is remote
-  code execution and access in one call.
+description: Instance metadata carries the startup script and the SSH keys, so a metadata write is code
+  execution and access in one call.
 version: 1.0.0
 severity: high
 tags:

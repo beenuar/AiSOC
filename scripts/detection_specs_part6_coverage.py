@@ -39,7 +39,6 @@ from detection_specs_part3_helpers import (  # type: ignore[import-not-found]
     FP_AUTOMATION,
     FP_BACKUP,
     FP_BREAK_GLASS,
-    FP_FORENSIC,
     FP_ONBOARD,
     FP_PATCH,
     FP_TUNING,
@@ -725,7 +724,7 @@ _GCP: list[tuple[str, str, str, list[str], str, str, str]] = [
         ["t1059"],
         "compute",
         "v1.compute.instances.setMetadata",
-        "Instance metadata carries the startup script and the SSH keys, so a metadata write is remote code execution and access in one call.",
+        "Instance metadata carries the startup script and the SSH keys, so a metadata write is code execution and access in one call.",
     ),
     (
         "gcp-project-metadata-set",
@@ -2655,7 +2654,8 @@ _M365: list[tuple[str, str, str, list[str], str, str, str]] = [
         ["t1114.003"],
         "New-InboxRule",
         "Exchange",
-        "A forwarding or delete rule is the textbook business-email-compromise persistence step; the connector now lifts the rule's parameters so the destination is visible.",
+        "A forwarding or delete rule is the textbook business-email-compromise "
+        "step; the connector lifts the parameters, so the destination is visible.",
     ),
     (
         "m365-inbox-rule-modified",
@@ -3704,3 +3704,149 @@ COVERAGE_CLOUD: list[dict] = BY_CATEGORY.get("cloud", [])
 COVERAGE_IDENTITY: list[dict] = BY_CATEGORY.get("identity", [])
 COVERAGE_APPLICATION: list[dict] = BY_CATEGORY.get("application", [])
 COVERAGE_DATA_EXFIL: list[dict] = BY_CATEGORY.get("data-exfil", [])
+
+
+def cloudtrail_entry(event_name: str, event_source: str, **extra: Any) -> dict[str, Any]:
+    """A LookupEvents envelope, which is the shape this connector reads.
+
+    The connector takes `EventName` from the envelope and everything else
+    out of `CloudTrailEvent`, a JSON **string** holding the full record. A
+    sample shaped like a raw CloudTrail record rather than a lookup result
+    normalises with `event_name` empty and every identity field `None` —
+    which is what a first pass at this proof produced, and is exactly the
+    kind of wrong-envelope mistake the replay is here to catch.
+    """
+    import json as _json
+
+    detail = {
+        "eventVersion": "1.08",
+        "eventTime": "2026-11-01T10:00:00Z",
+        "eventSource": event_source,
+        "eventName": event_name,
+        "awsRegion": "us-east-1",
+        "sourceIPAddress": "203.0.113.5",
+        "userAgent": "aws-cli/2.15.0",
+        "userIdentity": {
+            "type": extra.pop("identity_type", "IAMUser"),
+            "arn": "arn:aws:iam::111122223333:user/alice",
+            "userName": "alice",
+            "accountId": "111122223333",
+        },
+        "requestParameters": extra.pop("request", {}),
+        "recipientAccountId": "111122223333",
+        "eventID": "proof",
+        "readOnly": extra.pop("read_only", False),
+        "managementEvent": True,
+    }
+    return {
+        "EventId": "proof",
+        "EventName": event_name,
+        "EventTime": "2026-11-01T10:00:00Z",
+        "EventSource": event_source,
+        "Username": "alice",
+        "CloudTrailEvent": _json.dumps(detail),
+        **extra,
+    }
+
+
+#: (slug, name, severity, mitre, event name, event source, description)
+_AWS: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "aws-login-profile-updated",
+        "AWS Console Login Profile Updated",
+        "high",
+        ["t1098"],
+        "UpdateLoginProfile",
+        "iam.amazonaws.com",
+        "Setting a console password on an account that had none, or changing one, is how a programmatic identity gains an interactive "
+        "session.",
+    ),
+    (
+        "aws-user-added-to-group",
+        "AWS User Added To An IAM Group",
+        "high",
+        ["t1098"],
+        "AddUserToGroup",
+        "iam.amazonaws.com",
+        "Group membership carries whatever policies the group holds, with no policy attachment to notice.",
+    ),
+    (
+        "aws-secret-value-retrieved",
+        "AWS Secrets Manager Secret Retrieved",
+        "medium",
+        ["t1552.001"],
+        "GetSecretValue",
+        "secretsmanager.amazonaws.com",
+        "The call that returns the secret value, as distinct from listing secret names.",
+    ),
+    (
+        "aws-cloud-control-resource-created",
+        "AWS Cloud Control Resource Created",
+        "high",
+        ["t1578"],
+        "CreateResource",
+        "cloudcontrolapi.amazonaws.com",
+        "Cloud Control is a generic API that creates resources of any supported "
+        "type, so a principal that never used it reaching for it is a detection "
+        "the per-service rules all miss.",
+    ),
+    (
+        "aws-saml-role-assumed",
+        "AWS Role Assumed Through SAML",
+        "medium",
+        ["t1078.004"],
+        "AssumeRoleWithSAML",
+        "sts.amazonaws.com",
+        "Federated assumption is how most human access arrives, and is the step a forged assertion lands on.",
+    ),
+    (
+        "aws-snapshot-shared-externally",
+        "AWS Snapshot Copy Shared With Another Account",
+        "critical",
+        ["t1537"],
+        "SharedSnapshotCopyInitiated",
+        "ec2.amazonaws.com",
+        "AWS records this when another account copies a snapshot that was shared with it, which is the data leaving.",
+    ),
+    (
+        "aws-organizations-policy-detached",
+        "AWS Organizations Policy Detached",
+        "critical",
+        ["t1562"],
+        "DetachPolicy",
+        "organizations.amazonaws.com",
+        "Detaching a service control policy removes the guardrail from every account below it.",
+    ),
+    (
+        "aws-organizations-account-left",
+        "AWS Account Removed From The Organisation",
+        "critical",
+        ["t1562"],
+        "RemoveAccountFromOrganization",
+        "organizations.amazonaws.com",
+        "An account outside the organisation inherits none of its policies.",
+    ),
+]
+
+AWS_RULES: list[dict] = [
+    R(
+        family="cloud-enumeration-and-abuse",
+        category="cloud",
+        emitter="aws_cloudtrail",
+        proof=cloudtrail_entry(event_name, event_source),
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="aws",
+        service=event_source.split(".")[0],
+        when={"event_name": event_name},
+        fp=[FP_AUTOMATION, FP_BREAK_GLASS],
+        playbook="tpl-triage",
+        description=description,
+    )
+    for slug, name, severity, mitre, event_name, event_source, description in _AWS
+]
+
+BY_CATEGORY_AWS = by_category(AWS_RULES)
+COVERAGE_CLOUD.extend(BY_CATEGORY_AWS.get("cloud", []))

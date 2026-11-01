@@ -1,7 +1,7 @@
 id: det-application-156
 name: M365 Inbox Rule Created
-description: A forwarding or delete rule is the textbook business-email-compromise persistence step; the
-  connector now lifts the rule's parameters so the destination is visible.
+description: A forwarding or delete rule is the textbook business-email-compromise step; the connector
+  lifts the parameters, so the destination is visible.
 version: 1.0.0
 severity: high
 tags:

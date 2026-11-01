@@ -154,11 +154,11 @@ SCENARIO_TARGET = 800
 
 #: Measured on 2026-11-01 after the second authoring pass closed depth plan
 #: 3.6's target. 443 before the scenario families, 569 after the first pass,
-#: 899 after the second. The floor is the measurement, and the assertion
+#: 907 after the second. The floor is the measurement, and the assertion
 #: below is the target: both are checked, because a ratchet alone would let
 #: the figure sit one rule above 800 forever and a target alone would not
 #: notice 50 rules being lost.
-SCENARIO_FLOOR = 899
+SCENARIO_FLOOR = 907
 
 #: Windowed rules that declare a category and no product, so nothing can put
 #: them in one of the four groups. The windowed ruleset has no `product`

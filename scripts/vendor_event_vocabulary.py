@@ -378,6 +378,26 @@ GITHUB: frozenset[str] = frozenset(
 )
 
 
+#: AWS CloudTrail event names. Only the ones the second authoring pass added
+#: are listed: the older AWS rules predate this module and are covered by
+#: the fireability replay rather than by a vocabulary arm, which is stated
+#: here rather than left for a reader to infer from an absence.
+AWS_EVENTS: frozenset[str] = frozenset(
+    {
+        "AddUserToGroup",
+        "AssumeRoleWithSAML",
+        "CreateResource",
+        "DeleteDetector",
+        "DetachPolicy",
+        "GetSecretValue",
+        "RemoveAccountFromOrganization",
+        "SharedSnapshotCopyInitiated",
+        "StopConfigurationRecorder",
+        "UpdateLoginProfile",
+    }
+)
+
+
 def _workspace_known(value: str) -> bool:
     """`workspace.<application>.<event>` against the per-application list."""
     parts = value.split(".", 2)
@@ -429,6 +449,15 @@ def unknown_names(product: str, match_when: dict[str, Any]) -> list[str]:
         for value in _event_type_literals(match_when):
             if not value.startswith(prefix) or value[len(prefix) :] not in vocabulary:
                 bad.append(value)
+    elif product == "aws":
+        name = match_when.get("event_name")
+        # Only the scenario-family specs reach this function, and the AWS
+        # ones among them are exactly the second-pass rules listed above.
+        # The older AWS corpus predates this module and is covered by the
+        # fireability replay instead; an empty-set check here would have
+        # been a no-op dressed as a gate.
+        if isinstance(name, str) and name not in AWS_EVENTS:
+            bad.append(name)
     elif product == "gcp":
         method = match_when.get("method_name")
         if isinstance(method, str) and method not in GCP_METHODS:

@@ -1,5 +1,5 @@
 {
-  "count": 1180,
+  "count": 1188,
   "rules": [
     {
       "category": "application",
@@ -7862,6 +7862,134 @@
       "service": "audit",
       "severity": "high",
       "slug": "k8s-impersonation-used"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-303",
+      "match_when": {
+        "event_name": "UpdateLoginProfile"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "AWS Console Login Profile Updated",
+      "product": "aws",
+      "service": "iam",
+      "severity": "high",
+      "slug": "aws-login-profile-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-304",
+      "match_when": {
+        "event_name": "AddUserToGroup"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "AWS User Added To An IAM Group",
+      "product": "aws",
+      "service": "iam",
+      "severity": "high",
+      "slug": "aws-user-added-to-group"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-305",
+      "match_when": {
+        "event_name": "GetSecretValue"
+      },
+      "mitre": [
+        "T1552.001"
+      ],
+      "name": "AWS Secrets Manager Secret Retrieved",
+      "product": "aws",
+      "service": "secretsmanager",
+      "severity": "medium",
+      "slug": "aws-secret-value-retrieved"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-306",
+      "match_when": {
+        "event_name": "CreateResource"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "AWS Cloud Control Resource Created",
+      "product": "aws",
+      "service": "cloudcontrolapi",
+      "severity": "high",
+      "slug": "aws-cloud-control-resource-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-307",
+      "match_when": {
+        "event_name": "AssumeRoleWithSAML"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "AWS Role Assumed Through SAML",
+      "product": "aws",
+      "service": "sts",
+      "severity": "medium",
+      "slug": "aws-saml-role-assumed"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-308",
+      "match_when": {
+        "event_name": "SharedSnapshotCopyInitiated"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "AWS Snapshot Copy Shared With Another Account",
+      "product": "aws",
+      "service": "ec2",
+      "severity": "critical",
+      "slug": "aws-snapshot-shared-externally"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-309",
+      "match_when": {
+        "event_name": "DetachPolicy"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "AWS Organizations Policy Detached",
+      "product": "aws",
+      "service": "organizations",
+      "severity": "critical",
+      "slug": "aws-organizations-policy-detached"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-310",
+      "match_when": {
+        "event_name": "RemoveAccountFromOrganization"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "AWS Account Removed From The Organisation",
+      "product": "aws",
+      "service": "organizations",
+      "severity": "critical",
+      "slug": "aws-organizations-account-left"
     },
     {
       "category": "data-exfil",

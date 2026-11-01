@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T19:21:19Z",
+  "generated": "2026-11-01T19:25:56Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,27 +20,27 @@
     }
   ],
   "stats": {
-    "total": 7559,
+    "total": 7567,
     "playbooks": 88,
     "playbook_packs": 63,
-    "detections": 7391,
+    "detections": 7399,
     "plugins": 80,
-    "verified": 1438,
+    "verified": 1446,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1438
+      "stable": 1446
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 1277
+      "stable": 1285
     },
-    "executable": 3118,
+    "executable": 3126,
     "quarantined": 4441,
-    "executable_detections": 2950,
+    "executable_detections": 2958,
     "reference_only_detections": 4441,
     "not_a_detection": 168
   },
@@ -146,7 +146,7 @@
       "T1078.001": 5,
       "T1078.002": 7,
       "T1078.003": 3,
-      "T1078.004": 74,
+      "T1078.004": 75,
       "T1082": 13,
       "T1083": 9,
       "T1087": 12,
@@ -159,7 +159,7 @@
       "T1090.003": 16,
       "T1091": 1,
       "T1095": 4,
-      "T1098": 100,
+      "T1098": 102,
       "T1098.001": 38,
       "T1098.002": 2,
       "T1098.003": 22,
@@ -281,7 +281,7 @@
       "T1530": 42,
       "T1531": 34,
       "T1535": 1,
-      "T1537": 39,
+      "T1537": 40,
       "T1539": 6,
       "T1542.001": 3,
       "T1542.003": 1,
@@ -322,7 +322,7 @@
       "T1550.003": 3,
       "T1550.004": 1,
       "T1552": 6,
-      "T1552.001": 18,
+      "T1552.001": 19,
       "T1552.002": 3,
       "T1552.004": 7,
       "T1552.005": 1,
@@ -360,7 +360,7 @@
       "T1560": 2,
       "T1560.001": 12,
       "T1561.002": 1,
-      "T1562": 24,
+      "T1562": 26,
       "T1562.001": 31,
       "T1562.004": 11,
       "T1562.006": 2,
@@ -398,7 +398,7 @@
       "T1574.007": 1,
       "T1574.011": 11,
       "T1574.012": 2,
-      "T1578": 11,
+      "T1578": 12,
       "T1578.002": 2,
       "T1578.003": 1,
       "T1580": 1,
@@ -443,7 +443,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2820,
+    "total_with_mitre": 2828,
     "unique_techniques_all_rules": 494,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -571,7 +571,7 @@
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 12,
-      "T1078.004": 122,
+      "T1078.004": 123,
       "T1082": 49,
       "T1083": 28,
       "T1087": 23,
@@ -584,7 +584,7 @@
       "T1090.003": 18,
       "T1091": 5,
       "T1095": 8,
-      "T1098": 146,
+      "T1098": 148,
       "T1098.001": 47,
       "T1098.002": 8,
       "T1098.003": 47,
@@ -726,7 +726,7 @@
       "T1530": 60,
       "T1531": 47,
       "T1535": 6,
-      "T1537": 50,
+      "T1537": 51,
       "T1538": 1,
       "T1539": 7,
       "T1542": 1,
@@ -776,7 +776,7 @@
       "T1550.003": 9,
       "T1550.004": 2,
       "T1552": 25,
-      "T1552.001": 40,
+      "T1552.001": 41,
       "T1552.002": 7,
       "T1552.003": 3,
       "T1552.004": 14,
@@ -819,7 +819,7 @@
       "T1560.001": 22,
       "T1561.001": 2,
       "T1561.002": 4,
-      "T1562": 47,
+      "T1562": 49,
       "T1562.001": 128,
       "T1562.002": 13,
       "T1562.003": 2,
@@ -867,7 +867,7 @@
       "T1574.011": 13,
       "T1574.012": 2,
       "T1574.014": 1,
-      "T1578": 11,
+      "T1578": 12,
       "T1578.002": 3,
       "T1578.003": 1,
       "T1578.005": 1,
@@ -1004,7 +1004,7 @@
         "T1078.001": 4,
         "T1078.002": 3,
         "T1078.003": 2,
-        "T1078.004": 62,
+        "T1078.004": 63,
         "T1083": 2,
         "T1087": 2,
         "T1087.001": 2,
@@ -1013,7 +1013,7 @@
         "T1090": 3,
         "T1090.003": 13,
         "T1095": 3,
-        "T1098": 87,
+        "T1098": 89,
         "T1098.001": 42,
         "T1098.002": 2,
         "T1098.003": 21,
@@ -1080,7 +1080,7 @@
         "T1530": 50,
         "T1531": 32,
         "T1535": 1,
-        "T1537": 37,
+        "T1537": 38,
         "T1539": 4,
         "T1542.001": 1,
         "T1543": 1,
@@ -1114,7 +1114,7 @@
         "T1550.003": 1,
         "T1550.004": 1,
         "T1552": 5,
-        "T1552.001": 14,
+        "T1552.001": 15,
         "T1552.004": 2,
         "T1552.005": 1,
         "T1552.007": 4,
@@ -1144,7 +1144,7 @@
         "T1558.004": 4,
         "T1560.001": 3,
         "T1561.002": 1,
-        "T1562": 24,
+        "T1562": 26,
         "T1562.001": 31,
         "T1562.004": 11,
         "T1562.006": 2,
@@ -1170,7 +1170,7 @@
         "T1574": 1,
         "T1574.002": 4,
         "T1574.006": 2,
-        "T1578": 10,
+        "T1578": 11,
         "T1578.002": 2,
         "T1580": 1,
         "T1583.001": 4,
@@ -34528,7 +34528,7 @@
       "id": "det-application-156",
       "type": "detection",
       "name": "M365 Inbox Rule Created",
-      "description": "A forwarding or delete rule is the textbook business-email-compromise persistence step; the connector now lifts the rule's parameters so the destination is visible.",
+      "description": "A forwarding or delete rule is the textbook business-email-compromise step; the connector lifts the parameters, so the destination is visible.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
@@ -34547,7 +34547,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/application/m365-inbox-rule-created.yaml",
-      "sha256": "0ecbbd441ce604ce94d9c42a1d368b92243a7d480897ad98d5d74a590e8f4ed3"
+      "sha256": "6939a124e0dda8774619b96ab870d22d1a18d8c4e9ec2c5d363eddf8e43ea115"
     },
     {
       "id": "det-application-157",
@@ -41339,7 +41339,7 @@
       "id": "det-cloud-228",
       "type": "detection",
       "name": "GCP Compute Instance Metadata Set",
-      "description": "Instance metadata carries the startup script and the SSH keys, so a metadata write is remote code execution and access in one call.",
+      "description": "Instance metadata carries the startup script and the SSH keys, so a metadata write is code execution and access in one call.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
@@ -41358,7 +41358,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/cloud/gcp-instance-metadata-set.yaml",
-      "sha256": "ffd393bdb676ac0bdf5daf7dc76c2cf4abdb76f0f8062f6364ab43df5469e091"
+      "sha256": "90b06ca461840c5c6f3b81fdeb483acf7807f9a097274f5e432c312dd79126ca"
     },
     {
       "id": "det-cloud-229",
@@ -43210,6 +43210,206 @@
       "executable": true,
       "path": "detections/cloud/k8s-validating-admission-webhook-deleted.yaml",
       "sha256": "0de753cc806f1ddd63fdb852eac116da4049bdccd4d3780208046f932b743722"
+    },
+    {
+      "id": "det-cloud-303",
+      "type": "detection",
+      "name": "AWS Console Login Profile Updated",
+      "description": "Setting a console password on an account that had none, or changing one, is how a programmatic identity gains an interactive session.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-login-profile-updated.yaml",
+      "sha256": "7a8a9b007218797dbab3c8363c655754188dbd6133e56834e970ec24c6380bbe"
+    },
+    {
+      "id": "det-cloud-304",
+      "type": "detection",
+      "name": "AWS User Added To An IAM Group",
+      "description": "Group membership carries whatever policies the group holds, with no policy attachment to notice.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1098"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-user-added-to-group.yaml",
+      "sha256": "cb59672379d93480ff69fa87d4856dad821334a3f495589771c4300c0ccca744"
+    },
+    {
+      "id": "det-cloud-305",
+      "type": "detection",
+      "name": "AWS Secrets Manager Secret Retrieved",
+      "description": "The call that returns the secret value, as distinct from listing secret names.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1552.001"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-secret-value-retrieved.yaml",
+      "sha256": "049145525c421a3f0d95ba19472355f28897a1378d3ed3d836092371ac8048f1"
+    },
+    {
+      "id": "det-cloud-306",
+      "type": "detection",
+      "name": "AWS Cloud Control Resource Created",
+      "description": "Cloud Control is a generic API that creates resources of any supported type, so a principal that never used it reaching for it is a detection the per-service rules all miss.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1578"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-cloud-control-resource-created.yaml",
+      "sha256": "25f14f51c02dfadfe9321d9c3585401aaca8a9678276be82cd6e42d126cdc2f4"
+    },
+    {
+      "id": "det-cloud-307",
+      "type": "detection",
+      "name": "AWS Role Assumed Through SAML",
+      "description": "Federated assumption is how most human access arrives, and is the step a forged assertion lands on.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1078.004"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-saml-role-assumed.yaml",
+      "sha256": "68392a79724c4081e2721af047205e80d210336cb5c0567eb24f60c06ae907b6"
+    },
+    {
+      "id": "det-cloud-308",
+      "type": "detection",
+      "name": "AWS Snapshot Copy Shared With Another Account",
+      "description": "AWS records this when another account copies a snapshot that was shared with it, which is the data leaving.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1537"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-snapshot-shared-externally.yaml",
+      "sha256": "081305f2448a7c11d9490b3a32206785f1f44b29e0cda02b7d7045d89e553640"
+    },
+    {
+      "id": "det-cloud-309",
+      "type": "detection",
+      "name": "AWS Organizations Policy Detached",
+      "description": "Detaching a service control policy removes the guardrail from every account below it.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1562"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-organizations-policy-detached.yaml",
+      "sha256": "1dd3978b3ebd6b047b3e391efc4d7840a698b32a6fa6f3743da361e9ec4e23d8"
+    },
+    {
+      "id": "det-cloud-310",
+      "type": "detection",
+      "name": "AWS Account Removed From The Organisation",
+      "description": "An account outside the organisation inherits none of its policies.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "cloud",
+      "mitre_techniques": [
+        "T1562"
+      ],
+      "log_source": "aws",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/cloud/aws-organizations-account-left.yaml",
+      "sha256": "8d69034accd5f1eedc025c0363867929d23ac17c1564d20d115c1ddc0e8edb4d"
     },
     {
       "id": "det-data-exfil-001",

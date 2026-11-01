@@ -19,8 +19,8 @@ lever that reaches the engine is adding a spec and re-running
 
 | metric | count |
 |--------|------:|
-| rules on disk (total) | 7391 |
-| **executable (loaded by the engine)** | **2950** |
+| rules on disk (total) | 7399 |
+| **executable (loaded by the engine)** | **2958** |
 | non-executable (provenance/coverage only) | 4441 |
 | — of which: enabled, but no compiled spec | 0 |
 | windowed rules in `windowed_ruleset.json` | 76 |
@@ -55,7 +55,7 @@ were hand-authored in the upstream format to give it one.
 | car (imported) | 99 | 0 | 0 |
 | chronicle (imported) | 877 | 0 | 0 |
 | community | 1 | 0 | 0 |
-| native | 1253 | 1156 | 0 |
+| native | 1261 | 1164 | 0 |
 | sigma (imported) | 3132 | 1770 | 0 |
 | splunk (imported) | 2005 | 0 | 0 |
 | threat-anomaly | 24 | 24 | 0 |
@@ -69,9 +69,9 @@ were hand-authored in the upstream format to give it one.
 
 ## How to read the README claim
 
-The imported corpus is large (7391 rules on disk) and valuable as a
+The imported corpus is large (7399 rules on disk) and valuable as a
 provenance-tracked ATT&CK-mapped library, but the number that matters
-operationally is **2950 executable rules** — the ones the engine
+operationally is **2958 executable rules** — the ones the engine
 loads and fires against live telemetry. The README and marketplace must cite
 the executable figure when describing detection *coverage*, and may cite the
 on-disk figure only when explicitly describing the imported *library*.

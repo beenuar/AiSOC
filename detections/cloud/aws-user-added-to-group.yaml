@@ -1,0 +1,24 @@
+id: det-cloud-304
+name: AWS User Added To An IAM Group
+description: Group membership carries whatever policies the group holds, with no policy attachment to
+  notice.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: iam
+detection:
+  condition: |
+    event_name == "AddUserToGroup"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'
