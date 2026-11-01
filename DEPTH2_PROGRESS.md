@@ -50,9 +50,18 @@ claimed the same migration number simultaneously and one had to renumber.
 | Number | Kind | Lane / item | Claimed | File |
 |---|---|---|---|---|
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
+| 124 | migration | Lane A / 1.1 | 2026-11-01 | `services/api/migrations/124_identity_privilege_facts.sql` |
+| 125 | migration | Lane A / 1.2 | 2026-11-01 | `services/api/migrations/125_access_review_findings.sql` |
+| 126 | migration | Lane A / 1.4 | 2026-11-01 | `services/api/migrations/126_sub_principal_baselines.sql` |
+| 127 | migration | Lane A / 1.5 | 2026-11-01 | reserved — `1.5` change timeline, if a table is needed |
+| 128 | migration | Lane A / 3.1 | 2026-11-01 | `services/api/migrations/128_identity_links.sql` |
+| 129 | migration | Lane A | 2026-11-01 | reserved |
+| 0016 | ADR | Lane A / 1.1 | 2026-11-01 | `docs/decisions/0016-privilege-context-in-scoring.md` |
+| 0017 | ADR | Lane A / 3.1 | 2026-11-01 | reserved — identity-resolution confidence model |
 
-Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
-ADR `0016`.
+Highest at kickoff: migration `123`, ADR `0014`. Lane A holds migrations
+`124`–`129` and ADRs `0016`–`0017`; next free outside that block: migration
+`130`, ADR `0018`.
 
 ## Phase 0: Kickoff
 
