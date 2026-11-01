@@ -25,13 +25,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
-import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.identity_privilege import UNKNOWN_PRIVILEGE, IdentityPrivilege, PrivilegeTags
-
-logger = structlog.get_logger(__name__)
 
 __all__ = [
     "PrivilegeFact",

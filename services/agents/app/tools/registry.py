@@ -17,23 +17,14 @@ Design:
 from __future__ import annotations
 
 import inspect
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
 from typing import Any
 
+# Re-exported so every existing `from app.tools.registry import Tool`
+# keeps working. The dataclass moved to its own module to break the
+# registry -> customer_tools -> registry import cycle; see tool.py.
+from app.tools.tool import Tool
 
-@dataclass(frozen=True)
-class Tool:
-    name: str
-    description: str
-    parameters: dict[str, Any]  # JSON schema for the arguments
-    fn: Callable[..., Any] | Callable[..., Awaitable[Any]]
-
-    def openai_schema(self) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {"name": self.name, "description": self.description, "parameters": self.parameters},
-        }
+__all__ = ["Tool", "ToolRegistry", "default_registry"]
 
 
 class ToolRegistry:

@@ -49,7 +49,7 @@ from typing import Any
 import httpx
 import structlog
 
-from app.tools.registry import Tool
+from app.tools.tool import Tool
 
 logger = structlog.get_logger()
 
@@ -715,6 +715,12 @@ async def scoped_customer_tools(tenant_id: str) -> tuple[list[Tool], list[str]]:
 
 
 __all__ = [
+    "CHANGES_BEFORE_DESCRIPTION",
+    "CHANGES_BEFORE_PARAMETERS",
+    "CHANGES_BEFORE_TOOL",
+    "EFFECTIVE_PERMISSIONS_DESCRIPTION",
+    "EFFECTIVE_PERMISSIONS_PARAMETERS",
+    "EFFECTIVE_PERMISSIONS_TOOL",
     "INDICATOR_TYPES",
     "SIEM_SEARCH_TOOL",
     "UNTRUSTED_NOTICE",

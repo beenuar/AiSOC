@@ -29,14 +29,11 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.access_review import ReviewResult, review_principal, summarise
 from app.services.identity_privilege_store import live_facts_for_provider, usage_for_principal
-
-logger = structlog.get_logger(__name__)
 
 __all__ = ["acknowledge", "list_findings", "run_review", "summary"]
 

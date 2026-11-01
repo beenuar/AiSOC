@@ -199,7 +199,7 @@ def _local_part(value: str) -> str:
     if member:
         text = member.group("name")
     if "@" in text:
-        text = text.rsplit("@", 0)[0] if False else text.split("@", 1)[0]
+        text = text.split("@", 1)[0]
     if "\\" in text:
         # DOMAIN\user
         text = text.split("\\", 1)[1]

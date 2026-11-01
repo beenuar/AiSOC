@@ -209,21 +209,23 @@ def _ordered(comparison: str, left: Any, rights: list[Any]) -> bool | None:
     identical and two copies drift: an earlier draft had ``LessThanEquals``
     on one family and not the other.
     """
-    match comparison:
-        case "Equals":
-            return any(left == r for r in rights)
-        case "NotEquals":
-            return all(left != r for r in rights)
-        case "LessThan":
-            return any(left < r for r in rights)
-        case "LessThanEquals":
-            return any(left <= r for r in rights)
-        case "GreaterThan":
-            return any(left > r for r in rights)
-        case "GreaterThanEquals":
-            return any(left >= r for r in rights)
-        case _:
-            return None
+    # A dict of comparators rather than a `match`, so the fall-through is a
+    # lookup miss with one explicit `return None` instead of a wildcard arm
+    # that reads as unreachable. `match` here also mixed implicit and
+    # explicit returns in the eyes of static analysis, which is a real
+    # ambiguity in a function whose `None` means "undecidable".
+    comparators: dict[str, Any] = {
+        "Equals": lambda: any(left == r for r in rights),
+        "NotEquals": lambda: all(left != r for r in rights),
+        "LessThan": lambda: any(left < r for r in rights),
+        "LessThanEquals": lambda: any(left <= r for r in rights),
+        "GreaterThan": lambda: any(left > r for r in rights),
+        "GreaterThanEquals": lambda: any(left >= r for r in rights),
+    }
+    comparator = comparators.get(comparison)
+    if comparator is None:
+        return None
+    return bool(comparator())
 
 
 def evaluate(operator: str, key: str, expected: Any, context: dict[str, Any]) -> bool | None:
