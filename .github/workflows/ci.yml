@@ -606,6 +606,17 @@ jobs:
         run: python3 scripts/check_outcome_claims.py --self-test
       - name: No customer-outcome figure nobody measured
         run: python3 scripts/check_outcome_claims.py
+      # Wave 2, Phase 9.5 prerequisite. A caveat saying a console page is
+      # "not built" reads as modesty and works as an exemption: a surface
+      # recorded as absent needs no claim row and no gate. Three shipped
+      # pages were sitting behind one such sentence, and one of them —
+      # /settings/users — had no test at all. `check_claim_gate_matrix`
+      # cannot see this: it counts rows and statuses and does not read a
+      # caveat's prose.
+      - name: 'Unbuilt-surface claims — self-test'
+        run: python3 scripts/check_unbuilt_claims.py --self-test
+      - name: Every 'not built' claim about a console page is still true
+        run: python3 scripts/check_unbuilt_claims.py
       # Wave 2, Phase 5.5. The published retro-hunt ceiling is derived from
       # MAX_BYTES_PER_SWEEP, so moving the product's budget must move the
       # page or red the build: a published limit that quietly describes a
