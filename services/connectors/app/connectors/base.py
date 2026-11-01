@@ -81,6 +81,18 @@ class Capability(str, Enum):
     #: into ``asset_vulnerabilities`` (docs/cve-patch-policy.md): scanner
     #: findings are inventory rows with patch windows, not console alerts.
     PULL_VULNERABILITIES = "pull_vulnerabilities"
+    #: Pull *workforce context* -- employment status, start and last-day
+    #: dates, manager, department and worker type -- rather than events.
+    #: Connectors declaring it must expose ``fetch_workforce()``, which the
+    #: scheduler materialises into ``workforce_members`` (depth plan wave 2
+    #: item 1.3). An HR system reports slowly-changing state, not security
+    #: events, and pushing it through ingest would make "is this person
+    #: leaving" a lake search rather than a lookup.
+    PULL_WORKFORCE = "pull_workforce"
+    #: Pull *managed device state* -- owner, compliance, OS version,
+    #: encryption and agent health. Connectors declaring it must expose
+    #: ``fetch_devices()``, materialised into ``workforce_devices``.
+    PULL_DEVICE_INVENTORY = "pull_device_inventory"
 
     # QUERY — ad-hoc search across the source's index.
     QUERY_LOGS = "query_logs"

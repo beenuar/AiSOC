@@ -572,6 +572,41 @@
   },
   {
     "capabilities": [
+      "pull_workforce"
+    ],
+    "category": "hr",
+    "connector_id": "bamboohr",
+    "connector_name": "BambooHR",
+    "description": "Employment status, start and last-day dates, manager, department and worker type from BambooHR, as triage context. Read-only; no personal or compensation data is stored.",
+    "docs_url": "/docs/connectors/bamboohr",
+    "fields": [
+      {
+        "help_text": "The first label of your BambooHR URL: acme.bamboohr.com -> acme.",
+        "label": "Company subdomain",
+        "name": "subdomain",
+        "placeholder": "acme",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Generated from your BambooHR profile under API Keys. Needs directory and employee read access.",
+        "label": "API key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": 5000,
+        "help_text": "A ceiling on the per-employee reads one sync will make.",
+        "label": "Maximum employees per sync",
+        "name": "max_employees",
+        "required": false,
+        "type": "number"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_audit",
       "pivot_user",
       "read_audit_trail"
@@ -2111,6 +2146,37 @@
   },
   {
     "capabilities": [
+      "pull_device_inventory"
+    ],
+    "category": "mdm",
+    "connector_id": "microsoft_intune",
+    "connector_name": "Microsoft Intune",
+    "description": "Device owner, compliance state, OS version, encryption and threat-defence agent state from Microsoft Intune, as triage context. Read-only.",
+    "docs_url": "/docs/connectors/microsoft-intune",
+    "fields": [
+      {
+        "label": "Directory (tenant) ID",
+        "name": "tenant_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Application (client) ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "The app registration needs the application permission DeviceManagementManagedDevices.Read.All, granted with admin consent.",
+        "label": "Client secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "query_logs"
     ],
@@ -2750,6 +2816,33 @@
         "name": "api_key",
         "required": true,
         "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_workforce"
+    ],
+    "category": "hr",
+    "connector_id": "rippling",
+    "connector_name": "Rippling",
+    "description": "Employment status, start and end dates, manager, department and worker type from Rippling, as triage context. Read-only; compensation and personal data are never requested.",
+    "docs_url": "/docs/connectors/rippling",
+    "fields": [
+      {
+        "help_text": "A Rippling API token or installed-app access token carrying the workers.read scope.",
+        "label": "API token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "https://rest.ripplingapis.com",
+        "help_text": "Override only if Rippling has given you a different regional host.",
+        "label": "API base URL",
+        "name": "base_url",
+        "required": false,
+        "type": "string"
       }
     ]
   },

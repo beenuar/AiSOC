@@ -9,6 +9,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **HR and managed-device context, kept current by a connector on a
+  schedule** (depth plan wave 2, item 1.3). Three new connectors --
+  BambooHR, Rippling and Microsoft Intune -- feed employment status, start
+  and last-day dates, manager, department, worker type, device owner,
+  compliance state, OS version, encryption and threat-defence agent state
+  into triage.
+
+  What was absent, measured: 88 registered connectors and not one of them
+  HR or MDM, and `import_context` with exactly one production caller, a
+  manual POST route. A tenant's HR context was only ever as current as the
+  last file somebody uploaded.
+
+  The wiring is the half that makes it real. The connector scheduler calls
+  the workforce sync on every poll, in its own `try`, modelled on the
+  vulnerability sync beside it: a context sync that fails must not cost the
+  poll its events.
+
+  Migration 131 puts the context in Postgres so it exists on CORE. The graph
+  import stays and is richer, but Neo4j is a `full`-profile service, so on
+  the deployment `make up` produces the HR dimension did not exist at all
+  and every triage input reading it was silently dead.
+
+  Tenure, departing-within-30-days, contractor status and device compliance
+  are derived and cited in the confidence basis as well as rendered in the
+  prompt, because a fact in one and not the other is either invisible to a
+  reviewer or absent from the model. Every absence keeps its direction: a
+  missing start date is not a new joiner, a missing end date is not
+  "staying", an unmapped employment type is not an employee, and a device
+  the MDM never evaluated is not a compliant one.
+
+  Data minimisation is in the request and in the schema rather than in a
+  filter. All three vendors return compensation, date of birth and home
+  address; none is requested, and migration 131 has no column that could
+  hold one. The BambooHR directory endpoint, which would have been the
+  obvious single read, is deliberately not used for the facts: its own
+  reference says it never includes employment status or history in any
+  configuration and excludes former employees entirely, which removes every
+  field this item needs and the whole population it exists to see.
+
+  **Not built:** Workday and Kandji, recorded as blocked with exactly what
+  each needs rather than built against an invented payload shape.
+
+### Added
+
 - **Anonymizer and hosting classes stamped on public addresses at ingest**
   (depth plan wave 2, item 1.6). An event's source address now carries
   `tor_exit` or `hosting_provider` where a pinned local dataset has a record

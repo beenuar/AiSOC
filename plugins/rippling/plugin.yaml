@@ -1,0 +1,26 @@
+id: rippling
+name: Rippling Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Employment status, start and end dates, manager, department and worker type
+  from Rippling. Read-only. Only the department and employment-type
+  relationships are expanded, so compensation and personal data are never
+  fetched.
+author: AiSOC Core Team
+tags: [hr, workforce, identity, context, rippling]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/rippling.py
+license: MIT
+min_aisoc_version: "21.0.0"
+config_schema:
+  type: object
+  required: [api_token]
+  properties:
+    api_token:
+      type: string
+      description: Rippling API token or installed-app access token carrying the workers.read scope.
+      secret: true
+    base_url:
+      type: string
+      description: API base URL. Defaults to https://rest.ripplingapis.com.
