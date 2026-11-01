@@ -28,6 +28,7 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app import closure as closure_policy
+from app.agents import reviewer
 from app.agents.dispositions import (
     AUTO_CLOSEABLE_DISPOSITIONS,
     BENIGN,
@@ -859,6 +860,32 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
             signals=len(injection.signals),
             max_severity=ledger.get("max_severity"),
         )
+
+    # Phase 4.2. A separate pass over the decision contract, after every
+    # existing demotion and before the closure branch, so it can only ever
+    # take a decision *away* from closure. Off by default: it was measured
+    # on the corpus and did not improve balanced accuracy or auto-close
+    # precision, which the plan's own condition says means it stays off.
+    # Kept rather than deleted because the measurement is the deliverable,
+    # and because a funded model makes it a drop-in behind this interface.
+    if reviewer.enabled():
+        should_auto_close, verdict_review = reviewer.apply_review(
+            {
+                "verdict": verdict,
+                "supporting_evidence": claim_support.as_dict().get("supported") if claim_support.scored else None,
+                "contradictory_evidence": claim_support.as_dict().get("contradicted") if claim_support.scored else None,
+                "groundedness": getattr(state, "groundedness", None),
+                "missing_prerequisites": [],
+            },
+            auto_closed=should_auto_close,
+        )
+        state.reviewer_outcome = verdict_review.as_payload()
+        # Recorded on every run, abstentions included: a reviewer that has
+        # silently stopped firing must not look identical to one that ran
+        # and found nothing to act on.
+        state.confidence_basis.append(verdict_review.summary())
+        if verdict_review.changes_decision:
+            state.add_finding(verdict_review.summary())
 
     if should_auto_close:
         _metrics["auto_resolved_count"] += 1

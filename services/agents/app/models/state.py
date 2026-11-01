@@ -160,6 +160,11 @@ class InvestigationState(BaseModel):
     recent_dispositions: dict[str, Any] | None = None
     identity_context: dict[str, Any] | None = None
 
+    # Phase 4.2. What the reviewer pass did, including when it abstained.
+    # `None` means the pass did not run; an abstention is a dict saying so,
+    # and the two must not be collapsed.
+    reviewer_outcome: dict[str, Any] | None = None
+
     # Findings accumulated during investigation
     findings: list[str] = Field(default_factory=list)
     ioc_enrichments: dict[str, Any] = Field(default_factory=dict)
