@@ -606,6 +606,102 @@ LLM_USAGE_RULES: list[dict] = [
         fp=["New automation onboarding (change ticket)"],
         playbook="tpl-persistence",
     ),
+    # ----------------------------------------------------------------
+    # Wave-2 7.4. Four rules on the providers wave-2 7.1 added, each
+    # clausing only on a field the connector really emits at the top
+    # level — which is the whole lesson of the GitHub pass, where 1 of 12
+    # rules fired on real connector output because the rest claused on
+    # names nothing produced. Every one of these is replayed through
+    # `LlmUsageConnector.normalize()` and the real engine in
+    # `services/fusion/tests/test_ai_rule_pack_replay.py`.
+    # ----------------------------------------------------------------
+    S(
+        slug="llm-copilot-content-exclusion-changed",
+        name="Copilot Content Exclusion Changed",
+        severity="critical",
+        mitre=["t1562.001"],
+        product="github_copilot",
+        service="audit",
+        when={"event_type_endswith": ".copilot.content_exclusion_changed"},
+        fp=["Exclusion list edited as part of an approved repository onboarding"],
+        playbook="tpl-defense-evasion",
+        description=(
+            "Content exclusion is the control that stops a coding assistant reading the "
+            "paths an organisation has declared off limits — key material, customer data, "
+            "anything it has decided a model must not see. A change to it is a change to "
+            "that boundary, and it is made in a settings page rather than in a pull "
+            "request, so nothing else reviews it."
+        ),
+    ),
+    S(
+        slug="llm-copilot-agent-mcp-config-changed",
+        name="Hosted Coding Agent MCP Server List Changed",
+        severity="high",
+        mitre=["t1195"],
+        product="github_copilot",
+        service="audit",
+        when={"event_type_endswith": ".copilot.swe_agent_mcp_config_updated"},
+        fp=["A reviewed addition of an internal MCP server"],
+        playbook="tpl-supply-chain",
+        description=(
+            "The MCP server list decides what a hosted coding agent can reach and what it "
+            "is told. Adding a server is adding a party that can instruct the agent, which "
+            "is a scope change rather than a settings change — and the agent runs on the "
+            "provider's infrastructure, so no endpoint control sees the result."
+        ),
+    ),
+    S(
+        slug="llm-ai-app-granted-write-scope",
+        name="AI Application Consented a Write Scope",
+        severity="high",
+        mitre=["t1098.001"],
+        product="entra_consent",
+        service="audit",
+        when={
+            "event_type_endswith": ".consent_to_application",
+            "scopes_has_any": [
+                "Mail.ReadWrite",
+                "Mail.Send",
+                "Files.ReadWrite.All",
+                "Sites.ReadWrite.All",
+                "Directory.ReadWrite.All",
+                "User.ReadWrite.All",
+            ],
+        },
+        fp=["An AI application approved through the organisation's own review process"],
+        playbook="tpl-privilege-escalation",
+        description=(
+            "A consent grant handing an AI application the ability to change a mailbox, a "
+            "drive, a site or the directory itself. The read equivalent is an exposure; "
+            "this one can act. The decisive field is the granted scope, which the "
+            "connector lifts out of the free-text consent property — a grant whose scopes "
+            "stay buried is indistinguishable from one that was granted nothing."
+        ),
+    ),
+    S(
+        slug="llm-copilot-bulk-resource-access",
+        name="AI Assistant Interaction Touched Many Resources at Once",
+        severity="medium",
+        mitre=["t1530"],
+        product="microsoft_copilot",
+        service="audit",
+        when={
+            "event_type_endswith": ".CopilotInteraction",
+            "accessed_resource_count_gte": 25,
+        },
+        fp=[
+            "A summarisation task over a large shared folder, run deliberately",
+            "A migration or audit the owner initiated",
+        ],
+        playbook="tpl-data-exfil",
+        description=(
+            "One assistant turn that read a large number of distinct resources. An "
+            "assistant with a user's full grant is an exfiltration path that authenticates "
+            "as that user and looks like ordinary application traffic; volume in a single "
+            "interaction is the shape that separates answering a question from sweeping a "
+            "drive."
+        ),
+    ),
     S(
         slug="llm-project-deleted",
         name="LLM Provider Project Deleted",
