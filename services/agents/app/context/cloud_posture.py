@@ -236,6 +236,22 @@ def _shape(payload: Mapping[str, Any], *, limit: int) -> CloudPostureContext:
     )
 
 
+def _one_line(value: Any, *, limit: int = _MAX_FIELD_CHARS) -> str:
+    """Sanitise, then flatten to a single line.
+
+    `sanitize_text` deliberately keeps single newlines — it collapses blank
+    lines and strips control characters, which is right for a runbook body
+    where paragraph structure is the content. Every field here is one cell of
+    a one-line list item, so a surviving newline lets injected text start its
+    own line and read as a new section of the prompt rather than as part of a
+    resource name. Caught by
+    `test_a_resource_name_cannot_smuggle_an_instruction_into_the_prompt`,
+    which failed against the first version of this renderer.
+    """
+    cleaned = sanitize_text(str(value or ""), max_len=limit)
+    return " ".join(cleaned.split())
+
+
 _CLASS_WORDS = {
     "misconfiguration": "misconfiguration",
     "secret": "exposed secret",
@@ -259,14 +275,14 @@ def render_for_prompt(state_value: Mapping[str, Any] | None) -> str:
 
     lines: list[str] = []
     for row in rows:
-        title = sanitize_text(str(row.get("rule_title") or ""), max_len=_MAX_FIELD_CHARS)
+        title = _one_line(row.get("rule_title"))
         if not title:
             continue
         kind = _CLASS_WORDS.get(str(row.get("finding_class") or ""), "finding")
-        severity = sanitize_text(str(row.get("severity") or "unknown"), max_len=20)
-        resource = sanitize_text(str(row.get("resource_name") or row.get("matched_key") or ""), max_len=_MAX_FIELD_CHARS)
-        source = sanitize_text(str(row.get("source") or "a cloud security tool"), max_len=40)
-        seen = sanitize_text(str(row.get("first_detected_at") or ""), max_len=40)
+        severity = _one_line(row.get("severity") or "unknown", limit=20)
+        resource = _one_line(row.get("resource_name") or row.get("matched_key"))
+        source = _one_line(row.get("source") or "a cloud security tool", limit=40)
+        seen = _one_line(row.get("first_detected_at"), limit=40)
         bit = f"- {resource or 'this resource'}: {severity} {kind} — {title} (reported by {source}"
         if seen:
             bit += f", first seen {seen}"
