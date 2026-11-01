@@ -324,6 +324,22 @@ that every *alias target* is declared -- not that every connector has a
 profile. The context path is the scheduler's `_sync_workforce_context`, and
 the test asserting the scheduler calls it is the equivalent control.
 
+### D7 - Nothing on either Lane B branch has been graded yet, and that is the runner pool
+
+Recorded so the next reader does not mistake an ungraded branch for a
+broken one. At the time of writing, `check-runs` for the head commit of
+`depth2/lane-b-sources` returns `total_count: 0` while the repository has
+19 queued and 18 in-progress workflow runs. No check has failed, because no
+check has started.
+
+The measurement that distinguishes the two cases, since it costs one call:
+
+    gh api repos/beenuar/AiSOC/commits/<sha>/check-runs --jq .total_count
+    gh api 'repos/beenuar/AiSOC/actions/runs?status=queued' --jq .total_count
+
+Both PRs were verified locally against every gate they touch, listed in
+their PR bodies. A re-push refreshes the queue position if CodeQL 503s.
+
 ## Item log
 
 One entry per item as it lands: what failed before, the change, the negative
