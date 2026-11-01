@@ -59,8 +59,10 @@ claimed the same migration number simultaneously and one had to renumber.
 | 151–158 | migration | Lane F (analyst: 3.2, 3.3, 4.x, 5.x, 9.x) | 2026-11-01 | reserved block, see below |
 | 0022 | ADR | Lane F | 2026-11-01 | reserved |
 
-Highest at kickoff: migration `123`, ADR `0014`. Lane E holds the exclusive
-block migrations `146`–`150` and ADR `0021`.
+Highest at kickoff: migration `123`, ADR `0014`. Next free sequential number:
+migration `124`, ADR `0016`. Outside that sequence, Lane E holds the exclusive
+block migrations `146`–`150` and ADR `0021`, and Lane F holds `151`–`158` and
+ADR `0022` (below).
 
 ### Lane F block (exclusive, pre-allocated)
 
@@ -79,9 +81,6 @@ land:
 | 156 | `services/api/migrations/156_software_inventory.sql` | 5.4 inventory |
 | 157 | unused | — |
 | 158 | unused | — |
-
-Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
-ADR `0016`.
 
 ## Phase 0: Kickoff
 
