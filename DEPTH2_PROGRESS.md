@@ -55,10 +55,18 @@ claimed the same migration number simultaneously and one had to renumber.
 | 131 | migration | Lane B / 1.3 | 2026-11-01 | `services/api/migrations/131_workforce_context.sql` |
 | 132 | migration | Lane B / 8.3 | 2026-11-01 | `services/api/migrations/132_tenant_enrichment_providers.sql` |
 | 133 | migration | Lane B / 8.1 | 2026-11-01 | `services/api/migrations/133_cloud_security_findings.sql` |
+| 159 | migration | Lane C / 2.4 | 2026-11-01 | `services/api/migrations/159_api_endpoint_profiles.sql` |
+| 160 | migration | Lane C / 2.5 | 2026-11-01 | reserved — detection coverage gaps, if the existing proposal tables do not carry them |
+| 161 | migration | Lane C / 2.3 | 2026-11-01 | reserved — weak-signal accumulation, if the Redis baseline store cannot hold it |
+| 0023 | ADR | Lane C / 2.2 | 2026-11-01 | `docs/decisions/0023-long-horizon-identity-aggregates.md` |
 
 Lane B holds an exclusive pre-allocated block: migrations `130`-`137` and ADR
 `0018`. Numbers `134`-`137` are reserved and unused unless an item below
 claims one here first.
+
+Lane C holds migrations `159`-`161` and ADR `0023`. Numbers `142`-`158` are
+Lane D, Lane E and Lane F blocks; Lane C starts above all of them so a lane
+that has not yet pushed its claim cannot collide.
 
 Highest at kickoff: migration `123`, ADR `0014`. Next free outside Lane B's
 block: migration `124`, ADR `0016`.
