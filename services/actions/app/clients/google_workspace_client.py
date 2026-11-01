@@ -302,3 +302,115 @@ class GoogleWorkspaceClient:
             resp.raise_for_status()
             logger.info("gws.enforce_2sv.success", user=user_email)
             return {"success": True, "action": "enforce_2sv", "user": user_email}
+
+    # ------------------------------------------------------------------
+    # Wave-2 Phase 6.1: OAuth-grant and application-password containment
+    # ------------------------------------------------------------------
+    #
+    # Suspending the account and signing the sessions out leaves two routes
+    # back in that a suspended user does not close: a third-party OAuth
+    # grant keeps its own refresh token, and an application-specific
+    # password keeps working against the legacy protocols that cannot do
+    # 2-step verification. Containing the account and leaving those is the
+    # shape of an incident that reopens a week later.
+    #
+    # Both need the `admin.directory.user.security` scope, which this
+    # client already requests, so no deployment has to re-consent.
+    #
+    # References, fetched before these were written:
+    #   https://developers.google.com/workspace/admin/directory/reference/rest/v1/tokens/delete
+    #   https://developers.google.com/workspace/admin/directory/reference/rest/v1/asps/delete
+
+    async def list_oauth_tokens(self, user_email: str) -> list[dict[str, Any]]:
+        """Third-party applications holding a token for this user.
+
+        The read behind the grant-revocation probe, and useful on its own:
+        it is the list an analyst needs to decide which grant to revoke.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(f"{_DIRECTORY}/users/{user_email}/tokens", headers=self._headers())
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+        return [
+            {
+                "client_id": row.get("clientId"),
+                "display_text": row.get("displayText"),
+                "scopes": row.get("scopes") or [],
+                "anonymous": row.get("anonymous"),
+                "native_app": row.get("nativeApp"),
+            }
+            for row in body.get("items", [])
+        ]
+
+    async def revoke_oauth_token(self, user_email: str, client_id: str) -> dict[str, Any]:
+        """DELETE one application's token for this user.
+
+        Not platform-reversible: Google offers no call that re-grants a
+        revoked consent, because re-consent is the user's decision at the
+        application's own prompt. Recorded as such in the contract rather
+        than given a reverse capability that would dispatch to nothing.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.delete(
+                f"{_DIRECTORY}/users/{user_email}/tokens/{client_id}",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            logger.info("gws.revoke_oauth_token.success", user=user_email, client_id=client_id)
+            return {
+                "success": True,
+                "action": "revoke_oauth_grant",
+                "user": user_email,
+                "client_id": client_id,
+            }
+
+    async def list_app_passwords(self, user_email: str) -> list[dict[str, Any]]:
+        """Application-specific passwords (ASPs) issued to this user."""
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(f"{_DIRECTORY}/users/{user_email}/asps", headers=self._headers())
+            resp.raise_for_status()
+            body = resp.json() if resp.content else {}
+        return [
+            {
+                "code_id": row.get("codeId"),
+                "name": row.get("name"),
+                "creation_time": row.get("creationTime"),
+                "last_time_used": row.get("lastTimeUsed"),
+            }
+            for row in body.get("items", [])
+        ]
+
+    async def revoke_app_passwords(self, user_email: str, *, code_id: str | None = None) -> dict[str, Any]:
+        """Delete one ASP, or every ASP the user holds.
+
+        The default is every one. A per-code option exists because an
+        analyst who has identified the single leaked code should be able to
+        take the narrow action, and because a verb that can only take the
+        wide one gets avoided.
+
+        Deleting an ASP cannot be undone — Google does not return the code
+        and there is no re-create call. The user generates a new one, which
+        is a different credential. The contract records that.
+        """
+        codes = [code_id] if code_id else [entry["code_id"] for entry in await self.list_app_passwords(user_email) if entry.get("code_id")]
+        revoked: list[str] = []
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            for code in codes:
+                resp = await client.delete(
+                    f"{_DIRECTORY}/users/{user_email}/asps/{code}",
+                    headers=self._headers(),
+                )
+                resp.raise_for_status()
+                revoked.append(code)
+        logger.info("gws.revoke_app_passwords.success", user=user_email, count=len(revoked))
+        return {
+            "success": True,
+            "action": "revoke_token",
+            "user": user_email,
+            "revoked_code_ids": revoked,
+            "count": len(revoked),
+        }
