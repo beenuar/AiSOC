@@ -22,7 +22,7 @@ todos:
     status: pending
   - id: p1-3-hr-device-context
     content: "Phase 1.3: HR connectors (Workday, BambooHR, Rippling) and MDM connectors (Intune, Kandji, Jamf promoted from plugin) feeding employment status, manager, tenure, device owner and compliance into the identity graph and triage"
-    status: pending
+    status: in_progress
   - id: p1-4-sub-principal-baselines
     content: "Phase 1.4: baselines per sub-principal (OAuth app, token, service account, AI agent acting for a human); GitHub tokens joined to scopes and classified by cadence"
     status: pending

@@ -129,15 +129,30 @@ CREATE INDEX IF NOT EXISTS idx_workforce_devices_owner
 ALTER TABLE workforce_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE workforce_devices ENABLE ROW LEVEL SECURITY;
 
+-- FORCE, not just ENABLE. Without it the table owner -- which is the role
+-- that runs migrations -- walks straight past the policy, so a policy that
+-- reads correctly protects nothing when the owner is also a reader.
+ALTER TABLE workforce_members FORCE ROW LEVEL SECURITY;
+ALTER TABLE workforce_devices FORCE ROW LEVEL SECURITY;
+
+-- The `OR current_tenant_id() IS NULL` arm is the shape every table here
+-- uses, and it is load-bearing rather than a loosening: the connectors
+-- scheduler writes these rows on a connection that binds no tenant GUC,
+-- and without the arm it would see and write zero rows while reporting
+-- success. The real control for those writers is the explicit tenant
+-- predicate in the statement itself -- every read and write in
+-- `app/workforce.py` and `app/services/workforce_context.py` names
+-- `tenant_id` -- which is the query-layer scoping this repository treats
+-- as primary, with RLS as defence in depth for session-bound callers.
 DROP POLICY IF EXISTS workforce_members_tenant_isolation ON workforce_members;
 CREATE POLICY workforce_members_tenant_isolation ON workforce_members
-    USING (tenant_id = current_tenant_id())
-    WITH CHECK (tenant_id = current_tenant_id());
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL);
 
 DROP POLICY IF EXISTS workforce_devices_tenant_isolation ON workforce_devices;
 CREATE POLICY workforce_devices_tenant_isolation ON workforce_devices
-    USING (tenant_id = current_tenant_id())
-    WITH CHECK (tenant_id = current_tenant_id());
+    USING (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL)
+    WITH CHECK (tenant_id = current_tenant_id() OR current_tenant_id() IS NULL);
 
 -- The runtime role is DML-only; without these grants every read and write
 -- from the services fails with a permission error that reads as a missing

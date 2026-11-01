@@ -107,7 +107,7 @@ class MicrosoftIntuneConnector(BaseConnector):
                 "Device owner, compliance state, OS version, encryption and threat-defence agent state "
                 "from Microsoft Intune, as triage context. Read-only."
             ),
-            docs_url="/docs/connectors/microsoft_intune",
+            docs_url="/docs/connectors/microsoft-intune",
             fields=[
                 Field("tenant_id", "string", "Directory (tenant) ID"),
                 Field("client_id", "string", "Application (client) ID"),

@@ -255,10 +255,117 @@ Not done because landing 1.6 and 1.3 unblocks Lane C, and a half-wired
 per-tenant path would have been worse than an honest gap. Nothing shipped
 depends on it; the three classes simply carry no records.
 
+### D5 - Workday and Kandji are blocked; three of the six named sources are built
+
+Item 1.3 names six connectors. Three are built against public references
+verified on 2026-11-01 and cited by URL in each module: BambooHR, Rippling
+and Microsoft Intune. Three are not, for different reasons.
+
+**Workday.** `community.workday.com/sites/default/files/file-hosting/restapi/`
+answers 200, but the Staffing REST surface a tenant actually exposes is
+per-tenant and the report-as-a-service shape most deployments use is defined
+by the customer's own report definition, not by a fixed schema. There is no
+public response document from which an honest mock payload can be written.
+**Needed:** a Workday sandbox tenant, or one recorded (redacted) response
+from `Get_Workers` or from a customer's staffing RaaS report.
+
+**Kandji.** `api-docs.kandji.io` answers 200 and the landing page documents
+the base URL, the token header, the rate limit and the response codes. The
+device-list response's field names are rendered client-side and could not be
+extracted. **Needed:** one recorded (redacted) `GET /api/v1/devices`
+response, or the field list from the vendor's device-detail page.
+
+**Jamf Pro.** `developer.jamf.com/jamf-pro/reference/get_v1-computers-inventory`
+answers 200 and the field names *are* verified -- `general.name`,
+`operatingSystem.version`, `operatingSystem.fileVault2Status`,
+`diskEncryption.fileVault2Enabled`, `userAndLocation.username`,
+`userAndLocation.email`, `security.firewallEnabled` -- so unlike the other
+two this one is **not blocked on the vendor**. It is not built in this pass
+for time, and `plugins/jamf-mdm` stays a manifest without a connector class.
+The promotion is a known quantity: one module in the shape of
+`microsoft_intune.py` reading `GET /v1/computers-inventory` with
+`section=GENERAL&section=OPERATING_SYSTEM&section=DISK_ENCRYPTION&section=USER_AND_LOCATION&section=SECURITY`.
+
+Recorded rather than built against an invented shape, which is the plan's own
+rule for exactly these vendors.
+
+### D6 - HR and MDM connectors get no ingest profile, deliberately
+
+The wiring rule says every connector needs a `connectorProfiles` entry in
+`services/ingest/internal/normalizer/normalizer.go`, because a connector
+without one hits the lenient fallback at `class_uid: 4001` with an empty
+severity map and its events are archived and never promoted.
+
+These three emit no events at all. `fetch_alerts` returns `[]` on each by
+design: an HR system reports slowly-changing state, not security events, and
+pushing it through ingest would make "is this person leaving" a lake search
+rather than a lookup. A profile would be an entry nothing can reach.
+
+Checked rather than assumed: `go test ./internal/normalizer/` passes, and the
+only cross-check between the connector registry and the profile map is
+`TestConnectorTypeCanonicalTargetsAreDeclaredAndUnshadowed`, which asserts
+that every *alias target* is declared -- not that every connector has a
+profile. The context path is the scheduler's `_sync_workforce_context`, and
+the test asserting the scheduler calls it is the equivalent control.
+
 ## Item log
 
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
+
+### 1.3 HR and device context - Lane B
+
+**Reproduced.** On the current tree:
+
+    ModuleNotFoundError: No module named 'app.connectors.bamboohr'
+
+and the state behind it, measured rather than asserted: 88 connectors in
+`_CONNECTOR_CLASSES`, none HR and none MDM; `import_context` with exactly
+one production caller, the manual POST at
+`services/api/app/api/v1/endpoints/graph.py:725`.
+
+**Shipped.**
+
+| Piece | Where |
+|---|---|
+| HR connectors | `bamboohr`, `rippling` |
+| MDM connector | `microsoft_intune` |
+| Capabilities | `PULL_WORKFORCE`, `PULL_DEVICE_INVENTORY` |
+| Context store | `services/connectors/app/workforce.py`, migration `131` |
+| Scheduler caller | `ConnectorScheduler._sync_workforce_context`, on every poll |
+| CORE read | `services/api/app/services/workforce_context.py`, merged into `/graph/identity-context` |
+| Triage derivations | `derive_employment_facts` and `_render_device_line` in `services/agents/app/context/identity.py` |
+| Citations | `identity.basis` names departed, departing, contractor and device counts |
+| Marketplace | three `plugins/<id>/plugin.yaml`, index regenerated |
+| Docs | three pages generated, all three in the sidebar |
+| Count | regenerated, not edited: 87 -> **90** |
+
+**Negative control.** Removing the `_sync_workforce_context` call from
+`_poll_one` fails `test_the_scheduler_calls_a_workforce_sync_on_every_poll`
+with the reason stated: the connector would be registered, configured,
+polled and silently ignored. Removing each derived fact from
+`render_for_prompt` fails its paired prompt assertion, and removing it from
+`basis` fails its paired citation assertion, which is why both halves are
+asserted for all four facts.
+
+**Numbers, from the generators.**
+
+| Figure | Value | Source |
+|---|---|---|
+| Registered connectors | 87 -> **90** | `generate_connector_count.py --check` |
+| Connector docs | 90 documented, 41 generated / 49 hand-written | `generate_connector_docs.py --check` |
+| Marketplace plugins | 80 -> **83** | `build_marketplace.py` |
+| Claim matrix | 335/330/5 -> **336/331/5** | `check_claim_gate_matrix.py` |
+
+**One trap avoided and worth recording.** `generate_connector_docs._slug`
+writes the hyphenated filename for a connector with no existing page, so
+`microsoft_intune` documents at `/docs/connectors/microsoft-intune`. The
+connector's `docs_url` was written with the underscore first and would have
+404'd; corrected before commit and verified against the generated sidebar
+entry.
+
+**Deviations:** D5 (Workday and Kandji blocked, Jamf deferred with its shape
+recorded), D6 (no ingest profile, with the reason and the check).
 
 ### 1.6 Anonymizer and hosting classes at ingest - Lane B
 
