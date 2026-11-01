@@ -200,6 +200,18 @@ class BoxConnector(BaseConnector):
             "src_ip": raw.get("ip_address"),
             "target": source.get("item_name") or source.get("name"),
             "event_type": f"box.{event_type or 'event'}",
+            # `source`, `additional_details` and `action_by` are dicts, so
+            # the shared-link access level, the item type and the external
+            # collaborator who acted were all two levels down and invisible
+            # to a rule. The severity refinement above already reads
+            # `action_by.login`, which is the tell that the field matters
+            # and that only the connector could see it.
+            "item_type": source.get("item_type"),
+            "item_id": source.get("item_id"),
+            "item_owner": (source.get("owned_by") or {}).get("login"),
+            "parent_folder_id": (source.get("parent") or {}).get("id"),
+            "shared_link_access": ((raw.get("additional_details") or {}).get("shared_link") or {}).get("access"),
+            "action_by": (raw.get("action_by") or {}).get("login"),
             "raw_event": raw,
             "created_at": raw.get("created_at"),
         }

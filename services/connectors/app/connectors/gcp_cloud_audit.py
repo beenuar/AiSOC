@@ -326,6 +326,22 @@ class GCPCloudAuditConnector(BaseConnector):
             "actor": actor,
             "actor_email": actor if "@" in actor else None,
             "event_type": f"gcp.audit.{service.split('.')[0] or 'unknown'}",
+            # `protoPayload` and `resource` arrive as dicts and the engine
+            # flattens `raw_event` one level, so the method name — the one
+            # field every Cloud Audit detection is about — was reachable
+            # only as the free-text `title`. `event_type` carries the
+            # *service*, which is far too coarse to clause on: every IAM
+            # call in the estate shares `gcp.audit.iam`.
+            "method_name": method,
+            "service_name": service,
+            "resource_name": proto.get("resourceName"),
+            "resource_type": resource.get("type"),
+            "project_id": (resource.get("labels") or {}).get("project_id"),
+            "caller_user_agent": request_meta.get("callerSuppliedUserAgent"),
+            "principal_subject": auth_info.get("principalSubject"),
+            "service_account_delegation": bool(auth_info.get("serviceAccountDelegationInfo")),
+            "status_code": status.get("code"),
+            "operation_succeeded": succeeded,
             "raw_event": raw,
             "created_at": raw.get("timestamp"),
         }

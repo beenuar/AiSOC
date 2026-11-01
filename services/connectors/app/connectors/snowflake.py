@@ -279,6 +279,19 @@ class SnowflakeConnector(BaseConnector):
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         kind = raw.get("_kind")
+        # `_kind` is stamped by this connector's own poller. A row that
+        # reaches `normalize()` by any other path (a replay, a customer's
+        # own export, the ingest webhook) carried no `_kind` and fell to the
+        # "unknown account_usage shape" branch, which emits no `event_type`,
+        # no `actor` and no `src_ip` — so the same row detected nothing
+        # depending on how it arrived. The shape is recoverable from the
+        # columns ACCOUNT_USAGE actually returns, so infer it rather than
+        # requiring a marker only one caller sets.
+        if kind is None:
+            if "IS_SUCCESS" in raw or "FIRST_AUTHENTICATION_FACTOR" in raw:
+                kind = "login"
+            elif "QUERY_TYPE" in raw or "QUERY_TEXT" in raw or "QUERY_ID" in raw:
+                kind = "query"
         if kind == "login":
             return self._normalize_login(raw)
         if kind == "query":
@@ -312,6 +325,17 @@ class SnowflakeConnector(BaseConnector):
             "actor": raw.get("USER_NAME"),
             "src_ip": raw.get("CLIENT_IP"),
             "event_type": "snowflake.login",
+            # LOGIN_HISTORY's discriminating columns, lifted under lower-case
+            # names. The raw columns are visible through the one-level
+            # `raw_event` flatten, but only in Snowflake's SHOUTING_CASE — a
+            # cross-source rule reading `src_ip` or `is_success` saw nothing.
+            "is_success": is_success,
+            "error_code": err or None,
+            "error_message": raw.get("ERROR_MESSAGE"),
+            "client_type": raw.get("REPORTED_CLIENT_TYPE"),
+            "first_auth_factor": raw.get("FIRST_AUTHENTICATION_FACTOR"),
+            "second_auth_factor": raw.get("SECOND_AUTHENTICATION_FACTOR"),
+            "mfa_satisfied": (bool(raw.get("SECOND_AUTHENTICATION_FACTOR")) if is_success else None),
             "raw_event": raw,
             "created_at": raw.get("EVENT_TIMESTAMP"),
         }
@@ -336,6 +360,17 @@ class SnowflakeConnector(BaseConnector):
             "severity": severity,
             "actor": raw.get("USER_NAME"),
             "event_type": f"snowflake.query.{qtype.lower()}",
+            # Same lift as the login branch: QUERY_HISTORY's columns are
+            # upper-case, so the volume and role fields a data-movement or
+            # privilege rule reads had no lower-case spelling to match.
+            "query_type": qtype,
+            "role_name": raw.get("ROLE_NAME"),
+            "warehouse_name": raw.get("WAREHOUSE_NAME"),
+            "database_name": raw.get("DATABASE_NAME"),
+            "schema_name": raw.get("SCHEMA_NAME"),
+            "rows_produced": raw.get("ROWS_PRODUCED"),
+            "bytes_scanned": raw.get("BYTES_SCANNED"),
+            "execution_status": raw.get("EXECUTION_STATUS"),
             "raw_event": raw,
             "created_at": raw.get("START_TIME"),
         }
