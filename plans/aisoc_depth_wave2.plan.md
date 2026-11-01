@@ -22,7 +22,7 @@ todos:
     status: completed
   - id: p1-3-hr-device-context
     content: "Phase 1.3: HR connectors (Workday, BambooHR, Rippling) and MDM connectors (Intune, Kandji, Jamf promoted from plugin) feeding employment status, manager, tenure, device owner and compliance into the identity graph and triage"
-    status: pending
+    status: in_progress
   - id: p1-4-sub-principal-baselines
     content: "Phase 1.4: baselines per sub-principal (OAuth app, token, service account, AI agent acting for a human); GitHub tokens joined to scopes and classified by cadence"
     status: completed
@@ -127,7 +127,7 @@ todos:
     status: pending
   - id: p8-4-scale-evidence
     content: "Phase 8.4: first depth plan 4.4 cloud-hardware run and 4.5 managed-cluster run, published or recorded as blocked"
-    status: pending
+    status: completed
   - id: p9-1-voice-that-acts
     content: "Phase 9.1: build on-device voice input behind the existing voice.ts interface, then read-back and voice approval of a pending response with biometric step-up; no audio leaves the device"
     status: pending

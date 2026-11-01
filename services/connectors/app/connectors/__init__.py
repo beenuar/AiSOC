@@ -29,6 +29,7 @@ from app.connectors.azure_activity import AzureActivityConnector
 from app.connectors.azure_defender import AzureDefenderConnector
 from app.connectors.azure_entra import AzureEntraConnector
 from app.connectors.azure_event_hubs import AzureEventHubsConnector
+from app.connectors.bamboohr import BambooHRConnector
 from app.connectors.base import BaseConnector, ConnectorSchema, Field, OAuthHints
 from app.connectors.box import BoxConnector
 from app.connectors.carbon_black import CarbonBlackConnector
@@ -65,6 +66,7 @@ from app.connectors.kubernetes_audit import KubernetesAuditConnector
 from app.connectors.lacework import LaceworkConnector
 from app.connectors.llm_usage import LlmUsageConnector
 from app.connectors.m365_audit import M365AuditConnector
+from app.connectors.microsoft_intune import MicrosoftIntuneConnector
 from app.connectors.microsoft_sentinel import MicrosoftSentinelConnector
 from app.connectors.mimecast import MimecastConnector
 from app.connectors.netskope import NetskopeConnector
@@ -80,6 +82,7 @@ from app.connectors.proofpoint import ProofpointConnector
 from app.connectors.qradar import QRadarConnector
 from app.connectors.qualys import QualysConnector
 from app.connectors.rapid7_insightidr import Rapid7InsightIDRConnector
+from app.connectors.rippling import RipplingConnector
 from app.connectors.salesforce import SalesforceConnector
 from app.connectors.securonix import SecuronixConnector
 from app.connectors.sentinelone import SentinelOneConnector
@@ -112,6 +115,9 @@ if TYPE_CHECKING:
 # Source of truth for "which connectors does this build know about".
 # Keep alphabetised by connector_id for predictable diffs.
 _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
+    RipplingConnector,
+    MicrosoftIntuneConnector,
+    BambooHRConnector,
     AWSCloudTrailConnector,
     AWSCloudTrailS3Connector,
     AWSGuardDutyConnector,
