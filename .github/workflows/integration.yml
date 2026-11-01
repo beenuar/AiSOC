@@ -847,6 +847,7 @@ jobs:
           # only. One superuser DSN for both would bypass every policy on the
           # way through and could not have found the WITH CHECK defect.
           ISOLATION_OCCURRENCES_DSN: postgresql://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
+          # aisoc-db-role: owner — fixtures only. The suite creates scratch tenants, which the DML-only runtime role cannot. The code under test reads ISOLATION_OCCURRENCES_DSN above, which is the runtime role with NOBYPASSRLS, so every assertion — including the one that found migration 151's WITH CHECK defect — is still judged under forced RLS.
           ISOLATION_OCCURRENCES_ADMIN_DSN: postgresql://aisoc:aisoc_ci_secret@localhost:5432/aisoc
         run: |
           set -euo pipefail
