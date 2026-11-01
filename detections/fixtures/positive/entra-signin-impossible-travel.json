@@ -1,0 +1,6 @@
+{
+  "event_type": "azure.entra.signin.risky",
+  "riskEventTypes_v2": [
+    "unlikelyTravel"
+  ]
+}

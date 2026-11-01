@@ -1,0 +1,24 @@
+id: det-identity-213
+name: Entra Security Information Deleted By The User
+description: Deleting the owner's factor leaves only the attacker's.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556.006
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "User deleted security info"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

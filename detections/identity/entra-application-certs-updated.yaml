@@ -1,0 +1,24 @@
+id: det-identity-202
+name: Entra Application Certificates And Secrets Updated
+description: The activity Graph logs when a credential is added to an app registration.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Update application – Certificates and secrets management"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

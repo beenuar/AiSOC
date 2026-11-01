@@ -1,0 +1,24 @@
+id: det-identity-266
+name: Entra Sign-In With An Anomalous Token Issuer
+description: A SAML token whose issuer does not look like the tenant's own identity provider is the golden-SAML
+  shape.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1606.002
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-signin
+detection:
+  condition: |
+    event_type == "azure.entra.signin.risky"
+    AND riskEventTypes_v2 HAS_ANY ["tokenIssuerAnomaly"]
+false_positives:
+- Staff member travelling, on a corporate VPN, or using a client the tenant still permits
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

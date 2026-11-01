@@ -1,0 +1,24 @@
+id: det-cloud-228
+name: GCP Compute Instance Metadata Set
+description: Instance metadata carries the startup script and the SSH keys, so a metadata write is remote
+  code execution and access in one call.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1059
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: compute
+detection:
+  condition: |
+    method_name == "v1.compute.instances.setMetadata"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

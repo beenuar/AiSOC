@@ -1,0 +1,23 @@
+id: det-data-exfil-067
+name: Dropbox Member Added To A Group
+description: Group membership is how Dropbox access is granted.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: data-exfil
+log_source:
+  product: dropbox
+  service: events
+detection:
+  condition: |
+    event_type == "dropbox.group_add_member"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,25 @@
+id: det-identity-238
+name: Entra Authorization Policy Updated
+description: The authorization policy decides whether ordinary users may register applications and invite
+  guests.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Update authorization policy"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

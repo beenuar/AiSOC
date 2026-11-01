@@ -1,0 +1,22 @@
+id: det-identity-283
+name: 1Password Time-Based Code Timed Out
+description: A timeout is usually clock drift and occasionally a relayed code arriving too late.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1621
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    signin_type == "totp_timeout"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,23 @@
+id: det-cloud-262
+name: GCP Cloud Run IAM Policy Set
+description: Granting invoker to allUsers exposes the service publicly.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: run
+detection:
+  condition: |
+    method_name == "google.cloud.run.v1.Services.SetIamPolicy"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

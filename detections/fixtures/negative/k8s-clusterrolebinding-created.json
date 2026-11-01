@@ -1,0 +1,4 @@
+{
+  "k8s_resource": "clusterrolebindings",
+  "k8s_verb": "not-create"
+}

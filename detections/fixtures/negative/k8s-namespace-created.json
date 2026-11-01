@@ -1,0 +1,4 @@
+{
+  "k8s_resource": "namespaces",
+  "k8s_verb": "delete"
+}

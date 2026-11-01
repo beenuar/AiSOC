@@ -1,0 +1,25 @@
+id: det-identity-239
+name: Entra Cross-Tenant Access Setting Updated
+description: Inbound trust settings decide which other tenants' identities and multi-factor claims are
+  accepted here.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Update cross-tenant access setting"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

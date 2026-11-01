@@ -1,0 +1,23 @@
+id: det-application-119
+name: GitHub OAuth Application Restrictions Disabled
+description: With restrictions off, any member can authorise any application against organisation data.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1528
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.org.disable_oauth_app_restrictions"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

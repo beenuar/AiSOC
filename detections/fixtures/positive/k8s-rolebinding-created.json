@@ -1,0 +1,4 @@
+{
+  "k8s_resource": "rolebindings",
+  "k8s_verb": "create"
+}

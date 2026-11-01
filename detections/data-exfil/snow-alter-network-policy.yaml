@@ -1,0 +1,23 @@
+id: det-data-exfil-078
+name: Snowflake Network Policy Altered
+description: Widening the allowed range admits whatever it now covers.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562
+- tlp.white
+category: data-exfil
+log_source:
+  product: snowflake
+  service: query-history
+detection:
+  condition: |
+    query_type == "ALTER_NETWORK_POLICY"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

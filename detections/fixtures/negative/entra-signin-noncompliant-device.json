@@ -1,0 +1,4 @@
+{
+  "device_compliant": true,
+  "event_type": "azure.entra.signin.risky"
+}

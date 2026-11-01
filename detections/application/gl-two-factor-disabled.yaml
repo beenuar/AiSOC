@@ -1,0 +1,23 @@
+id: det-application-151
+name: GitLab Two-Factor Enforcement Disabled
+description: Group-level enforcement is what makes the second factor mandatory.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556.006
+- tlp.white
+category: application
+log_source:
+  product: gitlab
+  service: audit
+detection:
+  condition: |
+    action_key == "changed_require_two_factor_authentication"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

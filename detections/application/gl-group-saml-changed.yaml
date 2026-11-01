@@ -1,0 +1,23 @@
+id: det-application-155
+name: GitLab Group SAML Configuration Changed
+description: SAML settings decide which identity provider's assertions the group trusts.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: application
+log_source:
+  product: gitlab
+  service: audit
+detection:
+  condition: |
+    action_key == "changed_group_saml"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

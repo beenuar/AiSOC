@@ -143,17 +143,22 @@ SCENARIO_GROUPS: dict[str, frozenset[str]] = {
     "code": frozenset({"github", "gitlab"}),
 }
 
-#: Depth plan 3.6's target. The gate below does *not* enforce it — the tree
-#: is short of it and a gate asserting a number the tree does not have would
-#: simply be red. It enforces a ratchet at the measured figure so the count
-#: cannot fall silently, and prints the shortfall every run so the gap is
-#: published rather than quietly dropped. Raise `SCENARIO_FLOOR` in the PR
-#: that raises the count; never lower it to make a build green.
+#: Depth plan 3.6's target, and now an assertion rather than a report. The
+#: gate failed only the ratchet while the tree was short of 800, because a
+#: gate asserting a number the tree does not have is simply red; the figure
+#: reached 899 on 2026-11-01 and the target is enforced from here. The
+#: shortfall line still prints either way — that property is what made the
+#: PARTIAL honest, and removing it once the target is met would leave the
+#: next reader unable to see how much headroom there is.
 SCENARIO_TARGET = 800
 
-#: Measured on 2026-11-01 after the depth 2 wave 2 item 2.1 scenario
-#: families landed (443 before them).
-SCENARIO_FLOOR = 569
+#: Measured on 2026-11-01 after the second authoring pass closed depth plan
+#: 3.6's target. 443 before the scenario families, 569 after the first pass,
+#: 899 after the second. The floor is the measurement, and the assertion
+#: below is the target: both are checked, because a ratchet alone would let
+#: the figure sit one rule above 800 forever and a target alone would not
+#: notice 50 rules being lost.
+SCENARIO_FLOOR = 899
 
 #: Windowed rules that declare a category and no product, so nothing can put
 #: them in one of the four groups. The windowed ruleset has no `product`
@@ -456,6 +461,12 @@ def check(stats: dict) -> int:
                 failures.append(f"README claims {claimed} for {'.'.join(path)}; the tree has {expected} (pattern: {pattern})")
     scenario = stats["scenario_conditions"]
     measured = int(scenario["total"])
+    if measured < SCENARIO_TARGET:
+        failures.append(
+            f"cloud/identity/SaaS/code conditions are {measured}, below depth plan 3.6's target of "
+            f"{SCENARIO_TARGET}. The target was reached on 2026-11-01 and is asserted from there; "
+            "it is not a figure to lower."
+        )
     if measured < SCENARIO_FLOOR:
         failures.append(
             f"cloud/identity/SaaS/code conditions fell to {measured} against a floor of {SCENARIO_FLOOR}. "

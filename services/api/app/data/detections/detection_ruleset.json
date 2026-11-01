@@ -1,5 +1,5 @@
 {
-  "count": 850,
+  "count": 1180,
   "rules": [
     {
       "category": "application",
@@ -1767,6 +1767,1382 @@
       "service": "access-log",
       "severity": "high",
       "slug": "api-identifier-enumeration"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-114",
+      "match_when": {
+        "event_type": "github.org.add_member"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "GitHub Organisation Member Added",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-org-member-added"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-115",
+      "match_when": {
+        "event_type": "github.org.remove_member"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "GitHub Organisation Member Removed",
+      "product": "github",
+      "service": "audit",
+      "severity": "low",
+      "slug": "gh-org-member-removed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-116",
+      "match_when": {
+        "event_type": "github.org.invite_member"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "GitHub Organisation Invitation Sent",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-org-member-invited"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-117",
+      "match_when": {
+        "event_type": "github.org.update_member"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "GitHub Organisation Member Promoted To Owner",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-org-owner-promoted"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-118",
+      "match_when": {
+        "event_type": "github.org.disable_two_factor_requirement"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "GitHub Organisation Two-Factor Requirement Disabled",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-org-2fa-disabled"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-119",
+      "match_when": {
+        "event_type": "github.org.disable_oauth_app_restrictions"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "GitHub OAuth Application Restrictions Disabled",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-org-oauth-app-restrictions-disabled"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-120",
+      "match_when": {
+        "event_type": "github.org.disable_saml"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "GitHub Organisation SAML Disabled",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-org-saml-disabled"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-121",
+      "match_when": {
+        "event_type": "github.org.update_default_repository_permission"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GitHub Organisation Default Repository Permission Changed",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-org-default-permission-changed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-122",
+      "match_when": {
+        "event_type": "github.org.register_self_hosted_runner"
+      },
+      "mitre": [
+        "T1053"
+      ],
+      "name": "GitHub Self-Hosted Runner Registered",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-org-runner-registered"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-123",
+      "match_when": {
+        "event_type": "github.org.remove_self_hosted_runner"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "GitHub Self-Hosted Runner Removed",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-org-runner-removed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-124",
+      "match_when": {
+        "event_type": "github.repo.create"
+      },
+      "mitre": [
+        "T1074"
+      ],
+      "name": "GitHub Repository Created",
+      "product": "github",
+      "service": "audit",
+      "severity": "low",
+      "slug": "gh-repo-created"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-125",
+      "match_when": {
+        "event_type": "github.repo.destroy"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GitHub Repository Deleted",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-repo-destroyed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-126",
+      "match_when": {
+        "event_type": "github.repo.access"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GitHub Repository Visibility Changed",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-repo-visibility-changed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-127",
+      "match_when": {
+        "event_type": "github.repo.transfer"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GitHub Repository Transferred",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-repo-transferred"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-128",
+      "match_when": {
+        "event_type": "github.repo.archived"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GitHub Repository Archived",
+      "product": "github",
+      "service": "audit",
+      "severity": "low",
+      "slug": "gh-repo-archived"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-129",
+      "match_when": {
+        "event_type": "github.public_key.create"
+      },
+      "mitre": [
+        "T1098.004"
+      ],
+      "name": "GitHub Deploy Key Added",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-deploy-key-added"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-130",
+      "match_when": {
+        "event_type": "github.protected_branch.policy_override"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GitHub Branch Protection Overridden",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-branch-protection-overridden"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-131",
+      "match_when": {
+        "event_type": "github.protected_branch.destroy"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GitHub Branch Protection Removed",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-branch-protection-destroyed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-132",
+      "match_when": {
+        "event_type": "github.protected_branch.dismiss_stale_reviews"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GitHub Required Reviews Disabled On A Protected Branch",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-branch-protection-review-disabled"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-133",
+      "match_when": {
+        "event_type": "github.org.create_actions_secret"
+      },
+      "mitre": [
+        "T1552"
+      ],
+      "name": "GitHub Actions Secret Created",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-secret-created"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-134",
+      "match_when": {
+        "event_type": "github.org.remove_actions_secret"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "GitHub Actions Secret Removed",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-secret-removed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-135",
+      "match_when": {
+        "event_type": "github.personal_access_token.access_granted"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "GitHub Fine-Grained Token Granted Organisation Access",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-personal-access-token-granted"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-136",
+      "match_when": {
+        "event_type": "github.personal_access_token.request_created"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "GitHub Fine-Grained Token Access Requested",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-personal-access-token-requested"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-137",
+      "match_when": {
+        "event_type": "github.oauth_application.create"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "GitHub OAuth Application Authorised Against The Organisation",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-oauth-app-authorized"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-138",
+      "match_when": {
+        "event_type": "github.hook.create"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GitHub Webhook Created",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-hook-created"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-139",
+      "match_when": {
+        "event_type": "github.hook.config_changed"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GitHub Webhook Configuration Changed",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-hook-config-changed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-140",
+      "match_when": {
+        "event_type": "github.environment.create"
+      },
+      "mitre": [
+        "T1053"
+      ],
+      "name": "GitHub Deployment Environment Created",
+      "product": "github",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gh-environment-created"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-141",
+      "match_when": {
+        "event_type": "github.org.disable_ip_allow_list"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GitHub Organisation IP Allow List Disabled",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-ip-allow-list-disabled"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-142",
+      "match_when": {
+        "event_type": "github.ip_allow_list_entry.create"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GitHub IP Allow List Entry Created",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gh-ip-allow-entry-created"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-143",
+      "match_when": {
+        "event_type": "github.org.audit_log_export"
+      },
+      "mitre": [
+        "T1562.008"
+      ],
+      "name": "GitHub Audit Log Streaming Disabled",
+      "product": "github",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gh-audit-log-streaming-disabled"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-144",
+      "match_when": {
+        "action_key": "added_deploy_key"
+      },
+      "mitre": [
+        "T1098.004"
+      ],
+      "name": "GitLab Deploy Key Added",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gl-deploy-key-added"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-145",
+      "match_when": {
+        "action_key": "removed_deploy_key"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "GitLab Deploy Key Removed",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gl-deploy-key-removed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-146",
+      "match_when": {
+        "action_key": "added_user_access"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "GitLab Member Added To A Project Or Group",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gl-member-added"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-147",
+      "match_when": {
+        "action_key": "changed_access_level"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GitLab Member Access Level Changed",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gl-member-access-changed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-148",
+      "match_when": {
+        "action_key": "removed_user_access"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "GitLab Member Removed",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "low",
+      "slug": "gl-member-removed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-149",
+      "match_when": {
+        "action_key": "changed_visibility"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GitLab Project Visibility Changed",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gl-project-visibility-changed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-150",
+      "match_when": {
+        "action_key": "removed_protected_branch"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GitLab Protected Branch Removed",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gl-protected-branch-removed"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-151",
+      "match_when": {
+        "action_key": "changed_require_two_factor_authentication"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "GitLab Two-Factor Enforcement Disabled",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gl-two-factor-disabled"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-152",
+      "match_when": {
+        "action_key": "added_personal_access_token"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "GitLab Personal Access Token Created",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "high",
+      "slug": "gl-personal-access-token-created"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-153",
+      "match_when": {
+        "action_key": "added_ci_variable"
+      },
+      "mitre": [
+        "T1552"
+      ],
+      "name": "GitLab CI Variable Added",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gl-ci-variable-added"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-154",
+      "match_when": {
+        "action_key": "created_service_account"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "GitLab Service Account Created",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "gl-service-account-created"
+    },
+    {
+      "category": "application",
+      "family": "code-platform-compromise",
+      "id": "det-application-155",
+      "match_when": {
+        "action_key": "changed_group_saml"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "GitLab Group SAML Configuration Changed",
+      "product": "gitlab",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "gl-group-saml-changed"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-156",
+      "match_when": {
+        "operation": "New-InboxRule"
+      },
+      "mitre": [
+        "T1114.003"
+      ],
+      "name": "M365 Inbox Rule Created",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "high",
+      "slug": "m365-inbox-rule-created"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-157",
+      "match_when": {
+        "operation": "Set-InboxRule"
+      },
+      "mitre": [
+        "T1114.003"
+      ],
+      "name": "M365 Inbox Rule Modified",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "high",
+      "slug": "m365-inbox-rule-modified"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-158",
+      "match_when": {
+        "operation": "UpdateInboxRules"
+      },
+      "mitre": [
+        "T1114.003"
+      ],
+      "name": "M365 Inbox Rules Updated From A Client",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "medium",
+      "slug": "m365-inbox-rules-updated"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-159",
+      "match_when": {
+        "operation": "New-TransportRule"
+      },
+      "mitre": [
+        "T1114.002"
+      ],
+      "name": "M365 Transport Rule Created",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "critical",
+      "slug": "m365-transport-rule-created"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-160",
+      "match_when": {
+        "operation": "Set-TransportRule"
+      },
+      "mitre": [
+        "T1114.002"
+      ],
+      "name": "M365 Transport Rule Modified",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "critical",
+      "slug": "m365-transport-rule-modified"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-161",
+      "match_when": {
+        "operation": "Add-MailboxPermission"
+      },
+      "mitre": [
+        "T1098.002"
+      ],
+      "name": "M365 Mailbox Permission Granted",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "high",
+      "slug": "m365-mailbox-permission-added"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-162",
+      "match_when": {
+        "operation": "Add-RecipientPermission"
+      },
+      "mitre": [
+        "T1098.002"
+      ],
+      "name": "M365 Send-As Permission Granted",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "high",
+      "slug": "m365-recipient-permission-added"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-163",
+      "match_when": {
+        "operation": "Set-Mailbox"
+      },
+      "mitre": [
+        "T1114.003"
+      ],
+      "name": "M365 Mailbox Configuration Changed",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "high",
+      "slug": "m365-mailbox-forwarding-set"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-164",
+      "match_when": {
+        "operation": "New-ManagementRoleAssignment"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "M365 Exchange Management Role Assigned",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "critical",
+      "slug": "m365-management-role-assigned"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-165",
+      "match_when": {
+        "operation": "Set-AdminAuditLogConfig"
+      },
+      "mitre": [
+        "T1562.008"
+      ],
+      "name": "M365 Admin Audit Log Configuration Changed",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "critical",
+      "slug": "m365-audit-config-changed"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-166",
+      "match_when": {
+        "operation": "MailItemsAccessed"
+      },
+      "mitre": [
+        "T1114.002"
+      ],
+      "name": "M365 Mail Items Accessed",
+      "product": "m365",
+      "service": "exchange",
+      "severity": "medium",
+      "slug": "m365-mail-items-accessed"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-167",
+      "match_when": {
+        "operation": "AnonymousLinkCreated"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "M365 Anonymous Sharing Link Created",
+      "product": "m365",
+      "service": "sharepoint",
+      "severity": "high",
+      "slug": "m365-anonymous-link-created"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-168",
+      "match_when": {
+        "operation": "SharingInvitationCreated"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "M365 External Sharing Invitation Created",
+      "product": "m365",
+      "service": "sharepoint",
+      "severity": "medium",
+      "slug": "m365-sharing-invitation-created"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-169",
+      "match_when": {
+        "operation": "CompanyLinkCreated"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "M365 Organisation-Wide Sharing Link Created",
+      "product": "m365",
+      "service": "sharepoint",
+      "severity": "medium",
+      "slug": "m365-company-link-created"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-170",
+      "match_when": {
+        "operation": "SiteCollectionAdminAdded"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "M365 SharePoint Site Collection Administrator Added",
+      "product": "m365",
+      "service": "sharepoint",
+      "severity": "high",
+      "slug": "m365-site-admin-added"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-171",
+      "match_when": {
+        "operation": "FileSyncDownloadedFull"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "M365 Full File Sync Downloaded",
+      "product": "m365",
+      "service": "onedrive",
+      "severity": "medium",
+      "slug": "m365-file-sync-downloaded"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-172",
+      "match_when": {
+        "summary_key": "granted_site_admin"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Atlassian Site Administrator Granted",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "atl-site-admin-granted"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-173",
+      "match_when": {
+        "summary_key": "removed_user_from_site"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Atlassian User Removed From The Site",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "atl-user-removed-from-site"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-174",
+      "match_when": {
+        "summary_key": "removed_group_from_site"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Atlassian Group Removed From The Site",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "high",
+      "slug": "atl-group-removed-from-site"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-175",
+      "match_when": {
+        "summary_key": "permissions_granted_to_anyone"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Atlassian Permissions Granted To Anyone",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "atl-permissions-granted-to-anyone"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-176",
+      "match_when": {
+        "summary_key": "anonymous_access_enabled"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Atlassian Anonymous Access Enabled",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "atl-anonymous-access-enabled"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-177",
+      "match_when": {
+        "summary_key": "site_export_started"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "Atlassian Site Export Started",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "atl-site-export-started"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-178",
+      "match_when": {
+        "summary_key": "external_share_link_created"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Atlassian External Share Link Created",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "high",
+      "slug": "atl-external-share-link-created"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-179",
+      "match_when": {
+        "summary_key": "public_link_enabled"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Atlassian Public Link Enabled",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "high",
+      "slug": "atl-public-link-enabled"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-180",
+      "match_when": {
+        "summary_key": "bulk_delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Atlassian Bulk Delete Performed",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "high",
+      "slug": "atl-bulk-delete"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-181",
+      "match_when": {
+        "summary_key": "site-wide_deletion"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Atlassian Site-Wide Deletion",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "atl-site-wide-deletion"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-182",
+      "match_when": {
+        "summary_key": "space_permissions_updated"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Atlassian Space Permissions Updated",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "atl-space-permissions-updated"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-183",
+      "match_when": {
+        "summary_key": "page_permissions_updated"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Atlassian Page Permissions Updated",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "low",
+      "slug": "atl-page-permissions-updated"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-184",
+      "match_when": {
+        "summary_key": "restrictions_updated"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Atlassian Content Restrictions Updated",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "atl-restrictions-updated"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-185",
+      "match_when": {
+        "summary_key": "global_permissions_updated"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Atlassian Global Permissions Updated",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "high",
+      "slug": "atl-global-permissions-updated"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-186",
+      "match_when": {
+        "summary_key": "user_added_to_group"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Atlassian User Added To A Group",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "atl-user-added-to-group"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-187",
+      "match_when": {
+        "summary_key": "user_removed_from_group"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Atlassian User Removed From A Group",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "low",
+      "slug": "atl-user-removed-from-group"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-188",
+      "match_when": {
+        "summary_key": "group_created"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Atlassian Group Created",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "low",
+      "slug": "atl-group-created"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-189",
+      "match_when": {
+        "summary_key": "group_deleted"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Atlassian Group Deleted",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "atl-group-deleted"
+    },
+    {
+      "category": "application",
+      "family": "saas-admin-control-weakening",
+      "id": "det-application-190",
+      "match_when": {
+        "summary_key": "space_deleted"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Atlassian Space Deleted",
+      "product": "atlassian",
+      "service": "audit",
+      "severity": "high",
+      "slug": "atl-space-deleted"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-191",
+      "match_when": {
+        "event_type": "salesforce.deactivateUser"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Salesforce User Deactivated",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-user-deactivated"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-192",
+      "match_when": {
+        "event_type": "salesforce.frozeUser"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Salesforce User Frozen",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-user-frozen"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-193",
+      "match_when": {
+        "event_type": "salesforce.newUser"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "Salesforce User Created",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-user-created"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-194",
+      "match_when": {
+        "event_type": "salesforce.changedPassword"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Salesforce Password Changed",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "low",
+      "slug": "sfdc-password-changed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-195",
+      "match_when": {
+        "event_type": "salesforce.PermSetGroupCreate"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Salesforce Permission Set Group Created",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-permission-set-group-created"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-196",
+      "match_when": {
+        "event_type": "salesforce.createdPolicy"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "Salesforce Transaction Security Policy Created",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "medium",
+      "slug": "sfdc-policy-created"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-197",
+      "match_when": {
+        "event_type": "salesforce.updatedPolicy"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "Salesforce Transaction Security Policy Updated",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-policy-updated"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-198",
+      "match_when": {
+        "event_type": "salesforce.changedInterfaceUrl"
+      },
+      "mitre": [
+        "T1565"
+      ],
+      "name": "Salesforce Interface URL Changed",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-interface-url-changed"
+    },
+    {
+      "category": "application",
+      "family": "third-party-access",
+      "id": "det-application-199",
+      "match_when": {
+        "event_type": "salesforce.loginAsGrantedToPartnerBT"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Salesforce Login-As Granted To A Partner",
+      "product": "salesforce",
+      "service": "setup-audit",
+      "severity": "high",
+      "slug": "sfdc-login-as-partner"
     },
     {
       "category": "cloud",
@@ -4729,6 +6105,1765 @@
       "slug": "gcp-apps-script-user-agent-outside-service"
     },
     {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-195",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.CreateServiceAccount"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "GCP Service Account Created",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "medium",
+      "slug": "gcp-sa-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-196",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.DeleteServiceAccount"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "GCP Service Account Deleted",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "medium",
+      "slug": "gcp-sa-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-197",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.DisableServiceAccount"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "GCP Service Account Disabled",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "medium",
+      "slug": "gcp-sa-disabled"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-198",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.EnableServiceAccount"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GCP Service Account Re-Enabled",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "medium",
+      "slug": "gcp-sa-enabled"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-199",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.CreateServiceAccountKey"
+      },
+      "mitre": [
+        "T1098.001",
+        "T1528"
+      ],
+      "name": "GCP Service Account Key Created",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "high",
+      "slug": "gcp-sa-key-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-200",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.DeleteServiceAccountKey"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "GCP Service Account Key Deleted",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "low",
+      "slug": "gcp-sa-key-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-201",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.UpdateServiceAccount"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GCP Service Account Updated",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "low",
+      "slug": "gcp-sa-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-202",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.CreateRole"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GCP Custom IAM Role Created",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "medium",
+      "slug": "gcp-custom-role-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-203",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.UpdateRole"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GCP Custom IAM Role Updated",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "high",
+      "slug": "gcp-custom-role-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-204",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.DeleteRole"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "GCP Custom IAM Role Deleted",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "medium",
+      "slug": "gcp-custom-role-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-205",
+      "match_when": {
+        "method_name": "google.iam.admin.v1.UndeleteRole"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GCP Custom IAM Role Restored",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "medium",
+      "slug": "gcp-custom-role-undeleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-206",
+      "match_when": {
+        "method_name": "SetIamPolicy"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Project IAM Policy Replaced",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "high",
+      "slug": "gcp-project-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-207",
+      "match_when": {
+        "method_name": "CreateProject"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP Project Created",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "medium",
+      "slug": "gcp-project-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-208",
+      "match_when": {
+        "method_name": "DeleteProject"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP Project Deleted",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "high",
+      "slug": "gcp-project-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-209",
+      "match_when": {
+        "method_name": "UndeleteProject"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP Project Restored",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "medium",
+      "slug": "gcp-project-undeleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-210",
+      "match_when": {
+        "method_name": "MoveProject"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP Project Moved Between Folders",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "high",
+      "slug": "gcp-project-moved"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-211",
+      "match_when": {
+        "method_name": "UpdateProject"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP Project Metadata Updated",
+      "product": "gcp",
+      "service": "cloudresourcemanager",
+      "severity": "low",
+      "slug": "gcp-project-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-212",
+      "match_when": {
+        "method_name": "google.logging.v2.ConfigServiceV2.DeleteSink"
+      },
+      "mitre": [
+        "T1562.008"
+      ],
+      "name": "GCP Log Sink Deleted",
+      "product": "gcp",
+      "service": "logging",
+      "severity": "critical",
+      "slug": "gcp-log-sink-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-213",
+      "match_when": {
+        "method_name": "google.logging.v2.ConfigServiceV2.UpdateSink"
+      },
+      "mitre": [
+        "T1562.008"
+      ],
+      "name": "GCP Log Sink Updated",
+      "product": "gcp",
+      "service": "logging",
+      "severity": "high",
+      "slug": "gcp-log-sink-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-214",
+      "match_when": {
+        "method_name": "google.logging.v2.ConfigServiceV2.CreateSink"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GCP Log Sink Created",
+      "product": "gcp",
+      "service": "logging",
+      "severity": "medium",
+      "slug": "gcp-log-sink-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-215",
+      "match_when": {
+        "method_name": "google.logging.v2.LoggingServiceV2.DeleteLog"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "GCP Log Deleted",
+      "product": "gcp",
+      "service": "logging",
+      "severity": "critical",
+      "slug": "gcp-log-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-216",
+      "match_when": {
+        "method_name": "google.logging.v2.ConfigServiceV2.CreateExclusion"
+      },
+      "mitre": [
+        "T1562.008"
+      ],
+      "name": "GCP Log Exclusion Created",
+      "product": "gcp",
+      "service": "logging",
+      "severity": "high",
+      "slug": "gcp-log-exclusion-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-217",
+      "match_when": {
+        "method_name": "google.cloud.kms.v1.KeyManagementService.DestroyCryptoKeyVersion"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP KMS Key Version Destroyed",
+      "product": "gcp",
+      "service": "cloudkms",
+      "severity": "critical",
+      "slug": "gcp-kms-key-version-destroyed"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-218",
+      "match_when": {
+        "method_name": "google.cloud.kms.v1.KeyManagementService.CreateCryptoKey"
+      },
+      "mitre": [
+        "T1486"
+      ],
+      "name": "GCP KMS Crypto Key Created",
+      "product": "gcp",
+      "service": "cloudkms",
+      "severity": "low",
+      "slug": "gcp-kms-key-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-219",
+      "match_when": {
+        "method_name": "google.cloud.kms.v1.KeyManagementService.UpdateCryptoKeyPrimaryVersion"
+      },
+      "mitre": [
+        "T1486"
+      ],
+      "name": "GCP KMS Primary Key Version Changed",
+      "product": "gcp",
+      "service": "cloudkms",
+      "severity": "high",
+      "slug": "gcp-kms-primary-version-changed"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-220",
+      "match_when": {
+        "method_name": "google.cloud.kms.v1.KeyManagementService.SetIamPolicy"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP KMS Key IAM Policy Set",
+      "product": "gcp",
+      "service": "cloudkms",
+      "severity": "critical",
+      "slug": "gcp-kms-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-221",
+      "match_when": {
+        "method_name": "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion"
+      },
+      "mitre": [
+        "T1552.001"
+      ],
+      "name": "GCP Secret Version Accessed",
+      "product": "gcp",
+      "service": "secretmanager",
+      "severity": "medium",
+      "slug": "gcp-secret-accessed"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-222",
+      "match_when": {
+        "method_name": "google.cloud.secretmanager.v1.SecretManagerService.CreateSecret"
+      },
+      "mitre": [
+        "T1552.001"
+      ],
+      "name": "GCP Secret Created",
+      "product": "gcp",
+      "service": "secretmanager",
+      "severity": "low",
+      "slug": "gcp-secret-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-223",
+      "match_when": {
+        "method_name": "google.cloud.secretmanager.v1.SecretManagerService.AddSecretVersion"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GCP Secret Version Added",
+      "product": "gcp",
+      "service": "secretmanager",
+      "severity": "medium",
+      "slug": "gcp-secret-version-added"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-224",
+      "match_when": {
+        "method_name": "google.cloud.secretmanager.v1.SecretManagerService.DeleteSecret"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP Secret Deleted",
+      "product": "gcp",
+      "service": "secretmanager",
+      "severity": "high",
+      "slug": "gcp-secret-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-225",
+      "match_when": {
+        "method_name": "google.cloud.secretmanager.v1.SecretManagerService.SetIamPolicy"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Secret IAM Policy Set",
+      "product": "gcp",
+      "service": "secretmanager",
+      "severity": "high",
+      "slug": "gcp-secret-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-226",
+      "match_when": {
+        "method_name": "v1.compute.instances.insert"
+      },
+      "mitre": [
+        "T1578.002"
+      ],
+      "name": "GCP Compute Instance Created",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "low",
+      "slug": "gcp-instance-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-227",
+      "match_when": {
+        "method_name": "v1.compute.instances.delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP Compute Instance Deleted",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "medium",
+      "slug": "gcp-instance-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-228",
+      "match_when": {
+        "method_name": "v1.compute.instances.setMetadata"
+      },
+      "mitre": [
+        "T1059"
+      ],
+      "name": "GCP Compute Instance Metadata Set",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-instance-metadata-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-229",
+      "match_when": {
+        "method_name": "v1.compute.projects.setCommonInstanceMetadata"
+      },
+      "mitre": [
+        "T1098.004"
+      ],
+      "name": "GCP Project-Wide Instance Metadata Set",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "critical",
+      "slug": "gcp-project-metadata-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-230",
+      "match_when": {
+        "method_name": "v1.compute.instances.addAccessConfig"
+      },
+      "mitre": [
+        "T1133"
+      ],
+      "name": "GCP Compute Instance Given A Public Address",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-instance-access-config-added"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-231",
+      "match_when": {
+        "method_name": "v1.compute.instances.setIamPolicy"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Compute Instance IAM Policy Set",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-instance-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-232",
+      "match_when": {
+        "method_name": "v1.compute.instances.getSerialPortOutput"
+      },
+      "mitre": [
+        "T1552"
+      ],
+      "name": "GCP Compute Serial Port Output Read",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "medium",
+      "slug": "gcp-instance-serial-port-read"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-233",
+      "match_when": {
+        "method_name": "v1.compute.instances.setServiceAccount"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "GCP Compute Instance Service Account Changed",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-instance-service-account-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-234",
+      "match_when": {
+        "method_name": "v1.compute.firewalls.insert"
+      },
+      "mitre": [
+        "T1562.004"
+      ],
+      "name": "GCP Firewall Rule Created",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-firewall-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-235",
+      "match_when": {
+        "method_name": "v1.compute.firewalls.patch"
+      },
+      "mitre": [
+        "T1562.004"
+      ],
+      "name": "GCP Firewall Rule Modified",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-firewall-patched"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-236",
+      "match_when": {
+        "method_name": "v1.compute.firewalls.delete"
+      },
+      "mitre": [
+        "T1562.004"
+      ],
+      "name": "GCP Firewall Rule Deleted",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-firewall-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-237",
+      "match_when": {
+        "method_name": "v1.compute.networks.insert"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP VPC Network Created",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "medium",
+      "slug": "gcp-network-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-238",
+      "match_when": {
+        "method_name": "v1.compute.subnetworks.patch"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP Subnetwork Modified",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "medium",
+      "slug": "gcp-subnetwork-patched"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-239",
+      "match_when": {
+        "method_name": "v1.compute.routes.insert"
+      },
+      "mitre": [
+        "T1565"
+      ],
+      "name": "GCP Network Route Created",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-route-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-240",
+      "match_when": {
+        "method_name": "v1.compute.disks.createSnapshot"
+      },
+      "mitre": [
+        "T1005",
+        "T1537"
+      ],
+      "name": "GCP Disk Snapshot Created",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-disk-snapshot-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-241",
+      "match_when": {
+        "method_name": "v1.compute.images.insert"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GCP Compute Image Created",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "medium",
+      "slug": "gcp-image-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-242",
+      "match_when": {
+        "method_name": "v1.compute.vpnTunnels.insert"
+      },
+      "mitre": [
+        "T1133"
+      ],
+      "name": "GCP VPN Tunnel Created",
+      "product": "gcp",
+      "service": "compute",
+      "severity": "high",
+      "slug": "gcp-vpn-tunnel-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-243",
+      "match_when": {
+        "method_name": "storage.setIamPermissions"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Storage Bucket IAM Policy Set",
+      "product": "gcp",
+      "service": "storage",
+      "severity": "high",
+      "slug": "gcp-bucket-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-244",
+      "match_when": {
+        "method_name": "storage.buckets.create"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GCP Storage Bucket Created",
+      "product": "gcp",
+      "service": "storage",
+      "severity": "low",
+      "slug": "gcp-bucket-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-245",
+      "match_when": {
+        "method_name": "storage.buckets.delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP Storage Bucket Deleted",
+      "product": "gcp",
+      "service": "storage",
+      "severity": "high",
+      "slug": "gcp-bucket-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-246",
+      "match_when": {
+        "method_name": "storage.buckets.update"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GCP Storage Bucket Configuration Updated",
+      "product": "gcp",
+      "service": "storage",
+      "severity": "medium",
+      "slug": "gcp-bucket-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-247",
+      "match_when": {
+        "method_name": "storage.objects.delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP Storage Object Deleted",
+      "product": "gcp",
+      "service": "storage",
+      "severity": "low",
+      "slug": "gcp-object-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-248",
+      "match_when": {
+        "method_name": "storage.hmacKeys.create"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Storage HMAC Key Created",
+      "product": "gcp",
+      "service": "storage",
+      "severity": "high",
+      "slug": "gcp-hmac-key-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-249",
+      "match_when": {
+        "method_name": "google.cloud.bigquery.v2.DatasetService.UpdateDataset"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP BigQuery Dataset Access Updated",
+      "product": "gcp",
+      "service": "bigquery",
+      "severity": "high",
+      "slug": "gcp-bq-dataset-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-250",
+      "match_when": {
+        "method_name": "google.cloud.bigquery.v2.TableService.InsertTable"
+      },
+      "mitre": [
+        "T1074"
+      ],
+      "name": "GCP BigQuery Table Created",
+      "product": "gcp",
+      "service": "bigquery",
+      "severity": "low",
+      "slug": "gcp-bq-table-inserted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-251",
+      "match_when": {
+        "method_name": "google.cloud.bigquery.v2.JobService.InsertJob"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "GCP BigQuery Job Submitted",
+      "product": "gcp",
+      "service": "bigquery",
+      "severity": "low",
+      "slug": "gcp-bq-job-inserted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-252",
+      "match_when": {
+        "method_name": "google.cloud.bigquery.v2.TableService.DeleteTable"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP BigQuery Table Deleted",
+      "product": "gcp",
+      "service": "bigquery",
+      "severity": "medium",
+      "slug": "gcp-bq-table-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-253",
+      "match_when": {
+        "method_name": "google.container.v1.ClusterManager.CreateCluster"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP GKE Cluster Created",
+      "product": "gcp",
+      "service": "container",
+      "severity": "medium",
+      "slug": "gcp-gke-cluster-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-254",
+      "match_when": {
+        "method_name": "google.container.v1.ClusterManager.UpdateCluster"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP GKE Cluster Updated",
+      "product": "gcp",
+      "service": "container",
+      "severity": "high",
+      "slug": "gcp-gke-cluster-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-255",
+      "match_when": {
+        "method_name": "google.container.v1.ClusterManager.SetMasterAuth"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "GCP GKE Master Authentication Changed",
+      "product": "gcp",
+      "service": "container",
+      "severity": "critical",
+      "slug": "gcp-gke-master-auth-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-256",
+      "match_when": {
+        "method_name": "google.container.v1.ClusterManager.DeleteCluster"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "GCP GKE Cluster Deleted",
+      "product": "gcp",
+      "service": "container",
+      "severity": "high",
+      "slug": "gcp-gke-cluster-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-257",
+      "match_when": {
+        "method_name": "google.container.v1.ClusterManager.SetNodePoolManagement"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP GKE Node Pool Management Changed",
+      "product": "gcp",
+      "service": "container",
+      "severity": "medium",
+      "slug": "gcp-gke-node-pool-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-258",
+      "match_when": {
+        "method_name": "google.cloud.functions.v1.CloudFunctionsService.CreateFunction"
+      },
+      "mitre": [
+        "T1053"
+      ],
+      "name": "GCP Cloud Function Created",
+      "product": "gcp",
+      "service": "cloudfunctions",
+      "severity": "medium",
+      "slug": "gcp-function-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-259",
+      "match_when": {
+        "method_name": "google.cloud.functions.v1.CloudFunctionsService.UpdateFunction"
+      },
+      "mitre": [
+        "T1053"
+      ],
+      "name": "GCP Cloud Function Updated",
+      "product": "gcp",
+      "service": "cloudfunctions",
+      "severity": "high",
+      "slug": "gcp-function-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-260",
+      "match_when": {
+        "method_name": "google.cloud.functions.v1.CloudFunctionsService.SetIamPolicy"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Cloud Function IAM Policy Set",
+      "product": "gcp",
+      "service": "cloudfunctions",
+      "severity": "high",
+      "slug": "gcp-function-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-261",
+      "match_when": {
+        "method_name": "google.cloud.run.v1.Services.ReplaceService"
+      },
+      "mitre": [
+        "T1525"
+      ],
+      "name": "GCP Cloud Run Service Replaced",
+      "product": "gcp",
+      "service": "run",
+      "severity": "high",
+      "slug": "gcp-run-service-replaced"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-262",
+      "match_when": {
+        "method_name": "google.cloud.run.v1.Services.SetIamPolicy"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Cloud Run IAM Policy Set",
+      "product": "gcp",
+      "service": "run",
+      "severity": "high",
+      "slug": "gcp-run-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-263",
+      "match_when": {
+        "method_name": "google.pubsub.v1.Publisher.CreateTopic"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GCP Pub/Sub Topic Created",
+      "product": "gcp",
+      "service": "pubsub",
+      "severity": "low",
+      "slug": "gcp-pubsub-topic-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-264",
+      "match_when": {
+        "method_name": "google.pubsub.v1.Subscriber.CreateSubscription"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "GCP Pub/Sub Subscription Created",
+      "product": "gcp",
+      "service": "pubsub",
+      "severity": "medium",
+      "slug": "gcp-pubsub-subscription-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-265",
+      "match_when": {
+        "method_name": "dns.changes.create"
+      },
+      "mitre": [
+        "T1565"
+      ],
+      "name": "GCP DNS Record Changed",
+      "product": "gcp",
+      "service": "dns",
+      "severity": "high",
+      "slug": "gcp-dns-record-changed"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-266",
+      "match_when": {
+        "method_name": "dns.managedZones.create"
+      },
+      "mitre": [
+        "T1583.002"
+      ],
+      "name": "GCP DNS Managed Zone Created",
+      "product": "gcp",
+      "service": "dns",
+      "severity": "medium",
+      "slug": "gcp-dns-zone-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-267",
+      "match_when": {
+        "method_name": "google.api.serviceusage.v1.ServiceUsage.EnableService"
+      },
+      "mitre": [
+        "T1578"
+      ],
+      "name": "GCP Service API Enabled",
+      "product": "gcp",
+      "service": "serviceusage",
+      "severity": "medium",
+      "slug": "gcp-service-enabled"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-268",
+      "match_when": {
+        "method_name": "google.api.serviceusage.v1.ServiceUsage.DisableService"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GCP Service API Disabled",
+      "product": "gcp",
+      "service": "serviceusage",
+      "severity": "high",
+      "slug": "gcp-service-disabled"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-269",
+      "match_when": {
+        "method_name": "google.cloud.orgpolicy.v2.OrgPolicy.UpdatePolicy"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GCP Organisation Policy Set",
+      "product": "gcp",
+      "service": "orgpolicy",
+      "severity": "critical",
+      "slug": "gcp-org-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-270",
+      "match_when": {
+        "method_name": "google.cloud.orgpolicy.v2.OrgPolicy.DeletePolicy"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GCP Organisation Policy Deleted",
+      "product": "gcp",
+      "service": "orgpolicy",
+      "severity": "critical",
+      "slug": "gcp-org-policy-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-271",
+      "match_when": {
+        "method_name": "google.cloud.securitycenter.v1.SecurityCenter.UpdateSource"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GCP Security Command Center Source Updated",
+      "product": "gcp",
+      "service": "securitycenter",
+      "severity": "high",
+      "slug": "gcp-scc-source-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-272",
+      "match_when": {
+        "method_name": "google.cloud.securitycenter.v1.SecurityCenter.DeleteNotificationConfig"
+      },
+      "mitre": [
+        "T1562.008"
+      ],
+      "name": "GCP Security Command Center Notification Deleted",
+      "product": "gcp",
+      "service": "securitycenter",
+      "severity": "high",
+      "slug": "gcp-scc-notification-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-273",
+      "match_when": {
+        "method_name": "google.cloud.iap.v1.IdentityAwareProxyAdminService.UpdateIapSettings"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "GCP Identity-Aware Proxy Settings Updated",
+      "product": "gcp",
+      "service": "iap",
+      "severity": "high",
+      "slug": "gcp-iap-settings-updated"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-274",
+      "match_when": {
+        "method_name": "google.cloud.iap.v1.IdentityAwareProxyAdminService.SetIamPolicy"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GCP Identity-Aware Proxy IAM Policy Set",
+      "product": "gcp",
+      "service": "iap",
+      "severity": "high",
+      "slug": "gcp-iap-iam-policy-set"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-275",
+      "match_when": {
+        "method_name": "google.iam.v1.WorkloadIdentityPools.CreateWorkloadIdentityPool"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "GCP Workload Identity Pool Created",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "high",
+      "slug": "gcp-workload-identity-pool-created"
+    },
+    {
+      "category": "cloud",
+      "family": "cloud-enumeration-and-abuse",
+      "id": "det-cloud-276",
+      "match_when": {
+        "method_name": "google.iam.v1.WorkloadIdentityPools.CreateWorkloadIdentityPoolProvider"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "GCP Workload Identity Provider Created",
+      "product": "gcp",
+      "service": "iam",
+      "severity": "critical",
+      "slug": "gcp-workload-identity-provider-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-277",
+      "match_when": {
+        "k8s_resource": "clusterrolebindings",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Kubernetes ClusterRoleBinding Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-clusterrolebinding-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-278",
+      "match_when": {
+        "k8s_resource": "clusterroles",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Kubernetes ClusterRole Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "k8s-clusterrole-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-279",
+      "match_when": {
+        "k8s_resource": "rolebindings",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Kubernetes RoleBinding Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "k8s-rolebinding-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-280",
+      "match_when": {
+        "k8s_resource": "clusterrolebindings",
+        "k8s_verb": "delete"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Kubernetes RBAC Binding Deleted",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "k8s-rbac-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-281",
+      "match_when": {
+        "k8s_resource": "pods",
+        "k8s_subresource": "exec",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1609"
+      ],
+      "name": "Kubernetes Exec Into A Running Pod",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-pod-exec"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-282",
+      "match_when": {
+        "k8s_resource": "pods",
+        "k8s_subresource": "attach",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1609"
+      ],
+      "name": "Kubernetes Attach To A Running Pod",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-pod-attach"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-283",
+      "match_when": {
+        "k8s_resource": "pods",
+        "k8s_subresource": "portforward",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1572"
+      ],
+      "name": "Kubernetes Port-Forward To A Pod",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-pod-portforward"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-284",
+      "match_when": {
+        "k8s_resource": "pods",
+        "k8s_subresource": "proxy",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1572"
+      ],
+      "name": "Kubernetes Proxy Request To A Pod",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "k8s-pod-proxy"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-285",
+      "match_when": {
+        "k8s_namespace": "kube-system",
+        "k8s_resource": "pods",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1610"
+      ],
+      "name": "Kubernetes Pod Created In A System Namespace",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-pod-created-privileged-namespace"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-286",
+      "match_when": {
+        "k8s_resource": "secrets",
+        "k8s_verb": "get"
+      },
+      "mitre": [
+        "T1552.007"
+      ],
+      "name": "Kubernetes Secret Read",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "k8s-secret-read"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-287",
+      "match_when": {
+        "k8s_resource": "secrets",
+        "k8s_verb": "list"
+      },
+      "mitre": [
+        "T1552.007"
+      ],
+      "name": "Kubernetes Secrets Listed",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-secret-listed"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-288",
+      "match_when": {
+        "k8s_resource": "secrets",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1552.007"
+      ],
+      "name": "Kubernetes Secret Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "low",
+      "slug": "k8s-secret-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-289",
+      "match_when": {
+        "k8s_resource": "serviceaccounts",
+        "k8s_subresource": "token",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "Kubernetes Service Account Token Requested",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-serviceaccount-token-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-290",
+      "match_when": {
+        "k8s_resource": "serviceaccounts",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "Kubernetes Service Account Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "k8s-serviceaccount-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-291",
+      "match_when": {
+        "k8s_resource": "daemonsets",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1610"
+      ],
+      "name": "Kubernetes DaemonSet Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-daemonset-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-292",
+      "match_when": {
+        "k8s_resource": "cronjobs",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1053.003"
+      ],
+      "name": "Kubernetes CronJob Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-cronjob-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-293",
+      "match_when": {
+        "k8s_resource": "jobs",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1610"
+      ],
+      "name": "Kubernetes Job Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "low",
+      "slug": "k8s-job-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-294",
+      "match_when": {
+        "k8s_resource": "deployments",
+        "k8s_verb": "patch"
+      },
+      "mitre": [
+        "T1525"
+      ],
+      "name": "Kubernetes Deployment Patched",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "low",
+      "slug": "k8s-deployment-patched"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-295",
+      "match_when": {
+        "k8s_resource": "mutatingwebhookconfigurations",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1554"
+      ],
+      "name": "Kubernetes Admission Webhook Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "k8s-webhook-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-302",
+      "match_when": {
+        "k8s_resource": "validatingwebhookconfigurations",
+        "k8s_verb": "delete"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "Kubernetes Validating Webhook Deleted",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-validating-admission-webhook-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-296",
+      "match_when": {
+        "k8s_resource": "namespaces",
+        "k8s_verb": "create"
+      },
+      "mitre": [
+        "T1610"
+      ],
+      "name": "Kubernetes Namespace Created",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "low",
+      "slug": "k8s-namespace-created"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-297",
+      "match_when": {
+        "k8s_resource": "namespaces",
+        "k8s_verb": "delete"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Kubernetes Namespace Deleted",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-namespace-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-298",
+      "match_when": {
+        "k8s_resource": "networkpolicies",
+        "k8s_verb": "delete"
+      },
+      "mitre": [
+        "T1562.004"
+      ],
+      "name": "Kubernetes NetworkPolicy Deleted",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-networkpolicy-deleted"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-299",
+      "match_when": {
+        "k8s_response_code": 403
+      },
+      "mitre": [
+        "T1087"
+      ],
+      "name": "Kubernetes Request Refused By RBAC",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "k8s-forbidden-request"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-300",
+      "match_when": {
+        "k8s_user": "system:anonymous"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Kubernetes Request From An Unauthenticated Caller",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-unauthenticated-request"
+    },
+    {
+      "category": "cloud",
+      "family": "kubernetes-control-plane",
+      "id": "det-cloud-301",
+      "match_when": {
+        "k8s_impersonated_user_neq": ""
+      },
+      "mitre": [
+        "T1134"
+      ],
+      "name": "Kubernetes Request Used Impersonation",
+      "product": "kubernetes",
+      "service": "audit",
+      "severity": "high",
+      "slug": "k8s-impersonation-used"
+    },
+    {
       "category": "data-exfil",
       "id": "det-data-exfil-003",
       "match_when": {
@@ -5435,6 +8570,502 @@
       "service": "query-history",
       "severity": "high",
       "slug": "snowflake-create-user"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-050",
+      "match_when": {
+        "event_type": "box.ITEM_DOWNLOAD"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "Box Item Downloaded",
+      "product": "box",
+      "service": "events",
+      "severity": "low",
+      "slug": "box-item-downloaded"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-051",
+      "match_when": {
+        "event_type": "box.DELETE"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Box Item Deleted",
+      "product": "box",
+      "service": "events",
+      "severity": "low",
+      "slug": "box-item-deleted"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-052",
+      "match_when": {
+        "event_type": "box.COLLABORATION_INVITE"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Box Collaboration Invitation Sent",
+      "product": "box",
+      "service": "events",
+      "severity": "medium",
+      "slug": "box-collaboration-invited"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-053",
+      "match_when": {
+        "event_type": "box.COLLABORATION_ROLE_CHANGE"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Box Collaboration Role Changed",
+      "product": "box",
+      "service": "events",
+      "severity": "medium",
+      "slug": "box-collaboration-role-changed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-054",
+      "match_when": {
+        "event_type": "box.FAILED_LOGIN"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Box Sign-In Failed",
+      "product": "box",
+      "service": "events",
+      "severity": "low",
+      "slug": "box-failed-login"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-055",
+      "match_when": {
+        "event_type": "box.GROUP_ADMIN_CREATED"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Box Group Administrator Created",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-group-admin-created"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-056",
+      "match_when": {
+        "event_type": "box.DISABLE_TWO_FACTOR_AUTH"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Box Two-Factor Authentication Disabled",
+      "product": "box",
+      "service": "events",
+      "severity": "critical",
+      "slug": "box-two-factor-disabled"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-057",
+      "match_when": {
+        "event_type": "box.DATA_RETENTION_REMOVE_RETENTION"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Box Retention Policy Removed",
+      "product": "box",
+      "service": "events",
+      "severity": "high",
+      "slug": "box-retention-removed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-058",
+      "match_when": {
+        "event_type": "box.LEGAL_HOLD_ASSIGNMENT_DELETE"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Box Legal Hold Assignment Deleted",
+      "product": "box",
+      "service": "events",
+      "severity": "critical",
+      "slug": "box-legal-hold-deleted"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-059",
+      "match_when": {
+        "event_type": "box.OAUTH2_ACCESS_TOKEN_REVOKE"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "Box OAuth2 Access Token Revoked",
+      "product": "box",
+      "service": "events",
+      "severity": "low",
+      "slug": "box-oauth-token-revoked"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-060",
+      "match_when": {
+        "event_type": "dropbox.file_download"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "Dropbox File Downloaded",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "low",
+      "slug": "dbx-file-downloaded"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-061",
+      "match_when": {
+        "event_type": "dropbox.shared_link_create"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Dropbox Shared Link Created",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "medium",
+      "slug": "dbx-shared-link-created"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-062",
+      "match_when": {
+        "event_type": "dropbox.member_change_status"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Dropbox Member Status Changed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "medium",
+      "slug": "dbx-member-status-changed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-063",
+      "match_when": {
+        "event_type": "dropbox.member_change_email"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Dropbox Member Email Changed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "high",
+      "slug": "dbx-member-email-changed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-064",
+      "match_when": {
+        "event_type": "dropbox.tfa_change_policy"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Dropbox Two-Factor Policy Changed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "critical",
+      "slug": "dbx-two-factor-policy-changed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-065",
+      "match_when": {
+        "event_type": "dropbox.device_unlink"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "Dropbox Device Unlinked",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "low",
+      "slug": "dbx-device-unlinked"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-066",
+      "match_when": {
+        "event_type": "dropbox.group_create"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Dropbox Group Created",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "low",
+      "slug": "dbx-group-created"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-067",
+      "match_when": {
+        "event_type": "dropbox.group_add_member"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Dropbox Member Added To A Group",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "medium",
+      "slug": "dbx-group-member-added"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-068",
+      "match_when": {
+        "event_type": "dropbox.paper_external_view_allow"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Dropbox Paper External Viewing Allowed",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "high",
+      "slug": "dbx-paper-external-view-allowed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-069",
+      "match_when": {
+        "event_type": "dropbox.sign_in_as_session_start"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Dropbox Administrator Signed In As A Member",
+      "product": "dropbox",
+      "service": "events",
+      "severity": "high",
+      "slug": "dbx-sign-in-as-session-started"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-070",
+      "match_when": {
+        "query_type": "REVOKE"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Snowflake Privilege Revoked",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "medium",
+      "slug": "snow-revoke-executed"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-071",
+      "match_when": {
+        "query_type": "CREATE_ROLE"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Snowflake Role Created",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "medium",
+      "slug": "snow-create-role"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-072",
+      "match_when": {
+        "query_type": "DROP_USER"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Snowflake User Dropped",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snow-drop-user"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-073",
+      "match_when": {
+        "query_type": "ALTER_USER"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Snowflake User Altered",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snow-alter-user"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-074",
+      "match_when": {
+        "query_type": "CREATE_STAGE"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Snowflake Stage Created",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snow-create-stage"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-075",
+      "match_when": {
+        "query_type": "CREATE_SHARE"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Snowflake Share Created",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "critical",
+      "slug": "snow-create-share"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-076",
+      "match_when": {
+        "query_type": "ALTER_SHARE"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Snowflake Share Altered",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "critical",
+      "slug": "snow-alter-share"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-077",
+      "match_when": {
+        "query_type": "CREATE_NETWORK_POLICY"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "Snowflake Network Policy Created",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "medium",
+      "slug": "snow-create-network-policy"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-078",
+      "match_when": {
+        "query_type": "ALTER_NETWORK_POLICY"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "Snowflake Network Policy Altered",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snow-alter-network-policy"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-079",
+      "match_when": {
+        "query_type": "DROP"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Snowflake Table Dropped",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "medium",
+      "slug": "snow-drop-table"
+    },
+    {
+      "category": "data-exfil",
+      "family": "saas-data-movement",
+      "id": "det-data-exfil-080",
+      "match_when": {
+        "query_type": "COPY"
+      },
+      "mitre": [
+        "T1537"
+      ],
+      "name": "Snowflake Copy Into A Location",
+      "product": "snowflake",
+      "service": "query-history",
+      "severity": "high",
+      "slug": "snow-copy-into-location"
     },
     {
       "category": "endpoint",
@@ -13616,6 +17247,1728 @@
       "service": "authentication",
       "severity": "high",
       "slug": "lh-failed-network-set-saturated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-191",
+      "match_when": {
+        "activity": "Add member to role"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Entra Member Added To A Directory Role",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-role-member-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-192",
+      "match_when": {
+        "activity": "Remove member from role"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Member Removed From A Directory Role",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-role-member-removed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-193",
+      "match_when": {
+        "activity": "Add eligible member to role"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Entra Eligible Member Added To A Privileged Role",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-role-eligible-member-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-194",
+      "match_when": {
+        "activity": "Add role definition"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Custom Role Definition Created",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-role-definition-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-195",
+      "match_when": {
+        "activity": "Update role definition"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Custom Role Definition Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-role-definition-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-196",
+      "match_when": {
+        "activity": "Add service principal"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "Entra Service Principal Added",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-service-principal-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-197",
+      "match_when": {
+        "activity": "Remove service principal"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Service Principal Removed",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-service-principal-removed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-198",
+      "match_when": {
+        "activity": "Add service principal credentials"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "Entra Service Principal Credential Added",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-service-principal-credential-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-199",
+      "match_when": {
+        "activity": "Remove service principal credentials"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "Entra Service Principal Credential Removed",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-service-principal-credential-removed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-200",
+      "match_when": {
+        "activity": "Add application"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "Entra Application Registered",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-application-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-201",
+      "match_when": {
+        "activity": "Update application"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Application Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-application-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-202",
+      "match_when": {
+        "activity": "Update application – Certificates and secrets management"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "Entra Application Certificates And Secrets Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-application-certs-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-203",
+      "match_when": {
+        "activity": "Delete application"
+      },
+      "mitre": [
+        "T1485"
+      ],
+      "name": "Entra Application Deleted",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-application-deleted"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-204",
+      "match_when": {
+        "activity": "Add owner to application"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Owner Added To An Application",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-app-owner-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-205",
+      "match_when": {
+        "activity": "Add owner to service principal"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Owner Added To A Service Principal",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-sp-owner-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-206",
+      "match_when": {
+        "activity": "Add OAuth2PermissionGrant"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "Entra OAuth2 Permission Grant Added",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-oauth-grant-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-207",
+      "match_when": {
+        "activity": "Add app role assignment to service principal"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "Entra App Role Assigned To A Service Principal",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-app-role-assigned"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-208",
+      "match_when": {
+        "activity": "Add app role assignment grant to user"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra App Role Assignment Granted To A User",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-app-role-assigned-user"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-209",
+      "match_when": {
+        "activity": "Consent to application"
+      },
+      "mitre": [
+        "T1528"
+      ],
+      "name": "Entra Consent Granted To An Application",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-consent-to-application"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-210",
+      "match_when": {
+        "activity": "Reset user password"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra User Password Reset By An Administrator",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-user-password-reset"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-211",
+      "match_when": {
+        "activity": "Change user password"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra User Changed Their Own Password",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "low",
+      "slug": "entra-user-password-changed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-212",
+      "match_when": {
+        "activity": "User registered security info"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Entra Security Information Registered By The User",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-user-security-info-registered"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-213",
+      "match_when": {
+        "activity": "User deleted security info"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Entra Security Information Deleted By The User",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-user-security-info-deleted"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-214",
+      "match_when": {
+        "activity": "Admin registered security info"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Entra Security Information Registered By An Administrator",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-admin-security-info-registered"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-215",
+      "match_when": {
+        "activity": "Admin deleted security info"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Entra Security Information Deleted By An Administrator",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-admin-security-info-deleted"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-216",
+      "match_when": {
+        "activity": "User changed default security info"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Entra Default Authentication Method Changed",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-user-default-security-info-changed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-217",
+      "match_when": {
+        "activity": "Update StsRefreshTokenValidFrom Timestamp"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Refresh Tokens Invalidated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-refresh-tokens-revoked"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-218",
+      "match_when": {
+        "activity": "Add user"
+      },
+      "mitre": [
+        "T1136"
+      ],
+      "name": "Entra User Account Created",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-user-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-219",
+      "match_when": {
+        "activity": "Delete user"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra User Account Deleted",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-user-deleted"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-220",
+      "match_when": {
+        "activity": "Restore user"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra User Account Restored",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-user-restored"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-221",
+      "match_when": {
+        "activity": "Update user"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra User Account Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "low",
+      "slug": "entra-user-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-222",
+      "match_when": {
+        "activity": "Disable account"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Account Disabled",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-account-disabled"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-223",
+      "match_when": {
+        "activity": "Enable account"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Account Re-Enabled",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-account-enabled"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-224",
+      "match_when": {
+        "activity": "Invite external user"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Entra External User Invited",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-external-user-invited"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-225",
+      "match_when": {
+        "activity": "Redeem external user invite"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Entra External User Invitation Redeemed",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-external-invite-redeemed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-226",
+      "match_when": {
+        "activity": "Add group"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Group Created",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "low",
+      "slug": "entra-group-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-227",
+      "match_when": {
+        "activity": "Add member to group"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Member Added To A Group",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-group-member-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-228",
+      "match_when": {
+        "activity": "Remove member from group"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Member Removed From A Group",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "low",
+      "slug": "entra-group-member-removed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-229",
+      "match_when": {
+        "activity": "Update group"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Group Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-group-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-230",
+      "match_when": {
+        "activity": "Delete group"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Group Deleted",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-group-deleted"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-231",
+      "match_when": {
+        "activity": "Create administrative unit"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Administrative Unit Created",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-admin-unit-created"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-232",
+      "match_when": {
+        "activity": "Add conditional access policy"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Conditional Access Policy Added",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-ca-policy-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-233",
+      "match_when": {
+        "activity": "Update conditional access policy"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Conditional Access Policy Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-ca-policy-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-234",
+      "match_when": {
+        "activity": "Delete conditional access policy"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Conditional Access Policy Deleted",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-ca-policy-deleted"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-235",
+      "match_when": {
+        "activity": "Add named location"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Named Location Added",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-named-location-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-236",
+      "match_when": {
+        "activity": "Update named location"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Named Location Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-named-location-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-237",
+      "match_when": {
+        "activity": "Update policy"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Directory Policy Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-policy-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-238",
+      "match_when": {
+        "activity": "Update authorization policy"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Authorization Policy Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-authorization-policy-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-239",
+      "match_when": {
+        "activity": "Update cross-tenant access setting"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Entra Cross-Tenant Access Setting Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-cross-tenant-access-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-240",
+      "match_when": {
+        "activity": "Add partner to company"
+      },
+      "mitre": [
+        "T1199"
+      ],
+      "name": "Entra Partner Added To The Tenant",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-partner-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-241",
+      "match_when": {
+        "activity": "Add unverified domain"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Domain Added To The Tenant",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-domain-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-242",
+      "match_when": {
+        "activity": "Verify domain"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Domain Verified",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-domain-verified"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-243",
+      "match_when": {
+        "activity": "Set federation settings on domain"
+      },
+      "mitre": [
+        "T1484.002"
+      ],
+      "name": "Entra Domain Federation Settings Changed",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "critical",
+      "slug": "entra-domain-federation-set"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-244",
+      "match_when": {
+        "activity": "Remove domain from company"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Domain Removed From The Tenant",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-domain-removed"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-245",
+      "match_when": {
+        "activity": "Set Company Information"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "Entra Company Settings Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-company-settings-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-246",
+      "match_when": {
+        "activity": "Enable Desktop SSO"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Seamless Single Sign-On Enabled",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-desktop-sso-enabled"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-247",
+      "match_when": {
+        "activity": "Disable Desktop SSO"
+      },
+      "mitre": [
+        "T1562"
+      ],
+      "name": "Entra Seamless Single Sign-On Disabled",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-desktop-sso-disabled"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-248",
+      "match_when": {
+        "activity": "Add device"
+      },
+      "mitre": [
+        "T1098.005"
+      ],
+      "name": "Entra Device Registered",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-device-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-249",
+      "match_when": {
+        "activity": "Delete device"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Entra Device Deleted",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "medium",
+      "slug": "entra-device-deleted"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-250",
+      "match_when": {
+        "activity": "Add registered owner to device"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Registered Owner Added To A Device",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-device-owner-added"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-251",
+      "match_when": {
+        "activity": "Update device"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra Device Updated",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "low",
+      "slug": "entra-device-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-252",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskLevelDuringSignIn": "high"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Sign-In At High Risk",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-risk-high-at-risk"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-253",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskState": "confirmedCompromised"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Sign-In Risk Confirmed Compromised",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "critical",
+      "slug": "entra-signin-risk-confirmed-compromised"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-254",
+      "match_when": {
+        "conditionalAccessStatus": "failure",
+        "event_type": "azure.entra.signin.risky"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Sign-In Blocked By Conditional Access",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "medium",
+      "slug": "entra-signin-ca-failure"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-255",
+      "match_when": {
+        "conditionalAccessStatus": "notApplied",
+        "event_type": "azure.entra.signin.risky"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Entra Risky Sign-In With No Conditional Access Applied",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-ca-not-applied"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-256",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "mfa_satisfied": false
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Risky Sign-In Satisfied By A Single Factor",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-single-factor-risky"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-257",
+      "match_when": {
+        "device_compliant": false,
+        "event_type": "azure.entra.signin.risky"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Risky Sign-In From A Non-Compliant Device",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-noncompliant-device"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-258",
+      "match_when": {
+        "client_app_in": [
+          "Other clients",
+          "IMAP4",
+          "POP3",
+          "SMTP",
+          "Exchange ActiveSync"
+        ],
+        "event_type": "azure.entra.signin.risky"
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Sign-In Using A Legacy Authentication Client",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-legacy-client"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-259",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "isInteractive": false
+      },
+      "mitre": [
+        "T1550.001"
+      ],
+      "name": "Entra Risky Non-Interactive Sign-In",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-noninteractive-risky"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-260",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "ip_class_in": [
+          "vpn",
+          "tor_exit",
+          "public_proxy",
+          "hosting_provider"
+        ]
+      },
+      "mitre": [
+        "T1090.003"
+      ],
+      "name": "Entra Sign-In From An Anonymizing Or Hosting Network",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-from-anonymizer"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-261",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskEventTypes_v2_has_any": [
+          "anonymizedIPAddress"
+        ]
+      },
+      "mitre": [
+        "T1090.003"
+      ],
+      "name": "Entra Sign-In Flagged As Anonymized IP Address",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-anonymized-ip-risk"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-262",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskEventTypes_v2_has_any": [
+          "unlikelyTravel"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Sign-In Flagged As Atypical Travel",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-impossible-travel"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-263",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskEventTypes_v2_has_any": [
+          "passwordSpray"
+        ]
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Entra Sign-In Flagged As Password Spray",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-password-spray"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-264",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskEventTypes_v2_has_any": [
+          "leakedCredentials"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Sign-In With Leaked Credentials",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "critical",
+      "slug": "entra-signin-leaked-credentials"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-265",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskEventTypes_v2_has_any": [
+          "maliciousIPAddress"
+        ]
+      },
+      "mitre": [
+        "T1078.004"
+      ],
+      "name": "Entra Sign-In From An Address Microsoft Flags Malicious",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "high",
+      "slug": "entra-signin-malicious-ip"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-266",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskEventTypes_v2_has_any": [
+          "tokenIssuerAnomaly"
+        ]
+      },
+      "mitre": [
+        "T1606.002"
+      ],
+      "name": "Entra Sign-In With An Anomalous Token Issuer",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "critical",
+      "slug": "entra-signin-token-issuer-anomaly"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-267",
+      "match_when": {
+        "event_type": "azure.entra.signin.risky",
+        "riskEventTypes_v2_has_any": [
+          "suspiciousBrowser",
+          "anomalousToken"
+        ]
+      },
+      "mitre": [
+        "T1550.001"
+      ],
+      "name": "Entra Sign-In Flagged As Token Issuer Replay",
+      "product": "azure",
+      "service": "entra-signin",
+      "severity": "critical",
+      "slug": "entra-signin-token-replay"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-268",
+      "match_when": {
+        "event_type": "user.mfa.factor.deactivate"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Okta MFA Factor Deactivated",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "critical",
+      "slug": "okta-mfa-factor-deactivated"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-269",
+      "match_when": {
+        "event_type": "user.mfa.factor.reset_all"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "Okta All MFA Factors Reset",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "critical",
+      "slug": "okta-mfa-factors-reset"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-270",
+      "match_when": {
+        "event_type": "system.api_token.create"
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "Okta API Token Created",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "critical",
+      "slug": "okta-api-token-created"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-271",
+      "match_when": {
+        "event_type": "system.api_token.revoke"
+      },
+      "mitre": [
+        "T1070"
+      ],
+      "name": "Okta API Token Revoked",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "medium",
+      "slug": "okta-api-token-revoked"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-272",
+      "match_when": {
+        "event_type": "user.session.impersonation.initiate"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Okta Administrator Impersonation Initiated",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "high",
+      "slug": "okta-impersonation-initiated"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-273",
+      "match_when": {
+        "event_type": "user.session.impersonation.grant"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Okta Impersonation Grant Issued",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "high",
+      "slug": "okta-impersonation-granted"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-274",
+      "match_when": {
+        "event_type": "policy.rule.deactivate"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Okta Policy Rule Deactivated",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "critical",
+      "slug": "okta-policy-rule-deactivated"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-275",
+      "match_when": {
+        "event_type": "policy.lifecycle.update"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Okta Policy Updated",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "high",
+      "slug": "okta-policy-updated"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-276",
+      "match_when": {
+        "event_type": "zone.update"
+      },
+      "mitre": [
+        "T1556"
+      ],
+      "name": "Okta Network Zone Updated",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "high",
+      "slug": "okta-network-zone-updated"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-277",
+      "match_when": {
+        "event_type": "application.user_membership.add"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Okta Application Assigned To A User",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "medium",
+      "slug": "okta-app-assigned-to-user"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-278",
+      "match_when": {
+        "event_type": "group.privilege.grant"
+      },
+      "mitre": [
+        "T1098.003"
+      ],
+      "name": "Okta Administrator Privilege Granted To A Group",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "critical",
+      "slug": "okta-group-privilege-granted"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-279",
+      "match_when": {
+        "event_type": "security.threat.detected"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "Okta ThreatInsight Detection",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "high",
+      "slug": "okta-threat-detected"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-280",
+      "match_when": {
+        "event_type": "user.lifecycle.suspend"
+      },
+      "mitre": [
+        "T1531"
+      ],
+      "name": "Okta User Suspended",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "medium",
+      "slug": "okta-user-suspended"
+    },
+    {
+      "category": "identity",
+      "family": "saas-admin-control-weakening",
+      "id": "det-identity-281",
+      "match_when": {
+        "event_type": "user.lifecycle.unsuspend"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Okta Suspended User Re-Activated",
+      "product": "okta",
+      "service": "system-log",
+      "severity": "high",
+      "slug": "okta-user-unsuspended"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-282",
+      "match_when": {
+        "signin_type": "totp_bad"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "1Password Time-Based Code Rejected",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-totp-bad"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-283",
+      "match_when": {
+        "signin_type": "totp_timeout"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "1Password Time-Based Code Timed Out",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "low",
+      "slug": "1p-totp-timeout"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-284",
+      "match_when": {
+        "signin_type": "totp_disabled"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "1Password Time-Based Code Factor Disabled",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "high",
+      "slug": "1p-totp-disabled"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-285",
+      "match_when": {
+        "signin_type": "u2f_bad"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "1Password Security Key Rejected",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "high",
+      "slug": "1p-u2f-bad"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-286",
+      "match_when": {
+        "signin_type": "u2f_disabled"
+      },
+      "mitre": [
+        "T1556.006"
+      ],
+      "name": "1Password Security Key Factor Disabled",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "high",
+      "slug": "1p-u2f-disabled"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-287",
+      "match_when": {
+        "signin_type": "duo_bad"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "1Password Duo Verification Rejected",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-duo-bad"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-288",
+      "match_when": {
+        "signin_type": "ip_blocked"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Sign-In Blocked By Address",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-ip-blocked"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-289",
+      "match_when": {
+        "signin_type": "country_blocked"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Sign-In Blocked By Country",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-country-blocked"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-290",
+      "match_when": {
+        "signin_type": "continent_blocked"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Sign-In Blocked By Continent",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "low",
+      "slug": "1p-continent-blocked"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-291",
+      "match_when": {
+        "signin_type": "anonymous_blocked"
+      },
+      "mitre": [
+        "T1090.003"
+      ],
+      "name": "1Password Sign-In Blocked As Anonymous",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "high",
+      "slug": "1p-anonymous-blocked"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-292",
+      "match_when": {
+        "signin_type": "all_blocked"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Sign-In Blocked By A Deny-All Rule",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-all-blocked"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-293",
+      "match_when": {
+        "signin_type": "password_secret_bad"
+      },
+      "mitre": [
+        "T1110"
+      ],
+      "name": "1Password Account Password Or Secret Key Wrong",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-password-secret-bad"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-294",
+      "match_when": {
+        "signin_type": "mfa_missing"
+      },
+      "mitre": [
+        "T1621"
+      ],
+      "name": "1Password Sign-In Missing A Required Second Factor",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "medium",
+      "slug": "1p-mfa-missing"
+    },
+    {
+      "category": "identity",
+      "family": "saas-authentication-abuse",
+      "id": "det-identity-295",
+      "match_when": {
+        "signin_type": "modern_version_missing"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "1Password Client Too Old To Sign In",
+      "product": "onepassword",
+      "service": "signin-attempts",
+      "severity": "low",
+      "slug": "1p-modern-version-missing"
     },
     {
       "category": "network",

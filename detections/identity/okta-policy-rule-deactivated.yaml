@@ -1,0 +1,23 @@
+id: det-identity-274
+name: Okta Policy Rule Deactivated
+description: A deactivated sign-on rule stops enforcing whatever it required.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "policy.rule.deactivate"
+false_positives:
+- Documented break-glass procedure
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -80,6 +80,29 @@ def ids_on_disk() -> dict[str, list[Path]]:
     return found
 
 
+def duplicate_slugs() -> list[str]:
+    """Slugs used by more than one spec in the same category.
+
+    A collision does not look like one. `generate_detections.py` writes one
+    YAML per `(category, slug)`, so the second spec overwrites the first's
+    file — but `export_detection_ruleset.py` iterates specs, so **both**
+    reach the engine. The published executable total then exceeds the
+    number of files by exactly the number of collisions, which is how the
+    truth table came to read 2,949 against an engine loading 2,950.
+    """
+    from detection_specs_index import all_specs  # noqa: PLC0415 — scripts/ sibling
+
+    seen: dict[tuple[str, str], int] = {}
+    for category, spec in all_specs():
+        key = (category, str(spec.get("slug")))
+        seen[key] = seen.get(key, 0) + 1
+    return [
+        f"{category}/{slug} is declared by {count} specs: one YAML is written and {count} rules reach the engine"
+        for (category, slug), count in sorted(seen.items())
+        if count > 1
+    ]
+
+
 def check() -> list[str]:
     locked = locked_ids()
     if not locked:
@@ -87,7 +110,7 @@ def check() -> list[str]:
         # wrong. Refuse rather than emit a thousand confident falsehoods.
         return [f"{LOCK.relative_to(ROOT)} holds no ids — the gate cannot tell an orphan from a rule"]
 
-    problems: list[str] = []
+    problems: list[str] = list(duplicate_slugs())
     on_disk = ids_on_disk()
     if not on_disk:
         return ["no detection YAML found — the gate would have passed over an empty tree"]

@@ -1,0 +1,22 @@
+id: det-identity-294
+name: 1Password Sign-In Missing A Required Second Factor
+description: The client did not present a factor the policy requires.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1621
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    signin_type == "mfa_missing"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

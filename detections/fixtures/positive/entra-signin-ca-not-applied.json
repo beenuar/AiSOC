@@ -1,0 +1,4 @@
+{
+  "conditionalAccessStatus": "notApplied",
+  "event_type": "azure.entra.signin.risky"
+}

@@ -1,0 +1,4 @@
+{
+  "k8s_resource": "cronjobs",
+  "k8s_verb": "delete"
+}

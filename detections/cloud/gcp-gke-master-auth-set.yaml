@@ -1,0 +1,23 @@
+id: det-cloud-255
+name: GCP GKE Master Authentication Changed
+description: Setting master auth issues credentials for the control plane.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: container
+detection:
+  condition: |
+    method_name == "google.container.v1.ClusterManager.SetMasterAuth"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

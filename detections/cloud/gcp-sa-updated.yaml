@@ -1,0 +1,23 @@
+id: det-cloud-201
+name: GCP Service Account Updated
+description: Description and display-name changes are how an identity is made to look routine.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: iam
+detection:
+  condition: |
+    method_name == "google.iam.admin.v1.UpdateServiceAccount"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

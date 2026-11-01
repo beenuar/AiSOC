@@ -1,0 +1,25 @@
+id: det-identity-217
+name: Entra Refresh Tokens Invalidated
+description: Session revocation. A response action when the team does it and a disruption when nobody
+  did.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1531
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Update StsRefreshTokenValidFrom Timestamp"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

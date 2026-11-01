@@ -1,0 +1,23 @@
+id: det-application-170
+name: M365 SharePoint Site Collection Administrator Added
+description: A site collection administrator reaches every document in the site.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: sharepoint
+detection:
+  condition: |
+    operation == "SiteCollectionAdminAdded"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

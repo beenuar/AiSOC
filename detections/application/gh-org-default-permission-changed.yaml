@@ -1,0 +1,23 @@
+id: det-application-121
+name: GitHub Organisation Default Repository Permission Changed
+description: The default decides what a new member reaches before anyone grants them anything.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.org.update_default_repository_permission"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

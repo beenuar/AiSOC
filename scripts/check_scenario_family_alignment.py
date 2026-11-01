@@ -67,6 +67,13 @@ PRODUCT_EMITTER: dict[str, str] = {
     "box": "box",
     "dropbox": "dropbox",
     "onepassword": "onepassword",
+    "azure": "azure_entra",
+    "kubernetes": "kubernetes_audit",
+    "github": "github",
+    "gitlab": "gitlab",
+    "m365": "m365_audit",
+    "okta": "okta",
+    "atlassian": "confluence_audit",
 }
 
 #: Fields the engine derives at evaluate time rather than reading off the
@@ -414,9 +421,30 @@ PROOF_EVENTS: dict[str, tuple[str, dict[str, Any], dict[str, Any]]] = {
 
 
 def _family_specs() -> list[tuple[str, dict[str, Any]]]:
-    from detection_specs_part5_families import BY_CATEGORY  # noqa: PLC0415 — scripts/ sibling, path set above
+    """Every scenario-family spec, from both authoring passes.
 
-    return [(category, spec) for category, specs in BY_CATEGORY.items() for spec in specs]
+    The second pass carries its proof payload on the spec itself rather than
+    in `PROOF_EVENTS`, so a rule edited without its proof fails immediately
+    instead of drifting from a distant table. Both are read here and the
+    checks below do not care which arrangement a spec uses.
+    """
+    from detection_specs_part5_families import BY_CATEGORY  # noqa: PLC0415 — scripts/ sibling, path set above
+    from detection_specs_part6_coverage import BY_CATEGORY as COVERAGE  # noqa: PLC0415
+
+    out = [(category, spec) for category, specs in BY_CATEGORY.items() for spec in specs]
+    out += [(category, spec) for category, specs in COVERAGE.items() for spec in specs]
+    return out
+
+
+def _proofs_for(specs: list[tuple[str, dict[str, Any]]]) -> dict[str, tuple[str, dict[str, Any], dict[str, Any]]]:
+    """`PROOF_EVENTS` plus every proof a spec carries on itself."""
+    merged = dict(PROOF_EVENTS)
+    for _category, spec in specs:
+        carried = spec.get("proof")
+        if carried:
+            emitter, payload = carried
+            merged[str(spec["slug"])] = (emitter, payload, spec.get("proof_derived") or {})
+    return merged
 
 
 def _normalize_batch(entries: list[tuple[str, dict[str, Any]]]) -> list[dict[str, Any] | None]:
@@ -515,7 +543,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {category}/{spec['slug']:48} {state}")
         return 0
 
-    problems = check(specs, PROOF_EVENTS)
+    problems = check(specs, _proofs_for(specs))
     if problems:
         print("scenario family alignment: FAILED\n", file=sys.stderr)
         for problem in problems:

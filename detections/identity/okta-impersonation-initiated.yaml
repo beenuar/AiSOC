@@ -1,0 +1,24 @@
+id: det-identity-272
+name: Okta Administrator Impersonation Initiated
+description: Impersonation lets support act as a user; it is legitimate and it is also indistinguishable
+  from the user without this event.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "user.session.impersonation.initiate"
+false_positives:
+- Documented break-glass procedure
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'
