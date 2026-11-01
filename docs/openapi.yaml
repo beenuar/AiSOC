@@ -21303,6 +21303,179 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-chat-compliance/config:
+    get:
+      tags:
+      - ai-estate
+      summary: Get Config
+      operationId: get_config_api_v1_ai_chat_compliance_config_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+    put:
+      tags:
+      - ai-estate
+      summary: Put Config
+      description: 'Store the tenant''s key and switches.
+
+
+        Encryption happens before the row is written, and a vault failure is a
+
+        503 rather than a silently-plaintext row: storing the key unencrypted
+
+        because the vault was unavailable is the worst outcome available here.'
+      operationId: put_config_api_v1_ai_chat_compliance_config_put
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - ai-estate
+      summary: Delete Config
+      description: 'Stop collecting, and optionally remove what was collected.
+
+
+        Disabling without purging is the default because an operator turning a
+
+        feature off should not silently destroy evidence an investigation may
+
+        be relying on. Purging is the explicit choice, and it is the one a
+
+        data-subject request needs.'
+      operationId: delete_config_api_v1_ai_chat_compliance_config_delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: purge
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Also delete everything already collected for this tenant.
+          default: false
+          title: Purge
+        description: Also delete everything already collected for this tenant.
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-chat-compliance/events:
+    get:
+      tags:
+      - ai-estate
+      summary: List Events
+      operationId: list_events_api_v1_ai_chat_compliance_events_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-chat-compliance/content-labels:
+    get:
+      tags:
+      - ai-estate
+      summary: List Content Labels
+      operationId: list_content_labels_api_v1_ai_chat_compliance_content_labels_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter to one classification label.
+          title: Label
+        description: Filter to one classification label.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentLabelListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/war-rooms/cases/{case_id}:
     post:
       tags:
@@ -24577,6 +24750,62 @@ components:
       - node_count
       - edge_count
       title: AttackPathResponse
+    AuditEventListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AuditEventModel'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        collectionEnabled:
+          type: boolean
+          title: Collectionenabled
+      type: object
+      required:
+      - items
+      - total
+      - collectionEnabled
+      title: AuditEventListResponse
+    AuditEventModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        eventType:
+          type: string
+          title: Eventtype
+        occurredAt:
+          type: string
+          title: Occurredat
+        actorEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actoremail
+        actorIp:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorip
+        chatExternalId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chatexternalid
+        projectExternalId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectexternalid
+      type: object
+      required:
+      - id
+      - eventType
+      - occurredAt
+      title: AuditEventModel
     AuditEventOut:
       properties:
         id:
@@ -26181,6 +26410,70 @@ components:
       - medianConfidence
       - lowConfidence
       title: ConfidenceSummary
+    ConfigRequest:
+      properties:
+        provider:
+          type: string
+          title: Provider
+          description: 'One of: anthropic'
+        accessKey:
+          type: string
+          minLength: 8
+          title: Accesskey
+          description: Stored vault-encrypted; never returned.
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Collect the directory and the activity feed.
+          default: false
+        contentLabels:
+          type: boolean
+          title: Contentlabels
+          description: Additionally derive classification labels and one bounded snippet
+            from message text. Off by default even when collection is on.
+          default: false
+      type: object
+      required:
+      - provider
+      - accessKey
+      title: ConfigRequest
+    ConfigResponse:
+      properties:
+        configured:
+          type: boolean
+          title: Configured
+        provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+        contentLabels:
+          type: boolean
+          title: Contentlabels
+          default: false
+        hasKey:
+          type: boolean
+          title: Haskey
+          default: false
+        lastCollectedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lastcollectedat
+        lastError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lasterror
+      type: object
+      required:
+      - configured
+      title: ConfigResponse
+      description: The tenant's configuration, without the key.
     ConfirmRequest:
       properties:
         mfa_token:
@@ -26453,6 +26746,74 @@ components:
       - uploads_enabled
       - consent_text
       title: ConsentResponse
+    ContentLabelListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ContentLabelModel'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        contentLabelsEnabled:
+          type: boolean
+          title: Contentlabelsenabled
+      type: object
+      required:
+      - items
+      - total
+      - contentLabelsEnabled
+      title: ContentLabelListResponse
+    ContentLabelModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        chatExternalId:
+          type: string
+          title: Chatexternalid
+        actorEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actoremail
+        labels:
+          items:
+            type: string
+          type: array
+          title: Labels
+        secretKinds:
+          items:
+            type: string
+          type: array
+          title: Secretkinds
+        snippet:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Snippet
+        snippetTruncated:
+          type: boolean
+          title: Snippettruncated
+          default: false
+        messagesExamined:
+          type: integer
+          title: Messagesexamined
+        messagesMatched:
+          type: integer
+          title: Messagesmatched
+        occurredAt:
+          type: string
+          title: Occurredat
+      type: object
+      required:
+      - id
+      - chatExternalId
+      - messagesExamined
+      - messagesMatched
+      - occurredAt
+      title: ContentLabelModel
     ContextImportRequest:
       properties:
         departments:
