@@ -464,3 +464,33 @@ verb above `read_only` is `AUTOMATIC`, so unverifiable means not autonomous,
 and the read-backs ship as dispatchable read verbs (`get_cloud_identity`,
 `get_oauth_grants`, `get_secret_scanning_alerts`) so a playbook can read the
 effect even though governance does not treat the verb as self-verifying.
+
+### D5 — The kill-switch playbook is recorded as outside the benchmark corpus
+
+`test_playbook_completion_rate.py` requires every shipped playbook to match
+at least one incident in the 200-case synthetic corpus, and every pack
+category to cover at least one — "a category that matches no incidents is
+dead weight". The AI-agent kill switch matches nothing, because the corpus
+contains **no AI-estate template at all**.
+
+Two wrong fixes were available and both were refused. Tagging the playbook
+`supply-chain` would make it match `github-pat-leak`, which is exactly the
+"matches by tag only" case the gate's own docstring says it exists to
+prevent: blocking a gateway key does nothing about a leaked GitHub PAT.
+Adding an AI-estate template to the corpus moves a published measurement
+and belongs to the lane that owns detection content.
+
+What shipped instead: one entry in the existing
+`_PLAYBOOKS_NOT_IN_BENCHMARK_DATASET` list with the reason, the category
+gate's exemption **derived** from that list rather than kept as a second
+hand-written one (so the two cannot disagree), and a new ratchet —
+`test_the_not_in_benchmark_list_is_a_ratchet` re-runs the evaluation with
+the exemption emptied and fails if an entry would no longer be an orphan.
+It uses the evaluator's own definition rather than a second predicate,
+because a ratchet with its own idea of "covered" is a ratchet that drifts.
+Proven by adding a covered playbook to the list and watching it fail.
+
+**To close this:** an AI-estate incident template in
+`services/agents/tests/eval_data/synthetic_incidents.json`, with the
+scorecard and alert-reduction suite re-run, after which the entry must be
+removed or the ratchet fails.
