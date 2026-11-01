@@ -73,6 +73,48 @@ class TestRegistration:
         assert Capability.PULL_DEVICE_INVENTORY in MicrosoftIntuneConnector.capabilities()
 
 
+class TestTheRegistryCarriesNoDatabaseDependency:
+    """A connector must not pull a database driver into its import graph.
+
+    `scripts/connector_normalize_worker.py` imports the whole registry with
+    a minimal dependency set to replay detections through real connectors.
+    A module-level `from sqlalchemy import text` reachable from any
+    connector took that entire job down with
+    `ModuleNotFoundError: No module named 'sqlalchemy'`, which is why the
+    record shapes and the store that writes them are separate modules.
+    """
+
+    def test_importing_every_connector_needs_no_sqlalchemy(self) -> None:
+        import subprocess
+
+        # A subprocess with sqlalchemy blocked at import, because this
+        # process has already imported it and a monkeypatched sys.modules
+        # entry would not reproduce the worker's environment faithfully.
+        probe = (
+            "import sys\n"
+            "class _Block:\n"
+            "    def find_module(self, name, path=None):\n"
+            "        return self if name == 'sqlalchemy' or name.startswith('sqlalchemy.') else None\n"
+            "    def load_module(self, name):\n"
+            "        raise ImportError('No module named ' + repr(name))\n"
+            "sys.meta_path.insert(0, _Block())\n"
+            "from app.connectors import _CONNECTOR_CLASSES\n"
+            "print(len(_CONNECTOR_CLASSES))\n"
+        )
+        done = subprocess.run(
+            [sys.executable, "-c", probe],
+            cwd=str(Path(__file__).resolve().parents[2]),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert done.returncode == 0, (
+            "importing the connector registry failed with sqlalchemy unavailable, so the "
+            f"detection-replay worker cannot load it either:\n{done.stderr[-800:]}"
+        )
+        assert int(done.stdout.strip()) > 50
+
+
 class TestSchedulerRunsTheImport:
     """The wiring half. `import_context` had exactly one production caller
     before this work -- a manual POST route -- so a tenant's HR data was only

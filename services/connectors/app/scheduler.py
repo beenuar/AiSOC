@@ -1145,7 +1145,7 @@ class ConnectorScheduler:
             return
 
         try:
-            from app.workforce import sync_workforce
+            from app.workforce_store import sync_workforce
 
             report = await sync_workforce(
                 self._engine,
