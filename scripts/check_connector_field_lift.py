@@ -206,6 +206,116 @@ LIFTS: dict[str, dict[str, Any]] = {
             "shared_link_access": "open",
         },
     },
+    "azure_entra": {
+        # A directory audit record, in the shape Graph's auditLogs/directoryAudits
+        # returns it. The target of the action is inside `targetResources`,
+        # a list, with the property that changed one level deeper again.
+        "raw": {
+            "_aisoc_event_kind": "directoryAudit",
+            "id": "b1",
+            "activityDateTime": "2026-11-01T10:00:00Z",
+            "activityDisplayName": "Add member to role",
+            "category": "RoleManagement",
+            "result": "success",
+            "resultReason": "",
+            "operationType": "Assign",
+            "loggedByService": "Core Directory",
+            "initiatedBy": {"user": {"id": "u1", "userPrincipalName": "admin@example.com", "ipAddress": "203.0.113.5"}},
+            "targetResources": [
+                {
+                    "type": "User",
+                    "id": "t1",
+                    "userPrincipalName": "victim@example.com",
+                    "displayName": "Victim",
+                    "modifiedProperties": [{"displayName": "Role.DisplayName", "oldValue": "null", "newValue": '"Global Administrator"'}],
+                }
+            ],
+        },
+        "require": {
+            "activity": "Add member to role",
+            "activity_key": "add_member_to_role",
+            "operation_type": "Assign",
+            "audit_category": "RoleManagement",
+            "audit_result": "success",
+            "src_ip": "203.0.113.5",
+            "target_type": "User",
+            "target_user": "victim@example.com",
+            "modified_property": "Role.DisplayName",
+            # Graph JSON-encodes these; the quotes are stripped so a rule can
+            # compare against the role name a reader would write.
+            "new_value": "Global Administrator",
+        },
+    },
+    "m365_audit": {
+        "raw": {
+            "Id": "m1",
+            "CreationTime": "2026-11-01T10:00:00",
+            "Operation": "New-InboxRule",
+            "Workload": "Exchange",
+            "RecordType": 1,
+            "UserId": "user@example.com",
+            "ClientIP": "203.0.113.5",
+            "ResultStatus": "Succeeded",
+            "ObjectId": "rule1",
+            "Parameters": [{"Name": "ForwardTo", "Value": "attacker@example.net"}, {"Name": "DeleteMessage", "Value": "True"}],
+        },
+        "require": {
+            "operation": "New-InboxRule",
+            "result_status": "succeeded",
+            "object_id": "rule1",
+            "param_forwardto": "attacker@example.net",
+            "param_deletemessage": "True",
+        },
+    },
+    "gitlab": {
+        "raw": {
+            "_aisoc_stream": "audit_events",
+            "id": 1,
+            "created_at": "2026-11-01T10:00:00Z",
+            "author_id": 1,
+            "author_name": "User",
+            "entity_id": 7,
+            "entity_type": "Project",
+            "entity_path": "group/project",
+            "details": {
+                "custom_message": "Added deploy key",
+                "author_name": "User",
+                "target_id": 3,
+                "target_type": "DeployKey",
+                "target_details": "key",
+                "ip_address": "203.0.113.5",
+            },
+        },
+        "require": {
+            # `event_type` is built from GitLab's free-text custom_message and
+            # carries spaces; the underscored key is what a rule clauses on.
+            "action_key": "added_deploy_key",
+            "target_type": "DeployKey",
+            "target_details": "key",
+            "entity_path": "group/project",
+        },
+    },
+    "confluence_audit": {
+        "raw": {
+            "id": 1,
+            "creationDate": 1793952000000,
+            "author": {"type": "user", "displayName": "Admin", "accountId": "a1", "email": "admin@example.com"},
+            "remoteAddress": "203.0.113.5",
+            "summary": "Granted site admin",
+            "description": "",
+            "category": "Permissions",
+            "affectedObjects": [{"name": "victim@example.com", "objectType": "User"}],
+            "changedValues": [{"name": "Permission", "oldValue": "user", "newValue": "admin"}],
+        },
+        "require": {
+            "summary_key": "granted_site_admin",
+            "audit_category": "Permissions",
+            "target_name": "victim@example.com",
+            "target_type": "User",
+            "changed_property": "Permission",
+            "new_value": "admin",
+        },
+    },
 }
 
 
