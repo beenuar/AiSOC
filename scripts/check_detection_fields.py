@@ -299,6 +299,17 @@ _BASELINE_DERIVED_FIELDS = frozenset(
         "baseline_principal_volume_z",
         "baseline_oauth_app_volume_z",
         "baseline_peer_deviation",
+        # Depth plan wave 2, 1.4 — per-sub-principal baselines. A token, an
+        # OAuth app, a service account or an AI agent acting for a human
+        # gets its own baseline, because a stolen credential acts *as* the
+        # user and leaves the user's own numbers untouched.
+        "baseline_sub_principal_kind",
+        "baseline_sub_principal_rarity",
+        "baseline_sub_principal_volume_z",
+        "baseline_token_cadence",
+        "baseline_token_cadence_shift",
+        "baseline_token_reactivated_after_idle",
+        "baseline_token_new_asn_after_creation",
     }
 )
 

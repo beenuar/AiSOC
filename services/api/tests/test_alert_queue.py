@@ -715,7 +715,14 @@ class TestBuildQueue:
         # (critical base 900) and the basis says exactly that.
         assert item.priority_score == 900
         assert item.priority_basis["base"] == 900
-        assert item.priority_basis["rationale"] == []
+        # Since 1.1 the basis is not empty even with no context: a 1.0 row
+        # records that the actor's privilege at event time could not be
+        # resolved. The row has to be here rather than omitted, because an
+        # analyst reading "why is this ranked where it is" needs to be told
+        # the platform could not answer, not shown a list with the question
+        # silently missing. The score is unmoved, which is the other half.
+        assert [r["factor"] for r in item.priority_basis["rationale"]] == [1.0]
+        assert "unknown" in item.priority_basis["rationale"][0]["reason"]
         # Age is positive (first_seen was 10 minutes ago).
         assert item.age_seconds >= 0
         # Asset chip pulls host first.
