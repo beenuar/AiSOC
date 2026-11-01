@@ -136,6 +136,7 @@ def _literal_for(
     allowed: list[str] | None = None,
     max_len: int | None = None,
     exact_len: int | None = None,
+    ordinal: int = 0,
 ) -> str:
     """A syntactically valid value for a NOT NULL column with no default.
 
@@ -157,6 +158,18 @@ def _literal_for(
       digest column has and which the short filler cannot satisfy. Taught
       to the seeder rather than relaxed in the schema: a constraint
       loosened so a prober can insert is a constraint that stops being one.
+    * ``ordinal`` makes the text filler differ per column, and sort by
+      column position. ``_check_vocabularies`` reads single-column CHECKs
+      only, so a constraint *relating two columns* was invisible here and
+      every text column got the same literal:
+      ``identity_links`` declares ``left_key <> right_key`` and
+      ``left_key < right_key``, and the identical filler failed both, so the
+      table reported unseedable and its isolation assertions would have been
+      skipped. Ordering the filler by position satisfies the ordered-pair
+      idiom generally. It is a heuristic, and a safe one in the only
+      direction that matters: it can turn unseedable into seeded, never a
+      failed insert into a silent pass, because the insert itself is the
+      evidence and a table that still will not seed is still reported.
     """
     if allowed:
         return f"'{allowed[0]}'"
@@ -170,7 +183,9 @@ def _literal_for(
     if data_type == "uuid":
         return f"'{uuid.uuid4()}'::uuid"
     if data_type in ("character varying", "text", "character"):
-        value = f"p{nonce}"
+        # The ordinal leads so that truncation to `max_len` keeps columns
+        # distinct and in position order.
+        value = f"p{ordinal:02d}{nonce}"
         if max_len is not None:
             value = value[:max_len]
         return f"'{value}'"
@@ -306,7 +321,7 @@ async def _seed_row(conn, table: str, tenant: uuid.UUID, enum_labels: dict[str, 
 
     names = ["tenant_id"]
     values = [tenant_literal]
-    for col in cols:
+    for ordinal, col in enumerate(cols, start=1):
         literal = _literal_for(
             col["data_type"],
             col["udt_name"],
@@ -315,6 +330,7 @@ async def _seed_row(conn, table: str, tenant: uuid.UUID, enum_labels: dict[str, 
             allowed=vocab.get(col["column_name"]),
             max_len=col["character_maximum_length"],
             exact_len=exact.get(col["column_name"]),
+            ordinal=ordinal,
         )
         if literal == "DEFAULT":
             continue

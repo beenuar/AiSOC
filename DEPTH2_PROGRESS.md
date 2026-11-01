@@ -55,6 +55,14 @@ claimed the same migration number simultaneously and one had to renumber.
 | 144 | migration | Lane D / Phase 6.4 | 2026-11-01 | reserved — ticket-sync state, if 6.4 reproduces a gap |
 | 145 | migration | Lane D / Phase 7.5 | 2026-11-01 | reserved — AI containment state, if needed |
 | 0020 | ADR | Lane D | 2026-11-01 | reserved |
+| 124 | migration | Lane A / 1.1 | 2026-11-01 | `services/api/migrations/124_identity_privilege_facts.sql` |
+| 125 | migration | Lane A / 1.2 | 2026-11-01 | `services/api/migrations/125_access_review_findings.sql` |
+| 126 | migration | Lane A / 1.4 | 2026-11-01 | **released unused** — 1.4 lives in the existing fusion baseline store (Redis), as the plan requires; no table was needed |
+| 127 | migration | Lane A / 1.5 | 2026-11-01 | **released unused** — 1.5 reads `posture_snapshots` (103) and the lake; no new table |
+| 128 | migration | Lane A / 3.1 | 2026-11-01 | `services/api/migrations/128_identity_links.sql` |
+| 129 | migration | Lane A | 2026-11-01 | **released unused** |
+| 0016 | ADR | Lane A / 1.1 | 2026-11-01 | `docs/decisions/0016-privilege-context-in-scoring.md` |
+| 0017 | ADR | Lane A / 3.1 | 2026-11-01 | **released unused** — the confidence model is a table of eight rules in `identity_resolution.py`, each with its reasoning beside it, and the merge threshold's justification is in the module docstring. An ADR restating them would be a second place for them to drift |
 | 146 | migration | Lane E / 7.1 | 2026-11-01 | AI provider coverage + chat compliance (labels and bounded snippet only) |
 | 147 | migration | Lane E / 7.2 | 2026-11-01 | hosted agents and repository AI artefacts as asset kinds |
 | 148 | migration | Lane E / 7.3 | 2026-11-01 | agent identities and per-agent baselines |
@@ -82,8 +90,12 @@ claims one here first.
 Highest at kickoff: migration `123`, ADR `0014`. Next free outside Lane B's
 block: migration `124`, ADR `0016`.
 
-Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
-ADR `0016`.
+Highest at kickoff: migration `123`, ADR `0014`. Lane A claimed migrations
+`124`–`129` and ADRs `0016`–`0017`, and **used 124, 125, 128 and 0016**.
+The rest are released: a claimed-and-unused number is kept in this table
+rather than deleted, so a later lane reading it can see the number is free
+without having to prove the claim was abandoned rather than forgotten.
+Next free outside the block: migration `130`, ADR `0018`.
 
 ## Phase 0: Kickoff
 
@@ -226,6 +238,54 @@ not, that is a real first-run defect for the most common conflict there is
 and belongs in its own fix with a negative control. Until that run exists,
 this is an observation with its evidence attached.
 
+### D3 — the queue has never read identity privilege, contrary to the plan
+
+The plan's 1.1 says "Prioritisation already reads identity privilege (v16)
+and must read this". It does not. `score_alert_priority` has taken an
+`identity` argument and carried a `_PRIVILEGE_FACTOR` table since v16, and
+its **only** production caller — `alert_queue.build_queue` — passed
+`identity=None` at `alert_queue.py:570`. `queue_priority()`, the one other
+function that would pass one, has no production caller at all.
+
+So the privilege factor was unreachable from the only surface where
+prioritisation changes anything. Recorded here because it changes 1.1's
+scope: the item is not "make the existing reader read a better source", it
+is "wire the reader", which is the repository's defining defect found again
+inside a module whose own docstring explains why an ordering nobody can
+interrogate stops being trusted.
+
+Closed by Lane A's 1.1: `resolve_identity_contexts()` resolves each alert's
+actor against the privilege version covering that alert's own event time,
+one batched query per page, and `build_queue` passes it.
+
+### D4 — the container clock runs ahead of the host's, and a live
+point-in-time test trips over it
+
+`identity_privilege_facts.valid_from` defaults to Postgres `now()`. On this
+machine the Docker Postgres container's clock measured ~17 ms **ahead** of
+the host's Python clock, so a row written and immediately read back at
+`datetime.now(tz=UTC)` landed *before* its own `valid_from` and the
+point-in-time select correctly returned nothing.
+
+That is the store behaving exactly as specified — an event predating a
+collection has no posture — so the fix is in the test, which now reads one
+minute ahead. Widening `valid_from <= :at` to absorb the skew would have
+answered historical questions with newer snapshots, which is precisely the
+defect migration 103 is versioned to prevent. Recorded because the symptom
+("the row is there and the point-in-time read cannot see it") reads as a
+query bug and is not one.
+
+### D5 — the verdict baseline in the plan is for a model this host cannot run
+
+The published best balanced accuracy of 0.357 is
+`llama3.1:8b-instruct-q4_K_M`. The only model pulled on this host is
+`llama3.2:3b-instruct-q4_K_M`, so a run here is not comparable to that row.
+
+Rather than quote the 8B figure as a baseline it did not measure, Lane A ran
+the **same 3B model on both trees** — `origin/main` at `152c6d5ff` and the
+lane branch — so the comparison has one variable. Both numbers are recorded
+in the item log below, and neither is published as the project's headline:
+the scoreboard row for the 8B model is untouched.
 ## Phase 7: AI agent security (Lane E)
 
 - [x] **7.1** Provider coverage (depth 6.3) plus enterprise AI-chat
@@ -578,6 +638,250 @@ Proven by adding a covered playbook to the list and watching it fail.
 `services/agents/tests/eval_data/synthetic_incidents.json`, with the
 scorecard and alert-reduction suite re-run, after which the entry must be
 removed or the ratchet fails.
+### 1.1 Effective permissions everywhere — shipped
+
+**Reproduced first.** `services/api/tests/test_identity_privilege_reproduction.py`
+and `services/agents/tests/test_identity_privilege_tool_reproduction.py`
+failed on the pre-change tree: 15 of 20 api assertions and all 3 agents
+assertions. The 5 api assertions that passed are the *negative* arms of the
+condition-operator matrix, and they passed for the wrong reason — the
+resolver denied every operator it could not evaluate, so "correctly refuses"
+and "under-reports real access" were indistinguishable until the operators
+were modelled.
+
+**What shipped.**
+
+- `effective_permissions/iam_conditions.py`: 24 condition operators plus the
+  `IfExists` suffix and the `ForAnyValue:` / `ForAllValues:` qualifiers, with
+  a **three-valued** result. Undecidable is resolved per effect — an
+  undecidable `Allow` does not grant, an undecidable `Deny` still denies —
+  so both arms refuse to over-report access.
+- `effective_permissions/aws.py`: `NotAction` and `NotResource` invert their
+  sets; session policies cap the identity arm (intersected across several,
+  never unioned) and not the resource-policy arm; withheld actions are
+  reported in `deny_actions` with the reason in `notes`.
+- `identity_privilege.py`: tier derived from what an identity can *write*,
+  never from the name of the role it holds, plus `can_escalate`,
+  `data_access`, `third_party`, `cross_account`, each with its evidence.
+- Migration **124**: `identity_privilege_facts` (versioned on the same
+  interval as the snapshot it came from, one live row per principal enforced
+  by a partial unique index) and `identity_permission_usage` (the runtime
+  overlay), both under RLS.
+- `identity_usage_collector.py`: the overlay from the lake, returning
+  `measured=False` with a reason whenever the lake cannot be asked.
+
+**Wiring — the production callers.**
+
+| Surface | Caller |
+|---|---|
+| Fusion, per alert | `fusion_engine.process()` step 2.7 → `IdentityPrivilegeResolver.resolve()`, stamped at the alert's **event time** |
+| Confidence | `ConfidenceScorer.score()` factor `identity_privilege`, weight 0.06, the eight existing weights scaled by 0.94 so the total is still exactly 1.0 |
+| Console queue | `alert_queue.build_queue()` → `resolve_identity_contexts()` → `score_alert_priority(identity=...)` (see D3) |
+| Typed pivots | `investigation_tools.TOOLS["identity_effective_permissions"]`, reachable from `POST /graph/investigate/query` |
+| Agent tool registry | `tools/registry.py::default_registry`, so the model is offered it and the call lands in the ledger |
+| Triage prompt + `confidence_basis` | `fused_alert_consumer._attach_privilege_context()` → `context/privilege.py`, through the same `/investigate/query` door the registered tool uses |
+
+**Negative controls.** Ten live-Postgres tests, each with one: the
+point-in-time read is contrasted against the live-row read it replaced and
+the two disagree; the unchanged-rederivation test is paired with a changed
+one that *does* open a version; the queue test reverts the context and the
+score collapses to the unknown baseline.
+
+**Gates.** `test_tool_result_channel.py` caught the new tool missing from
+`AGENT_TOOL_NAMES` and `test_investigation_tools.py` caught it missing from
+the dispatch-coverage table. Both were the gate working, and both are fixed
+rather than relaxed.
+
+**Measurements.**
+
+Alert reduction, `services/fusion/tests/test_alert_reduction_real.py`:
+
+| Measure | Before | After |
+|---|---|---|
+| Production correlation key | 1000 → 667 = **33.3 %** | 1000 → 667 = **33.3 %** |
+| Detection-shaped cohort | 1000 → 755 = **24.5 %** | 1000 → 755 = **24.5 %** |
+
+Verdict scorecard, `scripts/run_verdict_eval.py`, same corpus and the same
+model on both trees (see D5), Apple M-series arm64 / macOS, 2026-11-01,
+`llama3.2:3b-instruct-q4_K_M` served by Ollama, 72 live model calls on each
+run, 0 errored:
+
+| Metric | Before (`152c6d5ff`) | After | Delta |
+|---|---|---|---|
+| Balanced accuracy | 0.2604 | 0.2715 | +0.0111 |
+| Malicious recall | 0.1944 | 0.1944 | 0.0000 |
+| Abstention rate | 0.0139 | 0.0139 | 0.0000 |
+| Auto-close precision | 0.4286 (3/7) | 0.3750 (3/8) | −0.0536 |
+
+**Both movements are run-to-run variance, not an effect of this change, and
+the reason is structural rather than a judgement call.** The verdict harness
+sets no service token, so `fetch_privilege_context` returns empty,
+`render_privilege(None)` returns `""`, and the prompt the model receives is
+byte-identical on both trees. The auto-close figure moved because its
+denominator moved from 7 to 8 — one additional item crossed the
+consideration threshold — which is the smallest denominator on the
+scorecard and the one most sensitive to a single sampled token.
+
+Nothing here is published to the scoreboard: the project's headline row is
+`llama3.1:8b-instruct-q4_K_M` at 0.357, which this host cannot run.
+
+### 1.2 Access review and right-sizing — shipped
+
+**Reproduced first.** `services/api/tests/test_access_review_reproduction.py`
+failed 7/7: no module in the tree compared granted with used, and a grep for
+`access_review`, `right-sizing`, `best_fit_role` or `dormant_admin` across
+`services/` and `apps/web/src` matched only Lane A's own 1.1 files.
+
+**What shipped.** `access_review.py` (pure), `access_review_store.py`,
+migration **125**, five routes behind `compliance:read`, and a console page
+at `/access-review` with a sidebar entry. Six finding kinds, each with a
+required `object_hint` and `recommendation` — a read-only review whose
+findings do not name the object to change leaves the reviewer with the hard
+half of the work, which is why reviews do not happen.
+
+**The honesty property this item turns on.** Usage-dependent findings are
+suppressed *wholesale* when `UsageOverlay.measured` is false, not emitted
+with a caveat. A caveat on "revoke this" is read by nobody, and the finding
+is wrong in the direction that costs an outage. `best_fit_role` returns
+`None` for the same reason, and also when no built-in covers the used set —
+recommending a role that does not cover something a principal actually used
+is a recommendation to cause an outage, which is the one error a
+right-sizing feature must not make.
+
+Three distinct empty states, because only one of them is good news:
+`never_run`, `nothing_reviewed` (a review over zero principals) and
+`no_findings` (a review over a real inventory). Rendering all three as
+"0 findings" presents an estate nobody looked at as an estate with nothing
+wrong.
+
+**Negative controls.** Eight live-Postgres tests: unmeasured usage suppresses
+the usage findings *and then the same principal with measured usage produces
+them*; three runs produce one row *and the run table proves three runs
+happened*; a finding that stops reproducing is retired; an acknowledgement
+survives the next run; another tenant's finding cannot be acknowledged
+(404, not 403, so the route is not an existence oracle).
+
+**Defect found while building.** The retire query hit the recorded
+`:name::type` bind-cast trap — SQLAlchemy's regex backtracks one character
+over a Postgres cast, so `:principals::text[]` declared a parameter named
+`principal`. Seven of eight live tests failed with a syntax error. Spelled
+`CAST(:principals AS text[])`; `check_text_bind_casts.py` stays green.
+
+### 1.4 Sub-principal baselines — shipped
+
+**Reproduced first.**
+`services/fusion/tests/test_sub_principal_baselines_reproduction.py` failed
+7/7. `baselines.py` kept a baseline per *principal* plus one volume
+baseline per OAuth app; a token, a service account and an AI agent were all
+folded into the human's baseline, which is backwards for the case these
+baselines exist to catch.
+
+**What shipped.** In `baselines.py` itself, as the plan requires — not a new
+store. `api_token`, `oauth_app`, `service_account` and `ai_agent` become
+subjects of their own, with four signals: acting outside its own baseline, a
+machine cadence turning interactive, a new ASN within an hour of the token
+first appearing, and reactivation after 60 days idle. All seven new fields
+are in `DERIVED_FIELDS`, so a rule can clause on them.
+
+**`classify_cadence` tests interactive first, and the order is the
+classifier.** A person working 09:00–17:00 produces consecutive active hours
+whose gaps are almost all 1, which is indistinguishable from an hourly cron
+by regularity alone. What separates them is that a person calls several
+times within one hour and a timer does not, so the repeat count has to be
+consulted before the regularity is. The first implementation checked
+regularity first and classified a human as `scheduled`.
+
+**The cross-language contract, and the second defect it caught.** The GitHub
+join key is written by Go (`session.go`, `strings.TrimSpace`, no case
+folding) and consumed by Python, whose general field helper lowercases —
+correct for a username, wrong for a base64 digest, and the obvious
+implementation is the broken one. Both sides now read one committed fixture,
+`services/ingest/internal/activity/testdata/github_token_key.json`, and it
+immediately found a *second* divergence nobody had looked for: Go requires a
+string type, while the Python side coerced a numeric `hashed_token` into
+`"12345"` — a baseline key Go never writes. Go: 8 subtests pass. Python: 9
+assertions pass, including a negative control that fails if the resolver
+ever starts folding case.
+
+**Gate caught drift.** `check_detection_fields.py` keeps its own mirror of
+`DERIVED_FIELDS` and `test_baselines.py` compares the two in both
+directions; it failed on the seven new fields, which is the gate working.
+
+### 1.5 What changed before this alert — shipped
+
+**Reproduced first.**
+`services/api/tests/test_change_timeline_reproduction.py` failed 5/5.
+
+**What shipped.** `change_timeline.py` joins versioned posture (what the
+estate looked like, complete for collected providers) with audit events (who
+did it, complete for ingested sources). Both are kept because a timeline
+from one alone is missing either the attribution or the coverage. Six change
+kinds over a closed action vocabulary — an unfamiliar action is not returned
+rather than guessed into a kind, because a reader cannot tell a guessed
+classification from a known one.
+
+`ChangeTimeline.measured` distinguishes "read both sources and found
+nothing" from "could not read either". An empty list with no such field
+turns a lake outage into evidence of a quiet week.
+
+**Wiring.** Registered as the typed pivot `changes_before_alert` and in the
+agents tool registry, reaching the API through the same `/investigate/query`
+door the privilege tool uses. The lake table is `aisoc.raw_events`, already
+declared ClickHouse-owned in `check_raw_sql_columns.py`'s `UNMIGRATED_TABLES`,
+so no new declaration was needed — verified by running the gate.
+
+### 3.1 Identity resolution — shipped
+
+**Reproduced first.**
+`services/api/tests/test_identity_resolution_reproduction.py` failed 7/7.
+
+**What shipped.** `identity_resolution.py` (pure) over all six sources the
+plan names, `identity_resolution_store.py`, and migration **128**. Eight
+rules, each carrying its own confidence, the evidence that produced it, and
+a `merged` flag derived from one threshold.
+
+**The failure mode designed against is a wrong link, not a missing one.** A
+wrong merge makes the identity look *richer*, not broken, and nothing
+downstream can detect it. The three canonical wrong merges are refused and
+each has a test: `alice@example.com` against `alice@contoso.com` (stored as
+a visible weak link, never merged), `admin` against `admin` (not even
+returned as weak — it would fill a review page with noise that reads as
+near-misses), and a shared role mailbox (demoted rather than treated as a
+verified address match).
+
+`MERGE_THRESHOLD` is 0.90 because the two errors are asymmetric: a missed
+link costs an analyst one pivot by hand, a wrong link silently attributes
+one person's alerts to another.
+
+**Both stores, one read interface.** Postgres for CORE per ADR-0010,
+`SAME_PERSON` edges mirrored to the graph for `full`, and reads come from
+Postgres only — a read that preferred the graph would answer differently on
+the two profiles for reasons no operator could see. Only merge-strength
+links are mirrored, because a weak edge in the graph gets walked by every
+traversal whose author did not know to filter it.
+
+**Negative controls.** Seven live-Postgres tests. The ordered-pair CHECK is
+exercised with a deliberate out-of-order insert that must be refused by the
+database; the weak-chain test is paired with a strong link proving the walk
+works at all; the bounded walk is compared at two depths; a human decision
+is tested in *both* directions (confirm promotes a weak link, reject demotes
+a strong one, neither touches `confidence`).
+
+### Measurements for 1.2, 1.4, 1.5 and 3.1
+
+Alert reduction re-run after all four: **33.3 %** (1000 → 667) and
+**24.5 %** (1000 → 755) — identical to the Phase 0 baseline.
+
+The verdict scorecard was **not** re-run for this batch, and the reason is
+stated rather than skipped: none of these four changes what the triage
+prompt contains on the eval corpus. 1.2 is a separate console surface with
+no triage caller; 1.4 adds fields to fusion's derived namespace that no
+corpus alert carries; 1.5 and 3.1 add tools the model may call, and the
+harness places no service token, so both return "could not read" exactly as
+the privilege tool did in the 1.1 measurement — where the prompt was proved
+byte-identical. A re-run would re-measure the same sampling noise at ~17
+minutes per pass. If a later lane wires any of these into the prompt by
+default, the scorecard has to move with it.
 ### 7.1 — Provider coverage and AI-chat compliance logs
 
 Landed early because Lane D's 7.5 depends on the provider work.

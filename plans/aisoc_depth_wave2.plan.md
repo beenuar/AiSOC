@@ -16,19 +16,19 @@ todos:
     status: pending
   - id: p1-1-effective-permissions-everywhere
     content: "Phase 1.1: depth 2.6 as specified, plus runtime-usage overlay, computed can-escalate / data-access / third-party / cross-account tags, and the AWS policy semantics the resolver does not yet model"
-    status: pending
+    status: completed
   - id: p1-2-access-review
     content: "Phase 1.2: access review and right-sizing (granted vs used over a window, best-fit role, humans holding long-lived keys, outside collaborators with admin) as read-only findings and a review page"
-    status: pending
+    status: completed
   - id: p1-3-hr-device-context
     content: "Phase 1.3: HR connectors (Workday, BambooHR, Rippling) and MDM connectors (Intune, Kandji, Jamf promoted from plugin) feeding employment status, manager, tenure, device owner and compliance into the identity graph and triage"
     status: pending
   - id: p1-4-sub-principal-baselines
     content: "Phase 1.4: baselines per sub-principal (OAuth app, token, service account, AI agent acting for a human); GitHub tokens joined to scopes and classified by cadence"
-    status: pending
+    status: completed
   - id: p1-5-change-before-alert
     content: "Phase 1.5: a cited 'what changed before this alert' tool over versioned posture and audit events (role, policy, OAuth consent, MFA, sharing)"
-    status: pending
+    status: completed
   - id: p1-6-anonymizer-classes
     content: "Phase 1.6: VPN, Tor, proxy and hosting-provider classes stamped at ingest from a pinned local dataset with its version recorded"
     status: in_progress
@@ -49,7 +49,7 @@ todos:
     status: pending
   - id: p3-1-identity-resolution
     content: "Phase 3.1: identity resolution across IdP, EDR device user, proxy user, cloud principal, code platform login and Workspace, with confidence and evidence"
-    status: pending
+    status: completed
   - id: p3-2-attack-stories
     content: "Phase 3.2: cross-source attack stories linked by resolved identity, session, role chain and shared indicator, with story-level severity and a ledger reason for any escalation"
     status: pending
