@@ -36,6 +36,12 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "pull_logs",
         "pull_pcap",
         "pull_vulnerabilities",
+        # Context rather than events: an HR system and an MDM report
+        # slowly-changing state, which the connector scheduler materialises
+        # into workforce_members and workforce_devices instead of pushing
+        # through ingest.
+        "pull_workforce",
+        "pull_device_inventory",
         # QUERY
         "query_logs",
         "query_processes",

@@ -42,6 +42,22 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 | 9.6 remainder (device evidence) | wave 2 Phase 9.2 | maintainer-blocked at hand-over |
 | Phase 10 close | wave 2 Phase 10 | wave 2's Phase 10 closes both |
 
+## Lane B status (sources: 1.3, 1.6, 8.1 to 8.4)
+
+| Item | State | Where |
+|---|---|---|
+| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
+| 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
+| 8.1 CNAPP depth | not started, gap reproduced | item log |
+| 8.2 NDR connectors | not started; ExtraHop buildable, Corelight blocked | item log |
+| 8.3 Enrichment per tenant, cited | not started, gap reproduced | item log |
+| 8.4 Scale and deployment evidence | **blocked, recorded with exactly what is needed** | item log |
+
+Every row above has its reproduction recorded in the item log as a command
+or a failing test, including the ones that were not built: a gap nobody
+reproduced is a rumour, and the three not-started items are written up so
+the next lane starts from evidence rather than from the plan's prose.
+
 ## Migration and ADR numbers claimed
 
 Claim a number here, push the claim, then write the file. Two lanes once
@@ -349,6 +365,113 @@ Not done because landing 1.6 and 1.3 unblocks Lane C, and a half-wired
 per-tenant path would have been worse than an honest gap. Nothing shipped
 depends on it; the three classes simply carry no records.
 
+### D5 - Workday and Kandji are blocked; three of the six named sources are built
+
+Item 1.3 names six connectors. Three are built against public references
+verified on 2026-11-01 and cited by URL in each module: BambooHR, Rippling
+and Microsoft Intune. Three are not, for different reasons.
+
+**Workday.** `community.workday.com/sites/default/files/file-hosting/restapi/`
+answers 200, but the Staffing REST surface a tenant actually exposes is
+per-tenant and the report-as-a-service shape most deployments use is defined
+by the customer's own report definition, not by a fixed schema. There is no
+public response document from which an honest mock payload can be written.
+**Needed:** a Workday sandbox tenant, or one recorded (redacted) response
+from `Get_Workers` or from a customer's staffing RaaS report.
+
+**Kandji.** `api-docs.kandji.io` answers 200 and the landing page documents
+the base URL, the token header, the rate limit and the response codes. The
+device-list response's field names are rendered client-side and could not be
+extracted. **Needed:** one recorded (redacted) `GET /api/v1/devices`
+response, or the field list from the vendor's device-detail page.
+
+**Jamf Pro.** `developer.jamf.com/jamf-pro/reference/get_v1-computers-inventory`
+answers 200 and the field names *are* verified -- `general.name`,
+`operatingSystem.version`, `operatingSystem.fileVault2Status`,
+`diskEncryption.fileVault2Enabled`, `userAndLocation.username`,
+`userAndLocation.email`, `security.firewallEnabled` -- so unlike the other
+two this one is **not blocked on the vendor**. It is not built in this pass
+for time, and `plugins/jamf-mdm` stays a manifest without a connector class.
+The promotion is a known quantity: one module in the shape of
+`microsoft_intune.py` reading `GET /v1/computers-inventory` with
+`section=GENERAL&section=OPERATING_SYSTEM&section=DISK_ENCRYPTION&section=USER_AND_LOCATION&section=SECURITY`.
+
+Recorded rather than built against an invented shape, which is the plan's own
+rule for exactly these vendors.
+
+### D6 - HR and MDM connectors get no ingest profile, and the first evidence for that was the wrong test
+
+**Corrected after CI.** The conclusion held; the evidence did not, which is
+the half worth recording.
+
+These three connectors publish no events at all. `fetch_alerts` returns an
+empty list on each by design: an HR system reports slowly-changing state,
+not security events, and their output is context the scheduler writes to
+`workforce_members` and `workforce_devices`, never to ingest. A
+`connectorProfiles` entry would be an entry nothing can reach.
+
+What was wrong was the check behind it. The original entry said `go test
+./internal/normalizer/` passed and cited
+`TestConnectorTypeCanonicalTargetsAreDeclaredAndUnshadowed`, which asserts
+that every *alias target* is declared and asks nothing about a connector
+having a profile. The test that does ask is
+`TestEveryDeclaredConnectorHasAnOCSFDecision`, and it failed in CI:
+
+    connector "bamboohr" has no entry in connectorOCSFClass: its events
+    take the 2001 default, which is always promoted, and nothing records
+    that as a decision
+
+`connectorOCSFClass` exists precisely to separate "decided to take the
+generic path" from "nobody looked", and a connector with no entry reads as
+the second. All three now carry a `genericReason` naming what they are.
+
+The lesson is the one this programme keeps paying for: a local suite
+passing is not evidence that the specific question was asked. The original
+entry named a test by title and did not read what it asserted.
+
+### D7 - Zero check runs was a conflicted PR, not a saturated pool, and the two look identical from outside
+
+**Corrected.** This entry first recorded the wrong cause, and the
+correction is worth more to the next lane than the original observation
+was.
+
+What was true: the head commit of each Lane B branch returned
+`total_count: 0` check runs. What was wrong: attributing that to the shared
+runner pool because 19 runs were queued and 18 in progress at the same
+moment. The pool had in fact drained to a single queued run.
+
+**The real cause.** Wave 0 was squash-merged into `main`, so `main` and the
+Lane B base `depth2/wave0-kickoff` each carried `DEPTH2_PROGRESS.md` and
+`plans/aisoc_depth_wave2.plan.md` by different histories - an add/add
+conflict. Both pull requests were therefore `mergeStateStatus: DIRTY`, and
+**GitHub cannot compute a merge ref for a conflicted pull request, so it
+creates no check runs at all**. Zero runs was the conflict, not the queue.
+
+**The one call that tells the two apart**, which is the durable half of
+this entry:
+
+```bash
+gh pr view <n> --repo beenuar/AiSOC --json mergeStateStatus -q .mergeStateStatus
+```
+
+* `DIRTY` - the merge ref cannot be computed. **Nothing can be graded**,
+  and no amount of waiting or re-pushing will change that. Merge the base
+  in and the runs appear.
+* `BLOCKED` or `UNSTABLE` with `total_count: 0` - the pull request is
+  gradeable and the runs have genuinely not started. That is the pool.
+
+A queue snapshot alone cannot distinguish them, because a busy queue is the
+ordinary state of this repository and is true at the same moment either way.
+Checking the queue first is what produced the wrong answer here.
+
+**Standing rule for this lane from now on:** after any push, read
+`mergeStateStatus` before concluding anything about the pool.
+
+Resolved by merging `origin/main` into both branches, keeping both sides of
+the tracker. Measured immediately afterwards: 108 check runs on
+`depth2/lane-b-sources` and 109 on `depth2/lane-b-workforce`, against zero
+before.
+
 ## Item log
 
 One entry per item as it lands: what failed before, the change, the negative
@@ -638,6 +761,194 @@ Proven by adding a covered playbook to the list and watching it fail.
 `services/agents/tests/eval_data/synthetic_incidents.json`, with the
 scorecard and alert-reduction suite re-run, after which the entry must be
 removed or the ratchet fails.
+### 8.1 CNAPP depth - Lane B - NOT STARTED, gap reproduced
+
+**Reproduced, recorded as commands rather than asserted.**
+
+`services/connectors/app/connectors/wiz.py` declares exactly one GraphQL
+operation, `query IssuesTable`. There is no vulnerability query, no
+configuration-finding query, no secrets query and no runtime-detection
+query. The four sibling cloud-security connectors each read one endpoint
+and it is their alert stream in every case:
+
+| Connector | The one read it makes |
+|---|---|
+| `orca` | two `GET`s against the alerts API |
+| `prisma_cloud` | two `POST`s against the search API |
+| `lacework` | `GET /api/v2/Alerts` |
+| `sysdig` | `GET /api/v1/secureEvents` |
+
+So the gap is real on all five and is as the plan describes it.
+
+**What remains, scoped:** extend the Wiz connector to vulnerabilities,
+configuration findings, secrets and runtime detections where the vendor API
+offers them; record the same depth check for the other four; surface the
+findings as **triage context keyed on the resource the alert touched**,
+not as alerts by default. The triage-context half is the part that needs a
+design decision rather than a read: a CNAPP finding on a resource is an
+input to a verdict about an event on that resource, which means a lookup
+keyed on resource identity at triage time, in the shape
+`services/agents/app/context/identity.py` uses for principals.
+
+**Risk the plan already names:** Wiz's newer GraphQL surfaces are behind a
+customer tenant. Verify each field against the vendor's current public
+reference before writing it, and record BLOCKED rather than inventing a
+payload shape, exactly as D5 does for Workday and Kandji.
+
+### 8.2 NDR connectors - Lane B - NOT STARTED, one half blocked
+
+**Reproduced.** `ls services/connectors/app/connectors/ | grep -iE
+"extrahop|corelight"` returns nothing. The two network connectors that
+exist are `zeek_suricata` and `darktrace`.
+
+**Reference availability, measured 2026-11-01:**
+
+| Vendor | Public reference | Verdict |
+|---|---|---|
+| ExtraHop RevealX 360 | `https://docs.extrahop.com/current/rest-api-guide/` answers **200** | buildable |
+| Corelight | `https://docs.corelight.com/` answers **401** | **BLOCKED** |
+
+So ExtraHop is a build and Corelight is not. **Corelight needs** either a
+documentation account, or one recorded (redacted) detection payload plus the
+endpoint and auth shape, before an honest mock can be written. Corelight's
+*Zeek output* is open and is already covered by the `zeek_suricata`
+connector, which is a different thing from the sensor's own detection API
+and must not be passed off as it.
+
+### 8.3 Enrichment per tenant, cited - Lane B - NOT STARTED, gap reproduced
+
+**Reproduced, and the gap is wider than the plan states.**
+
+`services/enrichment` is a **Go** service, not Python. Measured on this
+tree:
+
+  * `grep -c tenant` over `internal/enricher/enricher.go` and
+    `internal/config/config.go` returns **0** and **0**. There is no
+    per-tenant dimension anywhere in the service, so per-tenant opt-in is
+    absent rather than partial.
+  * No reference to the credential vault anywhere under
+    `services/enrichment/`. Keys are per-deployment environment variables.
+  * `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` are parsed in `config.go` lines
+    59-60, assigned to struct fields at lines 92-93, and **read by nothing
+    else in the service**. The plan's "reads and never enforces" reproduces
+    exactly.
+  * `URLSCAN_API_KEY` is a config field (`config.go:71`) with no client.
+  * No enrichment result is cited in the ledger.
+
+**What remains, and the one design decision it needs.** The per-tenant
+opt-in is a console settings surface with the tenant's own key in the
+credential vault, which `services/api` owns the write path for. A Go
+service cannot hold that write path, so either the enrichment service
+learns to read vault tokens through a vendored read-path `decrypt_dict`
+(the pattern `services/connectors` already uses), or the fan-out moves
+behind an API route that resolves the tenant's credentials first. That
+choice should be made explicitly rather than discovered during
+implementation.
+
+The rate limiter needs a test that proves it **refuses**, per the brief: a
+limiter asserted only on the allowed path is indistinguishable from no
+limiter.
+
+### 8.4 Scale and deployment evidence - Lane B - **BLOCKED**, which is the correct outcome
+
+The plan's own text allows for this: "published with hardware, date and
+commit, **or recorded as blocked with exactly what is needed**". Both halves
+are blocked on hardware nobody here has, and neither is blocked on code.
+
+**4.4, the cloud-hardware run.** Already stated honestly on
+`apps/docs/docs/operations/performance.md` under "No cloud-hardware run
+exists yet, and that is a gap", re-read on 2026-11-01 and still accurate.
+Every figure on that page comes from an 18-core Apple-silicon laptop, a
+6-CPU Linux VM on it, or a kind cluster on the same machine. The target is
+a sustained 5,000 events/s through detection at p95 under 2 s on one
+documented instance size.
+
+**Needed:** a cloud account and one named instance type. Nothing else. The
+harness already records the hardware fingerprint, the load shape and the
+commit into every result file, and `scripts/check_perf_results.py` already
+refuses a result that drops any of them. The command that produces the row
+is published on that page and is reproduced here so this entry stands alone:
+
+```bash
+python3 scripts/perf/load_harness.py \
+    --target compose --events 500000 --workers 32 --batch 100 \
+    --alert-every 100 --target-eps 5000 --drain-timeout 1800 \
+    --assert-benign-alert-rate-max 0.001 \
+    --out docs/perf/results/<date>-<instance-type>-realistic-mix.json
+```
+
+**4.5, the managed-cluster run.** The only cluster evidence in the tree is
+the three-node **kind** run of 2026-09-27, and the page already says what
+that does and does not prove: "kind nodes are containers on the same
+kernel, so this is not two machines' worth of anything". A kind run is not
+a managed-cluster run and must not be published as one.
+
+**Needed:** a managed Kubernetes cluster (EKS, GKE or AKS) with at least
+three worker nodes and a load balancer, plus permission to install the
+chart into it. The first depth plan recorded the same requirement as
+maintainer action M3; this entry carries it forward rather than restating
+it as new.
+
+**What was deliberately not done:** no figure was produced by extrapolation
+from the laptop runs. A laptop VM's disk, network and CPU scheduling are not
+an instance type's, and a number derived that way becomes a promise nobody
+can keep. "Not measured" with the exact requirement is the honest record,
+and it is the record this item asks for.
+
+### 1.3 HR and device context - Lane B
+
+**Reproduced.** On the current tree:
+
+    ModuleNotFoundError: No module named 'app.connectors.bamboohr'
+
+and the state behind it, measured rather than asserted: 88 connectors in
+`_CONNECTOR_CLASSES`, none HR and none MDM; `import_context` with exactly
+one production caller, the manual POST at
+`services/api/app/api/v1/endpoints/graph.py:725`.
+
+**Shipped.**
+
+| Piece | Where |
+|---|---|
+| HR connectors | `bamboohr`, `rippling` |
+| MDM connector | `microsoft_intune` |
+| Capabilities | `PULL_WORKFORCE`, `PULL_DEVICE_INVENTORY` |
+| Context store | `services/connectors/app/workforce.py`, migration `131` |
+| Scheduler caller | `ConnectorScheduler._sync_workforce_context`, on every poll |
+| CORE read | `services/api/app/services/workforce_context.py`, merged into `/graph/identity-context` |
+| Triage derivations | `derive_employment_facts` and `_render_device_line` in `services/agents/app/context/identity.py` |
+| Citations | `identity.basis` names departed, departing, contractor and device counts |
+| Marketplace | three `plugins/<id>/plugin.yaml`, index regenerated |
+| Docs | three pages generated, all three in the sidebar |
+| Count | regenerated, not edited: 87 -> **90** |
+
+**Negative control.** Removing the `_sync_workforce_context` call from
+`_poll_one` fails `test_the_scheduler_calls_a_workforce_sync_on_every_poll`
+with the reason stated: the connector would be registered, configured,
+polled and silently ignored. Removing each derived fact from
+`render_for_prompt` fails its paired prompt assertion, and removing it from
+`basis` fails its paired citation assertion, which is why both halves are
+asserted for all four facts.
+
+**Numbers, from the generators.**
+
+| Figure | Value | Source |
+|---|---|---|
+| Registered connectors | 87 -> **90** | `generate_connector_count.py --check` |
+| Connector docs | 90 documented, 41 generated / 49 hand-written | `generate_connector_docs.py --check` |
+| Marketplace plugins | 80 -> **83** | `build_marketplace.py` |
+| Claim matrix | 335/330/5 -> **336/331/5** | `check_claim_gate_matrix.py` |
+
+**One trap avoided and worth recording.** `generate_connector_docs._slug`
+writes the hyphenated filename for a connector with no existing page, so
+`microsoft_intune` documents at `/docs/connectors/microsoft-intune`. The
+connector's `docs_url` was written with the underscore first and would have
+404'd; corrected before commit and verified against the generated sidebar
+entry.
+
+**Deviations:** D5 (Workday and Kandji blocked, Jamf deferred with its shape
+recorded), D6 (no ingest profile, with the reason and the check).
+
 ### 1.1 Effective permissions everywhere — shipped
 
 **Reproduced first.** `services/api/tests/test_identity_privilege_reproduction.py`
@@ -1098,7 +1409,6 @@ classify from.
 
 **Shipped.**
 
-| Piece | Where |
 |---|---|
 | Downloader | `scripts/fetch_ip_class_dataset.py` |
 | Pinned snapshot | `services/ingest/internal/activity/ipclass/data/` (21,726 records) |
@@ -1126,7 +1436,6 @@ Restored, the suite passes again.
 
 **Numbers, from the generators.**
 
-| Figure | Value | Source |
 |---|---|---|
 | Dataset records | 21,726 | `check_ip_class_dataset.py` |
 | `tor_exit` records | 1,228 | same |
