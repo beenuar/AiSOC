@@ -48,7 +48,7 @@ from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
 from app.context import dispositions as dispositions_module
 from app.context import identity as identity_module
-from app.context import knowledge_base
+from app.context import knowledge_base, vendor_evidence
 from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
@@ -113,9 +113,16 @@ _METRICS = {
     "outcome_suppressed": 0,
     "ungrounded_demoted": 0,
     "llm_failed_held_for_review": 0,
+<<<<<<< HEAD
     # Phase 4.4(a). Counted so a deployment can tell "nothing resembled this
     # alert" from "precedent never ran".
     "precedent_cited": 0,
+=======
+    # Phase 4.5. Counted rather than inferred from the ledger, so a
+    # deployment that turned the pre-fetch on can tell "no vendor answered"
+    # from "the pre-fetch never ran".
+    "vendor_reads_executed": 0,
+>>>>>>> origin/depth2/lane-f-analyst
     "persist_retries": 0,
     "dead_lettered": 0,
     "approvals_raised": 0,
@@ -767,7 +774,11 @@ class FusedAlertTriageWorker:
                     # here.
                     await self._attach_recent_dispositions(state)
                     await self._attach_identity_context(state)
+<<<<<<< HEAD
                     await self._attach_precedent(state, fingerprint)
+=======
+                    await self._attach_vendor_evidence(state)
+>>>>>>> origin/depth2/lane-f-analyst
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
@@ -1187,6 +1198,7 @@ class FusedAlertTriageWorker:
         state.recent_dispositions = found.as_state()
         _METRICS["recent_dispositions_read"] += len(found.decisions)
 
+<<<<<<< HEAD
     async def _attach_precedent(self, state: InvestigationState, signature: str) -> None:
         """Decisions this organisation made on alerts *like* this one (4.4a).
 
@@ -1214,6 +1226,31 @@ class FusedAlertTriageWorker:
         state.precedent = [p.as_dict() for p in found]
         state.confidence_basis.extend(precedent.basis(found))
         _METRICS["precedent_cited"] += len(found)
+=======
+    async def _attach_vendor_evidence(self, state: InvestigationState) -> None:
+        """Ask the vendors that raised this alert what they know (Phase 4.5).
+
+        Off unless `AISOC_TRIAGE_VENDOR_EVIDENCE` is set: this reaches the
+        customer's vendor API on every fused alert, which is the condition
+        the plan reserves for opt-in, and auto-triage is the hot path.
+
+        In the context stage rather than inside `run_auto_triage` so it sits
+        with the other context fetches and shares their failure posture —
+        additive, never the verdict. A vendor that is down must cost the
+        alert nothing, and the renderer says COULD NOT CHECK rather than
+        letting an absent answer read as a clean one.
+        """
+        if not vendor_evidence.enabled():
+            return
+        try:
+            state.vendor_evidence = await vendor_evidence.collect(
+                state.raw_alert,
+                tenant_id=str(state.tenant_id or ""),
+            )
+            _METRICS["vendor_reads_executed"] += len(state.vendor_evidence.executed_capabilities)
+        except Exception as exc:  # noqa: BLE001 — context is additive
+            logger.warning("auto_triage_worker.vendor_evidence_failed", error=str(exc)[:200])
+>>>>>>> origin/depth2/lane-f-analyst
 
     async def _attach_identity_context(self, state: InvestigationState) -> None:
         """Record who is behind the accounts this alert names, if anyone knows.
@@ -1496,6 +1533,11 @@ class FusedAlertTriageWorker:
             proposed_actions=recommendations,
             business_context=state.business_context,
             business_impact=state.business_impact,
+            # Phase 4.5. The reads that happened, as ledger rows, in the same
+            # transaction as the verdict they informed. `None` when the
+            # pre-fetch is off, which writes no rows and restores the
+            # previous shape exactly.
+            vendor_reads=(state.vendor_evidence.as_state()["reads"] if getattr(state, "vendor_evidence", None) is not None else None),
             auto_closed=state.status is AgentStatus.COMPLETED,
             iterations=state.iteration_count,
             tokens=tokens,

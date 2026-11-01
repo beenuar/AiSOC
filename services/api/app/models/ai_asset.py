@@ -21,9 +21,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.database import Base
 
-#: The six kinds depth plan 6.1 names. Mirrored by the CHECK constraint in
-#: the migration, so a seventh value fails at the write rather than appearing
-#: as an unfilterable row in the console.
+#: The kinds depth plan 6.1 named, plus the two wave-2 7.2 added. Mirrored
+#: by the CHECK constraint in migrations 110 and 147, so a ninth value fails
+#: at the write rather than appearing as an unfilterable row in the console.
+#:
+#: `hosted_agent` runs in a provider's control plane, so it has no device to
+#: contain and `score_risk` must not charge it for the absence of one.
+#: `repo_ai_artifact` is an agent-instruction file, skill directory or MCP
+#: configuration file in a repository; the tools and servers it names live
+#: in `attributes`.
 AI_ASSET_KINDS: tuple[str, ...] = (
     "ai_app",
     "coding_agent",
@@ -31,7 +37,14 @@ AI_ASSET_KINDS: tuple[str, ...] = (
     "ide_extension",
     "provider_key",
     "oauth_grant",
+    "hosted_agent",
+    "repo_ai_artifact",
 )
+
+#: Kinds for which no device can exist, as opposed to kinds where one was
+#: simply not learned. `score_risk` reads this rather than naming the kinds
+#: inline, so adding a kind is one edit and not two that can disagree.
+DEVICELESS_KINDS: frozenset[str] = frozenset({"provider_key", "oauth_grant", "hosted_agent", "repo_ai_artifact"})
 
 #: Which discovery path produced a row. Carried rather than inferred because
 #: the three sources see genuinely different things, and an analyst reading an

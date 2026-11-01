@@ -1,0 +1,20 @@
+{
+  "actor": "octocat",
+  "actor_email": "octocat",
+  "category": "saas",
+  "created_at": 1761800000000,
+  "description": "provider=github_copilot; event_type=github_copilot.copilot.swe_agent_repo_enabled; actor=octocat",
+  "event_type": "github_copilot.copilot.swe_agent_repo_enabled",
+  "external_id": "mc-2",
+  "provider": "github_copilot",
+  "raw_event": {
+    "_document_id": "mc-2",
+    "action": "copilot.swe_agent_repo_enabled",
+    "actor": "octocat",
+    "created_at": 1761800000000,
+    "org": "acme"
+  },
+  "severity": "info",
+  "source": "llm_usage",
+  "title": "GitHub Copilot audit: copilot.swe_agent_repo_enabled"
+}

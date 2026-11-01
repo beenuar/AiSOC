@@ -160,6 +160,15 @@ class InvestigationState(BaseModel):
     recent_dispositions: dict[str, Any] | None = None
     identity_context: dict[str, Any] | None = None
 
+    # Phase 4.5. What the vendors that raised or observe this alert said when
+    # asked, just before triage reasoned over it. Carried as the
+    # `VendorEvidence` dataclass rather than as a dict, because the guard on
+    # fabricated tool claims reads `executed_capabilities` off it — the list
+    # of verbs a vendor really answered, which is not recoverable from a
+    # rendered block. `Any` for the same import-cycle reason as above, and
+    # excluded from the serialised state for the same reason the retrieval
+    # dicts are shaped the way they are.
+    vendor_evidence: Any = None
     # Phase 4.4(a). Past decisions on alerts *like* this one, matched by
     # similarity rather than by the exact evidence fingerprint. Context only
     # — nothing here closes an alert; suppression stays exact-match.

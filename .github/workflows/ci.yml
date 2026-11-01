@@ -534,6 +534,21 @@ jobs:
       # stay the one that is actually used.
       - name: Verify vendored SSRF guard is in sync
         run: python scripts/sync_vendored_ssrf_guard.py --check
+      # The AI SDK's secret-shape classifier, vendored so the AI-chat
+      # compliance collector labels a chat message the same way the SDK
+      # labels a prompt. Two surfaces answering "does this contain an AWS
+      # key" differently about the same text is the drift this prevents.
+      - name: Verify vendored AI redaction patterns are in sync
+        run: python scripts/sync_vendored_ai_redaction.py --check
+      # The prompt-injection patterns, generated from the agents guard's own
+      # rule table rather than hand-copied. The repository scanner (wave-2
+      # 7.2) flags an agent-instruction file or a skill whose text tries to
+      # steer an agent; a hand-picked subset would silently miss whatever
+      # pattern was added to the guard after the next incident. Needs the
+      # agents service importable, so it runs after that install step.
+      - name: Verify vendored AI instruction rules are in sync
+        run: |
+          PYTHONPATH="${PWD}/services/agents" python scripts/sync_vendored_ai_instruction_rules.py --check
       # The GPU preflight's own self-test. The real verdict depends on the
       # host, so CI can only assert that the refusals fire and say something
       # actionable -- which is the part that rots, since the advice is prose.
