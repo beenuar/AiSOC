@@ -293,9 +293,9 @@ class LlmUsageConnector(BaseConnector):
                     return out
                 body = resp.json()
                 for record in await self._records(client, body):
-                    normalized = self.normalize(record)
-                    if normalized is not None:
-                        out.append(normalized)
+                    if not self.is_ai_record(record):
+                        continue
+                    out.append(self.normalize(record))
         except Exception as exc:  # noqa: BLE001
             logger.warning("llm_usage.fetch_error", provider=self._provider, error=str(exc))
         return out
@@ -334,13 +334,35 @@ class LlmUsageConnector(BaseConnector):
     # ------------------------------------------------------------------
     # normalization
 
-    def _event_type(self, raw: dict[str, Any]) -> str | None:
-        """Dotted, provider-prefixed event type, or None to discard.
+    def is_ai_record(self, raw: dict[str, Any]) -> bool:
+        """Whether this record is AI activity at all.
 
-        Returning None is how a provider feed that carries far more than AI
-        traffic stays an AI feed. The two that need it are M365, whose
-        `Audit.General` content type is the whole general audit, and Entra,
-        whose directory audit is every directory change.
+        A separate predicate rather than a `None` return from `normalize`,
+        for two reasons. `normalize` has one contract across 87 connectors
+        and widening its return type here would weaken it everywhere. And
+        the filter is a different question from the mapping: it is the one
+        that keeps an AI feed an AI feed, so it deserves to be callable and
+        tested on its own.
+
+        The two providers that need it are Microsoft 365, whose
+        `Audit.General` content type is the entire general audit, and
+        Entra, whose directory audit is every directory change. For the
+        other four the vendor filters server-side and every record returned
+        is in scope.
+        """
+        if self._provider == "microsoft_copilot":
+            record_type = raw.get("RecordType")
+            return isinstance(record_type, int) and record_type in _M365_AI_RECORD_TYPES
+        if self._provider == "entra_consent":
+            return str(raw.get("activityDisplayName") or "").lower() in _ENTRA_CONSENT_ACTIVITIES
+        return True
+
+    def _event_type(self, raw: dict[str, Any]) -> str:
+        """Dotted, provider-prefixed event type.
+
+        Callers reach this only for records `is_ai_record` accepted, so the
+        Microsoft 365 branch can rely on the record type being one of the
+        two AI types.
         """
         if self._provider == "google_gemini":
             events = raw.get("events")
@@ -352,12 +374,10 @@ class LlmUsageConnector(BaseConnector):
             return f"{self._provider}.{raw.get('action') or 'copilot.event'}"
         if self._provider == "microsoft_copilot":
             record_type = raw.get("RecordType")
-            name = _M365_AI_RECORD_TYPES.get(record_type if isinstance(record_type, int) else -1)
-            return f"{self._provider}.{name}" if name else None
+            name = _M365_AI_RECORD_TYPES.get(record_type if isinstance(record_type, int) else -1, "AIRecord")
+            return f"{self._provider}.{name}"
         if self._provider == "entra_consent":
             activity = str(raw.get("activityDisplayName") or "")
-            if activity.lower() not in _ENTRA_CONSENT_ACTIVITIES:
-                return None
             return f"{self._provider}.{activity.lower().replace(' ', '_')}"
         vendor_type = str(raw.get("type") or raw.get("action") or raw.get("event_type") or "event")
         return f"{self._provider}.{vendor_type}"
@@ -401,11 +421,13 @@ class LlmUsageConnector(BaseConnector):
             return str(raw.get("id") or "")
         return str(raw.get("id") or "")
 
-    def normalize(self, raw: dict[str, Any]) -> dict[str, Any] | None:
-        """One vendor record as the common alert shape, or None to discard."""
+    def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """One vendor record as the common alert shape.
+
+        Call `is_ai_record` first on the providers whose feed carries more
+        than AI traffic; `fetch_alerts` does.
+        """
         event_type = self._event_type(raw)
-        if event_type is None:
-            return None
         low = event_type.lower()
         severity = "info"
         if any(h in low for h in _HIGH):
@@ -478,30 +500,30 @@ class LlmUsageConnector(BaseConnector):
             events = raw.get("events")
             first = events[0] if isinstance(events, list) and events and isinstance(events[0], dict) else {}
             params = first.get("parameters")
-            out = {}
+            gemini: dict[str, Any] = {}
             for param in params if isinstance(params, list) else []:
                 if isinstance(param, dict) and param.get("name"):
                     value = param.get("value", param.get("boolValue", param.get("intValue")))
                     if value is not None:
-                        out[str(param["name"])] = value
-            return out
+                        gemini[str(param["name"])] = value
+            return gemini
         if self._provider == "microsoft_copilot":
             data = raw.get("CopilotEventData")
             if not isinstance(data, dict):
                 return {}
-            out = {}
+            copilot: dict[str, Any] = {}
             host = _text(data.get("AppHost"))
             if host:
-                out["app_host"] = host
+                copilot["app_host"] = host
             resources = data.get("AccessedResources")
             if isinstance(resources, list) and resources:
-                out["accessed_resource_count"] = len(resources)
+                copilot["accessed_resource_count"] = len(resources)
                 labels = sorted(
                     {str(r.get("SensitivityLabelId")) for r in resources if isinstance(r, dict) and r.get("SensitivityLabelId")}
                 )
                 if labels:
-                    out["sensitivity_labels"] = labels
-            return out
+                    copilot["sensitivity_labels"] = labels
+            return copilot
         return {}
 
 
