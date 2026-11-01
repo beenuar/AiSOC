@@ -42,6 +42,7 @@ from app.closure import authorization as closure_authorization
 from app.closure.qa_sampling import ClosureQaSampler
 from app.confidence import eligibility
 from app.confidence.claim_support import score_claim_support
+from app.context import vendor_evidence as vendor_evidence_module
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
@@ -341,9 +342,28 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     # it just placed, which is the one thing holding the fence together.
     runbooks = render_runbooks(state.knowledge_base, nonce=nonce)
 
-    if not preamble and not runbooks:
+    # Phase 4.5. Fenced here for the same reason and with the same rule: the
+    # renderer places the nonce markers, so re-sanitising this block would
+    # rewrite the one thing holding the fence together. A vendor's own
+    # description field carries attacker-influenced text — a file name, a
+    # command line, a repository somebody chose — so it belongs inside the
+    # fence rather than in the first-party preamble above.
+    vendor = vendor_evidence_module.render_for_prompt(_vendor_evidence_of(state), nonce=nonce)
+
+    blocks = [*preamble, *([runbooks] if runbooks else []), *([vendor] if vendor else []), telemetry]
+    if not preamble and not runbooks and not vendor:
         return telemetry
-    return "\n\n".join([*preamble, *([runbooks] if runbooks else []), telemetry])
+    return "\n\n".join(blocks)
+
+
+def _vendor_evidence_of(state: Any) -> Any:
+    """The pre-fetched vendor evidence carried on the state, if any.
+
+    Read through `getattr` so a state built by an older caller — a replay of
+    a run from before 4.5, or a test double — renders no block instead of
+    raising on the hot path.
+    """
+    return getattr(state, "vendor_evidence", None)
 
 
 def _render_business_context(bc: dict[str, Any] | None) -> str:
@@ -713,13 +733,22 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     # retrieved and as asserting an indicator the evidence does not contain —
     # a claim whose provenance resolves to nothing.
     #
-    # `called_tools` is empty and that is the point rather than a shortcut:
-    # this path is a single `safe_ainvoke` with no tool channel, so the
-    # Investigation Ledger holds no `tool_call` row for this run and can hold
-    # none. Every tool result in this rationale therefore came from the
-    # evidence or from the model, and in both cases the verdict is resting on
-    # something that did not happen.
-    fabricated_tools = unverified_tool_claims(rationale, called_tools=())
+    # `called_tools` was empty and that was the point rather than a shortcut:
+    # this path was a single `safe_ainvoke` with no tool channel, so the
+    # Investigation Ledger held no `tool_call` row for the run and could hold
+    # none. Every tool result in a rationale therefore came from the evidence
+    # or from the model, and in both cases the verdict rested on something
+    # that did not happen.
+    #
+    # Phase 4.5 gives it a bounded channel, so the list is now whatever a
+    # vendor really answered — and *only* that. A read that was attempted and
+    # failed is deliberately absent: the guard's question is whether a
+    # rationale credits a tool with a result, and a read that returned
+    # nothing produced no result to credit. An empty tuple when the pre-fetch
+    # is off restores the original behaviour exactly.
+    evidence = _vendor_evidence_of(state)
+    called_tools = evidence.executed_capabilities if evidence is not None else ()
+    fabricated_tools = unverified_tool_claims(rationale, called_tools=called_tools)
 
     # Phase 7. The third member of that family, and the one indicator
     # grounding is structurally blind to: a conclusion that reuses the
