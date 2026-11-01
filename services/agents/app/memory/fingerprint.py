@@ -108,6 +108,36 @@ def canonical_evidence(alert: dict[str, Any]) -> dict[str, Any]:
     return {key: _normalise(value) for key, value in alert.items() if key not in _VOLATILE_FIELDS}
 
 
+#: Cap on what is stored beside a prior so it can be compared later. The
+#: canonical evidence is already small and typed; this is a ceiling against
+#: the fallback branch of `canonical_evidence`, which hashes every
+#: non-volatile key of an alert shape it does not recognise.
+MAX_STORED_EVIDENCE_FIELDS = 24
+MAX_STORED_VALUE_CHARS = 300
+
+
+def storable_evidence(alert: dict[str, Any] | None) -> dict[str, Any]:
+    """The canonical evidence, bounded, for storing beside an outcome prior.
+
+    Stored because a signature is a hash and a hash cannot be compared for
+    similarity. Bounded because `canonical_evidence` falls back to "every
+    non-volatile key" for an alert shape it does not recognise, and an
+    unbounded copy of an arbitrary payload into institutional memory is a
+    retention surface nobody declared.
+    """
+    if not isinstance(alert, dict):
+        return {}
+    evidence = canonical_evidence(alert)
+    bounded: dict[str, Any] = {}
+    for name in sorted(evidence)[:MAX_STORED_EVIDENCE_FIELDS]:
+        value = evidence[name]
+        if isinstance(value, list):
+            bounded[name] = [str(v)[:MAX_STORED_VALUE_CHARS] for v in value[:10]]
+        else:
+            bounded[name] = str(value)[:MAX_STORED_VALUE_CHARS]
+    return bounded
+
+
 def evidence_fingerprint(tenant_id: str, alert: Any) -> str:
     """Stable hash of the investigation-relevant evidence.
 

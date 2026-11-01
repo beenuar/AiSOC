@@ -160,6 +160,11 @@ class InvestigationState(BaseModel):
     recent_dispositions: dict[str, Any] | None = None
     identity_context: dict[str, Any] | None = None
 
+    # Phase 4.4(a). Past decisions on alerts *like* this one, matched by
+    # similarity rather than by the exact evidence fingerprint. Context only
+    # — nothing here closes an alert; suppression stays exact-match.
+    precedent: list[dict[str, Any]] = Field(default_factory=list)
+
     # Findings accumulated during investigation
     findings: list[str] = Field(default_factory=list)
     ioc_enrichments: dict[str, Any] = Field(default_factory=dict)
