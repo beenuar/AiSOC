@@ -10,19 +10,19 @@ run. It does not mean zero. The two get conflated constantly and the
 difference matters: one is a fact about users, the other is a fact
 about our tooling.
 
-## Latest — 2026-10-22
+## Latest — 2026-11-01
 
 ### Reach
 
-- Stars: 2,601
-- Forks: 286
+- Stars: 5,855
+- Forks: 615
 - Unique visitors (14d): not measured
 - Unique cloners (14d): not measured
 
 ### Conversion
 
-- Contributors: 17
-- Release asset downloads (all time): 239
+- Contributors: 19
+- Release asset downloads (all time): 447
 
 ### Package downloads (last month)
 
@@ -49,3 +49,4 @@ about our tooling.
 | --- | --- | --- | --- | --- |
 | 2026-09-21 | 2,361 | 377 | 13 | not measured |
 | 2026-10-22 | 2,601 | not measured | 17 | not measured |
+| 2026-11-01 | 5,855 | not measured | 19 | not measured |
