@@ -50,9 +50,15 @@ claimed the same migration number simultaneously and one had to renumber.
 | Number | Kind | Lane / item | Claimed | File |
 |---|---|---|---|---|
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
+| 146 | migration | Lane E / 7.1 | 2026-11-01 | AI provider coverage + chat compliance (labels and bounded snippet only) |
+| 147 | migration | Lane E / 7.2 | 2026-11-01 | hosted agents and repository AI artefacts as asset kinds |
+| 148 | migration | Lane E / 7.3 | 2026-11-01 | agent identities and per-agent baselines |
+| 149 | migration | Lane E / 7.3 | 2026-11-01 | reserved: agent baseline observations |
+| 150 | migration | Lane E / 7.4 | 2026-11-01 | reserved: AI rule-pack supporting state |
+| 0021 | ADR | Lane E / 7.1 | 2026-11-01 | AI-chat compliance-log minimisation |
 
-Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
-ADR `0016`.
+Highest at kickoff: migration `123`, ADR `0014`. Lane E holds the exclusive
+block migrations `146`–`150` and ADR `0021`.
 
 ## Phase 0: Kickoff
 
