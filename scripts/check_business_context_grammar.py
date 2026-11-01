@@ -234,7 +234,52 @@ def check(root: Path = REPO_ROOT) -> list[str]:
                 f"{rel}: {engine.label} implements {implemented_not_declared} but does not declare "
                 "it — unreachable, because the parser rejects the operator first"
             )
+
+    # Arm 4 — the plain-language grammar, which is a third producer.
+    #
+    # An analyst's sentence compiles to a structured rule through a closed
+    # phrase table. A phrase pointing at a comparator no evaluator implements
+    # would reintroduce the silent-no-match this gate exists for, through a
+    # door the first three arms do not watch. Skipped when the module is
+    # absent so the gate still runs on a tree without it.
+    phrase_path = root / "services/api/app/services/business_context/plain_language.py"
+    if phrase_path.is_file():
+        phrase_ops, refused = _phrase_targets(ast.parse(phrase_path.read_text(encoding="utf-8")))
+        rel = phrase_path.relative_to(root)
+        unknown = sorted(phrase_ops - console.declared)
+        if unknown:
+            problems.append(
+                f"{rel}: the plain-language grammar can produce {unknown}, which the console does "
+                "not declare — the sentence compiles into a rule that never matches"
+            )
+        wrongly_refused = sorted(refused & console.declared)
+        if wrongly_refused:
+            problems.append(
+                f"{rel}: {wrongly_refused} is refused as unsupported but is a real operator — "
+                "the refusal message sends an author looking for a workaround they do not need"
+            )
+
     return problems
+
+
+def _phrase_targets(tree: ast.AST) -> tuple[frozenset[str], frozenset[str]]:
+    """(producible, deliberately-refused) comparators of the phrase table."""
+    producible: set[str] = set()
+    refused: set[str] = set()
+    for node in ast.walk(tree):
+        targets = [node.target] if isinstance(node, ast.AnnAssign) else getattr(node, "targets", [])
+        for target in targets:
+            if not isinstance(target, ast.Name):
+                continue
+            if target.id == "_OPERATOR_PHRASES":
+                for element in getattr(node.value, "elts", []):
+                    producible.add(ast.literal_eval(element.elts[1]))
+            elif target.id == "_UNSUPPORTED":
+                for key in getattr(node.value, "keys", []):
+                    refused.add(ast.literal_eval(key))
+    if not producible:
+        raise GrammarError("plain_language.py: parsed zero operator phrases — refusing to report agreement this gate never measured")
+    return frozenset(producible - refused), frozenset(refused)
 
 
 # ---------------------------------------------------------------------------
