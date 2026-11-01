@@ -400,9 +400,7 @@ class ConfidenceScorer:
         # the fuse-time stamp (`enrichments["identity_privilege"]`), never
         # queried here — the scorer stays a pure projection, same contract
         # as the asset factor above.
-        privilege_contribution, privilege_value = _privilege_contribution(
-            (fused.enrichments or {}).get(_PRIVILEGE_STAMP_KEY)
-        )
+        privilege_contribution, privilege_value = _privilege_contribution((fused.enrichments or {}).get(_PRIVILEGE_STAMP_KEY))
         rationale.append(
             ConfidenceFactor(
                 factor="identity_privilege",

@@ -44,12 +44,12 @@ from app.confidence.claim_support import score_claim_support
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
-from app.context.privilege import basis as privilege_basis
-from app.context.privilege import render_for_prompt as render_privilege
 from app.context.identity import render_for_prompt as render_identity
 from app.context.knowledge_base import citation_basis, unresolvable_citations
 from app.context.knowledge_base import render_for_prompt as render_runbooks
 from app.context.organisation_memory import render_for_prompt
+from app.context.privilege import basis as privilege_basis
+from app.context.privilege import render_for_prompt as render_privilege
 from app.core.model_attribution import extract_serving_attribution
 from app.investigator.prompt_sanitizer import sanitize_text, wrap_untrusted
 from app.llm import safe_ainvoke

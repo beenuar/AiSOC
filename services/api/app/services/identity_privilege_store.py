@@ -212,9 +212,7 @@ def _same_facts(left: IdentityPrivilege, right: IdentityPrivilege) -> bool:
     )
 
 
-async def _live_fact(
-    db: AsyncSession, *, tenant_id: uuid.UUID, provider: str, principal_id: str
-) -> PrivilegeFact | None:
+async def _live_fact(db: AsyncSession, *, tenant_id: uuid.UUID, provider: str, principal_id: str) -> PrivilegeFact | None:
     result = await db.execute(
         text(
             f"""

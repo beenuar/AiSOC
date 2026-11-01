@@ -519,9 +519,7 @@ class AwsIamResolver(Resolver):
                     principal_match_required=False,
                 )
                 notes |= session_eval.notes
-                session_allowed = (
-                    set(session_eval.allow) if session_allowed is None else session_allowed & session_eval.allow
-                )
+                session_allowed = set(session_eval.allow) if session_allowed is None else session_allowed & session_eval.allow
                 if session_eval.deny:
                     identity_deny |= session_eval.deny
             if session_allowed is not None:
@@ -608,9 +606,7 @@ class AwsIamResolver(Resolver):
         # its condition could not be evaluated against the snapshot's request
         # context. Reporting it beside the other three is what keeps "we did
         # not grant this" distinguishable from "nobody granted this".
-        shadowed_denies = (
-            (pre_scp_allow & candidate_deny) | scp_blocked | boundary_blocked | session_blocked | undecided
-        ) - final_actions
+        shadowed_denies = ((pre_scp_allow & candidate_deny) | scp_blocked | boundary_blocked | session_blocked | undecided) - final_actions
 
         if undecided:
             notes.add(

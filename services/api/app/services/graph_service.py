@@ -530,27 +530,34 @@ async def get_permission_blast_radius(
             "total_actions": 0,
         }
 
-    resources = [
-        {
-            "resource_id": r.get("resource_id"),
-            "label": r.get("label"),
-            "properties": r.get("properties") or {},
-            "actions": list(r.get("actions") or []),
-            "deny_actions": list(r.get("deny_actions") or []),
-            "provider": r.get("provider"),
-            "policy_chain_ids": list(r.get("policy_chain_ids") or []),
-            "snapshot_id": r.get("snapshot_id"),
-        }
-        for r in records
-    ]
+    resources: list[dict[str, Any]] = []
+    total_actions = 0
+    total_denied = 0
+    for r in records:
+        actions = [str(a) for a in (r.get("actions") or [])]
+        denied = [str(a) for a in (r.get("deny_actions") or [])]
+        total_actions += len(actions)
+        total_denied += len(denied)
+        resources.append(
+            {
+                "resource_id": r.get("resource_id"),
+                "label": r.get("label"),
+                "properties": r.get("properties") or {},
+                "actions": actions,
+                "deny_actions": denied,
+                "provider": r.get("provider"),
+                "policy_chain_ids": [str(p) for p in (r.get("policy_chain_ids") or [])],
+                "snapshot_id": r.get("snapshot_id"),
+            }
+        )
     return {
         "principal_id": principal_id,
         "provider": provider,
         "resolved": True,
         "resources": resources,
         "total_resources": len(resources),
-        "total_actions": sum(len(r["actions"]) for r in resources),
-        "total_denied_actions": sum(len(r["deny_actions"]) for r in resources),
+        "total_actions": total_actions,
+        "total_denied_actions": total_denied,
         "truncated": len(resources) >= max(1, min(int(limit), 5000)),
     }
 

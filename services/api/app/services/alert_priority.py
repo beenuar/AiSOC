@@ -146,11 +146,7 @@ class IdentityContext:
     cross_account: bool | None = None
 
     def set_tags(self) -> list[str]:
-        return [
-            name
-            for name in ("can_escalate", "data_access", "third_party", "cross_account")
-            if getattr(self, name) is True
-        ]
+        return [name for name in ("can_escalate", "data_access", "third_party", "cross_account") if getattr(self, name) is True]
 
 
 @dataclass

@@ -17,7 +17,6 @@ from app.services.alert_enricher import AlertEnricher
 from app.services.alert_outbox import AlertNotificationOutbox
 from app.services.alert_sink import AlertSink
 from app.services.asset_context import AssetContextResolver
-from app.services.identity_privilege_context import IdentityPrivilegeResolver
 from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.baselines import BaselineStore
 from app.services.confidence import ConfidenceScorer
@@ -28,6 +27,7 @@ from app.services.dlq_sink import PostgresDLQ
 from app.services.entity_risk import EntityRiskEngine
 from app.services.first_seen import FirstSeenStore
 from app.services.fusion_engine import FusionEngine
+from app.services.identity_privilege_context import IdentityPrivilegeResolver
 from app.services.ioc_match import TenantIocMatcher
 from app.services.lake_writer import LakeWriter
 from app.services.sessions import SessionStore

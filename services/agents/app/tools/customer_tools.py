@@ -226,17 +226,13 @@ EFFECTIVE_PERMISSIONS_PARAMETERS: dict[str, Any] = {
         "at": {
             "type": "string",
             "description": (
-                "ISO-8601 timestamp of the event being investigated. Omitting it asks about now, "
-                "which is a different question."
+                "ISO-8601 timestamp of the event being investigated. Omitting it asks about now, which is a different question."
             ),
         },
         "provider": {
             "type": "string",
             "enum": ["aws", "azure", "gcp", "gws", "github", "okta"],
-            "description": (
-                "Optional. Omit it to search every provider that knows this principal and take "
-                "the strongest privilege found."
-            ),
+            "description": ("Optional. Omit it to search every provider that knows this principal and take the strongest privilege found."),
         },
     },
     "required": ["principal_id"],
@@ -296,8 +292,7 @@ async def identity_effective_permissions(
         )
     if row.get("snapshot_was_partial"):
         row["coverage_note"] = (
-            "The posture snapshot behind this answer was incomplete, so the real permission set "
-            "may be larger than what is listed."
+            "The posture snapshot behind this answer was incomplete, so the real permission set may be larger than what is listed."
         )
     return row
 

@@ -34,7 +34,7 @@ def test_the_tool_is_shipped_in_the_openai_schema_block() -> None:
 
 
 def test_the_tool_takes_a_principal_and_a_point_in_time() -> None:
-    """"What can it do" and "what could it do when it acted" differ.
+    """ "What can it do" and "what could it do when it acted" differ.
 
     An alert is triaged minutes to days after the event. A tool that cannot
     accept the event's timestamp can only answer the second question while

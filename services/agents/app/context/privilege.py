@@ -139,17 +139,19 @@ async def fetch_privilege_context(
         cache_key = f"{tenant_id}|{at_iso}|{name.lower()}"
         cached = _cache.get(cache_key)
         now = time.monotonic()
+        payload: dict[str, Any]
         if cached is not None and now - cached[0] < _CACHE_TTL_S:
             payload = cached[1]
         else:
-            payload = await _query(tenant_id, name, at_iso, token)
-            if payload is None:
+            fetched = await _query(tenant_id, name, at_iso, token)
+            if fetched is None:
                 # Transport failure. Deliberately not cached and deliberately
                 # not recorded as "unresolved": the two mean different things
                 # and conflating them would turn an API outage into a
                 # permanent statement that a tenant has no posture.
                 notes.append(f"the privilege lookup for {name} could not be completed")
                 continue
+            payload = fetched
             _cache[cache_key] = (now, payload)
 
         if payload.get("available") is False:
@@ -225,8 +227,7 @@ def render_for_prompt(state_value: Mapping[str, Any] | None) -> str:
             lines.append("  - the posture snapshot was incomplete, so the real reach may be larger")
         if row.get("usage_measured") is False:
             lines.append(
-                "  - which of these permissions were actually exercised was NOT measured on this "
-                "deployment; do not treat them as unused"
+                "  - which of these permissions were actually exercised was NOT measured on this deployment; do not treat them as unused"
             )
     for name in unresolved:
         lines.append(
@@ -256,8 +257,7 @@ def basis(state_value: Mapping[str, Any] | None) -> list[str]:
         tags = ", ".join(str(t) for t in (row.get("tags_set") or [])) or "no tags"
         at = str(value.get("at") or "the alert time")
         out.append(
-            f"Effective permissions (identity_effective_permissions) for "
-            f"{row.get('principal_id')}: privilege {tier} at {at}; {tags}"
+            f"Effective permissions (identity_effective_permissions) for {row.get('principal_id')}: privilege {tier} at {at}; {tags}"
         )
     if unresolved:
         out.append(

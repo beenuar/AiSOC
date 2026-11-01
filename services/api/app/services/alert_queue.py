@@ -509,9 +509,7 @@ async def resolve_identity_contexts(
                 # alert about someone who is an ordinary Okta user and an
                 # AWS administrator is an alert about an administrator.
                 existing = out.get(alert_id)
-                if existing is None or tier_rank.get(candidate.privilege_tier, 0) > tier_rank.get(
-                    existing.privilege_tier, 0
-                ):
+                if existing is None or tier_rank.get(candidate.privilege_tier, 0) > tier_rank.get(existing.privilege_tier, 0):
                     out[alert_id] = candidate
     return out
 

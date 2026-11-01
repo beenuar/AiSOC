@@ -76,6 +76,23 @@ UNBACKED_CALLS: list[tuple[str, dict[str, Any]]] = [
     ("persistence_mechanisms", {"hostname": "WS-42"}),
 ]
 
+#: A third category, added with 1.1. These answer from Postgres rather than
+#: the lake, so neither assertion above applies to them: there is no composed
+#: lake query to inspect for a tenant predicate, and "unavailable" is not a
+#: permanent property of the deployment but a statement about one principal
+#: at one moment.
+#:
+#: They are listed separately rather than bolted onto `BACKED_CALLS` because
+#: the tenant-predicate assertions there read the *captured SQL*, and a tool
+#: that composes none would pass them by having nothing to fail on. The
+#: scoping property for this family is checked by its own live test against
+#: real Postgres (`test_identity_privilege_live.py`), where the predicate is
+#: a schema fact rather than a string in a mock.
+POSTGRES_BACKED_CALLS: list[tuple[str, dict[str, Any]]] = [
+    ("identity_effective_permissions", {"principal_id": "alice"}),
+    ("identity_effective_permissions", {"principal_id": "alice", "at": "2026-10-01T00:00:00Z", "provider": "aws"}),
+]
+
 
 class TestTenantScoping:
     @pytest.mark.parametrize(("tool", "args"), BACKED_CALLS)
@@ -214,10 +231,44 @@ async def test_every_declared_tool_is_dispatchable(captured: list[Any]) -> None:
     argument-shape error is a failure rather than something the assertion
     quietly accepts.
     """
-    covered = {tool for tool, _ in BACKED_CALLS + UNBACKED_CALLS}
+    all_calls = BACKED_CALLS + UNBACKED_CALLS + POSTGRES_BACKED_CALLS
+    covered = {tool for tool, _ in all_calls}
     assert covered == set(TOOLS), f"tools with no dispatch case in this test: {sorted(set(TOOLS) - covered)}"
 
-    for name, args in BACKED_CALLS + UNBACKED_CALLS:
+    for name, args in all_calls:
         result = await dispatch(name, TENANT, args)
         assert isinstance(result, ToolResult), name
         assert "Invalid arguments" not in (result.reason or ""), f"{name} rejected the arguments its own schema advertises: {result.reason}"
+
+
+class TestPrivilegeToolNeverFabricates:
+    """The Postgres-backed family's own honesty properties.
+
+    With no database reachable in this suite the tool takes its failure
+    path, which is exactly the branch worth pinning: the sentence it emits
+    is what a model reads, and the wrong sentence here closes alerts.
+    """
+
+    async def test_an_unanswerable_lookup_is_never_an_empty_result(self) -> None:
+        result = await dispatch("identity_effective_permissions", TENANT, {"principal_id": "alice"})
+        assert result.available is False
+        assert result.rows == []
+        # The two sentences the tool is allowed to say, and both of them
+        # name the gap. An `available=false` with no reason would read to a
+        # model as a tool that is simply switched off.
+        assert result.reason
+        # Both of the tool's failure sentences end the same way, which is
+        # the property: whichever branch fires, the model is told the
+        # absence is not a finding.
+        assert "not an absence" in result.reason or "not evidence" in result.reason
+
+    async def test_a_model_supplied_tenant_is_discarded(self) -> None:
+        """Same property as the lake tools, checked on this door too."""
+        result = await dispatch(
+            "identity_effective_permissions",
+            TENANT,
+            {"principal_id": "alice", "tenant_id": OTHER_TENANT},
+        )
+        assert isinstance(result, ToolResult)
+        assert "Invalid arguments" not in (result.reason or "")
+        assert OTHER_TENANT not in (result.reason or "")

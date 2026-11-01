@@ -204,7 +204,143 @@ not, that is a real first-run defect for the most common conflict there is
 and belongs in its own fix with a negative control. Until that run exists,
 this is an observation with its evidence attached.
 
+### D3 — the queue has never read identity privilege, contrary to the plan
+
+The plan's 1.1 says "Prioritisation already reads identity privilege (v16)
+and must read this". It does not. `score_alert_priority` has taken an
+`identity` argument and carried a `_PRIVILEGE_FACTOR` table since v16, and
+its **only** production caller — `alert_queue.build_queue` — passed
+`identity=None` at `alert_queue.py:570`. `queue_priority()`, the one other
+function that would pass one, has no production caller at all.
+
+So the privilege factor was unreachable from the only surface where
+prioritisation changes anything. Recorded here because it changes 1.1's
+scope: the item is not "make the existing reader read a better source", it
+is "wire the reader", which is the repository's defining defect found again
+inside a module whose own docstring explains why an ordering nobody can
+interrogate stops being trusted.
+
+Closed by Lane A's 1.1: `resolve_identity_contexts()` resolves each alert's
+actor against the privilege version covering that alert's own event time,
+one batched query per page, and `build_queue` passes it.
+
+### D4 — the container clock runs ahead of the host's, and a live
+point-in-time test trips over it
+
+`identity_privilege_facts.valid_from` defaults to Postgres `now()`. On this
+machine the Docker Postgres container's clock measured ~17 ms **ahead** of
+the host's Python clock, so a row written and immediately read back at
+`datetime.now(tz=UTC)` landed *before* its own `valid_from` and the
+point-in-time select correctly returned nothing.
+
+That is the store behaving exactly as specified — an event predating a
+collection has no posture — so the fix is in the test, which now reads one
+minute ahead. Widening `valid_from <= :at` to absorb the skew would have
+answered historical questions with newer snapshots, which is precisely the
+defect migration 103 is versioned to prevent. Recorded because the symptom
+("the row is there and the point-in-time read cannot see it") reads as a
+query bug and is not one.
+
+### D5 — the verdict baseline in the plan is for a model this host cannot run
+
+The published best balanced accuracy of 0.357 is
+`llama3.1:8b-instruct-q4_K_M`. The only model pulled on this host is
+`llama3.2:3b-instruct-q4_K_M`, so a run here is not comparable to that row.
+
+Rather than quote the 8B figure as a baseline it did not measure, Lane A ran
+the **same 3B model on both trees** — `origin/main` at `152c6d5ff` and the
+lane branch — so the comparison has one variable. Both numbers are recorded
+in the item log below, and neither is published as the project's headline:
+the scoreboard row for the 8B model is untouched.
+
 ## Item log
 
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
+
+### 1.1 Effective permissions everywhere — shipped
+
+**Reproduced first.** `services/api/tests/test_identity_privilege_reproduction.py`
+and `services/agents/tests/test_identity_privilege_tool_reproduction.py`
+failed on the pre-change tree: 15 of 20 api assertions and all 3 agents
+assertions. The 5 api assertions that passed are the *negative* arms of the
+condition-operator matrix, and they passed for the wrong reason — the
+resolver denied every operator it could not evaluate, so "correctly refuses"
+and "under-reports real access" were indistinguishable until the operators
+were modelled.
+
+**What shipped.**
+
+- `effective_permissions/iam_conditions.py`: 24 condition operators plus the
+  `IfExists` suffix and the `ForAnyValue:` / `ForAllValues:` qualifiers, with
+  a **three-valued** result. Undecidable is resolved per effect — an
+  undecidable `Allow` does not grant, an undecidable `Deny` still denies —
+  so both arms refuse to over-report access.
+- `effective_permissions/aws.py`: `NotAction` and `NotResource` invert their
+  sets; session policies cap the identity arm (intersected across several,
+  never unioned) and not the resource-policy arm; withheld actions are
+  reported in `deny_actions` with the reason in `notes`.
+- `identity_privilege.py`: tier derived from what an identity can *write*,
+  never from the name of the role it holds, plus `can_escalate`,
+  `data_access`, `third_party`, `cross_account`, each with its evidence.
+- Migration **124**: `identity_privilege_facts` (versioned on the same
+  interval as the snapshot it came from, one live row per principal enforced
+  by a partial unique index) and `identity_permission_usage` (the runtime
+  overlay), both under RLS.
+- `identity_usage_collector.py`: the overlay from the lake, returning
+  `measured=False` with a reason whenever the lake cannot be asked.
+
+**Wiring — the production callers.**
+
+| Surface | Caller |
+|---|---|
+| Fusion, per alert | `fusion_engine.process()` step 2.7 → `IdentityPrivilegeResolver.resolve()`, stamped at the alert's **event time** |
+| Confidence | `ConfidenceScorer.score()` factor `identity_privilege`, weight 0.06, the eight existing weights scaled by 0.94 so the total is still exactly 1.0 |
+| Console queue | `alert_queue.build_queue()` → `resolve_identity_contexts()` → `score_alert_priority(identity=...)` (see D3) |
+| Typed pivots | `investigation_tools.TOOLS["identity_effective_permissions"]`, reachable from `POST /graph/investigate/query` |
+| Agent tool registry | `tools/registry.py::default_registry`, so the model is offered it and the call lands in the ledger |
+| Triage prompt + `confidence_basis` | `fused_alert_consumer._attach_privilege_context()` → `context/privilege.py`, through the same `/investigate/query` door the registered tool uses |
+
+**Negative controls.** Ten live-Postgres tests, each with one: the
+point-in-time read is contrasted against the live-row read it replaced and
+the two disagree; the unchanged-rederivation test is paired with a changed
+one that *does* open a version; the queue test reverts the context and the
+score collapses to the unknown baseline.
+
+**Gates.** `test_tool_result_channel.py` caught the new tool missing from
+`AGENT_TOOL_NAMES` and `test_investigation_tools.py` caught it missing from
+the dispatch-coverage table. Both were the gate working, and both are fixed
+rather than relaxed.
+
+**Measurements.**
+
+Alert reduction, `services/fusion/tests/test_alert_reduction_real.py`:
+
+| Measure | Before | After |
+|---|---|---|
+| Production correlation key | 1000 → 667 = **33.3 %** | 1000 → 667 = **33.3 %** |
+| Detection-shaped cohort | 1000 → 755 = **24.5 %** | 1000 → 755 = **24.5 %** |
+
+Verdict scorecard, `scripts/run_verdict_eval.py`, same corpus and the same
+model on both trees (see D5), Apple M-series arm64 / macOS, 2026-11-01,
+`llama3.2:3b-instruct-q4_K_M` served by Ollama, 72 live model calls on each
+run, 0 errored:
+
+| Metric | Before (`152c6d5ff`) | After | Delta |
+|---|---|---|---|
+| Balanced accuracy | 0.2604 | 0.2715 | +0.0111 |
+| Malicious recall | 0.1944 | 0.1944 | 0.0000 |
+| Abstention rate | 0.0139 | 0.0139 | 0.0000 |
+| Auto-close precision | 0.4286 (3/7) | 0.3750 (3/8) | −0.0536 |
+
+**Both movements are run-to-run variance, not an effect of this change, and
+the reason is structural rather than a judgement call.** The verdict harness
+sets no service token, so `fetch_privilege_context` returns empty,
+`render_privilege(None)` returns `""`, and the prompt the model receives is
+byte-identical on both trees. The auto-close figure moved because its
+denominator moved from 7 to 8 — one additional item crossed the
+consideration threshold — which is the smallest denominator on the
+scorecard and the one most sensitive to a single sampled token.
+
+Nothing here is published to the scoreboard: the project's headline row is
+`llama3.1:8b-instruct-q4_K_M` at 0.357, which this host cannot run.

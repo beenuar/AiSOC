@@ -18,7 +18,6 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
-
 from app.services.effective_permissions.aws import AwsIamResolver
 
 
@@ -81,9 +80,7 @@ class TestAwsSemanticsTheResolverDoesNotModel:
 
     def test_not_resource_excludes_only_the_named_resource(self) -> None:
         """``NotResource`` on the one bucket in the snapshot matches nothing."""
-        actions = _actions(
-            _snapshot({"Effect": "Allow", "Action": "s3:*", "NotResource": "arn:aws:s3:::data"})
-        )
+        actions = _actions(_snapshot({"Effect": "Allow", "Action": "s3:*", "NotResource": "arn:aws:s3:::data"}))
         assert actions == set()
 
     @pytest.mark.parametrize(
@@ -102,9 +99,7 @@ class TestAwsSemanticsTheResolverDoesNotModel:
             ({"DateGreaterThan": {"aws:CurrentTime": "2030-01-01T00:00:00Z"}}, {"aws:CurrentTime": "2026-01-01T00:00:00Z"}, False),
         ],
     )
-    def test_condition_operators_beyond_string_equals(
-        self, condition: dict[str, Any], context: dict[str, Any], expected: bool
-    ) -> None:
+    def test_condition_operators_beyond_string_equals(self, condition: dict[str, Any], context: dict[str, Any], expected: bool) -> None:
         """Today every operator outside StringEquals/StringLike denies outright.
 
         That is the conservative direction, which sounds safe and is not: it
@@ -158,7 +153,7 @@ class TestNothingConsumesThePosture:
         assert facts.tags.can_escalate is True
 
     def test_absent_posture_is_unknown_and_not_a_default_tier(self) -> None:
-        """"No snapshot covers this time" must never render as ``standard``.
+        """ "No snapshot covers this time" must never render as ``standard``.
 
         A default tier is the confident-zero defect: a reader cannot tell a
         measured standard account from one the platform knows nothing about,

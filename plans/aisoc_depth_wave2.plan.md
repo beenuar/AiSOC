@@ -16,7 +16,7 @@ todos:
     status: pending
   - id: p1-1-effective-permissions-everywhere
     content: "Phase 1.1: depth 2.6 as specified, plus runtime-usage overlay, computed can-escalate / data-access / third-party / cross-account tags, and the AWS policy semantics the resolver does not yet model"
-    status: pending
+    status: completed
   - id: p1-2-access-review
     content: "Phase 1.2: access review and right-sizing (granted vs used over a window, best-fit role, humans holding long-lived keys, outside collaborators with admin) as read-only findings and a review page"
     status: pending

@@ -549,10 +549,7 @@ async def identity_effective_permissions(
         return ToolResult(
             tool="identity_effective_permissions",
             available=False,
-            reason=(
-                f"Privilege lookup failed ({type(exc).__name__}). This is a lookup failure, "
-                f"not an absence of privilege."
-            ),
+            reason=(f"Privilege lookup failed ({type(exc).__name__}). This is a lookup failure, not an absence of privilege."),
         )
 
     privilege = fact.privilege
@@ -588,10 +585,7 @@ async def identity_effective_permissions(
         tool="identity_effective_permissions",
         rows=[row],
         row_count=1,
-        query_description=(
-            f"effective permissions for {privilege.provider}:{privilege.principal_id} "
-            f"as of {when.isoformat()}"
-        ),
+        query_description=(f"effective permissions for {privilege.provider}:{privilege.principal_id} as of {when.isoformat()}"),
     )
 
 

@@ -415,9 +415,7 @@ def test_unknown_tier_is_not_treated_as_standard(scorer: ConfidenceScorer) -> No
 
 def test_tier_orders_the_contribution(scorer: ConfidenceScorer) -> None:
     tiers = ["standard", "elevated", "admin", "domain_admin"]
-    contributions = [
-        _privilege_factor(scorer, {"tier": t, "measured": True, "tags_set": []}).contribution for t in tiers
-    ]
+    contributions = [_privilege_factor(scorer, {"tier": t, "measured": True, "tags_set": []}).contribution for t in tiers]
     assert contributions == sorted(contributions)
 
 

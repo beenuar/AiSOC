@@ -66,10 +66,7 @@ async def db():
     except Exception as exc:
         await engine.dispose()
         if REQUIRED:
-            pytest.fail(
-                f"MSSP_ISOLATION_REQUIRED is set and no database answered at DATABASE_URL: "
-                f"{type(exc).__name__}: {exc}"
-            )
+            pytest.fail(f"MSSP_ISOLATION_REQUIRED is set and no database answered at DATABASE_URL: {type(exc).__name__}: {exc}")
         pytest.skip(f"no database at DATABASE_URL ({type(exc).__name__}) — runs in integration.yml")
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -137,10 +134,7 @@ async def test_point_in_time_read_returns_the_tier_that_was_true_then(db) -> Non
     await db.commit()
     # Supersede: the same principal is demoted five days later.
     await db.execute(
-        text(
-            "UPDATE identity_privilege_facts SET valid_from = :t0 "
-            "WHERE tenant_id = :t AND valid_until IS NULL"
-        ),
+        text("UPDATE identity_privilege_facts SET valid_from = :t0 WHERE tenant_id = :t AND valid_until IS NULL"),
         {"t0": T0, "t": TENANT},
     )
     await db.commit()
@@ -158,10 +152,7 @@ async def test_point_in_time_read_returns_the_tier_that_was_true_then(db) -> Non
     # answer is wrong in the direction nobody checks -- it under-states.
     live_row = (
         await db.execute(
-            text(
-                "SELECT tier FROM identity_privilege_facts "
-                "WHERE tenant_id = :t AND valid_until IS NULL LIMIT 1"
-            ),
+            text("SELECT tier FROM identity_privilege_facts WHERE tenant_id = :t AND valid_until IS NULL LIMIT 1"),
             {"t": TENANT},
         )
     ).scalar_one()
@@ -336,8 +327,7 @@ async def test_usage_upsert_keeps_the_widest_observed_span(db) -> None:
     row = (
         await db.execute(
             text(
-                "SELECT first_used_at, last_used_at, use_count FROM identity_permission_usage "
-                "WHERE tenant_id = :t AND principal_id = 'u1'"
+                "SELECT first_used_at, last_used_at, use_count FROM identity_permission_usage WHERE tenant_id = :t AND principal_id = 'u1'"
             ),
             {"t": TENANT},
         )

@@ -157,9 +157,7 @@ _DATA_READ_ACTIONS: tuple[str, ...] = (
 )
 
 #: Resource kinds and tag values that mean "the tenant called this sensitive".
-_SENSITIVE_MARKERS: frozenset[str] = frozenset(
-    {"sensitive", "restricted", "confidential", "pii", "phi", "pci", "regulated", "crown-jewel"}
-)
+_SENSITIVE_MARKERS: frozenset[str] = frozenset({"sensitive", "restricted", "confidential", "pii", "phi", "pci", "regulated", "crown-jewel"})
 
 #: Tier floors by how much of the estate's authorization surface a principal
 #: can write. Derived from what the identity can *do*, never from the name of
