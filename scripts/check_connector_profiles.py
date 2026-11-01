@@ -273,11 +273,7 @@ def _emits_no_events(tree: ast.Module) -> bool:
         if len(body) != 1:
             return False
         stmt = body[0]
-        return (
-            isinstance(stmt, ast.Return)
-            and isinstance(stmt.value, ast.List)
-            and not stmt.value.elts
-        )
+        return isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.List) and not stmt.value.elts
     return False
 
 
