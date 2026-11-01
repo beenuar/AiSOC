@@ -50,9 +50,18 @@ claimed the same migration number simultaneously and one had to renumber.
 | Number | Kind | Lane / item | Claimed | File |
 |---|---|---|---|---|
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
+| 0018 | ADR | Lane B / 1.6 | 2026-11-01 | `docs/decisions/0018-ip-class-dataset-provenance.md` |
+| 130 | migration | Lane B / 1.6 | 2026-11-01 | `services/api/migrations/130_alert_ip_class.sql` |
+| 131 | migration | Lane B / 1.3 | 2026-11-01 | `services/api/migrations/131_workforce_context.sql` |
+| 132 | migration | Lane B / 8.3 | 2026-11-01 | `services/api/migrations/132_tenant_enrichment_providers.sql` |
+| 133 | migration | Lane B / 8.1 | 2026-11-01 | `services/api/migrations/133_cloud_security_findings.sql` |
 
-Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
-ADR `0016`.
+Lane B holds an exclusive pre-allocated block: migrations `130`-`137` and ADR
+`0018`. Numbers `134`-`137` are reserved and unused unless an item below
+claims one here first.
+
+Highest at kickoff: migration `123`, ADR `0014`. Next free outside Lane B's
+block: migration `124`, ADR `0016`.
 
 ## Phase 0: Kickoff
 
