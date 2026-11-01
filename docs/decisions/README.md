@@ -28,6 +28,7 @@ ADRs are immutable once accepted. If a decision changes, write a new ADR that su
 | [ADR-0012](./0012-how-fusion-scales.md) | How fusion scales — required-field indexing, entity partitioning, and a scale hint the cluster acts on | accepted | 2026-10-11 |
 | [ADR-0013](./0013-truncating-a-hash-chained-audit-log.md) | Truncating a hash-chained audit log without making an intact chain look tampered with | accepted | 2026-10-11 |
 | [ADR-0014](./0014-tenant-erasure-crosses-the-audit-trigger.md) | Tenant erasure crosses the audit-log immutability trigger; nothing smaller does | accepted | 2026-10-12 |
+| [ADR-0015](./0015-siem-replacement-scope.md) | AiSOC does not take on SIEM-replacement scope; it federates to the SIEM instead | proposed | 2026-11-01 |
 
 ## Authoring conventions
 

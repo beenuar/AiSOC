@@ -163,13 +163,30 @@ and ADR `0011`. The numbers are claimed before any file is written, because
 two lanes recently picked `102`/`103` within minutes of each other and one
 had to renumber. Unused numbers are struck at the end of the phase.
 
+## Carried to the wave-2 depth plan, 2026-11-01
+
+This plan's open items were handed over to
+`plans/aisoc_depth_wave2.plan.md` at its kickoff and are tracked in
+`DEPTH2_PROGRESS.md` from that date. They are deliberately **not** ticked
+here: a tick in both files is a double count, and the wave-2 plan's Phase 10
+closes this plan's Phase 10 as well.
+
+Carried: 0.3's `make up-full` baseline (recorded below as D2 — now captured,
+see `DEPTH2_PROGRESS.md` 0.3), 2.6, 3.6, 3.7, the 4.4 cloud-hardware run,
+the 4.5 managed-cluster run, 5.5, 5.6, 6.3 to 6.6, 8.1's sub-items 4.5 and
+4.6, the 9.4 Teams half, the 9.6 remainder, and Phase 10. The hand-over
+table in `DEPTH2_PROGRESS.md` names the wave-2 phase each one became.
+
 ## Phase 0: Kickoff
 
 - [x] **0.1** `DEPTH_PROGRESS.md` exists (this file), modelled on
   `PARITY_PROGRESS.md`.
 - [x] **0.2** Every figure re-derived against the base commit. See below.
 - [~] **0.3** Baselines captured. Four of five recorded; `make up-full` and the
-  hosted-model matrix are noted under Deviations.
+  hosted-model matrix are noted under Deviations. **`make up-full` was
+  captured on 2026-11-01 under the wave-2 plan's Phase 0.3** — 22 containers
+  on the `full` profile, recorded in `docs/audit/depth2-baseline/README.md`.
+  This item stays `[~]` here and is closed in `DEPTH2_PROGRESS.md`.
 
 ### 0.2 Re-derived figures
 
