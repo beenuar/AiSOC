@@ -149,6 +149,13 @@ var classesWithNoProducerYet = map[int]string{
 type connectorClass struct {
 	classUID      int
 	genericReason string
+	// contextOnly marks a connector that emits no ingest events at all: its
+	// fetch_alerts returns an empty list and its data reaches the platform
+	// through a different writer. Such a connector carries no generic-mapping
+	// debt, because no event of its ever reaches the normalizer to be mapped,
+	// so it is counted apart from the ceiling. The gate verifies the claim
+	// against the connector's own fetch_alerts rather than believing it.
+	contextOnly bool
 }
 
 // connectorOCSFClass carries a decision for every connector type
@@ -323,9 +330,9 @@ var connectorOCSFClass = map[string]connectorClass{
 	// exists to tell "decided to take the generic path" apart from "nobody
 	// looked", and an HR connector with no entry reads as the second.
 	// ---------------------------------------------------------------
-	"bamboohr":         {genericReason: "HR context, not events: fetch_alerts returns nothing and the scheduler writes workforce_members"},
-	"rippling":         {genericReason: "HR context, not events: fetch_alerts returns nothing and the scheduler writes workforce_members"},
-	"microsoft_intune": {genericReason: "MDM device context, not events: fetch_alerts returns nothing and the scheduler writes workforce_devices"},
+	"bamboohr":         {genericReason: "HR context, not events: fetch_alerts returns nothing and the scheduler writes workforce_members", contextOnly: true},
+	"rippling":         {genericReason: "HR context, not events: fetch_alerts returns nothing and the scheduler writes workforce_members", contextOnly: true},
+	"microsoft_intune": {genericReason: "MDM device context, not events: fetch_alerts returns nothing and the scheduler writes workforce_devices", contextOnly: true},
 
 	"crowdstrike":      {genericReason: "EDR detections: already judged by the vendor"},
 	"sentinelone":      {genericReason: "EDR threats: already judged by the vendor"},

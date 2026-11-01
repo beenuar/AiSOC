@@ -51,6 +51,10 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 | 8.1 CNAPP depth | **blocked** on unreachable Wiz docs; depth check recorded, two findings in it | item log |
 | 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR #1591 |
 | 8.3 Enrichment per tenant, cited | **rate limiting shipped**; provider gate built and held for its caller | item log + `depth2/lane-b-enrichment-tenant` |
+| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
+| 8.1 CNAPP depth | not started, gap reproduced | item log |
+| 8.2 NDR connectors | not started; ExtraHop buildable, Corelight blocked | item log |
+| 8.3 Enrichment per tenant, cited | not started, gap reproduced | item log |
 | 8.4 Scale and deployment evidence | **blocked, recorded with exactly what is needed** | item log |
 
 Every row above has its reproduction recorded in the item log as a command
@@ -683,6 +687,93 @@ survey:**
 | URLScan client | The config key exists and no client does |
 | Breached-credential source | One source, off by default per tenant |
 | Docs | Say plainly that enrichment needs the `full` profile |
+### 8.1 CNAPP depth - Lane B - NOT STARTED, gap reproduced
+
+**Reproduced, recorded as commands rather than asserted.**
+
+`services/connectors/app/connectors/wiz.py` declares exactly one GraphQL
+operation, `query IssuesTable`. There is no vulnerability query, no
+configuration-finding query, no secrets query and no runtime-detection
+query. The four sibling cloud-security connectors each read one endpoint
+and it is their alert stream in every case:
+
+| Connector | The one read it makes |
+|---|---|
+| `orca` | two `GET`s against the alerts API |
+| `prisma_cloud` | two `POST`s against the search API |
+| `lacework` | `GET /api/v2/Alerts` |
+| `sysdig` | `GET /api/v1/secureEvents` |
+
+So the gap is real on all five and is as the plan describes it.
+
+**What remains, scoped:** extend the Wiz connector to vulnerabilities,
+configuration findings, secrets and runtime detections where the vendor API
+offers them; record the same depth check for the other four; surface the
+findings as **triage context keyed on the resource the alert touched**,
+not as alerts by default. The triage-context half is the part that needs a
+design decision rather than a read: a CNAPP finding on a resource is an
+input to a verdict about an event on that resource, which means a lookup
+keyed on resource identity at triage time, in the shape
+`services/agents/app/context/identity.py` uses for principals.
+
+**Risk the plan already names:** Wiz's newer GraphQL surfaces are behind a
+customer tenant. Verify each field against the vendor's current public
+reference before writing it, and record BLOCKED rather than inventing a
+payload shape, exactly as D5 does for Workday and Kandji.
+
+### 8.2 NDR connectors - Lane B - NOT STARTED, one half blocked
+
+**Reproduced.** `ls services/connectors/app/connectors/ | grep -iE
+"extrahop|corelight"` returns nothing. The two network connectors that
+exist are `zeek_suricata` and `darktrace`.
+
+**Reference availability, measured 2026-11-01:**
+
+| Vendor | Public reference | Verdict |
+|---|---|---|
+| ExtraHop RevealX 360 | `https://docs.extrahop.com/current/rest-api-guide/` answers **200** | buildable |
+| Corelight | `https://docs.corelight.com/` answers **401** | **BLOCKED** |
+
+So ExtraHop is a build and Corelight is not. **Corelight needs** either a
+documentation account, or one recorded (redacted) detection payload plus the
+endpoint and auth shape, before an honest mock can be written. Corelight's
+*Zeek output* is open and is already covered by the `zeek_suricata`
+connector, which is a different thing from the sensor's own detection API
+and must not be passed off as it.
+
+### 8.3 Enrichment per tenant, cited - Lane B - NOT STARTED, gap reproduced
+
+**Reproduced, and the gap is wider than the plan states.**
+
+`services/enrichment` is a **Go** service, not Python. Measured on this
+tree:
+
+  * `grep -c tenant` over `internal/enricher/enricher.go` and
+    `internal/config/config.go` returns **0** and **0**. There is no
+    per-tenant dimension anywhere in the service, so per-tenant opt-in is
+    absent rather than partial.
+  * No reference to the credential vault anywhere under
+    `services/enrichment/`. Keys are per-deployment environment variables.
+  * `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` are parsed in `config.go` lines
+    59-60, assigned to struct fields at lines 92-93, and **read by nothing
+    else in the service**. The plan's "reads and never enforces" reproduces
+    exactly.
+  * `URLSCAN_API_KEY` is a config field (`config.go:71`) with no client.
+  * No enrichment result is cited in the ledger.
+
+**What remains, and the one design decision it needs.** The per-tenant
+opt-in is a console settings surface with the tenant's own key in the
+credential vault, which `services/api` owns the write path for. A Go
+service cannot hold that write path, so either the enrichment service
+learns to read vault tokens through a vendored read-path `decrypt_dict`
+(the pattern `services/connectors` already uses), or the fan-out moves
+behind an API route that resolves the tenant's credentials first. That
+choice should be made explicitly rather than discovered during
+implementation.
+
+The rate limiter needs a test that proves it **refuses**, per the brief: a
+limiter asserted only on the allowed path is indistinguishable from no
+limiter.
 
 ### 8.4 Scale and deployment evidence - Lane B - **BLOCKED**, which is the correct outcome
 

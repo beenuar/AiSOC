@@ -34,6 +34,7 @@ and says so.
 | Claim-to-gate traceability | Every product claim mapped to the CI job that fails when it stops being true | `docs/audit/CLAIM_TO_GATE_MATRIX.md` |
 
 The last row is the one worth reading first. It is the honest index: 332 rows
+The last row is the one worth reading first. It is the honest index: 332 rows
 `GATED`, 5 `PARTIAL`, and a ratchet that refuses to let a row sit at
 `NO GATE`. Re-read the figure from the table rather than from here — a count
 copied into prose goes stale in silence, which is why

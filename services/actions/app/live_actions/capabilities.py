@@ -36,11 +36,10 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         "pull_logs",
         "pull_pcap",
         "pull_vulnerabilities",
-        # Depth plan wave 2, 1.3. Context rather than events: an HR system
-        # answers "who works here" and an MDM "what is this laptop". They
-        # are mirrored here because this set is the actions service's copy
-        # of the connectors Capability enum and a gate compares the two in
-        # both directions; nothing in this service executes them.
+        # Context rather than events: an HR system and an MDM report
+        # slowly-changing state, which the connector scheduler materialises
+        # into workforce_members and workforce_devices instead of pushing
+        # through ingest.
         "pull_workforce",
         "pull_device_inventory",
         # QUERY
