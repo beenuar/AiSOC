@@ -36,7 +36,7 @@ import time
 import pytest
 from app.security.agent_identity import (
     AGENT_TOOL_SCOPES,
-    AgentIdentity,
+    KNOWN_TOOLS,
     ScopeDenied,
     issue_identity,
 )
@@ -49,7 +49,11 @@ def _tool(name: str) -> Tool:
 
 @pytest.fixture
 def registry() -> ToolRegistry:
-    return ToolRegistry([_tool("search_logs"), _tool("get_mitre_technique"), _tool("isolate_host")])
+    # Real tool names: `lookup_technique` is in the triage scope,
+    # `process_activity` is an investigator-only pivot and is therefore the
+    # out-of-scope case for a triage identity. Inventing names here would
+    # make the test pass against a scope table that grants nothing real.
+    return ToolRegistry([_tool("lookup_technique"), _tool("extract_iocs"), _tool("process_activity")])
 
 
 # ---------------------------------------------------------------------------
@@ -108,8 +112,8 @@ def test_an_unknown_agent_cannot_be_issued_an_identity():
 
 async def test_a_tool_inside_the_scope_runs(registry: ToolRegistry):
     identity = issue_identity("triage", run_id="run-1")
-    result = await registry.execute("search_logs", {}, identity=identity)
-    assert result == {"ok": "search_logs"}
+    result = await registry.execute("lookup_technique", {}, identity=identity)
+    assert result == {"ok": "lookup_technique"}
 
 
 async def test_a_tool_outside_the_scope_is_refused(registry: ToolRegistry):
@@ -121,7 +125,7 @@ async def test_a_tool_outside_the_scope_is_refused(registry: ToolRegistry):
     tell a denial from a tool that broke.
     """
     identity = issue_identity("triage", run_id="run-1")
-    result = await registry.execute("isolate_host", {}, identity=identity)
+    result = await registry.execute("process_activity", {}, identity=identity)
     assert "error" in result
     assert "scope" in result["error"].lower()
 
@@ -133,7 +137,7 @@ async def test_an_expired_identity_is_refused(registry: ToolRegistry):
     investigation resuming hours later must re-issue, not continue.
     """
     identity = issue_identity("triage", run_id="run-1", ttl_seconds=-1)
-    result = await registry.execute("search_logs", {}, identity=identity)
+    result = await registry.execute("lookup_technique", {}, identity=identity)
     assert "error" in result
     assert "expired" in result["error"].lower()
 
@@ -146,7 +150,7 @@ async def test_a_call_with_no_identity_is_refused_by_default(registry: ToolRegis
     of the `Annotated[Any, require_permission(...)]` routes that read as
     gated and enforced nothing.
     """
-    result = await registry.execute("search_logs", {})
+    result = await registry.execute("lookup_technique", {})
     assert "error" in result
     assert "identity" in result["error"].lower()
 
@@ -160,7 +164,7 @@ def test_scope_denied_is_raised_by_the_checker_itself():
     """
     identity = issue_identity("triage", run_id="run-1")
     with pytest.raises(ScopeDenied):
-        identity.require("isolate_host")
+        identity.require("process_activity")
 
 
 # ---------------------------------------------------------------------------
@@ -177,13 +181,13 @@ async def test_every_call_writes_an_audit_row_including_the_denials(registry: To
     registry.audit_sink = rows.append
     identity = issue_identity("triage", run_id="run-1")
 
-    await registry.execute("search_logs", {}, identity=identity)
-    await registry.execute("isolate_host", {}, identity=identity)
+    await registry.execute("lookup_technique", {}, identity=identity)
+    await registry.execute("process_activity", {}, identity=identity)
 
     assert len(rows) == 2
     allowed, denied = rows
-    assert allowed["agent"] == "triage" and allowed["tool"] == "search_logs" and allowed["allowed"] is True
-    assert denied["agent"] == "triage" and denied["tool"] == "isolate_host" and denied["allowed"] is False
+    assert allowed["agent"] == "triage" and allowed["tool"] == "lookup_technique" and allowed["allowed"] is True
+    assert denied["agent"] == "triage" and denied["tool"] == "process_activity" and denied["allowed"] is False
     assert all(r["run_id"] == "run-1" for r in rows)
 
 
@@ -198,7 +202,7 @@ async def test_the_audit_row_never_carries_the_tool_arguments(registry: ToolRegi
     registry.audit_sink = rows.append
     identity = issue_identity("triage", run_id="run-1")
 
-    await registry.execute("search_logs", {"query": "user=ceo@example.com password=hunter2"}, identity=identity)
+    await registry.execute("lookup_technique", {"query": "user=ceo@example.com password=hunter2"}, identity=identity)
 
     assert "hunter2" not in str(rows[0])
     assert "ceo@example.com" not in str(rows[0])
@@ -217,4 +221,95 @@ async def test_an_audit_sink_that_raises_does_not_break_the_tool_call(registry: 
 
     registry.audit_sink = explode
     identity = issue_identity("triage", run_id="run-1")
-    assert await registry.execute("search_logs", {}, identity=identity) == {"ok": "search_logs"}
+    assert await registry.execute("lookup_technique", {}, identity=identity) == {"ok": "lookup_technique"}
+
+
+# ---------------------------------------------------------------------------
+# The scope table names real tools
+# ---------------------------------------------------------------------------
+
+
+def test_every_scoped_tool_name_is_a_tool_something_registers():
+    """A scope naming tools that do not exist grants nothing and refuses
+    everything real.
+
+    The first draft of `AGENT_TOOL_SCOPES` listed `search_logs`,
+    `query_lake` and `graph_blast_radius`. No registry registers any of
+    them. That is the same class of mistake as a detection rule clausing on
+    a field no connector emits, and just as invisible: a scope full of
+    plausible names reads as careful.
+
+    Walked against the real registries rather than against `KNOWN_TOOLS`
+    alone, so the written-out list cannot drift from them either.
+    """
+    scoped = {tool for scope in AGENT_TOOL_SCOPES.values() for tool in scope}
+    missing = sorted(scoped - _registered_tool_names())
+    assert not missing, f"scoped but registered by nothing: {missing}"
+
+
+def _registered_tool_names() -> set[str]:
+    from app.tools.customer_tools import SIEM_SEARCH_TOOL, VENDOR_READ_TOOLS
+    from app.tools.investigation import investigation_tools
+    from app.tools.registry import default_registry
+
+    return (
+        set(default_registry("t").names()) | {tool.name for tool in investigation_tools("t")} | {SIEM_SEARCH_TOOL} | set(VENDOR_READ_TOOLS)
+    )
+
+
+def test_every_registered_tool_is_reachable_by_some_agent():
+    """The other direction, which is the one that caught the real bug.
+
+    Checking only "every scoped name is registered" passes on a scope
+    table that omits six tools: nothing is named that does not exist, and
+    six real tools are reachable by nobody. The deep-investigation
+    acceptance bar then drops from three pivots to one, and the symptom —
+    a thinner investigation — looks like a model problem rather than an
+    authorization one.
+
+    That is the one-directional-gate failure this repository keeps
+    finding: the graph-schema drift check compared Go against YAML and
+    never YAML against Go, and reported OK while eleven labels were
+    missing.
+    """
+    scoped = {tool for scope in AGENT_TOOL_SCOPES.values() for tool in scope}
+    unreachable = sorted(_registered_tool_names() - scoped)
+    assert not unreachable, (
+        f"registered but in no agent's scope, so nothing can call them: {unreachable}. "
+        "Add them to the agent that should hold them, or delete the tool."
+    )
+
+
+def test_known_tools_covers_everything_the_scopes_name():
+    scoped = {tool for scope in AGENT_TOOL_SCOPES.values() for tool in scope}
+    assert not sorted(scoped - KNOWN_TOOLS)
+
+
+def test_no_agent_scope_contains_a_tool_that_changes_an_estate():
+    """AiSOC's own agents propose; `services/actions` executes.
+
+    Putting a containment verb in this table would create a second, weaker
+    door to the same operation — one with no capability contract and no
+    approval tier.
+    """
+    acting = {"isolate_host", "disable_user", "block_indicator", "kill_process", "revoke_session", "delete_file"}
+    for agent, scope in AGENT_TOOL_SCOPES.items():
+        assert not (scope & acting), f"{agent} holds an estate-changing tool: {sorted(scope & acting)}"
+
+
+async def test_a_granted_mcp_tool_becomes_callable_without_extending_the_expiry():
+    """The one legitimate way a scope grows.
+
+    A tenant's MCP tools are discovered at run time, so they cannot be in
+    a static table; `app/mcp/policy.py` classifies and refuses the
+    destructive ones before this is reached. The expiry and credential id
+    carry over, so a grant cannot silently lengthen the credential's life
+    and the granted calls still join to the same run.
+    """
+    base = issue_identity("investigation", run_id="run-1")
+    granted = base.with_granted_tools({"tenant_wiki_search"})
+
+    assert granted.may("tenant_wiki_search")
+    assert not base.may("tenant_wiki_search")
+    assert granted.expires_at == base.expires_at
+    assert granted.credential_id == base.credential_id

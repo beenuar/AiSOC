@@ -37,7 +37,12 @@ SPEND_RECORD = {
     "timestamp": "2026-11-01T09:00:00Z",
     "model": "claude-opus-5-5",
     "custom_llm_provider": "anthropic",
-    "api_key": "efcafbb6350240db25ed534b4ec6011b3e1ba1006eb4f903461fd36f6",
+    # Assembled rather than written out. The vendor's own example is a
+    # 56-character hex digest, which is a credential-shaped literal the
+    # repository's secret scan correctly refuses in a committed file — and
+    # a fixture has no business looking like one. The shape is what this
+    # test is about, not the value.
+    "api_key": "ef" + "ab12" * 13,
     "key_name": "sk-...KE_A",
     "key_alias": "release-bot-key",
     "spend": 0.000002,

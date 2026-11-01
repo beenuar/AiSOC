@@ -109,10 +109,30 @@ class _FakeRedis:
     async def hgetall(self, key: str):
         return {k: str(v) for k, v in self.hashes.get(key, {}).items()}
 
-    async def hset(self, key: str, mapping: dict | None = None, **kw):
+    async def hset(self, key: str, field: str | None = None, value=None, *, mapping: dict | None = None):
+        """Both call shapes, because the production code uses the positional one.
+
+        The first draft of this double accepted only `mapping=`, so every
+        `hset(key, field, value)` raised `TypeError` — which the store's
+        fail-soft path swallowed into a `debug` log and returned `None`
+        from. The tests then failed with "no spend field", which reads as a
+        missing feature rather than as a broken double. A fake less capable
+        than the real thing is the mirror of the usual trap and fails in a
+        way that blames the code under test.
+        """
         bucket = self.hashes.setdefault(key, {})
-        bucket.update(mapping or {})
+        if mapping:
+            bucket.update(mapping)
+        if field is not None:
+            bucket[field] = value
         return 1
+
+    async def sadd(self, key: str, member: str) -> int:
+        self.hashes.setdefault(f"{key}:set", {})[member] = 1
+        return 1
+
+    async def scard(self, key: str) -> int:
+        return len(self.hashes.get(f"{key}:set", {}))
 
 
 @pytest.fixture
@@ -133,7 +153,7 @@ def test_the_oauth_application_is_one_sub_principal_kind_among_several():
     block and the module would grow four copies of one idea.
     """
     assert "oauth_app" in SUB_PRINCIPAL_FIELDS
-    assert "ai_agent" in SUB_PRINCIPAL_FIELDS
+    assert "agent" in SUB_PRINCIPAL_FIELDS
     assert "gateway_key" in SUB_PRINCIPAL_FIELDS
 
 
@@ -176,7 +196,7 @@ def test_a_gateway_span_resolves_to_both_its_agent_and_its_key():
     subject separates them.
     """
     resolved = dict(resolve_sub_principals(AGENT_EVENT))
-    assert resolved["ai_agent"] == "release-bot"
+    assert resolved["agent"] == "release-bot"
     assert resolved["gateway_key"] == "release-bot-key"
 
 
@@ -222,9 +242,18 @@ async def test_the_same_tool_on_a_different_agent_is_still_novel(store: Baseline
     If the counter were keyed on the tool alone, a tool made routine by one
     agent would be scored routine for every agent — which is how a
     compromised agent inherits the estate's good behaviour.
+
+    Both agents are given a history first, because `rarity` deliberately
+    scores a first-ever sighting `1 - 1/total`, i.e. `0.0` on a subject
+    with no history. A subject nobody has observed is not "maximally
+    anomalous", it is unmeasured, and the module refuses to claim more
+    confidence than the history supports. Comparing two fresh subjects
+    would therefore compare 0.0 with 0.0 and prove nothing.
     """
     for _ in range(20):
         await store.derived_fields(TENANT, dict(AGENT_EVENT, tool_name="execute_command"))
+    for _ in range(20):
+        await store.derived_fields(TENANT, dict(AGENT_EVENT, agent_id="summariser", agent_name="summariser", tool_name="search_logs"))
 
     other = await store.derived_fields(
         TENANT, dict(AGENT_EVENT, agent_id="summariser", agent_name="summariser", tool_name="execute_command")
@@ -235,10 +264,64 @@ async def test_the_same_tool_on_a_different_agent_is_still_novel(store: Baseline
 
 
 async def test_token_spend_is_tracked_per_agent_and_per_key(store: BaselineStore):
-    """Both subjects from one event, which 7.4 asks for by name."""
-    fields = await store.derived_fields(TENANT, AGENT_EVENT)
+    """Both subjects from one event, which 7.4 asks for by name.
+
+    A history is fed first, and a *varying* one. Two guards decide whether
+    a score exists at all, and both are deliberate: `observe_amount`
+    withholds below `MIN_VOLUME_SAMPLES`, and `z_score` refuses a
+    distribution whose standard deviation has collapsed to zero. The second
+    is the one that bites — feeding the same cost fifteen times produces a
+    constant, and a constant has no z-score. Real gateway traffic varies.
+    """
+    for index in range(15):
+        await store.derived_fields(TENANT, dict(AGENT_EVENT, request_cost_usd=0.01 + index * 0.001))
+
+    fields = await store.derived_fields(TENANT, dict(AGENT_EVENT, request_cost_usd=0.02))
     assert "baseline_agent_token_spend_z" in fields
     assert "baseline_gateway_key_token_spend_z" in fields
+
+
+async def test_a_spend_signal_is_withheld_until_there_is_a_history(store: BaselineStore):
+    """The other direction, stated rather than left implicit.
+
+    "Not enough history" and "normal spend" must not look the same. A
+    z-score published over three observations would be a confident number
+    about nothing, which is the failure mode this repository calls a
+    vacuous zero.
+    """
+    fields = await store.derived_fields(TENANT, AGENT_EVENT)
+    assert "baseline_agent_token_spend_z" not in fields
+
+
+async def test_an_unusually_expensive_request_scores_above_a_routine_one(store: BaselineStore):
+    """The signal 7.4's token-spend rule reads.
+
+    Asserted as a comparison between two measured scores rather than
+    against a threshold, so it keeps meaning if the floor moves.
+    """
+    for index in range(20):
+        await store.derived_fields(TENANT, dict(AGENT_EVENT, request_cost_usd=0.02 + (index % 5) * 0.002))
+
+    routine = await store.derived_fields(TENANT, dict(AGENT_EVENT, request_cost_usd=0.022))
+    spike = await store.derived_fields(TENANT, dict(AGENT_EVENT, request_cost_usd=25.0))
+
+    assert spike["baseline_agent_token_spend_z"] > routine["baseline_agent_token_spend_z"]
+
+
+async def test_a_perfectly_constant_spender_gets_no_score_rather_than_zero(store: BaselineStore):
+    """The module's documented refusal, pinned for the spend path too.
+
+    A batch agent billing the identical amount every run converges on zero
+    variance. Returning `0.0` there would make the most automated agent in
+    the estate the least suspicious one it is possible to be — which is
+    exactly what `z_score`'s docstring says it refuses to do, and this
+    asserts the new caller inherits that rather than working around it.
+    """
+    for _ in range(20):
+        await store.derived_fields(TENANT, dict(AGENT_EVENT, request_cost_usd=0.02))
+
+    fields = await store.derived_fields(TENANT, dict(AGENT_EVENT, request_cost_usd=0.02))
+    assert "baseline_agent_token_spend_z" not in fields
 
 
 async def test_an_event_with_no_cost_contributes_no_spend_signal(store: BaselineStore):
