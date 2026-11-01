@@ -1,0 +1,25 @@
+id: det-application-087
+name: Copilot Content Exclusion Changed
+description: Content exclusion is the control that stops a coding assistant reading the paths an organisation
+  has declared off limits — key material, customer data, anything it has decided a model must not see.
+  A change to it is a change to that boundary, and it is made in a settings page rather than in a pull
+  request, so nothing else reviews it.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1562.001
+- tlp.white
+category: application
+log_source:
+  product: github_copilot
+  service: audit
+detection:
+  condition: |
+    event_type ENDSWITH ".copilot.content_exclusion_changed"
+false_positives:
+- Exclusion list edited as part of an approved repository onboarding
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

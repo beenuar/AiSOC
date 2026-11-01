@@ -1,0 +1,126 @@
+{
+  "accessed_resource_count": 24,
+  "actor": "bob@example.com",
+  "actor_email": "bob@example.com",
+  "app_host": "Word",
+  "category": "saas",
+  "created_at": "2026-10-30T09:15:00",
+  "description": "provider=microsoft_copilot; event_type=microsoft_copilot.CopilotInteraction; actor=bob@example.com",
+  "event_type": "microsoft_copilot.CopilotInteraction",
+  "external_id": "bulk-2",
+  "provider": "microsoft_copilot",
+  "raw_event": {
+    "CopilotEventData": {
+      "AccessedResources": [
+        {
+          "Id": "f0",
+          "Type": "File"
+        },
+        {
+          "Id": "f1",
+          "Type": "File"
+        },
+        {
+          "Id": "f2",
+          "Type": "File"
+        },
+        {
+          "Id": "f3",
+          "Type": "File"
+        },
+        {
+          "Id": "f4",
+          "Type": "File"
+        },
+        {
+          "Id": "f5",
+          "Type": "File"
+        },
+        {
+          "Id": "f6",
+          "Type": "File"
+        },
+        {
+          "Id": "f7",
+          "Type": "File"
+        },
+        {
+          "Id": "f8",
+          "Type": "File"
+        },
+        {
+          "Id": "f9",
+          "Type": "File"
+        },
+        {
+          "Id": "f10",
+          "Type": "File"
+        },
+        {
+          "Id": "f11",
+          "Type": "File"
+        },
+        {
+          "Id": "f12",
+          "Type": "File"
+        },
+        {
+          "Id": "f13",
+          "Type": "File"
+        },
+        {
+          "Id": "f14",
+          "Type": "File"
+        },
+        {
+          "Id": "f15",
+          "Type": "File"
+        },
+        {
+          "Id": "f16",
+          "Type": "File"
+        },
+        {
+          "Id": "f17",
+          "Type": "File"
+        },
+        {
+          "Id": "f18",
+          "Type": "File"
+        },
+        {
+          "Id": "f19",
+          "Type": "File"
+        },
+        {
+          "Id": "f20",
+          "Type": "File"
+        },
+        {
+          "Id": "f21",
+          "Type": "File"
+        },
+        {
+          "Id": "f22",
+          "Type": "File"
+        },
+        {
+          "Id": "f23",
+          "Type": "File"
+        }
+      ],
+      "AppHost": "Word"
+    },
+    "CreationTime": "2026-10-30T09:15:00",
+    "Id": "bulk-2",
+    "Operation": "CopilotInteraction",
+    "RecordType": 261,
+    "UserId": "bob@example.com",
+    "Workload": "Copilot",
+    "accessed_resource_count": 24,
+    "app_host": "Word"
+  },
+  "severity": "info",
+  "source": "llm_usage",
+  "title": "Microsoft 365 Copilot audit: CopilotInteraction"
+}
