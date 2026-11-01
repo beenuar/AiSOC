@@ -201,7 +201,87 @@ not, that is a real first-run defect for the most common conflict there is
 and belongs in its own fix with a negative control. Until that run exists,
 this is an observation with its evidence attached.
 
+## Phase 7: AI agent security (Lane E)
+
+- [x] **7.1** Provider coverage (depth 6.3) plus enterprise AI-chat
+      compliance logs stored as labels and bounded snippets only.
+      [#1585](https://github.com/beenuar/AiSOC/pull/1585).
+- [ ] **7.2** Hosted agents and repository AI artefacts as new asset kinds.
+- [ ] **7.3** Agent identity and per-agent baselines (depth 6.4 / parity 6.7).
+- [ ] **7.4** AI rule pack (depth 6.5 plus this plan's additions).
+
 ## Item log
 
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
+
+### 7.1 — Provider coverage and AI-chat compliance logs
+
+Landed early because Lane D's 7.5 depends on the provider work.
+
+**What already existed, and was therefore not rebuilt.** Verified before
+writing anything: the AI estate inventory (`services/api/app/services/
+ai_inventory.py`, one `score_risk`, six asset kinds, tri-state `sanctioned`),
+migration 110 and its RLS, the fusion recorder with its three discovery
+sources, endpoint discovery, the `ai_gateway` connector, the two OCSF 6003
+webhook templates, `packages/aisoc-ai-sdk`, the AI estate console page, and
+**sixteen** executable AI rules — eight `llm-*` on the OpenAI/Anthropic
+control plane (`det-application-071`…`078`) and eight `ai-*` on runtime and
+guardrail findings (`079`…`086`). None of that was touched.
+
+**Reproduced gap A.** `LlmUsageConnector` accepted `openai` and `anthropic`
+and nothing else. Six of seven tests in
+`services/connectors/tests/connectors/test_llm_usage_provider_coverage.py`
+fail on the base commit; four of them drive the real HTTP path against a
+mock server and get a `ValueError` from the constructor.
+
+**Reproduced gap B**, found while wiring A and the more interesting one.
+`test_ai_asset_recorder.py` writes `finding.evidence.scopes` into a
+hand-built OCSF event and asserts the recorder reads
+`finding.evidence.scopes`. Both halves are the test's own invention: no
+connector produces that path and ingest does not synthesise it, so the
+assertion held whether or not the production path worked. Driven through the
+shape ingest really produces — the connector's dict as a JSON string under
+`raw_data` — an Entra consent grant reached the inventory with **no scopes at
+all**, so an AI notetaker consented into every mailbox scored identically to
+one granted nothing.
+
+**Reproduced gap C.** No table anywhere held AI-chat compliance data; the
+migration sweep for one returned nothing.
+
+**What shipped.** Four more providers on the existing connector
+(`google_gemini`, `github_copilot`, `microsoft_copilot`, `entra_consent`),
+each against the vendor's current public reference, every URL fetched and
+200 before committing. `_from_provider_audit` now reads through
+`_connector_fields`, so scopes reach the one existing `score_risk`; an OAuth
+grant is keyed on the application rather than the audit record. Migration
+146 with five RLS'd tables, ADR-0021, a classifier, a client, three API
+routes and a console panel.
+
+**Wiring proof.** One `score_risk` path, unchanged — the new providers feed
+the existing `oauth_grant` and `provider_key` kinds and add no second
+scorer. Minimisation is schema-enforced (no column can hold a message;
+`VARCHAR(280)`; CHECK-constrained label vocabulary; no client method returns
+text) rather than promised in prose. Erasure and retention come from the
+`tenant_id` column name that `discover_tenant_tables` selects on, asserted
+per table.
+
+**Negative controls.** (1) Reverting only the `fields.get("scopes")` read
+fails both recorder tests again with `KeyError: 'scopes'`. (2) Adding a
+`transcript` `Text` column to `AiChatContentLabel` and changing nothing else
+fails the forbidden-column and unbounded-TEXT sweeps.
+
+**Measurement delta.** No change to the executable-detection figure: this
+item adds no rules. Rules reading these feeds are 7.4.
+
+**Deviation D3 — one provider, not several, for the compliance half.** The
+plan says "where a provider offers a compliance API". Exactly one does with
+a complete public reference: Anthropic's, at
+`platform.claude.com/docs/en/manage-claude/compliance-*`, whose pages were
+fetched and returned 200. OpenAI's equivalent is behind a Cloudflare
+challenge that answers 403 to every non-browser request, including its
+ordinary audit-log reference, so no honest mock can be written from it. The
+`provider` column is a CHECK constraint with one value today; adding a
+second is a one-line migration. **Blocked, with exactly what is needed:** a
+reachable public reference for the OpenAI Compliance API, or a recorded
+payload from a customer tenant.
