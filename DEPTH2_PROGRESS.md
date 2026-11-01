@@ -308,24 +308,35 @@ The promotion is a known quantity: one module in the shape of
 Recorded rather than built against an invented shape, which is the plan's own
 rule for exactly these vendors.
 
-### D6 - HR and MDM connectors get no ingest profile, deliberately
+### D6 - HR and MDM connectors get no ingest profile, and the first evidence for that was the wrong test
 
-The wiring rule says every connector needs a `connectorProfiles` entry in
-`services/ingest/internal/normalizer/normalizer.go`, because a connector
-without one hits the lenient fallback at `class_uid: 4001` with an empty
-severity map and its events are archived and never promoted.
+**Corrected after CI.** The conclusion held; the evidence did not, which is
+the half worth recording.
 
-These three emit no events at all. `fetch_alerts` returns `[]` on each by
-design: an HR system reports slowly-changing state, not security events, and
-pushing it through ingest would make "is this person leaving" a lake search
-rather than a lookup. A profile would be an entry nothing can reach.
+These three connectors publish no events at all. `fetch_alerts` returns an
+empty list on each by design: an HR system reports slowly-changing state,
+not security events, and their output is context the scheduler writes to
+`workforce_members` and `workforce_devices`, never to ingest. A
+`connectorProfiles` entry would be an entry nothing can reach.
 
-Checked rather than assumed: `go test ./internal/normalizer/` passes, and the
-only cross-check between the connector registry and the profile map is
+What was wrong was the check behind it. The original entry said `go test
+./internal/normalizer/` passed and cited
 `TestConnectorTypeCanonicalTargetsAreDeclaredAndUnshadowed`, which asserts
-that every *alias target* is declared -- not that every connector has a
-profile. The context path is the scheduler's `_sync_workforce_context`, and
-the test asserting the scheduler calls it is the equivalent control.
+that every *alias target* is declared and asks nothing about a connector
+having a profile. The test that does ask is
+`TestEveryDeclaredConnectorHasAnOCSFDecision`, and it failed in CI:
+
+    connector "bamboohr" has no entry in connectorOCSFClass: its events
+    take the 2001 default, which is always promoted, and nothing records
+    that as a decision
+
+`connectorOCSFClass` exists precisely to separate "decided to take the
+generic path" from "nobody looked", and a connector with no entry reads as
+the second. All three now carry a `genericReason` naming what they are.
+
+The lesson is the one this programme keeps paying for: a local suite
+passing is not evidence that the specific question was asked. The original
+entry named a test by title and did not read what it asserted.
 
 ### D7 - Zero check runs was a conflicted PR, not a saturated pool, and the two look identical from outside
 
