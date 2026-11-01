@@ -34,7 +34,7 @@ and says so.
 | Claim-to-gate traceability | Every product claim mapped to the CI job that fails when it stops being true | `docs/audit/CLAIM_TO_GATE_MATRIX.md` |
 
 The last row is the one worth reading first. It is the honest index: 341 rows
-`GATED`, 7 `PARTIAL`, and a ratchet that refuses to let a row sit at
+`GATED`, 8 `PARTIAL`, and a ratchet that refuses to let a row sit at
 `NO GATE`. Re-read the figure from the table rather than from here — a count
 copied into prose goes stale in silence, which is why
 `scripts/readme_gates.py` cross-checks this sentence against the matrix.

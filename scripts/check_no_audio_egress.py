@@ -72,6 +72,49 @@ _RECORDING = (
 )
 _RECORDING_RE = re.compile("|".join(_RECORDING))
 
+#: Speech SDKs that transcribe or synthesise **in somebody else's cloud**.
+#:
+#: Wave 2, Phase 9.1. The capture list above catches a module that holds
+#: audio bytes. It does not catch the likelier shape: a vendor SDK that takes
+#: the microphone itself and streams it to a hosted endpoint, with no `Blob`
+#: and no `Audio.Recording` anywhere in this tree. Those are a one-line
+#: import and they break the only promise this feature makes.
+#:
+#: `@react-native-voice/voice` is deliberately in the capture list rather
+#: than here: it wraps the platform recogniser, which on Android falls back
+#: to Google's servers unless `EXTRA_PREFER_OFFLINE` is set, so it is
+#: cloud-capable by default and the gate refuses it outright.
+_CLOUD_SPEECH = (
+    r"@google-cloud/speech",
+    r"@google-cloud/text-to-speech",
+    r"microsoft-cognitiveservices-speech-sdk",
+    r"@aws-sdk/client-transcribe",
+    r"@aws-sdk/client-polly",
+    r"@deepgram/sdk",
+    r"assemblyai",
+    r"elevenlabs",
+    r"@speechmatics/",
+    r"api\.openai\.com/v1/audio",
+    r"speech\.googleapis\.com",
+)
+_CLOUD_SPEECH_RE = re.compile("|".join(_CLOUD_SPEECH))
+
+#: Speech packages that run **on the device**, and are therefore permitted.
+#:
+#: Named rather than inferred. A gate that allowed anything not on the
+#: denylist would pass the next hosted SDK nobody has added yet, which is the
+#: wrong direction for a control whose whole claim is a negative.
+ON_DEVICE_SPEECH: frozenset[str] = frozenset(
+    {
+        # Platform TTS. Speaks through the OS voice; no network leg.
+        "expo-speech",
+        # On-device Whisper via a bundled GGML model.
+        "whisper.rn",
+        # On-device model runtime.
+        "react-native-executorch",
+    }
+)
+
 #: Binary request bodies. The structural half: a future SDK nobody has heard
 #: of still has to put the bytes somewhere, and this is where.
 _BINARY_BODY_RE = re.compile(r"body\s*:\s*(?:new\s+)?(FormData|Blob|ArrayBuffer|Uint8Array|ReadableStream|File)\b")
@@ -96,6 +139,13 @@ def violations_in(source: str, rel: str) -> list[str]:
             f"no-recording-api: {rel}:{line}: references {match.group(0)!r}. "
             "The responder app transcribes on the device and sends text; it has no reason "
             "to hold audio bytes at all."
+        )
+    for match in _CLOUD_SPEECH_RE.finditer(code):
+        line = code[: match.start()].count("\n") + 1
+        found.append(
+            f"no-cloud-speech: {rel}:{line}: references {match.group(0)!r}, which transcribes "
+            "or synthesises in a hosted service. The responder app promises that audio never "
+            f"leaves the device; the on-device packages are {sorted(ON_DEVICE_SPEECH)}."
         )
     for match in _BINARY_BODY_RE.finditer(code):
         line = code[: match.start()].count("\n") + 1
@@ -146,6 +196,10 @@ export async function ask(q: string) {
 _RECORDS = "import { Audio } from 'expo-av';\nconst r = new Audio.Recording();\n"
 _UPLOADS = "const fd = new FormData();\nawait fetch(url, { method: 'POST', body: FormData });\n"
 _COMMENT_ONLY = "// We deliberately never call getUserMedia or send a Blob body.\nexport const x = 1;\n"
+_CLOUD_STT = "import { SpeechClient } from '@google-cloud/speech';\nexport const c = new SpeechClient();\n"
+_CLOUD_TTS = "import * as sdk from 'microsoft-cognitiveservices-speech-sdk';\nexport const s = sdk;\n"
+_ON_DEVICE_TTS = "import * as Speech from 'expo-speech';\nSpeech.speak(answer);\n"
+_ON_DEVICE_STT = "import { initWhisper } from 'whisper.rn';\nconst w = await initWhisper({ filePath: model });\n"
 
 
 def _rule_self_test() -> list[tuple[str, bool]]:
@@ -164,6 +218,26 @@ def _rule_self_test() -> list[tuple[str, bool]]:
         (
             "a comment saying the app does not do it is NOT reported",
             not violations_in(_COMMENT_ONLY, "f.ts"),
+        ),
+        (
+            "a hosted speech-to-text SDK is reported",
+            any("no-cloud-speech" in v for v in violations_in(_CLOUD_STT, "f.ts")),
+        ),
+        (
+            "a hosted text-to-speech SDK is reported",
+            any("no-cloud-speech" in v for v in violations_in(_CLOUD_TTS, "f.ts")),
+        ),
+        (
+            "an on-device TTS package is NOT reported",
+            not violations_in(_ON_DEVICE_TTS, "f.ts"),
+        ),
+        (
+            "an on-device recogniser is NOT reported",
+            not violations_in(_ON_DEVICE_STT, "f.ts"),
+        ),
+        (
+            "the on-device allowlist and the cloud denylist do not overlap",
+            not any(re.search(_CLOUD_SPEECH_RE, pkg) for pkg in ON_DEVICE_SPEECH),
         ),
         (
             "a Blob body is reported even with no recording API in the file",
