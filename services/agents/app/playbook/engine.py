@@ -28,7 +28,7 @@ import httpx
 
 from app.playbook import pause as playbook_pause
 
-from . import action_bridge, idempotency, references, verification
+from . import action_bridge, ask_model, idempotency, references, verification
 from .bounds import (
     ABSOLUTE_MAX_LOOP_ITERATIONS,
     ABSOLUTE_MAX_PARALLEL_BRANCHES,
@@ -1809,6 +1809,49 @@ async def _deliver_verification_prompt(
     )
 
 
+async def _control_ask_model(
+    step: PlaybookStep,
+    pr: PlaybookRun,
+    http: httpx.AsyncClient,
+    *,
+    dry_run: bool,
+    path: tuple[str, ...] = (),
+) -> tuple[StepStatus, dict]:
+    """Ask one bounded question and report the branch it selected.
+
+    A misconfigured step fails rather than silently deciding: a question
+    with no fallback branch, or with answers nobody can give, is an
+    authoring error and the run should stop on it. A *model* that fails —
+    absent, erroring, or answering off-list — is not an error, and takes
+    the declared fallback.
+    """
+    try:
+        config = ask_model.AskModelStepConfig.from_params(step.params, timeout_seconds=step.timeout_seconds)
+    except ask_model.AskModelConfigError as exc:
+        return StepStatus.FAILED, {"error": f"ask_model step {step.name!r} is not usable: {exc}", "misconfigured": True}
+
+    record = await ask_model.ask(config, pr.context, dry_run=dry_run)
+
+    # The answer is ledgered on the run and announced on the stream, so an
+    # auditor can see the question that was asked, what came back and which
+    # branch it chose — not merely that a step called "triage question"
+    # succeeded.
+    await _emit(
+        pr.run_id,
+        "step.ask_model",
+        {
+            "step": step.name,
+            "question": record["question"],
+            "answer": record.get("answer"),
+            "valid": record.get("valid"),
+            "fallback_taken": record.get("fallback_taken"),
+            "next_step_id": record.get("next_step_id"),
+        },
+        http,
+    )
+    return StepStatus.SUCCESS, record
+
+
 #: Step types the run loop hands to a control-flow coroutine rather than to
 #: ``_HANDLERS``. Keyed here rather than tested with an ``in`` against a set
 #: so a type added to one and not the other cannot silently fall through to
@@ -1818,6 +1861,11 @@ _CONTROL_FLOW: dict[StepType, Any] = {
     StepType.PARALLEL: _control_parallel,
     StepType.LOOP: _control_loop,
     StepType.VERIFY_USER: _control_verify_user,
+    # Wave-2 Phase 6.2. Routed here rather than into `_HANDLERS` for a
+    # security reason, not a structural one: `_HANDLERS` entries are the
+    # ones that reach `action_bridge`, and the whole point of this step is
+    # that it decides a branch and cannot act. A test asserts the routing.
+    StepType.ASK_MODEL: _control_ask_model,
 }
 
 
@@ -2152,6 +2200,19 @@ class PlaybookEngine:
                     pr.status = RunStatus.FAILED
                     pr.error = f"step '{step.name}' failed"
                     break
+
+                # Advance: a step that selected its own next step wins.
+                #
+                # Only `ask_model` produces this today, and the id it names
+                # came out of the author's own `branches` map rather than
+                # out of the model's reply — so the worst an injected
+                # instruction can do is pick a branch the playbook already
+                # contains. An id that is not in this playbook is ignored
+                # rather than trusted.
+                chosen = result.get("next_step_id") if step_status == StepStatus.SUCCESS else None
+                if chosen and chosen in step_index:
+                    current_idx = step_index[chosen]
+                    continue
 
                 # Advance: branching on success
                 if step_status == StepStatus.SUCCESS and step.next_true and step.next_true in step_index:

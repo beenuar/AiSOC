@@ -265,6 +265,7 @@ const STEP_TYPE_TO_INTEGRATION: Record<StepType, IntegrationType | null> = {
   approval:            null,
   // Depth 5.4. The prompt goes out through the same governed `notify`
   // arms, so the integration a verification needs is the destination.
+  ask_model:           'Decision',
   verify_user:         'Notification',
 };
 

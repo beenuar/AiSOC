@@ -663,6 +663,61 @@ export const STEP_SCHEMAS: Record<StepType, StepSchema> = {
       },
     ],
   },
+  ask_model: {
+    type: 'ask_model',
+    execution: 'executed',
+    label: 'Ask the model',
+    description:
+      'Asks the model one multiple-choice question about the evidence and branches on the ' +
+      'answer. The answer set is yours, not the model\'s: an answer outside it takes the ' +
+      'fallback branch you declare. This step cannot run a response action — it decides ' +
+      'which branch runs next and nothing else.',
+    accent: '#38bdf8',
+    bgColor: '#122b3a',
+    icon: '❓',
+    shortCode: 'ask',
+    fields: [
+      {
+        key: 'question',
+        label: 'Question',
+        kind: 'textarea',
+        required: true,
+        placeholder: 'Does this evidence describe the user\'s own scheduled job?',
+        help: 'One question, answerable from the evidence you list below. Max 1000 characters.',
+      },
+      {
+        key: 'choices',
+        label: 'Allowed answers',
+        kind: 'list',
+        required: true,
+        placeholder: 'scheduled_job, interactive_use',
+        help:
+          'Between two and eight. The model must reply with one of these verbatim; anything ' +
+          'else counts as no answer.',
+      },
+      {
+        key: 'context_keys',
+        label: 'Evidence to include',
+        kind: 'list',
+        required: false,
+        placeholder: 'alert, _step_enrich',
+        help:
+          'Run-context keys passed to the model as quoted, sanitised evidence. Up to six. ' +
+          'Everything here is treated as untrusted data, never as instructions.',
+      },
+      {
+        key: 'on_invalid',
+        label: 'Fallback branch (step id)',
+        kind: 'text',
+        required: true,
+        placeholder: 'escalate-to-analyst',
+        help:
+          'Where the run goes when the model answers with something outside your list, ' +
+          'returns nothing, or is not configured at all. Required, because the case that ' +
+          'matters is the one where the model does not decide.',
+      },
+    ],
+  },
   verify_user: {
     type: 'verify_user',
     execution: 'executed',

@@ -72,11 +72,16 @@ def test_the_three_types_exist_and_are_runnable() -> None:
     # test is a failing build. `verify_user` (depth 5.4) is the fourth: it
     # suspends to the same pause table and so needs the run, which is the
     # property that puts a step in this table rather than in `_HANDLERS`.
+    # `ask_model` (wave-2 6.2) is the fifth, and it is here for a second
+    # reason: `_HANDLERS` entries are the ones that reach the action
+    # bridge, and that step must not be able to act. Its own tests pin
+    # that, including one that tries.
     assert set(engine_mod._CONTROL_FLOW) == {
         StepType.WAIT,
         StepType.PARALLEL,
         StepType.LOOP,
         StepType.VERIFY_USER,
+        StepType.ASK_MODEL,
     }
 
 

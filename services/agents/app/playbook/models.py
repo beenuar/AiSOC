@@ -37,6 +37,14 @@ class StepType(str, Enum):
     WAIT = "wait"  # Hold for a timer or a callback
     PARALLEL = "parallel"  # Run child steps concurrently, then join
     LOOP = "loop"  # Run child steps once per item, bounded
+    # Ask the model one multiple-choice question about the evidence and
+    # branch on the answer. Deliberately the narrowest possible form of
+    # "let the model decide": the answer set is closed and written by the
+    # playbook author, an answer outside it takes a declared fallback
+    # branch, and the step cannot dispatch a verb — it is routed through
+    # the control-flow table, not through the handler table that reaches
+    # the action bridge. See `ask_model.py`.
+    ASK_MODEL = "ask_model"
     # Human-in-the-loop
     APPROVAL = "approval"  # Require analyst approval before proceeding
     # Ask the affected person, then their manager, and branch on the answer.
