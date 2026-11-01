@@ -66,7 +66,7 @@ PACKAGED = REPO / "services" / "api" / "app" / "data" / "detections"
 #: regeneration that silently empties one is a failure here rather than a
 #: quieter comparison of two numbers that moved together.
 ARTEFACTS: dict[str, int] = {
-    "detection_ruleset.json": 760,
+    "detection_ruleset.json": 764,
     "detection_ruleset_imported.json": 1770,
     "windowed_ruleset.json": 76,
 }
@@ -76,7 +76,7 @@ ARTEFACTS: dict[str, int] = {
 #: why the loaded windowed count is 73 against a file holding 72.
 PYTHON_RESIDENT_WINDOWED = 3
 
-#: 760 + 1770 stateless, 76 windowed (73 of the 76 file entries plus the three
+#: 764 + 1770 stateless, 76 windowed (73 of the 76 file entries plus the three
 #: above), 3 sequence (the other three file entries). Measured, not assumed —
 #: `test_catalogue_matches_what_fusion_actually_loads` re-derives it by running
 #: fusion's loaders. The 2026-10-12 merge train moved it 2586 -> 2614: +24
@@ -84,8 +84,11 @@ PYTHON_RESIDENT_WINDOWED = 3
 #: AitM family). Issue #1545 moved it 2614 -> 2609: five GitHub rules whose
 #: evidence the org audit log cannot carry were retired with reasons
 #: (`enrichment_decisions.py`) and stopped being counted as executable,
-#: which they never were.
-FUSION_LOADED_TOTAL = 2609
+#: which they never were. Wave-2 7.4 moved it 2609 -> 2613: four AI rules on
+#: the provider feeds 7.1 added, each replayed through the real connector and
+#: the real engine in `services/fusion/tests/test_ai_rule_pack_replay.py`
+#: with a negative twin differing in exactly one field.
+FUSION_LOADED_TOTAL = 2613
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")

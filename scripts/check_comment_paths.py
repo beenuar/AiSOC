@@ -194,6 +194,12 @@ ACCEPTED: dict[tuple[str, str], str] = {
         "A placeholder tenant file in the usage line. Real tenant descriptors are supplied by the operator and are not committed."
     ),
     ("infra/fly/managed/render.sh", "infra/fly/managed/tenants/acme.yaml"): ("Same usage line in the sibling script, same placeholder."),
+    ("services/api/app/services/ai_repo_scan.py", ".github/copilot-instructions.md"): (
+        "A filename convention this scanner looks for in a *customer's* repositories, quoted in "
+        "the module docstring beside the other conventions it recognises. It is not a path in "
+        "this repository and creating one to satisfy the gate would add an agent-instruction "
+        "file nobody asked for."
+    ),
     ("scripts/audit_runbook_links.py", "docs/runbooks/foo.md"): (
         "An illustrative path in a docstring explaining which link shapes the gate accepts."
     ),

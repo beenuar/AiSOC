@@ -31,6 +31,12 @@
 # "api-key-leak-in-request", "slack-token-exposed". The values are rule ids
 # of the form det-application-085. Nothing in this file is a secret; the
 # heuristic is firing on the slug, not on the value.
+#
+# Wave-2 7.4 added four rules, which shifted every line below them and
+# invalidated five fingerprints — the exact rot the note above describes, so
+# the line numbers were corrected rather than the entries dropped. One entry
+# is genuinely new: `llm-copilot-bulk-resource-access` trips the heuristic on
+# the word "access", for the same reason as its neighbours.
 detections/rule-ids.lock.json:generic-api-key:4
 detections/rule-ids.lock.json:generic-api-key:10
 detections/rule-ids.lock.json:generic-api-key:15
@@ -40,8 +46,11 @@ detections/rule-ids.lock.json:generic-api-key:39
 detections/rule-ids.lock.json:generic-api-key:53
 detections/rule-ids.lock.json:generic-api-key:54
 detections/rule-ids.lock.json:generic-api-key:65
-detections/rule-ids.lock.json:generic-api-key:67
-detections/rule-ids.lock.json:generic-api-key:82
+detections/rule-ids.lock.json:generic-api-key:68
+detections/rule-ids.lock.json:generic-api-key:70
+detections/rule-ids.lock.json:generic-api-key:86
+detections/rule-ids.lock.json:generic-api-key:845
+detections/rule-ids.lock.json:generic-api-key:858
 
 # Positive test fixture for the `jwt-none-alg` detection rule. This file is
 # *expected* to contain a JWT with `alg: none` because the detection engine
@@ -149,5 +158,3 @@ services/api/tests/test_evidence_bundle.py:generic-api-key:26
 # rule's id so regeneration cannot renumber it. The scanner's key/value
 # heuristic reads the pair as an api key; it is a rule identifier in a
 # generated lock file.
-detections/rule-ids.lock.json:generic-api-key:841
-detections/rule-ids.lock.json:generic-api-key:854
