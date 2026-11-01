@@ -80,6 +80,9 @@ land:
 | 157 | unused | — |
 | 158 | unused | — |
 
+Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
+ADR `0016`.
+
 ## Phase 0: Kickoff
 
 - [x] **0.1** This file exists, modelled on `DEPTH_PROGRESS.md`, with the
