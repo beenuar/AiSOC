@@ -46,10 +46,10 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 
 | Item | State | Where |
 |---|---|---|
-| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
+| 1.6 Anonymizer and hosting classes at ingest | **done and MERGED** 2026-11-01 | PR #1586 |
 | 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
 | 8.1 CNAPP depth | **blocked** on unreachable Wiz docs; depth check recorded, two findings in it | item log |
-| 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR for `depth2/lane-b-ndr` |
+| 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR #1591 |
 | 8.3 Enrichment per tenant, cited | **rate limiting shipped**; provider gate built and held for its caller | item log + `depth2/lane-b-enrichment-tenant` |
 | 8.4 Scale and deployment evidence | **blocked, recorded with exactly what is needed** | item log |
 
