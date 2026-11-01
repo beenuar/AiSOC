@@ -350,7 +350,7 @@ with `rg` run inside it:
 | `orca`, `prisma_cloud`, `lacework`, `sysdig` | One aggregated feed each; `lacework` also reads compliance evaluations. All alert-shaped |
 | Ingest profiles | None of the five has a `connectorProfiles` entry; all five resolve through the canonical `raw_event` envelope, which defaults to class 2001, so their issues **are** promoted. `check_connector_profiles.py` is green and stays green |
 | `plugins/wiz/plugin.yaml` | **Absent.** The only one of the five cloud-security connectors with no manifest (63 of 87 connectors have one) |
-| `Capability.PULL_VULNERABILITIES` + `fetch_vulnerability_findings()` | **Built and working.** The scheduler calls it and `app/vulnerabilities.py` materialises into `asset_vulnerabilities` under the polled tenant. Implemented by `wazuh` and `tenable` only |
+| `Capability.PULL_VULNERABILITIES` + `fetch_vulnerability_findings()` | **Built and working.** The scheduler calls it and `app/vulnerabilities.py` materialises into `asset_vulnerabilities` under the polled tenant. Implemented by the host-IDS and the vulnerability-scanner connector only |
 | `incident_context.py` (the five triage dimensions) | 100% Neo4j, so `full` only. On CORE every dimension answers "graph unavailable" |
 | `context/identity.py` | The CORE-native precedent: an internal API route behind a service token, `render_for_prompt`, `basis`, cached, never raises |
 
