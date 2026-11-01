@@ -190,8 +190,39 @@ class DetectionEngine:
         if isinstance(nested, dict):
             merged = {k: v for k, v in nested.items() if isinstance(k, str)}
             merged.update(fields)
-            return merged
-        return fields
+            fields = merged
+        return DetectionEngine._with_activity_location(ocsf, fields)
+
+    #: Keys the ingest activity projection carries that rules match on. The
+    #: anonymizer and hosting class is stamped in Go at ingest from a pinned
+    #: local dataset, and lands at `activity.location.ip_class` -- nested,
+    #: where the matcher's plain `event.get(field)` cannot see it. A rule
+    #: naming `ip_class` would read None and could never fire, which is the
+    #: same defect the `raw_event` merge above was written to end, one level
+    #: further out.
+    _ACTIVITY_LOCATION_KEYS = ("ip_class", "ip_class_source", "ip_class_dataset_version")
+
+    @staticmethod
+    def _with_activity_location(ocsf: dict[str, Any], fields: dict[str, Any]) -> dict[str, Any]:
+        """Lift the activity projection's location keys into the flat namespace.
+
+        Connector-supplied keys win, for the same reason they win over the
+        vendor payload above: a connector that genuinely emits `ip_class` has
+        made a deliberate decision about its own source.
+        """
+        activity = ocsf.get("activity") if isinstance(ocsf, dict) else None
+        if not isinstance(activity, dict):
+            return fields
+        location = activity.get("location")
+        if not isinstance(location, dict):
+            return fields
+        lifted = {
+            key: location[key] for key in DetectionEngine._ACTIVITY_LOCATION_KEYS if isinstance(location.get(key), str) and location[key]
+        }
+        if not lifted:
+            return fields
+        lifted.update(fields)
+        return lifted
 
     @staticmethod
     def _decode_raw_data(ocsf: dict[str, Any]) -> dict[str, Any]:
