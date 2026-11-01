@@ -325,7 +325,7 @@ that has to carry the delta.
 **Deviations:** D3 (three classes have no redistributable source), D4
 (tenant-supplied lists designed, not built).
 
-### 8.1 CNAPP depth - Lane B (in progress)
+### 8.1 CNAPP depth - Lane B
 
 Migration `133` is this item's, from Lane B's pre-allocated block; the claim
 above already names `133_cloud_security_findings.sql` and this item keeps that
@@ -359,4 +359,135 @@ add a second posture store, a second scanner or a second scoring path. It
 gives `posture_findings` its first production writer, extends Wiz to the three
 finding classes its API actually offers, and makes the result reach a verdict
 on CORE through the `identity.py` pattern rather than through the graph.
+
+**Reproduced.** Not by grep. Three measurements on the pre-change tree:
+
+1. `rg` over the whole tree for writers of `posture_findings` returns one
+   non-test site, `posture.py:149`, inside `ingest_finding` — a route behind
+   `settings:write`. For `posture_scan_runs`, zero.
+2. `GET /posture/summary` is `sum(1 for f in findings if ...)` over that
+   table with no discriminator, so on any deployment that has not POSTed a
+   finding by hand it returns eight zeros. Pinned by
+   `test_a_tenant_that_has_never_collected_gets_nulls_and_a_false_flag`,
+   which fails against the pre-change handler.
+3. `get_incident_context` imports `app.db.neo4j.get_session` and every one of
+   its five dimensions is Cypher, so on CORE the whole bundle answers
+   `graph unavailable`. That is why the new read is Postgres.
+
+**Shipped.**
+
+| Piece | Where |
+|---|---|
+| Vendor reads | `wiz.py`: `vulnerabilityFindings`, `configurationFindings`, `detections`, each opt-in |
+| Vulnerability destination | the existing `fetch_vulnerability_findings` hook -> `asset_vulnerabilities`. No new store |
+| Posture destination | `services/connectors/app/cloud_security.py` -> `posture_findings`, written in the connectors service for the reason `vulnerabilities.py` records |
+| Scheduler hook | `_sync_cloud_security_findings`, its own `try`, a failure costs the poll nothing |
+| Schema | migration `133`: `source`, `finding_class` + CHECK, `external_id`, `resource_keys` + GIN, `last_seen_at`, a partial unique index, and two columns on `posture_scan_runs` |
+| Honest summary | `collected` + null counts; a run row is written even for a poll that found nothing |
+| Internal read | `GET /posture/resource-findings`, service-token only, conditional exemption in `check_route_tenant_scope` |
+| Triage context | `services/agents/app/context/cloud_posture.py`, modelled on `context/identity.py` |
+| Replay freeze | a fourth `CUTOFF` source; cut on the vendor's own `first_detected_at`, which is stronger than directory context's import stamp |
+| Injection scan | a sixth channel in `_scannable_fields` |
+| Manifest + docs | `plugins/wiz/plugin.yaml` (the only one of the five that had none), `connectors/wiz.md`, `connectors/cloud-security-depth.md` |
+
+**Negative controls, measured.**
+
+    # re-poll resets the exposure clock
+    FAILED test_a_repoll_touches_one_row_and_does_not_restart_the_exposure_clock
+      assert datetime(2026, 11, 1, ...) == datetime(2026, 10, 20, 9, 0, ...)
+
+    # match lookup drops its tenant predicate
+    FAILED test_a_second_tenants_poll_leaves_the_first_alone
+      assert 0 == 1
+
+    # the vendor's default type filter is left in place
+    FAILED test_wiz_detections_request_both_types
+      KeyError: 'type'
+
+    # the service-token check is deleted but the allowlist entry kept
+    check_route_tenant_scope FAIL: 1 route(s) take a tenant identifier with
+      no auth dependency
+
+**A defect this work introduced and its own test caught.** The first renderer
+passed each field through `sanitize_text`, which deliberately keeps single
+newlines — correct for a runbook body, wrong for a one-line list item, where
+an attacker-chosen resource name could start its own line and read as a new
+section of the prompt. `_one_line` flattens every field;
+`test_a_resource_name_cannot_smuggle_an_instruction_into_the_prompt` failed
+against the first version.
+
+**Refused, with the reason recorded.** The plan names four finding classes
+and Wiz offers three. No public reference documents a top-level secrets
+query: the official Elastic integration ships six Wiz data streams and none
+is secrets, and third-party query inventories list only issues,
+configuration findings and vulnerability findings. Writing a
+`secretFindings` query from the product's marketing surface would be
+inventing an endpoint, so secrets are not collected and the docs say why.
+They reach AiSOC as `issues` where Wiz raises them as such. This is the
+maintainer-blocked item the plan already anticipated ("recorded payloads for
+the CNAPP vendor's newer APIs, where public references are not enough to
+build the mock").
+
+**Also refused: auto-resolving a finding that stopped being returned.** A
+poll asks for a time window, so absence means "not updated in this window"
+far more often than "remediated", and writing `resolved` from it would
+retire a live misconfiguration on a quiet afternoon.
+
+**Numbers.**
+
+| Figure | Value | Source |
+|---|---|---|
+| Live writer cases | 8, real Postgres as `aisoc_app` (NOBYPASSRLS) | `test_cloud_security_findings_live.py` |
+| Connector cases | 12, three asserted on the request | `test_wiz_cnapp_depth.py` |
+| Agents context cases | 16 | `test_cloud_posture_context.py` |
+| API surface cases | 12 | `test_posture_triage_context.py` |
+| Registered connectors | 87 -> **87** (none added) | `generate_connector_count.py --check` |
+| Plugin manifests | 80 -> **81** | `pnpm marketplace:sync` |
+| Marketplace items | 7,183 -> **7,184** | same |
+| Claim matrix | 335/330/5 -> **338/333/5** | `check_claim_gate_matrix.py` |
+| Service suites | agents 2,212 · connectors 1,243 · api 5,034, all green | each service's own locked venv |
+
+**Scorecard and reduction suite.** Not re-run, recorded as a judgement. This
+item adds a prompt block that is empty on every tenant in the corpus: the
+verdict corpus carries no cloud-posture findings and no CNAPP connector, so
+`render_for_prompt` returns `""` for all 72 items and the model input is
+byte-identical. It changes no correlation key, no confidence input and no
+priority input. The PR that seeds posture findings into the corpus is the one
+that has to carry the delta.
+
+### 8.4 Scale and deployment evidence - Lane B (audit)
+
+Audited rather than re-implemented, since a sibling lane reported it done.
+Four of the five things worth checking were already right, and saying so is
+the point of the audit.
+
+| Property | State on `main` | Verdict |
+|---|---|---|
+| 4.4 cloud-hardware run | Absent, with its own page section, the exact command, and "an account and an instance, not code" as what is needed | already honest |
+| End-to-end floor and ceiling | 11 events/s and 21,000 ms, stated as 7.3x and 19.2x from the published figures, held by `test_perf_gate_is_related_to_the_claims.py` | already bound |
+| Harness refuses to grade | `load_harness.py` turns an unmeasured stage into a failure ("throughput was not measured, so the floor cannot be met"), not a pass | already correct |
+| An unknown probe reads as unknown | The `kind` run records absent `kubectl top` data as absence rather than zero; `/scale-hint` publishes `lag_measured: false` and the page says a scaler must treat it as no signal | already correct |
+| **In-process floor** | `--assert-floor 1000` against a figure published nowhere, under a comment claiming ">200x below the measured number" | **the real gap** |
+| **4.5 managed-cluster run** | Absent, but only implicitly — the page carried a Kubernetes table (`kind`) and no sentence saying a managed run is a separate missing thing | **understated** |
+
+The in-process floor is the one that mattered, because `end-to-end` is
+`if: schedule || workflow_dispatch`: on a pull request it was the only
+throughput assertion running at all. Measured at **140,692 events/s** (Apple
+M5 Max, 18 cores, 2026-11-01, commit `4e6c79305`), published on the
+performance page, floor moved `1000` -> `7000`, a stated **20.1x**. Controls:
+reverting the floor fails at 140.7x against a 25x ceiling; deleting the
+published section fails with the reason rather than passing over an absent
+claim.
+
+Both runs stay **blocked**, now stated separately and each with exactly what
+is needed: a cloud account and a named instance type for 4.4, and a managed
+Kubernetes cluster plus a kubeconfig for 4.5. Neither is blocked on code —
+the harness records hardware, load shape and commit into every result file,
+and `helm.yml` already installs all of CORE on `kind` on every pull request.
+
+**An observation recorded rather than acted on.** `context/identity.py`'s
+renderer has the same newline exposure the posture renderer had, through a
+directory display name. It is a lower trust tier (first-party import, and
+the module says so) and it is Lane A's surface, so it is reported here rather
+than edited mid-flight.
 
