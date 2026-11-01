@@ -168,17 +168,26 @@ SUB_PRINCIPAL_KINDS: tuple[str, ...] = ("oauth_app", "api_token", "service_accou
 
 #: Vendor fields that name a token, per connector. Order is precedence.
 #:
-#: `hashed_token` is GitHub's own SHA-256 of the credential and is the join
-#: key `services/ingest/internal/activity/session.go` writes into the
-#: session projection. It is read **verbatim** -- see
-#: :func:`resolve_sub_principal` for why that matters.
+#: Deliberately **not** including GitHub's credential digest. That value is
+#: a session key, and the session key has exactly one producer:
+#: `services/ingest/internal/activity/session.go`. A consumer that re-derived
+#: it would be the second derivation ADR-0010 forbids -- the two would agree
+#: until the next vendor-schema change and then disagree silently, leaving
+#: Postgres, the lake and the graph holding different answers to "which
+#: session was this". :func:`_session_credential_key` reads the producer's
+#: projection instead, and `scripts/check_session_projection.py` is the gate
+#: that refuses the shortcut.
 TOKEN_FIELDS: tuple[str, ...] = (
-    "hashed_token",
     "token_id",
     "access_key_id",
     "accessKeyId",
     "api_key_id",
 )
+
+#: `session.key_kind` values whose key *is* the credential, so the session
+#: key doubles as the token's identity. `session.go` documents the
+#: vocabulary; `vendor_credential` is the one GitHub's digest lands under.
+CREDENTIAL_KEY_KINDS: frozenset[str] = frozenset({"vendor_credential"})
 
 #: Fields naming a service account or workload identity.
 SERVICE_ACCOUNT_FIELDS: tuple[str, ...] = (
@@ -274,31 +283,48 @@ class SubPrincipal:
 def _verbatim(event: dict[str, Any], candidates: tuple[str, ...]) -> str | None:
     """First present candidate, trimmed and **not** case-folded.
 
-    This exists because of one field. ``hashed_token`` is GitHub's SHA-256
-    of the credential, and it is the join key
-    ``services/ingest/internal/activity/session.go`` writes into the
-    session projection using ``strings.TrimSpace`` and no case folding.
-
     Every other field in this module goes through :func:`_first_present`,
-    which lowercases — correct for a username, wrong for a digest. Routing
-    the token through the usual helper would produce a key that never joins
-    to the session the Go side wrote, on every GitHub event, silently and
-    with no error anywhere. ``test_sub_principal_baselines_reproduction.py``
-    pins the two sides against each other.
+    which lowercases — correct for a username, wrong for an opaque token id
+    or a digest. A lowercased key would never join to what the producer
+    wrote, on every event, silently and with no error anywhere.
     """
     for name in candidates:
         value = event.get(name)
-        # A string, not anything stringifiable. Go's `str()` is
-        # `if s, ok := v.(string); ok`, so a numeric `hashed_token` yields
-        # no key there — and a Python side that coerced it to "12345" would
-        # mint a baseline key Go never writes. The shared fixture caught
-        # exactly this; `test_github_token_key_parity.py` keeps it caught.
+        # A string, not anything stringifiable: coercing a number here would
+        # mint a baseline key under an id no other store uses.
         if not isinstance(value, str):
             continue
         text = value.strip()
         if text:
             return text
     return None
+
+
+def _session_credential_key(event: dict[str, Any]) -> str | None:
+    """The session key, when the vendor's session *is* a credential.
+
+    Reads `activity.session` — what `session.go` wrote — rather than the
+    vendor field it was derived from. That is the whole point: one producer,
+    many consumers, so the baseline store, the session store, the lake and
+    the graph cannot disagree about which session an event belongs to.
+
+    Returns ``None`` for every other `key_kind`, including a vendor session
+    id: a session id is not a token identity, and keying a token baseline on
+    one would merge every token used in that session into a single subject.
+    """
+    activity = event.get("activity")
+    if not isinstance(activity, dict):
+        return None
+    session = activity.get("session")
+    if not isinstance(session, dict):
+        return None
+    if str(session.get("key_kind") or "") not in CREDENTIAL_KEY_KINDS:
+        return None
+    key = session.get("key")
+    if not isinstance(key, str):
+        return None
+    text = key.strip()
+    return text or None
 
 
 def resolve_sub_principal(event: dict[str, Any]) -> SubPrincipal | None:
@@ -310,6 +336,14 @@ def resolve_sub_principal(event: dict[str, Any]) -> SubPrincipal | None:
     baseline a compromise would move.
     """
     on_behalf_of = resolve_principal(event) or ""
+
+    # The producer's projection first. Where the vendor's session *is* a
+    # credential — a GitHub token is the case this was built for — the
+    # session key is the token's identity, already trimmed and un-folded by
+    # the one component allowed to derive it.
+    credential = _session_credential_key(event)
+    if credential:
+        return SubPrincipal(kind="api_token", id=credential, on_behalf_of=on_behalf_of)
 
     token = _verbatim(event, TOKEN_FIELDS)
     if token:

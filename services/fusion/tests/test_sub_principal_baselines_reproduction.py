@@ -56,7 +56,9 @@ def test_a_token_is_resolved_as_its_own_subject() -> None:
     event = {
         "connector_type": "github",
         "actor": "alice",
-        "hashed_token": "AbC123+/xyz=",
+        # What `session.go` wrote. The consumer reads this and never the
+        # vendor field it came from, so there is only ever one derivation.
+        "activity": {"session": {"key": "AbC123+/xyz=", "key_kind": "vendor_credential"}},
     }
     subject = resolve_sub_principal(event)
     assert subject is not None
@@ -64,22 +66,43 @@ def test_a_token_is_resolved_as_its_own_subject() -> None:
     assert subject.id == "AbC123+/xyz="
 
 
-def test_the_github_join_key_is_byte_identical_to_the_go_side() -> None:
-    """The cross-language contract, and the trap inside it.
+def test_the_token_identity_comes_from_the_projection_not_the_vendor_field() -> None:
+    """One producer, many consumers — the property ADR-0010 turns on.
 
-    `services/ingest/internal/activity/session.go` reads `hashed_token` with
-    `strings.TrimSpace` and **no case folding**, because the value is a
-    base64-ish digest and case is significant. Every other field this module
-    resolves goes through `_first_present`, which lowercases — so routing the
-    token through the usual helper would produce a key that never joins to
-    the session the Go side wrote, on every GitHub event, silently.
+    An earlier cut of this resolver read GitHub's `hashed_token` itself and
+    pinned its normalisation against the Go side byte for byte. That passes
+    and is still the wrong design: it is a *second* derivation of a session
+    key, and two derivations agree until the next vendor-schema change and
+    then disagree silently, leaving Postgres, the lake and the graph holding
+    different answers to "which session was this".
+    `scripts/check_session_projection.py` refuses it.
+
+    So the vendor field alone resolves nothing here, and the projection is
+    what the subject is keyed on.
     """
     from app.services.baselines import resolve_sub_principal
 
     mixed = "AbC123+/xyz="
-    subject = resolve_sub_principal({"connector_type": "github", "hashed_token": f"  {mixed}  "})
-    assert subject is not None
-    assert subject.id == mixed, "the token key was altered; it must match the Go session key byte for byte"
+
+    from_vendor_field = resolve_sub_principal({"connector_type": "github", "hashed_token": mixed})
+    assert from_vendor_field is None, "the consumer must not re-derive the session key from the vendor field"
+
+    from_projection = resolve_sub_principal(
+        {"connector_type": "github", "activity": {"session": {"key": f"  {mixed}  ", "key_kind": "vendor_credential"}}}
+    )
+    assert from_projection is not None
+    assert from_projection.id == mixed, "case must survive: the key is a digest, not a name"
+
+
+def test_a_vendor_session_id_is_not_a_token_identity() -> None:
+    """Keying a token baseline on a session id would merge every token used
+    in that session into one subject."""
+    from app.services.baselines import resolve_sub_principal
+
+    subject = resolve_sub_principal(
+        {"connector_type": "okta", "activity": {"session": {"key": "sess-1", "key_kind": "vendor_session"}}}
+    )
+    assert subject is None
 
 
 @pytest.mark.parametrize(
