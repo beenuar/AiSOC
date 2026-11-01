@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-28T19:50:45Z",
+  "generated": "2026-11-01T11:45:43Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,27 +20,27 @@
     }
   ],
   "stats": {
-    "total": 7183,
+    "total": 7187,
     "playbooks": 88,
     "playbook_packs": 63,
-    "detections": 7015,
+    "detections": 7019,
     "plugins": 80,
-    "verified": 1062,
+    "verified": 1066,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1062
+      "stable": 1066
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 901
+      "stable": 905
     },
-    "executable": 2698,
+    "executable": 2702,
     "quarantined": 4485,
-    "executable_detections": 2530,
+    "executable_detections": 2534,
     "reference_only_detections": 4485,
     "not_a_detection": 168
   },
@@ -159,7 +159,7 @@
       "T1091": 1,
       "T1095": 4,
       "T1098": 48,
-      "T1098.001": 19,
+      "T1098.001": 20,
       "T1098.003": 8,
       "T1098.004": 6,
       "T1098.005": 1,
@@ -209,7 +209,7 @@
       "T1185": 3,
       "T1187": 3,
       "T1190": 39,
-      "T1195": 3,
+      "T1195": 4,
       "T1195.001": 2,
       "T1195.002": 6,
       "T1197": 13,
@@ -275,7 +275,7 @@
       "T1526": 2,
       "T1528": 8,
       "T1529": 3,
-      "T1530": 31,
+      "T1530": 32,
       "T1531": 7,
       "T1535": 1,
       "T1537": 7,
@@ -358,7 +358,7 @@
       "T1560.001": 12,
       "T1561.002": 1,
       "T1562": 5,
-      "T1562.001": 31,
+      "T1562.001": 32,
       "T1562.004": 7,
       "T1562.006": 2,
       "T1562.008": 11,
@@ -439,7 +439,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2400,
+    "total_with_mitre": 2404,
     "unique_techniques_all_rules": 494,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -581,7 +581,7 @@
       "T1091": 5,
       "T1095": 8,
       "T1098": 95,
-      "T1098.001": 29,
+      "T1098.001": 30,
       "T1098.002": 6,
       "T1098.003": 37,
       "T1098.004": 12,
@@ -637,7 +637,7 @@
       "T1187": 12,
       "T1189": 4,
       "T1190": 177,
-      "T1195": 23,
+      "T1195": 24,
       "T1195.001": 3,
       "T1195.002": 17,
       "T1197": 23,
@@ -719,7 +719,7 @@
       "T1526": 11,
       "T1528": 28,
       "T1529": 16,
-      "T1530": 50,
+      "T1530": 51,
       "T1531": 20,
       "T1535": 6,
       "T1537": 23,
@@ -816,7 +816,7 @@
       "T1561.001": 2,
       "T1561.002": 4,
       "T1562": 28,
-      "T1562.001": 137,
+      "T1562.001": 138,
       "T1562.002": 13,
       "T1562.003": 2,
       "T1562.004": 18,
@@ -1009,7 +1009,7 @@
         "T1090.003": 6,
         "T1095": 3,
         "T1098": 36,
-        "T1098.001": 24,
+        "T1098.001": 25,
         "T1098.003": 11,
         "T1098.004": 8,
         "T1098.005": 1,
@@ -1034,7 +1034,7 @@
         "T1176": 1,
         "T1185": 1,
         "T1190": 30,
-        "T1195": 2,
+        "T1195": 3,
         "T1195.001": 1,
         "T1195.002": 10,
         "T1197": 1,
@@ -1071,7 +1071,7 @@
         "T1505.003": 3,
         "T1525": 8,
         "T1528": 6,
-        "T1530": 40,
+        "T1530": 41,
         "T1531": 5,
         "T1535": 1,
         "T1537": 10,
@@ -1139,7 +1139,7 @@
         "T1560.001": 3,
         "T1561.002": 1,
         "T1562": 5,
-        "T1562.001": 40,
+        "T1562.001": 41,
         "T1562.004": 7,
         "T1562.006": 2,
         "T1562.007": 1,
@@ -32785,6 +32785,106 @@
       "executable": true,
       "path": "detections/application/ai-agent-tool-call-failed-repeatedly.yaml",
       "sha256": "761239d214b8c504f62eeb0e33e934af5cd33f73012bf827fe9dc7dd504090c6"
+    },
+    {
+      "id": "det-application-087",
+      "type": "detection",
+      "name": "Copilot Content Exclusion Changed",
+      "description": "Content exclusion is the control that stops a coding assistant reading the paths an organisation has declared off limits \u2014 key material, customer data, anything it has decided a model must not see. A change to it is a change to that boundary, and it is made in a settings page rather than in a pull request, so nothing else reviews it.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1562.001"
+      ],
+      "log_source": "github_copilot",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/llm-copilot-content-exclusion-changed.yaml",
+      "sha256": "ad2fc1761551c349da3e0d4416b793be44f1327da87be83710e7d3db157a754c"
+    },
+    {
+      "id": "det-application-088",
+      "type": "detection",
+      "name": "Hosted Coding Agent MCP Server List Changed",
+      "description": "The MCP server list decides what a hosted coding agent can reach and what it is told. Adding a server is adding a party that can instruct the agent, which is a scope change rather than a settings change \u2014 and the agent runs on the provider's infrastructure, so no endpoint control sees the result.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1195"
+      ],
+      "log_source": "github_copilot",
+      "playbook": "tpl-supply-chain",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/llm-copilot-agent-mcp-config-changed.yaml",
+      "sha256": "60b791340bd9a87c52bd32b9a6ec812a82fd8196b97d0ed410b67f09de6c9263"
+    },
+    {
+      "id": "det-application-089",
+      "type": "detection",
+      "name": "AI Application Consented a Write Scope",
+      "description": "A consent grant handing an AI application the ability to change a mailbox, a drive, a site or the directory itself. The read equivalent is an exposure; this one can act. The decisive field is the granted scope, which the connector lifts out of the free-text consent property \u2014 a grant whose scopes stay buried is indistinguishable from one that was granted nothing.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098.001"
+      ],
+      "log_source": "entra_consent",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/llm-ai-app-granted-write-scope.yaml",
+      "sha256": "4892734be4afbfbe4afc7c3a9a2a2cad0ab0f33c027ffeb968d9d89e6ed3b9bf"
+    },
+    {
+      "id": "det-application-090",
+      "type": "detection",
+      "name": "AI Assistant Interaction Touched Many Resources at Once",
+      "description": "One assistant turn that read a large number of distinct resources. An assistant with a user's full grant is an exfiltration path that authenticates as that user and looks like ordinary application traffic; volume in a single interaction is the shape that separates answering a question from sweeping a drive.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1530"
+      ],
+      "log_source": "microsoft_copilot",
+      "playbook": "tpl-data-exfil",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/llm-copilot-bulk-resource-access.yaml",
+      "sha256": "b1b664f05eb77501b1f895c6749dde3c88d1fbcb3e223e6c02416c26f397fad9"
     },
     {
       "id": "det-cloud-001",
