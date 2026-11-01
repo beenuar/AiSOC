@@ -2087,7 +2087,7 @@
     "category": "saas",
     "connector_id": "llm_usage",
     "connector_name": "AI / LLM Usage Audit",
-    "description": "Pull organization audit logs from OpenAI or Anthropic \u2014 API key creation, role grants, logging/MFA changes, project deletes. Pairs with the llm-* detection rules. Auth is an admin/audit-scoped API key.",
+    "description": "Pull organization audit logs from an AI provider \u2014 API key creation, role grants, logging/MFA changes, Copilot agent and content-exclusion settings, and consent grants to AI applications. Pairs with the llm-* and ai-* detection rules. Auth is an admin/audit-scoped token.",
     "docs_url": "/docs/connectors/llm_usage",
     "fields": [
       {
@@ -2101,6 +2101,22 @@
           {
             "label": "Anthropic",
             "value": "anthropic"
+          },
+          {
+            "label": "Gemini in Google Workspace",
+            "value": "google_gemini"
+          },
+          {
+            "label": "GitHub Copilot",
+            "value": "github_copilot"
+          },
+          {
+            "label": "Microsoft 365 Copilot",
+            "value": "microsoft_copilot"
+          },
+          {
+            "label": "Microsoft Entra AI app consent",
+            "value": "entra_consent"
           }
         ],
         "required": true,
@@ -2111,6 +2127,22 @@
         "name": "api_key",
         "required": true,
         "type": "secret"
+      },
+      {
+        "help_text": "Required for GitHub Copilot: the audit-log endpoint is organization-scoped.",
+        "label": "GitHub organization",
+        "name": "organization",
+        "placeholder": "acme",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Required for Microsoft 365 Copilot: the Management Activity API path is tenant-scoped.",
+        "label": "Microsoft tenant id",
+        "name": "tenant",
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "required": false,
+        "type": "string"
       }
     ]
   },
