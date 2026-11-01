@@ -624,6 +624,18 @@ jobs:
       # /settings/users — had no test at all. `check_claim_gate_matrix`
       # cannot see this: it counts rows and statuses and does not read a
       # caveat's prose.
+      # A translation catalogue rots in two directions and only one is
+      # visible. A key the base has and a locale lacks falls back to English
+      # — correct, and invisible, so the gap reaches a customer. A key a
+      # locale has and the base does not renders nowhere at all, so no
+      # amount of using the console finds it; that is the direction nobody
+      # checks, and it is fatal here. Untranslated keys are ratcheted
+      # instead, because a gate that reds the build on a partial locale gets
+      # the locale deleted rather than finished.
+      - name: 'i18n catalogue keys — self-test'
+        run: python3 scripts/check_i18n_keys.py --self-test
+      - name: Every locale is checked against the base catalogue, both ways
+        run: python3 scripts/check_i18n_keys.py
       - name: 'Unbuilt-surface claims — self-test'
         run: python3 scripts/check_unbuilt_claims.py --self-test
       - name: Every 'not built' claim about a console page is still true
