@@ -99,9 +99,7 @@ def test_a_vendor_session_id_is_not_a_token_identity() -> None:
     in that session into one subject."""
     from app.services.baselines import resolve_sub_principal
 
-    subject = resolve_sub_principal(
-        {"connector_type": "okta", "activity": {"session": {"key": "sess-1", "key_kind": "vendor_session"}}}
-    )
+    subject = resolve_sub_principal({"connector_type": "okta", "activity": {"session": {"key": "sess-1", "key_kind": "vendor_session"}}})
     assert subject is None
 
 
