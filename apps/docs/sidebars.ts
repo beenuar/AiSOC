@@ -180,6 +180,10 @@ const sidebars: SidebarsConfig = {
         "connectors/zeek_suricata",
         "connectors/zscaler",
         // END GENERATED CONNECTOR LIST
+        // Outside the markers on purpose: generate_connector_docs.py rewrites
+        // everything between them from the connector registry, so an overview
+        // page that is not a connector is silently dropped if it sits inside.
+        "connectors/cloud-security-depth",
       ],
     },
     {

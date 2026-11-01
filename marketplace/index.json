@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-10-28T19:50:45Z",
+  "generated": "2026-11-01T18:46:49Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,29 +20,29 @@
     }
   ],
   "stats": {
-    "total": 7183,
+    "total": 7184,
     "playbooks": 88,
     "playbook_packs": 63,
     "detections": 7015,
-    "plugins": 80,
-    "verified": 1062,
+    "plugins": 81,
+    "verified": 1063,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1062
+      "stable": 1063
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
       "stable": 901
     },
-    "executable": 2698,
+    "executable": 2699,
     "quarantined": 4485,
     "executable_detections": 2530,
     "reference_only_detections": 4485,
-    "not_a_detection": 168
+    "not_a_detection": 169
   },
   "mitre_coverage": {
     "unique_techniques": 391,
@@ -240179,6 +240179,35 @@
       "tier": "stable",
       "path": "plugins/windows-event/plugin.yaml",
       "sha256": "cb5bebf4a904eea77be25d30e1b918a954ee1953c0937ef935a97c6e6b3d5738"
+    },
+    {
+      "id": "wiz",
+      "type": "plugin",
+      "name": "Wiz Connector",
+      "description": "Wiz cloud security. Pulls open issues as alerts, and optionally three further finding classes as triage context rather than as alerts: vulnerability findings into the per-asset CVE inventory, and configuration findings and runtime detections into the cloud-posture store, where a verdict can ask what is already known to be wrong with the resource an alert touched. Each context read is off until the tenant enables it.",
+      "version": "1.1.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "cloud",
+        "cnapp",
+        "cspm",
+        "cwpp",
+        "ciem",
+        "vulnerability",
+        "runtime",
+        "wiz"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/wiz.py",
+      "min_aisoc_version": "7.1.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/wiz/plugin.yaml",
+      "sha256": "bf749736ca183ab51d3a6a42507ac9fa282804c881df704c3a905e3d863b8cd4"
     },
     {
       "id": "yara-enricher",
