@@ -606,6 +606,17 @@ jobs:
         run: python3 scripts/check_outcome_claims.py --self-test
       - name: No customer-outcome figure nobody measured
         run: python3 scripts/check_outcome_claims.py
+      # Wave-2 plan 4.3. A business-context rule is authored and validated in
+      # `services/api` and evaluated on the triage hot path in
+      # `services/agents`. The two ship as separate images, cannot import each
+      # other, and so declare the operator grammar twice. Drift is silent in
+      # the direction that matters: the console accepts the rule, the worker
+      # has no branch for the operator and falls through to False, and the
+      # tenant gets a saved rule that never fires and no diagnostic.
+      - name: Business-context grammar — self-test
+        run: python3 scripts/check_business_context_grammar.py --self-test
+      - name: Both business-context engines agree on the operator grammar
+        run: python3 scripts/check_business_context_grammar.py --check
       # Wave 2, Phase 9.5 prerequisite. A caveat saying a console page is
       # "not built" reads as modesty and works as an exemption: a surface
       # recorded as absent needs no claim row and no gate. Three shipped
