@@ -50,9 +50,15 @@ claimed the same migration number simultaneously and one had to renumber.
 | Number | Kind | Lane / item | Claimed | File |
 |---|---|---|---|---|
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
+| 146 | migration | Lane E / 7.1 | 2026-11-01 | AI provider coverage + chat compliance (labels and bounded snippet only) |
+| 147 | migration | Lane E / 7.2 | 2026-11-01 | hosted agents and repository AI artefacts as asset kinds |
+| 148 | migration | Lane E / 7.3 | 2026-11-01 | agent identities and per-agent baselines |
+| 149 | migration | Lane E / 7.3 | 2026-11-01 | reserved: agent baseline observations |
+| 150 | migration | Lane E / 7.4 | 2026-11-01 | reserved: AI rule-pack supporting state |
+| 0021 | ADR | Lane E / 7.1 | 2026-11-01 | AI-chat compliance-log minimisation |
 
-Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
-ADR `0016`.
+Highest at kickoff: migration `123`, ADR `0014`. Lane E holds the exclusive
+block migrations `146`–`150` and ADR `0021`.
 
 ## Phase 0: Kickoff
 
@@ -195,7 +201,223 @@ not, that is a real first-run defect for the most common conflict there is
 and belongs in its own fix with a negative control. Until that run exists,
 this is an observation with its evidence attached.
 
+## Phase 7: AI agent security (Lane E)
+
+- [x] **7.1** Provider coverage (depth 6.3) plus enterprise AI-chat
+      compliance logs stored as labels and bounded snippets only.
+      [#1585](https://github.com/beenuar/AiSOC/pull/1585).
+- [x] **7.2** Hosted agents and repository AI artefacts as new asset kinds.
+      [#1585](https://github.com/beenuar/AiSOC/pull/1585).
+- [!] **7.3** Agent identity and per-agent baselines (depth 6.4 / parity 6.7)
+      — not delivered; reproduced gap and what is needed recorded below.
+- [~] **7.4** AI rule pack — four of the listed targets shipped and replayed
+      ([#1585](https://github.com/beenuar/AiSOC/pull/1585)); the rest need a
+      producer or 7.3's baselines, each recorded below.
+
 ## Item log
 
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
+
+### 7.1 — Provider coverage and AI-chat compliance logs
+
+Landed early because Lane D's 7.5 depends on the provider work.
+
+**What already existed, and was therefore not rebuilt.** Verified before
+writing anything: the AI estate inventory (`services/api/app/services/
+ai_inventory.py`, one `score_risk`, six asset kinds, tri-state `sanctioned`),
+migration 110 and its RLS, the fusion recorder with its three discovery
+sources, endpoint discovery, the `ai_gateway` connector, the two OCSF 6003
+webhook templates, `packages/aisoc-ai-sdk`, the AI estate console page, and
+**sixteen** executable AI rules — eight `llm-*` on the OpenAI/Anthropic
+control plane (`det-application-071`…`078`) and eight `ai-*` on runtime and
+guardrail findings (`079`…`086`). None of that was touched.
+
+**Reproduced gap A.** `LlmUsageConnector` accepted `openai` and `anthropic`
+and nothing else. Six of seven tests in
+`services/connectors/tests/connectors/test_llm_usage_provider_coverage.py`
+fail on the base commit; four of them drive the real HTTP path against a
+mock server and get a `ValueError` from the constructor.
+
+**Reproduced gap B**, found while wiring A and the more interesting one.
+`test_ai_asset_recorder.py` writes `finding.evidence.scopes` into a
+hand-built OCSF event and asserts the recorder reads
+`finding.evidence.scopes`. Both halves are the test's own invention: no
+connector produces that path and ingest does not synthesise it, so the
+assertion held whether or not the production path worked. Driven through the
+shape ingest really produces — the connector's dict as a JSON string under
+`raw_data` — an Entra consent grant reached the inventory with **no scopes at
+all**, so an AI notetaker consented into every mailbox scored identically to
+one granted nothing.
+
+**Reproduced gap C.** No table anywhere held AI-chat compliance data; the
+migration sweep for one returned nothing.
+
+**What shipped.** Four more providers on the existing connector
+(`google_gemini`, `github_copilot`, `microsoft_copilot`, `entra_consent`),
+each against the vendor's current public reference, every URL fetched and
+200 before committing. `_from_provider_audit` now reads through
+`_connector_fields`, so scopes reach the one existing `score_risk`; an OAuth
+grant is keyed on the application rather than the audit record. Migration
+146 with five RLS'd tables, ADR-0021, a classifier, a client, three API
+routes and a console panel.
+
+**Wiring proof.** One `score_risk` path, unchanged — the new providers feed
+the existing `oauth_grant` and `provider_key` kinds and add no second
+scorer. Minimisation is schema-enforced (no column can hold a message;
+`VARCHAR(280)`; CHECK-constrained label vocabulary; no client method returns
+text) rather than promised in prose. Erasure and retention come from the
+`tenant_id` column name that `discover_tenant_tables` selects on, asserted
+per table.
+
+**Negative controls.** (1) Reverting only the `fields.get("scopes")` read
+fails both recorder tests again with `KeyError: 'scopes'`. (2) Adding a
+`transcript` `Text` column to `AiChatContentLabel` and changing nothing else
+fails the forbidden-column and unbounded-TEXT sweeps.
+
+**Measurement delta.** No change to the executable-detection figure: this
+item adds no rules. Rules reading these feeds are 7.4.
+
+**Deviation D3 — one provider, not several, for the compliance half.** The
+plan says "where a provider offers a compliance API". Exactly one does with
+a complete public reference: Anthropic's, at
+`platform.claude.com/docs/en/manage-claude/compliance-*`, whose pages were
+fetched and returned 200. OpenAI's equivalent is behind a Cloudflare
+challenge that answers 403 to every non-browser request, including its
+ordinary audit-log reference, so no honest mock can be written from it. The
+`provider` column is a CHECK constraint with one value today; adding a
+second is a one-line migration. **Blocked, with exactly what is needed:** a
+reachable public reference for the OpenAI Compliance API, or a recorded
+payload from a customer tenant.
+
+### 7.2 — Hosted agents and repository AI artefacts
+
+**What already existed, and was therefore not rebuilt.** The whole asset
+table, the one `score_risk`, the tri-state `sanctioned`, the console page and
+its "not learned" rendering, and the recorder's three discovery sources. 7.2
+widened two constraints and added two producers; it changed no scoring.
+
+**Reproduced gap.** `.laneE/repro_7x.py` against the base commit:
+`AI_ASSET_KINDS` held six values, `hosted_agent present: False`,
+`repo artefact kind present: False`. Migration 110's CHECK constraint rejected
+a seventh kind deliberately, so this is that refusal answered by a reviewed
+migration rather than by dropping the constraint.
+
+**What shipped.** Migration 147 (two kinds, two discovery sources, a
+repository expression index), `ai_repo_scan.py`, `hosted_agents.py`, the
+generated `_vendor/ai_instruction_rules.py` with its sync gate wired into
+`ci.yml`, and the console's kind list and source-limitation copy.
+
+**Wiring proof — the single scorer.** `score_risk` gained three signals
+(`unvetted_mcp_server`, `instruction_injection`, `unpinned_skill_source`) and
+both producers emit `attributes` keyed to what it already reads (`tools`,
+`mcp_servers`, `skills`), so neither needs a special case and no second
+scorer exists. `DEVICELESS_KINDS` is shared between the model and the scorer
+so the four kinds with no device are not charged for lacking one.
+
+**Wiring proof — the injection channel.** Repository instruction text and a
+hosted agent's system prompt both pass `scan_instruction_text` at capture.
+The patterns are generated from the agents guard's own `_RULES` table, so the
+scanner and the triage guard cannot disagree about the same text; only
+pattern *names* are stored, never the matching span. Proven in both
+directions: a hostile instruction file is flagged and scores higher, an
+ordinary one is flagged by nothing and scores exactly 0 with an empty reason
+list.
+
+**Negative controls.** Clean twins on every signal (clean instruction file,
+clean hosted agent, vetted MCP server, every deviceless kind) each score 0
+with no reasons, so every delta is attributable to one field. The vendored
+rule table's `--check` fails against a stale copy, and the generator fails if
+an excluded rule name leaves the guard.
+
+**Two defects found while building it, both recorded rather than quietly
+fixed.** `path.lstrip("./")` strips the leading dot of a dotfolder, which
+would have turned most of the scan off silently — caught because the
+classification test enumerates real paths instead of two examples. And a
+committed JWT-shaped literal in the 7.1 test, which the repository's secret
+scan correctly refused.
+
+**Measurement delta.** No change to the executable-detection figure.
+
+### D4 — One hosted-agent provider, for the same reason as D3
+
+`GET /v1/agents` is the one provider hosted-agent list with a complete public
+reference. The GitHub Copilot coding agent is reachable only through its
+audit events (`copilot.swe_agent_*`), which 7.1 now ingests but which are
+events rather than an inventory; `docs.github.com/en/rest/copilot/copilot-agents`
+is a 404. **Blocked, with exactly what is needed:** a published REST reference
+for a second provider's hosted-agent list, or a recorded response from one.
+
+### 7.4 — AI rule pack (PARTIAL, four of the listed targets)
+
+**What already existed.** Sixteen executable AI rules: eight `llm-*` on the
+OpenAI/Anthropic control plane and eight `ai-*` on runtime and guardrail
+findings. Not rebuilt.
+
+**Reproduced gap.** `.laneE/repro_7x.py` showed no rule anywhere clausing on
+a Copilot audit action, a consent scope or an assistant's resource-access
+volume, because until 7.1 no connector emitted any of them.
+
+**What shipped.** Four rules on the feeds 7.1 added:
+`llm-copilot-content-exclusion-changed` (critical),
+`llm-copilot-agent-mcp-config-changed` (high),
+`llm-ai-app-granted-write-scope` (high),
+`llm-copilot-bulk-resource-access` (medium).
+
+**Replay proof.** `services/fusion/tests/test_ai_rule_pack_replay.py` drives
+the real `DetectionEngine` over the real compiled ruleset against fixtures
+that are the committed output of `LlmUsageConnector.normalize()` — not
+synthesized from the rules. Each negative twin differs in exactly one
+decisive field, and a test asserts that property on the fixtures rather than
+trusting it.
+
+**Negative control.** Rewriting one rule's clause to the unprefixed vendor
+action — the exact shape of the measured GitHub failure where 1 of 12 rules
+fired on real output — and re-exporting fails that rule's positive replay
+while the other three stay green.
+
+**Measurement delta.** Executable detections **2,530 → 2,534**; on disk
+7,015 → 7,019. Re-derived with `python3 scripts/project_stats.py` and
+propagated by the generators to the README, `ROADMAP.md`, the truth table,
+`corpus-stats.json`, both marketplace indexes and the packaged API copy. No
+figure was hand-typed; `test_readme_figures_gate.py` passes (23).
+
+**Not delivered, and why — the remaining targets each need a producer that
+does not exist yet.** Recorded rather than shipped as rules clausing on
+fields nothing emits, which is the failure this plan's replay rule exists to
+prevent:
+
+| Target | What is missing |
+|---|---|
+| Provider key used from a new ASN | No provider audit log read here carries a source IP, so there is no address to resolve to an ASN. Needs 1.6's anonymiser/ASN dataset plus a provider feed that emits the IP. |
+| Agent invoking a *new* high-risk tool | "New" is a per-agent baseline, which is 7.3 and is not built. The stateless engine can see the tool, not its novelty. |
+| Rise in guardrail violations | A rate over a window per agent; same dependency on 7.3. |
+| Token-spend anomalies per key and per agent | `cost_telemetry.py` records per-call cost and the dashboard aggregates it, but neither writes a per-agent baseline the engine can read. Wiring a second meter was explicitly refused. |
+| Secrets or personal data labelled in AI chats | The labels exist (7.1, migration 146) but live in Postgres, not on the event stream the engine evaluates. Needs a promoter from `aisoc_ai_chat_content_labels` to an event, which is a design decision rather than a rule. |
+| Agent process reading browser cookie or credential stores | Endpoint discovery sees AI processes; nothing emits a file-access event scoped to cookie or credential stores. Needs an osquery/EDR producer. |
+
+### 7.3 — Agent identity and baselines: NOT DELIVERED
+
+**Reproduced gap, recorded for whoever picks it up.** Two halves, both open:
+
+- *Agent identity.* No module in the tree defines an identity for AiSOC's own
+  agents: `grep -rln "agent_identity\|AgentIdentity\|agent_principal"` across
+  `services/` returns nothing. Parity 6.7 asks for short-lived credentials and
+  least-privilege tool scopes visible in the audit log.
+- *Per-agent baselines.* `services/fusion/app/services/baselines.py` defines
+  **zero** `baseline_*` functions; the only AI-adjacent signal is
+  `baseline_oauth_app_volume_z`, emitted inside `BaselineStore` and keyed on
+  the OAuth application, not on an agent. Nothing keys a baseline on an agent
+  identity, and `cost_telemetry.py` has no baseline writer at all.
+
+**Why it is not started rather than half-built.** It is the dependency under
+four of 7.4's six remaining targets, so a partial version would have produced
+rules that cannot fire — and 7.5 (Lane D) depends on 7.1, which landed first
+as instructed. Starting a per-agent baseline store without the agent identity
+half would key it on whatever field happened to be present, which is how
+`baseline_oauth_app_volume_z` came to be the only one.
+
+**What is needed:** the full item, in order — agent identities with
+short-lived credentials and least-privilege tool scopes first, then baselines
+keyed on them (tools, resources, volume, token spend, hours) reading the
+existing `cost_telemetry.py` rather than a second meter.
