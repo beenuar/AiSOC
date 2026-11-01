@@ -600,6 +600,23 @@ jobs:
         run: python3 scripts/check_alert_reduction_claims.py --self-test
       - name: Verify the retracted alert-reduction figure stays retracted
         run: python3 scripts/check_alert_reduction_claims.py --check
+      # Same family, same reason. The three customer outcomes a buyer asks
+      # for first are recorded as not measured because no design partner has
+      # offered a queue to replay; that record is worth what stops it being
+      # replaced by a figure, or — worse — by a zero, which reads as a
+      # measurement that found nothing.
+      - name: Outcome claims — self-test
+        run: python3 scripts/check_outcome_claims.py --self-test
+      - name: Verify no surface publishes an unmeasured outcome
+        run: python3 scripts/check_outcome_claims.py
+      # And the mirror: a caveat saying a console surface is "not built"
+      # reads as modesty and works as an exemption, since an absent surface
+      # needs no claim row and no gate. Three of the six the matrix called
+      # unbuilt had shipped.
+      - name: Unbuilt-surface claims — self-test
+        run: python3 scripts/check_unbuilt_claims.py --self-test
+      - name: Verify every 'not built' claim is still true
+        run: python3 scripts/check_unbuilt_claims.py
       # `llms.txt` is the machine-first summary crawlers and LLM-backed tools
       # read instead of the rendered docs nav, so a stale figure there is
       # consumed with no human in the loop to sanity-check it. It is generated
