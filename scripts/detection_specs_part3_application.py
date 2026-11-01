@@ -659,7 +659,10 @@ LLM_USAGE_RULES: list[dict] = [
         service="audit",
         when={
             "event_type_endswith": ".consent_to_application",
-            "scopes_has_any": [
+            # `granted_scopes`, the name the connector promotes. A bare
+            # `scopes` collided with GitHub's token scopes in the
+            # detection-field gate's union-of-all-connectors namespace.
+            "granted_scopes_has_any": [
                 "Mail.ReadWrite",
                 "Mail.Send",
                 "Files.ReadWrite.All",
