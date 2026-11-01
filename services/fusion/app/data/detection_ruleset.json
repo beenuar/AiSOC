@@ -1,5 +1,5 @@
 {
-  "count": 760,
+  "count": 764,
   "rules": [
     {
       "category": "application",
@@ -1177,6 +1177,75 @@
       "service": "audit",
       "severity": "medium",
       "slug": "llm-service-account-created"
+    },
+    {
+      "category": "application",
+      "id": "det-application-087",
+      "match_when": {
+        "event_type_endswith": ".copilot.content_exclusion_changed"
+      },
+      "mitre": [
+        "T1562.001"
+      ],
+      "name": "Copilot Content Exclusion Changed",
+      "product": "github_copilot",
+      "service": "audit",
+      "severity": "critical",
+      "slug": "llm-copilot-content-exclusion-changed"
+    },
+    {
+      "category": "application",
+      "id": "det-application-088",
+      "match_when": {
+        "event_type_endswith": ".copilot.swe_agent_mcp_config_updated"
+      },
+      "mitre": [
+        "T1195"
+      ],
+      "name": "Hosted Coding Agent MCP Server List Changed",
+      "product": "github_copilot",
+      "service": "audit",
+      "severity": "high",
+      "slug": "llm-copilot-agent-mcp-config-changed"
+    },
+    {
+      "category": "application",
+      "id": "det-application-089",
+      "match_when": {
+        "event_type_endswith": ".consent_to_application",
+        "granted_scopes_has_any": [
+          "Mail.ReadWrite",
+          "Mail.Send",
+          "Files.ReadWrite.All",
+          "Sites.ReadWrite.All",
+          "Directory.ReadWrite.All",
+          "User.ReadWrite.All"
+        ]
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "AI Application Consented a Write Scope",
+      "product": "entra_consent",
+      "service": "audit",
+      "severity": "high",
+      "slug": "llm-ai-app-granted-write-scope"
+    },
+    {
+      "category": "application",
+      "id": "det-application-090",
+      "match_when": {
+        "accessed_resource_count_gte": 25,
+        "event_type_endswith": ".CopilotInteraction"
+      },
+      "mitre": [
+        "T1530"
+      ],
+      "name": "AI Assistant Interaction Touched Many Resources at Once",
+      "product": "microsoft_copilot",
+      "service": "audit",
+      "severity": "medium",
+      "slug": "llm-copilot-bulk-resource-access"
     },
     {
       "category": "application",

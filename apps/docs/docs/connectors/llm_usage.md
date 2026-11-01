@@ -1,19 +1,57 @@
 ---
 title: AI / LLM Usage Audit
-description: Ingest OpenAI + Anthropic organization audit logs into AiSOC to govern AI adoption.
+description: Ingest AI provider organization audit logs — OpenAI, Anthropic, Gemini in Workspace, GitHub Copilot, Microsoft 365 Copilot and Entra AI app consent — into AiSOC to govern AI adoption.
 ---
 
 # AI / LLM Usage Audit
 
 The **AI / LLM Usage Audit** connector (`llm_usage`, category `saas`) pulls
-organization audit logs from OpenAI (`/v1/organization/audit_logs`) or Anthropic
-and normalizes each into the AiSOC alert shape, mapping the event type onto the
-five-tier severity ladder (`info | low | medium | high | critical`).
+organization audit logs from one AI provider and normalizes each record into the
+AiSOC alert shape, mapping the event type onto the five-tier severity ladder
+(`info | low | medium | high | critical`).
 
 It is the governance surface for AI adoption — who created an API key, who was
-granted owner, was audit logging or MFA turned off, was a project deleted — and
-pairs with the built-in `llm-*` detection rules, which fire on the emitted
-`event_type` (for example `openai.api_key.created`, `anthropic.member.added`).
+granted owner, was audit logging or MFA turned off, who changed a coding agent's
+MCP server list, who consented an AI application into a mailbox — and pairs with
+the built-in `llm-*` and `ai-*` detection rules, which fire on the emitted
+`event_type` (for example `openai.api_key.created`,
+`github_copilot.copilot.swe_agent_mcp_config_updated`).
+
+## Providers
+
+Pick one provider per connector instance; run several instances to cover
+several providers. Each row names the vendor reference the client was written
+against.
+
+| Provider | Reads | Reference |
+| --- | --- | --- |
+| `openai` | `GET /v1/organization/audit_logs` | OpenAI platform API reference |
+| `anthropic` | `GET /v1/organizations/audit_logs` | Anthropic admin API reference |
+| `google_gemini` | Admin SDK Reports API, `applicationName=gemini_in_workspace_apps` | [Gemini in Workspace apps activity events](https://developers.google.com/workspace/admin/reports/v1/appendix/activity/gemini-in-workspace-apps) |
+| `github_copilot` | `GET /orgs/{org}/audit-log`, filtered server-side to `action:copilot` | [GitHub organization REST API](https://docs.github.com/en/rest/orgs/orgs) |
+| `microsoft_copilot` | Office 365 Management Activity API, `Audit.General`, RecordType 261 and 284 | [Management Activity API reference](https://learn.microsoft.com/en-us/office/office-365-management-api/office-365-management-activity-api-reference) |
+| `entra_consent` | Microsoft Graph `auditLogs/directoryAudits`, consent grants only | [directoryAudit list](https://learn.microsoft.com/en-us/graph/api/directoryaudit-list) |
+
+Two providers need a second field because their endpoint is scoped: GitHub
+Copilot needs the **organization**, Microsoft 365 Copilot needs the **tenant
+id**. The connector refuses to construct without them rather than failing with
+a 404 at poll time, which reads as a credential problem and is not.
+
+### What is filtered, and why
+
+`Audit.General` carries the whole Microsoft 365 general audit and
+`directoryAudits` carries every directory change. Both readers discard records
+that are not AI records — by `RecordType` for Microsoft 365, by the consent
+activity name for Entra — so an AI feed stays an AI feed instead of becoming a
+second copy of the general audit.
+
+### What this connector deliberately does not read
+
+Google Workspace OAuth token grants are already collected by the
+[`google_workspace`](./google-workspace.md) connector, which polls the `token`
+application. A second reader for the same endpoint would double-count every
+grant. What was missing there was classification, not collection, and that
+happens in the AI estate recorder.
 
 ## What you get
 
@@ -24,11 +62,16 @@ pairs with the built-in `llm-*` detection rules, which fire on the emitted
 | Logging disabled | `openai.logging.setting.updated` (disabled) | critical |
 | MFA disabled | `openai.mfa.*` (disabled) | critical |
 | Project delete | `openai.project.archived` | medium |
+| Copilot agent MCP config changed | `github_copilot.copilot.swe_agent_mcp_config_updated` | high |
+| Copilot content exclusion changed | `github_copilot.copilot.content_exclusion_changed` | critical |
+| AI app consented a scope | `entra_consent.consent_to_application` | high |
+| Gemini feature used | `google_gemini.ai_usage_event.feature_utilization` | info |
+| Copilot interaction | `microsoft_copilot.CopilotInteraction` | info |
 
 ## Setup
 
 1. In **Connectors -> Add connector**, choose **AI / LLM Usage Audit**.
-2. Pick the **provider** (OpenAI or Anthropic) and paste an **admin/audit-scoped API key** (stored in the credential vault, never in plaintext).
+2. Pick the **provider** and paste an **admin/audit-scoped API key or access token** (stored in the credential vault, never in plaintext). Fill the organization or tenant id if the provider you picked needs one.
 3. Click **Test connection**, then **Save**. The scheduler polls the audit log on the default cadence.
 
 Events flow through ingest → Kafka → fusion, where the `llm-*` detections fire
@@ -43,8 +86,10 @@ and matching alerts are auto-triaged (copilot).
 
 | Field | Label | Type | Required | Default | Notes |
 |-------|-------|------|----------|---------|-------|
-| `provider` | Provider | select | yes | — | one of: `openai`, `anthropic` |
+| `provider` | Provider | select | yes | — | one of: `openai`, `anthropic`, `google_gemini`, `github_copilot`, `microsoft_copilot`, `entra_consent` |
 | `api_key` | Admin / Audit API Key | secret | yes | — | **encrypted at rest** |
+| `organization` | GitHub organization | string | no | — | Required for GitHub Copilot: the audit-log endpoint is organization-scoped. |
+| `tenant` | Microsoft tenant id | string | no | — | Required for Microsoft 365 Copilot: the Management Activity API path is tenant-scoped. |
 
 :::note Credential handling
 `api_key` is encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API. See [credential vault](../operations/credentials.md).
