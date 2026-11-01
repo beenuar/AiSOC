@@ -34,7 +34,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
-from sqlalchemy import and_, case, func, literal, or_, select, update
+from sqlalchemy import and_, case, func, literal, or_, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
@@ -428,6 +428,92 @@ async def resolve_asset_contexts(
     return out
 
 
+async def resolve_identity_contexts(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    alerts: list[Any],
+) -> dict[uuid.UUID, IdentityContext]:
+    """Privilege and tags per alert, **as of that alert's own event time**.
+
+    Depth plan wave 2, 1.1. One query for the page rather than one per
+    alert, matching ``resolve_asset_contexts`` above.
+
+    The point-in-time join is the part worth reading carefully. Each alert
+    brings its own timestamp into the query and is matched against the
+    privilege version whose interval contains it, so an alert from before a
+    role was revoked still ranks by the privilege the actor held when they
+    acted. A simpler join on the live row would rank the whole queue by
+    today's posture, which is both wrong and invisible -- the number looks
+    identical either way.
+
+    An alert whose actor has no covering version is deliberately **absent**
+    from the result, and the caller turns that into an ``unknown`` tier
+    rather than a ``standard`` one.
+    """
+    actors: dict[str, list[tuple[uuid.UUID, datetime]]] = {}
+    for alert in alerts:
+        for user in list(getattr(alert, "affected_users", None) or []):
+            name = str(user or "").strip()
+            if not name:
+                continue
+            when = getattr(alert, "event_time", None) or getattr(alert, "first_seen", None)
+            if when is None:
+                continue
+            if when.tzinfo is None:
+                when = when.replace(tzinfo=UTC)
+            actors.setdefault(name.lower(), []).append((alert.id, when))
+    if not actors:
+        return {}
+
+    rows = (
+        await db.execute(
+            text(
+                """
+                SELECT principal_id, principal_label, tier,
+                       can_escalate, data_access, third_party, cross_account,
+                       valid_from, valid_until
+                  FROM identity_privilege_facts
+                 WHERE tenant_id = :tenant_id
+                   AND (lower(principal_id) = ANY(:actors) OR lower(principal_label) = ANY(:actors))
+                """
+            ),
+            {"tenant_id": str(tenant_id), "actors": list(actors)},
+        )
+    ).fetchall()
+    if not rows:
+        return {}
+
+    tier_rank = {"unknown": 0, "standard": 1, "elevated": 2, "admin": 3, "domain_admin": 4}
+    out: dict[uuid.UUID, IdentityContext] = {}
+    for row in rows:
+        handles = {
+            str(row.principal_id or "").lower(),
+            str(row.principal_label or "").lower(),
+        } - {""}
+        valid_from = row.valid_from
+        valid_until = row.valid_until
+        for handle in handles:
+            for alert_id, when in actors.get(handle, ()):
+                if valid_from > when or (valid_until is not None and valid_until <= when):
+                    continue
+                candidate = IdentityContext(
+                    principal=row.principal_id,
+                    privilege_tier=str(row.tier or "unknown"),
+                    can_escalate=row.can_escalate,
+                    data_access=row.data_access,
+                    third_party=row.third_party,
+                    cross_account=row.cross_account,
+                )
+                # One alert can name several users, and a person can hold
+                # accounts in several providers. The strongest wins: an
+                # alert about someone who is an ordinary Okta user and an
+                # AWS administrator is an alert about an administrator.
+                existing = out.get(alert_id)
+                if existing is None or tier_rank.get(candidate.privilege_tier, 0) > tier_rank.get(existing.privilege_tier, 0):
+                    out[alert_id] = candidate
+    return out
+
+
 def queue_priority(alert: Any, *, asset: Any = None, identity: Any = None) -> int:
     """The score this alert sorts by.
 
@@ -450,9 +536,13 @@ def queue_priority(alert: Any, *, asset: Any = None, identity: Any = None) -> in
         else None,
         identity=IdentityContext(
             principal=str(getattr(identity, "principal", "") or "") or None,
-            privilege_tier=str(getattr(identity, "privilege_tier", "standard") or "standard"),
+            privilege_tier=str(getattr(identity, "privilege_tier", "unknown") or "unknown"),
             is_service=bool(getattr(identity, "is_service", False)),
             is_break_glass=bool(getattr(identity, "is_break_glass", False)),
+            can_escalate=getattr(identity, "can_escalate", None),
+            data_access=getattr(identity, "data_access", None),
+            third_party=getattr(identity, "third_party", None),
+            cross_account=getattr(identity, "cross_account", None),
         )
         if identity is not None
         else None,
@@ -549,6 +639,13 @@ async def build_queue(
     # hidden.
     page_alerts = [row[0] for row in rows]
     asset_contexts = await resolve_asset_contexts(db, tenant_id, page_alerts)
+    # Depth 2 wave 2, 1.1. `score_alert_priority` has taken an `identity`
+    # since v16 and this call site passed `identity=None`, so the privilege
+    # factor and its whole table were unreachable from the only surface
+    # where prioritisation changes anything -- the built-but-unwired shape,
+    # in the module whose own docstring explains why an ordering nobody can
+    # interrogate stops being trusted.
+    identity_contexts = await resolve_identity_contexts(db, tenant_id, page_alerts)
 
     scored: list[tuple[int, datetime, int, QueueItem]] = []
     for row in rows:
@@ -567,7 +664,11 @@ async def build_queue(
         priority_result = score_alert_priority(
             severity=str(alert.severity or "medium"),
             asset=asset_contexts.get(alert.id),
-            identity=None,
+            # Absent means no posture version covered this alert's event
+            # time. `IdentityContext()` defaults to `unknown`, which scores
+            # neutrally and says so in the rationale -- unlike `None`, which
+            # omits the question from the basis entirely.
+            identity=identity_contexts.get(alert.id, IdentityContext()),
         )
 
         item = QueueItem(

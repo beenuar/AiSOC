@@ -107,6 +107,13 @@ KNOWN_TOOLS: frozenset[str] = frozenset(
         "mailbox_activity",
         "oauth_grants",
         "persistence_mechanisms",
+        # Wave-2 1.1 and 1.5, registered unconditionally in
+        # `default_registry`: what this identity could do at the moment it
+        # acted, and what changed shortly before it did. Read-only, and
+        # both answer "unknown, and here is why" rather than a silent zero
+        # when no snapshot covers the question.
+        "identity_effective_permissions",
+        "changes_before_alert",
         # Customer-estate read tools (`app/tools/customer_tools.py`). These
         # reach the customer's own vendors through the governed read path
         # rather than AiSOC's lake, which is why the investigator holds
@@ -160,6 +167,12 @@ AGENT_TOOL_SCOPES: dict[str, frozenset[str]] = {
             "mailbox_activity",
             "oauth_grants",
             "persistence_mechanisms",
+            # The two halves of "what could this identity do, and what
+            # changed before it did". The investigator rather than triage:
+            # both take typed entity fields, but the scope table keeps the
+            # agent most exposed to attacker-controlled text at its minimum.
+            "identity_effective_permissions",
+            "changes_before_alert",
             "siem_indicator_search",
             "cloud_audit_lookup",
             "edr_host_details",

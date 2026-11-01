@@ -30,27 +30,19 @@ from __future__ import annotations
 
 import inspect
 import logging
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Callable
 from typing import Any
 
 from app.security.agent_identity import AgentIdentity, ScopeDenied
 
+# Re-exported so every existing `from app.tools.registry import Tool`
+# keeps working. The dataclass moved to its own module to break the
+# registry -> customer_tools -> registry import cycle; see tool.py.
+from app.tools.tool import Tool
+
 logger = logging.getLogger(__name__)
 
-
-@dataclass(frozen=True)
-class Tool:
-    name: str
-    description: str
-    parameters: dict[str, Any]  # JSON schema for the arguments
-    fn: Callable[..., Any] | Callable[..., Awaitable[Any]]
-
-    def openai_schema(self) -> dict[str, Any]:
-        return {
-            "type": "function",
-            "function": {"name": self.name, "description": self.description, "parameters": self.parameters},
-        }
+__all__ = ["Tool", "ToolRegistry", "default_registry"]
 
 
 class ToolRegistry:
@@ -150,6 +142,16 @@ def default_registry(tenant_id: str = "") -> ToolRegistry:
     refuses a service credential that does not name the tenant it acts for.
     """
     from app.investigator.tools import enrich_ioc, extract_iocs, map_to_mitre
+    from app.tools.customer_tools import (
+        CHANGES_BEFORE_DESCRIPTION,
+        CHANGES_BEFORE_PARAMETERS,
+        CHANGES_BEFORE_TOOL,
+        EFFECTIVE_PERMISSIONS_DESCRIPTION,
+        EFFECTIVE_PERMISSIONS_PARAMETERS,
+        EFFECTIVE_PERMISSIONS_TOOL,
+        changes_before_alert,
+        identity_effective_permissions,
+    )
     from app.tools.mitre import lookup_technique
     from app.tools.sandbox import TOOL_DESCRIPTION, TOOL_NAME, TOOL_PARAMETERS, lookup_file_hash
 
@@ -160,6 +162,29 @@ def default_registry(tenant_id: str = "") -> ToolRegistry:
                 description=TOOL_DESCRIPTION,
                 parameters=TOOL_PARAMETERS,
                 fn=lambda sha256: lookup_file_hash(sha256, tenant_id=tenant_id),
+            ),
+            # Registered unconditionally, unlike the customer tools in
+            # `scoped_customer_tools`, which are bound only when the tenant
+            # has a backend for them. The difference is deliberate: a
+            # customer tool with no backend answers `no_integration` and is
+            # noise, whereas this one answers "unknown, and here is why" —
+            # which is a sentence the model needs to be able to reach.
+            Tool(
+                name=EFFECTIVE_PERMISSIONS_TOOL,
+                description=EFFECTIVE_PERMISSIONS_DESCRIPTION,
+                parameters=EFFECTIVE_PERMISSIONS_PARAMETERS,
+                fn=lambda principal_id, at="", provider="": identity_effective_permissions(
+                    principal_id, at=at, provider=provider, tenant_id=tenant_id
+                ),
+            ),
+            # Depth 2 wave 2, 1.5. Registered beside the privilege tool
+            # because the two answer halves of one question: what this
+            # identity could do, and what changed shortly before it did.
+            Tool(
+                name=CHANGES_BEFORE_TOOL,
+                description=CHANGES_BEFORE_DESCRIPTION,
+                parameters=CHANGES_BEFORE_PARAMETERS,
+                fn=lambda subjects, at="", days=7: changes_before_alert(subjects, at=at, days=days, tenant_id=tenant_id),
             ),
             Tool(
                 name="extract_iocs",

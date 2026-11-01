@@ -1,0 +1,44 @@
+[
+  {
+    "name": "mixed_case_is_preserved",
+    "hashed_token": "AbC123+/xyz=",
+    "expected_key": "AbC123+/xyz=",
+    "why": "the value is a digest; lowercasing it names a different credential"
+  },
+  {
+    "name": "surrounding_whitespace_is_trimmed",
+    "hashed_token": "  AbC123+/xyz=  ",
+    "expected_key": "AbC123+/xyz=",
+    "why": "both sides trim, so a padded value must still join"
+  },
+  {
+    "name": "base64_padding_is_significant",
+    "hashed_token": "Zm9vYmFy==",
+    "expected_key": "Zm9vYmFy==",
+    "why": "trailing = is part of the value and must not be stripped"
+  },
+  {
+    "name": "an_empty_token_yields_no_key",
+    "hashed_token": "",
+    "expected_key": "",
+    "why": "an absent credential is not a session key of the empty string"
+  },
+  {
+    "name": "whitespace_only_yields_no_key",
+    "hashed_token": "   ",
+    "expected_key": "",
+    "why": "trimming to empty is the same as absent"
+  },
+  {
+    "name": "a_missing_field_yields_no_key",
+    "hashed_token": null,
+    "expected_key": "",
+    "why": "an audit entry with no hashed_token has no credential to group on"
+  },
+  {
+    "name": "a_non_string_yields_no_key",
+    "hashed_token": 12345,
+    "expected_key": "",
+    "why": "both sides require a string; coercing a number would invent a key"
+  }
+]
