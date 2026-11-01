@@ -1213,7 +1213,7 @@
       "id": "det-application-089",
       "match_when": {
         "event_type_endswith": ".consent_to_application",
-        "scopes_has_any": [
+        "granted_scopes_has_any": [
           "Mail.ReadWrite",
           "Mail.Send",
           "Files.ReadWrite.All",
