@@ -48,7 +48,7 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 |---|---|---|
 | 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
 | 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
-| 8.1 CNAPP depth | not started, gap reproduced | item log |
+| 8.1 CNAPP depth | **blocked** on unreachable Wiz docs; depth check recorded, two findings in it | item log |
 | 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR for `depth2/lane-b-ndr` |
 | 8.3 Enrichment per tenant, cited | **rate limiting shipped**; provider gate built and held for its caller | item log + `depth2/lane-b-enrichment-tenant` |
 | 8.4 Scale and deployment evidence | **blocked, recorded with exactly what is needed** | item log |
@@ -475,39 +475,64 @@ has been exercised.
 
 **Deviation:** D8 (Corelight blocked on 401 documentation).
 
-### 8.1 CNAPP depth - Lane B - NOT STARTED, gap reproduced
+### 8.1 CNAPP depth - Lane B - **BLOCKED on vendor documentation**, with the depth check recorded
 
-**Reproduced, recorded as commands rather than asserted.**
+**Reproduced.** `services/connectors/app/connectors/wiz.py` declares exactly
+one GraphQL operation, `query IssuesTable`. No vulnerability query, no
+configuration-finding query, no secrets query, no runtime-detection query.
 
-`services/connectors/app/connectors/wiz.py` declares exactly one GraphQL
-operation, `query IssuesTable`. There is no vulnerability query, no
-configuration-finding query, no secrets query and no runtime-detection
-query. The four sibling cloud-security connectors each read one endpoint
-and it is their alert stream in every case:
+**Blocked, and this is not a scoping choice.** The item asks for queries
+the vendor's current public reference must support an honest mock for.
+Measured 2026-11-01, repeatedly and with a browser user agent, with a
+twenty-second pause between attempts:
 
-| Connector | The one read it makes |
-|---|---|
-| `orca` | two `GET`s against the alerts API |
-| `prisma_cloud` | two `POST`s against the search API |
-| `lacework` | `GET /api/v2/Alerts` |
-| `sysdig` | `GET /api/v1/secureEvents` |
+    429  https://docs.wiz.io/
+    429  https://win.wiz.io/reference/wiz-api
+    429  https://docs.wiz.io/wiz-docs/docs/welcome
+    000  https://integrate.wiz.io/
 
-So the gap is real on all five and is as the plan describes it.
+Every attempt was rate-limited or unreachable, so the GraphQL schema for
+vulnerabilities, configuration findings, secrets and runtime detections
+could not be read. The one query already in the tree predates this work and
+is not evidence about the others.
 
-**What remains, scoped:** extend the Wiz connector to vulnerabilities,
-configuration findings, secrets and runtime detections where the vendor API
-offers them; record the same depth check for the other four; surface the
-findings as **triage context keyed on the resource the alert touched**,
-not as alerts by default. The triage-context half is the part that needs a
-design decision rather than a read: a CNAPP finding on a resource is an
-input to a verdict about an event on that resource, which means a lookup
-keyed on resource identity at triage time, in the shape
-`services/agents/app/context/identity.py` uses for principals.
+Writing those four queries from memory or by pattern-matching the issues
+query would be inventing a payload shape, which the plan names as the thing
+to refuse. **Needed:** the Wiz API reference reachable, or the GraphQL
+schema document (`wizQueryTable` / `vulnerabilityFindings` /
+`configurationFindings` / `secrets` / `threatDetections` field definitions),
+or one recorded (redacted) response per query type.
 
-**Risk the plan already names:** Wiz's newer GraphQL surfaces are behind a
-customer tenant. Verify each field against the vendor's current public
-reference before writing it, and record BLOCKED rather than inventing a
-payload shape, exactly as D5 does for Workday and Kandji.
+**The depth check for the other four, as the item asks.** What each
+connector reads today is established from the code and is exact. What each
+API offers is marked unverified where the vendor's reference could not be
+reached, rather than asserted from recollection.
+
+| Connector | Reads today (verified from the tree) | Vendor reference | Verdict |
+|---|---|---|---|
+| `wiz` | one GraphQL operation, `IssuesTable` | `docs.wiz.io` **429**, `integrate.wiz.io` **000** | depth unverifiable; blocked |
+| `orca` | `GET /api/alerts` (plus `/api/user/session` for auth) | `api-docs.orcasecurity.io` **000** | alerts only; depth unverifiable |
+| `prisma_cloud` | `POST /alert/v1/alert` (plus `/login`) | `pan.dev/prisma-cloud/api/cspm/` **200**, overview only: the page describes authorisation and request shape and enumerates no endpoint groups | alerts only; depth needs the endpoint index, not the overview |
+| `lacework` | `GET /api/v2/Alerts` **and** `POST /api/v2/Configs/ComplianceEvaluations/search` | `docs.lacework.net` **000** | **already deeper than issues**: it reads compliance evaluations as well as alerts, which is the configuration-findings half of this item |
+| `sysdig` | `GET /api/v1/secureEvents` | `docs.sysdig.com/en/sysdig-secure/` **200** | runtime events only |
+
+Two things in that table are worth more than the blocked verdict.
+
+`lacework` already reads compliance evaluations, so the plan's premise that
+every cloud-security connector reads issues only is **wrong for one of the
+five**. That is the "do not build what exists" rule paying for itself: the
+depth check was supposed to be a formality and found a connector a third of
+the way through this item already.
+
+`sysdig` reads `secureEvents`, which is Sysdig's **runtime** detection
+stream rather than a posture issue list. So the runtime-detections half of
+this item is partly covered there too, by a connector nobody counted.
+
+**Not started, and distinct from the blocked half:** findings as *triage
+context* keyed on the resource an alert touched, rather than as alerts. That
+needs no new vendor read -- it can be built over what these five already
+ingest -- and it is the half of 8.1 that is not blocked on anything. It is
+the first thing the next pass should take.
 
 ### 8.3 Enrichment per tenant, cited - Lane B - rate limiting shipped, the rest split and in flight
 
