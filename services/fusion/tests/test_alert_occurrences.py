@@ -200,8 +200,7 @@ async def test_a_redelivered_event_cannot_inflate_the_count() -> None:
     sql, _ = _occurrence_statements(pool)[0]
     normalised = " ".join(sql.split()).lower()
     assert "@>" in normalised, (
-        "the occurrence statement has no containment guard, so a redelivered "
-        "message increments the count a second time"
+        "the occurrence statement has no containment guard, so a redelivered message increments the count a second time"
     )
 
 

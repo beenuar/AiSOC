@@ -166,6 +166,70 @@ UPDATE alerts
 #: settled by the second entry.
 _MAX_SOURCE_EVENT_IDS = 200
 
+#: Keep a repeat as a linked occurrence instead of discarding it (Phase 3.3).
+#:
+#: `source_event_ids` above answers "did more than one event produce this?".
+#: It cannot answer "how many times, between when and when", because it also
+#: grows on multi-event correlation and it stops at 200. This statement does,
+#: as a rollup keyed `(tenant_id, alert_id)`: migration 151.
+#:
+#: Three properties the SQL holds so that no caller has to remember them:
+#:
+#: * **The count includes the surviving alert.** The INSERT arm starts at 2
+#:   (the original plus this repeat), so an alert with no row here has been
+#:   seen exactly once and a reader joins with `COALESCE(count, 1)`.
+#: * **A redelivery cannot inflate it.** The `WHERE NOT (payload_ids @> …)`
+#:   on the DO UPDATE is the same containment guard `_DEDUP_SOURCE_EVENT_SQL`
+#:   uses, for the same reason: a consumer-group rebalance re-delivers the
+#:   same message, and a count that grew on that would be measuring Kafka
+#:   rather than the vendor. Removing it takes five redeliveries of one
+#:   message from a count of 2 to a count of 7, which the live suite pins.
+#: * **The window keeps the newest ids.** `payload_ids - 0` drops the oldest
+#:   element once the window is full, so the containment guard's coverage
+#:   sits where redelivery actually happens. `payload_ids_complete` goes
+#:   false the moment anything is evicted, so a partial list is never
+#:   presented as the whole set.
+#:
+#: Looked up by `dedup_hash` rather than by an alert id because fusion holds
+#: the fingerprint at this point and the surviving row's id only after a
+#: second read.
+_OCCURRENCE_SQL = """
+INSERT INTO alert_occurrences AS ao (
+    tenant_id, alert_id, occurrence_count, first_seen, last_seen,
+    payload_ids, payload_ids_complete
+)
+SELECT
+    $1,
+    a.id,
+    2,
+    LEAST(COALESCE(a.event_time, NOW()), COALESCE($4::timestamptz, NOW())),
+    GREATEST(COALESCE(a.event_time, NOW()), COALESCE($4::timestamptz, NOW())),
+    CASE WHEN $3::text IS NULL THEN '[]'::jsonb ELSE jsonb_build_array($3::text) END,
+    TRUE
+  FROM alerts a
+ WHERE a.tenant_id = $1
+   AND a.dedup_hash = $2::text
+ON CONFLICT (tenant_id, alert_id) DO UPDATE
+   SET occurrence_count = ao.occurrence_count + 1,
+       first_seen = LEAST(ao.first_seen, EXCLUDED.first_seen),
+       last_seen = GREATEST(ao.last_seen, EXCLUDED.last_seen),
+       payload_ids = CASE
+           WHEN $3::text IS NULL THEN ao.payload_ids
+           WHEN jsonb_array_length(ao.payload_ids) >= $5
+               THEN (ao.payload_ids - 0) || jsonb_build_array($3::text)
+           ELSE ao.payload_ids || jsonb_build_array($3::text)
+       END,
+       payload_ids_complete = ao.payload_ids_complete
+           AND NOT ($3::text IS NOT NULL AND jsonb_array_length(ao.payload_ids) >= $5),
+       updated_at = NOW()
+ WHERE $3::text IS NULL OR NOT (ao.payload_ids @> jsonb_build_array($3::text))
+"""
+
+#: Ceiling on the retained payload-id window. Deliberately the same number as
+#: `_MAX_SOURCE_EVENT_IDS`: two bounded lists of ids on one alert that
+#: disagreed about their length would be a question nobody can answer.
+_MAX_OCCURRENCE_PAYLOAD_IDS = 200
+
 # The reconciliation row the two-way SIEM loop reads. Written here rather than
 # from the API because fusion is the only place that holds the alert id, the
 # connector instance and the vendor finding id at the same moment — asking the
@@ -706,7 +770,16 @@ class AlertSink:
         return results
 
     async def _record_deduplicated_event(self, conn: Any, alert: Any) -> None:
-        """Attach a folded-away event's id to the alert it deduplicated onto.
+        """Keep a folded-away repeat, as provenance and as a counted occurrence.
+
+        Two writes with different scopes, and the difference is the Phase 3.3
+        change. The `source_event_ids` append answers "did more than one event
+        produce this?" and needs an id to append, so it is skipped when there
+        is none. The occurrence rollup answers "how many times, between when
+        and when" and **is not skipped**: most connectors' normalisers leave
+        `source_event_ids` empty, so gating the count on an id would
+        under-report exactly those vendors and the published number would
+        quietly mean "repeats from connectors that happen to set an id".
 
         Best-effort, for the same reason `_link_source_finding` is: the
         provenance entry is worth one statement, never the verdict the caller
@@ -714,20 +787,36 @@ class AlertSink:
         into a FAILED.
         """
         ids = [i for i in (alert.source_event_ids or []) if i]
-        if not ids:
-            return
         fingerprint = alert.fingerprint()
+        if ids:
+            try:
+                for source_event_id in ids:
+                    await conn.execute(
+                        _DEDUP_SOURCE_EVENT_SQL,
+                        alert.tenant_id,
+                        fingerprint,
+                        str(source_event_id),
+                        _MAX_SOURCE_EVENT_IDS,
+                    )
+            except Exception as exc:  # noqa: BLE001 — provenance is not worth the alert
+                logger.warning("alert_sink.dedup_provenance_failed", error=str(exc))
+
+        # The representative id for this folded *event*, not one per raw event
+        # behind it: one delivery is one occurrence however many source ids it
+        # carries. Keying the redelivery guard on the first id is enough
+        # because a redelivery carries the same list.
+        payload_id = str(ids[0]) if ids else None
         try:
-            for source_event_id in ids:
-                await conn.execute(
-                    _DEDUP_SOURCE_EVENT_SQL,
-                    alert.tenant_id,
-                    fingerprint,
-                    str(source_event_id),
-                    _MAX_SOURCE_EVENT_IDS,
-                )
-        except Exception as exc:  # noqa: BLE001 — provenance is not worth the alert
-            logger.warning("alert_sink.dedup_provenance_failed", error=str(exc))
+            await conn.execute(
+                _OCCURRENCE_SQL,
+                alert.tenant_id,
+                fingerprint,
+                payload_id,
+                getattr(alert, "event_time", None),
+                _MAX_OCCURRENCE_PAYLOAD_IDS,
+            )
+        except Exception as exc:  # noqa: BLE001 — the count is not worth the alert
+            logger.warning("alert_sink.occurrence_record_failed", error=str(exc))
 
     async def _link_source_finding(self, pool: asyncpg.Pool, alert: Any, *, alert_id: Any) -> None:
         """Record which vendor finding produced this alert, when there is one.
