@@ -2,8 +2,8 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.1"
-date: "2026-10-28"
+version: "v1.2"
+date: "2026-10-31"
 license: "MIT (same as the AiSOC project)"
 abstract: |
   A complete operator's guide to AiSOC: installing it on a laptop and on a
@@ -778,7 +778,62 @@ the restore, and failures are counted and surfaced.
 
 ---
 
-## 10. Honest limits
+## 10. Evaluation, replay and model suitability
+
+Added in v21.0.0, this is how the platform keeps its own numbers honest. The
+full methodology lives on the benchmark page; what an operator needs is below.
+
+**Serving-model attribution.** Every verdict scorecard, ledger exchange and
+eligibility decision records which model *actually served* each call, with a
+provenance status: `gateway_verified` when the LiteLLM gateway attests the
+serving model in a response header, `self_reported` when only the response
+body names it (credited only when the body can witness itself — a name merely
+equal to the requested alias is never copied in), and `unattributed`
+otherwise. A run that placed zero real calls, fell back to the deterministic
+path, or cannot name its serving model is preserved as a diagnostic and
+refused as "verified performance of model X". The same status gates autonomy:
+a clearing measurement that cannot be bound to an attributed call cannot
+authorize automatic closures.
+
+**Metrics with denominators.** The replay scorer publishes precision, recall,
+per-class F1, confusion matrices, balanced accuracy and MCC with
+numerator/denominator counts; full-cohort malicious recall keeps abstentions
+and runtime failures in the denominator; closure candidates carry four
+honest cuts (malicious closure rate, closure contamination, benign closure
+coverage, unknown-label share), always over *proposed* closures — a simulated
+closure never appears as a production outcome. Requested, attempted,
+completed, failed and unattempted counts travel with every run, so a failure
+that stops a run cannot vanish from the headline.
+
+**Alert reduction, three figures.** 75.3% is the legacy four-tier grouping
+benchmark (not what production runs); 33.3% is the production correlation
+key on the tactic-carrying cohort; 24.5% is a detection-shaped cohort after
+v21.0.0's grouping change, where a missing identifier narrows the group
+instead of widening it. The drop is the honest direction: the difference was
+unrelated alerts counted as grouped.
+
+**Replay and re-hunting.** Historical replay freezes evidence at each
+decision time, enforces the cutoff in retrieval and storage queries rather
+than in the prompt, keeps truth labels reachable by the evaluator and
+unreachable by the agent, and discloses that pretrained weights may postdate
+the events (the scorecard carries the model-knowledge limit, or "unknown").
+Replay cannot execute real actions — the mutation boundary is the write
+adapter, not an instruction. Re-hunting old telemetry with newly published
+intelligence is a separate, labelled mode with a rehearsal switch
+(`RETRO_HUNT_DRY_RUN=1`) that records proposed reopens without mutating
+anything; its discoveries are never counted as predictions at the original
+event time.
+
+**Model suitability is per task.** `scripts/run_model_matrix.py --task
+verdict` grades each configured model on the same locked corpus and records
+serving identity, sampling, runtime and token use per row. Every row is read
+against a deterministic baseline floor (balanced accuracy exactly 0.250 on
+the published corpus — what answering without a model scores). A model or
+configuration with no funded run is listed as *not measured*; reproduction is
+one command against any OpenAI-compatible endpoint, including a local
+Ollama.
+
+## 11. Honest limits
 
 Stated plainly, because a guide that only lists strengths is a brochure.
 
@@ -787,9 +842,11 @@ Stated plainly, because a guide that only lists strengths is a brochure.
 - **Long-duration scale figures do not exist.** The harness has ramp, burst,
   backpressure and 24/72-hour soak profiles; the long ones have not been run,
   and no throughput number is claimed from them.
-- **Package distribution is blocked on credentials.** The release workflow
-  builds and packs all eight npm and PyPI packages on every tag; the upload
-  step is credential-gated. Install from source.
+- **Package distribution is half-shipped.** The five PyPI packages are live
+  and resolve at the tree's versions (`pip install aisoc-sandbox` works
+  today); the three npm packages still await the first-upload `NPM_TOKEN`,
+  an account action. The release workflow builds and packs all eight on
+  every tag.
 - **Benchmark numbers are labelled.** Three of the four eval metrics are
   substrate self-consistency gates, not agent accuracy. Only MITRE accuracy
   measures the live agent, and the benchmark page says which is which.
@@ -798,7 +855,7 @@ Stated plainly, because a guide that only lists strengths is a brochure.
 
 ---
 
-## 11. Where to go next
+## 12. Where to go next
 
 | You want | Read |
 |---|---|

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [21.0.0] - 2026-10-31
+
+### BREAKING
+
+- **Correlation grouping narrows on missing identifiers** (the Changed
+  entry below). On upgrade, *future* alerts that carry no tactic group
+  per rule instead of per entity, and alerts with no identifiers at all
+  stop cross-rule merging entirely. Existing incidents are untouched;
+  the measured effect on a detection-shaped cohort is reduction moving
+  42.6% → 24.5% because unrelated alerts stop counting as grouped.
+  There is no API change in this release; the major marks this grouping
+  change plus the redefinition of published evaluation semantics
+  (serving-model provenance, full-cohort denominators, closure
+  contamination) that older scorecards do not carry.
+
 ### Added
 
 - **Serving-model attribution, end to end.** Every published verdict-eval
