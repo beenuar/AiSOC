@@ -330,6 +330,27 @@ _LONG_HORIZON_DERIVED_FIELDS = frozenset(
     }
 )
 
+#: Depth 2 wave 2 item 2.4. Per-endpoint API behaviour from
+#: `services/fusion/app/services/api_behaviour.py`, published only for a
+#: tenant that opted in and only for a template with enough history — so a
+#: rule reading one fires on a measured deviation from a learned shape and
+#: never on the first request to a new endpoint.
+#:
+#: `services/fusion/tests/test_api_behaviour.py` asserts this set and
+#: `api_behaviour.DERIVED_FIELDS` agree in both directions.
+_API_BEHAVIOUR_DERIVED_FIELDS = frozenset(
+    {
+        "api_template",
+        "api_unknown_parameter",
+        "api_unknown_parameter_detail",
+        "api_parameter_type_change",
+        "api_parameter_type_change_detail",
+        "api_identifier_enumeration",
+        "api_identifier_enumeration_detail",
+        "api_enumeration_distinct",
+    }
+)
+
 #: `<left>_eq_<right>` / `<left>_neq_<right>`, resolved by comparing two
 #: fields of the same event. Reachable only when *both* sides are in the
 #: namespace — a comparison against a field nothing emits is still dead, and
@@ -347,6 +368,7 @@ def _is_derivable(field: str, namespace: set[str]) -> bool:
         or field in _FIRST_SEEN_DERIVED_FIELDS
         or field in _BASELINE_DERIVED_FIELDS
         or field in _LONG_HORIZON_DERIVED_FIELDS
+        or field in _API_BEHAVIOUR_DERIVED_FIELDS
     ):
         return True
     match = _DERIVED_COMPARISON_RE.match(field)

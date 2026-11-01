@@ -1,5 +1,5 @@
 {
-  "count": 847,
+  "count": 850,
   "rules": [
     {
       "category": "application",
@@ -1718,6 +1718,55 @@
       "service": "setup-audit",
       "severity": "high",
       "slug": "sfdc-certificate-inserted"
+    },
+    {
+      "category": "application",
+      "family": "api-behaviour",
+      "id": "det-application-111",
+      "match_when": {
+        "api_unknown_parameter": true
+      },
+      "mitre": [
+        "T1190"
+      ],
+      "name": "Unknown Parameter Sent To A Profiled API Endpoint",
+      "product": "api-gateway",
+      "service": "access-log",
+      "severity": "medium",
+      "slug": "api-unknown-parameter-on-known-endpoint"
+    },
+    {
+      "category": "application",
+      "family": "api-behaviour",
+      "id": "det-application-112",
+      "match_when": {
+        "api_parameter_type_change": true
+      },
+      "mitre": [
+        "T1190"
+      ],
+      "name": "Known API Parameter Changed Type",
+      "product": "api-gateway",
+      "service": "access-log",
+      "severity": "high",
+      "slug": "api-parameter-type-changed"
+    },
+    {
+      "category": "application",
+      "family": "api-behaviour",
+      "id": "det-application-113",
+      "match_when": {
+        "api_identifier_enumeration": true
+      },
+      "mitre": [
+        "T1087",
+        "T1190"
+      ],
+      "name": "Client Walked Many Identifiers Through One API Endpoint",
+      "product": "api-gateway",
+      "service": "access-log",
+      "severity": "high",
+      "slug": "api-identifier-enumeration"
     },
     {
       "category": "cloud",

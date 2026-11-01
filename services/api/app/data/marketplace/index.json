@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T18:42:10Z",
+  "generated": "2026-11-01T18:48:49Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,27 +20,27 @@
     }
   ],
   "stats": {
-    "total": 7226,
+    "total": 7229,
     "playbooks": 88,
     "playbook_packs": 63,
-    "detections": 7058,
+    "detections": 7061,
     "plugins": 80,
-    "verified": 1105,
+    "verified": 1108,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1105
+      "stable": 1108
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 944
+      "stable": 947
     },
-    "executable": 2785,
+    "executable": 2788,
     "quarantined": 4441,
-    "executable_detections": 2617,
+    "executable_detections": 2620,
     "reference_only_detections": 4441,
     "not_a_detection": 168
   },
@@ -148,7 +148,7 @@
       "T1078.004": 64,
       "T1082": 13,
       "T1083": 9,
-      "T1087": 10,
+      "T1087": 11,
       "T1087.001": 10,
       "T1087.002": 18,
       "T1087.004": 2,
@@ -208,7 +208,7 @@
       "T1176.001": 2,
       "T1185": 3,
       "T1187": 3,
-      "T1190": 39,
+      "T1190": 42,
       "T1195": 3,
       "T1195.001": 2,
       "T1195.002": 6,
@@ -440,7 +440,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2487,
+    "total_with_mitre": 2490,
     "unique_techniques_all_rules": 493,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -571,7 +571,7 @@
       "T1078.004": 112,
       "T1082": 49,
       "T1083": 28,
-      "T1087": 21,
+      "T1087": 22,
       "T1087.001": 28,
       "T1087.002": 52,
       "T1087.004": 10,
@@ -637,7 +637,7 @@
       "T1185": 12,
       "T1187": 12,
       "T1189": 4,
-      "T1190": 177,
+      "T1190": 180,
       "T1195": 23,
       "T1195.001": 3,
       "T1195.002": 16,
@@ -999,6 +999,7 @@
         "T1078.003": 2,
         "T1078.004": 52,
         "T1083": 2,
+        "T1087": 1,
         "T1087.001": 2,
         "T1087.002": 5,
         "T1087.004": 3,
@@ -1030,7 +1031,7 @@
         "T1140": 1,
         "T1176": 1,
         "T1185": 1,
-        "T1190": 30,
+        "T1190": 33,
         "T1195": 2,
         "T1195.001": 1,
         "T1195.002": 9,
@@ -33385,6 +33386,82 @@
       "executable": true,
       "path": "detections/application/sfdc-certificate-inserted.yaml",
       "sha256": "c1e1c16e837a1b5047776c198ec5cff8272b3f2bad9f1eb073c8cf841991e02d"
+    },
+    {
+      "id": "det-application-111",
+      "type": "detection",
+      "name": "Unknown Parameter Sent To A Profiled API Endpoint",
+      "description": "A parameter name this templated endpoint has not received before, on an endpoint with at least 50 requests of history. A mass-assignment or hidden-parameter probe looks exactly like this; so does a deploy, which is why the false positive is named.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1190"
+      ],
+      "log_source": "api-gateway",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/api-unknown-parameter-on-known-endpoint.yaml",
+      "sha256": "b478817950d4cffb6bb55787f00021508154ed6371037fea672b5f06eb8a62d2"
+    },
+    {
+      "id": "det-application-112",
+      "type": "detection",
+      "name": "Known API Parameter Changed Type",
+      "description": "A parameter the endpoint has always received as an integer arrived as a string. Injection and type-confusion probes change the type; ordinary traffic does not.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1190"
+      ],
+      "log_source": "api-gateway",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/api-parameter-type-changed.yaml",
+      "sha256": "343474cf9776b17d158b20ec3150c01ece28819b5d8dca34ba80c450f6fceb2f"
+    },
+    {
+      "id": "det-application-113",
+      "type": "detection",
+      "name": "Client Walked Many Identifiers Through One API Endpoint",
+      "description": "One client requested 50 or more distinct identifiers through one templated path inside five minutes. Templating is what makes this visible at all: without it the requests are unrelated strings.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1087",
+        "T1190"
+      ],
+      "log_source": "api-gateway",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/api-identifier-enumeration.yaml",
+      "sha256": "3c95cfc51f531c7bc815793be4ed1ca3bb916d93a9691c673d797a288d5779bd"
     },
     {
       "id": "det-cloud-001",

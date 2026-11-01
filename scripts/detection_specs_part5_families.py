@@ -1382,3 +1382,71 @@ LONG_HORIZON_IDENTITY: list[dict] = [
 
 BY_CATEGORY_LONG_HORIZON = by_category(LONG_HORIZON_IDENTITY)
 FAMILIES_IDENTITY.extend(BY_CATEGORY_LONG_HORIZON.get("identity", []))
+
+
+# ===========================================================================
+# Family: api-behaviour
+#
+# Item 2.4. Deviations from an endpoint's learned shape, from
+# `services/fusion/app/services/api_behaviour.py`. Off by default per tenant,
+# and a signal is published only for a template with enough history, so none
+# of these can fire on the first request to a new endpoint.
+# ===========================================================================
+API_BEHAVIOUR: list[dict] = [
+    F(
+        family="api-behaviour",
+        category="application",
+        slug="api-unknown-parameter-on-known-endpoint",
+        name="Unknown Parameter Sent To A Profiled API Endpoint",
+        severity="medium",
+        mitre=["t1190"],
+        product="api-gateway",
+        service="access-log",
+        when={"api_unknown_parameter": True},
+        fp=["A release that added a parameter; the profile relearns it within the window"],
+        playbook="tpl-triage",
+        description=(
+            "A parameter name this templated endpoint has not received before, on an endpoint "
+            "with at least 50 requests of history. A mass-assignment or hidden-parameter probe "
+            "looks exactly like this; so does a deploy, which is why the false positive is named."
+        ),
+    ),
+    F(
+        family="api-behaviour",
+        category="application",
+        slug="api-parameter-type-changed",
+        name="Known API Parameter Changed Type",
+        severity="high",
+        mitre=["t1190"],
+        product="api-gateway",
+        service="access-log",
+        when={"api_parameter_type_change": True},
+        fp=["A client that began sending an identifier as a string"],
+        playbook="tpl-triage",
+        description=(
+            "A parameter the endpoint has always received as an integer arrived as a string. "
+            "Injection and type-confusion probes change the type; ordinary traffic does not."
+        ),
+    ),
+    F(
+        family="api-behaviour",
+        category="application",
+        slug="api-identifier-enumeration",
+        name="Client Walked Many Identifiers Through One API Endpoint",
+        severity="high",
+        mitre=["t1087", "t1190"],
+        product="api-gateway",
+        service="access-log",
+        when={"api_identifier_enumeration": True},
+        fp=["A sanctioned export job paging through records by identifier"],
+        playbook="tpl-triage",
+        description=(
+            "One client requested 50 or more distinct identifiers through one templated path "
+            "inside five minutes. Templating is what makes this visible at all: without it the "
+            "requests are unrelated strings."
+        ),
+    ),
+]
+
+BY_CATEGORY_API = by_category(API_BEHAVIOUR)
+FAMILIES_APPLICATION.extend(BY_CATEGORY_API.get("application", []))
