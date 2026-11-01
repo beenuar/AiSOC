@@ -48,6 +48,7 @@ from app.api.v1.endpoints import (
     hunt_reports,
     hunts,
     identity_graph,
+    identity_resolution,
     identity_timeline,
     inbox,
     inbox_itsm,
@@ -347,6 +348,7 @@ api_router.include_router(threat_intel.router)
 api_router.include_router(posture.router)
 api_router.include_router(easm.router)
 api_router.include_router(identity_graph.router)
+api_router.include_router(identity_resolution.router)
 api_router.include_router(reports.router)
 # Depth 9.5: a natural-language hunt or a retro-hunt that found something
 # becomes a readable, cited report, exportable through the same WeasyPrint

@@ -29,19 +29,24 @@ import uuid
 from datetime import datetime
 from typing import Any
 
+import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.access_review import ReviewResult, review_principal, summarise
 from app.services.identity_privilege_store import live_facts_for_provider, usage_for_principal
+from app.services.identity_usage_collector import collect_usage_for_tenant
+
+logger = structlog.get_logger(__name__)
 
 __all__ = ["acknowledge", "list_findings", "run_review", "summary"]
 
-_FINDING_COLUMNS = """
-    id, run_id, kind, provider, principal_id, severity, title, detail,
-    object_hint, recommendation, best_fit_role, evidence, usage_measured,
-    acknowledged_at, acknowledged_by, acknowledged_note, first_seen, last_seen
-"""
+# Written out per statement rather than interpolated, and the optional
+# filters below are parameters rather than appended clauses. `text()` with
+# an f-string is a taint sink for `avoid-sqlalchemy-text`, and the rule is
+# right that it cannot tell a constant clause from a caller-supplied one.
+# One statement per query is also the better shape: there is no second
+# query path that only some callers exercise.
 
 
 def _row_to_finding(row: Any) -> dict[str, Any]:
@@ -68,15 +73,47 @@ def _row_to_finding(row: Any) -> dict[str, Any]:
     }
 
 
-async def run_review(db: AsyncSession, *, tenant_id: uuid.UUID, provider: str) -> dict[str, Any]:
+async def run_review(
+    db: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    provider: str,
+    collect_usage: bool = True,
+) -> dict[str, Any]:
     """Recompute this provider's review and persist the result.
 
-    Reads only: privilege facts and the usage overlay, both already in this
-    database. No vendor API is called from here and none may be added — the
-    plan's read-only rule for 1.2 is the reason the review can be run across
-    a whole estate without a change-control conversation.
+    Reads only: privilege facts, the event lake and the usage overlay. No
+    vendor API is called from here and none may be added — the plan's
+    read-only rule for 1.2 is why the review can be run across a whole
+    estate without a change-control conversation.
+
+    ``collect_usage`` refreshes the runtime overlay from the lake first,
+    because this is the only caller that needs it and a collector with no
+    caller is the defect this repository keeps rediscovering. It is a
+    parameter rather than unconditional so a test can separate "the review
+    is wrong" from "the lake is slow", and so a scheduled sweep that has
+    already collected can skip it.
+
+    When the lake cannot be read the collection reports ``measured=False``
+    and the review proceeds with usage unknown — which suppresses the
+    usage-dependent findings rather than emitting them against an empty
+    used-set.
     """
     facts = await live_facts_for_provider(db, tenant_id=tenant_id, provider=provider)
+
+    if collect_usage and facts:
+        collection = await collect_usage_for_tenant(
+            db,
+            tenant_id=tenant_id,
+            provider=provider,
+            principals=[f.privilege.principal_id for f in facts],
+        )
+        if not collection.measured:
+            logger.info(
+                "access_review.usage_not_measured",
+                provider=provider,
+                reason=collection.reason,
+            )
 
     results: list[ReviewResult] = []
     window_start: datetime | None = None
@@ -289,23 +326,17 @@ async def list_findings(
     include_acknowledged: bool = False,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
-    clauses = ["tenant_id = :tenant_id"]
-    params: dict[str, Any] = {"tenant_id": str(tenant_id), "limit": max(1, min(limit, 500))}
-    if provider:
-        clauses.append("provider = :provider")
-        params["provider"] = provider
-    if kind:
-        clauses.append("kind = :kind")
-        params["kind"] = kind
-    if not include_acknowledged:
-        clauses.append("acknowledged_at IS NULL")
-
     result = await db.execute(
         text(
-            f"""
-            SELECT {_FINDING_COLUMNS}
+            """
+            SELECT id, run_id, kind, provider, principal_id, severity, title, detail,
+                   object_hint, recommendation, best_fit_role, evidence, usage_measured,
+                   acknowledged_at, acknowledged_by, acknowledged_note, first_seen, last_seen
               FROM access_review_findings
-             WHERE {" AND ".join(clauses)}
+             WHERE tenant_id = :tenant_id
+               AND (CAST(:provider AS text) IS NULL OR provider = :provider)
+               AND (CAST(:kind AS text) IS NULL OR kind = :kind)
+               AND (CAST(:include_acknowledged AS boolean) OR acknowledged_at IS NULL)
              ORDER BY array_position(
                         ARRAY['critical','high','medium','low','info']::text[], severity
                       ),
@@ -313,7 +344,13 @@ async def list_findings(
              LIMIT :limit
             """
         ),
-        params,
+        {
+            "tenant_id": str(tenant_id),
+            "provider": provider or None,
+            "kind": kind or None,
+            "include_acknowledged": bool(include_acknowledged),
+            "limit": max(1, min(limit, 500)),
+        },
     )
     return [_row_to_finding(row) for row in result.fetchall()]
 
@@ -326,21 +363,18 @@ async def summary(db: AsyncSession, *, tenant_id: uuid.UUID, provider: str | Non
     sentence, because the one thing this page must not do is show a zero
     that a reader takes for an all-clear.
     """
-    clauses = ["tenant_id = :tenant_id"]
-    params: dict[str, Any] = {"tenant_id": str(tenant_id)}
-    if provider:
-        clauses.append("provider = :provider")
-        params["provider"] = provider
+    params: dict[str, Any] = {"tenant_id": str(tenant_id), "provider": provider or None}
 
     runs = (
         await db.execute(
             text(
-                f"""
+                """
                 SELECT DISTINCT ON (provider)
                        provider, run_state, reviewed_principals, usage_measured_for,
                        finding_count, window_start, window_end, note, started_at
                   FROM access_review_runs
-                 WHERE {" AND ".join(clauses)}
+                 WHERE tenant_id = :tenant_id
+                   AND (CAST(:provider AS text) IS NULL OR provider = :provider)
                  ORDER BY provider, started_at DESC
                 """
             ),
@@ -362,9 +396,11 @@ async def summary(db: AsyncSession, *, tenant_id: uuid.UUID, provider: str | Non
     open_count = (
         await db.execute(
             text(
-                f"""
+                """
                 SELECT count(*) FROM access_review_findings
-                 WHERE {" AND ".join(clauses)} AND acknowledged_at IS NULL
+                 WHERE tenant_id = :tenant_id
+                   AND (CAST(:provider AS text) IS NULL OR provider = :provider)
+                   AND acknowledged_at IS NULL
                 """
             ),
             params,
@@ -407,14 +443,16 @@ async def acknowledge(
     """
     result = await db.execute(
         text(
-            f"""
+            """
             UPDATE access_review_findings
                SET acknowledged_at = NOW(),
                    acknowledged_by = :user_id,
                    acknowledged_note = :note
              WHERE tenant_id = :tenant_id
                AND id = :finding_id
-            RETURNING {_FINDING_COLUMNS}
+            RETURNING id, run_id, kind, provider, principal_id, severity, title, detail,
+                   object_hint, recommendation, best_fit_role, evidence, usage_measured,
+                   acknowledged_at, acknowledged_by, acknowledged_note, first_seen, last_seen
             """
         ),
         {

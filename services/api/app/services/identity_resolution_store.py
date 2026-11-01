@@ -38,10 +38,11 @@ logger = structlog.get_logger(__name__)
 
 __all__ = ["cluster_for", "decide_link", "links_for", "save_links"]
 
-_COLUMNS = """
-    id, left_key, right_key, confidence, rule, evidence,
-    decided, decided_by, decided_at, first_seen, last_seen
-"""
+# Written out per statement rather than interpolated. `text()` with an
+# f-string is a taint sink for `avoid-sqlalchemy-text`, and the rule is
+# right that it cannot tell a constant column list from a caller-supplied
+# one. `check_raw_sql_columns.py` compares each copy against migration 128,
+# so a drifting copy is caught.
 
 
 def _row(row: Any) -> dict[str, Any]:
@@ -187,22 +188,30 @@ async def links_for(
     is never a second source of truth: a read that preferred it would answer
     differently on the two profiles for reasons no operator could see.
     """
-    clauses = ["tenant_id = :tenant_id", "(left_key = :key OR right_key = :key)"]
-    params: dict[str, Any] = {"tenant_id": str(tenant_id), "key": key}
-    if not include_weak:
-        clauses.append("(confidence >= :floor OR decided = 'confirmed')")
-        params["floor"] = MERGE_THRESHOLD
-
+    # The optional strength filter is a parameter, not an appended clause:
+    # one statement, one plan, and no f-string reaching `text()`.
     result = await db.execute(
         text(
-            f"""
-            SELECT {_COLUMNS}
+            """
+            SELECT id, left_key, right_key, confidence, rule, evidence,
+                   decided, decided_by, decided_at, first_seen, last_seen
               FROM identity_links
-             WHERE {" AND ".join(clauses)}
+             WHERE tenant_id = :tenant_id
+               AND (left_key = :key OR right_key = :key)
+               AND (
+                     CAST(:include_weak AS boolean)
+                     OR confidence >= :floor
+                     OR decided = 'confirmed'
+                   )
              ORDER BY confidence DESC, last_seen DESC
             """
         ),
-        params,
+        {
+            "tenant_id": str(tenant_id),
+            "key": key,
+            "include_weak": bool(include_weak),
+            "floor": MERGE_THRESHOLD,
+        },
     )
     return [_row(row) for row in result.fetchall()]
 
@@ -272,14 +281,15 @@ async def decide_link(
 
     result = await db.execute(
         text(
-            f"""
+            """
             UPDATE identity_links
                SET decided = :decision,
                    decided_by = :user_id,
                    decided_at = NOW()
              WHERE tenant_id = :tenant_id
                AND id = :link_id
-            RETURNING {_COLUMNS}
+            RETURNING id, left_key, right_key, confidence, rule, evidence,
+                   decided, decided_by, decided_at, first_seen, last_seen
             """
         ),
         {

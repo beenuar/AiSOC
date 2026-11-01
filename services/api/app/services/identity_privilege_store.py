@@ -40,12 +40,13 @@ __all__ = [
     "usage_for_principal",
 ]
 
-_FACT_COLUMNS = """
-    id, tenant_id, provider, principal_id, principal_label, principal_kind,
-    tier, can_escalate, data_access, third_party, cross_account,
-    evidence, action_count, resource_count, snapshot_id, resolver_version,
-    partial_source, valid_from, valid_until
-"""
+# The column list is written out in each statement rather than
+# interpolated from a shared constant. Interpolating it makes every
+# statement an f-string, and `text()` with an f-string is a taint sink for
+# `avoid-sqlalchemy-text` -- correctly, because a rule cannot tell a
+# constant column list from a caller-supplied one. Four copies of a column
+# list is the cheaper half of that trade, and `check_raw_sql_columns.py`
+# compares each one against the migration, so a drifting copy is caught.
 
 
 @dataclass(frozen=True)
@@ -162,7 +163,7 @@ async def save_privilege(
 
     result = await db.execute(
         text(
-            f"""
+            """
             INSERT INTO identity_privilege_facts (
                 tenant_id, provider, principal_id, principal_label, principal_kind,
                 tier, can_escalate, data_access, third_party, cross_account,
@@ -174,7 +175,10 @@ async def save_privilege(
                 CAST(:evidence AS jsonb), :action_count, :resource_count, :snapshot_id,
                 :resolver_version, :partial_source
             )
-            RETURNING {_FACT_COLUMNS}
+            RETURNING id, tenant_id, provider, principal_id, principal_label, principal_kind,
+                   tier, can_escalate, data_access, third_party, cross_account,
+                   evidence, action_count, resource_count, snapshot_id, resolver_version,
+                   partial_source, valid_from, valid_until
             """
         ),
         {
@@ -212,8 +216,11 @@ def _same_facts(left: IdentityPrivilege, right: IdentityPrivilege) -> bool:
 async def _live_fact(db: AsyncSession, *, tenant_id: uuid.UUID, provider: str, principal_id: str) -> PrivilegeFact | None:
     result = await db.execute(
         text(
-            f"""
-            SELECT {_FACT_COLUMNS}
+            """
+            SELECT id, tenant_id, provider, principal_id, principal_label, principal_kind,
+                   tier, can_escalate, data_access, third_party, cross_account,
+                   evidence, action_count, resource_count, snapshot_id, resolver_version,
+                   partial_source, valid_from, valid_until
               FROM identity_privilege_facts
              WHERE tenant_id = :tenant_id
                AND provider = :provider
@@ -248,27 +255,30 @@ async def privilege_at(
     would answer a question nobody asked in a way no reader could detect,
     which is the exact failure migration 103 is versioned to prevent.
     """
-    clauses = [
-        "tenant_id = :tenant_id",
-        "valid_from <= :at",
-        "(valid_until IS NULL OR valid_until > :at)",
-        "(principal_id = :principal_id OR lower(principal_label) = lower(:principal_id))",
-    ]
-    params: dict[str, Any] = {
-        "tenant_id": str(tenant_id),
-        "principal_id": principal_id,
-        "at": at,
-    }
-    if provider:
-        clauses.append("provider = :provider")
-        params["provider"] = provider
-
+    # The optional provider filter is a *parameter*, not an appended clause.
+    # Assembling the WHERE from a list makes the statement an f-string, and
+    # `text()` with an f-string is a taint sink the scanner refuses --
+    # correctly, since it cannot tell a constant clause from a
+    # caller-supplied one. One statement with one plan is also the better
+    # shape: there is no second query path to test.
+    #
+    # `CAST(:provider AS text)` rather than `:provider::text`: SQLAlchemy's
+    # bind regex backtracks over a Postgres cast and would declare a
+    # parameter named `provide`, and an untyped `:provider IS NULL` raises
+    # on asyncpg. `check_text_bind_casts.py` gates both.
     result = await db.execute(
         text(
-            f"""
-            SELECT {_FACT_COLUMNS}
+            """
+            SELECT id, tenant_id, provider, principal_id, principal_label, principal_kind,
+                   tier, can_escalate, data_access, third_party, cross_account,
+                   evidence, action_count, resource_count, snapshot_id, resolver_version,
+                   partial_source, valid_from, valid_until
               FROM identity_privilege_facts
-             WHERE {" AND ".join(clauses)}
+             WHERE tenant_id = :tenant_id
+               AND valid_from <= :at
+               AND (valid_until IS NULL OR valid_until > :at)
+               AND (principal_id = :principal_id OR lower(principal_label) = lower(:principal_id))
+               AND (CAST(:provider AS text) IS NULL OR provider = :provider)
              ORDER BY array_position(
                         ARRAY['unknown','standard','elevated','admin','domain_admin']::text[], tier
                       ) DESC,
@@ -276,7 +286,12 @@ async def privilege_at(
              LIMIT 1
             """
         ),
-        params,
+        {
+            "tenant_id": str(tenant_id),
+            "principal_id": principal_id,
+            "at": at,
+            "provider": provider or None,
+        },
     )
     row = result.fetchone()
     return _row_to_fact(row) if row else None
@@ -292,8 +307,11 @@ async def live_facts_for_provider(
     """Every live fact for one provider — the access review's scan."""
     result = await db.execute(
         text(
-            f"""
-            SELECT {_FACT_COLUMNS}
+            """
+            SELECT id, tenant_id, provider, principal_id, principal_label, principal_kind,
+                   tier, can_escalate, data_access, third_party, cross_account,
+                   evidence, action_count, resource_count, snapshot_id, resolver_version,
+                   partial_source, valid_from, valid_until
               FROM identity_privilege_facts
              WHERE tenant_id = :tenant_id
                AND provider = :provider
