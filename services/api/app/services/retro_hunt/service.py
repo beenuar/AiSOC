@@ -100,6 +100,14 @@ class TenantSweepReport:
     alert_id: uuid.UUID | None = None
     deduplicated: bool = False
     detail: str = ""
+    #: True when this sweep ran in evaluation (dry-run) mode: the match was
+    #: recorded as a *proposal* and nothing was opened, refreshed or written.
+    #: A proposed open must never read as an executed one, which is why this
+    #: is a field on the report rather than a phrase in ``detail``.
+    proposed: bool = False
+    #: The alert a live sweep would have opened, by its identifying fields.
+    #: ``None`` outside dry-run mode and on non-matches.
+    proposed_alert: dict[str, Any] | None = None
 
 
 def alert_idempotency_key(indicator_type: str, value: str) -> str:
@@ -280,12 +288,22 @@ async def sweep_tenant(
     indicator: IntelIndicator,
     settings_row: RetroHuntSettings | None = None,
     now: datetime | None = None,
+    dry_run: bool = False,
 ) -> TenantSweepReport:
     """Sweep one tenant for one indicator and open at most one alert.
 
     The caller is responsible for the transaction. Nothing here commits, so a
     batch of tenants can be swept and committed together, and a failure on one
     tenant does not half-write another.
+
+    ``dry_run`` is the evaluation mode: the warehouse sweep runs exactly as a
+    live one does — and therefore still consumes the tenant's sweep budget,
+    because the scan the budget bounds was performed — but every mutation
+    after it is withheld *here, at the boundary that owns the writes*: no
+    alert is opened, no sighting row is inserted and the dedup branch leaves
+    even its counters untouched. The match comes back as a **proposal** on
+    the report, so a re-hunt can be rehearsed over history and graded without
+    any ability to touch production state, whatever the caller does next.
     """
     now = now or datetime.now(UTC)
 
@@ -351,6 +369,23 @@ async def sweep_tenant(
 
     surfaces = _matched_surfaces(outcome)
 
+    if existing is not None and dry_run:
+        # Known already, and this is a rehearsal: report what a live sweep
+        # would have refreshed and leave even the counters alone. Advancing
+        # `times_seen` from an evaluation would make the production record
+        # claim sweeps that were drills.
+        return TenantSweepReport(
+            tenant_id=tenant_id,
+            outcome="swept",
+            matched=True,
+            alert_id=existing.alert_id,
+            deduplicated=True,
+            proposed=True,
+            detail=(
+                "DRY RUN — this indicator already has an alert for this tenant; a live sweep would have refreshed its sighting counters."
+            ),
+        )
+
     if existing is not None:
         # Already known. Refresh what we learned and open nothing: this is the
         # branch that keeps a daily-republished indicator from becoming a
@@ -371,6 +406,28 @@ async def sweep_tenant(
                 f"Already alerted on this indicator for this tenant "
                 f"({existing.times_seen} sweeps have now matched it); no new alert opened."
             ),
+        )
+
+    if dry_run:
+        # The mutation boundary. Everything an operator needs to judge the
+        # would-be alert travels on the report; nothing reaches the session.
+        return TenantSweepReport(
+            tenant_id=tenant_id,
+            outcome="swept",
+            matched=True,
+            proposed=True,
+            proposed_alert={
+                "title": f"Retro-hunt: {indicator.indicator_type} {indicator.value} seen in your history",
+                "severity": DEFAULT_SEVERITY,
+                "category": ALERT_CATEGORY,
+                "idempotency_key": alert_idempotency_key(indicator.indicator_type, indicator.value),
+                "total_sightings": outcome.total_sightings,
+                "matched_surfaces": surfaces,
+                "not_checked": outcome.gaps,
+                "intel_first_seen_at": (indicator.first_seen_at.isoformat() if indicator.first_seen_at else None),
+                "lookback_days": outcome.lookback_days,
+            },
+            detail=f"DRY RUN — a live sweep would have opened one alert for {outcome.total_sightings} sighting(s).",
         )
 
     alert = await _open_alert(db, tenant_id=tenant_id, indicator=indicator, outcome=outcome)

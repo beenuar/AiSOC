@@ -124,6 +124,14 @@ class InvestigationState(BaseModel):
     # knowledge-base citations. `{"statement": str, "citations": [...]}`.
     business_impact: dict[str, Any] | None = None
 
+    #: The claim-support review behind the verdict, as structure rather than
+    #: only as basis strings: which decisive claims the evidence supported,
+    #: which it did not, and which it contradicted
+    #: (``ClaimSupportResult.as_dict()``). ``None`` on paths that never score
+    #: claims — the deterministic tier, memory suppression — which is a
+    #: different fact from "scored and found nothing".
+    claim_review: dict[str, Any] | None = None
+
     # Knowledge-base runbook chunks retrieved for this alert, as
     # `app.context.knowledge_base.RunbookRetrieval.as_state()` renders them:
     # the chunks, the markers a citation resolves through, and what the
@@ -226,6 +234,9 @@ class InvestigationState(BaseModel):
         prompt: str | list[dict[str, Any]],
         response: str,
         duration_ms: int,
+        serving_model: str | None = None,
+        serving_attribution: str | None = None,
+        system_fingerprint: str | None = None,
     ) -> dict[str, Any]:
         """Record one model call so the verdict it produced can be replayed.
 
@@ -242,6 +253,15 @@ class InvestigationState(BaseModel):
             "agent": agent,
             "purpose": purpose,
             "model": model,
+            # The serving identity, kept apart from the requested one above.
+            # `model` is what was asked for; `serving_model` is what some
+            # party said answered, `serving_attribution` is who said it
+            # (gateway_header / response_body), and None means nobody did —
+            # never a copy of the request. `system_fingerprint` is the
+            # backend's own configuration digest when it published one.
+            "serving_model": serving_model,
+            "serving_attribution": serving_attribution,
+            "system_fingerprint": system_fingerprint,
             "prompt": prompt_text[:_LLM_LITERAL_LIMIT],
             "prompt_truncated": len(prompt_text) > _LLM_LITERAL_LIMIT,
             "response": response[:_LLM_LITERAL_LIMIT],

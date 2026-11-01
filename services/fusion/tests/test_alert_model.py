@@ -77,9 +77,18 @@ class TestRawAlertCorrelationKey:
         assert "server-42" in key
         assert key.endswith(":execution")
 
-    def test_correlation_key_unknown_when_no_entity_or_tactic(self) -> None:
+    def test_correlation_key_narrows_when_no_entity_or_tactic(self) -> None:
+        """A missing identifier narrows the group instead of widening it.
+
+        The old fallback substituted the literal "unknown" for both halves,
+        which merged every entity-less, tactic-less alert tenant-wide. With
+        no entity and no rule, the key now carries the dedup fingerprint, so
+        only exact repeats of one shape group together.
+        """
         a = _alert()
-        assert a.correlation_key().endswith(":unknown:unknown")
+        key = a.correlation_key()
+        assert ":no-entity:fp:" in key
+        assert key == _alert().correlation_key(), "the same shape still groups with itself"
 
     def test_correlation_key_includes_tenant(self) -> None:
         tenant = UUID("22222222-2222-2222-2222-222222222222")

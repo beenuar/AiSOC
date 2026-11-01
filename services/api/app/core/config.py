@@ -420,6 +420,16 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("RETRO_HUNT_ENABLED", "AISOC_RETRO_HUNT_ENABLED"),
     )
+    # Evaluation mode for retro-hunts: sweeps run exactly as live ones do —
+    # and still consume the tenant's sweep budget, because the warehouse scan
+    # the budget bounds was performed — but matches come back as recorded
+    # *proposals* and the mutation boundary inside `sweep_tenant` withholds
+    # every write: no alert opens, no sighting row lands, no counter moves.
+    # For rehearsing a re-hunt over history; off means live.
+    RETRO_HUNT_DRY_RUN: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("RETRO_HUNT_DRY_RUN", "AISOC_RETRO_HUNT_DRY_RUN"),
+    )
     KAFKA_TOPIC_THREAT_INTEL: str = "aisoc.threat_intel"
     RETRO_HUNT_CONSUMER_GROUP: str = "aisoc-retro-hunt"
 

@@ -119,14 +119,15 @@ refused.
 
 Corpus: **72 items** in **36 twin pairs** (`verdict_corpus_v1`, digest `sha256:ec60d7bddabcc5b28d8942cea52d770bd8a2d13b93396826a6deab1dcba6aa86`). Twins share title, rule, severity, vendor and technique and differ only in the evidence, so severity alone separates nothing and a constant answer scores at most **0.250**. Hand-authored and synthetic: no recorded customer telemetry is involved.
 
-| Model | Mode | Balanced accuracy | MCC | Malicious recall | Abstention | Hallucination rate | Calls placed |
-|---|---|---|---|---|---|---|---|
-| `llama3.2:3b-instruct-q4_K_M` | live | 0.285 | 0.047 | 0.250 / 36 | 0.000 | 0.000 | 72 |
-| `llama3.1:8b-instruct-q4_K_M` | live | 0.357 | 0.209 | 0.583 / 36 | 0.000 | 0.000 | 72 |
-| `llama3:8b` | live | 0.279 | 0.113 | 0.639 / 36 | 0.000 | 0.000 | 72 |
-| `qwen2.5:7b-instruct-q4_K_M` | live | 0.260 | 0.032 | 0.083 / 36 | 0.097 | 0.000 | 72 |
-| `mistral:7b-instruct-v0.3-q4_K_M` | live | 0.210 | 0.202 | 0.639 / 36 | 0.306 | 0.000 | 72 |
-| `any hosted provider (GPT-4o class)` | – | not measured — no funded key exists in this repository, and no hosted provider has ever been exercised | – | – | – | – | 0 |
+| Model | Mode | Balanced accuracy | MCC | Malicious recall | Abstention | Hallucination rate | Calls placed | Attribution |
+|---|---|---|---|---|---|---|---|---|
+| `llama3.2:3b-instruct-q4_K_M` | live | 0.285 | 0.047 | 0.250 / 36 | 0.000 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
+| `llama3.1:8b-instruct-q4_K_M` | live | 0.357 | 0.209 | 0.583 / 36 | 0.000 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
+| `llama3:8b` | live | 0.279 | 0.113 | 0.639 / 36 | 0.000 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
+| `qwen2.5:7b-instruct-q4_K_M` | live | 0.260 | 0.032 | 0.083 / 36 | 0.097 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
+| `mistral:7b-instruct-v0.3-q4_K_M` | live | 0.210 | 0.202 | 0.639 / 36 | 0.306 | 0.000 | 72 | unverified (recorded before per-decision attribution existed) |
+| `deterministic fallback (no model)` | deterministic | 0.250 | 0.000 | 0.000 / 36 | 0.000 | – | 0 | no calls |
+| `any hosted provider (GPT-4o class)` | – | not measured — no funded key exists in this repository, and no hosted provider has ever been exercised | – | – | – | – | 0 | – |
 
 Malicious recall prints the count behind it: a rate over 36 cases is a different claim from the same rate over four, and the figure alone cannot say which. Every measured row placed the model calls shown in the last column; a row that placed none is refused rather than published, because triage answers from a deterministic scorer when a provider fails and the resulting scorecard looks entirely normal.
 
@@ -166,11 +167,25 @@ The 3B ran CPU-bound inside the stack container and the four 7–8B rows ran
 GPU-accelerated on the host, so the figures measure different machines.
 Dropping the column would have hidden that asymmetry instead of naming it.
 
-**Per-decision model attribution is unverified.** Every run placed the model
-calls shown and every call was answered — the reasoning in each decision is
-specific to its alert — but `resolved_models` came back empty, so the
-scorecard can show that 72 calls happened and cannot show which model served
-each one. The count is measured; the attribution is not.
+**Per-decision model attribution: unverified for the rows above, mechanised
+for every run after them.** Those five runs placed the model calls shown and
+every call was answered, but `resolved_models` came back empty — the serving
+identity reader only knew the LiteLLM gateway header, and these runs talked
+to an OpenAI-compatible endpoint directly. The serving model was in the
+response body the whole time; nothing read it. The extractor now reads both,
+most-authoritative first: the gateway's `x-litellm-model-name` header
+(**verified** — the party that routed the call speaking), else the response
+body's own `model` field (**self_reported** — the endpoint naming itself),
+credited only when there is evidence it came from the body rather than from
+langchain's fallback to the requested name, which is never copied into
+serving metadata. Every new scorecard carries a `provenance_status` —
+`verified` / `self_reported` / `unattributed` / `serving_mismatch` /
+`no_calls` — and the Attribution column above renders it; a `serving_mismatch`
+run is refused as any model's row outright, and the five historical rows keep
+their honest "unverified" rather than receiving invented attribution. The
+same identity now gates autonomy: a measured auto-closure precision cannot be
+bound to a call whose serving model no party vouched for
+(`services/agents/app/confidence/eligibility.py`).
 
 **No hosted provider has ever been exercised.** The hosted row reads *not
 measured* rather than `0`, because a zero in an accuracy column says the
@@ -204,7 +219,8 @@ every PR targeting `main` or `develop`.
 
 | Suite                          | Metric                  | Per-case   | Per-template macro     | Target  | What it checks |
 |--------------------------------|-------------------------|------------|------------------------|---------|----------------|
-| Alert reduction (product logic) | reduction              | 33.3 %     | _n/a_                  | 20–95 % | **The number that describes AiSOC.** Groups a noisy 1 000-alert stream with `RawAlert.correlation_key()` — the method `Correlator` actually calls |
+| Alert reduction (product logic) | reduction              | 33.3 %     | _n/a_                  | 20–95 % | **The number that describes AiSOC** on tactic-carrying alerts. Groups a noisy 1 000-alert stream with `RawAlert.correlation_key()` — the method `Correlator` actually calls |
+| Alert reduction (detection-shaped) | reduction           | 24.5 %     | _n/a_                  | pinned exactly | The same real key over alerts shaped like the detection engines' output (rule_id, **no tactics**), with zero cross-rule merges — see below for the before/after |
 | Alert reduction (legacy suite)  | reduction              | 75.3 %     | _n/a_                  | ≥ 70 %  | A four-tier scheme implemented inside the test. Retained for continuity; **does not describe this product** — see below |
 | MITRE ATT&CK tactic accuracy   | accuracy                | 97.0 %     | 96.4 % (n=55)          | ≥ 80 %  | Substrate self-consistency — keyword extractor vs. dataset written for it |
 | Investigation completeness     | mean keyword coverage   | 94.2 %     | 94.3 % (n=55)          | ≥ 85 %  | Substrate self-consistency — report template wraps the description; judge finds keywords from the description |
@@ -238,6 +254,32 @@ to a point, and the gate says where.
 Both numbers stay published. Deleting the old one would make the history
 unreadable; presenting it without this note would be the thing this page
 exists to prevent.
+
+**There is now a third figure, and the story behind it is a fixed defect.**
+The 33.3 % stream carries a MITRE tactic on every alert, and no detection
+engine in this product has ever emitted one — the ruleset carries technique
+ids only — so every *detection* alert's key fell back to the literal
+`unknown` tactic and all of an entity's detection alerts collapsed into one
+incident per window, whatever the rule or kill-chain stage. Alerts with no
+entity merged **tenant-wide**. The fallback now narrows instead of widening
+(same entity + no tactic groups per detection rule; no entity never groups
+across rules), and the same `test_alert_reduction_real.py` measures a
+detection-shaped cohort — 1,000 alerts, `rule_id` set, no tactics, ~4 %
+entity-less — before and after on the identical stream:
+
+| Cohort | Before | After |
+|---|---|---|
+| Incidents | 574 | 755 |
+| Reduction | 42.6 % | **24.5 %** |
+| Incident groups spanning more than one rule | 36 | **0** |
+
+The reduction went **down**, and that is the honest direction: the
+difference was unrelated alerts being counted as grouped, and review-work
+reduction is only worth having over groups that are actually related. A
+reader comparing reduction figures should also ask what else travels with
+them — which malicious evidence a merged group buries is the companion
+question, and the grouped-purity row (zero cross-rule groups) is this
+page's answer for the detection cohort.
 
 > The synthetic telemetry suite is a **schema/coverage gate**, not a scoring
 > suite, so it does not appear in the table. It checks that every incident has

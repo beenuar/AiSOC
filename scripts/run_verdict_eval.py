@@ -382,6 +382,17 @@ def main(argv: list[str] | None = None) -> int:
         help="key for that endpoint; local servers accept any non-empty string",
     )
     parser.add_argument("--corpus", type=Path, default=CORPUS)
+    parser.add_argument(
+        "--model-knowledge-cutoff",
+        default=None,
+        help=(
+            "the model's published training-data cutoff (e.g. 2023-12), when the vendor states one. "
+            "Recorded on the scorecard; left 'unknown' when not given. This bounds what the WEIGHTS "
+            "may already know: the replay freeze constrains supplied context only, and a model whose "
+            "training data postdates the corpus events may recognise them from pretraining rather "
+            "than infer them from evidence — a limit every historical-predictive claim carries."
+        ),
+    )
     parser.add_argument("--out", type=Path, help="write the scorecard JSON here")
     parser.add_argument("--decisions-out", type=Path, help="write the per-item decisions here (stays local by default)")
     parser.add_argument("--tenant-id", default="00000000-0000-0000-0000-0000000000de")
@@ -421,6 +432,27 @@ def main(argv: list[str] | None = None) -> int:
     answered_by_model = sum(1 for d in decisions if d.get("resolved_models"))
     errored = sum(1 for d in decisions if d.get("error"))
 
+    # Run-level provenance: who vouched for the serving identity, and whether
+    # what served answers for what was asked. Computed from per-decision
+    # attribution, not asserted — see app.core.model_attribution.
+    from app.core.model_attribution import (
+        ADVERTISABLE_STATUSES,
+        STATUS_MIXED_SERVING,
+        run_provenance_status,
+    )
+
+    attribution_sources: dict[str, int] = {}
+    for d in decisions:
+        for source, count in (d.get("attribution_sources") or {}).items():
+            attribution_sources[str(source)] = attribution_sources.get(str(source), 0) + int(count or 0)
+    serving_models = sorted({str(m) for d in decisions for m in (d.get("resolved_models") or [])})
+    provenance_status = run_provenance_status(
+        llm_calls=llm_calls,
+        attributed_by_source=attribution_sources,
+        serving_models=tuple(serving_models),
+        requested=(args.model,) if args.model and not args.deterministic else (),
+    )
+
     live = llm_calls > 0
     if not live and not (args.deterministic or args.allow_no_llm):
         print(
@@ -432,6 +464,7 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    from measure_triage_reliability import MAX_TOKENS, TEMPERATURE
     from score_replay_set import CorpusNotGradeable, grade
 
     model_label = "deterministic" if args.deterministic else args.model
@@ -442,6 +475,7 @@ def main(argv: list[str] | None = None) -> int:
             dataset=str(corpus.get("corpus_id") or "aisoc-verdict-v1"),
             commit=git_commit(),
             synthetic=True,
+            requested_total=len(corpus["decisions"]),
         )
     except CorpusNotGradeable as exc:
         print(f"verdict-eval: REFUSED — {exc}", file=sys.stderr)
@@ -465,12 +499,49 @@ def main(argv: list[str] | None = None) -> int:
         # eligibility matches on the prompt's version and content hash, so a
         # scorecard that does not name them can authorise nothing.
         "prompt": prompt_provenance(),
+        # The sampling the production triage call pins (`make_chat_model("triage",
+        # temperature=0.0, max_tokens=2048, json_output=True)`). Imported from the
+        # reliability harness rather than retyped, so the three surfaces that state
+        # these values — the call site, that harness, and this scorecard — share
+        # one declaration and drift together loudly instead of apart silently.
+        # Two scorecards sampled differently are not comparable, and until now
+        # nothing a reader could open said how a row was sampled.
+        "sampling": {
+            "temperature": TEMPERATURE,
+            "max_tokens": MAX_TOKENS,
+            "json_mode": True,
+            "source": "production triage call site (app/agents/auto_triage_agent.py), held in step by the reliability harness",
+        },
+        # What the model's own weights may already contain. The replay freeze
+        # and the leak check constrain the *supplied* context; they cannot
+        # establish that pretrained weights hold no knowledge postdating the
+        # corpus events, so a historical-predictive reading of this scorecard
+        # is bounded by this field — and "unknown" is the honest default,
+        # never an implied "before the events".
+        "model_knowledge": {
+            "release_or_training_cutoff": args.model_knowledge_cutoff or "unknown",
+            "stated_by": "operator" if args.model_knowledge_cutoff else None,
+            "disclosure": (
+                "Evidence cutoffs constrain supplied context only; they do not establish that the "
+                "model's pretrained weights contain no knowledge later than the events replayed."
+            ),
+        },
         "context_configuration": context_configuration(decisions),
         # The three numbers that decide whether the rest is worth reading.
         "llm_calls_placed": llm_calls,
         "decisions_answered_by_model": answered_by_model,
         "decisions_errored": errored,
         "resolved_models": score.get("models") or [],
+        # Who vouched for those serving models, and what the whole run may be
+        # published as. `verified` means the gateway named every call's model;
+        # `self_reported` means the serving endpoints named themselves;
+        # `unattributed` means calls were placed and nobody said; and
+        # `serving_mismatch` means what answered is not what was asked for.
+        # Only the first two may be advertised as measured performance of the
+        # named model — anything else is a diagnostic with a limitation.
+        "attribution_sources": attribution_sources,
+        "provenance_status": provenance_status,
+        "advertisable_as_model_performance": (not args.deterministic) and provenance_status in ADVERTISABLE_STATUSES,
         # Writes production would have made, every one intercepted. Published
         # because "side-effect free" is a claim, and this is the measurement
         # behind it.
@@ -519,7 +590,22 @@ def main(argv: list[str] | None = None) -> int:
 
     print(report["report_markdown"])
     print()
-    print(f"verdict-eval: model={model_label} mode={scorecard['mode']} llm_calls={llm_calls} errored={errored}")
+    print(
+        f"verdict-eval: model={model_label} mode={scorecard['mode']} llm_calls={llm_calls} errored={errored} provenance={provenance_status}"
+    )
+
+    if live and provenance_status == STATUS_MIXED_SERVING:
+        # The scorecard above is preserved as a diagnostic — it says what was
+        # measured and carries this limitation — but the run must not pass as
+        # the requested model's performance, because something else answered.
+        print(
+            f"verdict-eval: REFUSED to attribute — the run was requested as {args.model!r} and the "
+            f"serving identity that answered was {', '.join(serving_models) or 'unnamed'}. The scorecard "
+            "is written with provenance_status=serving_mismatch and must not be published as the "
+            f"requested model's performance. Fix the endpoint or the pin, then re-run.",
+            file=sys.stderr,
+        )
+        return 2
     return 0
 
 

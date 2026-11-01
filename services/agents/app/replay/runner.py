@@ -181,6 +181,30 @@ class ReplayDecision:
     tool_calls: int = 0
     resolved_models: list[str] = field(default_factory=list)
 
+    #: Calls each attribution source vouched for on this decision:
+    #: ``{"gateway_header": n, "response_body": m}``. Empty when calls were
+    #: placed and nobody named the server — which is a different fact from
+    #: "no call was placed", and the grader needs both to compute an honest
+    #: run-level provenance status.
+    attribution_sources: dict[str, int] = field(default_factory=dict)
+
+    #: The alert's severity, carried for the per-severity miss breakdown. A
+    #: miss on a critical alert and a miss on an info alert are different
+    #: findings, and a grader that cannot segment by severity reports one
+    #: number for both.
+    severity: str | None = None
+
+    #: Where the reflex path spent its time on this decision, by named stage
+    #: (milliseconds). Latency is still reported and never graded; the stage
+    #: split is what turns "slow" into "the context fetch, not the model".
+    stage_timings_ms: dict[str, float] = field(default_factory=dict)
+
+    #: The decision as the structured contract the worker now assembles:
+    #: operational disposition, supporting and contradictory evidence,
+    #: missing prerequisites, escalation reason. Carried verbatim so the
+    #: grader and the report read the same shape a reviewer does.
+    decision_contract: dict[str, Any] = field(default_factory=dict)
+
     #: Model calls this decision actually placed, priced or not.
     #:
     #: The one number that separates "the model answered" from "the
@@ -219,6 +243,10 @@ class ReplayDecision:
             "evidence": self.evidence,
             "tool_calls": self.tool_calls,
             "resolved_models": list(self.resolved_models),
+            "attribution_sources": dict(self.attribution_sources),
+            "severity": self.severity,
+            "stage_timings_ms": dict(self.stage_timings_ms),
+            "decision_contract": dict(self.decision_contract),
             "llm_calls": self.llm_calls,
             "tokens": self.tokens,
             "measured_usd": self.measured_usd,
@@ -378,6 +406,7 @@ class ReplayRunner:
             expected_disposition=finding.disposition,
             vendor_disposition=finding.vendor_disposition,
             labelled=finding.is_labelled,
+            severity=finding.severity,
         )
 
         try:
@@ -425,6 +454,7 @@ class ReplayRunner:
         decision.estimated_usd = cost.get("estimated_usd")
         decision.unpriced_calls = int(cost.get("unpriced_calls") or 0)
         decision.resolved_models = [str(m) for m in (cost.get("resolved_models") or [])]
+        decision.attribution_sources = {str(k): int(v) for k, v in (cost.get("attribution_sources") or {}).items()}
         # Every call the tracker saw, however it was priced. Summed from the
         # three priced/unpriced buckets rather than read off one of them: a
         # local model is unpriced, a hosted one is measured, and a harness
@@ -441,4 +471,6 @@ class ReplayRunner:
         # move, so the comment and the code contradicted each other, and the
         # day triage gained a tool the report would have kept saying zero.
         decision.tool_calls = _tool_calls_recorded(summary.get("ledger") or [])
+        decision.stage_timings_ms = {str(k): float(v) for k, v in (summary.get("stage_timings_ms") or {}).items()}
+        decision.decision_contract = dict(summary.get("decision_contract") or {})
         return decision

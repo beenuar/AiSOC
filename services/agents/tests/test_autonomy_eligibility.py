@@ -98,11 +98,63 @@ def test_a_clearing_measurement_is_eligible() -> None:
         alert_class="cloud",
         records=(_record(),),
         now_iso="2026-10-27T00:00:00+00:00",
+        model_attribution="response_body",
     )
 
     assert decision.state is Eligibility.ELIGIBLE
     assert decision.allows_auto_close
     assert decision.measured
+
+
+def test_a_measurement_cannot_authorise_an_unattributed_serving_identity() -> None:
+    """A matching measurement with no attribution for this call blocks.
+
+    The measurement names a model. If no party — gateway header or the
+    serving endpoint's own response body — vouched that this call was served
+    by that model, the measurement cannot be bound to the call: the gateway
+    may have re-pointed the alias since the measurement was taken, which is
+    exactly the drift a measurement-gated closure exists to catch. BLOCKED
+    rather than UNMEASURED, because a measurement exists and the problem is
+    that it cannot be matched to the call in front of us.
+    """
+    decision = evaluate_eligibility(
+        model="llama3.1:8b-instruct-q4_K_M",
+        prompt_version="2",
+        prompt_sha256="a" * 64,
+        tenant_context="default",
+        alert_class="cloud",
+        records=(_record(),),
+        now_iso="2026-10-27T00:00:00+00:00",
+        model_attribution=None,
+    )
+
+    assert decision.state is Eligibility.BLOCKED
+    assert not decision.allows_auto_close
+    assert "unverified" in decision.reason or "attribut" in decision.reason
+
+
+def test_unmeasured_stays_unmeasured_whatever_the_attribution() -> None:
+    """Attribution gates the *binding* of a measurement, not its absence.
+
+    With no matching row there is nothing to bind, so the state stays
+    UNMEASURED — additive by default, denied under the strict posture —
+    identically for attributed and unattributed calls. Collapsing the two
+    into BLOCKED would turn the strict flag into a no-op.
+    """
+    for attribution in ("gateway_header", None):
+        decision = evaluate_eligibility(
+            model="some-model-nobody-graded",
+            prompt_version="2",
+            prompt_sha256="a" * 64,
+            tenant_context="default",
+            alert_class="cloud",
+            records=(_record(),),
+            now_iso="2026-10-27T00:00:00+00:00",
+            model_attribution=attribution,
+        )
+        assert decision.state is Eligibility.UNMEASURED
+
+    assert decision.as_dict()["model_attribution"] is None
 
 
 def test_a_measurement_below_the_precision_floor_blocks() -> None:

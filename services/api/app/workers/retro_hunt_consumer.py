@@ -76,6 +76,17 @@ def _enabled() -> bool:
     return bool(getattr(settings, "RETRO_HUNT_ENABLED", False))
 
 
+def _dry_run() -> bool:
+    """Evaluation mode: sweeps run and report proposals, mutations are withheld.
+
+    Read per sweep rather than once at startup, so an operator can flip a
+    deployment into rehearsal before a noisy feed lands without a restart.
+    The withholding itself lives inside ``sweep_tenant`` at the write
+    boundary — this flag only selects the mode; it is not the guard.
+    """
+    return bool(getattr(settings, "RETRO_HUNT_DRY_RUN", False))
+
+
 def parse_intel_event(raw: bytes | str) -> dict[str, Any] | None:
     """Decode one message from the intel topic, or ``None`` if it is not one.
 
@@ -280,7 +291,15 @@ async def handle_indicator(indicator: IntelIndicator) -> list[TenantSweepReport]
                         tenant_id=settings_row.tenant_id,
                         indicator=indicator,
                         settings_row=settings_row,
+                        dry_run=_dry_run(),
                     )
+                    if report.proposed:
+                        logger.info(
+                            "retro_hunt.dry_run_proposal tenant=%s matched=%s detail=%s",
+                            settings_row.tenant_id,
+                            report.matched,
+                            report.detail.replace("\r", "").replace("\n", " ")[:200],
+                        )
                     await db.flush()
                 except Exception:
                     await savepoint.rollback()

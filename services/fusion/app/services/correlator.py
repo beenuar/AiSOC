@@ -90,11 +90,47 @@ class Correlator:
                 )
                 return True, incident
 
-        # Create a new incident
+        # Create a new incident. The payload is saved before the index points
+        # at it, so a concurrent reader can never resolve the index to an
+        # incident that does not exist yet.
         incident = self._create_incident(alert)
         await self._save_incident(incident)
-        # Map correlation key -> incident ID
-        await self._redis.set(index_key, str(incident.id), ex=self._window)
+        # Map correlation key -> incident ID, atomically and only if no other
+        # worker got there first. The previous plain SET made the two-replica
+        # creation race invisible: both GETs missed, both SETs "succeeded",
+        # the last writer owned the index, and the first writer's incident —
+        # with its alert — became an unreachable orphan. NX makes exactly one
+        # creator win; the loser merges its alert into the winner's incident,
+        # and its own just-saved payload expires unreferenced, which costs a
+        # few bytes of Redis for one window and loses nothing.
+        created = await self._redis.set(index_key, str(incident.id), ex=self._window, nx=True)
+        if not created:
+            winner_bytes = await self._redis.get(index_key)
+            winner_id = ""
+            if winner_bytes is not None:
+                try:
+                    winner_id = winner_bytes.decode() if isinstance(winner_bytes, bytes) else str(winner_bytes)
+                except UnicodeDecodeError:
+                    winner_id = ""
+            winner = await self._load_incident(winner_id) if winner_id else None
+            if winner is not None and winner.alert_count < self._max_alerts:
+                winner = await self._merge_alert(winner, alert)
+                await self._save_incident(winner)
+                logger.info(
+                    "Alert correlated to incident created concurrently",
+                    incident_id=winner_id,
+                    alert_id=str(alert.id),
+                    alert_count=winner.alert_count,
+                )
+                return True, winner
+            # The winner expired or is unreadable in the gap. Take the index
+            # over — our payload is already saved — rather than losing the
+            # alert to a dead pointer. A merge that raced a *merge* (not a
+            # creation) is still last-writer-wins on the incident payload;
+            # that narrower window is documented in the live concurrency
+            # test and closing it needs an owner-checked script like the
+            # windowed engine's, not a bigger hammer here.
+            await self._redis.set(index_key, str(incident.id), ex=self._window)
         logger.info(
             "New incident created from alert",
             incident_id=str(incident.id),

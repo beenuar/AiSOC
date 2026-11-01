@@ -64,6 +64,7 @@ from app.routing.model_router import is_deterministic_mode
 from app.security.llm_resolver import resolve_llm_config
 from app.workers.business_context import BusinessContextApplier
 from app.workers.entity_lane import EntityLanes, entity_of
+from app.workers.reflex_observability import StageTimer, decision_contract, queue_delay_ms
 from app.workers.shadow_mode import (
     LiveShadowModePolicy,
     ShadowDecision,
@@ -215,6 +216,11 @@ def _cost_payload(cost: CostSummary, tokens: int) -> dict[str, Any]:
         "estimated_calls": cost.estimated_calls,
         "unpriced_calls": cost.unpriced_calls,
         "resolved_models": list(cost.resolved_models),
+        # Who vouched for each resolved model, as per-source call counts.
+        # Travels beside the names because the names alone cannot say whether
+        # the gateway spoke (verified) or the endpoint named itself
+        # (self-reported) — see app/core/model_attribution.py.
+        "attribution_sources": dict(cost.attribution_sources),
         "tokens": tokens,
     }
 
@@ -624,6 +630,13 @@ class FusedAlertTriageWorker:
     async def triage(self, message: dict[str, Any]) -> dict[str, Any] | None:
         """Auto-triage one fused alert. Read-only (copilot): never dispatches a
         response. Returns a verdict summary dict, or None if unprocessable."""
+        # Reflex observability: named stage spans plus the queue delay, so
+        # "triage is slow" splits into the queue, the context fetch, the
+        # model, the verification gates and the persistence that actually
+        # spent the time. Reported on the summary and the completion log
+        # line, joined to the outcome by the run id that already exists.
+        timer = StageTimer()
+        queued_ms = queue_delay_ms(message)
         # Phase B4 — apply business-context rules on the post-fusion alert BEFORE
         # any triage work. A suppress rule drops the alert (no triage spend); a
         # severity/route/tag rule mutates the alert the agent reasons over.
@@ -633,10 +646,11 @@ class FusedAlertTriageWorker:
             # business-context rules per tenant and this worker only ever read
             # a YAML file whose path nothing sets, so authored rules applied to
             # no triage decision.
-            bc = await self._business_context.apply_for_tenant(
-                message.get("tenant_id") or message["alert"].get("tenant_id"),
-                message["alert"],
-            )
+            with timer.measure("business_context"):
+                bc = await self._business_context.apply_for_tenant(
+                    message.get("tenant_id") or message["alert"].get("tenant_id"),
+                    message["alert"],
+                )
             bc_matched = bc.matched_rule_ids
             if bc.suppressed:
                 _METRICS["bc_suppressed"] += 1
@@ -647,6 +661,8 @@ class FusedAlertTriageWorker:
                     "cost": _cost_payload(CostSummary(), 0),
                     "business_context_rules": bc_matched,
                     "response_dispatched": False,
+                    "queue_delay_ms": queued_ms,
+                    "stage_timings_ms": timer.as_millis(),
                 }
             if bc.changed:
                 _METRICS["bc_mutated"] += 1
@@ -685,8 +701,19 @@ class FusedAlertTriageWorker:
         # (this is what makes alert volume actually shrink over time). Gated on
         # trust (human prior, or corroborated high-confidence AI prior).
         if _memory_suppression_enabled():
-            suppressed = await self._maybe_suppress_from_memory(state, fingerprint, bc_matched, writer=writer)
+            with timer.measure("memory_suppression"):
+                suppressed = await self._maybe_suppress_from_memory(state, fingerprint, bc_matched, writer=writer)
             if suppressed is not None:
+                suppressed["queue_delay_ms"] = queued_ms
+                suppressed["stage_timings_ms"] = timer.as_millis()
+                suppressed["decision_contract"] = decision_contract(
+                    state,
+                    verdict=suppressed.get("verdict"),
+                    confidence=float(suppressed.get("confidence") or 0.0),
+                    tier="memory",
+                    auto_closed=False,
+                    suppressed_by_memory=True,
+                )
                 return suppressed
 
         decision = governor.check(str(state.tenant_id), fingerprint)
@@ -709,29 +736,33 @@ class FusedAlertTriageWorker:
             cfg = await self._resolve_tenant_llm(state.tenant_id)
             use_llm = decision.use_llm and not is_deterministic_mode() and cfg is not None
             if use_llm:
-                # What analysts have repeatedly taught this tenant's platform,
-                # read once here rather than inside the agent so the round trip
-                # is on the worker's timeline and is skipped entirely when no
-                # LLM call is going to happen. Never raises; an empty list just
-                # means the prompt is what it was before.
-                state.organisation_memory = await self._reader.fetch_statements(str(state.tenant_id))
-                # Phase 6.1: the tenant's own skill for this shape of alert.
-                # Read through the same port for the same reason: it is durable
-                # state a verdict depends on, so the replay freeze has to be
-                # able to reach it. Selection is per alert and cheap; the fetch
-                # behind it is cached.
-                await self._attach_tenant_skill(state)
-                # Phase 6.3: the tenant's own runbooks for this shape of alert.
-                # Same port again, and for a source the freeze holds still by
-                # a server-side cutoff rather than by capture, which is why
-                # the worker passes a query and never a point in time.
-                await self._attach_runbooks(state)
-                # Phase 6.3: what this tenant's analysts decided the last few
-                # times, and who is behind the account. Both are cutoff-frozen
-                # sources like runbooks, so neither takes a point in time from
-                # here.
-                await self._attach_recent_dispositions(state)
-                await self._attach_identity_context(state)
+                # Evidence preparation, timed as one stage: five context
+                # reads whose combined latency sits between the queue and
+                # the model and was previously indistinguishable from both.
+                with timer.measure("context_fetch"):
+                    # What analysts have repeatedly taught this tenant's platform,
+                    # read once here rather than inside the agent so the round trip
+                    # is on the worker's timeline and is skipped entirely when no
+                    # LLM call is going to happen. Never raises; an empty list just
+                    # means the prompt is what it was before.
+                    state.organisation_memory = await self._reader.fetch_statements(str(state.tenant_id))
+                    # Phase 6.1: the tenant's own skill for this shape of alert.
+                    # Read through the same port for the same reason: it is durable
+                    # state a verdict depends on, so the replay freeze has to be
+                    # able to reach it. Selection is per alert and cheap; the fetch
+                    # behind it is cached.
+                    await self._attach_tenant_skill(state)
+                    # Phase 6.3: the tenant's own runbooks for this shape of alert.
+                    # Same port again, and for a source the freeze holds still by
+                    # a server-side cutoff rather than by capture, which is why
+                    # the worker passes a query and never a point in time.
+                    await self._attach_runbooks(state)
+                    # Phase 6.3: what this tenant's analysts decided the last few
+                    # times, and who is behind the account. Both are cutoff-frozen
+                    # sources like runbooks, so neither takes a point in time from
+                    # here.
+                    await self._attach_recent_dispositions(state)
+                    await self._attach_identity_context(state)
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
@@ -755,14 +786,18 @@ class FusedAlertTriageWorker:
                     # the gateway as a bearer token, which 401s. Left unset,
                     # make_chat_model resolves the key that pairs with the route
                     # it actually chose.
-                    with llm_override(
-                        api_key=cfg.api_key if getattr(cfg, "api_key_from_tenant", False) else None,
-                        base_url=cfg.base_url if getattr(cfg, "base_url_from_tenant", False) else None,
-                        model=cfg.model if getattr(cfg, "model_from_tenant", False) else None,
+                    with (
+                        timer.measure("decide"),
+                        llm_override(
+                            api_key=cfg.api_key if getattr(cfg, "api_key_from_tenant", False) else None,
+                            base_url=cfg.base_url if getattr(cfg, "base_url_from_tenant", False) else None,
+                            model=cfg.model if getattr(cfg, "model_from_tenant", False) else None,
+                        ),
                     ):
                         state, tier = await self._llm_triage(state)
                 else:
-                    state = await run_triage(state)
+                    with timer.measure("decide"):
+                        state = await run_triage(state)
                     tier = "deterministic"
                     _METRICS["deterministic"] += 1
                 cost = CostSummary.from_tracker(tracker)
@@ -790,11 +825,12 @@ class FusedAlertTriageWorker:
                 # replay of last month's alerts would have fired this month's
                 # playbooks -- real notifications, real tickets -- against rows a
                 # grader was only meant to score.
-                playbook_outcome = (
-                    await alert_trigger.run_for_alert(state)
-                    if writer.fires_playbooks
-                    else alert_trigger.TriggerOutcome(skipped_reason="replay: playbooks are not fired")
-                )
+                with timer.measure("playbooks"):
+                    playbook_outcome = (
+                        await alert_trigger.run_for_alert(state)
+                        if writer.fires_playbooks
+                        else alert_trigger.TriggerOutcome(skipped_reason="replay: playbooks are not fired")
+                    )
                 if playbook_outcome.matched:
                     state.add_finding(
                         f"Playbooks matched: {', '.join(playbook_outcome.matched)}"
@@ -843,10 +879,12 @@ class FusedAlertTriageWorker:
         # axis with no caller in the service, so a confident verdict citing an
         # IP or hash that appeared nowhere in the alert was persisted, acted on
         # and auto-closed with no signal that it was invented.
-        verdict, confidence = self._apply_groundedness_gate(state, verdict, confidence)
+        with timer.measure("verification"):
+            verdict, confidence = self._apply_groundedness_gate(state, verdict, confidence)
 
         _METRICS["triaged"] += 1
-        await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost=cost, writer=writer)
+        with timer.measure("persist"):
+            await self._record(state, tier=tier, verdict=verdict, confidence=confidence, tokens=tokens, cost=cost, writer=writer)
 
         # Wave 1 — write the durable outcome back as a per-signature prior so
         # autonomous closures compound (a later identical alert can suppress).
@@ -872,24 +910,47 @@ class FusedAlertTriageWorker:
         # High-confidence FP/BTP already terminated (status COMPLETED) and
         # skip enrichment. Best-effort: the verdict is already durable, so an
         # enrichment/investigation failure never fails the triage outcome.
-        if state.status is not AgentStatus.COMPLETED:
-            await self._maybe_escalate(state, writer=writer)
+        escalated = state.status is not AgentStatus.COMPLETED
+        if escalated:
+            with timer.measure("escalate"):
+                await self._maybe_escalate(state, writer=writer)
 
         # Queue every action that needs sign-off so a human can actually give
         # it. Until v9.0 proposed actions were persisted as JSON and stopped
         # there, so "requires_approval" described an approval nobody could
         # grant — the responder app's queue had no producer at all.
-        approvals = await self._raise_approvals(state, writer=writer)
+        with timer.measure("approvals"):
+            approvals = await self._raise_approvals(state, writer=writer)
 
         # Close the loop with the SIEM that raised this alert. Runs last and
         # fails soft: the verdict is already durable, and an unreachable
         # Splunk must not re-drive the retry path and dead-letter an alert
         # that was triaged correctly.
-        source_writeback = await self._write_back_to_source(state, verdict, confidence, rationale=_rationale_of(state), writer=writer)
+        with timer.measure("writeback"):
+            source_writeback = await self._write_back_to_source(state, verdict, confidence, rationale=_rationale_of(state), writer=writer)
 
         shadow = isinstance(writer, ShadowModeTriageWriter)
         if isinstance(writer, ShadowModeTriageWriter) and writer.recorded:
             _METRICS["shadow_decisions_recorded"] += 1
+
+        stage_timings = timer.as_millis()
+        contract = decision_contract(
+            state,
+            verdict=verdict,
+            confidence=float(confidence or 0.0),
+            tier=tier,
+            auto_closed=state.status is AgentStatus.COMPLETED,
+            escalated=escalated,
+        )
+        logger.info(
+            "auto_triage_worker.reflex_timings",
+            run_id=str(state.run_id),
+            alert_id=(state.raw_alert or {}).get("id"),
+            tier=tier,
+            disposition=contract["operational_disposition"],
+            queue_delay_ms=queued_ms,
+            **{f"stage_{name}_ms": value for name, value in stage_timings.items()},
+        )
 
         return {
             # Phase 2.1. Stated on the summary rather than inferred from the
@@ -915,6 +976,14 @@ class FusedAlertTriageWorker:
             # run reports the same shape with `executed: False`.
             "source_writeback": source_writeback,
             "proposed_actions": [{"action_type": a.action_type, "requires_approval": a.requires_approval} for a in state.proposed_actions],
+            # Reflex observability: where the time went and what shape the
+            # decision takes for a reviewer. `queue_delay_ms` is None when the
+            # envelope carries no parseable `fused_at` — a replayed historical
+            # finding legitimately has none, and inventing a delay would put a
+            # plausible number on a measurement nobody took.
+            "queue_delay_ms": queued_ms,
+            "stage_timings_ms": stage_timings,
+            "decision_contract": contract,
         }
 
     async def _sink_for(self, state: InvestigationState, fingerprint: str) -> TriageWriter:

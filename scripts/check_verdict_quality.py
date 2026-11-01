@@ -114,8 +114,36 @@ def validate_entry(entry: dict[str, Any]) -> None:
             "one thing this gate exists to refuse."
         )
 
+    if entry.get("provenance_status") == "serving_mismatch":
+        raise VerdictQualityError(
+            f"{name}: the scorecard records provenance_status=serving_mismatch — what answered the "
+            "calls is not the model this row names. The scorecard is a valid diagnostic; a table row "
+            "under the requested model's name is a false attribution, and it is refused."
+        )
+
     if entry.get("balanced_accuracy") is None:
         raise VerdictQualityError(f"{name}: measured row carries no balanced_accuracy")
+
+
+def _attribution_cell(entry: dict[str, Any]) -> str:
+    """How the row's serving identity is known, or that it is not.
+
+    A scorecard recorded before attribution existed carries no
+    ``provenance_status`` and renders as **unverified** — the historical fact
+    about those runs, never backfilled. A new scorecard carries the status its
+    run earned (``verified`` from a gateway header, ``self_reported`` from the
+    endpoint's own body, ``unattributed`` when calls were placed and nobody
+    named the server). ``serving_mismatch`` never reaches this cell, because
+    :func:`validate_entry` refuses the row outright.
+    """
+    status = entry.get("provenance_status")
+    if not status:
+        if entry.get("mode") == "deterministic":
+            return "no calls"
+        return "unverified (recorded before per-decision attribution existed)"
+    if status == "no_calls":
+        return "no calls"
+    return str(status)
 
 
 def render_table(scorecard: dict[str, Any]) -> str:
@@ -138,8 +166,8 @@ def render_table(scorecard: dict[str, Any]) -> str:
         f"**{_fmt(corpus.get('constant_answer_ceiling'))}**. Hand-authored and synthetic: "
         "no recorded customer telemetry is involved.",
         "",
-        "| Model | Mode | Balanced accuracy | MCC | Malicious recall | Abstention | Hallucination rate | Calls placed |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Model | Mode | Balanced accuracy | MCC | Malicious recall | Abstention | Hallucination rate | Calls placed | Attribution |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
 
     for entry in entries:
@@ -149,10 +177,10 @@ def render_table(scorecard: dict[str, Any]) -> str:
             # One spanning cell, not six copies of the same phrase: a reader
             # scanning the column must not see something that parses as a
             # score. The reason sits where the first number would.
-            lines.append(f"| {name} | – | {NOT_MEASURED} — {reason} | – | – | – | – | 0 |")
+            lines.append(f"| {name} | – | {NOT_MEASURED} — {reason} | – | – | – | – | 0 | – |")
             continue
         lines.append(
-            "| {model} | {mode} | {ba} | {mcc} | {recall} | {abst} | {halluc} | {calls} |".format(
+            "| {model} | {mode} | {ba} | {mcc} | {recall} | {abst} | {halluc} | {calls} | {attr} |".format(
                 model=name,
                 mode=entry["mode"],
                 ba=_fmt(entry.get("balanced_accuracy")),
@@ -165,6 +193,7 @@ def render_table(scorecard: dict[str, Any]) -> str:
                 abst=_fmt(entry.get("abstention_rate")),
                 halluc=_fmt(entry.get("hallucination_rate")),
                 calls=entry.get("llm_calls_placed") or 0,
+                attr=_attribution_cell(entry),
             )
         )
 
