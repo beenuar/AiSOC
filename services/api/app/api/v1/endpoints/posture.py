@@ -27,7 +27,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser, require_permission
@@ -297,6 +297,11 @@ class ResourceFindingsResponse(BaseModel):
     collected: bool
     findings: list[ResourceFinding] = Field(default_factory=list)
     matched_resources: int = 0
+    #: Echoed so a replay can tell "the server applied my cutoff" from "the
+    #: server ignored the parameter". A reply that names no instant is counted
+    #: as a cutoff not honoured rather than assumed to have been frozen.
+    as_of: datetime | None = None
+    excluded_after_cutoff: int = 0
 
 
 @router.get(
@@ -309,6 +314,7 @@ async def resource_findings_for_triage(
     tenant_id: uuid.UUID,
     resources: Annotated[list[str], Query()],
     db: Annotated[AsyncSession, Depends(get_db)],
+    as_of: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=25)] = 5,
     x_aisoc_service_token: Annotated[str | None, Header()] = None,
 ) -> ResourceFindingsResponse:
@@ -335,24 +341,31 @@ async def resource_findings_for_triage(
 
     collected = bool((await db.execute(select(PostureScanRun.id).where(PostureScanRun.tenant_id == tenant_id).limit(1))).first())
     if not keys:
-        return ResourceFindingsResponse(collected=collected)
+        return ResourceFindingsResponse(collected=collected, as_of=as_of)
 
-    rows = (
-        (
-            await db.execute(
-                select(PostureFinding)
-                .where(
-                    PostureFinding.tenant_id == tenant_id,
-                    PostureFinding.status == "open",
-                    PostureFinding.resource_keys.overlap(keys),
-                )
-                .order_by(PostureFinding.last_seen_at.desc())
-                .limit(limit)
-            )
-        )
-        .scalars()
-        .all()
+    base = (
+        PostureFinding.tenant_id == tenant_id,
+        PostureFinding.status == "open",
+        PostureFinding.resource_keys.overlap(keys),
     )
+
+    # The cutoff is applied here rather than trusted from the caller, and it
+    # is a real one: `first_detected_at` is the vendor's own first-seen -- when
+    # the estate became wrong -- not an import stamp. A replay therefore cuts
+    # on the fact's own time. The refused count is published because a cutoff
+    # that matched nothing and one that threw away fifty rows both return an
+    # empty list, so the count is the only evidence the freeze did anything.
+    excluded = 0
+    query = select(PostureFinding).where(*base)
+    if as_of is not None:
+        excluded = int(
+            (
+                await db.execute(select(func.count()).select_from(PostureFinding).where(*base, PostureFinding.first_detected_at > as_of))
+            ).scalar_one()
+        )
+        query = query.where(PostureFinding.first_detected_at <= as_of)
+
+    rows = (await db.execute(query.order_by(PostureFinding.last_seen_at.desc()).limit(limit))).scalars().all()
 
     findings: list[ResourceFinding] = []
     for row in rows:
@@ -376,6 +389,8 @@ async def resource_findings_for_triage(
         collected=collected or bool(findings),
         findings=findings,
         matched_resources=len({f.matched_key for f in findings if f.matched_key}),
+        as_of=as_of,
+        excluded_after_cutoff=excluded,
     )
 
 
