@@ -138,8 +138,6 @@ class AskModelStepConfig:
         )
 
 
-
-
 def build_prompt(config: AskModelStepConfig, context: dict[str, Any]) -> str:
     """Assemble the user message, with every context value sanitised.
 
