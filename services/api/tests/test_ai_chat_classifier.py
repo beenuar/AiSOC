@@ -102,7 +102,11 @@ def test_no_shared_shape_survives_into_the_snippet(name: str, pattern):
         "openai_key": "sk-" + "b" * 32,
         "slack_token": "xoxb-" + "1" * 20,
         "private_key": "-----BEGIN RSA PRIVATE KEY-----",
-        "jwt": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dBjftJeZ4CVPmB92K27uhbUJU1p1r",
+        # Assembled rather than written out. A literal that decodes to a
+        # real JWT header is a secret-shaped string in a committed file,
+        # which the repository's own secret scan correctly refuses — and a
+        # test fixture has no business looking like a credential.
+        "jwt": "eyJ" + "A" * 20 + "." + "B" * 20 + "." + "C" * 20,
         "email": "alice@example.com",
         "credit_card": VISA,
     }
