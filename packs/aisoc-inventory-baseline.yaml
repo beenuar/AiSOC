@@ -55,6 +55,20 @@ queries:
     severity: low
     description: Enumerate Homebrew packages (macOS)
 
+  installed_packages_windows:
+    sql: >
+      SELECT name, version, publisher, install_location, install_source
+      FROM programs
+      ORDER BY name
+    interval: 3600
+    severity: low
+    description: >
+      Enumerate installed Windows programs. Absent from this pack until
+      wave 2 Phase 5.4, which meant a Windows estate produced no package
+      rows at all - indistinguishable, on the inventory page, from a
+      Windows estate with nothing installed on it.
+    platform: windows
+
   running_processes:
     sql: >
       SELECT p.pid, p.parent, p.name, p.path, p.cmdline, p.uid, p.gid,

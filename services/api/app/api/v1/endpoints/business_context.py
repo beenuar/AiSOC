@@ -79,6 +79,10 @@ from app.services.business_context.engine import (
     EngineSnapshot,
     get_engine,
 )
+from app.services.business_context.plain_language import (
+    PlainLanguageError,
+    compile_plain_language,
+)
 
 logger = structlog.get_logger()
 
@@ -737,3 +741,111 @@ def _serialise_rules(rules: list[BusinessContextRule]) -> str:
         for r in rules
     ]
     return yaml.safe_dump({"rules": docs}, sort_keys=False)
+
+
+# ---------------------------------------------------------------------------
+# Plain-language authoring (Wave 2, Phase 4.3)
+# ---------------------------------------------------------------------------
+#
+# An analyst types a sentence and sees, before saving, the exact structured
+# rule it compiles to. No model is involved: the compiler is a deterministic
+# parser, which is how the item's hard constraint — a tenant's free text never
+# becomes an instruction — is met by construction rather than by a guard.
+#
+# The preview answers the question the `neq` defect never got asked: "will
+# this rule ever match?". Fields are dotted paths into a fused alert whose
+# shape depends on a tenant's connectors, so they cannot be a closed list;
+# instead the route measures each referenced field against the tenant's own
+# recent alerts and reports the coverage. A field present in 0 of 50 is the
+# warning that stops a rule that parses and never fires.
+
+
+class CompileRequest(BaseModel):
+    sentence: str = Field(..., max_length=2000)
+    rule_id: str = Field(..., min_length=3, max_length=63)
+    description: str = Field("", max_length=300)
+
+
+class FieldCoverage(BaseModel):
+    field: str
+    present_in: int
+    sample_size: int
+
+
+class CompileResponse(BaseModel):
+    rule: dict[str, Any]
+    yaml: str
+    fields: list[FieldCoverage]
+    warnings: list[str]
+
+
+def _present_in(alerts: list[dict[str, Any]], path: str) -> int:
+    """How many sampled alerts carry ``path``. Absent, not falsy."""
+    count = 0
+    for alert in alerts:
+        current: Any = alert
+        for part in path.split("."):
+            if isinstance(current, dict) and part in current:
+                current = current[part]
+            else:
+                break
+        else:
+            count += 1
+    return count
+
+
+@router.post("/rules/compile", response_model=CompileResponse)
+async def compile_rule(
+    payload: CompileRequest,
+    user: AuthUser,
+    db: DBSession,
+) -> CompileResponse:
+    """Compile one plain-language sentence into the structured rule schema.
+
+    Saves nothing. The returned ``rule`` is the exact mapping a save would
+    write, so the preview and the save cannot drift — they are one dict.
+    """
+    await user.require_permission_db("settings:read", db)
+
+    try:
+        compiled = compile_plain_language(
+            payload.sentence,
+            rule_id=payload.rule_id,
+            description=payload.description,
+        )
+    except PlainLanguageError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    # Round-trip through the real parser rather than trusting the compiler.
+    # If the two ever disagree the author must see it here, not discover it
+    # when the rule is saved and refused.
+    rule_yaml = yaml.safe_dump({"rules": [compiled.rule]}, sort_keys=False)
+    try:
+        load_rules_from_yaml(rule_yaml)
+    except RuleParseError as exc:  # pragma: no cover - defence in depth
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"the sentence compiled to a rule the schema rejects: {exc}",
+        ) from exc
+
+    alerts = await _fetch_sample_alerts(db, user.tenant_id, limit=50)
+    coverage = [
+        FieldCoverage(field=name, present_in=_present_in(alerts, name), sample_size=len(alerts)) for name in compiled.fields_referenced
+    ]
+
+    warnings = list(compiled.warnings)
+    for entry in coverage:
+        if entry.sample_size and entry.present_in == 0:
+            warnings.append(
+                f"{entry.field!r} is not present in any of your last {entry.sample_size} alerts, "
+                "so this rule would not have matched any of them"
+            )
+    if not alerts:
+        warnings.append("there are no recent alerts to check these fields against, so field coverage is unknown rather than zero")
+
+    return CompileResponse(
+        rule=compiled.rule,
+        yaml=rule_yaml,
+        fields=coverage,
+        warnings=warnings,
+    )
