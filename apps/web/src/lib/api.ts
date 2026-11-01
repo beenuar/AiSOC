@@ -4612,9 +4612,58 @@ export interface NlQueryTranslateResponse {
   grammar_validated: boolean;
 }
 
+export interface NlQueryResult {
+  columns: string[];
+  rows: unknown[][];
+  total_rows: number;
+  took_ms?: number | null;
+}
+
+export interface NlQueryExecuteResponse extends NlQueryTranslateResponse {
+  result: NlQueryResult | null;
+  execution_error: string | null;
+  /**
+   * Which store answered. "Nothing matched in your SIEM" and "nothing
+   * matched in AiSOC's own lake" are different findings and an analyst must
+   * be able to tell them apart.
+   */
+  executed_against: "elasticsearch" | "lake" | null;
+  /**
+   * Translator fields the lake does not store. A hunt that quietly drops
+   * half its filters returns more rows than was asked for, which reads as
+   * "nothing was filtered out".
+   */
+  unsupported_filters: string[];
+  /**
+   * The query text actually sent to the store.
+   *
+   * For a lake execution this is **not** the ES|QL translation — the lake
+   * speaks SQL and the question is compiled separately. Showing the ES|QL
+   * beside lake rows would be a query that did not produce them.
+   */
+  executed_query: string | null;
+  executed_query_language: "sql" | "esql" | null;
+  /** Bound values, kept apart from the text rather than interpolated into it. */
+  executed_query_params: Record<string, unknown>;
+}
+
 export const nlQueryApi = {
   translate: (data: NlQueryTranslateRequest) =>
     request<NlQueryTranslateResponse>("/api/v1/nl-query/translate", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  /**
+   * Translate *and run*, against the tenant's SIEM when one is connected and
+   * otherwise against AiSOC's own lake.
+   *
+   * `translate` alone returns an ES|QL/SPL/KQL triple and runs nothing; the
+   * explorer used to call it and then post the ES|QL to the lake's SQL
+   * endpoint, which are different languages.
+   */
+  execute: (data: NlQueryTranslateRequest & { max_rows?: number }) =>
+    request<NlQueryExecuteResponse>("/api/v1/nl-query/execute", {
       method: "POST",
       body: JSON.stringify(data),
     }),

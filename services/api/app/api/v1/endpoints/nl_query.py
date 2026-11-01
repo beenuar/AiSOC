@@ -252,6 +252,24 @@ class NLQueryExecuteResponse(NLQueryTranslateResponse):
     #: was asked for, which reads as "nothing was filtered out".
     unsupported_filters: list[str] = Field(default_factory=list)
 
+    #: The query text actually sent to the store, and the language it is in.
+    #:
+    #: Wave 2, Phase 5.3. Without this the console could only show the ES|QL
+    #: translation, which for a lake execution is **not what ran** — the lake
+    #: speaks SQL and the question is compiled separately. Showing the ES|QL
+    #: beside lake rows is a query that did not produce them, which is worse
+    #: than showing nothing: an analyst checking whether the question was
+    #: understood would be reading the wrong artefact.
+    executed_query: str | None = None
+    executed_query_language: Literal["sql", "esql"] | None = None
+    #: Bound parameter values, kept separate from the text.
+    #:
+    #: The compiled lake query binds its values rather than interpolating
+    #: them, and rendering an interpolated string here would both misreport
+    #: what ran and re-introduce, in a display path, the string-building the
+    #: compiler exists to avoid. The console renders the two side by side.
+    executed_query_params: dict[str, Any] = Field(default_factory=dict)
+
 
 # ────────────────────────────────────────────────────────────────────────────
 # Translation orchestration
@@ -431,6 +449,11 @@ async def _execute_against_lake(
         return base
 
     base.unsupported_filters = compiled.unsupported_fields
+    # Recorded before execution, so a failed query still shows what was tried.
+    # A query that errored is exactly the one an analyst wants to read.
+    base.executed_query = compiled.sql
+    base.executed_query_language = "sql"
+    base.executed_query_params = dict(compiled.params or {})
 
     try:
         result = await execute_lake_query(compiled.sql, params=compiled.params)
@@ -536,6 +559,8 @@ async def execute_query(
         return await _execute_against_lake(base, translated, body, user)
 
     base.executed_against = "elasticsearch"
+    base.executed_query = translated.esql
+    base.executed_query_language = "esql"
     try:
         base.result = await _execute_esql(
             translated.esql,
