@@ -327,21 +327,48 @@ that every *alias target* is declared -- not that every connector has a
 profile. The context path is the scheduler's `_sync_workforce_context`, and
 the test asserting the scheduler calls it is the equivalent control.
 
-### D7 - Nothing on either Lane B branch has been graded yet, and that is the runner pool
+### D7 - Zero check runs was a conflicted PR, not a saturated pool, and the two look identical from outside
 
-Recorded so the next reader does not mistake an ungraded branch for a
-broken one. At the time of writing, `check-runs` for the head commit of
-`depth2/lane-b-sources` returns `total_count: 0` while the repository has
-19 queued and 18 in-progress workflow runs. No check has failed, because no
-check has started.
+**Corrected.** This entry first recorded the wrong cause, and the
+correction is worth more to the next lane than the original observation
+was.
 
-The measurement that distinguishes the two cases, since it costs one call:
+What was true: the head commit of each Lane B branch returned
+`total_count: 0` check runs. What was wrong: attributing that to the shared
+runner pool because 19 runs were queued and 18 in progress at the same
+moment. The pool had in fact drained to a single queued run.
 
-    gh api repos/beenuar/AiSOC/commits/<sha>/check-runs --jq .total_count
-    gh api 'repos/beenuar/AiSOC/actions/runs?status=queued' --jq .total_count
+**The real cause.** Wave 0 was squash-merged into `main`, so `main` and the
+Lane B base `depth2/wave0-kickoff` each carried `DEPTH2_PROGRESS.md` and
+`plans/aisoc_depth_wave2.plan.md` by different histories - an add/add
+conflict. Both pull requests were therefore `mergeStateStatus: DIRTY`, and
+**GitHub cannot compute a merge ref for a conflicted pull request, so it
+creates no check runs at all**. Zero runs was the conflict, not the queue.
 
-Both PRs were verified locally against every gate they touch, listed in
-their PR bodies. A re-push refreshes the queue position if CodeQL 503s.
+**The one call that tells the two apart**, which is the durable half of
+this entry:
+
+```bash
+gh pr view <n> --repo beenuar/AiSOC --json mergeStateStatus -q .mergeStateStatus
+```
+
+* `DIRTY` - the merge ref cannot be computed. **Nothing can be graded**,
+  and no amount of waiting or re-pushing will change that. Merge the base
+  in and the runs appear.
+* `BLOCKED` or `UNSTABLE` with `total_count: 0` - the pull request is
+  gradeable and the runs have genuinely not started. That is the pool.
+
+A queue snapshot alone cannot distinguish them, because a busy queue is the
+ordinary state of this repository and is true at the same moment either way.
+Checking the queue first is what produced the wrong answer here.
+
+**Standing rule for this lane from now on:** after any push, read
+`mergeStateStatus` before concluding anything about the pool.
+
+Resolved by merging `origin/main` into both branches, keeping both sides of
+the tracker. Measured immediately afterwards: 108 check runs on
+`depth2/lane-b-sources` and 109 on `depth2/lane-b-workforce`, against zero
+before.
 
 ## Item log
 
