@@ -66,7 +66,7 @@ PACKAGED = REPO / "services" / "api" / "app" / "data" / "detections"
 #: regeneration that silently empties one is a failure here rather than a
 #: quieter comparison of two numbers that moved together.
 ARTEFACTS: dict[str, int] = {
-    "detection_ruleset.json": 764,
+    "detection_ruleset.json": 765,
     "detection_ruleset_imported.json": 1770,
     "windowed_ruleset.json": 76,
 }
@@ -76,7 +76,7 @@ ARTEFACTS: dict[str, int] = {
 #: why the loaded windowed count is 73 against a file holding 72.
 PYTHON_RESIDENT_WINDOWED = 3
 
-#: 764 + 1770 stateless, 76 windowed (73 of the 76 file entries plus the three
+#: 765 + 1770 stateless, 76 windowed (73 of the 76 file entries plus the three
 #: above), 3 sequence (the other three file entries). Measured, not assumed —
 #: `test_catalogue_matches_what_fusion_actually_loads` re-derives it by running
 #: fusion's loaders. The 2026-10-12 merge train moved it 2586 -> 2614: +24
@@ -87,8 +87,15 @@ PYTHON_RESIDENT_WINDOWED = 3
 #: which they never were. Wave-2 7.4 moved it 2609 -> 2613: four AI rules on
 #: the provider feeds 7.1 added, each replayed through the real connector and
 #: the real engine in `services/fusion/tests/test_ai_rule_pack_replay.py`
-#: with a negative twin differing in exactly one field.
-FUSION_LOADED_TOTAL = 2613
+#: with a negative twin differing in exactly one field. Wave-2 lane A moved
+#: it 2613 -> 2614, and the direction is the point: no rule was written.
+#: `ident-github-pat-classic-created-with-broad-scopes` had been retired as
+#: unfireable because no audit entry carried a created token's scopes, and
+#: 1.4's token-scope join made every field it reads resolvable. The
+#: enrichment-decision gate refuses a retirement whose reason has stopped
+#: being true -- retiring a rule that works lowers the ratchet without
+#: closing anything -- so the refusal was deleted rather than reworded.
+FUSION_LOADED_TOTAL = 2614
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")

@@ -1,5 +1,5 @@
 {
-  "count": 764,
+  "count": 765,
   "rules": [
     {
       "category": "application",
@@ -12086,6 +12086,26 @@
       "service": "audit",
       "severity": "critical",
       "slug": "ident-github-org-2fa-disabled"
+    },
+    {
+      "category": "identity",
+      "id": "det-identity-154",
+      "match_when": {
+        "action": "personal_access_token.create",
+        "scopes_contains_all": [
+          "repo",
+          "workflow",
+          "admin:org"
+        ]
+      },
+      "mitre": [
+        "T1098.001"
+      ],
+      "name": "GitHub Classic PAT Created With repo+workflow+admin:org",
+      "product": "github",
+      "service": "audit",
+      "severity": "high",
+      "slug": "ident-github-pat-classic-created-with-broad-scopes"
     },
     {
       "category": "identity",

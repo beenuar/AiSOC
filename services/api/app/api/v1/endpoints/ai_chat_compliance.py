@@ -49,6 +49,7 @@ from app.models.ai_chat_compliance import (
     AiChatUser,
 )
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services.ai_chat_compliance.collector import collect_for_tenant
 
 logger = structlog.get_logger()
 
@@ -237,6 +238,42 @@ async def delete_config(
         purged=purge,
         actor=str(current_user.user_id),
     )
+
+
+class SyncResponse(BaseModel):
+    """What one collection run did."""
+
+    users: int
+    projects: int
+    events: int
+    contentLabels: int
+    chatsSkipped: int
+    contentUnavailable: bool
+    errors: list[str]
+
+
+@router.post("/sync", response_model=SyncResponse)
+async def sync_now(
+    db: TenantDBSession,
+    current_user: Annotated[CurrentUser, Depends(require_permission("ai_estate:write"))],
+) -> SyncResponse:
+    """Collect now, for this tenant.
+
+    This route is the production caller the collector, client and
+    classifier never had. Until it existed the four tables migration 146
+    creates could only ever be empty, and the events page read "nothing
+    here" on a tenant that had configured collection and switched it on --
+    which reads as no AI-chat risk rather than as nothing having looked.
+
+    Write-permissioned deliberately: a sync spends a tenant's provider
+    quota and writes rows, so it is not a read.
+
+    Partial failure is reported, never swallowed. A directory call that
+    403s still leaves the activity records that were written, and the
+    reason lands on both this response and the config row's ``lastError``.
+    """
+    result = await collect_for_tenant(db, current_user.tenant_id)
+    return SyncResponse(**result.as_dict())
 
 
 @router.get("/events", response_model=AuditEventListResponse)
