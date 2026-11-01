@@ -36956,6 +36956,14 @@ components:
         audit_days:
           type: integer
           title: Audit Days
+        purge_worker_enabled:
+          type: boolean
+          title: Purge Worker Enabled
+          default: false
+        purge_worker_dry_run:
+          type: boolean
+          title: Purge Worker Dry Run
+          default: true
       type: object
       required:
       - raw_events_days
