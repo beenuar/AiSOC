@@ -50,7 +50,7 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 | 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
 | 8.1 CNAPP depth | not started, gap reproduced | item log |
 | 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR for `depth2/lane-b-ndr` |
-| 8.3 Enrichment per tenant, cited | not started, gap reproduced | item log |
+| 8.3 Enrichment per tenant, cited | **rate limiting shipped**; provider gate built and held for its caller | item log + `depth2/lane-b-enrichment-tenant` |
 | 8.4 Scale and deployment evidence | **blocked, recorded with exactly what is needed** | item log |
 
 Every row above has its reproduction recorded in the item log as a command
@@ -509,39 +509,63 @@ customer tenant. Verify each field against the vendor's current public
 reference before writing it, and record BLOCKED rather than inventing a
 payload shape, exactly as D5 does for Workday and Kandji.
 
-### 8.3 Enrichment per tenant, cited - Lane B - NOT STARTED, gap reproduced
+### 8.3 Enrichment per tenant, cited - Lane B - rate limiting shipped, the rest split and in flight
 
-**Reproduced, and the gap is wider than the plan states.**
-
-`services/enrichment` is a **Go** service, not Python. Measured on this
-tree:
+**Reproduced, and the gap is wider than the plan's wording.** Measured on
+this tree:
 
   * `grep -c tenant` over `internal/enricher/enricher.go` and
-    `internal/config/config.go` returns **0** and **0**. There is no
-    per-tenant dimension anywhere in the service, so per-tenant opt-in is
-    absent rather than partial.
+    `internal/config/config.go` returns **0** and **0**. There is no tenant
+    dimension anywhere in this service, so per-tenant opt-in is absent
+    rather than partial. Keys are per deployment, which means a deployment
+    holding a VirusTotal key sends **every** tenant's indicators to
+    VirusTotal whether that tenant agreed or not. An indicator is the
+    customer's own address, domain or file hash, so that is a disclosure
+    nobody consented to.
+  * `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` are parsed at `config.go:59-60`,
+    assigned to struct fields at `92-93`, and **read by nothing else**.
   * No reference to the credential vault anywhere under
-    `services/enrichment/`. Keys are per-deployment environment variables.
-  * `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` are parsed in `config.go` lines
-    59-60, assigned to struct fields at lines 92-93, and **read by nothing
-    else in the service**. The plan's "reads and never enforces" reproduces
-    exactly.
-  * `URLSCAN_API_KEY` is a config field (`config.go:71`) with no client.
+    `services/enrichment/`.
+  * `URLSCAN_API_KEY` is a config field with no client.
   * No enrichment result is cited in the ledger.
 
-**What remains, and the one design decision it needs.** The per-tenant
-opt-in is a console settings surface with the tenant's own key in the
-credential vault, which `services/api` owns the write path for. A Go
-service cannot hold that write path, so either the enrichment service
-learns to read vault tokens through a vendored read-path `decrypt_dict`
-(the pattern `services/connectors` already uses), or the fan-out moves
-behind an API route that resolves the tenant's credentials first. That
-choice should be made explicitly rather than discovered during
-implementation.
+**Shipped in the NDR pull request**, because it is complete, wired and
+regresses nothing:
 
-The rate limiter needs a test that proves it **refuses**, per the brief: a
-limiter asserted only on the allowed path is indistinguishable from no
-limiter.
+  * a per-tenant token-bucket limiter applied in the real handler, on both
+    `/enrich` and `/enrich/bulk`, with one token per *item* on the bulk path
+    so a hundred-indicator call cannot be the way around the limit;
+  * a tenant-scoped cache key, because two tenants legitimately enable
+    different providers and a shared key would serve tenant A's verdict from
+    a provider tenant B switched off straight to tenant B;
+  * six tests, every grant with a partner refusal, driven through the real
+    handler with the real `Enricher` rather than a nil one, so the granted
+    path is exercised too.
+
+**Held back deliberately, on `depth2/lane-b-enrichment-tenant`:** the
+default-deny provider gate. It is built, tested and negative-controlled
+(`TenantPolicy`, `runFanOutForTenant`, and an AST wiring test that fails
+naming the call site when any fan-out bypasses the gate).
+
+It is not in the pull request because **threading a default-deny gate into
+`Enrich` while no caller sends a policy would stop enrichment on every
+deployment.** That is a regression, and shipping it to satisfy an item
+would be the exact substitution this plan exists to catch. It lands with
+the caller.
+
+**Remaining scope, so the next pass starts from a decision rather than a
+survey:**
+
+| Piece | What it needs |
+|---|---|
+| Per-tenant provider table | Migration (Lane B block has `132`-`137` free), RLS, and a row seeded per existing tenant from the deployment's current providers, mirroring migration 122's treatment of closure policy: new tenants default-deny, existing ones keep what they had |
+| Tenant's own key in the vault | The API owns the vault write path and this is a Go service, so either it learns a vendored read-path `decrypt_dict` (the pattern `services/connectors` already uses) or the fan-out moves behind an API route that resolves credentials first. **This is the design decision to make first**; everything else follows from it |
+| Console settings surface | API routes plus a settings panel. A table nothing writes is the same defect as a console nothing reads |
+| Caller wiring | `services/fusion/app/services/alert_enricher.py` resolves the tenant's policy and sends it; the held-back gate then binds in production |
+| Ledger citations | Every enrichment result triage uses, with provider and time |
+| URLScan client | The config key exists and no client does |
+| Breached-credential source | One source, off by default per tenant |
+| Docs | Say plainly that enrichment needs the `full` profile |
 
 ### 8.4 Scale and deployment evidence - Lane B - **BLOCKED**, which is the correct outcome
 

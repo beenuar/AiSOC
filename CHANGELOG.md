@@ -49,6 +49,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   needs rather than substituting the Zeek-log connector that already
   exists, which reads different data for a different purpose.
 
+### Fixed
+
+- **The enrichment service's rate limit is applied** (depth plan wave 2,
+  item 8.3, first half). `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` were parsed
+  into config, assigned to struct fields, and read by nothing else in the
+  service. That is worse than a missing setting, because an operator reading
+  the environment believed the service was bounded.
+
+  A token bucket per tenant, applied on `/enrich` and on `/enrich/bulk`,
+  with one token per *item* on the bulk path so a hundred-indicator call
+  cannot be the way around the limit. An unset rate means unlimited rather
+  than blocked: a malformed environment variable parses to 0, and reading
+  that as "allow nothing" would turn enrichment off across a deployment
+  with no message anywhere. A request with no tenant shares one bucket
+  rather than bypassing the limit.
+
+  Six tests, every grant with a partner refusal, because a limiter asserted
+  only on the allowed path is indistinguishable from no limiter, which is
+  exactly what shipped.
+
+  The enrichment cache key is now tenant-scoped as well. Two tenants
+  legitimately enable different providers, so a shared key would serve
+  tenant A's verdict from a provider tenant B switched off straight to
+  tenant B.
+
 ### Added
 
 - **HR and managed-device context, kept current by a connector on a

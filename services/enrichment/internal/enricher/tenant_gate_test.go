@@ -1,85 +1,23 @@
 package enricher
 
-import (
-	"context"
-	"testing"
-)
+import "testing"
 
-// Depth plan wave 2, item 8.3.
+// Depth plan wave 2, item 8.3, first half.
 //
-// Two properties, and the first is the one that matters most.
+// `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` were parsed in config.go and
+// assigned to struct fields, and read by nothing else in the service. That
+// is worse than a missing setting: an operator reading the environment
+// believed the service was bounded.
 //
-// **Nothing is sent for a provider a tenant has not enabled.** Today there is
-// no tenant dimension anywhere in this service: `grep -c tenant` over
-// `enricher.go` and `config.go` returns 0 and 0. Keys are per deployment, so
-// a deployment with a VirusTotal key sends every tenant's indicators to
-// VirusTotal whether that tenant agreed to it or not. An indicator is a
-// customer's own address, domain or file hash; sending one to a third party
-// is a disclosure, and a disclosure nobody consented to is the defect here
-// rather than a configuration preference.
+// Every test here that grants permission has a partner that must be denied,
+// because a limiter asserted only on the allowed path is indistinguishable
+// from no limiter, which is exactly what shipped.
 //
-// **The rate limiter must refuse.** `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST`
-// are parsed in config.go and assigned to struct fields, and nothing in the
-// service reads them. A limiter asserted only on the allowed path is
-// indistinguishable from no limiter, so every test below that grants
-// permission has a partner that must be denied.
-
-// recordingProvider stands in for a vendor client and records whether it was
-// called. A mock that returns a result on demand would let the gate pass by
-// being bypassed; what has to be observable is the *call*.
-type recordingProvider struct {
-	name   string
-	called int
-}
-
-func (p *recordingProvider) task() fanOutTask {
-	return fanOutTask{
-		name: p.name,
-		fn: func() (*EnrichmentResult, error) {
-			p.called++
-			return &EnrichmentResult{Value: "x"}, nil
-		},
-	}
-}
-
-func TestOnlyEnabledProvidersAreCalled(t *testing.T) {
-	enabled := &recordingProvider{name: "virustotal"}
-	disabled := &recordingProvider{name: "abuseipdb"}
-
-	policy := NewTenantPolicy(map[string]bool{"virustotal": true})
-
-	runFanOutForTenant(context.Background(), "1.2.3.4", policy, []fanOutTask{
-		enabled.task(),
-		disabled.task(),
-	})
-
-	if enabled.called != 1 {
-		t.Errorf("an enabled provider was called %d time(s), want 1", enabled.called)
-	}
-	if disabled.called != 0 {
-		t.Errorf("a provider the tenant did not enable was called %d time(s); an indicator is the customer's own data and sending it is a disclosure", disabled.called)
-	}
-}
-
-func TestAnEmptyPolicyCallsNothing(t *testing.T) {
-	// Default-deny, and this is the direction the defect ran: a tenant that
-	// has enabled nothing must have nothing sent, not everything the
-	// deployment happens to hold a key for.
-	provider := &recordingProvider{name: "virustotal"}
-	runFanOutForTenant(context.Background(), "1.2.3.4", NewTenantPolicy(nil), []fanOutTask{provider.task()})
-	if provider.called != 0 {
-		t.Errorf("a tenant that enabled nothing had %d provider(s) called", provider.called)
-	}
-}
-
-func TestAProviderExplicitlyDisabledIsNotCalled(t *testing.T) {
-	provider := &recordingProvider{name: "virustotal"}
-	policy := NewTenantPolicy(map[string]bool{"virustotal": false})
-	runFanOutForTenant(context.Background(), "1.2.3.4", policy, []fanOutTask{provider.task()})
-	if provider.called != 0 {
-		t.Errorf("an explicitly disabled provider was called %d time(s)", provider.called)
-	}
-}
+// The per-tenant *provider* gate that belongs to the same plan item is on
+// `depth2/lane-b-enrichment-tenant` and lands with the caller that resolves
+// a tenant's policy. It is default-deny, so threading it into `Enrich` here
+// -- where no caller sends a policy yet -- would stop enrichment on every
+// deployment.
 
 func TestTheRateLimiterRefuses(t *testing.T) {
 	// The partner assertion. A limiter that only ever grants is the same as

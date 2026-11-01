@@ -88,7 +88,17 @@ func main() {
 		Msg("Threat intelligence providers configured")
 
 	// Initialize handler and server
-	h := handler.New(e)
+	// Depth plan wave 2, item 8.3. RATE_LIMIT_RPS and RATE_LIMIT_BURST were
+	// parsed into config and read by nothing, which is worse than no
+	// setting at all: an operator reading the environment believed the
+	// service was bounded. This is where they start being applied.
+	limiter := enricher.NewRateLimiter(cfg.RateLimitRPS, cfg.RateLimitBurst)
+	log.Info().
+		Int("rps", cfg.RateLimitRPS).
+		Int("burst", cfg.RateLimitBurst).
+		Msg("per-tenant enrichment rate limit applied")
+
+	h := handler.New(e, limiter)
 	srv := server.New(cfg.HTTPPort, h)
 
 	// Graceful shutdown
