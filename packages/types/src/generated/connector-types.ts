@@ -4,10 +4,10 @@
 // Every `connector_type` the ingest normalizer resolves, derived from the
 // registry that decides what the platform can ingest:
 //
-//    87  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
+//    91  connector ids declared in services/connectors (_CONNECTOR_CLASSES)
 //     6  connectorProfiles keys no connector declares under that spelling
 //     5  alternate spellings connectorTypeCanonical folds onto a declared id
-//    98  total
+//   102  total
 //
 // The union used to be written by hand, which is how ten members came to name
 // nothing: `ibm_qradar` reached no profile and no connector, so strict mode
@@ -32,6 +32,7 @@ export const CONNECTOR_TYPES = [
   "azure_defender",     // registry
   "azure_entra",        // registry
   "azure_event_hubs",   // registry
+  "bamboohr",           // registry
   "box",                // registry
   "carbon_black",       // registry
   "chronicle",          // registry
@@ -52,6 +53,7 @@ export const CONNECTOR_TYPES = [
   "elastic",            // registry
   "email_inbox",        // registry
   "exabeam",            // registry
+  "extrahop",           // registry
   "falco",              // registry
   "fleetdm",            // registry
   "gcp_cloud_audit",    // registry
@@ -70,6 +72,7 @@ export const CONNECTOR_TYPES = [
   "lacework",           // registry
   "llm_usage",          // registry
   "m365_audit",         // registry
+  "microsoft_intune",   // registry
   "microsoft_sentinel", // registry
   "mimecast",           // registry
   "netskope",           // registry
@@ -87,6 +90,7 @@ export const CONNECTOR_TYPES = [
   "qradar",             // registry
   "qualys",             // registry
   "rapid7_insightidr",  // registry
+  "rippling",           // registry
   "salesforce",         // registry
   "securonix",          // registry
   "sentinelone",        // registry
