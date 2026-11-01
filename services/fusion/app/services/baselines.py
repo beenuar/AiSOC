@@ -352,7 +352,7 @@ def classify_cadence(hours: list[int]) -> str:
     if len(hours) < CADENCE_MIN_SAMPLES:
         return "unknown"
 
-    distinct = sorted(set(h % 24 for h in hours))
+    distinct = sorted({h % 24 for h in hours})
     if len(distinct) < 2:
         # Everything in one hour of the day, repeatedly: a daily job.
         return "scheduled"
