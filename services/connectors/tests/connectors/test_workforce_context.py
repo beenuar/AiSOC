@@ -62,11 +62,15 @@ class TestRegistration:
             declared = {f.name for f in cls.schema().fields if f.type == "secret"}
             assert declared == expected_secret[cls.connector_id], cls.connector_id
 
-    def test_each_declares_the_workforce_capability(self) -> None:
+    def test_each_declares_the_capability_the_scheduler_dispatches_on(self) -> None:
+        """Two capabilities, not one. An HR system answers "who works here"
+        and an MDM answers "what is this laptop"; a single verb would make
+        the catalogue claim each connector can answer both."""
         from app.connectors.base import Capability
 
-        for cls in (BambooHRConnector, RipplingConnector, MicrosoftIntuneConnector):
+        for cls in (BambooHRConnector, RipplingConnector):
             assert Capability.PULL_WORKFORCE in cls.capabilities(), cls.connector_id
+        assert Capability.PULL_DEVICE_INVENTORY in MicrosoftIntuneConnector.capabilities()
 
 
 class TestSchedulerRunsTheImport:
@@ -81,8 +85,7 @@ class TestSchedulerRunsTheImport:
 
         source = inspect.getsource(ConnectorScheduler._poll_one)
         assert "_sync_workforce_context" in source, (
-            "the poll path does not sync workforce context, so an HR connector would be "
-            "registered, configured, polled and silently ignored"
+            "the poll path does not sync workforce context, so an HR connector would be registered, configured, polled and silently ignored"
         )
 
     @pytest.mark.asyncio
@@ -256,9 +259,7 @@ class TestIntuneVendorShape:
                 },
             )
 
-        connector = MicrosoftIntuneConnector(
-            tenant_id="t", client_id="c", client_secret="s", transport=_transport(handler)
-        )
+        connector = MicrosoftIntuneConnector(tenant_id="t", client_id="c", client_secret="s", transport=_transport(handler))
         device = (await connector.fetch_devices())[0]
         assert device.external_id == "705c034c-034c-705c-4c03-5c704c035c70"
         assert device.hostname == "LAPTOP-ADA"
@@ -278,9 +279,7 @@ class TestIntuneVendorShape:
                 return httpx.Response(200, json={"access_token": "a", "expires_in": 3600})
             return httpx.Response(200, json={"value": [{"id": "d1", "complianceState": "unknown"}]})
 
-        connector = MicrosoftIntuneConnector(
-            tenant_id="t", client_id="c", client_secret="s", transport=_transport(handler)
-        )
+        connector = MicrosoftIntuneConnector(tenant_id="t", client_id="c", client_secret="s", transport=_transport(handler))
         device = (await connector.fetch_devices())[0]
         assert device.compliance_state == "unknown"
         # Encryption nobody reported is None, not False: "not encrypted" is

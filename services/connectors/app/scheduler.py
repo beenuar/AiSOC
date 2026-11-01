@@ -650,6 +650,15 @@ class ConnectorScheduler:
         # fetch that fails must not be reported as a successful sync.
         await self._sync_vulnerability_findings(connector, target)
 
+        # Workforce and device context, for the same reason and by the same
+        # route. `import_context` in the API had exactly one production
+        # caller before this -- a manual POST -- so a tenant's HR data was
+        # only ever as current as the last file somebody uploaded, and a
+        # termination that happened on Friday reached triage on Monday if
+        # anyone remembered. Depth plan wave 2 item 1.3 says this runs on
+        # the schedule, which means here.
+        await self._sync_workforce_context(connector, target)
+
         # Normalize defensively: connectors *should* normalize themselves
         # in fetch_alerts, but we double-tap so a connector that returns
         # raw events still produces consistent shapes downstream.
@@ -1098,6 +1107,76 @@ class ConnectorScheduler:
                 "connector.scheduler.vulnerability_sync_failed id=%s type=%s",
                 target.id,
                 target.connector_type,
+            )
+
+    async def _sync_workforce_context(self, connector: Any, target: Any) -> None:
+        """Materialise an HR or MDM connector's context, if it has any.
+
+        Written here rather than posted to the API for the same reason
+        `_sync_vulnerability_findings` above is: the service principal is
+        deliberately read-only, and this service already holds a database
+        engine and the tenant id it is polling for.
+
+        Deliberately in its own `try`: a context sync that fails must not
+        cost the poll its events, and a fetch that fails must not be
+        reported as a successful sync.
+        """
+        fetch_workers = getattr(connector, "fetch_workforce", None)
+        fetch_devices = getattr(connector, "fetch_devices", None)
+        if fetch_workers is None and fetch_devices is None:
+            return
+
+        workers = []
+        devices = []
+        try:
+            if fetch_workers is not None:
+                workers = await fetch_workers()
+            if fetch_devices is not None:
+                devices = await fetch_devices()
+        except Exception:
+            logger.exception(
+                "connector.scheduler.workforce_fetch_failed id=%s type=%s",
+                getattr(target, "id", None),
+                getattr(target, "connector_type", None),
+            )
+            return
+
+        if not workers and not devices:
+            return
+
+        try:
+            from app.workforce import sync_workforce
+
+            report = await sync_workforce(
+                self._engine,
+                tenant_id=target.tenant_id,
+                connector_type=target.connector_type,
+                workers=workers,
+                devices=devices,
+            )
+            logger.info(
+                "connector.scheduler.workforce_synced id=%s workers=%d devices=%d rejected=%d",
+                target.id,
+                report.workers,
+                report.devices,
+                len(report.rejected),
+            )
+            for rejection in report.rejected[:20]:
+                # Named rather than counted. "synced 900 of 1000" does not
+                # say whether the missing hundred are one malformed
+                # department or every contractor.
+                logger.warning(
+                    "connector.scheduler.workforce_record_rejected id=%s kind=%s record=%s reason=%s",
+                    target.id,
+                    rejection["kind"],
+                    rejection["id"],
+                    rejection["reason"],
+                )
+        except Exception:
+            logger.exception(
+                "connector.scheduler.workforce_sync_failed id=%s type=%s",
+                getattr(target, "id", None),
+                getattr(target, "connector_type", None),
             )
 
     async def _promote_overdue_findings(self) -> None:
