@@ -52,16 +52,19 @@ claimed the same migration number simultaneously and one had to renumber.
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
 | 124 | migration | Lane A / 1.1 | 2026-11-01 | `services/api/migrations/124_identity_privilege_facts.sql` |
 | 125 | migration | Lane A / 1.2 | 2026-11-01 | `services/api/migrations/125_access_review_findings.sql` |
-| 126 | migration | Lane A / 1.4 | 2026-11-01 | `services/api/migrations/126_sub_principal_baselines.sql` |
-| 127 | migration | Lane A / 1.5 | 2026-11-01 | reserved — `1.5` change timeline, if a table is needed |
+| 126 | migration | Lane A / 1.4 | 2026-11-01 | **released unused** — 1.4 lives in the existing fusion baseline store (Redis), as the plan requires; no table was needed |
+| 127 | migration | Lane A / 1.5 | 2026-11-01 | **released unused** — 1.5 reads `posture_snapshots` (103) and the lake; no new table |
 | 128 | migration | Lane A / 3.1 | 2026-11-01 | `services/api/migrations/128_identity_links.sql` |
-| 129 | migration | Lane A | 2026-11-01 | reserved |
+| 129 | migration | Lane A | 2026-11-01 | **released unused** |
 | 0016 | ADR | Lane A / 1.1 | 2026-11-01 | `docs/decisions/0016-privilege-context-in-scoring.md` |
-| 0017 | ADR | Lane A / 3.1 | 2026-11-01 | reserved — identity-resolution confidence model |
+| 0017 | ADR | Lane A / 3.1 | 2026-11-01 | **released unused** — the confidence model is a table of eight rules in `identity_resolution.py`, each with its reasoning beside it, and the merge threshold's justification is in the module docstring. An ADR restating them would be a second place for them to drift |
 
-Highest at kickoff: migration `123`, ADR `0014`. Lane A holds migrations
-`124`–`129` and ADRs `0016`–`0017`; next free outside that block: migration
-`130`, ADR `0018`.
+Highest at kickoff: migration `123`, ADR `0014`. Lane A claimed migrations
+`124`–`129` and ADRs `0016`–`0017`, and **used 124, 125, 128 and 0016**.
+The rest are released: a claimed-and-unused number is kept in this table
+rather than deleted, so a later lane reading it can see the number is free
+without having to prove the claim was abandoned rather than forgotten.
+Next free outside the block: migration `130`, ADR `0018`.
 
 ## Phase 0: Kickoff
 
