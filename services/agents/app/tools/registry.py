@@ -75,6 +75,12 @@ def default_registry(tenant_id: str = "") -> ToolRegistry:
     refuses a service credential that does not name the tenant it acts for.
     """
     from app.investigator.tools import enrich_ioc, extract_iocs, map_to_mitre
+    from app.tools.customer_tools import (
+        EFFECTIVE_PERMISSIONS_DESCRIPTION,
+        EFFECTIVE_PERMISSIONS_PARAMETERS,
+        EFFECTIVE_PERMISSIONS_TOOL,
+        identity_effective_permissions,
+    )
     from app.tools.mitre import lookup_technique
     from app.tools.sandbox import TOOL_DESCRIPTION, TOOL_NAME, TOOL_PARAMETERS, lookup_file_hash
 
@@ -85,6 +91,20 @@ def default_registry(tenant_id: str = "") -> ToolRegistry:
                 description=TOOL_DESCRIPTION,
                 parameters=TOOL_PARAMETERS,
                 fn=lambda sha256: lookup_file_hash(sha256, tenant_id=tenant_id),
+            ),
+            # Registered unconditionally, unlike the customer tools in
+            # `scoped_customer_tools`, which are bound only when the tenant
+            # has a backend for them. The difference is deliberate: a
+            # customer tool with no backend answers `no_integration` and is
+            # noise, whereas this one answers "unknown, and here is why" —
+            # which is a sentence the model needs to be able to reach.
+            Tool(
+                name=EFFECTIVE_PERMISSIONS_TOOL,
+                description=EFFECTIVE_PERMISSIONS_DESCRIPTION,
+                parameters=EFFECTIVE_PERMISSIONS_PARAMETERS,
+                fn=lambda principal_id, at="", provider="": identity_effective_permissions(
+                    principal_id, at=at, provider=provider, tenant_id=tenant_id
+                ),
             ),
             Tool(
                 name="extract_iocs",

@@ -80,19 +80,41 @@ For each ``(principal, resource)`` pair the algorithm is:
   seeing what it stopped, and an action that silently never appears is
   indistinguishable from one nobody ever granted.
 
-Still not modelled: ``NotAction``, ``NotResource``, condition operators
-beyond StringEquals/StringLike, and session policies. Those are flagged as
-``notes`` on :class:`ResolverResult` so the UI can surface "this resolver
-doesn't yet model X" instead of silently returning a wrong answer — as is a
-boundary that is attached to the principal but absent from the snapshot,
-which cannot be applied and would otherwise over-permit in exactly the case
-the boundary exists to prevent. The synthesised simulator fixture exercises
-every feature the resolver does model so the test gate is meaningful.
+6. **Session policies** passed on ``AssumeRole``. Like a permissions
+   boundary they only cap, never grant, and like a boundary they do not cap a
+   resource-based policy that names the session principal directly. They are
+   the reason an assumed-role chain's reach is routinely far smaller than the
+   role's, which matters because an assumed-role chain is what most cloud
+   investigations are looking at.
+
+``NotAction`` and ``NotResource`` invert the set a statement applies to, so
+ignoring them does not return a vaguer answer — it returns the complement of
+the right one. ``Allow NotAction s3:DeleteObject`` grants everything *except*
+delete; read as an absent ``Action`` it grants nothing.
+
+Condition operators are evaluated by
+:mod:`app.services.effective_permissions.iam_conditions`, which returns a
+three-valued result. An **undecidable** condition — a modelled operator whose
+context key the snapshot does not carry, or one of the two operators that
+module still does not model — is resolved per effect rather than globally:
+an undecidable ``Allow`` does not grant, and an undecidable ``Deny`` still
+denies. Both choices refuse to over-report access, which is the only
+direction that is safe on a containment decision. Actions withheld that way
+are reported in ``deny_actions`` and the reason lands in ``notes``, because
+an action that silently never appears is indistinguishable from one nobody
+ever granted.
+
+A boundary attached to the principal but absent from the snapshot is flagged
+in ``notes`` too: the cap cannot be applied and would otherwise over-permit
+in exactly the case the boundary exists to prevent. The synthesised simulator
+fixture exercises every feature the resolver models so the test gate is
+meaningful.
 """
 
 from __future__ import annotations
 
 import fnmatch
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
@@ -102,6 +124,10 @@ from app.services.effective_permissions.base import (
     Resolver,
     ResolverError,
     ResolverResult,
+)
+from app.services.effective_permissions.iam_conditions import (
+    evaluate_block,
+    unmodelled_operators_in,
 )
 
 
@@ -147,43 +173,53 @@ def _resource_matches(statement_resource: Any, resource_arn: str) -> bool:
     return False
 
 
-def _condition_matches(condition: dict[str, Any] | None, context: dict[str, Any]) -> bool:
-    """Evaluate the subset of IAM condition operators the resolver models.
+def _statement_covers_resource(statement: dict[str, Any], resource_arn: str) -> bool:
+    """Does this statement apply to ``resource_arn``?
 
-    Returns ``True`` when no condition is present. Supports
-    ``StringEquals`` and ``StringLike``; anything else is treated as
-    "unable to evaluate" and is conservatively considered non-matching when
-    a context key is present, matching when no context value is supplied
-    (so a context-less test exercise still exercises the rest of the
-    resolver).
+    ``NotResource`` is the complement of ``Resource`` and the two are mutually
+    exclusive in a valid statement. A statement carrying neither applies to
+    everything, which is why ``Resource`` defaults to ``"*"`` — and why the
+    ``NotResource`` arm has to be checked *first*: reading
+    ``statement.get("Resource", "*")`` on a ``NotResource`` statement turns
+    an exclusion into a universal grant.
     """
 
-    if not condition:
-        return True
-    for operator, kv in condition.items():
-        if not isinstance(kv, dict):
-            continue
-        if operator == "StringEquals":
-            for key, expected in kv.items():
-                supplied = context.get(key)
-                if supplied is None:
-                    return False
-                if isinstance(expected, list):
-                    if supplied not in expected:
-                        return False
-                elif supplied != expected:
-                    return False
-        elif operator == "StringLike":
-            for key, pattern in kv.items():
-                supplied = context.get(key)
-                if supplied is None:
-                    return False
-                patterns = pattern if isinstance(pattern, list) else [pattern]
-                if not any(fnmatch.fnmatchcase(supplied, p) for p in patterns):
-                    return False
-        else:
-            return False
-    return True
+    if "NotResource" in statement:
+        return not _resource_matches(statement["NotResource"], resource_arn)
+    return _resource_matches(statement.get("Resource", "*"), resource_arn)
+
+
+def _statement_actions(statement: dict[str, Any], catalogue: list[str]) -> set[str]:
+    """The action set a statement applies to, honouring ``NotAction``.
+
+    ``NotAction`` is the complement against the service catalogue, so the
+    answer is only as complete as the catalogue is — an action the catalogue
+    does not list cannot be reported either way. That is a real limit and the
+    honest one: inventing actions to complement against would report access
+    to API calls that may not exist.
+    """
+
+    if "NotAction" in statement:
+        excluded = _expand_actions(_as_list(statement["NotAction"]), catalogue)
+        return set(catalogue) - excluded
+    return _expand_actions(_as_list(statement.get("Action")), catalogue)
+
+
+@dataclass(frozen=True)
+class _PolicyEvaluation:
+    """What one policy said about one resource.
+
+    ``undecided`` is the set this type exists for. Returning
+    ``(allow, deny)`` forced every undecidable condition into one of the two,
+    and whichever it picked was wrong half the time: folded into ``deny`` it
+    claimed a policy denied something it did not mention, dropped entirely it
+    silently narrowed the answer with nothing recording that it had.
+    """
+
+    allow: set[str]
+    deny: set[str]
+    undecided: set[str]
+    notes: set[str]
 
 
 def _expand_actions(actions: list[str], catalogue: list[str]) -> set[str]:
@@ -259,7 +295,7 @@ class AwsIamResolver(Resolver):
 
         decisions: list[ResolvedPermission] = []
         for resource in snap.get("resources", []):
-            decision = self._resolve_resource(
+            decision, resource_notes = self._resolve_resource(
                 principal=principal,
                 resource=resource,
                 identity_policy_refs=identity_policy_refs,
@@ -267,6 +303,11 @@ class AwsIamResolver(Resolver):
                 scp_ids=scp_ids,
                 action_catalogue=action_catalogue,
             )
+            # Deduplicated and sorted: one unmodelled operator on a policy
+            # attached to forty buckets is one gap, not forty notes.
+            for note in sorted(resource_notes):
+                if note not in notes:
+                    notes.append(note)
             if decision is not None:
                 decisions.append(decision)
 
@@ -316,7 +357,7 @@ class AwsIamResolver(Resolver):
         policies_by_id: dict[str, dict[str, Any]],
         scp_ids: list[str],
         action_catalogue: dict[str, list[str]],
-    ) -> ResolvedPermission | None:
+    ) -> tuple[ResolvedPermission | None, set[str]]:
         resource_arn = resource["arn"]
         resource_service = resource.get("service") or resource_arn.split(":")[2]
         service_catalogue = resource.get("service_actions") or action_catalogue.get(resource_service, [])
@@ -325,13 +366,14 @@ class AwsIamResolver(Resolver):
         chain: list[PolicyChainStep] = []
         identity_allow: set[str] = set()
         identity_deny: set[str] = set()
+        undecided: set[str] = set()
+        notes: set[str] = set()
 
         for policy_id, via_group_id in identity_policy_refs:
             policy = policies_by_id.get(policy_id)
             if policy is None:
                 continue
-            step_added = False
-            allow_added, deny_added = self._evaluate_policy(
+            evaluation = self._evaluate_policy(
                 policy=policy,
                 principal_arn=principal["arn"],
                 resource_arn=resource_arn,
@@ -339,22 +381,20 @@ class AwsIamResolver(Resolver):
                 catalogue=service_catalogue,
                 principal_match_required=False,
             )
-            if allow_added or deny_added:
-                identity_allow |= allow_added
-                identity_deny |= deny_added
+            notes |= evaluation.notes
+            undecided |= evaluation.undecided
+            if evaluation.allow or evaluation.deny:
+                identity_allow |= evaluation.allow
+                identity_deny |= evaluation.deny
                 chain.append(
                     PolicyChainStep(
                         kind="policy",
                         id=policy_id,
                         name=policy.get("name", policy_id),
-                        effect="deny" if deny_added and not allow_added else "allow",
+                        effect="deny" if evaluation.deny and not evaluation.allow else "allow",
                         via=via_group_id,
                     )
                 )
-                step_added = True
-            if not step_added:
-                # Identity-policy didn't match the resource — skip it.
-                pass
 
         resource_policy_id = resource.get("resource_policy_id")
         resource_allow: set[str] = set()
@@ -362,7 +402,7 @@ class AwsIamResolver(Resolver):
         if resource_policy_id:
             resource_policy = policies_by_id.get(resource_policy_id)
             if resource_policy is not None:
-                resource_allow, resource_deny = self._evaluate_policy(
+                evaluation = self._evaluate_policy(
                     policy=resource_policy,
                     principal_arn=principal["arn"],
                     resource_arn=resource_arn,
@@ -370,6 +410,9 @@ class AwsIamResolver(Resolver):
                     catalogue=service_catalogue,
                     principal_match_required=True,
                 )
+                notes |= evaluation.notes
+                undecided |= evaluation.undecided
+                resource_allow, resource_deny = evaluation.allow, evaluation.deny
                 if resource_allow or resource_deny:
                     chain.append(
                         PolicyChainStep(
@@ -404,7 +447,7 @@ class AwsIamResolver(Resolver):
         boundary_id = principal.get("permissions_boundary")
         boundary = policies_by_id.get(boundary_id) if boundary_id else None
         if boundary is not None:
-            boundary_allow, boundary_deny = self._evaluate_policy(
+            boundary_eval = self._evaluate_policy(
                 policy=boundary,
                 principal_arn=principal["arn"],
                 resource_arn=resource_arn,
@@ -412,6 +455,8 @@ class AwsIamResolver(Resolver):
                 catalogue=service_catalogue,
                 principal_match_required=False,
             )
+            notes |= boundary_eval.notes
+            boundary_allow, boundary_deny = boundary_eval.allow, boundary_eval.deny
             boundary_allowed = boundary_allow
 
         identity_capped = identity_allow
@@ -438,6 +483,60 @@ class AwsIamResolver(Resolver):
                     )
                 )
 
+        # Session policies. Passed on `AssumeRole`, they cap the session the
+        # same way a boundary caps the principal: the intersection of the
+        # role's identity permissions and the session policy. Two properties
+        # are worth stating because getting either wrong changes an answer:
+        #
+        #  * several session policies are ANDed, not ORed, so the cap is the
+        #    *intersection* of them all. Unioning would widen the cap with
+        #    each extra policy, which is backwards;
+        #  * like a boundary, a session policy does not cap a resource-based
+        #    policy that names the session principal directly, so the cap is
+        #    applied to the identity arm only.
+        #
+        # This is the arm that matters most in practice: most cloud
+        # investigations are looking at an assumed-role chain, and a role's
+        # reach is routinely far wider than the session's.
+        session_policy_ids = [pid for pid in _as_list(principal.get("session_policies")) if pid]
+        session_blocked: set[str] = set()
+        if session_policy_ids:
+            session_allowed: set[str] | None = None
+            for session_policy_id in session_policy_ids:
+                session_policy = policies_by_id.get(session_policy_id)
+                if session_policy is None:
+                    notes.add(
+                        f"session policy {session_policy_id!r} is attached to the session but absent "
+                        f"from the snapshot — the cap could not be applied and these actions may over-permit"
+                    )
+                    continue
+                session_eval = self._evaluate_policy(
+                    policy=session_policy,
+                    principal_arn=principal["arn"],
+                    resource_arn=resource_arn,
+                    context=context,
+                    catalogue=service_catalogue,
+                    principal_match_required=False,
+                )
+                notes |= session_eval.notes
+                session_allowed = (
+                    set(session_eval.allow) if session_allowed is None else session_allowed & session_eval.allow
+                )
+                if session_eval.deny:
+                    identity_deny |= session_eval.deny
+            if session_allowed is not None:
+                session_blocked = identity_capped - session_allowed
+                identity_capped = identity_capped & session_allowed
+                if session_blocked or session_allowed:
+                    chain.append(
+                        PolicyChainStep(
+                            kind="session-policy",
+                            id=",".join(session_policy_ids),
+                            name=f"session policy ({len(session_policy_ids)})",
+                            effect="deny" if session_blocked else "allow",
+                        )
+                    )
+
         candidate_allow = identity_capped | resource_allow
         # A Deny written inside a boundary document is an ordinary explicit
         # deny, not a cap, so it joins the deny set and outranks the
@@ -457,7 +556,7 @@ class AwsIamResolver(Resolver):
                 scp = policies_by_id.get(scp_id)
                 if scp is None:
                     continue
-                allow_set, deny_set = self._evaluate_policy(
+                scp_eval = self._evaluate_policy(
                     policy=scp,
                     principal_arn=principal["arn"],
                     resource_arn=resource_arn,
@@ -465,6 +564,8 @@ class AwsIamResolver(Resolver):
                     catalogue=service_catalogue,
                     principal_match_required=False,
                 )
+                notes |= scp_eval.notes
+                allow_set, deny_set = scp_eval.allow, scp_eval.deny
                 if allow_set:
                     scp_allowed |= allow_set
                     chain.append(
@@ -502,19 +603,36 @@ class AwsIamResolver(Resolver):
         # the whole value of a boundary to a reviewer is seeing *what it
         # stopped*, and an action that silently never appears is
         # indistinguishable from one nobody ever granted.
-        shadowed_denies = (pre_scp_allow & candidate_deny) | scp_blocked | boundary_blocked
+        #
+        # (4) is the undecidable set: an Allow this resolver withheld because
+        # its condition could not be evaluated against the snapshot's request
+        # context. Reporting it beside the other three is what keeps "we did
+        # not grant this" distinguishable from "nobody granted this".
+        shadowed_denies = (
+            (pre_scp_allow & candidate_deny) | scp_blocked | boundary_blocked | session_blocked | undecided
+        ) - final_actions
+
+        if undecided:
+            notes.add(
+                f"{len(undecided)} action(s) on {resource_arn} were withheld because a policy condition "
+                f"could not be evaluated against the snapshot's request context; they are listed in "
+                f"deny_actions rather than dropped"
+            )
 
         if not final_actions and not shadowed_denies:
-            return None
+            return None, notes
 
-        return ResolvedPermission(
-            principal_id=principal["id"],
-            resource_id=resource["id"],
-            resource_kind=resource.get("kind"),
-            resource_arn=resource_arn,
-            actions=tuple(sorted(final_actions)),
-            deny_actions=tuple(sorted(shadowed_denies)),
-            policy_chain=tuple(chain),
+        return (
+            ResolvedPermission(
+                principal_id=principal["id"],
+                resource_id=resource["id"],
+                resource_kind=resource.get("kind"),
+                resource_arn=resource_arn,
+                actions=tuple(sorted(final_actions)),
+                deny_actions=tuple(sorted(shadowed_denies)),
+                policy_chain=tuple(chain),
+            ),
+            notes,
         )
 
     def _evaluate_policy(
@@ -526,27 +644,51 @@ class AwsIamResolver(Resolver):
         context: dict[str, Any],
         catalogue: list[str],
         principal_match_required: bool,
-    ) -> tuple[set[str], set[str]]:
-        """Return ``(allow_actions, deny_actions)`` from a single policy."""
+    ) -> _PolicyEvaluation:
+        """Evaluate one policy into allow / deny / withheld-as-undecidable.
+
+        The third set is what makes the three-valued condition result usable.
+        An ``Allow`` whose condition cannot be decided is **not** granted —
+        but it is also not the same as one nobody wrote, so it is reported
+        separately and surfaces to the reader rather than vanishing.
+        """
 
         document = policy.get("document") or {}
         statements = _as_list(document.get("Statement"))
         allow: set[str] = set()
         deny: set[str] = set()
+        undecided: set[str] = set()
+        notes: set[str] = set()
+
         for statement in statements:
             if not isinstance(statement, dict):
                 continue
-            if principal_match_required:
-                if not _principal_matches(statement.get("Principal"), principal_arn):
-                    continue
-            if not _resource_matches(statement.get("Resource", "*"), resource_arn):
+            if principal_match_required and not _principal_matches(statement.get("Principal"), principal_arn):
                 continue
-            if not _condition_matches(statement.get("Condition"), context):
+            if not _statement_covers_resource(statement, resource_arn):
                 continue
+
+            condition = statement.get("Condition")
+            notes |= unmodelled_operators_in(condition)
+            satisfied = evaluate_block(condition, context)
+            if satisfied is False:
+                continue
+
             effect = statement.get("Effect", "Allow")
-            actions = _expand_actions(_as_list(statement.get("Action")), catalogue)
+            actions = _statement_actions(statement, catalogue)
+            if satisfied is None:
+                # Undecidable. An Allow is withheld (never over-report what
+                # an identity can reach); a Deny still denies (never
+                # over-report it either). Both arms fail toward less access.
+                if effect == "Allow":
+                    undecided |= actions
+                elif effect == "Deny":
+                    deny |= actions
+                continue
+
             if effect == "Allow":
                 allow |= actions
             elif effect == "Deny":
                 deny |= actions
-        return allow, deny
+
+        return _PolicyEvaluation(allow=allow, deny=deny, undecided=undecided, notes=notes)

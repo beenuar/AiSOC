@@ -75,7 +75,31 @@ _PRIVILEGE_FACTOR: dict[str, float] = {
     "admin": 1.35,
     "elevated": 1.15,
     "standard": 1.0,
+    # Exactly 1.0, and present rather than absent. An identity with no
+    # posture covering the event is not evidence in either direction, so it
+    # must not move the score -- but it is also not the same as a measured
+    # standard account, and the rationale says which one it was. Leaving
+    # `unknown` out of this table would reach `.get(tier, 1.0)` and produce
+    # the same number with no sentence attached.
+    "unknown": 1.0,
 }
+
+#: Depth plan wave 2, 1.1. Each tag that is true multiplies by this much.
+#: Deliberately small and multiplicative, matching the module's design note:
+#: context reorders alerts of similar severity and cannot invert a severity
+#: gap. Four tags together reach 1.21, which is less than one criticality
+#: step -- tags are a reason to look sooner, not a reason to outrank a
+#: critical alert.
+_TAG_FACTOR: dict[str, float] = {
+    "can_escalate": 1.10,
+    "cross_account": 1.05,
+    "data_access": 1.05,
+    "third_party": 1.05,
+}
+
+#: Ceiling on the combined tag multiplier, so adding a fifth tag later
+#: cannot quietly make tags dominate the ordering.
+_TAG_FACTOR_CAP = 1.25
 
 #: A host running something on the CISA Known Exploited Vulnerabilities
 #: catalogue is being attacked with a technique that is known to work,
@@ -108,9 +132,25 @@ class AssetContext:
 @dataclass(frozen=True)
 class IdentityContext:
     principal: str | None = None
-    privilege_tier: str = "standard"
+    #: Defaults to ``unknown``, not ``standard``. A caller that builds this
+    #: without a posture lookup is saying "I did not check", and the old
+    #: default said "I checked and it is ordinary" on its behalf.
+    privilege_tier: str = "unknown"
     is_service: bool = False
     is_break_glass: bool = False
+    #: The four computed tags from 1.1. ``None`` is "no snapshot could
+    #: answer" and never contributes; only ``True`` does.
+    can_escalate: bool | None = None
+    data_access: bool | None = None
+    third_party: bool | None = None
+    cross_account: bool | None = None
+
+    def set_tags(self) -> list[str]:
+        return [
+            name
+            for name in ("can_escalate", "data_access", "third_party", "cross_account")
+            if getattr(self, name) is True
+        ]
 
 
 @dataclass
@@ -188,11 +228,36 @@ def score_alert_priority(
             rationale.append({"factor": 1.2, "reason": "the host is internet-facing"})
 
     if identity is not None:
-        tier = (identity.privilege_tier or "standard").strip().lower()
+        tier = (identity.privilege_tier or "unknown").strip().lower()
         privilege_factor = _PRIVILEGE_FACTOR.get(tier, 1.0)
         if privilege_factor != 1.0:
             score *= privilege_factor
             rationale.append({"factor": privilege_factor, "reason": f"the principal holds {tier} privilege"})
+        elif tier == "unknown":
+            # A 1.0 row rather than no row. The queue renders this rationale
+            # verbatim, and an analyst asking "why is this ranked here"
+            # needs to be told the platform could not answer, not shown a
+            # list with the question silently missing from it.
+            rationale.append(
+                {
+                    "factor": 1.0,
+                    "reason": "the principal's privilege at event time is unknown (no posture snapshot covers it)",
+                }
+            )
+
+        tags = identity.set_tags()
+        if tags:
+            combined = 1.0
+            for tag in tags:
+                combined *= _TAG_FACTOR.get(tag, 1.0)
+            combined = min(combined, _TAG_FACTOR_CAP)
+            score *= combined
+            rationale.append(
+                {
+                    "factor": round(combined, 4),
+                    "reason": f"the principal is tagged {', '.join(tags)}",
+                }
+            )
 
         if identity.is_break_glass:
             score *= _BREAK_GLASS_FACTOR

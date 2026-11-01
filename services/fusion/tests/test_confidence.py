@@ -29,6 +29,8 @@ from app.models.alert import (
 from app.services.confidence import (
     HIGH_THRESHOLD,
     LOW_THRESHOLD,
+    WEIGHT_ASSET_CRITICALITY,
+    WEIGHT_IDENTITY_PRIVILEGE,
     ConfidenceScorer,
 )
 
@@ -107,6 +109,11 @@ def test_score_attaches_complete_rationale(scorer: ConfidenceScorer) -> None:
         "upstream_risk",
         "ioc_density",
         "asset_criticality",
+        # Depth 2 wave 2, 1.1. Present on *every* alert, including ones with
+        # no posture behind them, where it reads "unknown". That is the
+        # whole point: a factor that appears only when the answer is known
+        # cannot tell an analyst that the platform could not answer.
+        "identity_privilege",
     }
 
 
@@ -362,5 +369,112 @@ def test_low_criticality_pulls_down_but_is_bounded(scorer: ConfidenceScorer) -> 
     scored = scorer.score(fused)
     factor = next(f for f in scored.confidence_rationale if f.factor == "asset_criticality")
     assert factor.contribution == -0.3
-    # Bounded: weight 0.06, so the full swing is ±0.03 on the score.
-    assert factor.weight == 0.06
+    # Bounded: weight 0.0564, so the full swing is ±0.028 on the score. The
+    # weight was 0.06 until 1.1 added `identity_privilege` and scaled the
+    # eight pre-existing factors by 0.94 to keep the total at exactly 1.0.
+    assert factor.weight == WEIGHT_ASSET_CRITICALITY
+    assert factor.weight == pytest.approx(0.06 * 0.94)
+
+
+# ─── Actor privilege at event time (depth 2 wave 2, 1.1) ─────────────────────
+
+
+def _privilege_factor(scorer: ConfidenceScorer, stamp: object):
+    fused = _fused(_alert())
+    fused.enrichments["identity_privilege"] = stamp
+    scored = scorer.score(fused)
+    return next(f for f in scored.confidence_rationale if f.factor == "identity_privilege")
+
+
+def test_absent_privilege_stamp_is_unknown_and_contributes_nothing(scorer: ConfidenceScorer) -> None:
+    """No stamp must read as unknown in words, not as a bare 0.00.
+
+    A zero with no explanation is indistinguishable from a measured neutral,
+    and the two call for different actions: one is an ordinary account, the
+    other is a provider whose posture has never been collected.
+    """
+    fused = _fused(_alert())
+    scored = scorer.score(fused)
+    factor = next(f for f in scored.confidence_rationale if f.factor == "identity_privilege")
+    assert factor.contribution == 0.0
+    assert "unknown" in factor.value
+
+
+def test_unknown_tier_is_not_treated_as_standard(scorer: ConfidenceScorer) -> None:
+    """`standard` is mildly negative; `unknown` is exactly neutral.
+
+    Collapsing them would make an uncollected provider look like a estate
+    full of ordinary users, which is the most reassuring possible rendering
+    of a blind spot.
+    """
+    unknown = _privilege_factor(scorer, {"tier": "unknown", "measured": False})
+    standard = _privilege_factor(scorer, {"tier": "standard", "measured": True, "tags_set": []})
+    assert unknown.contribution == 0.0
+    assert standard.contribution < 0.0
+
+
+def test_tier_orders_the_contribution(scorer: ConfidenceScorer) -> None:
+    tiers = ["standard", "elevated", "admin", "domain_admin"]
+    contributions = [
+        _privilege_factor(scorer, {"tier": t, "measured": True, "tags_set": []}).contribution for t in tiers
+    ]
+    assert contributions == sorted(contributions)
+
+
+def test_tags_add_but_are_capped(scorer: ConfidenceScorer) -> None:
+    """Four tags must not swamp the tier, and the contribution stays in [-1, 1]."""
+    none_set = _privilege_factor(scorer, {"tier": "admin", "measured": True, "tags_set": []})
+    one_set = _privilege_factor(scorer, {"tier": "admin", "measured": True, "tags_set": ["can_escalate"]})
+    all_set = _privilege_factor(
+        scorer,
+        {
+            "tier": "admin",
+            "measured": True,
+            "tags_set": ["can_escalate", "data_access", "third_party", "cross_account"],
+        },
+    )
+    assert none_set.contribution < one_set.contribution < all_set.contribution
+    assert all_set.contribution <= 1.0
+    # The cap is what stops tags from making the tier irrelevant: an admin
+    # with four tags must still outrank a domain admin with none only
+    # because of the tags, never because the tier stopped mattering.
+    assert all_set.contribution - none_set.contribution <= 0.6 + 1e-9
+
+
+def test_tags_dict_is_accepted_when_tags_set_is_missing(scorer: ConfidenceScorer) -> None:
+    """The stamp has two shapes and only one of them is fusion's own.
+
+    `tags_set` is written by the fuse-time resolver; `tags` is what the API
+    stores and what a replayed or imported alert carries. Reading only the
+    first silently scored every replayed alert as tagless.
+    """
+    factor = _privilege_factor(
+        scorer,
+        {
+            "tier": "admin",
+            "measured": True,
+            "tags": {"can_escalate": True, "data_access": None, "third_party": False, "cross_account": True},
+        },
+    )
+    baseline = _privilege_factor(scorer, {"tier": "admin", "measured": True, "tags_set": []})
+    assert factor.contribution > baseline.contribution
+    assert "can_escalate" in factor.value and "cross_account" in factor.value
+    # None and False are both "not a reason to escalate" here, and neither
+    # may be counted as a set tag.
+    assert "third_party" not in factor.value
+    assert "data_access" not in factor.value
+
+
+def test_partial_snapshot_is_said_out_loud(scorer: ConfidenceScorer) -> None:
+    factor = _privilege_factor(
+        scorer,
+        {"tier": "admin", "measured": True, "tags_set": [], "snapshot_partial": True},
+    )
+    assert "incomplete" in factor.value
+
+
+def test_privilege_weight_is_bounded_like_asset_criticality(scorer: ConfidenceScorer) -> None:
+    """Context about the alert must not outweigh evidence that it happened."""
+    factor = _privilege_factor(scorer, {"tier": "domain_admin", "measured": True, "tags_set": []})
+    assert factor.weight == WEIGHT_IDENTITY_PRIVILEGE
+    assert WEIGHT_IDENTITY_PRIVILEGE <= 0.06

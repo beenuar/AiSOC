@@ -17,6 +17,7 @@ from app.services.alert_enricher import AlertEnricher
 from app.services.alert_outbox import AlertNotificationOutbox
 from app.services.alert_sink import AlertSink
 from app.services.asset_context import AssetContextResolver
+from app.services.identity_privilege_context import IdentityPrivilegeResolver
 from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.baselines import BaselineStore
 from app.services.confidence import ConfidenceScorer
@@ -110,6 +111,11 @@ async def lifespan(app: FastAPI):
     # import writes); unset DATABASE_URL leaves the scorer's factor honestly
     # reading "unknown (no inventory match)".
     asset_resolver = AssetContextResolver(settings.database_url) if settings.database_url else None
+    # Depth 2 wave 2, 1.1 — the actor's privilege as of the event, read from
+    # `identity_privilege_facts` (migration 124) in the same Postgres. Unset
+    # DATABASE_URL leaves every alert stamped "unknown", which is what a
+    # deployment that has collected no posture should see.
+    privilege_resolver = IdentityPrivilegeResolver(settings.database_url) if settings.database_url else None
     engine = FusionEngine(
         dedup,
         correlator,
@@ -120,6 +126,7 @@ async def lifespan(app: FastAPI):
         enricher=enricher,
         asset_resolver=asset_resolver,
         memory_provider=memory_provider,
+        privilege_resolver=privilege_resolver,
     )
     # Phase 3.1 — fused alerts land in the Postgres alert store so the spine
     # is continuous (raw event → alert row). Fail-soft: a missing/unreachable

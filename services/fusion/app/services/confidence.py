@@ -24,22 +24,38 @@ clamped to [0, 1]. Bands map to labels:
 Factors and weights
 -------------------
 
-================== ====== ==========================================
-factor              w     signal
-================== ====== ==========================================
-severity           0.18   alert severity (critical / high / med / low)
-ml_anomaly         0.17   IsolationForest anomaly_score (0–1)
-ml_priority        0.17   LightGBM priority_score (0–1)
-mitre_coverage     0.14   number of mapped MITRE techniques
-threat_intel       0.15   enrichment hits (TI feed match)
-upstream_risk      0.08   raw_alert.risk_score (0–1, vendor-provided)
-ioc_density        0.05   distinct populated IOC fields
-asset_criticality  0.06   tenant asset inventory (fuse-time stamp)
-================== ====== ==========================================
+================== ======= ==========================================
+factor              w      signal
+================== ======= ==========================================
+severity           0.1692  alert severity (critical / high / med / low)
+ml_anomaly         0.1598  IsolationForest anomaly_score (0–1)
+ml_priority        0.1598  LightGBM priority_score (0–1)
+threat_intel       0.1410  enrichment hits (TI feed match)
+mitre_coverage     0.1316  number of mapped MITRE techniques
+upstream_risk      0.0752  raw_alert.risk_score (0–1, vendor-provided)
+identity_privilege 0.0600  actor's privilege + tags at event time
+asset_criticality  0.0564  tenant asset inventory (fuse-time stamp)
+ioc_density        0.0470  distinct populated IOC fields
+================== ======= ==========================================
 
 Sum of weights = 1.0. The factor list is *also* what's persisted on the
 ``FusedAlert`` so the UI can render the same evidence chain that the
 score was derived from — no magic numbers.
+
+Where the four-decimal weights come from
+----------------------------------------
+``identity_privilege`` (depth plan wave 2, 1.1) was added at 0.06 — the same
+weight ``asset_criticality`` carries, because it answers the matching
+question about the actor rather than the asset — and the eight pre-existing
+weights were scaled by 0.94 so the total is still exactly 1.0. Scaling,
+rather than taking the new weight out of one neighbour, keeps every existing
+factor's share of the model unchanged relative to the others: the only thing
+that moved is that all of them together now account for 94% instead of 100%.
+
+That does shift every alert's score slightly, which is a real change and is
+measured rather than waved at. It does **not** reorder two alerts that
+differ only in pre-existing factors, because a common positive scale factor
+preserves the ordering of ``Σ(w·c)``.
 
 AiSOC — open-source AI Security Operations Center (MIT License)
 """
@@ -69,14 +85,23 @@ HIGH_THRESHOLD = 0.70
 LOW_THRESHOLD = 0.40
 
 # Factor weights — keep summing to 1.0 if you tweak.
-WEIGHT_SEVERITY = 0.18
-WEIGHT_ML_ANOMALY = 0.17
-WEIGHT_ML_PRIORITY = 0.17
-WEIGHT_MITRE = 0.14
-WEIGHT_THREAT_INTEL = 0.15
-WEIGHT_UPSTREAM_RISK = 0.08
-WEIGHT_IOC_DENSITY = 0.05
-WEIGHT_ASSET_CRITICALITY = 0.06
+# `test_weights_sum_to_one` holds this, and it is not decoration: the score
+# is `0.5 + Σ(w·c)` with contributions in [-1, +1], so a total above 1.0
+# lets a single all-positive alert clamp at the ceiling and a total below it
+# makes `HIGH` unreachable.
+WEIGHT_SEVERITY = 0.1692
+WEIGHT_ML_ANOMALY = 0.1598
+WEIGHT_ML_PRIORITY = 0.1598
+WEIGHT_MITRE = 0.1316
+WEIGHT_THREAT_INTEL = 0.1410
+WEIGHT_UPSTREAM_RISK = 0.0752
+WEIGHT_IOC_DENSITY = 0.0470
+WEIGHT_ASSET_CRITICALITY = 0.0564
+#: Depth plan wave 2, 1.1. Deliberately the same magnitude as asset
+#: criticality: both are context about *what the alert is about* rather than
+#: evidence that it happened, and letting either outweigh the detection
+#: itself is how a prioritisation scheme gets switched off.
+WEIGHT_IDENTITY_PRIVILEGE = 0.0600
 
 # What the asset the alert landed on contributes. Unknown — no inventory, no
 # match — is exactly 0.0: the absence of a CMDB row is not evidence in either
@@ -89,6 +114,31 @@ _ASSET_CRITICALITY_CONTRIBUTION = {
     "low": -0.3,
     "none": -0.5,
 }
+
+# What the actor's privilege contributes. Same shape and same reasoning as
+# the asset table above: `unknown` is exactly 0.0, because "no posture has
+# been collected for this provider" is not evidence in either direction, and
+# the factor row still appears so an analyst sees that the platform could not
+# answer rather than seeing nothing at all.
+#
+# `standard` is mildly negative for the same reason `low` criticality is: an
+# ordinary account doing something is less interesting than an administrator
+# doing it, and a scheme where context can only ever increase a score stops
+# being able to deprioritise anything.
+_PRIVILEGE_TIER_CONTRIBUTION = {
+    "domain_admin": 1.0,
+    "admin": 0.7,
+    "elevated": 0.3,
+    "standard": -0.2,
+    "unknown": 0.0,
+}
+
+#: Each tag that is *true* adds this much, capped below. Tags are evidence
+#: about reach, and reach compounds: an identity that can escalate AND
+#: reaches another account is worse than either alone. The cap stops four
+#: tags from making the tier irrelevant.
+_PRIVILEGE_TAG_STEP = 0.2
+_PRIVILEGE_TAG_CAP = 0.6
 
 _SEVERITY_CONTRIBUTION = {
     AlertSeverity.CRITICAL: 1.0,
@@ -145,6 +195,43 @@ def _ti_contribution(enrichments: dict | None) -> tuple[float, str]:
     if hits == 1:
         return 0.6, sources[0]
     return 1.0, " + ".join(sources)
+
+
+#: The key `services/fusion/app/services/identity_privilege_context.py`
+#: writes. Imported as a literal rather than from that module so the scorer
+#: keeps no import of the thing that opens a database connection.
+_PRIVILEGE_STAMP_KEY = "identity_privilege"
+
+
+def _privilege_contribution(stamp: object) -> tuple[float, str]:
+    """Tier plus capped tag steps, and the sentence the UI renders.
+
+    Returns ``(contribution, value)``. The value string is what an analyst
+    reads in the evidence chain, so it says "unknown" in words whenever the
+    contribution is zero for lack of data — a 0.00 with no explanation is
+    indistinguishable from a measured neutral.
+    """
+    if not isinstance(stamp, dict):
+        return 0.0, "unknown (no posture collected)"
+
+    tier = str(stamp.get("tier") or "unknown").lower()
+    if tier == "unknown":
+        reason = str(stamp.get("reason") or "no posture snapshot covers this event")
+        return 0.0, f"unknown ({reason})"
+
+    contribution = _PRIVILEGE_TIER_CONTRIBUTION.get(tier, 0.0)
+
+    tags = stamp.get("tags_set")
+    if not isinstance(tags, list):
+        raw_tags = stamp.get("tags")
+        tags = [k for k, v in raw_tags.items() if v is True] if isinstance(raw_tags, dict) else []
+    tag_bonus = min(_PRIVILEGE_TAG_CAP, len(tags) * _PRIVILEGE_TAG_STEP)
+
+    contribution = max(-1.0, min(1.0, contribution + tag_bonus))
+    value = tier if not tags else f"{tier} ({', '.join(sorted(tags))})"
+    if stamp.get("snapshot_partial"):
+        value = f"{value} — snapshot incomplete"
+    return contribution, value
 
 
 def _ioc_density_contribution(alert) -> tuple[float, int]:
@@ -309,7 +396,24 @@ class ConfidenceScorer:
             )
         )
 
-        # 9. Institutional memory nudge (Wave 1) — a bounded ±MEMORY_CAP
+        # 9. Actor privilege at event time (depth 2 wave 2, 1.1). Read from
+        # the fuse-time stamp (`enrichments["identity_privilege"]`), never
+        # queried here — the scorer stays a pure projection, same contract
+        # as the asset factor above.
+        privilege_contribution, privilege_value = _privilege_contribution(
+            (fused.enrichments or {}).get(_PRIVILEGE_STAMP_KEY)
+        )
+        rationale.append(
+            ConfidenceFactor(
+                factor="identity_privilege",
+                label="Actor privilege at event time",
+                value=privilege_value,
+                contribution=privilege_contribution,
+                weight=WEIGHT_IDENTITY_PRIVILEGE,
+            )
+        )
+
+        # 10. Institutional memory nudge (Wave 1) — a bounded ±MEMORY_CAP
         # adjustment from the distilled per-signature prior. A signature the
         # analysts have repeatedly corrected to benign pulls new alerts of that
         # signature down; one repeatedly confirmed nudges up. Unknown
