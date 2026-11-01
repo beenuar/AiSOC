@@ -23315,6 +23315,16 @@ components:
           - type: string
           - type: 'null'
           title: Disposition
+        src_ip_class:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class
+        src_ip_class_dataset_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class Dataset Version
         affected_ips:
           items: {}
           type: array
@@ -23773,6 +23783,16 @@ components:
           - type: string
           - type: 'null'
           title: Disposition
+        src_ip_class:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class
+        src_ip_class_dataset_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class Dataset Version
         affected_ips:
           items: {}
           type: array

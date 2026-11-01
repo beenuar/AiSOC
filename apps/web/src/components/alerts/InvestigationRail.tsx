@@ -148,6 +148,7 @@ export function InvestigationRail({ alertId, onClose }: InvestigationRailProps) 
         ) : (
           <>
             <AutomatedTriageSection alert={alert} />
+            <SourceAddressClassSection alert={alert} />
             <BusinessContextSection ctx={alert.businessContext ?? null} />
             <NarrativeSection narrative={alert.narrative ?? null} />
             <RelatedEntitiesSection entities={alert.relatedEntities ?? []} />
@@ -427,6 +428,82 @@ function AutomatedTriageSection({ alert }: { alert: Alert }) {
     </section>
   );
 }
+
+/**
+ * What the pinned ingest dataset said about the source address.
+ *
+ * Rendered only when there is something to say. An alert whose address the
+ * dataset has never seen gets no section at all, deliberately: three of the
+ * five classes ship with no records because no redistributable source for
+ * them exists, so "no class" is the ordinary answer and a chip reading "not
+ * an anonymizer" would be a reassurance the data cannot support.
+ *
+ * The dataset version sits beside the class for the same reason it is a
+ * column rather than an inference: the dataset is refreshed, an address
+ * changes class over time, and an analyst reading an old alert has to be
+ * able to tell a reclassification from a change in behaviour.
+ */
+function SourceAddressClassSection({ alert }: { alert: Alert }) {
+  if (!alert.srcIpClass) return null;
+  // A value outside the closed set renders as nothing rather than as an
+  // unlabelled chip. `normalizeAlert` already drops unknown classes, so this
+  // only fires for an envelope that reached the component another way, and
+  // an unexplained class on a security surface is worse than silence.
+  const cfg = IP_CLASS_CONFIG[alert.srcIpClass];
+  if (!cfg) return null;
+  return (
+    <section className="px-4 py-4 border-b border-gray-800/40">
+      <SectionHeader title="Source address" />
+      <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={clsx(
+            'inline-flex items-center rounded px-2 py-0.5 text-xs font-medium',
+            cfg.tone,
+          )}
+        >
+          {cfg.label}
+        </span>
+        {alert.srcIpClassDatasetVersion && (
+          <span className="text-[11px] text-gray-500">
+            dataset {alert.srcIpClassDatasetVersion}
+          </span>
+        )}
+      </div>
+      <p className="mt-1.5 text-xs text-gray-500">{cfg.detail}</p>
+    </section>
+  );
+}
+
+const IP_CLASS_CONFIG: Record<
+  NonNullable<Alert['srcIpClass']>,
+  { label: string; tone: string; detail: string }
+> = {
+  tor_exit: {
+    label: 'Tor exit relay',
+    tone: 'bg-rose-500/10 text-rose-300 ring-1 ring-rose-500/30',
+    detail: 'The address is published as a Tor exit relay. The originating network is not observable.',
+  },
+  vpn: {
+    label: 'VPN exit',
+    tone: 'bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/30',
+    detail: 'The address is on a list of VPN exit nodes supplied by this tenant.',
+  },
+  public_proxy: {
+    label: 'Public proxy',
+    tone: 'bg-amber-500/10 text-amber-300 ring-1 ring-amber-500/30',
+    detail: 'The address is on a list of open proxies supplied by this tenant.',
+  },
+  residential_proxy: {
+    label: 'Residential proxy',
+    tone: 'bg-orange-500/10 text-orange-300 ring-1 ring-orange-500/30',
+    detail: 'The address is on a list of residential proxy exits supplied by this tenant.',
+  },
+  hosting_provider: {
+    label: 'Hosting provider',
+    tone: 'bg-sky-500/10 text-sky-300 ring-1 ring-sky-500/30',
+    detail: 'The address belongs to a cloud or hosting range, not to a consumer network.',
+  },
+};
 
 function NarrativeSection({ narrative }: { narrative: string | null }) {
   if (!narrative || !narrative.trim()) return null;

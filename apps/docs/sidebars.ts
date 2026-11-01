@@ -215,6 +215,7 @@ const sidebars: SidebarsConfig = {
         "operations/white-label",
         "operations/usage-metering",
         "operations/ingest-authentication",
+        "operations/ip-classification",
         "operations/airgap",
         "operations/air-gapped",
         "operations/sandbox-providers",

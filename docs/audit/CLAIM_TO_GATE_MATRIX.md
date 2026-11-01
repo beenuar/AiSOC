@@ -355,6 +355,12 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 - Total: 342
 - GATED: 337
+| Every public source address carries the anonymizer or hosting class a pinned local dataset gives it, with the dataset version that answered | `apps/docs/docs/operations/ip-classification.md`; `docs/decisions/0018-ip-class-dataset-provenance.md`; depth plan wave 2 item 1.6 | `ci.yml` ingest Go job (`internal/normalizer/ipclass_stamp_test.go`, driving the real `Normalize` rather than the classifier, so a classifier with no caller cannot satisfy it: a Tor exit relay and a cloud range read out of the committed dataset are classified, a documentation range and an unlisted public address are not, and no private address is ever classified) + `ci.yml :: Python — Tests` (fusion, `test_ip_class_projection.py`, 9 cases: the nested ingest stamp reaches the flat namespace the matcher reads, an unstamped event gains no key, a fixture carrying only a `src_ip` classifies through the vendored loader, the two agree on one address, and `enrich` does not consult the dataset when no rule asks) + `ci.yml :: python-lint` (`check_ip_class_dataset.py --self-test` then the gate: manifest digest and record count against the committed file, downloader and manifest naming the same sources, the class vocabulary agreeing across the downloader, the loader and the manifest, the vendored copy in sync, and **the Go classifier and the Python one returning identical answers over 400 sampled addresses**) | core | GATED | **Three of the five classes ship with no records.** `vpn`, `public_proxy` and `residential_proxy` have no redistributable source - the widely cited community list carries no licence file, verified as a 404 on its default branch - so they are tenant-supplied only, and tenant-supplied lists are **not yet implemented**. An unclassified address therefore means the dataset had no entry and never that the address is ordinary: the column is NULL, the rail renders nothing and no surface says "not an anonymizer". Measured at the pinned snapshot: 21,726 records, 1,228 `tor_exit` and 20,498 `hosting_provider` across 8 sources |
+
+## Summary
+
+- Total: 335
+- GATED: 330
 - PARTIAL: 5
 - NO GATE: 0
 
