@@ -1,0 +1,28 @@
+id: det-application-087
+name: AI Agent Called a High-Risk Tool It Has Never Used
+description: 'An agent reached for a tool that changes an estate and has essentially no history of using
+  it. Novelty is per agent and not global: execute_command is routine for a deployment bot and alarming
+  for a summariser, and a count across the estate cannot tell them apart. The high-risk list is the same
+  one the AI estate''s exposure score reads, so an operator sees one definition of ''changes an estate''
+  in both places.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1059
+- tlp.white
+category: application
+log_source:
+  product: ai_runtime
+  service: runtime
+detection:
+  condition: |
+    tool_name IN ["execute_command", "run_shell", "write_file", "delete_file", "send_email", "create_user", "grant_permission", "deploy", "terraform_apply", "database_write"]
+    AND baseline_agent_tool_rarity >= 0.95
+false_positives:
+- An agent whose scope was widened deliberately, with the change recorded
+- The first run after a deployment that added the tool
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

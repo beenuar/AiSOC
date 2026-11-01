@@ -1,0 +1,25 @@
+id: det-application-090
+name: AI Gateway Key Spend Far Above Its Own Baseline
+description: 'The same question asked of the key rather than the agent, and the two are not the same incident:
+  a leaked key driving inference from outside the estate moves the key''s baseline while every agent on
+  it looks ordinary. Both are needed, which is why the baseline module keys on sub-principals rather than
+  on one chosen subject.'
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1496
+- tlp.white
+category: application
+log_source:
+  product: ai_runtime
+  service: runtime
+detection:
+  condition: |
+    baseline_gateway_key_token_spend_z >= 4.0
+false_positives:
+- A key deliberately shared with a new workload
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

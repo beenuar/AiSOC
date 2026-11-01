@@ -1,0 +1,27 @@
+id: det-application-088
+name: Guardrail Violations Rose Sharply for One AI Agent
+description: A single agent is being blocked far more often than its own history. One guardrail violation
+  is noise — a user phrasing something awkwardly — while a rise against that agent's own baseline is someone
+  probing for a phrasing that gets through. Scored per agent rather than per tenant, because a busy estate's
+  total hides one agent's change completely.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: application
+log_source:
+  product: ai_guardrail
+  service: runtime
+detection:
+  condition: |
+    outcome == "blocked"
+    AND baseline_agent_volume_z >= 3.0
+false_positives:
+- A newly tightened guardrail policy, where the rise is the policy and not the agent
+- A load test replaying blocked prompts
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

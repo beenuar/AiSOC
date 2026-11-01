@@ -1,0 +1,26 @@
+id: det-application-089
+name: AI Agent Spend Far Above Its Own Baseline
+description: Cost is the signal that notices an agent being used for something other than its job — an
+  exfiltration loop, a stolen credential driving inference, or a prompt that has started recursing. It
+  reads the gateway's own billed figure rather than recomputing one from token counts, so it cannot disagree
+  with the invoice. An unpriced request contributes nothing instead of a zero.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1496
+- tlp.white
+category: application
+log_source:
+  product: ai_runtime
+  service: runtime
+detection:
+  condition: |
+    baseline_agent_token_spend_z >= 4.0
+false_positives:
+- A deliberately larger job, such as a backfill or a bulk summarisation
+- A model change that raised the per-request cost for every agent
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

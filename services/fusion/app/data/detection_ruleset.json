@@ -1,5 +1,5 @@
 {
-  "count": 760,
+  "count": 764,
   "rules": [
     {
       "category": "application",
@@ -1303,6 +1303,79 @@
       "service": "runtime",
       "severity": "high",
       "slug": "ai-prompt-contained-credential"
+    },
+    {
+      "category": "application",
+      "id": "det-application-087",
+      "match_when": {
+        "baseline_agent_tool_rarity_gte": 0.95,
+        "tool_name_in": [
+          "execute_command",
+          "run_shell",
+          "write_file",
+          "delete_file",
+          "send_email",
+          "create_user",
+          "grant_permission",
+          "deploy",
+          "terraform_apply",
+          "database_write"
+        ]
+      },
+      "mitre": [
+        "T1059"
+      ],
+      "name": "AI Agent Called a High-Risk Tool It Has Never Used",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-agent-new-high-risk-tool"
+    },
+    {
+      "category": "application",
+      "id": "det-application-088",
+      "match_when": {
+        "baseline_agent_volume_z_gte": 3.0,
+        "outcome": "blocked"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Guardrail Violations Rose Sharply for One AI Agent",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-agent-guardrail-violation-rate"
+    },
+    {
+      "category": "application",
+      "id": "det-application-089",
+      "match_when": {
+        "baseline_agent_token_spend_z_gte": 4.0
+      },
+      "mitre": [
+        "T1496"
+      ],
+      "name": "AI Agent Spend Far Above Its Own Baseline",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "medium",
+      "slug": "ai-agent-token-spend-anomaly"
+    },
+    {
+      "category": "application",
+      "id": "det-application-090",
+      "match_when": {
+        "baseline_gateway_key_token_spend_z_gte": 4.0
+      },
+      "mitre": [
+        "T1496"
+      ],
+      "name": "AI Gateway Key Spend Far Above Its Own Baseline",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "medium",
+      "slug": "ai-gateway-key-spend-anomaly"
     },
     {
       "category": "application",

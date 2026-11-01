@@ -127,6 +127,10 @@ PRINCIPAL_FIELDS: tuple[str, ...] = (
     "principal",
     "user_arn",
     "userPrincipalName",
+    # The human an AI agent acted for. The `ai-runtime` template maps it to
+    # `actor.user.name`, which is to say the vendor and the schema already
+    # agree it is the principal; this module simply could not see it.
+    "on_behalf_of",
 )
 
 #: Event fields naming the OAuth application acting, for the per-application
@@ -512,12 +516,24 @@ class BaselineStore:
         if not tenant:
             return {}
         principal = resolve_principal(event)
-        if not principal:
+        sub_principals = resolve_sub_principals(event)
+        if not principal and not sub_principals:
+            # Previously this returned on `not principal` alone, and that
+            # skipped the whole module for any event naming a non-human
+            # subject. A gateway span names an agent and a key and often no
+            # person at all — an agent running on a schedule acts for
+            # nobody — so every per-agent baseline was computed for exactly
+            # zero events, while the field names read as working.
+            #
+            # "No subject of any kind" is still nothing to baseline, which
+            # is what this now says.
             return {}
 
         out: dict[str, Any] = {}
 
         for field, candidates in RARITY_FIELDS.items():
+            if not principal:
+                break
             value = _first_present(event, candidates)
             if value is None:
                 continue
@@ -529,15 +545,16 @@ class BaselineStore:
                 continue
             out[field] = round(self.rarity(count, total), 4)
 
-        volume = await self.observe_volume(tenant, principal, "principal", now=now)
-        if volume is not None:
-            out["baseline_principal_volume_z"] = round(volume, 4)
+        if principal:
+            volume = await self.observe_volume(tenant, principal, "principal", now=now)
+            if volume is not None:
+                out["baseline_principal_volume_z"] = round(volume, 4)
 
         # Every sub-principal this event names, through one loop. The OAuth
         # application used to be special-cased here; it is now the first
         # entry in SUB_PRINCIPAL_FIELDS and produces the same published
         # field name, because the name is derived from the key.
-        for kind, subject in resolve_sub_principals(event):
+        for kind, subject in sub_principals:
             sub_volume = await self.observe_volume(tenant, subject, kind, now=now)
             if sub_volume is not None:
                 out[f"baseline_{kind}_volume_z"] = round(sub_volume, 4)
@@ -573,7 +590,7 @@ class BaselineStore:
                     if spend is not None:
                         out[f"baseline_{kind}_token_spend_z"] = round(spend, 4)
 
-        group = _first_present(event, PEER_GROUP_FIELDS)
+        group = _first_present(event, PEER_GROUP_FIELDS) if principal else None
         if group is not None:
             # The member's own hourly volume is the quantity compared across
             # the group. Rarity is not comparable between principals — one

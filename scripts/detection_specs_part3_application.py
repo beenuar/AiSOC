@@ -753,6 +753,117 @@ AI_RUNTIME_RULES: list[dict] = [
             "capture mode."
         ),
     ),
+    # ----------------------------------------------------------------
+    # Wave-2 7.4, the four targets Phase 7.3's baselines unblock.
+    #
+    # Each clauses on a `baseline_agent_*` or `baseline_gateway_key_*`
+    # derived field, which `services/fusion/app/services/baselines.py`
+    # computes per sub-principal and `scripts/check_detection_fields.py`
+    # knows about. Novelty and rate are properties of a *history*, so the
+    # stateless matcher cannot express them on its own — which is exactly
+    # why these four could not be written before 7.3 and were recorded as
+    # blocked rather than shipped clausing on fields nothing produced.
+    #
+    # Thresholds are stated as floors on an already-bounded score: rarity
+    # is in [0,1] and a z-score is in deviations, so the numbers below are
+    # readable without knowing the corpus.
+    # ----------------------------------------------------------------
+    S(
+        slug="ai-agent-new-high-risk-tool",
+        name="AI Agent Called a High-Risk Tool It Has Never Used",
+        severity="high",
+        mitre=["t1059"],
+        product="ai_runtime",
+        service="runtime",
+        when={
+            "tool_name_in": [
+                "execute_command",
+                "run_shell",
+                "write_file",
+                "delete_file",
+                "send_email",
+                "create_user",
+                "grant_permission",
+                "deploy",
+                "terraform_apply",
+                "database_write",
+            ],
+            "baseline_agent_tool_rarity_gte": 0.95,
+        },
+        fp=[
+            "An agent whose scope was widened deliberately, with the change recorded",
+            "The first run after a deployment that added the tool",
+        ],
+        playbook="tpl-privilege-escalation",
+        description=(
+            "An agent reached for a tool that changes an estate and has essentially no "
+            "history of using it. Novelty is per agent and not global: execute_command is "
+            "routine for a deployment bot and alarming for a summariser, and a count across "
+            "the estate cannot tell them apart. The high-risk list is the same one the AI "
+            "estate's exposure score reads, so an operator sees one definition of "
+            "'changes an estate' in both places."
+        ),
+    ),
+    S(
+        slug="ai-agent-guardrail-violation-rate",
+        name="Guardrail Violations Rose Sharply for One AI Agent",
+        severity="high",
+        mitre=["t1078"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"outcome": "blocked", "baseline_agent_volume_z_gte": 3.0},
+        fp=[
+            "A newly tightened guardrail policy, where the rise is the policy and not the agent",
+            "A load test replaying blocked prompts",
+        ],
+        playbook="tpl-triage",
+        description=(
+            "A single agent is being blocked far more often than its own history. One "
+            "guardrail violation is noise — a user phrasing something awkwardly — while a "
+            "rise against that agent's own baseline is someone probing for a phrasing that "
+            "gets through. Scored per agent rather than per tenant, because a busy estate's "
+            "total hides one agent's change completely."
+        ),
+    ),
+    S(
+        slug="ai-agent-token-spend-anomaly",
+        name="AI Agent Spend Far Above Its Own Baseline",
+        severity="medium",
+        mitre=["t1496"],
+        product="ai_runtime",
+        service="runtime",
+        when={"baseline_agent_token_spend_z_gte": 4.0},
+        fp=[
+            "A deliberately larger job, such as a backfill or a bulk summarisation",
+            "A model change that raised the per-request cost for every agent",
+        ],
+        playbook="tpl-triage",
+        description=(
+            "Cost is the signal that notices an agent being used for something other than "
+            "its job — an exfiltration loop, a stolen credential driving inference, or a "
+            "prompt that has started recursing. It reads the gateway's own billed figure "
+            "rather than recomputing one from token counts, so it cannot disagree with the "
+            "invoice. An unpriced request contributes nothing instead of a zero."
+        ),
+    ),
+    S(
+        slug="ai-gateway-key-spend-anomaly",
+        name="AI Gateway Key Spend Far Above Its Own Baseline",
+        severity="medium",
+        mitre=["t1496"],
+        product="ai_runtime",
+        service="runtime",
+        when={"baseline_gateway_key_token_spend_z_gte": 4.0},
+        fp=["A key deliberately shared with a new workload"],
+        playbook="tpl-triage",
+        description=(
+            "The same question asked of the key rather than the agent, and the two are not "
+            "the same incident: a leaked key driving inference from outside the estate "
+            "moves the key's baseline while every agent on it looks ordinary. Both are "
+            "needed, which is why the baseline module keys on sub-principals rather than "
+            "on one chosen subject."
+        ),
+    ),
     S(
         slug="ai-agent-tool-call-failed-repeatedly",
         name="AI Agent Tool Call Denied",

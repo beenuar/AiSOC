@@ -31,17 +31,30 @@
 # "api-key-leak-in-request", "slack-token-exposed". The values are rule ids
 # of the form det-application-085. Nothing in this file is a secret; the
 # heuristic is firing on the slug, not on the value.
-detections/rule-ids.lock.json:generic-api-key:4
-detections/rule-ids.lock.json:generic-api-key:10
-detections/rule-ids.lock.json:generic-api-key:15
+#
+# These fingerprints pin a *line number*, so any commit that adds a rule
+# shifts the ones below it and silently invalidates their entries — the
+# exact rot the note above describes. The fix is to correct the numbers,
+# never to drop an entry or relax the job, and the set must be re-derived
+# with the allow-list **removed** (the way the job's own control step runs
+# it). Deriving it with a stale allow-list in place under-counts, because
+# some findings are suppressed by coincidence where an old line number
+# happens to match a new finding.
+detections/rule-ids.lock.json:generic-api-key:5
+detections/rule-ids.lock.json:generic-api-key:7
+detections/rule-ids.lock.json:generic-api-key:8
+detections/rule-ids.lock.json:generic-api-key:14
 detections/rule-ids.lock.json:generic-api-key:19
-detections/rule-ids.lock.json:generic-api-key:22
-detections/rule-ids.lock.json:generic-api-key:39
-detections/rule-ids.lock.json:generic-api-key:53
-detections/rule-ids.lock.json:generic-api-key:54
-detections/rule-ids.lock.json:generic-api-key:65
-detections/rule-ids.lock.json:generic-api-key:67
-detections/rule-ids.lock.json:generic-api-key:82
+detections/rule-ids.lock.json:generic-api-key:23
+detections/rule-ids.lock.json:generic-api-key:26
+detections/rule-ids.lock.json:generic-api-key:43
+detections/rule-ids.lock.json:generic-api-key:57
+detections/rule-ids.lock.json:generic-api-key:58
+detections/rule-ids.lock.json:generic-api-key:69
+detections/rule-ids.lock.json:generic-api-key:71
+detections/rule-ids.lock.json:generic-api-key:86
+detections/rule-ids.lock.json:generic-api-key:845
+detections/rule-ids.lock.json:generic-api-key:858
 
 # Positive test fixture for the `jwt-none-alg` detection rule. This file is
 # *expected* to contain a JWT with `alg: none` because the detection engine
@@ -149,5 +162,3 @@ services/api/tests/test_evidence_bundle.py:generic-api-key:26
 # rule's id so regeneration cannot renumber it. The scanner's key/value
 # heuristic reads the pair as an api key; it is a rule identifier in a
 # generated lock file.
-detections/rule-ids.lock.json:generic-api-key:841
-detections/rule-ids.lock.json:generic-api-key:854

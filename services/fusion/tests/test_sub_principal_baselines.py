@@ -356,3 +356,38 @@ async def test_the_hour_of_day_is_baselined_per_agent(store: BaselineStore):
     """
     fields = await store.derived_fields(TENANT, AGENT_EVENT)
     assert "baseline_agent_hour_rarity" in fields
+
+
+async def test_an_agent_acting_for_nobody_still_gets_a_baseline(store: BaselineStore):
+    """The defect that made every per-agent baseline compute on zero events.
+
+    `derived_fields` returned `{}` whenever `resolve_principal` found no
+    human. A gateway span names an agent and a key and frequently no
+    person at all — an agent running on a schedule acts for nobody — so
+    the sub-principal half was skipped for exactly the events it exists
+    to score, while the field names read as working.
+
+    Found by driving the real store from the real connector output rather
+    than by reading the function, because the early return is three lines
+    above the code it disables.
+    """
+    autonomous = {k: v for k, v in AGENT_EVENT.items() if k not in {"user", "on_behalf_of"}}
+
+    fields = await store.derived_fields(TENANT, autonomous)
+
+    assert "baseline_agent_tool_rarity" in fields
+    assert "baseline_agent_hour_rarity" in fields
+    # And no principal-scoped field, because there is genuinely no
+    # principal — the fix must not invent one.
+    assert "baseline_principal_volume_z" not in fields
+    assert "baseline_peer_deviation" not in fields
+
+
+async def test_the_human_an_agent_acts_for_is_recognised_as_the_principal(store: BaselineStore):
+    """`on_behalf_of` is what the `ai-runtime` template maps to
+    `actor.user.name`, so the vendor and the schema already agree it is
+    the principal. This module simply could not see it, which meant an
+    agent acting for a named person contributed nothing to that person's
+    own baseline."""
+    fields = await store.derived_fields(TENANT, {k: v for k, v in AGENT_EVENT.items() if k != "user"})
+    assert "baseline_agent_tool_rarity" in fields

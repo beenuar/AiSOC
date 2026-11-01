@@ -1,6 +1,10 @@
 {
   "application/ai-agent-excessive-agency": "det-application-080",
+  "application/ai-agent-guardrail-violation-rate": "det-application-088",
+  "application/ai-agent-new-high-risk-tool": "det-application-087",
+  "application/ai-agent-token-spend-anomaly": "det-application-089",
   "application/ai-agent-tool-call-failed-repeatedly": "det-application-086",
+  "application/ai-gateway-key-spend-anomaly": "det-application-090",
   "application/ai-prompt-contained-credential": "det-application-085",
   "application/ai-prompt-injection-detected": "det-application-079",
   "application/ai-sensitive-data-egress": "det-application-081",
