@@ -297,6 +297,84 @@ async def identity_effective_permissions(
     return row
 
 
+# ------------------------------------------ what changed before (1.5)
+
+
+CHANGES_BEFORE_TOOL = "changes_before_alert"
+
+CHANGES_BEFORE_DESCRIPTION = (
+    "Every recorded change touching these identities or resources in the days BEFORE this alert: "
+    "role and group grants, policy edits, OAuth consents, MFA factor changes, sharing changes and "
+    "key creation. Reads the customer's versioned posture and their audit events, and says which "
+    "of the two it could read. An answer of 'could not read' is a gap in visibility and is NOT "
+    "evidence that nothing changed."
+)
+
+CHANGES_BEFORE_PARAMETERS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "subjects": {
+            "type": "string",
+            "description": (
+                "Comma-separated identities or resources from the alert. Ask about the actor and "
+                "the thing it touched together rather than in two calls."
+            ),
+        },
+        "at": {
+            "type": "string",
+            "description": "ISO-8601 timestamp of the alert. The window ends here.",
+        },
+        "days": {
+            "type": "integer",
+            "description": "How many days before `at` to look. Default 7, maximum 90.",
+        },
+    },
+    "required": ["subjects"],
+}
+
+
+async def changes_before_alert(
+    subjects: str,
+    at: str = "",
+    days: int = 7,
+    *,
+    tenant_id: str = "",
+) -> dict[str, Any]:
+    """Ask the API what changed before this alert.
+
+    Through `/investigate/query` like the privilege tool, for the same
+    reason: one dispatch table means the console and the model cannot be
+    offered different tools, and the endpoint takes the tenant from the
+    authenticated principal rather than from the request.
+    """
+    what = f"changes to {subjects!r} before this alert"
+    args: dict[str, Any] = {"subjects": subjects, "days": int(days or 7)}
+    if at:
+        args["at"] = at
+
+    body = await _call(
+        "/api/v1/graph/investigate/query",
+        {"tool": CHANGES_BEFORE_TOOL, "args": args},
+        what,
+        tenant_id,
+    )
+    if body.get("available") is False:
+        return body
+
+    rows = body.get("rows") or []
+    return {
+        "available": True,
+        "outcome": "resolved",
+        "change_count": len(rows),
+        "changes": rows,
+        "query": body.get("query"),
+        # Present even when the list is empty: "read both sources and found
+        # nothing" is a measured result, and without this sentence a model
+        # reads an empty list as a failed lookup -- or worse, the reverse.
+        "note": body.get("reason"),
+    }
+
+
 # ------------------------------------------------------------- SIEM search
 
 

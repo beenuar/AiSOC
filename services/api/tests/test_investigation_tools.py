@@ -91,6 +91,8 @@ UNBACKED_CALLS: list[tuple[str, dict[str, Any]]] = [
 POSTGRES_BACKED_CALLS: list[tuple[str, dict[str, Any]]] = [
     ("identity_effective_permissions", {"principal_id": "alice"}),
     ("identity_effective_permissions", {"principal_id": "alice", "at": "2026-10-01T00:00:00Z", "provider": "aws"}),
+    ("changes_before_alert", {"subjects": "alice"}),
+    ("changes_before_alert", {"subjects": "alice,arn:aws:s3:::data", "at": "2026-10-01T00:00:00Z", "days": 14}),
 ]
 
 

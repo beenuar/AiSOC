@@ -126,6 +126,7 @@ __all__ = [
 AGENT_TOOL_NAMES: frozenset[str] = frozenset(
     {
         # app/tools/registry.py :: default_registry
+        "changes_before_alert",
         "enrich_ioc",
         "extract_iocs",
         # Depth 2 wave 2, 1.1. Worth the guard more than most: a fabricated

@@ -76,9 +76,13 @@ def default_registry(tenant_id: str = "") -> ToolRegistry:
     """
     from app.investigator.tools import enrich_ioc, extract_iocs, map_to_mitre
     from app.tools.customer_tools import (
+        CHANGES_BEFORE_DESCRIPTION,
+        CHANGES_BEFORE_PARAMETERS,
+        CHANGES_BEFORE_TOOL,
         EFFECTIVE_PERMISSIONS_DESCRIPTION,
         EFFECTIVE_PERMISSIONS_PARAMETERS,
         EFFECTIVE_PERMISSIONS_TOOL,
+        changes_before_alert,
         identity_effective_permissions,
     )
     from app.tools.mitre import lookup_technique
@@ -105,6 +109,15 @@ def default_registry(tenant_id: str = "") -> ToolRegistry:
                 fn=lambda principal_id, at="", provider="": identity_effective_permissions(
                     principal_id, at=at, provider=provider, tenant_id=tenant_id
                 ),
+            ),
+            # Depth 2 wave 2, 1.5. Registered beside the privilege tool
+            # because the two answer halves of one question: what this
+            # identity could do, and what changed shortly before it did.
+            Tool(
+                name=CHANGES_BEFORE_TOOL,
+                description=CHANGES_BEFORE_DESCRIPTION,
+                parameters=CHANGES_BEFORE_PARAMETERS,
+                fn=lambda subjects, at="", days=7: changes_before_alert(subjects, at=at, days=days, tenant_id=tenant_id),
             ),
             Tool(
                 name="extract_iocs",

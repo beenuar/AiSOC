@@ -589,6 +589,78 @@ async def identity_effective_permissions(
     )
 
 
+async def changes_before_alert(
+    tenant_id: uuid.UUID | str,
+    subjects: str,
+    *,
+    at: str | None = None,
+    days: int = 7,
+) -> ToolResult:
+    """Every recorded change touching these identities before the alert.
+
+    Depth plan wave 2, 1.5. ``subjects`` is a comma-separated list of
+    identities or resources, because the question is usually about a person
+    *and* the thing they touched, and two tool calls to ask one question is
+    how a model runs out of its step budget.
+
+    Reads versioned posture and the audit lake, and says which of the two
+    answered. "Nothing changed" and "we could not look" are returned as
+    different results, which is the whole reason this is a tool rather than
+    a query: the second must never read as the first.
+    """
+    from app.db.database import AsyncSessionLocal  # noqa: PLC0415 — keeps the lake tools import-light
+    from app.services.change_timeline import changes_before
+
+    names = [s.strip() for s in str(subjects or "").split(",") if s.strip()]
+    if not names:
+        return ToolResult(
+            tool="changes_before_alert",
+            available=False,
+            reason="No identity or resource was named, so there was nothing to look up.",
+        )
+
+    when = _parse_at(at)
+    try:
+        async with AsyncSessionLocal() as session:
+            timeline = await changes_before(
+                session,
+                tenant_id=_as_uuid(tenant_id),
+                subjects=names,
+                at=when,
+                days=days,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("investigation_tool.changes_before_alert failed err=%s", type(exc).__name__)
+        return ToolResult(
+            tool="changes_before_alert",
+            available=False,
+            reason=(f"The change lookup failed ({type(exc).__name__}). This is a lookup failure, not an absence of change."),
+        )
+
+    payload = timeline.as_dict()
+    if not timeline.measured:
+        return ToolResult(
+            tool="changes_before_alert",
+            available=False,
+            reason=payload["reason"],
+            query_description=f"changes to {', '.join(names)} in the {days} day(s) before {when.isoformat()}",
+        )
+
+    return ToolResult(
+        tool="changes_before_alert",
+        rows=payload["changes"],
+        row_count=payload["change_count"],
+        # Carried even on a zero-row answer, because "read both sources and
+        # found nothing" is a measured result and has to read like one.
+        reason=payload.get("reason"),
+        query_description=(
+            f"changes to {', '.join(names)} in the {days} day(s) before {when.isoformat()}; "
+            f"read {', '.join(payload['sources_read'])}"
+            + (f"; could not read {', '.join(payload['sources_failed'])}" if payload["sources_failed"] else "")
+        ),
+    )
+
+
 def _parse_at(at: str | None) -> datetime:
     """An ISO timestamp, or now. An unparseable one is now, with no pretence.
 
@@ -622,6 +694,7 @@ TOOLS: dict[str, Any] = {
     "entity_timeline": entity_timeline,
     "technique_activity": technique_activity,
     "identity_effective_permissions": identity_effective_permissions,
+    "changes_before_alert": changes_before_alert,
     "process_tree": process_tree,
     "mailbox_activity": mailbox_activity,
     "oauth_grants": oauth_grants,
@@ -643,6 +716,10 @@ BACKED_TOOLS = frozenset(
         # the lake, which is why it is the one entry here that can answer on
         # a CORE install with no ClickHouse.
         "identity_effective_permissions",
+        # Reads both: versioned posture in Postgres and audit events in
+        # the lake. It reports which of the two answered, so a CORE install
+        # gets the posture half and is told the other was not read.
+        "changes_before_alert",
     }
 )
 
