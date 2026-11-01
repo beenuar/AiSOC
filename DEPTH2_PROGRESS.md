@@ -208,8 +208,11 @@ this is an observation with its evidence attached.
       [#1585](https://github.com/beenuar/AiSOC/pull/1585).
 - [x] **7.2** Hosted agents and repository AI artefacts as new asset kinds.
       [#1585](https://github.com/beenuar/AiSOC/pull/1585).
-- [ ] **7.3** Agent identity and per-agent baselines (depth 6.4 / parity 6.7).
-- [ ] **7.4** AI rule pack (depth 6.5 plus this plan's additions).
+- [!] **7.3** Agent identity and per-agent baselines (depth 6.4 / parity 6.7)
+      — not delivered; reproduced gap and what is needed recorded below.
+- [~] **7.4** AI rule pack — four of the listed targets shipped and replayed
+      ([#1585](https://github.com/beenuar/AiSOC/pull/1585)); the rest need a
+      producer or 7.3's baselines, each recorded below.
 
 ## Item log
 
@@ -344,3 +347,77 @@ audit events (`copilot.swe_agent_*`), which 7.1 now ingests but which are
 events rather than an inventory; `docs.github.com/en/rest/copilot/copilot-agents`
 is a 404. **Blocked, with exactly what is needed:** a published REST reference
 for a second provider's hosted-agent list, or a recorded response from one.
+
+### 7.4 — AI rule pack (PARTIAL, four of the listed targets)
+
+**What already existed.** Sixteen executable AI rules: eight `llm-*` on the
+OpenAI/Anthropic control plane and eight `ai-*` on runtime and guardrail
+findings. Not rebuilt.
+
+**Reproduced gap.** `.laneE/repro_7x.py` showed no rule anywhere clausing on
+a Copilot audit action, a consent scope or an assistant's resource-access
+volume, because until 7.1 no connector emitted any of them.
+
+**What shipped.** Four rules on the feeds 7.1 added:
+`llm-copilot-content-exclusion-changed` (critical),
+`llm-copilot-agent-mcp-config-changed` (high),
+`llm-ai-app-granted-write-scope` (high),
+`llm-copilot-bulk-resource-access` (medium).
+
+**Replay proof.** `services/fusion/tests/test_ai_rule_pack_replay.py` drives
+the real `DetectionEngine` over the real compiled ruleset against fixtures
+that are the committed output of `LlmUsageConnector.normalize()` — not
+synthesized from the rules. Each negative twin differs in exactly one
+decisive field, and a test asserts that property on the fixtures rather than
+trusting it.
+
+**Negative control.** Rewriting one rule's clause to the unprefixed vendor
+action — the exact shape of the measured GitHub failure where 1 of 12 rules
+fired on real output — and re-exporting fails that rule's positive replay
+while the other three stay green.
+
+**Measurement delta.** Executable detections **2,530 → 2,534**; on disk
+7,015 → 7,019. Re-derived with `python3 scripts/project_stats.py` and
+propagated by the generators to the README, `ROADMAP.md`, the truth table,
+`corpus-stats.json`, both marketplace indexes and the packaged API copy. No
+figure was hand-typed; `test_readme_figures_gate.py` passes (23).
+
+**Not delivered, and why — the remaining targets each need a producer that
+does not exist yet.** Recorded rather than shipped as rules clausing on
+fields nothing emits, which is the failure this plan's replay rule exists to
+prevent:
+
+| Target | What is missing |
+|---|---|
+| Provider key used from a new ASN | No provider audit log read here carries a source IP, so there is no address to resolve to an ASN. Needs 1.6's anonymiser/ASN dataset plus a provider feed that emits the IP. |
+| Agent invoking a *new* high-risk tool | "New" is a per-agent baseline, which is 7.3 and is not built. The stateless engine can see the tool, not its novelty. |
+| Rise in guardrail violations | A rate over a window per agent; same dependency on 7.3. |
+| Token-spend anomalies per key and per agent | `cost_telemetry.py` records per-call cost and the dashboard aggregates it, but neither writes a per-agent baseline the engine can read. Wiring a second meter was explicitly refused. |
+| Secrets or personal data labelled in AI chats | The labels exist (7.1, migration 146) but live in Postgres, not on the event stream the engine evaluates. Needs a promoter from `aisoc_ai_chat_content_labels` to an event, which is a design decision rather than a rule. |
+| Agent process reading browser cookie or credential stores | Endpoint discovery sees AI processes; nothing emits a file-access event scoped to cookie or credential stores. Needs an osquery/EDR producer. |
+
+### 7.3 — Agent identity and baselines: NOT DELIVERED
+
+**Reproduced gap, recorded for whoever picks it up.** Two halves, both open:
+
+- *Agent identity.* No module in the tree defines an identity for AiSOC's own
+  agents: `grep -rln "agent_identity\|AgentIdentity\|agent_principal"` across
+  `services/` returns nothing. Parity 6.7 asks for short-lived credentials and
+  least-privilege tool scopes visible in the audit log.
+- *Per-agent baselines.* `services/fusion/app/services/baselines.py` defines
+  **zero** `baseline_*` functions; the only AI-adjacent signal is
+  `baseline_oauth_app_volume_z`, emitted inside `BaselineStore` and keyed on
+  the OAuth application, not on an agent. Nothing keys a baseline on an agent
+  identity, and `cost_telemetry.py` has no baseline writer at all.
+
+**Why it is not started rather than half-built.** It is the dependency under
+four of 7.4's six remaining targets, so a partial version would have produced
+rules that cannot fire — and 7.5 (Lane D) depends on 7.1, which landed first
+as instructed. Starting a per-agent baseline store without the agent identity
+half would key it on whatever field happened to be present, which is how
+`baseline_oauth_app_volume_z` came to be the only one.
+
+**What is needed:** the full item, in order — agent identities with
+short-lived credentials and least-privilege tool scopes first, then baselines
+keyed on them (tools, resources, volume, token spend, hours) reading the
+existing `cost_telemetry.py` rather than a second meter.
