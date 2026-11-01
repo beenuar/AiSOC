@@ -49,7 +49,7 @@ from app.models.ai_chat_compliance import (
     AiChatUser,
 )
 from app.security.credential_vault import CredentialVaultError, get_vault
-from app.services.ai_chat_compliance.collector import collect_for_tenant
+from app.services.ai_estate_collectors import collect_chat_compliance
 
 logger = structlog.get_logger()
 
@@ -240,42 +240,6 @@ async def delete_config(
     )
 
 
-class SyncResponse(BaseModel):
-    """What one collection run did."""
-
-    users: int
-    projects: int
-    events: int
-    contentLabels: int
-    chatsSkipped: int
-    contentUnavailable: bool
-    errors: list[str]
-
-
-@router.post("/sync", response_model=SyncResponse)
-async def sync_now(
-    db: TenantDBSession,
-    current_user: Annotated[CurrentUser, Depends(require_permission("ai_estate:write"))],
-) -> SyncResponse:
-    """Collect now, for this tenant.
-
-    This route is the production caller the collector, client and
-    classifier never had. Until it existed the four tables migration 146
-    creates could only ever be empty, and the events page read "nothing
-    here" on a tenant that had configured collection and switched it on --
-    which reads as no AI-chat risk rather than as nothing having looked.
-
-    Write-permissioned deliberately: a sync spends a tenant's provider
-    quota and writes rows, so it is not a read.
-
-    Partial failure is reported, never swallowed. A directory call that
-    403s still leaves the activity records that were written, and the
-    reason lands on both this response and the config row's ``lastError``.
-    """
-    result = await collect_for_tenant(db, current_user.tenant_id)
-    return SyncResponse(**result.as_dict())
-
-
 @router.get("/events", response_model=AuditEventListResponse)
 async def list_events(
     db: TenantDBSession,
@@ -345,3 +309,52 @@ async def list_content_labels(
         total=total,
         contentLabelsEnabled=bool(config and config.content_labels_enabled),
     )
+
+
+class CollectionResponse(BaseModel):
+    """What one collection pass did, per sink.
+
+    Per sink rather than one total: a single number presented as the
+    operation's result reads as total failure when one sink failed and the
+    others worked, which is how a threat-intel pass reported `indexed: 0`
+    beside a successful write of 1,739 rows.
+    """
+
+    users: int
+    projects: int
+    events: int
+    contentLabels: int
+    assets: int
+    #: Present and empty is different from absent. An empty list means the
+    #: pass ran cleanly; a non-empty one names what failed.
+    errors: list[str] = Field(default_factory=list)
+    #: Sinks deliberately not attempted, with the reason — an Admin API key
+    #: reaching only the activity feed, or content classification being off.
+    skipped: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/collect", response_model=CollectionResponse)
+async def collect_now(
+    db: TenantDBSession,
+    current_user: Annotated[CurrentUser, Depends(require_permission("ai_estate:write"))],
+) -> CollectionResponse:
+    """Run one collection pass for this tenant.
+
+    Explicit rather than scheduled. Every read here reaches a third party
+    with the tenant's own credential, and the plan's rule for anything
+    that reaches out is off by default and enabled per tenant — so the
+    tenant decides when it runs, not a loop that started the moment a key
+    was saved.
+
+    A tenant with no configuration, or with collection disabled, gets a
+    zero-count response whose `skipped` says which it was. The two are
+    different states and a bare zero cannot tell them apart.
+    """
+    result = await collect_chat_compliance(db, current_user.tenant_id)
+    logger.info(
+        "ai_chat_compliance.collect_requested",
+        tenant_id=str(current_user.tenant_id),
+        actor=str(current_user.user_id),
+        **result.as_dict(),
+    )
+    return CollectionResponse(**result.as_dict())

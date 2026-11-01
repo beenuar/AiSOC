@@ -154,26 +154,6 @@ ALLOWED_UNREACHABLE: dict[str, str] = {
         "app.llm.tool_loop. Nothing imports the old path any more, so this "
         "is a compatibility shim with nothing left to be compatible with."
     ),
-    # ── Depth wave 2, Phase 7.2: built against a producer that does not
-    # exist yet. Both are pure functions over a payload, so neither can
-    # acquire a caller until something fetches that payload. Each names the
-    # one piece of collection work that removes its entry, and this gate
-    # fails the moment either becomes reachable, which is how the entry
-    # gets deleted rather than renewed.
-    "services/api/app/services/ai_repo_scan.py": (
-        "Scans a repository's agent-instruction, skill and MCP config files "
-        "and returns what tools and servers they reference. `scan_repository` "
-        "takes the file contents already fetched, and no connector in this "
-        "tree fetches them: there is no file-content read on the GitHub "
-        "connector. Removing this entry needs that read, not a change here."
-    ),
-    "services/api/app/services/hosted_agents.py": (
-        "Parses one provider's hosted-agent record into an asset. No provider "
-        "admin API is reachable to produce one -- recorded in DEPTH2_PROGRESS "
-        "D4, where GitHub's rest/copilot/copilot-agents answers 404 and no "
-        "second provider publishes a reference. Removing this entry needs a "
-        "published API, which is a maintainer action rather than code."
-    ),
     "services/agents/app/routing/cascade.py": "Cost-aware model cascade. Complete, tested, no caller.",
     "services/agents/app/orchestrator/planner.py": "Specialist planner, scored agent selection. Complete, tested, no caller.",
     "services/agents/app/swarm/__init__.py": "Package marker for the swarm modules below.",

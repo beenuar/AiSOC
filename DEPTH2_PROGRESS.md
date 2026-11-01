@@ -58,6 +58,9 @@ claimed the same migration number simultaneously and one had to renumber.
 | 0021 | ADR | Lane E / 7.1 | 2026-11-01 | AI-chat compliance-log minimisation |
 | 151–158 | migration | Lane F (analyst: 3.2, 3.3, 4.x, 5.x, 9.x) | 2026-11-01 | reserved block, see below |
 | 0022 | ADR | Lane F | 2026-11-01 | reserved |
+
+Highest at kickoff: migration `123`, ADR `0014`. Lane E holds the exclusive
+block migrations `146`–`150` and ADR `0021`.
 | 0018 | ADR | Lane B / 1.6 | 2026-11-01 | `docs/decisions/0018-ip-class-dataset-provenance.md` |
 | 130 | migration | Lane B / 1.6 | 2026-11-01 | `services/api/migrations/130_alert_ip_class.sql` |
 | 131 | migration | Lane B / 1.3 | 2026-11-01 | `services/api/migrations/131_workforce_context.sql` |
