@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T13:07:54Z",
+  "generated": "2026-11-01T19:11:51Z",
   "categories": [
     {
       "id": "playbooks",
@@ -32859,7 +32859,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/application/llm-ai-app-granted-write-scope.yaml",
-      "sha256": "15d001ee9e9ef14ad85b0425b80e5ea589079c192a4b8d34dea6b412110254f2"
+      "sha256": "4892734be4afbfbe4afc7c3a9a2a2cad0ab0f33c027ffeb968d9d89e6ed3b9bf"
     },
     {
       "id": "det-application-090",
