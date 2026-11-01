@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [21.0.0] - 2026-10-31
 
-### Behavior change
+### BREAKING
 
 - **Correlation grouping narrows on missing identifiers** (the Changed
   entry below). On upgrade, *future* alerts that carry no tactic group

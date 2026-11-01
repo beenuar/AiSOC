@@ -161,7 +161,7 @@ thing in a fresh install that is neither synthetic nor yours.
 
 ## Evaluation, reflex and replay
 
-The published numbers carry their own provenance. ([methodology](https://beenuar.github.io/AiSOC/docs/benchmark) · [real vs synthetic data](https://beenuar.github.io/AiSOC/docs/concepts/real-vs-synthetic))
+The published numbers carry their own provenance. ([methodology](https://beenuar.github.io/AiSOC/docs/benchmark) · [real vs synthetic data](apps/docs/docs/concepts/real-vs-synthetic.md))
 
 - **Every verdict scorecard names the model that actually served it** — gateway-attested or self-reported, with an explicit provenance status. A run with missing attribution, zero real calls or a deterministic fallback cannot be advertised as a named model's performance, and a measurement that cannot be bound to an attributed call cannot authorize closures.
 - **Denominators are published, and the uncomfortable direction wins.** Full-cohort recall keeps abstentions and failures in the malicious denominator; closure claims ship with their contamination rate; alert reduction has three labelled figures (75.3% legacy grouping, 33.3% production key, 24.5% on a detection-shaped cohort after a missing identifier was fixed to *narrow* the group instead of widening it). Unmeasured reads *not measured*, never `0`.
