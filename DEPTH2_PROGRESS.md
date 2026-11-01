@@ -325,3 +325,38 @@ that has to carry the delta.
 **Deviations:** D3 (three classes have no redistributable source), D4
 (tenant-supplied lists designed, not built).
 
+### 8.1 CNAPP depth - Lane B (in progress)
+
+Migration `133` is this item's, from Lane B's pre-allocated block; the claim
+above already names `133_cloud_security_findings.sql` and this item keeps that
+filename. Re-derived against `origin/main` immediately before writing:
+`130` is the highest on `main`, and `124`, `125`, `128`, `131`, `142`, `143`,
+`146` and `147` are taken on pushed lane branches. `133` is free everywhere.
+
+**Inventory first, because several "missing" capabilities in this repository
+turned out to be built and unwired.** Measured on `4bb84f0fd`, in a worktree,
+with `rg` run inside it:
+
+| Piece | State on `main` |
+|---|---|
+| `services/api/app/services/cspm.py` | Real. Pure functions, five resource types, severity plus control refs. **Stateless** |
+| `POST /posture/scan` | Evaluates a snapshot supplied in the request body and persists nothing |
+| `posture_findings` (migration `017`) | Table, RLS, six indices, one of them `(tenant_id, resource_id)` |
+| Writers of `posture_findings` | **One**: `POST /posture/findings`, which a human calls by hand. No collector, no scheduler, no connector |
+| Writers of `posture_scan_runs` | **None anywhere in the tree.** `GET /posture/scans` reads a table nothing writes |
+| `GET /posture/summary` | Counts that table, so on every deployment it answers eight confident zeros |
+| Console cloud-posture page | **Does not exist.** `AlertPosturePanel` is the alert backlog; the other `/posture` hits in `apps/web` are autonomy posture |
+| `wiz.py` | Issues only, exactly as the plan says. `raw_event` envelope correct, five-tier map correct |
+| `orca`, `prisma_cloud`, `lacework`, `sysdig` | One aggregated feed each; `lacework` also reads compliance evaluations. All alert-shaped |
+| Ingest profiles | None of the five has a `connectorProfiles` entry; all five resolve through the canonical `raw_event` envelope, which defaults to class 2001, so their issues **are** promoted. `check_connector_profiles.py` is green and stays green |
+| `plugins/wiz/plugin.yaml` | **Absent.** The only one of the five cloud-security connectors with no manifest (63 of 87 connectors have one) |
+| `Capability.PULL_VULNERABILITIES` + `fetch_vulnerability_findings()` | **Built and working.** The scheduler calls it and `app/vulnerabilities.py` materialises into `asset_vulnerabilities` under the polled tenant. Implemented by `wazuh` and `tenable` only |
+| `incident_context.py` (the five triage dimensions) | 100% Neo4j, so `full` only. On CORE every dimension answers "graph unavailable" |
+| `context/identity.py` | The CORE-native precedent: an internal API route behind a service token, `render_for_prompt`, `basis`, cached, never raises |
+
+**What 8.1 therefore adds, and what it deliberately does not.** It does not
+add a second posture store, a second scanner or a second scoring path. It
+gives `posture_findings` its first production writer, extends Wiz to the three
+finding classes its API actually offers, and makes the result reach a verdict
+on CORE through the `identity.py` pattern rather than through the graph.
+
