@@ -448,6 +448,120 @@ async def get_blast_radius(entity_id: str, entity_type: str, tenant_id: str, hop
     }
 
 
+async def get_permission_blast_radius(
+    principal_id: str,
+    tenant_id: str,
+    *,
+    provider: str | None = None,
+    limit: int = 500,
+) -> dict[str, Any]:
+    """What this identity's *effective permissions* reach, not what is near it.
+
+    :func:`get_blast_radius` answers "everything within N hops of this node
+    over any relationship", which on a populated graph is the alert that
+    mentioned the host, the IOC seen on it, the technique tagged on that, and
+    a few hundred of their neighbours. It is a reachability answer to a
+    containment question, and an analyst cannot act on it.
+
+    This walks ``:EFFECTIVE_PERMISSION`` edges only — the ones the resolver
+    materialises from a posture snapshot — so every resource in the answer is
+    one the principal can genuinely act on, with the actions that let it. A
+    resource reachable by a relationship that is not a permission (the
+    principal and the bucket were both mentioned by one alert) is correctly
+    absent.
+
+    Two properties the shorter version of this query would not have:
+
+    * **Deny edges are returned, not filtered.** The resolver records what a
+      policy tried to grant and something higher-priority removed. During an
+      incident that set is evidence: it is the list of things an attacker
+      with this identity will try and fail at, which is how the attempt
+      shows up in the logs.
+    * **Every node on the path is tenant-scoped**, matching
+      :func:`get_blast_radius`. An ``:EFFECTIVE_PERMISSION`` edge points at a
+      ``:Resource``, and a resource node shared between tenants would
+      otherwise enumerate the other tenant's estate — the same defect that
+      was fixed in the hop-based query.
+    """
+    where_provider = "AND e.provider = $provider" if provider else ""
+    cypher = f"""
+    MATCH (i:Identity {{id: $principal_id}})-[e:EFFECTIVE_PERMISSION]->(r:Resource)
+    WHERE {_scoped("i")} AND {_scoped("r")}
+      {where_provider}
+    RETURN r.id AS resource_id,
+           labels(r)[0] AS label,
+           properties(r) AS properties,
+           e.actions AS actions,
+           e.deny_actions AS deny_actions,
+           e.provider AS provider,
+           e.policy_chain_ids AS policy_chain_ids,
+           e.snapshot_id AS snapshot_id
+    ORDER BY size(coalesce(e.actions, [])) DESC
+    LIMIT $limit
+    """
+
+    try:
+        async with get_session() as s:
+            result = await s.run(
+                cypher,
+                principal_id=principal_id,
+                tenant_id=tenant_id,
+                provider=provider,
+                limit=max(1, min(int(limit), 5000)),
+                global_labels=list(_GLOBAL_LABELS),
+            )
+            records = [dict(record) async for record in result]
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "permission_blast_radius.failed err=%s",
+            str(exc)[:200].replace("\r", "").replace("\n", " "),
+        )
+        # `resolved: False` rather than an empty list. An empty reach and an
+        # unreachable graph are the same shape to a caller that only reads
+        # `resources`, and the difference is "this identity is harmless"
+        # against "we could not check".
+        return {
+            "principal_id": principal_id,
+            "provider": provider,
+            "resolved": False,
+            "reason": f"graph unavailable ({type(exc).__name__}); reach is unknown, not empty",
+            "resources": [],
+            "total_resources": 0,
+            "total_actions": 0,
+        }
+
+    resources: list[dict[str, Any]] = []
+    total_actions = 0
+    total_denied = 0
+    for r in records:
+        actions = [str(a) for a in (r.get("actions") or [])]
+        denied = [str(a) for a in (r.get("deny_actions") or [])]
+        total_actions += len(actions)
+        total_denied += len(denied)
+        resources.append(
+            {
+                "resource_id": r.get("resource_id"),
+                "label": r.get("label"),
+                "properties": r.get("properties") or {},
+                "actions": actions,
+                "deny_actions": denied,
+                "provider": r.get("provider"),
+                "policy_chain_ids": [str(p) for p in (r.get("policy_chain_ids") or [])],
+                "snapshot_id": r.get("snapshot_id"),
+            }
+        )
+    return {
+        "principal_id": principal_id,
+        "provider": provider,
+        "resolved": True,
+        "resources": resources,
+        "total_resources": len(resources),
+        "total_actions": total_actions,
+        "total_denied_actions": total_denied,
+        "truncated": len(resources) >= max(1, min(int(limit), 5000)),
+    }
+
+
 def _is_missing_procedure(exc: Exception) -> bool:
     """Whether Neo4j refused because a procedure is not installed.
 
