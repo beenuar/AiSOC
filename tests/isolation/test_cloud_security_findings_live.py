@@ -45,6 +45,7 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -65,9 +66,9 @@ def _dsn() -> str:
     return value
 
 
-def _finding(**overrides: object) -> dict:
+def _finding(**overrides: Any) -> dict[str, Any]:
     """A configuration finding in the shape the Wiz connector emits."""
-    base = {
+    base: dict[str, Any] = {
         "source": "wiz",
         "finding_class": "misconfiguration",
         "external_id": "cf-live-1",

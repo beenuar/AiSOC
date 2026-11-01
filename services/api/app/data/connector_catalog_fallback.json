@@ -3637,7 +3637,8 @@
   },
   {
     "capabilities": [
-      "pull_alerts"
+      "pull_alerts",
+      "pull_vulnerabilities"
     ],
     "category": "cloud",
     "connector_id": "wiz",
@@ -3672,6 +3673,30 @@
         "name": "auth_url",
         "required": false,
         "type": "string"
+      },
+      {
+        "default": false,
+        "help_text": "Pull per-asset CVE findings into the vulnerability inventory (not the alert queue). Needs the read:vulnerabilities scope.",
+        "label": "Collect vulnerability findings",
+        "name": "collect_vulnerabilities",
+        "required": false,
+        "type": "boolean"
+      },
+      {
+        "default": false,
+        "help_text": "Pull failed cloud-configuration checks as posture context for triage (not the alert queue). Needs the read:cloud_configuration scope.",
+        "label": "Collect configuration findings",
+        "name": "collect_configuration_findings",
+        "required": false,
+        "type": "boolean"
+      },
+      {
+        "default": false,
+        "help_text": "Pull runtime threat detections as posture context for triage (not the alert queue). Needs the read:detections scope.",
+        "label": "Collect runtime detections",
+        "name": "collect_runtime_detections",
+        "required": false,
+        "type": "boolean"
       }
     ]
   },
