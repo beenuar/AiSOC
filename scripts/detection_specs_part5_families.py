@@ -1287,3 +1287,98 @@ FAMILIES_CLOUD: list[dict] = BY_CATEGORY.get("cloud", [])
 FAMILIES_IDENTITY: list[dict] = BY_CATEGORY.get("identity", [])
 FAMILIES_APPLICATION: list[dict] = BY_CATEGORY.get("application", [])
 FAMILIES_DATA_EXFIL: list[dict] = BY_CATEGORY.get("data-exfil", [])
+
+
+# ===========================================================================
+# Family: long-horizon-identity
+#
+# Item 2.2. Accumulation over days to weeks per account, from the
+# long-horizon store (`services/fusion/app/services/long_horizon_identity.py`)
+# rather than the windowed engine, whose longest window is one day and which
+# counts rather than accumulates sets.
+#
+# The thresholds are a recorded *rationale*, not a measurement:
+# `docs/detections/long-horizon-thresholds.json` carries `measured: false`
+# because no corpus here has an authentication event with an account, a
+# source network and an outcome together. The descriptions say so, because a
+# threshold a reader believes was derived is worse than one they can check.
+# ===========================================================================
+LONG_HORIZON_IDENTITY: list[dict] = [
+    F(
+        family="long-horizon-identity",
+        category="identity",
+        slug="lh-distributed-failures-against-one-account",
+        name="Account Failed Authentication From Many Networks Over Weeks",
+        severity="high",
+        mitre=["t1110.003"],
+        product="identity",
+        service="authentication",
+        when={"lh_distinct_failed_asn_gte": 8},
+        fp=["Shared service account authenticated by a fleet of workers across many networks"],
+        playbook="tpl-account-takeover",
+        description=(
+            "Eight or more distinct autonomous systems have failed against this one account "
+            "inside the 30-day horizon. Spread this thin the attempt crosses no hourly "
+            "threshold, which is why the windowed engine cannot see it. The threshold is a "
+            "recorded rationale and not a measurement; see docs/detections/long-horizon-thresholds.json."
+        ),
+    ),
+    F(
+        family="long-horizon-identity",
+        category="identity",
+        slug="lh-failure-breadth-exceeds-success-breadth",
+        name="Account Fails From Far More Networks Than It Succeeds From",
+        severity="high",
+        mitre=["t1110.003", "t1078"],
+        product="identity",
+        service="authentication",
+        when={"lh_failed_to_success_asn_ratio_gte": 4.0},
+        fp=["Account whose client retries against a rotating egress pool"],
+        playbook="tpl-account-takeover",
+        description=(
+            "The ratio is the discriminator the plan names: a travelling employee widens both "
+            "sides together, an attack widens only the failing one. Undefined when the account "
+            "has no observed successes, so a dormant account cannot fire it. The threshold is a "
+            "recorded rationale and not a measurement."
+        ),
+    ),
+    F(
+        family="long-horizon-identity",
+        category="identity",
+        slug="lh-failed-country-breadth",
+        name="Account Failed Authentication From Many Countries Over Weeks",
+        severity="medium",
+        mitre=["t1110.003"],
+        product="identity",
+        service="authentication",
+        when={"lh_distinct_failed_country_gte": 5},
+        fp=["Globally distributed workforce sharing one break-glass account"],
+        playbook="tpl-account-takeover",
+        description=(
+            "Country breadth is weaker evidence than autonomous-system breadth — a single "
+            "provider spans countries — so this is medium where the ASN rule is high. The "
+            "threshold is a recorded rationale and not a measurement."
+        ),
+    ),
+    F(
+        family="long-horizon-identity",
+        category="identity",
+        slug="lh-failed-network-set-saturated",
+        name="Account Failure Sources Exceeded The Daily Enumeration Cap",
+        severity="high",
+        mitre=["t1110.003"],
+        product="identity",
+        service="authentication",
+        when={"lh_failed_asn_saturated": True},
+        fp=["Load generator or authentication test harness pointed at a real account"],
+        playbook="tpl-account-takeover",
+        description=(
+            "The store stops admitting new sources for an account's day at a cap, so the day is "
+            "reported as saturated rather than silently truncated. Saturation is itself the "
+            "finding: the account is being reached from more networks than it is worth enumerating."
+        ),
+    ),
+]
+
+BY_CATEGORY_LONG_HORIZON = by_category(LONG_HORIZON_IDENTITY)
+FAMILIES_IDENTITY.extend(BY_CATEGORY_LONG_HORIZON.get("identity", []))

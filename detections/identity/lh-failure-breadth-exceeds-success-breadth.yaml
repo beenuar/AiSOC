@@ -1,0 +1,25 @@
+id: det-identity-188
+name: Account Fails From Far More Networks Than It Succeeds From
+description: 'The ratio is the discriminator the plan names: a travelling employee widens both sides together,
+  an attack widens only the failing one. Undefined when the account has no observed successes, so a dormant
+  account cannot fire it. The threshold is a recorded rationale and not a measurement.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1110.003
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: authentication
+detection:
+  condition: |
+    lh_failed_to_success_asn_ratio >= 4.0
+false_positives:
+- Account whose client retries against a rotating egress pool
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

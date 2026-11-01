@@ -153,7 +153,7 @@ SCENARIO_TARGET = 800
 
 #: Measured on 2026-11-01 after the depth 2 wave 2 item 2.1 scenario
 #: families landed (443 before them).
-SCENARIO_FLOOR = 565
+SCENARIO_FLOOR = 569
 
 #: Windowed rules that declare a category and no product, so nothing can put
 #: them in one of the four groups. The windowed ruleset has no `product`

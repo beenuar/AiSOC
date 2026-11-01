@@ -239,6 +239,7 @@ class DetectionEngine:
         overlay: Any | None = None,
         first_seen: Any | None = None,
         baselines: Any | None = None,
+        long_horizon: Any | None = None,
     ) -> list[DetectionHit]:
         """`evaluate`, plus the enrichments that need Redis.
 
@@ -253,6 +254,12 @@ class DetectionEngine:
         different questions about the same event — "have we seen this value
         before" and "how usual is it for this principal" — and a rule may
         read one, the other or both.
+
+        `long_horizon` is depth 2 wave 2 item 2.2: how many distinct source
+        networks have failed and succeeded against one account over weeks.
+        It is a third store for the same reason — a day is the windowed
+        engine's longest window, and an attack deliberately spread below an
+        hourly threshold is invisible to every one of these but this one.
         """
         extra: dict[str, Any] = {}
         ocsf = message.get("ocsf_event")
@@ -264,6 +271,8 @@ class DetectionEngine:
                     extra.update(await first_seen.derived_fields(tenant, fields))
                 if baselines is not None:
                     extra.update(await baselines.derived_fields(tenant, fields))
+                if long_horizon is not None:
+                    extra.update(await long_horizon.derived_fields(tenant, fields))
         return self.evaluate(message, overlay, _extra_fields=extra)
 
     def evaluate(

@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T18:36:37Z",
+  "generated": "2026-11-01T18:42:10Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,27 +20,27 @@
     }
   ],
   "stats": {
-    "total": 7222,
+    "total": 7226,
     "playbooks": 88,
     "playbook_packs": 63,
-    "detections": 7054,
+    "detections": 7058,
     "plugins": 80,
-    "verified": 1101,
+    "verified": 1105,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1101
+      "stable": 1105
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 940
+      "stable": 944
     },
-    "executable": 2781,
+    "executable": 2785,
     "quarantined": 4441,
-    "executable_detections": 2613,
+    "executable_detections": 2617,
     "reference_only_detections": 4441,
     "not_a_detection": 168
   },
@@ -141,7 +141,7 @@
       "T1071.004": 10,
       "T1072": 4,
       "T1074.001": 4,
-      "T1078": 54,
+      "T1078": 55,
       "T1078.001": 5,
       "T1078.002": 7,
       "T1078.003": 3,
@@ -171,7 +171,7 @@
       "T1110": 21,
       "T1110.001": 5,
       "T1110.002": 1,
-      "T1110.003": 2,
+      "T1110.003": 6,
       "T1110.004": 3,
       "T1112": 58,
       "T1113": 7,
@@ -440,7 +440,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2483,
+    "total_with_mitre": 2487,
     "unique_techniques_all_rules": 493,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -564,7 +564,7 @@
       "T1072": 9,
       "T1074": 3,
       "T1074.001": 6,
-      "T1078": 136,
+      "T1078": 137,
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 12,
@@ -597,7 +597,7 @@
       "T1110": 60,
       "T1110.001": 18,
       "T1110.002": 1,
-      "T1110.003": 45,
+      "T1110.003": 49,
       "T1110.004": 16,
       "T1112": 164,
       "T1113": 16,
@@ -993,7 +993,7 @@
         "T1071.001": 9,
         "T1071.004": 6,
         "T1074.001": 1,
-        "T1078": 45,
+        "T1078": 46,
         "T1078.001": 4,
         "T1078.002": 3,
         "T1078.003": 2,
@@ -1014,7 +1014,7 @@
         "T1105": 3,
         "T1110": 12,
         "T1110.001": 4,
-        "T1110.003": 5,
+        "T1110.003": 9,
         "T1110.004": 4,
         "T1112": 1,
         "T1113": 2,
@@ -51615,6 +51615,107 @@
       "executable": true,
       "path": "detections/identity/1p-signin-from-anonymizer.yaml",
       "sha256": "54d3ecb5bc26353c83c7e2484b92adb1fb98898561bb3808300fcf2b6245e153"
+    },
+    {
+      "id": "det-identity-187",
+      "type": "detection",
+      "name": "Account Failed Authentication From Many Networks Over Weeks",
+      "description": "Eight or more distinct autonomous systems have failed against this one account inside the 30-day horizon. Spread this thin the attempt crosses no hourly threshold, which is why the windowed engine cannot see it. The threshold is a recorded rationale and not a measurement; see docs/detections/long-horizon-thresholds.json.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1110.003"
+      ],
+      "log_source": "identity",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/lh-distributed-failures-against-one-account.yaml",
+      "sha256": "d56299b702d33587e50d418b2cff030479c956fade3a2b4c1fe7d8a85d1913eb"
+    },
+    {
+      "id": "det-identity-188",
+      "type": "detection",
+      "name": "Account Fails From Far More Networks Than It Succeeds From",
+      "description": "The ratio is the discriminator the plan names: a travelling employee widens both sides together, an attack widens only the failing one. Undefined when the account has no observed successes, so a dormant account cannot fire it. The threshold is a recorded rationale and not a measurement.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1110.003",
+        "T1078"
+      ],
+      "log_source": "identity",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/lh-failure-breadth-exceeds-success-breadth.yaml",
+      "sha256": "666fc1c52f0dbc08de51170ad8fafc0e59c316e936d75135bb46afb4d5b19629"
+    },
+    {
+      "id": "det-identity-189",
+      "type": "detection",
+      "name": "Account Failed Authentication From Many Countries Over Weeks",
+      "description": "Country breadth is weaker evidence than autonomous-system breadth \u2014 a single provider spans countries \u2014 so this is medium where the ASN rule is high. The threshold is a recorded rationale and not a measurement.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1110.003"
+      ],
+      "log_source": "identity",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/lh-failed-country-breadth.yaml",
+      "sha256": "49bb7de2e216ca7b19f158ee0ceef149272726848e6b758ddb2971613fda2d2c"
+    },
+    {
+      "id": "det-identity-190",
+      "type": "detection",
+      "name": "Account Failure Sources Exceeded The Daily Enumeration Cap",
+      "description": "The store stops admitting new sources for an account's day at a cap, so the day is reported as saturated rather than silently truncated. Saturation is itself the finding: the account is being reached from more networks than it is worth enumerating.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "identity",
+      "mitre_techniques": [
+        "T1110.003"
+      ],
+      "log_source": "identity",
+      "playbook": "tpl-account-takeover",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/identity/lh-failed-network-set-saturated.yaml",
+      "sha256": "94fe212489dc1c68ea5d3dc9ea0037c5a8361870ac9748b80e83395f4e1552b3"
     },
     {
       "id": "det-network-001",

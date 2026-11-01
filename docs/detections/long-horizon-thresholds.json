@@ -1,0 +1,18 @@
+{
+  "measured": false,
+  "reason": "UNMEASURED \u2014 no corpus in this repository carries an authentication event with an account, a source network and a stated outcome together, so no breadth distribution exists to derive a threshold from. 502 events scanned across 2 corpora, 0 usable. The thresholds below are a recorded rationale, not a measurement, and the rules that read them say so.",
+  "return_to_measured": "A corpus of authentication events carrying account, source ASN or country, and outcome. Re-run scripts/derive_long_horizon_thresholds.py; it will publish percentiles and set measured to true.",
+  "survey": {
+    "corpora": [
+      "services/agents/tests/eval_data/synthetic_telemetry.jsonl",
+      "services/agents/tests/eval_data/synthetic_hunt_telemetry.jsonl"
+    ],
+    "events_scanned": 502,
+    "events_usable": 0
+  },
+  "thresholds": {
+    "lh_distinct_failed_asn": 8,
+    "lh_distinct_failed_country": 5,
+    "lh_failed_to_success_asn_ratio": 4.0
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "count": 843,
+  "count": 847,
   "rules": [
     {
       "category": "application",
@@ -13502,6 +13502,71 @@
       "service": "signin-attempts",
       "severity": "high",
       "slug": "1p-signin-from-anonymizer"
+    },
+    {
+      "category": "identity",
+      "family": "long-horizon-identity",
+      "id": "det-identity-187",
+      "match_when": {
+        "lh_distinct_failed_asn_gte": 8
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Account Failed Authentication From Many Networks Over Weeks",
+      "product": "identity",
+      "service": "authentication",
+      "severity": "high",
+      "slug": "lh-distributed-failures-against-one-account"
+    },
+    {
+      "category": "identity",
+      "family": "long-horizon-identity",
+      "id": "det-identity-188",
+      "match_when": {
+        "lh_failed_to_success_asn_ratio_gte": 4.0
+      },
+      "mitre": [
+        "T1110.003",
+        "T1078"
+      ],
+      "name": "Account Fails From Far More Networks Than It Succeeds From",
+      "product": "identity",
+      "service": "authentication",
+      "severity": "high",
+      "slug": "lh-failure-breadth-exceeds-success-breadth"
+    },
+    {
+      "category": "identity",
+      "family": "long-horizon-identity",
+      "id": "det-identity-189",
+      "match_when": {
+        "lh_distinct_failed_country_gte": 5
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Account Failed Authentication From Many Countries Over Weeks",
+      "product": "identity",
+      "service": "authentication",
+      "severity": "medium",
+      "slug": "lh-failed-country-breadth"
+    },
+    {
+      "category": "identity",
+      "family": "long-horizon-identity",
+      "id": "det-identity-190",
+      "match_when": {
+        "lh_failed_asn_saturated": true
+      },
+      "mitre": [
+        "T1110.003"
+      ],
+      "name": "Account Failure Sources Exceeded The Daily Enumeration Cap",
+      "product": "identity",
+      "service": "authentication",
+      "severity": "high",
+      "slug": "lh-failed-network-set-saturated"
     },
     {
       "category": "network",

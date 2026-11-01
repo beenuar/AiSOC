@@ -1,5 +1,5 @@
 {
-  "executable": 2613,
+  "executable": 2617,
   "windowed": 76,
   "onDisk": 7054,
   "quarantined": 4441,
@@ -12,7 +12,7 @@
     "cloud": 239,
     "data-exfil": 41,
     "endpoint": 1978,
-    "identity": 170,
+    "identity": 174,
     "network": 63,
     "threat-anomaly": 24
   },

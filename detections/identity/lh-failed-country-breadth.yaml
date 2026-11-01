@@ -1,0 +1,24 @@
+id: det-identity-189
+name: Account Failed Authentication From Many Countries Over Weeks
+description: Country breadth is weaker evidence than autonomous-system breadth — a single provider spans
+  countries — so this is medium where the ASN rule is high. The threshold is a recorded rationale and
+  not a measurement.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1110.003
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: authentication
+detection:
+  condition: |
+    lh_distinct_failed_country >= 5
+false_positives:
+- Globally distributed workforce sharing one break-glass account
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'
