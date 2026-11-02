@@ -127,7 +127,8 @@ def from_spdx(document: dict[str, Any], *, repository: str) -> list[PackageRow]:
     if not repo:
         raise InventoryError("an SBOM needs the repository it describes")
 
-    sbom = document.get("sbom") if isinstance(document.get("sbom"), dict) else document
+    nested = document.get("sbom")
+    sbom = nested if isinstance(nested, dict) else document
     packages = sbom.get("packages")
     if not isinstance(packages, list):
         raise InventoryError("SPDX document has no 'packages' list")

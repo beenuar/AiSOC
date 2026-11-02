@@ -33,6 +33,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 import pytest
+from app.api.v1.deps import CurrentUser
 from app.api.v1.endpoints import nl_query
 
 
@@ -69,15 +70,29 @@ class _Translated:
     intents: Any = None
 
 
-@dataclass
-class _User:
-    tenant_id: uuid.UUID
+TENANT = "aaaaaaaa-0000-0000-0000-000000000001"
 
 
-@dataclass
-class _Body:
-    time_range_hours: int = 24
-    max_rows: int = 500
+def _user() -> CurrentUser:
+    """The real principal, not a stand-in.
+
+    `_execute_against_lake` reads `tenant_id` and nothing else today, but a
+    dataclass carrying only that field is the double this file's header
+    warns about: it would keep passing through a rename, or through the
+    handler starting to read a second attribute, that the real object
+    would not survive.
+    """
+    return CurrentUser(
+        user_id=uuid.UUID("bbbbbbbb-0000-0000-0000-000000000001"),
+        tenant_id=uuid.UUID(TENANT),
+        role="analyst",
+        email="analyst@example.com",
+    )
+
+
+def _body() -> nl_query.NLQueryExecuteRequest:
+    """The real request model, whose defaults are the values under test."""
+    return nl_query.NLQueryExecuteRequest(question="show critical events")
 
 
 def _base() -> nl_query.NLQueryExecuteResponse:
@@ -93,7 +108,7 @@ def _base() -> nl_query.NLQueryExecuteResponse:
 
 
 SQL = "SELECT event_time, severity FROM aisoc.raw_events WHERE tenant_id = {tenant:String} LIMIT {limit:UInt32}"
-PARAMS = {"tenant": "aaaaaaaa-0000-0000-0000-000000000001", "limit": 500}
+PARAMS = {"tenant": TENANT, "limit": 500}
 
 
 def test_a_fresh_response_discloses_nothing_rather_than_guessing():
@@ -123,7 +138,7 @@ async def test_the_lake_path_discloses_compiled_sql_not_the_esql(monkeypatch: py
 
     monkeypatch.setattr(nl_query, "execute_lake_query", _rows)
 
-    out = await nl_query._execute_against_lake(_base(), translated, _Body(), _User(tenant_id=uuid.UUID(PARAMS["tenant"])))
+    out = await nl_query._execute_against_lake(_base(), translated, _body(), _user())
 
     assert out.executed_against == "lake"
     assert out.executed_query == SQL
@@ -147,9 +162,9 @@ async def test_bound_values_are_not_inside_the_disclosed_text(monkeypatch: pytes
 
     monkeypatch.setattr(nl_query, "execute_lake_query", _rows)
 
-    out = await nl_query._execute_against_lake(_base(), _Translated(), _Body(), _User(tenant_id=uuid.UUID(PARAMS["tenant"])))
-    assert PARAMS["tenant"] not in (out.executed_query or "")
-    assert out.executed_query_params["tenant"] == PARAMS["tenant"]
+    out = await nl_query._execute_against_lake(_base(), _Translated(), _body(), _user())
+    assert TENANT not in (out.executed_query or "")
+    assert out.executed_query_params["tenant"] == TENANT
 
 
 @pytest.mark.asyncio
@@ -170,7 +185,7 @@ async def test_a_failed_query_is_still_disclosed(monkeypatch: pytest.MonkeyPatch
 
     monkeypatch.setattr(nl_query, "execute_lake_query", _boom)
 
-    out = await nl_query._execute_against_lake(_base(), _Translated(), _Body(), _User(tenant_id=uuid.UUID(PARAMS["tenant"])))
+    out = await nl_query._execute_against_lake(_base(), _Translated(), _body(), _user())
     assert out.result is None
     assert out.execution_error
     assert out.executed_query == SQL
@@ -190,5 +205,5 @@ async def test_unsupported_filters_are_reported(monkeypatch: pytest.MonkeyPatch)
 
     monkeypatch.setattr(nl_query, "execute_lake_query", _rows)
 
-    out = await nl_query._execute_against_lake(_base(), _Translated(), _Body(), _User(tenant_id=uuid.UUID(PARAMS["tenant"])))
+    out = await nl_query._execute_against_lake(_base(), _Translated(), _body(), _user())
     assert out.unsupported_filters == ["process.name"]

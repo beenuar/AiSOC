@@ -268,14 +268,15 @@ def _phrase_targets(tree: ast.AST) -> tuple[frozenset[str], frozenset[str]]:
     refused: set[str] = set()
     for node in ast.walk(tree):
         targets = [node.target] if isinstance(node, ast.AnnAssign) else getattr(node, "targets", [])
+        value = getattr(node, "value", None)
         for target in targets:
             if not isinstance(target, ast.Name):
                 continue
             if target.id == "_OPERATOR_PHRASES":
-                for element in getattr(node.value, "elts", []):
+                for element in getattr(value, "elts", []):
                     producible.add(ast.literal_eval(element.elts[1]))
             elif target.id == "_UNSUPPORTED":
-                for key in getattr(node.value, "keys", []):
+                for key in getattr(value, "keys", []):
                     refused.add(ast.literal_eval(key))
     if not producible:
         raise GrammarError("plain_language.py: parsed zero operator phrases — refusing to report agreement this gate never measured")
