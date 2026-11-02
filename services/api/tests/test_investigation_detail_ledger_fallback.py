@@ -182,3 +182,68 @@ class TestPhaseBlocksReconstruction:
         events[0].payload = {"response": "not json at all"}
         recon, _f, _r, _a = await cases._ledger_phase_blocks(_db_returning(events), uuid.uuid4(), uuid.uuid4())
         assert recon.get("summary") == "phase summary survived", "tab would be blank with no fallback"
+
+
+class TestRouterPathFallsBackToPersistedState:
+    """Router-path runs (kafka auto-triage) carry no recon/forensic/responder
+    agents and persist no llm_response events, so the event-derived blocks come
+    back without real payload. They must be rebuilt from the `router_state`
+    artifact the router now writes at run close — and the investigator path,
+    which carries real payloads, must never be shadowed by it."""
+
+    def _db_events_then_artifact(self, events: list[Any], artifact_content: str | None) -> MagicMock:
+        db = MagicMock()
+        ev_scalars = MagicMock()
+        ev_scalars.all = MagicMock(return_value=events)
+        ev_result = MagicMock()
+        ev_result.scalars = MagicMock(return_value=ev_scalars)
+
+        art_scalars = MagicMock()
+        if artifact_content is None:
+            art_scalars.first = MagicMock(return_value=None)
+        else:
+            row = MagicMock()
+            row.content = artifact_content
+            row.created_at = None
+            art_scalars.first = MagicMock(return_value=row)
+        art_result = MagicMock()
+        art_result.scalars = MagicMock(return_value=art_scalars)
+
+        db.execute = AsyncMock(side_effect=[ev_result, art_result])
+        return db
+
+    @pytest.mark.asyncio
+    async def test_router_run_without_phase_payload_is_rebuilt_from_router_state(self) -> None:
+        """Router emits triage_verdict events only -> blocks lack payload. The
+        router_state artifact must fill recon/forensic/responder + audit."""
+        events = [_event(1, "auto_triage", "triage_verdict", None, summary="verdict=benign")]
+        artifact = json.dumps(
+            {
+                "verdict": "suspicious",
+                "confidence": 0.82,
+                "confidence_basis": ["impossible travel"],
+                "findings": ["login from new country"],
+                "mitre_mappings": ["T1078"],
+                "proposed_actions": [{"action_type": "reset", "description": "reset password"}],
+                "alert_summary": "impossible-travel sign-in",
+                "ioc_enrichments": {"203.0.113.9": {}},
+            }
+        )
+        db = self._db_events_then_artifact(events, artifact)
+        recon, forensic, responder, audit = await cases._ledger_phase_blocks(db, uuid.uuid4(), uuid.uuid4())
+        assert recon["mitre_techniques"] == ["T1078"], "router recon tab would render empty"
+        assert recon["iocs"] == ["203.0.113.9"], "router IOC tab would render empty"
+        assert forensic["confidence"] == 0.82, "router forensic tab would render empty"
+        assert responder["recommended_actions"] == ["reset password"], "router response tab would render empty"
+        assert len(audit) >= 3, "router timeline tab would render empty"
+
+    @pytest.mark.asyncio
+    async def test_investigator_run_with_real_payload_is_never_shadowed(self) -> None:
+        """Guard must NOT fire when the investigator blocks carry real content —
+        the event-derived block wins even if a stray router_state exists."""
+        events = [_event(1, "ReconAgent", "llm_response", {"summary": "real recon", "iocs": ["10.0.0.1"], "mitre_techniques": ["T1059"]})]
+        stray = json.dumps({"verdict": "x", "mitre_mappings": ["T9999"]})
+        db = self._db_events_then_artifact(events, stray)
+        recon, _f, _r, _a = await cases._ledger_phase_blocks(db, uuid.uuid4(), uuid.uuid4())
+        assert recon["mitre_techniques"] == ["T1059"], "investigator block was shadowed by router_state"
+        assert recon["iocs"] == ["10.0.0.1"], "investigator IOC block was shadowed by router_state"
