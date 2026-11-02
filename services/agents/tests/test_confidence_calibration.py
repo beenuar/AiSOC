@@ -15,10 +15,18 @@ This suite exercises ``services/agents/app/confidence/scoring.py`` against:
     each labelled ``y = 0`` (true negative).
 
 The control set is built in-process (no extra dataset file to drift) and
-contains the same shape of inputs the triage agent sees in production but
-without the strong signals that should drive confidence up: no risk
-score, no critical/high keywords, no MITRE technique IDs, no IOC fields.
-A well-calibrated scorer should score these near the floor.
+comes in two halves.
+
+*Generic controls* carry the same shape of inputs the triage agent sees in
+production but without the strong signals that should drive confidence up:
+no risk score, no critical/high keywords, no MITRE technique IDs, no IOC
+fields. A well-calibrated scorer should score these near the floor.
+
+*Cloud-host twins* are one-to-one with the positives that run on a cloud
+instance host, sharing the host and the vendor severity so that neither can
+separate the two halves. They exist because the corpus previously had no
+benign event on a cloud host at all, which is precisely the case #1607 got
+wrong — see :func:`_build_cloud_host_twins`.
 
 Two calibration metrics gate the build:
 
@@ -66,6 +74,7 @@ from app.confidence import (  # noqa: E402
     score_triage,
 )
 from app.confidence.calibration import expected_calibration_error  # noqa: E402
+from app.keywords import CRITICAL_KEYWORDS, HIGH_KEYWORDS, alert_text, matched  # noqa: E402
 from app.models.state import (  # noqa: E402
     ActionRisk,
     InvestigationState,
@@ -188,6 +197,80 @@ def _build_benign_state(idx: int) -> InvestigationState:
         alert_summary=summary,
         raw_alert=raw_alert,
     )
+
+
+#: Routine cloud operations on a production instance. None of these carries a
+#: critical or high keyword — ``TestCloudHostTwins`` asserts that rather than
+#: trusting the reader's eye, because an unnoticed keyword in a *control* is
+#: how a benign item scores high for a reason nobody intended.
+_CLOUD_BENIGN_SUMMARIES = (
+    "Nightly AMI build completed and the instance returned to the pool",
+    "Autoscaling health check replaced an unhealthy target in the group",
+    "Patch baseline applied; no remediation required",
+    "Config recorder captured a routine tag change",
+    "Log rotation and archive upload finished on schedule",
+)
+
+
+def _is_cloud_instance_host(hostname: object) -> bool:
+    """Whether a hostname is a cloud instance identifier.
+
+    ``ec2`` is the substring that made #1607 expensive: it occurs in every
+    AWS private hostname, and the positive corpus had 10 incidents on one.
+    """
+
+    return "ec2" in str(hostname or "").lower()
+
+
+def _build_cloud_host_twins() -> list[InvestigationState]:
+    """A benign control for every positive that runs on a cloud instance host.
+
+    **Why this exists.** #1607 found that the critical-keyword check matched
+    ``c2`` as a substring, so every alert naming an EC2 host scored critical.
+    The calibration gate did not catch it — it got *better* when the bug was
+    present, because 10 of the 200 positives run on ``AWS-EC2-PROD-API`` and
+    the corpus contained **no benign event on a cloud host at all**. The
+    spurious cue could only ever raise confidence on the positive side, so
+    the published ECE was partly an artefact of the bug.
+
+    A corpus with a hole exactly where the bug lives cannot measure the bug.
+
+    **Construction**, following the discipline of the repo's twin-paired
+    verdict corpus (``services/agents/tests/eval_data/verdict``), whose gate
+    requires twins to share everything an alert carries except its evidence:
+
+    - strictly one-to-one with the cloud-host positives, so the two halves
+      carry an identical host *and* severity distribution;
+    - the twin keeps its positive's ``risk_score``, because severity is what
+      the vendor reported and the vendor does not know which one is real.
+      A twin that dropped the risk score would score at the floor and prove
+      only that the floor exists;
+    - only the behaviour differs.
+
+    So neither the host nor the vendor severity separates the halves, and a
+    scorer that keys on either is measured at chance.
+    """
+
+    twins: list[InvestigationState] = []
+    for idx, state in enumerate(_POSITIVE_STATES):
+        hostname = state.raw_alert.get("hostname")
+        if not _is_cloud_instance_host(hostname):
+            continue
+        twins.append(
+            InvestigationState(
+                incident_id=uuid4(),
+                tenant_id=uuid4(),
+                alert_summary=f"{_CLOUD_BENIGN_SUMMARIES[idx % len(_CLOUD_BENIGN_SUMMARIES)]} on {hostname}",
+                raw_alert={
+                    "rule_id": f"rule.benign.cloud_ops_{idx:03d}",
+                    "hostname": hostname,
+                    # Shared with the twin: the vendor scored the alert before
+                    # anyone knew which way it would resolve.
+                    "risk_score": state.raw_alert.get("risk_score"),
+                },
+            )
+        )
+    return twins
 
 
 def _build_positive_state(incident: dict[str, Any]) -> InvestigationState:
@@ -314,7 +397,16 @@ def _enrich_for_investigation(
 _BENIGN_COUNT = len(_POSITIVE_INCIDENTS)  # balance the corpus 1:1
 
 _POSITIVE_STATES = [_build_positive_state(inc) for inc in _POSITIVE_INCIDENTS]
-_BENIGN_STATES = [_build_benign_state(i) for i in range(_BENIGN_COUNT)]
+
+#: Generic controls: real-looking telemetry carrying none of the signals the
+#: scorer keys on. These establish the floor.
+_GENERIC_BENIGN_STATES = [_build_benign_state(i) for i in range(_BENIGN_COUNT)]
+
+#: Twinned controls: one per cloud-host positive, sharing its host and its
+#: vendor severity so that neither can separate the halves (#1607).
+_CLOUD_TWIN_STATES = _build_cloud_host_twins()
+
+_BENIGN_STATES = _GENERIC_BENIGN_STATES + _CLOUD_TWIN_STATES
 
 
 def _score_corpus_triage() -> tuple[list[float], list[int]]:
@@ -436,6 +528,71 @@ class TestConfidenceBoundsAndSeparation(unittest.TestCase):
             self.assertTrue(verdict_i)
 
 
+class TestCloudHostTwins(unittest.TestCase):
+    """The properties that make the cloud-host controls worth having.
+
+    A control set is only evidence if nothing about its *construction* lets a
+    scorer separate the halves. These pin the three shortcuts that would: the
+    host, the vendor severity, and a stray keyword in a control.
+    """
+
+    def test_twins_are_one_to_one_with_cloud_host_positives(self) -> None:
+        positives = [s for s in _POSITIVE_STATES if _is_cloud_instance_host(s.raw_alert.get("hostname"))]
+        self.assertTrue(positives, "no positive runs on a cloud instance host — the twin set would be vacuous")
+        self.assertEqual(
+            len(_CLOUD_TWIN_STATES),
+            len(positives),
+            "twins must be strictly one-to-one with the cloud-host positives",
+        )
+
+    def test_host_identifier_separates_nothing(self) -> None:
+        """Every cloud host in the positive set also appears in the benign set."""
+
+        def hosts(states: list[InvestigationState]) -> set[str]:
+            return {str(s.raw_alert["hostname"]).lower() for s in states if _is_cloud_instance_host(s.raw_alert.get("hostname"))}
+
+        positive_hosts = hosts(_POSITIVE_STATES)
+        self.assertEqual(
+            positive_hosts,
+            hosts(_BENIGN_STATES),
+            "a cloud host on only one side of the label is a shortcut the scorer can take",
+        )
+
+    def test_severity_distribution_is_identical_across_the_pair(self) -> None:
+        def risks(states: list[InvestigationState]) -> list[float]:
+            return sorted(
+                float(s.raw_alert.get("risk_score") or 0.0) for s in states if _is_cloud_instance_host(s.raw_alert.get("hostname"))
+            )
+
+        self.assertEqual(
+            risks(_POSITIVE_STATES),
+            risks(_CLOUD_TWIN_STATES),
+            "twins must carry their positive's vendor severity, or severity alone separates the halves",
+        )
+
+    def test_controls_carry_no_severity_keyword(self) -> None:
+        """A control that trips a keyword scores high for a reason nobody intended."""
+
+        for state in _CLOUD_TWIN_STATES:
+            text = alert_text(state.alert_summary, state.raw_alert)
+            hit = matched(text, CRITICAL_KEYWORDS | HIGH_KEYWORDS)
+            self.assertEqual(hit, [], f"benign control matched {hit}: {state.alert_summary!r}")
+
+    def test_a_constant_verdict_does_not_score_well(self) -> None:
+        """The corpus must not be winnable by answering the same thing every time."""
+
+        _, outcomes = _score_corpus_triage()
+        best_constant = sum(outcomes) / len(outcomes)
+        score = brier_score([best_constant] * len(outcomes), outcomes)
+        self.assertGreater(
+            score,
+            0.20,
+            f"the best constant predictor scores Brier {score:.4f}; a corpus this easy measures nothing",
+        )
+        majority = max(sum(outcomes), len(outcomes) - sum(outcomes)) / len(outcomes)
+        self.assertLess(majority, 0.60, f"a constant verdict is right {majority:.1%} of the time — the corpus is unbalanced")
+
+
 class TestBrierGate(unittest.TestCase):
     """Brier-score and ECE gates — the actual CI calibration gate."""
 
@@ -512,10 +669,16 @@ def run_evaluation() -> dict[str, Any]:
     return {
         "pillar": "confidence_calibration",
         "summary": (
-            "Brier-score and ECE gate over a 1:1 labelled corpus "
+            "Brier-score and ECE gate over a labelled corpus "
             f"({len(_POSITIVE_INCIDENTS)} positive synthetic incidents + "
-            f"{_BENIGN_COUNT} deterministic benign controls). Lower is better."
+            f"{len(_GENERIC_BENIGN_STATES)} generic benign controls + "
+            f"{len(_CLOUD_TWIN_STATES)} benign cloud-host twins). Lower is better."
         ),
+        "corpus": {
+            "positives": len(_POSITIVE_STATES),
+            "generic_benign_controls": len(_GENERIC_BENIGN_STATES),
+            "benign_cloud_host_twins": len(_CLOUD_TWIN_STATES),
+        },
         "thresholds": {
             "triage_brier_max": BRIER_THRESHOLD_TRIAGE,
             "investigation_brier_max": BRIER_THRESHOLD_INVESTIGATION,

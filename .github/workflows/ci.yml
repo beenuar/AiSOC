@@ -948,6 +948,16 @@ jobs:
         run: python3 scripts/check_replay_contract_parity.py --self-test
       - name: Replay contract parity gate
         run: python3 scripts/check_replay_contract_parity.py
+      # Alert-text keyword matching (#1607). Two arms: the severity
+      # vocabulary is declared once and imported by every scorer, and no
+      # keyword in any corpus fires on a real cloud identifier. "c2" as a
+      # substring matched every AWS private hostname, scored the alert
+      # critical at 0.9, and 0.9 clears the model cascade's escalation
+      # floor — so the alert was never sent to a model at all.
+      - name: Keyword matching gate — self-test
+        run: python3 scripts/check_keyword_matching.py --self-test
+      - name: Keyword matching gate
+        run: python3 scripts/check_keyword_matching.py
       # The finding-count comparison itself lives in the three scanner jobs in
       # security.yml, where the reports are. This runs the half that needs no
       # scanner — the allow-list's own schema, its expiry dates, and whether
