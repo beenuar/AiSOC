@@ -41,6 +41,7 @@ from typing import Any
 import structlog
 
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, normalize_disposition
+from app.memory.fingerprint import storable_evidence
 from app.memory.institutional import institutional_get, institutional_set
 
 logger = structlog.get_logger()
@@ -72,6 +73,7 @@ async def record_outcome(
     author: str = AI,
     alert_id: Any = None,
     injection_suspected: bool = False,
+    alert: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Write/refresh the per-signature outcome prior. Best-effort (never raises)."""
     disposition = normalize_disposition(disposition, default="needs_review")
@@ -104,6 +106,22 @@ async def record_outcome(
         # then send clean ones would otherwise launder the prior.
         INJECTION_FLAG: bool(injection_suspected) or bool(isinstance(prior, dict) and prior.get(INJECTION_FLAG)),
     }
+    # Phase 4.4(a). The canonical evidence beside the signature, bounded,
+    # because a signature is a SHA-256 and a hash cannot be compared for
+    # similarity — so without this, precedent is reachable only by an alert
+    # identical to the one that taught it.
+    #
+    # Carried forward from an existing prior when this call has no alert to
+    # derive it from: `record_outcome` is called from paths that hold only
+    # the signature, and overwriting a usable evidence record with nothing
+    # would quietly turn similarity off for that prior forever.
+    stored_evidence = storable_evidence(alert)
+    if not stored_evidence and isinstance(prior, dict):
+        carried = prior.get("evidence")
+        if isinstance(carried, dict):
+            stored_evidence = carried
+    if stored_evidence:
+        value["evidence"] = stored_evidence
     try:
         await institutional_set(
             tenant_id,

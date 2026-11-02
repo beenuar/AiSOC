@@ -41,6 +41,46 @@ MATRIX = ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
 MAX_NO_GATE = 0
 
 
+_SUMMARY_HEADING = "## Summary"
+_SUMMARY_FIELDS = ("Total", "GATED", "PARTIAL", "NO GATE")
+
+
+def check_summary_block(text: str, counts: dict[str, int]) -> list[str]:
+    """Hold the written summary to the rows that were actually parsed.
+
+    The block is hand-written while the counts are derived, so nothing stopped
+    the two from disagreeing — and a conflict resolution that keeps both sides
+    of this file appends a second copy of the block rather than merging it,
+    which reads as a clean union in a diff. Both shapes are failures here.
+    """
+    problems: list[str] = []
+    headings = [i for i, line in enumerate(text.splitlines()) if line.strip() == _SUMMARY_HEADING]
+    if not headings:
+        return [f"no '{_SUMMARY_HEADING}' block found"]
+    if len(headings) > 1:
+        at = ", ".join(str(i + 1) for i in headings)
+        problems.append(
+            f"{len(headings)} '{_SUMMARY_HEADING}' blocks (lines {at}); expected exactly one — "
+            "a merge that kept both sides duplicates it instead of merging it"
+        )
+
+    # Read the first block only: with duplicates already reported, parsing the
+    # rest would repeat one fault as several.
+    body = "\n".join(text.splitlines()[headings[0] + 1 :])
+    body = body.split(_SUMMARY_HEADING)[0]
+    for field in _SUMMARY_FIELDS:
+        match = re.search(rf"^-\s*{re.escape(field)}:\s*(\d+)\s*$", body, re.MULTILINE)
+        if match is None:
+            problems.append(f"summary block does not state '{field}'")
+            continue
+        written = int(match.group(1))
+        if written != counts[field]:
+            problems.append(
+                f"summary says {field} = {written}, the table parses {counts[field]} — recompute rather than editing the number"
+            )
+    return problems
+
+
 def _parse_status_rows(text: str) -> list[str]:
     """Return the Status cell of every data row in the claim-to-gate table."""
     lines = text.splitlines()
@@ -181,6 +221,16 @@ def main() -> int:
 
     if args.print_only:
         return 0
+
+    drift = check_summary_block(
+        text,
+        {"Total": len(statuses), "GATED": gated, "PARTIAL": partial, "NO GATE": no_gate},
+    )
+    if drift:
+        print(f"ERROR: the written summary does not match the table ({len(drift)} problem(s)):", file=sys.stderr)
+        for problem in drift:
+            print(f"  {problem}", file=sys.stderr)
+        return 1
 
     if no_gate > args.max_no_gate:
         print(
