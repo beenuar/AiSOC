@@ -50,6 +50,7 @@ from app.connectors.duo_security import DuoSecurityConnector
 from app.connectors.elastic import ElasticConnector
 from app.connectors.email_inbox import EmailInboxConnector
 from app.connectors.exabeam import ExabeamConnector
+from app.connectors.extrahop import ExtraHopConnector
 from app.connectors.falco import FalcoConnector
 from app.connectors.fleetdm import FleetDMConnector
 from app.connectors.gcp_cloud_audit import GCPCloudAuditConnector
@@ -115,6 +116,7 @@ if TYPE_CHECKING:
 # Source of truth for "which connectors does this build know about".
 # Keep alphabetised by connector_id for predictable diffs.
 _CONNECTOR_CLASSES: tuple[type[BaseConnector], ...] = (
+    ExtraHopConnector,
     RipplingConnector,
     MicrosoftIntuneConnector,
     BambooHRConnector,

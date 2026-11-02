@@ -96,6 +96,13 @@ KNOWN_CAPABILITIES: frozenset[str] = frozenset(
         # or a principal, so neither fits the three verbs above.
         "lookup_cloud_audit",
         "lookup_endpoint_telemetry",
+        # Depth plan wave 2, 8.2. Network evidence for a vendor-originated
+        # alert: the flow and protocol records involving one address, and
+        # the devices an NDR appliance has discovered at it. Neither fits
+        # `lookup_endpoint_telemetry`, which searches an EDR's own index on
+        # a host, nor `lookup_cloud_audit`, which reads a control plane.
+        "lookup_network_flows",
+        "lookup_network_device",
         # Depth 5.1. A distributed osquery query across a fleet. Distinct
         # from `query_processes`, which names one table; this runs one of a
         # closed set of allowlisted templates and the caller never supplies

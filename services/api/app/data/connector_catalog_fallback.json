@@ -1461,6 +1461,47 @@
   },
   {
     "capabilities": [
+      "pull_alerts"
+    ],
+    "category": "ndr",
+    "connector_id": "extrahop",
+    "connector_name": "ExtraHop RevealX 360",
+    "description": "Network detections from ExtraHop RevealX 360, with the vendor's own risk bands preserved. Read-only: nothing here changes a detection's status or assignee.",
+    "docs_url": "/docs/connectors/extrahop",
+    "fields": [
+      {
+        "help_text": "The API Endpoint shown on the RevealX 360 API Access page. Do not include the /oauth2/token suffix.",
+        "label": "API endpoint",
+        "name": "api_host",
+        "placeholder": "https://example.api.cloud.extrahop.com",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "REST API credential ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Generated on the RevealX 360 API Access page. An API key works against a sensor or console but is not compatible with the RevealX 360 REST API.",
+        "label": "REST API credential secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": 1,
+        "help_text": "Only detections at or above this risk score are pulled. 1 is every scored detection; the vendor's bands are 1-30, 31-79 and 80-99.",
+        "label": "Minimum risk score",
+        "name": "risk_score_min",
+        "required": false,
+        "type": "number"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_alerts",
       "pull_logs"
     ],
