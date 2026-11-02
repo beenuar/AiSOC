@@ -198,6 +198,18 @@ _PLAYBOOKS_NOT_IN_BENCHMARK_DATASET: set[str] = {
     "exfil-removable-media-v1",
     "ddos-volumetric-l3-v1",
     "insider-after-hours-access-v1",
+    # Wave-2 Phase 7.5. The AI-agent kill switch responds to a compromised
+    # AI agent: it blocks the agent's gateway key, stops its process and
+    # asks whether the account behind it needs demoting. The 200-incident
+    # corpus contains no AI-estate template at all, so there is nothing
+    # here for it to match.
+    #
+    # Tagging it `supply-chain` so it matched `github-pat-leak` would be
+    # the "matches by tag only" case this gate's own docstring says it
+    # exists to prevent: blocking a gateway key does nothing about a
+    # leaked GitHub PAT. Adding an AI-estate template to the corpus moves
+    # a published measurement and belongs to the lane that owns content.
+    "ai-agent-kill-switch-v1",
 }
 
 # All categories the pack actually ships. Loaded dynamically below from disk
@@ -685,10 +697,52 @@ class TestPlaybookCompletionRate(unittest.TestCase):
     def test_every_pack_category_fires(self) -> None:
         """Every category folder under packs/v1 must match at least one
         incident in the dataset. Dead-weight categories are a regression."""
-        dead = [cat for cat, bucket in self.result.per_category.items() if cat in PACK_CATEGORIES and bucket["covered"] == 0]
+        # A category every one of whose playbooks is already recorded as
+        # outside the benchmark is not dead weight — it is a category the
+        # corpus cannot exercise, which is the same fact the playbook-level
+        # exemption records. Derived rather than kept as a second hand-written
+        # list, so the two can never disagree and so the ratchet below is
+        # inherited rather than reimplemented.
+        by_category: dict[str, set[str]] = {}
+        for pb in PLAYBOOK_PACK:
+            by_category.setdefault(str(pb["__category"]), set()).add(str(pb.get("id") or ""))
+        unexercisable = {
+            category
+            for category, playbook_ids in by_category.items()
+            if playbook_ids and playbook_ids <= _PLAYBOOKS_NOT_IN_BENCHMARK_DATASET
+        }
+        dead = [
+            cat
+            for cat, bucket in self.result.per_category.items()
+            if cat in PACK_CATEGORIES and bucket["covered"] == 0 and cat not in unexercisable
+        ]
         self.assertFalse(
             dead,
             f"Pack categories with zero matched incidents: {dead}",
+        )
+
+    def test_the_not_in_benchmark_list_is_a_ratchet(self) -> None:
+        """An exemption that starts matching must be removed.
+
+        A stale exemption is a gate that stopped checking. If someone adds
+        an AI-estate template to the corpus, this fails until the entry
+        above goes — which is the moment the playbook starts being graded.
+        """
+        # Re-run with the exemption emptied, so "would this still be an
+        # orphan" is answered by the evaluator's own definition rather than
+        # by a second predicate here that could drift from it.
+        shipped = {str(pb.get("id") or "") for pb in PLAYBOOK_PACK}
+        saved = set(_PLAYBOOKS_NOT_IN_BENCHMARK_DATASET)
+        try:
+            _PLAYBOOKS_NOT_IN_BENCHMARK_DATASET.clear()
+            unexempted = evaluate_playbook_completion(SYNTHETIC_INCIDENTS_DATA, PLAYBOOK_PACK)
+        finally:
+            _PLAYBOOKS_NOT_IN_BENCHMARK_DATASET.update(saved)
+        still_orphaned = {entry["playbook_id"] for entry in unexempted.orphan_playbooks}
+        now_covered = sorted(pb_id for pb_id in saved if pb_id in shipped and pb_id not in still_orphaned)
+        self.assertFalse(
+            now_covered,
+            f"_PLAYBOOKS_NOT_IN_BENCHMARK_DATASET lists {now_covered}, which now match incidents. Remove them so the gate grades them.",
         )
 
     def test_no_orphan_playbooks(self) -> None:

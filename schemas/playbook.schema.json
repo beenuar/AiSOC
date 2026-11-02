@@ -34,7 +34,8 @@
     "wait": "executed",
     "parallel": "executed",
     "loop": "executed",
-    "verify_user": "executed"
+    "verify_user": "executed",
+    "ask_model": "executed"
   },
 
   "properties": {
@@ -188,6 +189,7 @@
             "create_ticket",
             "approval",
             "verify_user",
+            "ask_model",
             "block_ioc",
             "disable_user",
             "reset_password",

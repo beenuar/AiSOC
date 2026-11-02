@@ -140,6 +140,9 @@ async def suspend(
     verification_stage: str | None = None,
     verification_subject: str | None = None,
     verification_manager: str | None = None,
+    timeout_outcome: str = "stay_paused",
+    timeout_capability: str | None = None,
+    timeout_params: dict[str, Any] | None = None,
 ) -> Pause | None:
     """Record where this run stopped. None when it could not be stored.
 
@@ -163,9 +166,11 @@ async def suspend(
                     (id, tenant_id, run_id, playbook_id, playbook_name, step_index,
                      step_id, run_context, step_results, approval_id, expires_at,
                      kind, resume_at, resume_token,
-                     verification_stage, verification_subject, verification_manager)
+                     verification_stage, verification_subject, verification_manager,
+                     timeout_outcome, timeout_capability, timeout_params)
                 VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb,
-                        $10::uuid, $11, $12, $13, $14, $15, $16, $17)
+                        $10::uuid, $11, $12, $13, $14, $15, $16, $17,
+                        $18, $19, $20::jsonb)
                 """,
                 pause_id,
                 tenant_id,
@@ -184,6 +189,9 @@ async def suspend(
                 verification_stage,
                 verification_subject,
                 verification_manager,
+                timeout_outcome,
+                timeout_capability,
+                json.dumps(timeout_params or {}, default=str),
             )
     except Exception as exc:  # noqa: BLE001
         logger.warning("playbook_pause: write failed for run %s: %s", run_id, exc)
@@ -561,6 +569,15 @@ async def resolve(*, pause_id: str, status: str, resolution: str, tenant_id: str
 async def expire_due(*, now: datetime | None = None) -> list[str]:
     """Expire every pause past its deadline. Returns the run ids.
 
+    A thin wrapper over :func:`expire_due_returning`, kept because the run
+    ids are what the sweeper logs and what every existing caller expects.
+    """
+    return [str(row["run_id"]) for row in await expire_due_returning(now=now)]
+
+
+async def expire_due_returning(*, now: datetime | None = None) -> list[dict[str, Any]]:
+    """Expire every due pause and hand back what each one declared.
+
     Deliberately cross-tenant, and recorded as such in
     `scripts/check_tenant_query_predicates.py`. A per-tenant sweep would
     need a list of tenants to iterate, and a tenant missing from that list
@@ -570,6 +587,18 @@ async def expire_due(*, now: datetime | None = None) -> list[str]:
     Run from the scheduler. An expiry that nothing sweeps is a status
     column that never changes, which looks identical to a pause still
     legitimately waiting.
+
+    **One statement rather than two**, which is wave-2 6.3's only change
+    here. The timeout outcome a step declared has to be read from a row
+    that is still `waiting`, and this `UPDATE` is what stops it being
+    `waiting` — so a separate read afterwards would see nothing and a
+    separate read before would be a second cross-tenant sweep racing the
+    first. `RETURNING` hands back the columns this statement does not
+    touch, so the declaration and the expiry are the same atomic step.
+
+    Every due pause is still expired, including the ones declaring
+    `rollback` or `contain`: the outcome decides what the platform *does*
+    about the deadline, not whether the deadline is recorded.
     """
     pool = await _pool()
     if pool is None:
@@ -583,16 +612,50 @@ async def expire_due(*, now: datetime | None = None) -> list[str]:
                        resolved_at = NOW(),
                        resolution = 'no decision before the approval deadline'
                  WHERE status = 'waiting' AND expires_at <= $1
-             RETURNING run_id
+             RETURNING id, tenant_id, run_id, playbook_id, step_id,
+                       timeout_outcome, timeout_capability, timeout_params
                 """,
                 now or datetime.now(UTC),
             )
     except Exception as exc:  # noqa: BLE001
         logger.warning("playbook_pause: expiry sweep failed: %s", exc)
         return []
-    run_ids = [r["run_id"] for r in rows]
-    if run_ids:
+    expired = [dict(row) for row in rows]
+    if expired:
         # Info, not debug. An expired approval means an action a human was
         # asked to authorise did not happen, and nobody decided that.
-        logger.info("playbook_pause: %d pause(s) expired: %s", len(run_ids), run_ids[:10])
-    return run_ids
+        logger.info(
+            "playbook_pause: %d pause(s) expired: %s",
+            len(expired),
+            [row["run_id"] for row in expired[:10]],
+        )
+    return expired
+
+
+async def record_timeout_result(*, pause_id: str, tenant_id: str, result: dict[str, Any]) -> bool:
+    """Write what the platform actually did at the deadline.
+
+    Distinct from ``resolution``, which says why the pause ended. An
+    operator reading the incident afterwards needs both: "nobody decided"
+    and "so we isolated the host" are two different facts and the second
+    one is the one that gets asked about.
+    """
+    pool = await _pool()
+    if pool is None:
+        return False
+    try:
+        async with pool.acquire() as conn:
+            outcome = await conn.execute(
+                """
+                UPDATE aisoc_playbook_pauses
+                   SET timeout_result = $3::jsonb
+                 WHERE id = $1::uuid AND tenant_id = $2::uuid
+                """,
+                pause_id,
+                tenant_id,
+                json.dumps(result, default=str),
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("playbook_pause: could not record timeout result for %s: %s", pause_id, exc)
+        return False
+    return str(outcome).rsplit(" ", 1)[-1] != "0"

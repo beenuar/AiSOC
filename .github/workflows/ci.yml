@@ -1538,6 +1538,15 @@ jobs:
         # test file that does not exist.
         run: python3 scripts/check_action_contract.py
 
+      - name: Executor arm count holds its floor
+        # The figure wave-2 6.1 is graded against, and it had already been
+        # quoted three ways: a loose grep over the executors also matches
+        # `reverse_capability=` and reports 111, where the declared rule —
+        # class-level `capability = "..."` — reports 89. The gate counts
+        # twice, by AST and by registry, and requires the two to agree, so
+        # the published number cannot drift from what registers.
+        run: python3 scripts/check_executor_arm_count.py
+
       - name: Gate investigation depth (Pillar 2)
         # run_with_tools shipped working, guarded and instrumented with zero
         # production callers, so the platform's deepest capability was
