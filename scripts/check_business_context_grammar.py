@@ -54,7 +54,11 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root  # noqa: E402
+
+REPO_ROOT = repo_root()
 
 #: ``(label, declaration file, constant, evaluator file, evaluator functions)``.
 #:

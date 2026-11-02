@@ -42,7 +42,11 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root  # noqa: E402
+
+REPO_ROOT = repo_root()
 MESSAGES = REPO_ROOT / "apps" / "web" / "src" / "lib" / "i18n" / "messages"
 BASE = "en"
 
