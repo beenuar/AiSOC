@@ -1219,6 +1219,7 @@ class FusedAlertTriageWorker:
         state.precedent = [p.as_dict() for p in found]
         state.confidence_basis.extend(precedent.basis(found))
         _METRICS["precedent_cited"] += len(found)
+
     async def _attach_vendor_evidence(self, state: InvestigationState) -> None:
         """Ask the vendors that raised this alert what they know (Phase 4.5).
 
