@@ -30,9 +30,8 @@ from typing import Sequence
 
 from . import __version__
 from .investigation import run_investigation
-from .ledger import Ledger
-from .scenarios import available_scenarios, emit_scenario_index, load_scenario
-
+from .ledger import SYNTHETIC_NOTICE, Ledger
+from .scenarios import Scenario, available_scenarios, emit_scenario_index, load_scenario
 
 _PROG = "aisoc-sandbox"
 _DESCRIPTION = "Run an AiSOC agent investigation offline in under 30 seconds. No Docker, no API key, no network."
@@ -110,6 +109,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             payload = {
                 "tool": _PROG,
                 "version": __version__,
+                # First two keys in the document, before `scenario` and
+                # `ledger`, so a consumer that reads the head of the
+                # payload cannot miss them. A machine reader has no
+                # terminal banner to scroll past.
+                "mode": "synthetic-offline",
+                "disclaimer": (
+                    "No LLM, no network, nothing executed. Every statement in the ledger is arithmetic over the"
+                    " events below; anything the sandbox could not compute carries status=not_computed with a reason,"
+                    " and every tool_call carries executed=false."
+                ),
                 "scenario": scenario.to_dict(),
                 "ledger": ledger.to_dict(),
                 "elapsed_ms": elapsed_ms,
@@ -121,7 +130,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         _print_preamble(scenario)
         ledger.render_human()
         print(
-            f"Ran {len(ledger)} steps in {elapsed_ms} ms.\n"
+            f"Ran {len(ledger)} steps in {elapsed_ms} ms. {SYNTHETIC_NOTICE}.\n"
             "Ready for the real stack? `pnpm aisoc:demo` from a fresh clone of\n"
             "  https://github.com/beenuar/AiSOC\n"
         )
@@ -132,18 +141,23 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 2
 
 
-def _print_preamble(scenario: object) -> None:
-    sc = scenario  # narrow for the type-checker
+def _print_preamble(scenario: Scenario) -> None:
     # We don't depend on rich so the package stays zero-dep. The
     # output uses plain text + ANSI; piping to a file produces clean
     # text via Ledger.render_human's TTY-aware colour code.
-    print(f"\nScenario: {sc.id}")
-    print(f"Title:    {sc.title}")
-    if sc.narrative:
-        print(f"Narrative: {sc.narrative}")
-    if sc.mitre_techniques:
-        print(f"MITRE:    {', '.join(sc.mitre_techniques)}")
-    print(f"Severity: {sc.severity}\n")
+    #
+    # MITRE and severity are labelled as declared by the input, right
+    # where they are first shown. They are what the scenario *claims*,
+    # and the sandbox neither verifies nor revises either one — which
+    # was not obvious when they were printed as bare facts above a
+    # ledger that then appeared to act on them.
+    print(f"\nScenario: {scenario.id}")
+    print(f"Title:    {scenario.title}")
+    if scenario.narrative:
+        print(f"Narrative: {scenario.narrative}")
+    if scenario.mitre_techniques:
+        print(f"MITRE:    {', '.join(scenario.mitre_techniques)}  (declared by the input, not computed)")
+    print(f"Severity: {scenario.severity}  (declared by the input, not computed)\n")
 
 
 if __name__ == "__main__":  # pragma: no cover — covered by smoke test.

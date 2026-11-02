@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The offline sandbox's verdict followed the label on the input file, not
+  the events.** Reported by a community reviewer who fed `aisoc-sandbox` a
+  harmless login — same user, same address, New York both times, eight hours
+  apart, tagged `T1078` at severity `high` — and got back "the geo pivot
+  between sequential events is physically impossible", high confidence,
+  **83/100**. Relabelling genuine impossible-travel events `info` returned
+  "L4 — fully autonomous closure" and "auto-execute eligible". Every claim
+  reproduced against `main`, and the cause was visible in three signatures:
+  `_confidence_band(*, severity, technique_count)`, `_automation_tier(severity)`
+  and `explain(*, technique)` — **none of the three decision functions could
+  see the events**. The rationale came from a fixed table keyed on the MITRE
+  technique, so `T1078` always produced that sentence; 83 is
+  `75 (high) + 4 x 2 techniques`; and the tier was a dict keyed on severity,
+  so a self-declared label in an input file selected the autonomy posture.
+  Several canned rationales also asserted measurements nothing had taken —
+  a Welford-online baseline, a domain registration age, a file-extension
+  churn rate — and the class docstring named the goal outright: that a reader
+  "can't tell the rendered ledger apart at a glance" from the live demo. This
+  is the family the project deletes rather than rewords, so all of it is gone
+  rather than reworded.
+
+  What replaces it: `aisoc_sandbox.signals` computes what the event payload
+  genuinely allows — impossible travel is a great-circle distance over an
+  elapsed time, so the sandbox performs that division and prints it. The
+  reporter's benign payload now reports `0.0 km apart, implied speed
+  0.0 km/h` and says the `T1078` tag is **not supported by anything computed
+  here**; their relabelled payload still identifies the travel as impossible
+  from the arithmetic, and determines no tier at all. Everything the sandbox
+  cannot compute — confidence score, L0–L4 tier, approval posture,
+  related-case count, entity risk, hunt matches — is now an explicit
+  `not_computed` carrying its reason, never a plausible figure and never a
+  zero (a hunt that did not run reports `unknown`, since it looked nowhere
+  rather than finding nothing). Tool calls are marked `executed: false`; the
+  ruleset figure is derived from `corpus-stats.json` by
+  `scripts/sync_sandbox_corpus_figures.py` instead of the hand-typed `"800+"`
+  that had gone stale by a factor of three; and the synthetic-run notice
+  moved onto every decision line, because the reporter read the verdict
+  several screens below the banner. Guarded by
+  `scripts/check_sandbox_honesty.py`, which also refuses the *shape* — a
+  table mapping a technique id or a severity name to a sentence or a score —
+  and which reports **222 problems against the pre-fix tree and 0 after**.
+  Thanks to the reporter for a careful, well-scoped report that was right on
+  every count, including about what they had not tested.
+
 ### Added
 
 - **ExtraHop RevealX 360 network detections, with the vendor's own risk
