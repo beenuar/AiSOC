@@ -46,8 +46,12 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 
 | Item | State | Where |
 |---|---|---|
-| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
+| 1.6 Anonymizer and hosting classes at ingest | **done and MERGED** 2026-11-01 | PR #1586 |
 | 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
+| 8.1 CNAPP depth | **blocked** on unreachable Wiz docs; depth check recorded, two findings in it | item log |
+| 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR #1591 |
+| 8.3 Enrichment per tenant, cited | **rate limiting shipped**; provider gate built and held for its caller | item log + `depth2/lane-b-enrichment-tenant` |
+| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
 | 8.1 CNAPP depth | not started, gap reproduced | item log |
 | 8.2 NDR connectors | not started; ExtraHop buildable, Corelight blocked | item log |
 | 8.3 Enrichment per tenant, cited | not started, gap reproduced | item log |
@@ -499,6 +503,32 @@ The lesson is the one this programme keeps paying for: a local suite
 passing is not evidence that the specific question was asked. The original
 entry named a test by title and did not read what it asserted.
 
+### D8 - Corelight is blocked on documentation nobody can read
+
+Item 8.2 names two NDR connectors. ExtraHop RevealX 360 is built; Corelight
+is not, and the reason is outside the repository.
+
+Measured 2026-11-01:
+
+    $ curl -sL -o /dev/null -w "%{http_code}" https://docs.corelight.com/
+    401
+
+There is no public API reference, so there is no document from which an
+honest mock payload can be written, and the plan's own rule for exactly
+this case is to record it rather than invent one.
+
+**Needed, specifically:** a Corelight documentation account, **or** one
+recorded (redacted) detection payload together with the endpoint path and
+the authentication shape the sensor expects.
+
+One thing that must not be mistaken for closing it. Corelight's **Zeek
+output** is open, and `services/connectors/app/connectors/zeek_suricata.py`
+already ingests it. That is a different thing from the sensor's own
+detection API: Zeek logs are network telemetry, and a Corelight detection
+has passed Corelight's correlation. Shipping the first while the item asks
+for the second, and calling the item done, would be the kind of
+substitution this plan exists to catch.
+
 ### D7 - Zero check runs was a conflicted PR, not a saturated pool, and the two look identical from outside
 
 **Corrected.** This entry first recorded the wrong cause, and the
@@ -547,6 +577,196 @@ before.
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
 
+### 8.2 NDR connectors - Lane B - ExtraHop shipped, Corelight blocked
+
+**Reproduced, in the two places this item can be wired wrong.** The
+connector half:
+
+    ModuleNotFoundError: No module named 'app.connectors.extrahop'
+
+The ingest half, which is the one that fails quietly:
+
+    extrahop_profile_test.go:22: extrahop has no connectorProfiles entry;
+      its detections would fall to the lenient 4001 fallback and never
+      promote
+
+and the normalizer saying so itself in the same run:
+
+    {"level":"warn","connector_type":"extrahop",
+     "message":"Using generic profile for unknown connector"}
+
+**Shipped.** All seven registration surfaces plus the ingest profile:
+
+| Surface | Where |
+|---|---|
+| Registry class | `ExtraHopConnector` in `_CONNECTOR_CLASSES` |
+| `schema()` with `secret=True` | `client_secret` only; asserted by test |
+| Marketplace manifest | `plugins/extrahop/plugin.yaml`, index regenerated |
+| Docs page | `apps/docs/docs/connectors/extrahop.md`, sidebar entry `connectors/extrahop` |
+| Count gate | regenerated, not edited: 90 -> **91** |
+| Scheduler polling | `test_scheduler.py` asserts a non-null `next_run_time` |
+| Severity ladder | three bands, no invented `critical` |
+| **Ingest profile** | `connectorProfiles["extrahop"]`, class 2001 / category 2 |
+| Read verbs | `lookup_network_flows`, `lookup_network_device` |
+
+**The severity decision, because a reviewer will ask why this connector
+never emits critical.** ExtraHop publishes three risk bands and no fourth.
+From the vendor's own detections page, verbatim: the icon is "color coded
+by severity as red (80-99), orange (31-79), or yellow (1-30)". The same
+page draws the contrast itself, because CrowdStrike detections in the same
+view use red for *Critical* while ExtraHop's red is just 80-99.
+
+So 80-99 maps to `high` and stops. Promoting it would assert a tier the
+vendor does not publish, which is the mirror of collapsing a vendor's real
+`critical` into `high`. Promotion does not depend on it: class 2001 is
+category 2 and promotes unconditionally.
+
+**Negative control.** Removing the `connectorProfiles["extrahop"]` entry
+fails all three Go tests and the normalizer logs `Using generic profile for
+unknown connector`. Restored, they pass.
+
+**Numbers, from the generators.**
+
+| Figure | Value | Source |
+|---|---|---|
+| Registered connectors | 90 -> **91** | `generate_connector_count.py --check` |
+| Conformance matrix | 91/91 | `connector_conformance.py` |
+| Marketplace plugins | 83 -> **84** | `build_marketplace.py` |
+| Executor arms | 97 -> **99** | `check_action_contract.py` |
+| Claim matrix | 336/331/5 -> **337/332/5** | `check_claim_gate_matrix.py` |
+
+**A real defect the contract gate caught, from the previous item.**
+`check_action_contract.py` compares the connectors `Capability` enum
+against `KNOWN_CAPABILITIES` in the actions service in both directions, and
+reported that `pull_workforce` and `pull_device_inventory` -- added by 1.3
+-- were missing from the mirror. Fixed here rather than left, because the
+gate is right: the two sets are mirrors and a one-way addition is drift.
+
+**No live suite was added**, and that is a decision rather than an
+omission. There is no containerised ExtraHop to stand up, so a job in
+`integration.yml` would have nothing to drive; the tests run in the
+ordinary `ci.yml` jobs against a mock transport and recorded vendor shapes.
+What that does not prove is stated in the claim-matrix row: no live tenant
+has been exercised.
+
+**Deviation:** D8 (Corelight blocked on 401 documentation).
+
+### 8.1 CNAPP depth - Lane B - **BLOCKED on vendor documentation**, with the depth check recorded
+
+**Reproduced.** `services/connectors/app/connectors/wiz.py` declares exactly
+one GraphQL operation, `query IssuesTable`. No vulnerability query, no
+configuration-finding query, no secrets query, no runtime-detection query.
+
+**Blocked, and this is not a scoping choice.** The item asks for queries
+the vendor's current public reference must support an honest mock for.
+Measured 2026-11-01, repeatedly and with a browser user agent, with a
+twenty-second pause between attempts:
+
+    429  https://docs.wiz.io/
+    429  https://win.wiz.io/reference/wiz-api
+    429  https://docs.wiz.io/wiz-docs/docs/welcome
+    000  https://integrate.wiz.io/
+
+Every attempt was rate-limited or unreachable, so the GraphQL schema for
+vulnerabilities, configuration findings, secrets and runtime detections
+could not be read. The one query already in the tree predates this work and
+is not evidence about the others.
+
+Writing those four queries from memory or by pattern-matching the issues
+query would be inventing a payload shape, which the plan names as the thing
+to refuse. **Needed:** the Wiz API reference reachable, or the GraphQL
+schema document (`wizQueryTable` / `vulnerabilityFindings` /
+`configurationFindings` / `secrets` / `threatDetections` field definitions),
+or one recorded (redacted) response per query type.
+
+**The depth check for the other four, as the item asks.** What each
+connector reads today is established from the code and is exact. What each
+API offers is marked unverified where the vendor's reference could not be
+reached, rather than asserted from recollection.
+
+| Connector | Reads today (verified from the tree) | Vendor reference | Verdict |
+|---|---|---|---|
+| `wiz` | one GraphQL operation, `IssuesTable` | `docs.wiz.io` **429**, `integrate.wiz.io` **000** | depth unverifiable; blocked |
+| `orca` | `GET /api/alerts` (plus `/api/user/session` for auth) | `api-docs.orcasecurity.io` **000** | alerts only; depth unverifiable |
+| `prisma_cloud` | `POST /alert/v1/alert` (plus `/login`) | `pan.dev/prisma-cloud/api/cspm/` **200**, overview only: the page describes authorisation and request shape and enumerates no endpoint groups | alerts only; depth needs the endpoint index, not the overview |
+| `lacework` | `GET /api/v2/Alerts` **and** `POST /api/v2/Configs/ComplianceEvaluations/search` | `docs.lacework.net` **000** | **already deeper than issues**: it reads compliance evaluations as well as alerts, which is the configuration-findings half of this item |
+| `sysdig` | `GET /api/v1/secureEvents` | `docs.sysdig.com/en/sysdig-secure/` **200** | runtime events only |
+
+Two things in that table are worth more than the blocked verdict.
+
+`lacework` already reads compliance evaluations, so the plan's premise that
+every cloud-security connector reads issues only is **wrong for one of the
+five**. That is the "do not build what exists" rule paying for itself: the
+depth check was supposed to be a formality and found a connector a third of
+the way through this item already.
+
+`sysdig` reads `secureEvents`, which is Sysdig's **runtime** detection
+stream rather than a posture issue list. So the runtime-detections half of
+this item is partly covered there too, by a connector nobody counted.
+
+**Not started, and distinct from the blocked half:** findings as *triage
+context* keyed on the resource an alert touched, rather than as alerts. That
+needs no new vendor read -- it can be built over what these five already
+ingest -- and it is the half of 8.1 that is not blocked on anything. It is
+the first thing the next pass should take.
+
+### 8.3 Enrichment per tenant, cited - Lane B - rate limiting shipped, the rest split and in flight
+
+**Reproduced, and the gap is wider than the plan's wording.** Measured on
+this tree:
+
+  * `grep -c tenant` over `internal/enricher/enricher.go` and
+    `internal/config/config.go` returns **0** and **0**. There is no tenant
+    dimension anywhere in this service, so per-tenant opt-in is absent
+    rather than partial. Keys are per deployment, which means a deployment
+    holding a VirusTotal key sends **every** tenant's indicators to
+    VirusTotal whether that tenant agreed or not. An indicator is the
+    customer's own address, domain or file hash, so that is a disclosure
+    nobody consented to.
+  * `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` are parsed at `config.go:59-60`,
+    assigned to struct fields at `92-93`, and **read by nothing else**.
+  * No reference to the credential vault anywhere under
+    `services/enrichment/`.
+  * `URLSCAN_API_KEY` is a config field with no client.
+  * No enrichment result is cited in the ledger.
+
+**Shipped in the NDR pull request**, because it is complete, wired and
+regresses nothing:
+
+  * a per-tenant token-bucket limiter applied in the real handler, on both
+    `/enrich` and `/enrich/bulk`, with one token per *item* on the bulk path
+    so a hundred-indicator call cannot be the way around the limit;
+  * a tenant-scoped cache key, because two tenants legitimately enable
+    different providers and a shared key would serve tenant A's verdict from
+    a provider tenant B switched off straight to tenant B;
+  * six tests, every grant with a partner refusal, driven through the real
+    handler with the real `Enricher` rather than a nil one, so the granted
+    path is exercised too.
+
+**Held back deliberately, on `depth2/lane-b-enrichment-tenant`:** the
+default-deny provider gate. It is built, tested and negative-controlled
+(`TenantPolicy`, `runFanOutForTenant`, and an AST wiring test that fails
+naming the call site when any fan-out bypasses the gate).
+
+It is not in the pull request because **threading a default-deny gate into
+`Enrich` while no caller sends a policy would stop enrichment on every
+deployment.** That is a regression, and shipping it to satisfy an item
+would be the exact substitution this plan exists to catch. It lands with
+the caller.
+
+**Remaining scope, so the next pass starts from a decision rather than a
+survey:**
+
+| Piece | What it needs |
+|---|---|
+| Per-tenant provider table | Migration (Lane B block has `132`-`137` free), RLS, and a row seeded per existing tenant from the deployment's current providers, mirroring migration 122's treatment of closure policy: new tenants default-deny, existing ones keep what they had |
+| Tenant's own key in the vault | The API owns the vault write path and this is a Go service, so either it learns a vendored read-path `decrypt_dict` (the pattern `services/connectors` already uses) or the fan-out moves behind an API route that resolves credentials first. **This is the design decision to make first**; everything else follows from it |
+| Console settings surface | API routes plus a settings panel. A table nothing writes is the same defect as a console nothing reads |
+| Caller wiring | `services/fusion/app/services/alert_enricher.py` resolves the tenant's policy and sends it; the held-back gate then binds in production |
+| Ledger citations | Every enrichment result triage uses, with provider and time |
+| URLScan client | The config key exists and no client does |
+| Breached-credential source | One source, off by default per tenant |
+| Docs | Say plainly that enrichment needs the `full` profile |
 ### 6.1 Verb breadth — done
 
 **What failed before.** `scripts/check_executor_arm_count.py --check` on the
@@ -1002,7 +1222,6 @@ asserted for all four facts.
 
 **Numbers, from the generators.**
 
-| Figure | Value | Source |
 |---|---|---|
 | Registered connectors | 87 -> **90** | `generate_connector_count.py --check` |
 | Connector docs | 90 documented, 41 generated / 49 hand-written | `generate_connector_docs.py --check` |
