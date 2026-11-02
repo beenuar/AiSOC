@@ -266,7 +266,21 @@ ceilings:
     # Counted rather than suppressed, per the note at the bottom of this
     # file. Measured with semgrep 1.86.0 on the vendored packs
     # (rules_sha256 below): 112 total / 44 error.
-    total: 112
+    #
+    # 112 -> 113 (error unchanged at 44). The added WARNING is
+    # `dynamic-urllib-use-detected` on scripts/perf/retro_hunt_scale.py,
+    # which POSTs a measurement query to an operator-supplied ClickHouse DSN.
+    # This is the third instance of the identical finding — the same rule
+    # already contributes one for check_main_run_cancellations.py and one for
+    # check_codeql_alerts.py — and it is counted for the same reason: the
+    # rule fires on any non-literal argument to `urlopen`, which every one of
+    # these three has by construction, and counting it is better than
+    # suppressing it. That `error` did not move is the check that this is a
+    # real warning rather than the scanner's recorded +/-1, which moves both
+    # numbers; the new line was also located in the diff before the ceiling
+    # was touched, so this is the ratchet's documented path for an understood
+    # finding and not a ceiling raised to make a scan pass.
+    total: 113
     error: 44
     measured_with: "1.86.0"
     rules_sha256: "5af76658e7e28b96b1099d2c995d7c85b3b9a4f96795a39df3d02aa7d295cb99"
