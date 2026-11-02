@@ -15,11 +15,20 @@ headers that were actually sent rather than only the return value.
 
 from __future__ import annotations
 
+import json
+import re
 import uuid
+from pathlib import Path
 
 import httpx
 import pytest
-from app.ingest_client import IngestClient, IngestClientError, resolve_service_token
+from app.ingest_client import (
+    MAX_BATCH_SIZE,
+    IngestClient,
+    IngestClientError,
+    resolve_max_batch_size,
+    resolve_service_token,
+)
 
 TENANT = uuid.UUID("11111111-1111-4111-8111-111111111111")
 
@@ -99,3 +108,142 @@ def test_service_token_precedence_matches_the_platform(monkeypatch: pytest.Monke
 
     monkeypatch.setenv("AISOC_SERVICE_TOKEN", "")
     assert resolve_service_token() == ""
+
+
+def _events(n: int) -> list[dict[str, str]]:
+    return [{"severity": "high", "title": f"event-{i}"} for i in range(n)]
+
+
+def _batch_size(request: httpx.Request) -> int:
+    body = json.loads(request.read().decode("utf-8"))
+    return len(body["events"])
+
+
+@pytest.mark.asyncio
+async def test_push_events_chunks_oversized_batches(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A poll larger than the ingest cap never produces an oversized request (#1635).
+
+    The transport refuses any body over ``MAX_BATCH_SIZE`` with 413, which is
+    what the Go ingest service does. Chunking has to stay under that cap, and
+    the accepted/rejected counts have to be the sum across chunks so the
+    scheduler can still tell whether every submitted event was accepted.
+    """
+    requests_seen: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        batch_size = _batch_size(request)
+        requests_seen.append(batch_size)
+        assert request.headers["authorization"] == "Bearer svc-secret"
+        assert request.headers["x-tenant-id"] == str(TENANT)
+        if batch_size > MAX_BATCH_SIZE:
+            return httpx.Response(413, text=f"batch size exceeds maximum of {MAX_BATCH_SIZE}")
+        # One rejection in the tail chunk, so the summed counts are not just
+        # a copy of the event list length.
+        rejected = 1 if batch_size < MAX_BATCH_SIZE else 0
+        return httpx.Response(200, json={"accepted": batch_size - rejected, "rejected": rejected})
+
+    client = _client(monkeypatch, handler, service_token="svc-secret")
+
+    # 2500 is above the cap and not a round multiple, so the last chunk is a
+    # short one. Without chunking the transport answers 413 and the push
+    # raises; with it, the requests are 1000, 1000, and 500.
+    result = await client.push_events(
+        tenant_id=TENANT,
+        connector_id=uuid.uuid4(),
+        connector_type="sentinelone",
+        events=_events(2500),
+    )
+
+    assert requests_seen == [MAX_BATCH_SIZE, MAX_BATCH_SIZE, 500]
+    assert all(size <= MAX_BATCH_SIZE for size in requests_seen)
+    assert result["accepted"] == 2499
+    assert result["rejected"] == 1
+
+
+@pytest.mark.asyncio
+async def test_push_events_negative_control_unchunked_oversized_batch_fails_413(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Negative control: bypassing chunking against the same 413 transport must fail."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        batch_size = _batch_size(request)
+        if batch_size > MAX_BATCH_SIZE:
+            return httpx.Response(413, text=f"batch size exceeds maximum of {MAX_BATCH_SIZE}")
+        return httpx.Response(200, json={"accepted": batch_size, "rejected": 0})
+
+    client = _client(monkeypatch, handler, service_token="svc-secret")
+    with pytest.raises(IngestClientError, match="413"):
+        await client._push_chunk(
+            tenant_id=TENANT,
+            connector_id=uuid.uuid4(),
+            connector_type="sentinelone",
+            events=_events(MAX_BATCH_SIZE + 1),
+            source_format="raw_json",
+        )
+
+
+@pytest.mark.asyncio
+async def test_push_events_does_not_chunk_when_under_cap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A batch already within the cap is one request."""
+    requests_seen: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        batch_size = _batch_size(request)
+        requests_seen.append(batch_size)
+        return httpx.Response(200, json={"accepted": batch_size, "rejected": 0})
+
+    client = _client(monkeypatch, handler, service_token="svc-secret")
+    result = await client.push_events(
+        tenant_id=TENANT,
+        connector_id=uuid.uuid4(),
+        connector_type="dropbox",
+        events=_events(MAX_BATCH_SIZE),
+    )
+
+    assert result == {"accepted": MAX_BATCH_SIZE, "rejected": 0}
+    assert requests_seen == [MAX_BATCH_SIZE]
+
+
+@pytest.mark.asyncio
+async def test_chunk_that_is_still_too_large_is_a_hard_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A 413 on one chunk aborts the push.
+
+    Chunking only splits at the client's cap. If a chunk is still too large
+    for the ingest service, the refusal has to surface as ``IngestClientError``
+    rather than being retried or dropped — otherwise the server-side guard
+    stops meaning anything.
+    """
+    calls = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal calls
+        calls += 1
+        batch_size = _batch_size(request)
+        assert batch_size <= MAX_BATCH_SIZE
+        if calls == 2:
+            return httpx.Response(413, text="batch size exceeds maximum of 1000")
+        return httpx.Response(200, json={"accepted": batch_size, "rejected": 0})
+
+    client = _client(monkeypatch, handler, service_token="svc-secret")
+    with pytest.raises(IngestClientError) as excinfo:
+        await client.push_events(
+            tenant_id=TENANT,
+            connector_id=uuid.uuid4(),
+            connector_type="dropbox",
+            events=_events(MAX_BATCH_SIZE + 1),
+        )
+
+    assert "413" in str(excinfo.value)
+    assert calls == 2
+
+
+def test_max_batch_size_matches_ingest_service_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The connectors default batch cap must equal the Go ingest service default."""
+    monkeypatch.delenv("MAX_BATCH_SIZE", raising=False)
+    assert resolve_max_batch_size() == MAX_BATCH_SIZE
+
+    repo_root = Path(__file__).resolve().parents[3]
+    go_config = repo_root / "services" / "ingest" / "internal" / "config" / "config.go"
+    if go_config.is_file():
+        match = re.search(r'mustGetEnvInt\(\s*"MAX_BATCH_SIZE"\s*,\s*(\d+)\s*\)', go_config.read_text(encoding="utf-8"))
+        assert match is not None, "could not locate MAX_BATCH_SIZE default in services/ingest/internal/config/config.go"
+        assert int(match.group(1)) == MAX_BATCH_SIZE
