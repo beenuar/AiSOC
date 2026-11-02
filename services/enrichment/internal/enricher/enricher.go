@@ -105,7 +105,11 @@ func New(cfg Config) *Enricher {
 // Enrich performs IOC enrichment with caching, fan-out to multiple sources,
 // and result merging. If force=true, bypasses the cache.
 func (e *Enricher) Enrich(ctx context.Context, req EnrichRequest) (*EnrichmentResult, error) {
-	cacheKey := cache.MakeKey(string(req.IOCType), req.Value)
+	// Tenant-scoped, which is not tidiness: two tenants legitimately enable
+	// different providers, so the merged result for one is not the answer
+	// for the other. A shared key would serve tenant A's verdict from a
+	// provider tenant B switched off straight to tenant B.
+	cacheKey := cache.MakeTenantKey(req.TenantID, string(req.IOCType), req.Value)
 
 	if !req.Force && e.cache != nil {
 		var cached EnrichmentResult
