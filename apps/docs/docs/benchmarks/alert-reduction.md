@@ -44,6 +44,7 @@ production fusion service against real customer telemetry.
 | Metric | Value | Target | Describes AiSOC? |
 |---|---|---|---|
 | **Reduction ratio (product logic)** | **33.3 %** (1,000 alerts → 667 incidents) | 20–95 % | **Yes** — groups with `RawAlert.correlation_key()` |
+| **Repeat folding (deduplication)** | **28.4 %** (1,000 inputs → 716 alerts, 284 folded) | not floored — see below | **Yes** — folds with `RawAlert.fingerprint()`, the function behind `alerts.dedup_hash` |
 | Reduction ratio (legacy suite) | 75.3 % (1,000 alerts → 247 incidents) | ≥ 70 % | **No** — four-tier scheme implemented inside the test |
 | Critical alerts preserved (legacy suite) | 93 / 93 (zero drop) | 100 % | Invariant of the legacy suite |
 | Storm incidents collapsed (legacy Tier 3) | 16 (avg ~8.9 alerts each, 3–8 distinct hosts) | ≥ 1 | Legacy suite only |
@@ -54,6 +55,45 @@ The real-key gate is bounded on **both** sides rather than floored. A floor
 alone is satisfied by a key that collapses everything into one incident —
 99.9 % reduction and a useless SOC — so "more reduction is better" is only
 true up to a point, and the gate says where.
+
+### Why repeat folding is a separate row, and why it did not go up
+
+Deduplication and correlation reduce different things and are published as
+two numbers that must never be added together. Correlation groups *related*
+alerts under `correlation_key()`. Deduplication folds *the same finding
+arriving again* under `fingerprint()`, which is the function behind
+`alerts.dedup_hash` and `uq_alerts_tenant_dedup`. A reader who summed them
+would be double-counting, which is precisely the defect the retracted 75.3 %
+figure carried: a headline whose denominator nobody could name.
+
+The folding itself is not new — three layers have collapsed repeats since
+migration 120. What wave 2's Phase 3.3 changed is that the folded repeat is
+now **kept** rather than discarded, as a linked occurrence on the alert it
+folded onto (`alert_occurrences`, migration 151): a count that includes the
+surviving alert, the real first- and last-seen window, and a bounded window
+of the original payload ids. A vendor that re-reports one finding 79 times is
+one alert that says 79.
+
+So the measured reduction is **identical before and after 3.3**, and that is
+the honest reading of this row. The number worth publishing is not a larger
+reduction; it is the same reduction with all 284 folded inputs accounted for
+instead of absent. The suite asserts that accounting directly — every input
+lands in exactly one of *retained alone*, *attached to a group*, *folded onto
+a retained alert*, or *pending/failed*, and the four sum to the denominator:
+
+```
+[eval] full-cohort accounting: 1000 inputs = 658 retained alone
+       + 58 attached to a group + 284 folded occurrences + 0 pending/failed
+```
+
+A second assertion requires each folded repeat to resolve back to the id of
+the alert that absorbed it. Balance alone says nothing was lost in aggregate;
+resolvability says the evidence can still be followed. A count that balances
+while pointing nowhere cannot be audited.
+
+This row carries no floor. A deduplication rate is a property of how noisy
+the connected vendors are, not of how good the product is, so a target would
+be measuring the customer's estate rather than AiSOC.
 
 The legacy snapshot lives at
 [`eval-results/eval/results/latest.json`](https://github.com/beenuar/AiSOC/blob/eval-results/eval/results/latest.json)

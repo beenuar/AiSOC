@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-02T01:44:37Z",
+  "generated": "2026-11-02T03:05:19Z",
   "categories": [
     {
       "id": "playbooks",
@@ -50757,8 +50757,8 @@
       "enabled": false,
       "executable": false,
       "path": "detections/identity/ident-github-pat-classic-created-with-broad-scopes.yaml",
-      "quarantine_reason": "not executable (needs-external-source): classic-PAT creation never reaches the org audit log \u2014 the documented personal_access_token.* lifecycle covers fine-grained tokens \u2014 and no audit entry carries a created token's scopes: the common `token_scopes` field describes the token that authenticated the API call, not the token being created.",
-      "sha256": "3857957fad4cd0871d68735956badce1c5d0d27abdf05c16dcee134dd2f3def1"
+      "quarantine_reason": "not executable (needs-external-source): classic-PAT creation never reaches the org audit log \u2014 the documented personal_access_token.* lifecycle covers fine-grained tokens \u2014 and no audit entry carries a created token's scopes: the common `token_scopes` field describes the token that authenticated the API call, not the token being created. Briefly un-retired on the strength of the gate reporting `scopes` resolvable; that field reaches the namespace from llm_usage.py and from no GitHub path at all, which is the blind spot the gate's product scoping now closes.",
+      "sha256": "9b602156772e03201b9b513536dc3b20dcba8601b5849320361a1653a22e60f3"
     },
     {
       "id": "det-identity-155",

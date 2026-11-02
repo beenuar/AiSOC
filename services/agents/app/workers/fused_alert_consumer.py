@@ -48,7 +48,7 @@ from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
 from app.context import dispositions as dispositions_module
 from app.context import identity as identity_module
-from app.context import knowledge_base
+from app.context import knowledge_base, vendor_evidence
 from app.context import privilege as privilege_module
 from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
@@ -113,6 +113,10 @@ _METRICS = {
     "outcome_suppressed": 0,
     "ungrounded_demoted": 0,
     "llm_failed_held_for_review": 0,
+    # Phase 4.5. Counted rather than inferred from the ledger, so a
+    # deployment that turned the pre-fetch on can tell "no vendor answered"
+    # from "the pre-fetch never ran".
+    "vendor_reads_executed": 0,
     "persist_retries": 0,
     "dead_lettered": 0,
     "approvals_raised": 0,
@@ -765,6 +769,7 @@ class FusedAlertTriageWorker:
                     # here.
                     await self._attach_recent_dispositions(state)
                     await self._attach_identity_context(state)
+                    await self._attach_vendor_evidence(state)
                     # Depth 2 wave 2, 1.1. Unlike the three above, this one
                     # *does* take a point in time, and it is the alert's own:
                     # the posture store is versioned precisely so "what could
@@ -1189,6 +1194,30 @@ class FusedAlertTriageWorker:
         state.recent_dispositions = found.as_state()
         _METRICS["recent_dispositions_read"] += len(found.decisions)
 
+    async def _attach_vendor_evidence(self, state: InvestigationState) -> None:
+        """Ask the vendors that raised this alert what they know (Phase 4.5).
+
+        Off unless `AISOC_TRIAGE_VENDOR_EVIDENCE` is set: this reaches the
+        customer's vendor API on every fused alert, which is the condition
+        the plan reserves for opt-in, and auto-triage is the hot path.
+
+        In the context stage rather than inside `run_auto_triage` so it sits
+        with the other context fetches and shares their failure posture —
+        additive, never the verdict. A vendor that is down must cost the
+        alert nothing, and the renderer says COULD NOT CHECK rather than
+        letting an absent answer read as a clean one.
+        """
+        if not vendor_evidence.enabled():
+            return
+        try:
+            state.vendor_evidence = await vendor_evidence.collect(
+                state.raw_alert,
+                tenant_id=str(state.tenant_id or ""),
+            )
+            _METRICS["vendor_reads_executed"] += len(state.vendor_evidence.executed_capabilities)
+        except Exception as exc:  # noqa: BLE001 — context is additive
+            logger.warning("auto_triage_worker.vendor_evidence_failed", error=str(exc)[:200])
+
     async def _attach_identity_context(self, state: InvestigationState) -> None:
         """Record who is behind the accounts this alert names, if anyone knows.
 
@@ -1520,6 +1549,11 @@ class FusedAlertTriageWorker:
             proposed_actions=recommendations,
             business_context=state.business_context,
             business_impact=state.business_impact,
+            # Phase 4.5. The reads that happened, as ledger rows, in the same
+            # transaction as the verdict they informed. `None` when the
+            # pre-fetch is off, which writes no rows and restores the
+            # previous shape exactly.
+            vendor_reads=(state.vendor_evidence.as_state()["reads"] if getattr(state, "vendor_evidence", None) is not None else None),
             auto_closed=state.status is AgentStatus.COMPLETED,
             iterations=state.iteration_count,
             tokens=tokens,
