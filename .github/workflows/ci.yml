@@ -633,6 +633,7 @@ jobs:
       - name: 'Unbuilt-surface claims — self-test'
         run: python3 scripts/check_unbuilt_claims.py --self-test
       - name: Every 'not built' claim about a console page is still true
+        run: python3 scripts/check_unbuilt_claims.py
       # Same family, same reason. The three customer outcomes a buyer asks
       # for first are recorded as not measured because no design partner has
       # offered a queue to replay; that record is worth what stops it being
