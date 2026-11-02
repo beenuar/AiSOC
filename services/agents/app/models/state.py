@@ -169,6 +169,10 @@ class InvestigationState(BaseModel):
     # excluded from the serialised state for the same reason the retrieval
     # dicts are shaped the way they are.
     vendor_evidence: Any = None
+    # Phase 4.4(a). Past decisions on alerts *like* this one, matched by
+    # similarity rather than by the exact evidence fingerprint. Context only
+    # — nothing here closes an alert; suppression stays exact-match.
+    precedent: list[dict[str, Any]] = Field(default_factory=list)
     # What those principals could do *at the alert's event time*, as
     # `app.context.privilege.PrivilegeContext.as_state()` renders it (depth
     # plan wave 2, 1.1). Distinct from `identity_context`, which says who
