@@ -33,10 +33,11 @@ def test_registry_contains_falco():
     assert CONNECTOR_REGISTRY["falco"] is FalcoConnector
 
 
-def test_normalize_critical_to_high(fixture):
+def test_normalize_critical_preserves_critical(fixture):
     out = FalcoConnector().normalize(fixture[0])
     assert out["source"] == "falco"
-    assert out["severity"] == "high"
+    assert out["severity"] == "critical"
+    assert out["raw_event"]["priority"] == "CRITICAL"
     assert out["actor"] == "root"
     assert out["namespace"] == "prod"
     assert out["event_type"] == "falco.terminal_shell_in_container"
@@ -55,8 +56,10 @@ def test_normalize_informational_to_info(fixture):
 
 def test_normalize_emergency_alert_warning():
     c = FalcoConnector()
-    assert c.normalize({"priority": "EMERGENCY", "rule": "x"})["severity"] == "high"
-    assert c.normalize({"priority": "ALERT", "rule": "x"})["severity"] == "high"
+    # Syslog ordering: EMERGENCY and ALERT outrank CRITICAL, so none of
+    # them may rank below it.
+    assert c.normalize({"priority": "EMERGENCY", "rule": "x"})["severity"] == "critical"
+    assert c.normalize({"priority": "ALERT", "rule": "x"})["severity"] == "critical"
     assert c.normalize({"priority": "WARNING", "rule": "x"})["severity"] == "low"
     assert c.normalize({"priority": "NOTICE", "rule": "x"})["severity"] == "info"
 
@@ -89,7 +92,7 @@ async def test_fetch_alerts_uses_pagination(fixture):
     # All three events drained and normalised.
     assert len(first) == 3
     severities = [e["severity"] for e in first]
-    assert "high" in severities and "medium" in severities and "info" in severities
+    assert "critical" in severities and "medium" in severities and "info" in severities
     # Buffer is empty — second poll terminates immediately.
     second = await c.fetch_alerts(since_seconds=300)
     assert second == []
