@@ -16299,6 +16299,39 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/business-context/rules/compile:
+    post:
+      tags:
+      - business-context
+      summary: Compile Rule
+      description: 'Compile one plain-language sentence into the structured rule schema.
+
+
+        Saves nothing. The returned ``rule`` is the exact mapping a save would
+
+        write, so the preview and the save cannot drift — they are one dict.'
+      operationId: compile_rule_api_v1_business_context_rules_compile_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompileRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
   /api/v1/nl-detection/translate:
     post:
       tags:
@@ -26694,6 +26727,53 @@ components:
       - author
       - submitted_at
       title: CommunityPluginOut
+    CompileRequest:
+      properties:
+        sentence:
+          type: string
+          maxLength: 2000
+          title: Sentence
+        rule_id:
+          type: string
+          maxLength: 63
+          minLength: 3
+          title: Rule Id
+        description:
+          type: string
+          maxLength: 300
+          title: Description
+          default: ''
+      type: object
+      required:
+      - sentence
+      - rule_id
+      title: CompileRequest
+    CompileResponse:
+      properties:
+        rule:
+          additionalProperties: true
+          type: object
+          title: Rule
+        yaml:
+          type: string
+          title: Yaml
+        fields:
+          items:
+            $ref: '#/components/schemas/FieldCoverage'
+          type: array
+          title: Fields
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+      type: object
+      required:
+      - rule
+      - yaml
+      - fields
+      - warnings
+      title: CompileResponse
     CompliancePosture:
       properties:
         framework:
@@ -30694,6 +30774,23 @@ components:
       - is_enabled
       - created_at
       title: FeedOut
+    FieldCoverage:
+      properties:
+        field:
+          type: string
+          title: Field
+        present_in:
+          type: integer
+          title: Present In
+        sample_size:
+          type: integer
+          title: Sample Size
+      type: object
+      required:
+      - field
+      - present_in
+      - sample_size
+      title: FieldCoverage
     FindingCreate:
       properties:
         cloud_provider:
@@ -35246,6 +35343,23 @@ components:
             type: string
           type: array
           title: Unsupported Filters
+        executed_query:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Executed Query
+        executed_query_language:
+          anyOf:
+          - type: string
+            enum:
+            - sql
+            - esql
+          - type: 'null'
+          title: Executed Query Language
+        executed_query_params:
+          additionalProperties: true
+          type: object
+          title: Executed Query Params
       type: object
       required:
       - request_id
