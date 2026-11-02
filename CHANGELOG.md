@@ -7,6 +7,165 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The offline sandbox read two spellings of "timestamp" and silently
+  computed nothing for the rest.** Found by writing a payload the way a
+  stranger would: the same benign login as the previous report, timed with
+  `"ts"` instead of `"published"`, returned `not_computable` on every
+  time-based signal. The behaviour was honest — it named the missing input
+  rather than inventing a verdict — but
+  `_parse_timestamp(event.get("published") or event.get("timestamp"))`
+  accepted exactly two spellings while the actor reader accepted four and
+  the address reader four, which is backwards: a timestamp has *more*
+  ordinary spellings than an actor, not fewer. Measured over the spellings
+  a stranger would plausibly write, **13 of 63 probes passed**. Since the
+  package is used by running it against your own alert file, that is the
+  difference between a tool that works and one that appears to do nothing.
+
+  No existing test could have caught it, and that is the part worth
+  keeping: every bundled fixture says `published`, so replaying the corpus
+  could only ever confirm that `published` works. A corpus written in its
+  parser's own dialect cannot reveal a dialect gap.
+
+  All field reads now go through one declared table, `FIELD_VOCABULARY`,
+  covering event time (16 spellings, ISO-8601 or epoch), actor (14, plus 4
+  honoured only when nested), source address (13), city, country,
+  coordinates, domain age and destination. Actor, address and position are
+  also read through declared container objects up to three levels deep, so
+  the shapes Okta, Microsoft Entra and Elastic Common Schema actually ship
+  resolve without reshaping. Position now **prefers coordinates the payload
+  carries** over a city centroid: explicit `lat`/`lon` is not a weaker
+  input than the table but a strictly better one, while the table stays
+  narrow and still names a city it cannot resolve rather than substituting
+  a country centroid. 63 of 63 probes pass after.
+
+  Widening was not allowed to buy a new confident answer, which took three
+  guards. Two events timed only to a calendar date both land on midnight,
+  so the elapsed time is zero and the implied speed infinite — without a
+  precision guard the sandbox reports "one actor was in two places at once"
+  from a payload that never carried an hour, proven by reverting the guard
+  alone and watching it fire. Event times are read from the top of the
+  event only, so a nested `user.created_at` can never stand in for the time
+  of the event. And `0,0`, out-of-range coordinates and half a coordinate
+  pair are refused or fall back to the city table, never plotted. An
+  unrecognised spelling still returns `not_computed` naming the field.
+  Gated by a new vocabulary arm in `scripts/check_sandbox_honesty.py` that
+  generates its fixtures from the vocabulary table itself, plus
+  `test_field_vocabulary.py` (134 cases). Signal output for all five
+  bundled scenarios is unchanged, byte for byte.
+
+- **The offline sandbox's verdict followed the label on the input file, not
+  the events.** Reported by a community reviewer who fed `aisoc-sandbox` a
+  harmless login — same user, same address, New York both times, eight hours
+  apart, tagged `T1078` at severity `high` — and got back "the geo pivot
+  between sequential events is physically impossible", high confidence,
+  **83/100**. Relabelling genuine impossible-travel events `info` returned
+  "L4 — fully autonomous closure" and "auto-execute eligible". Every claim
+  reproduced against `main`, and the cause was visible in three signatures:
+  `_confidence_band(*, severity, technique_count)`, `_automation_tier(severity)`
+  and `explain(*, technique)` — **none of the three decision functions could
+  see the events**. The rationale came from a fixed table keyed on the MITRE
+  technique, so `T1078` always produced that sentence; 83 is
+  `75 (high) + 4 x 2 techniques`; and the tier was a dict keyed on severity,
+  so a self-declared label in an input file selected the autonomy posture.
+  Several canned rationales also asserted measurements nothing had taken —
+  a Welford-online baseline, a domain registration age, a file-extension
+  churn rate — and the class docstring named the goal outright: that a reader
+  "can't tell the rendered ledger apart at a glance" from the live demo. This
+  is the family the project deletes rather than rewords, so all of it is gone
+  rather than reworded.
+
+  What replaces it: `aisoc_sandbox.signals` computes what the event payload
+  genuinely allows — impossible travel is a great-circle distance over an
+  elapsed time, so the sandbox performs that division and prints it. The
+  reporter's benign payload now reports `0.0 km apart, implied speed
+  0.0 km/h` and says the `T1078` tag is **not supported by anything computed
+  here**; their relabelled payload still identifies the travel as impossible
+  from the arithmetic, and determines no tier at all. Everything the sandbox
+  cannot compute — confidence score, L0–L4 tier, approval posture,
+  related-case count, entity risk, hunt matches — is now an explicit
+  `not_computed` carrying its reason, never a plausible figure and never a
+  zero (a hunt that did not run reports `unknown`, since it looked nowhere
+  rather than finding nothing). Tool calls are marked `executed: false`; the
+  ruleset figure is derived from `corpus-stats.json` by
+  `scripts/sync_sandbox_corpus_figures.py` instead of the hand-typed `"800+"`
+  that had gone stale by a factor of three; and the synthetic-run notice
+  moved onto every decision line, because the reporter read the verdict
+  several screens below the banner. Guarded by
+  `scripts/check_sandbox_honesty.py`, which also refuses the *shape* — a
+  table mapping a technique id or a severity name to a sentence or a score —
+  and which reports **222 problems against the pre-fix tree and 0 after**.
+  Thanks to the reporter for a careful, well-scoped report that was right on
+  every count, including about what they had not tested.
+
+### Added
+
+- **ExtraHop RevealX 360 network detections, with the vendor's own risk
+  bands intact** (depth plan wave 2, item 8.2). Detections arrive as alerts
+  on a schedule, and two read-only verbs -- `lookup_network_flows` and
+  `lookup_network_device` -- let an investigation pull the flows and the
+  device record around one address.
+
+  What was absent: no NDR connector beyond Zeek/Suricata and Darktrace. The
+  reproduction had two halves, because this is an item that can be wired
+  wrong in two places. The connector half was an import error. The ingest
+  half was quieter and worse: with no `connectorProfiles` entry the
+  normalizer logs `Using generic profile for unknown connector`, files the
+  event at `class_uid: 4001`, and `should_promote()` then drops every
+  mid-band detection. The connector would have polled successfully,
+  reported healthy and produced an empty queue.
+
+  **This connector never emits `critical`, deliberately.** ExtraHop
+  publishes three risk bands and no fourth; from the vendor's own
+  documentation the score is "color coded by severity as red (80-99),
+  orange (31-79), or yellow (1-30)". Promoting the top band would assert a
+  tier the vendor does not publish, which is the same defect as collapsing
+  a vendor's real `critical` into `high`, in the other direction. Nothing
+  is lost: these are OCSF Security Findings at category 2, which promote
+  regardless of severity.
+
+  A read that could not happen is not an empty result. RevealX 360 record
+  search needs a cloud recordstore with Premium Investigation, and a
+  deployment without one gets a refusal naming the reason rather than a
+  list of no flows -- because an investigation reporting an address was
+  quiet when nothing was ever searched has stated a fact it did not
+  establish.
+
+  The gate that keeps it fixed is the ingest profile test, proven against
+  the pre-fix tree: removing the profile fails all three assertions and the
+  normalizer logs the generic-profile warning again.
+
+  **Not built:** Corelight. Its documentation answers 401, so no honest
+  mock payload can be written. Recorded as blocked with exactly what it
+  needs rather than substituting the Zeek-log connector that already
+  exists, which reads different data for a different purpose.
+
+### Fixed
+
+- **The enrichment service's rate limit is applied** (depth plan wave 2,
+  item 8.3, first half). `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` were parsed
+  into config, assigned to struct fields, and read by nothing else in the
+  service. That is worse than a missing setting, because an operator reading
+  the environment believed the service was bounded.
+
+  A token bucket per tenant, applied on `/enrich` and on `/enrich/bulk`,
+  with one token per *item* on the bulk path so a hundred-indicator call
+  cannot be the way around the limit. An unset rate means unlimited rather
+  than blocked: a malformed environment variable parses to 0, and reading
+  that as "allow nothing" would turn enrichment off across a deployment
+  with no message anywhere. A request with no tenant shares one bucket
+  rather than bypassing the limit.
+
+  Six tests, every grant with a partner refusal, because a limiter asserted
+  only on the allowed path is indistinguishable from no limiter, which is
+  exactly what shipped.
+
+  The enrichment cache key is now tenant-scoped as well. Two tenants
+  legitimately enable different providers, so a shared key would serve
+  tenant A's verdict from a provider tenant B switched off straight to
+  tenant B.
+
 ### Added
 
 - **Response reaches the cloud, SaaS and code-platform estate.** The live

@@ -126,6 +126,7 @@ const sidebars: SidebarsConfig = {
         "connectors/elastic",
         "connectors/email-inbox",
         "connectors/exabeam",
+        "connectors/extrahop",
         "connectors/falco",
         "connectors/fleetdm",
         "connectors/gcp-cloud-audit",
@@ -194,7 +195,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Benchmarks",
-      items: ["benchmarks/alert-reduction"],
+      items: ["benchmarks/alert-reduction", "benchmarks/retro-hunt-scale"],
     },
     {
       type: "category",

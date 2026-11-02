@@ -72,8 +72,10 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # GitHub, Slack, Salesforce, Snowflake or 1Password, and no gateway
     # verb for a single URL. Plus 14 from wave-2 Phase 7.5: AI-estate
     # containment, where the inventory could score a provider key's
-    # exposure and nothing could act on it.
-    assert count == 165
+    # exposure and nothing could act on it. Plus 2 from wave-2 8.2:
+    # ExtraHop's two read-only NDR verbs, `lookup_network_flows` and
+    # `lookup_network_device`.
+    assert count == 167
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -150,6 +152,8 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("elastic", "search_siem"),
         ("elastic", "suppress_alert"),
         ("elastic", "update_alert_disposition"),
+        ("extrahop", "lookup_network_device"),
+        ("extrahop", "lookup_network_flows"),
         ("elastic", "update_watcher"),
         ("email", "notify"),
         ("entra", "get_user_activity"),
@@ -283,7 +287,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 165
+    assert count == 167
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

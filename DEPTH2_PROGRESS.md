@@ -46,8 +46,12 @@ from now on; `DEPTH_PROGRESS.md` gains a cross-reference rather than a tick.
 
 | Item | State | Where |
 |---|---|---|
-| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
+| 1.6 Anonymizer and hosting classes at ingest | **done and MERGED** 2026-11-01 | PR #1586 |
 | 1.3 HR and device context | **done for three of six connectors**, in review | PR #1589 |
+| 8.1 CNAPP depth | **blocked** on unreachable Wiz docs; depth check recorded, two findings in it | item log |
+| 8.2 NDR connectors | **ExtraHop done**, in review; Corelight blocked (D8) | PR #1591 |
+| 8.3 Enrichment per tenant, cited | **rate limiting shipped**; provider gate built and held for its caller | item log + `depth2/lane-b-enrichment-tenant` |
+| 1.6 Anonymizer and hosting classes at ingest | **done**, in review | PR #1586 |
 | 8.1 CNAPP depth | not started, gap reproduced | item log |
 | 8.2 NDR connectors | not started; ExtraHop buildable, Corelight blocked | item log |
 | 8.3 Enrichment per tenant, cited | not started, gap reproduced | item log |
@@ -339,6 +343,11 @@ the scoreboard row for the 8B model is untouched.
       ([#1585](https://github.com/beenuar/AiSOC/pull/1585)); the rest need a
       producer or 7.3's baselines, each recorded below.
 ### D5 — Lane F did not reach eleven of its sixteen items, and this is where they stand
+### D5 — Where Lane F's remaining items stand
+
+*Updated 2026-11-01 after a second pass: 9.5's prerequisite, 4.5, 4.4, 3.3's second half, 4.2 and 5.5 have since landed and are in the item log. The rows below are what is still open, and each is measured state rather than a guess.*
+
+~~Originally recorded as eleven unreached items.~~
 
 Recorded rather than left implicit. Lane F covered 4.2–4.6, 5.1–5.5, 9.1–9.5
 and 3.2–3.3. Five landed (3.2, 3.3 first half, 5.2, 4.6, 9.2/9.4 records);
@@ -499,6 +508,32 @@ The lesson is the one this programme keeps paying for: a local suite
 passing is not evidence that the specific question was asked. The original
 entry named a test by title and did not read what it asserted.
 
+### D8 - Corelight is blocked on documentation nobody can read
+
+Item 8.2 names two NDR connectors. ExtraHop RevealX 360 is built; Corelight
+is not, and the reason is outside the repository.
+
+Measured 2026-11-01:
+
+    $ curl -sL -o /dev/null -w "%{http_code}" https://docs.corelight.com/
+    401
+
+There is no public API reference, so there is no document from which an
+honest mock payload can be written, and the plan's own rule for exactly
+this case is to record it rather than invent one.
+
+**Needed, specifically:** a Corelight documentation account, **or** one
+recorded (redacted) detection payload together with the endpoint path and
+the authentication shape the sensor expects.
+
+One thing that must not be mistaken for closing it. Corelight's **Zeek
+output** is open, and `services/connectors/app/connectors/zeek_suricata.py`
+already ingests it. That is a different thing from the sensor's own
+detection API: Zeek logs are network telemetry, and a Corelight detection
+has passed Corelight's correlation. Shipping the first while the item asks
+for the second, and calling the item done, would be the kind of
+substitution this plan exists to catch.
+
 ### D7 - Zero check runs was a conflicted PR, not a saturated pool, and the two look identical from outside
 
 **Corrected.** This entry first recorded the wrong cause, and the
@@ -547,6 +582,196 @@ before.
 One entry per item as it lands: what failed before, the change, the negative
 control, and the measurement delta.
 
+### 8.2 NDR connectors - Lane B - ExtraHop shipped, Corelight blocked
+
+**Reproduced, in the two places this item can be wired wrong.** The
+connector half:
+
+    ModuleNotFoundError: No module named 'app.connectors.extrahop'
+
+The ingest half, which is the one that fails quietly:
+
+    extrahop_profile_test.go:22: extrahop has no connectorProfiles entry;
+      its detections would fall to the lenient 4001 fallback and never
+      promote
+
+and the normalizer saying so itself in the same run:
+
+    {"level":"warn","connector_type":"extrahop",
+     "message":"Using generic profile for unknown connector"}
+
+**Shipped.** All seven registration surfaces plus the ingest profile:
+
+| Surface | Where |
+|---|---|
+| Registry class | `ExtraHopConnector` in `_CONNECTOR_CLASSES` |
+| `schema()` with `secret=True` | `client_secret` only; asserted by test |
+| Marketplace manifest | `plugins/extrahop/plugin.yaml`, index regenerated |
+| Docs page | `apps/docs/docs/connectors/extrahop.md`, sidebar entry `connectors/extrahop` |
+| Count gate | regenerated, not edited: 90 -> **91** |
+| Scheduler polling | `test_scheduler.py` asserts a non-null `next_run_time` |
+| Severity ladder | three bands, no invented `critical` |
+| **Ingest profile** | `connectorProfiles["extrahop"]`, class 2001 / category 2 |
+| Read verbs | `lookup_network_flows`, `lookup_network_device` |
+
+**The severity decision, because a reviewer will ask why this connector
+never emits critical.** ExtraHop publishes three risk bands and no fourth.
+From the vendor's own detections page, verbatim: the icon is "color coded
+by severity as red (80-99), orange (31-79), or yellow (1-30)". The same
+page draws the contrast itself, because CrowdStrike detections in the same
+view use red for *Critical* while ExtraHop's red is just 80-99.
+
+So 80-99 maps to `high` and stops. Promoting it would assert a tier the
+vendor does not publish, which is the mirror of collapsing a vendor's real
+`critical` into `high`. Promotion does not depend on it: class 2001 is
+category 2 and promotes unconditionally.
+
+**Negative control.** Removing the `connectorProfiles["extrahop"]` entry
+fails all three Go tests and the normalizer logs `Using generic profile for
+unknown connector`. Restored, they pass.
+
+**Numbers, from the generators.**
+
+| Figure | Value | Source |
+|---|---|---|
+| Registered connectors | 90 -> **91** | `generate_connector_count.py --check` |
+| Conformance matrix | 91/91 | `connector_conformance.py` |
+| Marketplace plugins | 83 -> **84** | `build_marketplace.py` |
+| Executor arms | 97 -> **99** | `check_action_contract.py` |
+| Claim matrix | 336/331/5 -> **337/332/5** | `check_claim_gate_matrix.py` |
+
+**A real defect the contract gate caught, from the previous item.**
+`check_action_contract.py` compares the connectors `Capability` enum
+against `KNOWN_CAPABILITIES` in the actions service in both directions, and
+reported that `pull_workforce` and `pull_device_inventory` -- added by 1.3
+-- were missing from the mirror. Fixed here rather than left, because the
+gate is right: the two sets are mirrors and a one-way addition is drift.
+
+**No live suite was added**, and that is a decision rather than an
+omission. There is no containerised ExtraHop to stand up, so a job in
+`integration.yml` would have nothing to drive; the tests run in the
+ordinary `ci.yml` jobs against a mock transport and recorded vendor shapes.
+What that does not prove is stated in the claim-matrix row: no live tenant
+has been exercised.
+
+**Deviation:** D8 (Corelight blocked on 401 documentation).
+
+### 8.1 CNAPP depth - Lane B - **BLOCKED on vendor documentation**, with the depth check recorded
+
+**Reproduced.** `services/connectors/app/connectors/wiz.py` declares exactly
+one GraphQL operation, `query IssuesTable`. No vulnerability query, no
+configuration-finding query, no secrets query, no runtime-detection query.
+
+**Blocked, and this is not a scoping choice.** The item asks for queries
+the vendor's current public reference must support an honest mock for.
+Measured 2026-11-01, repeatedly and with a browser user agent, with a
+twenty-second pause between attempts:
+
+    429  https://docs.wiz.io/
+    429  https://win.wiz.io/reference/wiz-api
+    429  https://docs.wiz.io/wiz-docs/docs/welcome
+    000  https://integrate.wiz.io/
+
+Every attempt was rate-limited or unreachable, so the GraphQL schema for
+vulnerabilities, configuration findings, secrets and runtime detections
+could not be read. The one query already in the tree predates this work and
+is not evidence about the others.
+
+Writing those four queries from memory or by pattern-matching the issues
+query would be inventing a payload shape, which the plan names as the thing
+to refuse. **Needed:** the Wiz API reference reachable, or the GraphQL
+schema document (`wizQueryTable` / `vulnerabilityFindings` /
+`configurationFindings` / `secrets` / `threatDetections` field definitions),
+or one recorded (redacted) response per query type.
+
+**The depth check for the other four, as the item asks.** What each
+connector reads today is established from the code and is exact. What each
+API offers is marked unverified where the vendor's reference could not be
+reached, rather than asserted from recollection.
+
+| Connector | Reads today (verified from the tree) | Vendor reference | Verdict |
+|---|---|---|---|
+| `wiz` | one GraphQL operation, `IssuesTable` | `docs.wiz.io` **429**, `integrate.wiz.io` **000** | depth unverifiable; blocked |
+| `orca` | `GET /api/alerts` (plus `/api/user/session` for auth) | `api-docs.orcasecurity.io` **000** | alerts only; depth unverifiable |
+| `prisma_cloud` | `POST /alert/v1/alert` (plus `/login`) | `pan.dev/prisma-cloud/api/cspm/` **200**, overview only: the page describes authorisation and request shape and enumerates no endpoint groups | alerts only; depth needs the endpoint index, not the overview |
+| `lacework` | `GET /api/v2/Alerts` **and** `POST /api/v2/Configs/ComplianceEvaluations/search` | `docs.lacework.net` **000** | **already deeper than issues**: it reads compliance evaluations as well as alerts, which is the configuration-findings half of this item |
+| `sysdig` | `GET /api/v1/secureEvents` | `docs.sysdig.com/en/sysdig-secure/` **200** | runtime events only |
+
+Two things in that table are worth more than the blocked verdict.
+
+`lacework` already reads compliance evaluations, so the plan's premise that
+every cloud-security connector reads issues only is **wrong for one of the
+five**. That is the "do not build what exists" rule paying for itself: the
+depth check was supposed to be a formality and found a connector a third of
+the way through this item already.
+
+`sysdig` reads `secureEvents`, which is Sysdig's **runtime** detection
+stream rather than a posture issue list. So the runtime-detections half of
+this item is partly covered there too, by a connector nobody counted.
+
+**Not started, and distinct from the blocked half:** findings as *triage
+context* keyed on the resource an alert touched, rather than as alerts. That
+needs no new vendor read -- it can be built over what these five already
+ingest -- and it is the half of 8.1 that is not blocked on anything. It is
+the first thing the next pass should take.
+
+### 8.3 Enrichment per tenant, cited - Lane B - rate limiting shipped, the rest split and in flight
+
+**Reproduced, and the gap is wider than the plan's wording.** Measured on
+this tree:
+
+  * `grep -c tenant` over `internal/enricher/enricher.go` and
+    `internal/config/config.go` returns **0** and **0**. There is no tenant
+    dimension anywhere in this service, so per-tenant opt-in is absent
+    rather than partial. Keys are per deployment, which means a deployment
+    holding a VirusTotal key sends **every** tenant's indicators to
+    VirusTotal whether that tenant agreed or not. An indicator is the
+    customer's own address, domain or file hash, so that is a disclosure
+    nobody consented to.
+  * `RATE_LIMIT_RPS` and `RATE_LIMIT_BURST` are parsed at `config.go:59-60`,
+    assigned to struct fields at `92-93`, and **read by nothing else**.
+  * No reference to the credential vault anywhere under
+    `services/enrichment/`.
+  * `URLSCAN_API_KEY` is a config field with no client.
+  * No enrichment result is cited in the ledger.
+
+**Shipped in the NDR pull request**, because it is complete, wired and
+regresses nothing:
+
+  * a per-tenant token-bucket limiter applied in the real handler, on both
+    `/enrich` and `/enrich/bulk`, with one token per *item* on the bulk path
+    so a hundred-indicator call cannot be the way around the limit;
+  * a tenant-scoped cache key, because two tenants legitimately enable
+    different providers and a shared key would serve tenant A's verdict from
+    a provider tenant B switched off straight to tenant B;
+  * six tests, every grant with a partner refusal, driven through the real
+    handler with the real `Enricher` rather than a nil one, so the granted
+    path is exercised too.
+
+**Held back deliberately, on `depth2/lane-b-enrichment-tenant`:** the
+default-deny provider gate. It is built, tested and negative-controlled
+(`TenantPolicy`, `runFanOutForTenant`, and an AST wiring test that fails
+naming the call site when any fan-out bypasses the gate).
+
+It is not in the pull request because **threading a default-deny gate into
+`Enrich` while no caller sends a policy would stop enrichment on every
+deployment.** That is a regression, and shipping it to satisfy an item
+would be the exact substitution this plan exists to catch. It lands with
+the caller.
+
+**Remaining scope, so the next pass starts from a decision rather than a
+survey:**
+
+| Piece | What it needs |
+|---|---|
+| Per-tenant provider table | Migration (Lane B block has `132`-`137` free), RLS, and a row seeded per existing tenant from the deployment's current providers, mirroring migration 122's treatment of closure policy: new tenants default-deny, existing ones keep what they had |
+| Tenant's own key in the vault | The API owns the vault write path and this is a Go service, so either it learns a vendored read-path `decrypt_dict` (the pattern `services/connectors` already uses) or the fan-out moves behind an API route that resolves credentials first. **This is the design decision to make first**; everything else follows from it |
+| Console settings surface | API routes plus a settings panel. A table nothing writes is the same defect as a console nothing reads |
+| Caller wiring | `services/fusion/app/services/alert_enricher.py` resolves the tenant's policy and sends it; the held-back gate then binds in production |
+| Ledger citations | Every enrichment result triage uses, with provider and time |
+| URLScan client | The config key exists and no client does |
+| Breached-credential source | One source, off by default per tenant |
+| Docs | Say plainly that enrichment needs the `full` profile |
 ### 6.1 Verb breadth — done
 
 **What failed before.** `scripts/check_executor_arm_count.py --check` on the
@@ -1002,7 +1227,6 @@ asserted for all four facts.
 
 **Numbers, from the generators.**
 
-| Figure | Value | Source |
 |---|---|---|
 | Registered connectors | 87 -> **90** | `generate_connector_count.py --check` |
 | Connector docs | 90 documented, 41 generated / 49 hand-written | `generate_connector_docs.py --check` |
@@ -1473,6 +1697,12 @@ existing `cost_telemetry.py` rather than a second meter.
 | 2026-11-01 | 5.2 | Reproduced: `resolve_provider` required `connected_types.intersection(provider.connector_types)`, and `_execute_hunt` turns the resulting `UnsupportedTranslation` into a hit count of **zero** — not an error state, so no case opens, nothing logs above INFO, `last_run_at` moves, and it is indistinguishable from "your hunt found nothing". That was the answer on every deployment whose data lives in AiSOC's own lake. Added `LakeProvider` (no connector types; the registry now allows such a provider, checked **after** the connector-backed chain so a tenant's own SIEM always wins) with tenant binding through `compile_hunt`, an unreachable lake raising rather than returning zero, and dropped conditions logged by name. ADR-0015's **HUNTING OUTPUT** label did not exist anywhere outside the ADR — now in the banner, the page title and the mail subject, with a sentence saying what the document does not claim. Emailed delivery did not exist either (`aisoc_hunt_reports` and the report scheduler's `ReportArtefact` were never connected); it ships **off** behind `AISOC_HUNT_REPORT_RECIPIENTS`. Negative control: removing the empty-`connector_types` arm fails the reproduction and the scheduler-wiring case. API suite 5042 passed. [#1588](https://github.com/beenuar/AiSOC/pull/1588) |
 | 2026-11-01 | 9.2 | **Blocked, and the README was overstating.** See D4. Corrected the capability table and extended the `mobile.yml` honesty guard to pin both rows. **Needs:** 9.1's recogniser and screen first — nothing can speak to the app today — then an Apple developer account and provisioning profile for iOS, or a Google Play account for a store-signable Android build. The Android `assembleDebug` APK already installs on a handset, so once 9.1 lands the Android half becomes a device question rather than a credentials one. [#1588](https://github.com/beenuar/AiSOC/pull/1588) |
 | 2026-11-01 | 3.2 | Reproduced: the grouper chained on a shared host, user or source-IP **string**, first match wins in a fixed order, with nothing on the result saying which of the three had done it — so a NAT egress address welds two intrusions into one story; an alert carrying a `session_id` (written by fusion since migration 102, alongside `originating_human`) got no more weight than one carrying a hostname; and `ChainMember` carried a per-member severity that nothing aggregated, so "a member benign alone may be escalated by its story" had nowhere to happen. Built **on** the grouper: typed links with three strengths (session/human > hash/domain > host/user/ip), story severity raised by exactly one tier only when the story spans three or more kill-chain stages with the reason carried on the assignment, and actor mode held at `unknown` until Lane A's 1.4 supplies cadence — two tempting inferences rejected in code and pinned by test. **Measured:** story recall 100 % on all three labelled scenarios (4/4, 3/3, 2/2), purity 100 % (5/5), 0 cross-rule stories of 63 on a detection-shaped cohort. **The purity rule was found by the measurement, not reasoned out:** the first cut refused a weak link only across detection rules and the suite measured 75 % purity, because the scenario alerts carry no `rule_id` and an antivirus quarantine sharing the NAT address joined a phishing-to-exfiltration story. A weak link now also may not join a story anchored on strong evidence; the asymmetry (a strong link may still join a string-held pile) is deliberate and tested. Negative controls, both measured: removing either refusal fails two cases. Reduction baselines unmoved at 33.3 % and 24.5 %. **Open and recorded, not approximated:** stories are still Redis-only — the assignment reaches the Kafka envelope and the realtime socket and evaporates, so no API read or case can show one — and the resolved-identity link waits on Lane A's 3.1. [#1588](https://github.com/beenuar/AiSOC/pull/1588) |
+| 2026-11-01 | 9.5 (prereq) | **A claim-matrix row that was false in the repository's favour.** The caveat of a GATED row said six console pages "are not built"; three were. SCIM tokens is gated by another row of the same matrix, so two rows of one document disagreed about whether a surface exists. The direction is what made it worth its own change: it reads as modesty and works as an exemption, because a surface recorded as absent needs no claim row and no gate — and `UsersView` had shipped at `/settings/users` with no test at all. `check_claim_gate_matrix` cannot see this; it counts rows and statuses and does not read a caveat's prose. `check_unbuilt_claims.py` resolves each named surface through a component file **and** a render site (an unrendered component is not a page, and crediting one would make the gate certify the defect it is named for) and was **proven against the pre-fix tree, naming all three**. `UsersView.test.tsx` is the gate the corrected row names: 6 cases asserting on first paint as well as the error branch, including that a member count must not render over a failed read because `total` falls back to 0. Branding, retention, rule packs and delegations genuinely are not built and the corrected caveat says so. [#1592](https://github.com/beenuar/AiSOC/pull/1592) |
+| 2026-11-01 | 4.5 | **No read verb added.** `investigation_reads.py` already carried five across seven vendors with contracts, executors and autospec'd signature tests; the gap was that `run_auto_triage` had **no tool channel at all** and said so in its own comment, so on the path every fused alert takes a GuardDuty or Defender alert was triaged without asking GuardDuty or Defender. Shipped a **deterministic bounded pre-fetch** rather than a tool-calling loop: a loop makes latency and cost unbounded on the hot path; the alert payload is untrusted by construction so a channel whose arguments the model derives from it is a door an injected string can aim (asserted — a hostile `description` changes no read); and a pre-fetch makes the ledger citation true because the call happened. Reads land as `tool_call` rows at seq 2+ in the verdict's own transaction. `called_tools` is now what a vendor really answered and **only** that — a failed read is absent, because the guard asks whether a rationale credits a tool with a *result*. Off by default. Negative controls: removing the render call, and counting failed reads as called tools, each fail a case. Scorecard unchanged at 0.250, which is what an off-by-default context source must do. [#1593](https://github.com/beenuar/AiSOC/pull/1593) |
+| 2026-11-01 | 4.4 | Similarity precedent scores the canonical evidence rather than embedding it, on a measurement already paid for: local models pressed into embedding duty scored **below the lexical baseline** (recall@1 0.333 vs 0.667). A prior now stores the evidence it came from, because a signature is a hash; priors written before this are invisible to similarity and there is nothing to backfill from. Precedent is **cited, never acted on** — exact-fingerprint suppression stays the only path from memory to a closed alert. The measurement found a real gap in the first cut: two alerts whose only shared field is `severity` score a perfect 1.0, so a ratio alone makes "severity: high" precedent for every high alert; `MIN_SHARED_WEIGHT` is the half the ratio cannot see. Re-triage gets its **own identity** — `uuid5(alert:workflow:retriage:trigger_fingerprint)` — because the production run id is deterministic and the ledger is `ON CONFLICT DO NOTHING`, so the obvious implementation writes nothing and reports success. `changed` is explicit, since a re-triage that did not move the verdict is a real outcome. Two assertions first failed **on their own prose** and now parse the source with docstrings stripped. The writer-parity gate caught three writers lacking the new keyword. [#1594](https://github.com/beenuar/AiSOC/pull/1594) |
+| 2026-11-01 | 3.3 (2nd half) | Cross-vendor root cause, keyed on `(resource, technique, principal)` — the conjunction is the control, and a NULL does not match another NULL. Every original is kept: promoting one vendor's alert would make the survivor's severity and vendor an accident of arrival order and discard the fact that several products agreed. `vendor_count` is recomputed, not incremented, so a redelivery cannot turn two vendors into three. Published as a **third labelled row, 16.8 %**, and the gate now refuses a page quoting any of the three reductions' four possible sums. **A weak test was found and fixed**: the severity case first read `WHERE vendor_count = 4 LIMIT 1` with no tenant predicate and passed against an earlier test's row while the ordering was reverted — a live suite that does not scope its reads measures whatever ran before it. Negative controls: resource-only keying fails 3 live cases; alphabetical severity fails the severity case. Migration 152. [#1595](https://github.com/beenuar/AiSOC/pull/1595) |
+| 2026-11-01 | 4.2 | **Measured, did not help, off — a complete outcome.** Reviewer on and off both score 0.2500 balanced accuracy, auto-close precision *not measured* (the deterministic path closed nothing, so no denominator — never `0`), malicious recall unchanged. The reason is published rather than shrugged at: the deterministic scorer makes no prose claims, so every input the reviewer reads is `None` and it abstains on all 72 — which measures the reviewer on the only path available to measure it, not the idea. Deterministic rather than a second model call because a model at 0.21–0.36 adjudicating another at 0.21–0.36 is a coin flip refereeing a coin flip. It may never close: the flag goes True→False only, and an AST assertion with docstrings stripped proves no closure path. A test asserts the measurement is recorded beside the code, because "it is off" decays into "nobody remembers why". [#1596](https://github.com/beenuar/AiSOC/pull/1596) |
+| 2026-11-01 | 5.5 | **Measured against a real ClickHouse on recorded hardware** (Apple M5 Max, 128 GiB, CH 24.8), driving the real `build_sweep_sql` and reading cost from `system.query_log`. `read_rows` equals `lake_rows` at every step: the sweep is a **full scan**, 93.8 bytes/row, 7.45 ms per million rows. **The degradation point is derived from the product's own constant** — `MAX_BYTES_PER_SWEEP` (8 GiB) over 93.8 bytes/row means one sweep is refused by the server at ~**91.6 M rows** of history. The million-indicator figures are extrapolation and are labelled as such; at 20 M rows that is 41.4 h and 1.88 PB. The honest reading is on the page: **a million indicators cannot be swept one at a time against a working lake**, a batched sweep would fix it, and it is not built. Negative control: changing the budget to 2 GiB makes the gate name the page's stale ceiling. [#1596](https://github.com/beenuar/AiSOC/pull/1596) |
 ### 1.6 Anonymizer and hosting classes at ingest - Lane B
 
 **Reproduced.** A Go test driving the real `Normalize` entry point, not the

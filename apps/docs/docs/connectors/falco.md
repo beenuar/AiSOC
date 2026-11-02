@@ -56,17 +56,20 @@ http_output:
 
 ## Severity mapping
 
-Falco's syslog-style priority ladder collapses to the AiSOC 4-tier ladder:
+Falco's syslog-style priority ladder maps onto the AiSOC five-tier ladder:
 
 | Falco priority | AiSOC severity |
 |---|---|
-| `EMERGENCY` | `high` |
-| `ALERT` | `high` |
-| `CRITICAL` | `high` |
+| `EMERGENCY` | `critical` |
+| `ALERT` | `critical` |
+| `CRITICAL` | `critical` |
 | `ERROR` | `medium` |
 | `WARNING` / `WARN` | `low` |
 | `NOTICE` | `info` |
 | `INFORMATIONAL` / `INFO` / `DEBUG` | `info` |
+
+In syslog ordering `EMERGENCY` and `ALERT` outrank `CRITICAL`, so all three
+share AiSOC's top tier. Nothing from Falco maps to `high`.
 
 The `minimum_priority` field is enforced *server-side* before normalisation, so dropped events never count against ingest quotas.
 

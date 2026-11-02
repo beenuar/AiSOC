@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.keywords import CRITICAL_KEYWORDS, HIGH_KEYWORDS, alert_text, any_matched
 from app.models.state import InvestigationState
 
 # Calibration bands. Tuned against the 200-incident synthetic corpus so that
@@ -37,40 +38,19 @@ def _clamp(value: float) -> float:
 
 
 def _has_critical_keyword(state: InvestigationState) -> bool:
-    text = (state.alert_summary + " " + str(state.raw_alert)).lower()
-    return any(
-        kw in text
-        for kw in (
-            "ransomware",
-            "lateral movement",
-            "credential dump",
-            "exfiltration",
-            "mimikatz",
-            "cobalt strike",
-            "c2",
-            "rootkit",
-            "supply chain",
-            "zero-day",
-            "data breach",
-        )
-    )
+    """Whether the alert carries critical-tier evidence.
+
+    The vocabulary lives in :mod:`app.keywords` because it was declared here
+    *and* in the triage agent, and the two had already drifted apart by two
+    entries — so an alert could be scored critical by triage and denied the
+    matching confidence bonus here, with nothing reporting it (#1607).
+    """
+
+    return any_matched(alert_text(state.alert_summary, state.raw_alert), CRITICAL_KEYWORDS)
 
 
 def _has_high_keyword(state: InvestigationState) -> bool:
-    text = (state.alert_summary + " " + str(state.raw_alert)).lower()
-    return any(
-        kw in text
-        for kw in (
-            "phishing",
-            "malware",
-            "exploit",
-            "privilege escalation",
-            "brute force",
-            "suspicious login",
-            "anomaly",
-            "backdoor",
-        )
-    )
+    return any_matched(alert_text(state.alert_summary, state.raw_alert), HIGH_KEYWORDS)
 
 
 def score_triage(state: InvestigationState) -> tuple[float, list[str], str]:

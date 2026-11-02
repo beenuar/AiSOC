@@ -28,6 +28,7 @@ import structlog
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from app import closure as closure_policy
+from app.agents import reviewer
 from app.agents.dispositions import (
     AUTO_CLOSEABLE_DISPOSITIONS,
     BENIGN,
@@ -57,6 +58,8 @@ from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
 from app.llm.prompt_registry import prompt_text
 from app.llm.structured_output import extract_json_block
+from app.memory.precedent import Precedent
+from app.memory.precedent import render_for_prompt as render_precedent
 from app.models.state import AgentStatus, InvestigationState
 from app.prompt_serialization import format_extra_fields_for_llm
 from app.prompting.envelope import make_nonce, scan_evidence_fields, system_rule
@@ -324,6 +327,14 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     if who:
         preamble.append(sanitize_text(who, max_len=_MAX_CONTEXT_BLOCK_CHARS))
 
+    # Phase 4.4(a). In the preamble rather than the fence, on the same test
+    # the dispositions block passes: every value in it is first-party and
+    # from a closed vocabulary — a disposition the server owns, an author
+    # that is `human` or `ai`, a float, and field names drawn from this
+    # module's own weight table. No tenant or vendor free text reaches it.
+    prior_art = render_precedent(_precedent_of(state))
+    if prior_art:
+        preamble.append(sanitize_text(prior_art, max_len=_MAX_CONTEXT_BLOCK_CHARS))
     # What that principal could do when it acted (depth 2 wave 2, 1.1).
     # First-party like the block above -- it is the platform's own derivation
     # over a posture snapshot, not vendor text -- but sanitised anyway,
@@ -374,6 +385,32 @@ def _vendor_evidence_of(state: Any) -> Any:
     raising on the hot path.
     """
     return getattr(state, "vendor_evidence", None)
+
+
+def _precedent_of(state: Any) -> list[Precedent]:
+    """Rehydrate the precedent carried on the state.
+
+    Stored as plain dicts so the state stays serialisable, the same shape
+    the other context sources use; the renderer wants objects. Read through
+    `getattr` so a state built before 4.4 renders nothing rather than
+    raising on the hot path.
+    """
+    rows = getattr(state, "precedent", None) or []
+    out: list[Precedent] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        out.append(
+            Precedent(
+                disposition=str(row.get("disposition") or "unknown"),
+                author=str(row.get("author") or "ai"),
+                count=int(row.get("count") or 1),
+                score=float(row.get("score") or 0.0),
+                matched=[str(m) for m in (row.get("matched_fields") or [])],
+                last_seen=str(row.get("last_seen") or ""),
+            )
+        )
+    return out
 
 
 def _render_business_context(bc: dict[str, Any] | None) -> str:
@@ -903,6 +940,32 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
             signals=len(injection.signals),
             max_severity=ledger.get("max_severity"),
         )
+
+    # Phase 4.2. A separate pass over the decision contract, after every
+    # existing demotion and before the closure branch, so it can only ever
+    # take a decision *away* from closure. Off by default: it was measured
+    # on the corpus and did not improve balanced accuracy or auto-close
+    # precision, which the plan's own condition says means it stays off.
+    # Kept rather than deleted because the measurement is the deliverable,
+    # and because a funded model makes it a drop-in behind this interface.
+    if reviewer.enabled():
+        should_auto_close, verdict_review = reviewer.apply_review(
+            {
+                "verdict": verdict,
+                "supporting_evidence": claim_support.as_dict().get("supported") if claim_support.scored else None,
+                "contradictory_evidence": claim_support.as_dict().get("contradicted") if claim_support.scored else None,
+                "groundedness": getattr(state, "groundedness", None),
+                "missing_prerequisites": [],
+            },
+            auto_closed=should_auto_close,
+        )
+        state.reviewer_outcome = verdict_review.as_payload()
+        # Recorded on every run, abstentions included: a reviewer that has
+        # silently stopped firing must not look identical to one that ran
+        # and found nothing to act on.
+        state.confidence_basis.append(verdict_review.summary())
+        if verdict_review.changes_decision:
+            state.add_finding(verdict_review.summary())
 
     if should_auto_close:
         _metrics["auto_resolved_count"] += 1

@@ -9,7 +9,14 @@
 - **Fixture:** [`examples/alerts/kubernetes-privesc.json`](./alerts/kubernetes-privesc.json)
 - **MITRE techniques:** T1098, T1078
 - **Severity at intake:** `critical`
-- **Confidence band (sandbox):** 100/100, `high`
+- **What the sandbox computes:** nothing: these events carry no geolocation, no source address and no domain age, so every signal the sandbox knows how to compute came back `not_computable`
+
+> **The step-by-step below describes the full stack.** The offline
+> `aisoc-sandbox` run shows the same ledger *shape* but computes only what
+> arithmetic over these events can give it — there is no model, no graph, no
+> Qdrant and no lake in the wheel, and it emits no confidence score, no
+> automation tier and no verdict. Values it cannot compute say so, with the
+> reason attached. What it does compute for this scenario is listed above.
 
 ## Run it
 
@@ -39,7 +46,7 @@ performed any admin RBAC actions in the last 30 days, that the SA
 namespace `experiments` has no production workloads — three
 independent signals consistent with credential-takeover-then-privesc.
 
-**Decision:** Confidence `high` (100/100).
+**Decision (sandbox):** 1 of 4 signals computed from the events, 0 fired. No confidence score: the sandbox runs no model, so it has nothing to calibrate one from.
 
 ### Step 2 · HuntAgent · hunt
 
@@ -59,7 +66,9 @@ the cluster down:
 - `case.create(...)` at severity `critical`
 - `case.notify({"channel": "pagerduty", "service": "kubernetes-on-call"})`
 
-**Decision:** 5 actions proposed; awaiting analyst approval (severity critical).
+**Decision (live stack):** 5 actions proposed; awaiting analyst approval (severity critical).
+
+**Decision (sandbox):** the same actions are listed as call *shapes*, each marked `executed: false`. The automation tier and the approval posture read `not computed` — the live stack resolves both from the capability contract and the approval matrix, and neither is a thing a severity label can select.
 
 ## What the analyst would do next
 

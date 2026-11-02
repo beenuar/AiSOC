@@ -223,11 +223,13 @@ class FalcoConnector(BaseConnector):
 
     # ----------------------- normalize --------------------------
 
-    # Falco's priority ladder follows syslog severities. Wave-1 mapping:
+    # Falco's priority ladder follows syslog severities, in which EMERGENCY
+    # and ALERT outrank CRITICAL. Falco publishes a distinct CRITICAL, so all
+    # three share AiSOC's top tier rather than collapsing into ``high``.
     _PRIORITY_SEVERITY = {
-        "EMERGENCY": "high",
-        "ALERT": "high",
-        "CRITICAL": "high",
+        "EMERGENCY": "critical",
+        "ALERT": "critical",
+        "CRITICAL": "critical",
         "ERROR": "medium",
         "WARNING": "low",
         "WARN": "low",
