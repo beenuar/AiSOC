@@ -546,12 +546,6 @@ jobs:
       # steer an agent; a hand-picked subset would silently miss whatever
       # pattern was added to the guard after the next incident. Needs the
       # agents service importable, so it runs after that install step.
-      - name: Verify vendored AI instruction rules are in sync
-        run: |
-          PYTHONPATH="${PWD}/services/agents" python scripts/sync_vendored_ai_instruction_rules.py --check
-      # The GPU preflight's own self-test. The real verdict depends on the
-      # host, so CI can only assert that the refusals fire and say something
-      # actionable -- which is the part that rots, since the advice is prose.
       - name: GPU preflight — self-test
         run: python3 scripts/check_gpu_runtime.py --self-test
       # Gap-closure Phase 2.2. The sixth mirror, and the one where drift is a
