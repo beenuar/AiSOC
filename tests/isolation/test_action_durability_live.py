@@ -229,14 +229,34 @@ def _free_port() -> int:
         return int(sock.getsockname()[1])
 
 
+class _JoiningHTTPServer(ThreadingHTTPServer):
+    """A stub vendor whose request threads are joined before the test exits.
+
+    `ThreadingHTTPServer` defaults to `daemon_threads = True`, which makes
+    `server_close()` return without waiting for a handler still inside
+    `handle()`. The suite then passes and the *process* aborts at
+    interpreter shutdown — "could not acquire lock for <stderr> ... possibly
+    due to daemon threads", exit 134 — so a required check goes red with 27
+    of 27 green above it, intermittently and for nothing.
+
+    Non-daemon threads make `server_close()` join them. `shutdown()` has
+    already stopped the accept loop by then, so the only wait is for
+    requests already in flight against a local stub.
+    """
+
+    daemon_threads = False
+    block_on_close = True
+
+
 @pytest.fixture(scope="module")
 def vendor_base_url():
-    server = ThreadingHTTPServer(("127.0.0.1", _free_port()), _VendorHandler)
+    server = _JoiningHTTPServer(("127.0.0.1", _free_port()), _VendorHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{server.server_address[1]}"
     server.shutdown()
     server.server_close()
+    thread.join(timeout=10)
 
 
 @pytest.fixture(autouse=True)

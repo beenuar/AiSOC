@@ -204,6 +204,11 @@ const navSections: NavSection[] = [
         icon: <SearchIcon />,
       },
       {
+        label: 'Access Review',
+        href: '/access-review',
+        icon: <ShieldIcon />,
+      },
+      {
         label: 'Evaluate on History',
         href: '/evaluate',
         icon: <ChartBarIcon />,
