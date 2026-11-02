@@ -589,18 +589,7 @@ async def _persist_router_state(
     tenant_id: uuid.UUID | None,
     state: InvestigationState,
 ) -> None:
-    """Persist the router's structured InvestigationState as a ledger artifact.
-
-    The router's flat state has no per-agent recon/forensic/responder blocks and
-    persists none of its findings/MITRE/actions to the ledger, so after an agents
-    restart those case-workspace tabs render empty for router-path runs. The
-    investigator path avoids this because it writes per-agent llm_response events;
-    the router has no equivalent. Persisting the structured state (not report_md,
-    which is already stored) lets the API ledger fallback rebuild the phase tabs.
-
-    Best-effort: a ledger failure must never block the live stream, matching
-    :func:`_persist_report_artifact`.
-    """
+    """Persist the router\'s structured InvestigationState as a ledger artifact."""
     if tenant_id is None:
         return
     try:

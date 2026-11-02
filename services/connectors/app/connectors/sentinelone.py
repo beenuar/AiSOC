@@ -31,11 +31,6 @@ _SEVERITY_MAP = {
     "Critical": "critical",
 }
 
-# ``threatInfo.confidenceLevel`` is the agent's verdict, not a severity
-# ladder: the API reports ``malicious`` or ``suspicious``. None of the keys
-# above can match it, so without this map every threat landed on the
-# ``medium`` default and a malicious detection ranked level with a
-# suspicious one.
 _CONFIDENCE_SEVERITY = {
     "malicious": "high",
     "suspicious": "medium",

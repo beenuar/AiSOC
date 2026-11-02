@@ -42,8 +42,6 @@ def _evaluate(hypothesis: Hypothesis, signal: dict, budget: int) -> HypothesisRe
     text = _signal_text(signal)
     techniques = {t.upper() for t in (signal.get("techniques") or signal.get("mitre_techniques") or [])}
 
-    # Token-boundary matching: as substrings, ``c2`` credited the C2-beacon
-    # hypothesis on any alert naming an EC2 host (#1607).
     evidence = matched(text, hypothesis.supports_keywords)
     contradictions = matched(text, hypothesis.contradicts_keywords)
     tech_hits = sorted(techniques & {t.upper() for t in hypothesis.techniques})

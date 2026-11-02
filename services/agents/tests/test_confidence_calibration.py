@@ -17,16 +17,11 @@ This suite exercises ``services/agents/app/confidence/scoring.py`` against:
 The control set is built in-process (no extra dataset file to drift) and
 comes in two halves.
 
-*Generic controls* carry the same shape of inputs the triage agent sees in
-production but without the strong signals that should drive confidence up:
-no risk score, no critical/high keywords, no MITRE technique IDs, no IOC
-fields. A well-calibrated scorer should score these near the floor.
-
-*Cloud-host twins* are one-to-one with the positives that run on a cloud
-instance host, sharing the host and the vendor severity so that neither can
-separate the two halves. They exist because the corpus previously had no
-benign event on a cloud host at all, which is precisely the case #1607 got
-wrong — see :func:`_build_cloud_host_twins`.
+The control set is built in-process (no extra dataset file to drift) and
+contains the same shape of inputs the triage agent sees in production but
+without the strong signals that should drive confidence up: no risk
+score, no critical/high keywords, no MITRE technique IDs, no IOC fields.
+A well-calibrated scorer should score these near the floor.
 
 Two calibration metrics gate the build:
 
@@ -199,10 +194,6 @@ def _build_benign_state(idx: int) -> InvestigationState:
     )
 
 
-#: Routine cloud operations on a production instance. None of these carries a
-#: critical or high keyword — ``TestCloudHostTwins`` asserts that rather than
-#: trusting the reader's eye, because an unnoticed keyword in a *control* is
-#: how a benign item scores high for a reason nobody intended.
 _CLOUD_BENIGN_SUMMARIES = (
     "Nightly AMI build completed and the instance returned to the pool",
     "Autoscaling health check replaced an unhealthy target in the group",
@@ -213,44 +204,10 @@ _CLOUD_BENIGN_SUMMARIES = (
 
 
 def _is_cloud_instance_host(hostname: object) -> bool:
-    """Whether a hostname is a cloud instance identifier.
-
-    ``ec2`` is the substring that made #1607 expensive: it occurs in every
-    AWS private hostname, and the positive corpus had 10 incidents on one.
-    """
-
     return "ec2" in str(hostname or "").lower()
 
 
 def _build_cloud_host_twins() -> list[InvestigationState]:
-    """A benign control for every positive that runs on a cloud instance host.
-
-    **Why this exists.** #1607 found that the critical-keyword check matched
-    ``c2`` as a substring, so every alert naming an EC2 host scored critical.
-    The calibration gate did not catch it — it got *better* when the bug was
-    present, because 10 of the 200 positives run on ``AWS-EC2-PROD-API`` and
-    the corpus contained **no benign event on a cloud host at all**. The
-    spurious cue could only ever raise confidence on the positive side, so
-    the published ECE was partly an artefact of the bug.
-
-    A corpus with a hole exactly where the bug lives cannot measure the bug.
-
-    **Construction**, following the discipline of the repo's twin-paired
-    verdict corpus (``services/agents/tests/eval_data/verdict``), whose gate
-    requires twins to share everything an alert carries except its evidence:
-
-    - strictly one-to-one with the cloud-host positives, so the two halves
-      carry an identical host *and* severity distribution;
-    - the twin keeps its positive's ``risk_score``, because severity is what
-      the vendor reported and the vendor does not know which one is real.
-      A twin that dropped the risk score would score at the floor and prove
-      only that the floor exists;
-    - only the behaviour differs.
-
-    So neither the host nor the vendor severity separates the halves, and a
-    scorer that keys on either is measured at chance.
-    """
-
     twins: list[InvestigationState] = []
     for idx, state in enumerate(_POSITIVE_STATES):
         hostname = state.raw_alert.get("hostname")
@@ -264,8 +221,6 @@ def _build_cloud_host_twins() -> list[InvestigationState]:
                 raw_alert={
                     "rule_id": f"rule.benign.cloud_ops_{idx:03d}",
                     "hostname": hostname,
-                    # Shared with the twin: the vendor scored the alert before
-                    # anyone knew which way it would resolve.
                     "risk_score": state.raw_alert.get("risk_score"),
                 },
             )
@@ -398,12 +353,8 @@ _BENIGN_COUNT = len(_POSITIVE_INCIDENTS)  # balance the corpus 1:1
 
 _POSITIVE_STATES = [_build_positive_state(inc) for inc in _POSITIVE_INCIDENTS]
 
-#: Generic controls: real-looking telemetry carrying none of the signals the
-#: scorer keys on. These establish the floor.
 _GENERIC_BENIGN_STATES = [_build_benign_state(i) for i in range(_BENIGN_COUNT)]
 
-#: Twinned controls: one per cloud-host positive, sharing its host and its
-#: vendor severity so that neither can separate the halves (#1607).
 _CLOUD_TWIN_STATES = _build_cloud_host_twins()
 
 _BENIGN_STATES = _GENERIC_BENIGN_STATES + _CLOUD_TWIN_STATES

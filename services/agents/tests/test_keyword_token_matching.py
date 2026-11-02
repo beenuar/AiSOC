@@ -1,28 +1,4 @@
-"""Keyword matching must read tokens, not substrings (issue #1607).
-
-Reported by Rudy Mizrahi Celekli.
-
-``_score_alert`` and ``_has_critical_keyword`` tested their critical
-keywords as substrings of ``alert_summary + str(raw_alert)``. One of those
-keywords is ``c2``, which occurs in every AWS private hostname
-(``ip-10-0-1-7.ec2.internal``), in EC2 instance ids, and in hashes and
-base64 blobs. An alert with nothing critical about it was therefore scored
-``("critical", 0.9)``, proposed ``isolate_host`` against the hostname, and
-took a +0.35 confidence boost.
-
-The expensive consequence is the one that leaves no trace. The model cascade
-uses the deterministic scorer as tier 1 and escalates only when its
-confidence falls below ``DEFAULT_CONFIDENCE_FLOOR`` (0.85). A spurious 0.9
-clears the floor, so the alert is answered by the heuristic and **never
-reaches the ML or LLM tier at all**. A wrong severity is visible on the
-queue; an alert that silently skips analysis is not. So the routing
-assertions below are the point of this file, not the severity ones.
-
-Every test here fails on the pre-fix tree, which was verified by reverting
-``app/keywords.py``'s boundary rule to ``kw in text`` and watching them go
-red — the negative control is recorded in the pull request rather than
-being left as a claim.
-"""
+"""Keyword matching token boundary and severity tests."""
 
 from __future__ import annotations
 
@@ -57,10 +33,8 @@ from app.routing.model_router import (  # noqa: E402
     build_router,
 )
 
-#: The hostname from ``services/connectors/tests/fixtures/sysdig/sample_event.json``.
 EC2_HOST = "ip-10-0-1-7.ec2.internal"
 
-#: Identifiers that contain the characters ``c2`` and mean nothing by it.
 INCIDENTAL = (
     EC2_HOST,
     "i-0ab2c2d3e4f5a6b7",
@@ -72,7 +46,6 @@ INCIDENTAL = (
     "aks-syspool-c2f4a1b6-vmss000003",
 )
 
-#: Ways a real command-and-control reference is written.
 GENUINE = (
     "Outbound C2 traffic to 203.0.113.9",
     "c2-server contacted",
@@ -84,12 +57,6 @@ GENUINE = (
 
 
 def _unremarkable_alert(host: str = EC2_HOST) -> InvestigationState:
-    """An alert with nothing critical about it, on a host named like a cloud instance.
-
-    A file read flagged by a runtime sensor: no risk score, no MITRE
-    technique, no IOC, and no word in it that any vocabulary claims.
-    """
-
     return InvestigationState(
         incident_id=uuid4(),
         tenant_id=uuid4(),
@@ -217,14 +184,6 @@ class TestGenuineReferencesStillMatch(unittest.TestCase):
 
 
 class TestOneVocabulary(unittest.TestCase):
-    """The second defect: the vocabulary was declared twice and had drifted.
-
-    ``triage_agent`` held 13 critical keywords and ``confidence/scoring``
-    held 11 — ``beacon`` and ``domain admin`` were in one and not the other,
-    so an alert could be scored critical by triage while the confidence
-    scorer declined to credit the same evidence.
-    """
-
     def test_both_scorers_agree_on_every_keyword(self) -> None:
         for keyword in CRITICAL_KEYWORDS:
             state = InvestigationState(

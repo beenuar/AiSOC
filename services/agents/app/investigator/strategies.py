@@ -403,12 +403,6 @@ def select_strategy(
     classification, whereas a keyword can appear in any narrative. Ties go to
     the earlier strategy, and no match falls back to general triage rather
     than to no strategy at all.
-
-    Keywords match at token boundaries (:mod:`app.keywords`). As substrings,
-    ``c2`` picked the beaconing strategy for any alert mentioning an EC2
-    host, which then set the investigation's system guidance and the
-    recorded ``strategy_id`` — so the model was told to go looking for
-    beaconing that was never indicated (#1607).
     """
     text = normalise(summary or "")
     mapped = {t.upper() for t in (techniques or [])}

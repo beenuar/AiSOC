@@ -38,14 +38,6 @@ def _clamp(value: float) -> float:
 
 
 def _has_critical_keyword(state: InvestigationState) -> bool:
-    """Whether the alert carries critical-tier evidence.
-
-    The vocabulary lives in :mod:`app.keywords` because it was declared here
-    *and* in the triage agent, and the two had already drifted apart by two
-    entries — so an alert could be scored critical by triage and denied the
-    matching confidence bonus here, with nothing reporting it (#1607).
-    """
-
     return any_matched(alert_text(state.alert_summary, state.raw_alert), CRITICAL_KEYWORDS)
 
 

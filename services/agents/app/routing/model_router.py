@@ -273,12 +273,6 @@ class ModelRouter:
 
 
 def _as_uuid(value: str) -> UUID:
-    """The request's tenant, or a throwaway one when it does not carry a valid id.
-
-    Routing is a scoring decision and reads no tenant data, so an unparseable
-    tenant must not become an exception on the hot path.
-    """
-
     try:
         return UUID(str(value))
     except (ValueError, AttributeError, TypeError):
@@ -305,12 +299,6 @@ def build_router(
         from app.models.state import InvestigationState  # noqa: PLC0415
 
         payload = request.payload
-        # ``incident_id`` and ``tenant_id`` are required on the state. Omitting
-        # them raised ValidationError on every call, so this factory — the only
-        # thing that wires the real triage scorer as tier 1 — had never scored
-        # anything; it has no production caller, which is why nothing noticed.
-        # The scoring path reads neither field, so a routing request that
-        # carries no tenant gets a throwaway identity rather than a 500.
         state = InvestigationState(
             incident_id=uuid4(),
             tenant_id=_as_uuid(request.tenant_id),

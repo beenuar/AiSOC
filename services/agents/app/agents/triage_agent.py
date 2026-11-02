@@ -16,13 +16,7 @@ logger = structlog.get_logger()
 
 
 def _score_alert(state: InvestigationState) -> tuple[str, float]:
-    """Return (severity, risk_score) based on alert content heuristics.
-
-    Keywords are matched at token boundaries, not as substrings. The scorer
-    reads the raw payload as well as the summary, so a substring test let
-    ``c2`` fire on every AWS private hostname and score the alert critical
-    (#1607) — see :mod:`app.keywords`.
-    """
+    """Return (severity, risk_score) based on alert content heuristics."""
 
     text = alert_text(state.alert_summary, state.raw_alert)
     risk = state.raw_alert.get("risk_score", 0.0)

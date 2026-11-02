@@ -1,24 +1,4 @@
-"""Do-not-regress guard for the investigation-detail ledger fallback.
-
-Two bugs, same root: agents keeps investigation runs in a process-local dict
-(`_runs`, "swap for Redis in production") that empties on every restart. The
-detail route proxied ONLY to agents, so after a restart every historical run
-404'd while the sibling list route (which falls back to the Postgres ledger)
-still showed it. And even once detail returned, the Recon / Forensic / Response
-tabs rendered bare headers with no body, because those blocks live only in the
-volatile `_runs` and were never persisted as artifacts.
-
-The fix reconstructs both from the append-only ledger: run metadata + report_md
-from `investigation_runs`/`investigation_artifacts`, and the recon/forensic/
-responder blocks + audit trail from the `investigation_events` llm_response rows
-the investigator pipeline already writes. These tests assert that behaviour so an
-upstream merge that drops the fallback (or reverts it to a bare proxy) fails CI
-rather than silently reintroducing empty tabs in production.
-
-Asserted against behaviour, not source text: a fallback that is present but
-wired to the wrong tenant, or that returns an envelope without the phase blocks,
-would satisfy a grep and still show empty tabs.
-"""
+"""Tests for investigation detail ledger fallback."""
 
 from __future__ import annotations
 
@@ -44,12 +24,6 @@ def _proxy(status_code: int, payload: Any = None, text: str = "") -> MagicMock:
 
 
 def _event(seq: int, agent: str, kind: str, response_obj: Any = None, summary: str | None = None) -> MagicMock:
-    """A ledger InvestigationEvent row.
-
-    Mirrors the real shape: for kind='llm_response' the payload is an already
-    deserialised envelope whose 'response' is a JSON *string* (the column is
-    jsonb; only the inner agent output stays stringified).
-    """
     ev = MagicMock()
     ev.seq = seq
     ev.agent = agent
@@ -88,7 +62,7 @@ class TestTheDetailRouteFallsBackToTheLedger:
         monkeypatch.setattr(cases, "_resolve_case_id", AsyncMock(return_value=case_uuid))
         monkeypatch.setattr(cases, "_agents_proxy", AsyncMock(return_value=_proxy(404, text="run not found")))
 
-        recon = {"summary": "recon summary", "iocs": ["1.2.3.4"], "mitre_techniques": ["T1056"]}
+        recon = {"summary": "recon summary", "iocs": ["192.0.2.1"], "mitre_techniques": ["T1056"]}
         forensic = {"summary": "forensic summary", "root_cause_hypothesis": "log tampering", "confidence": 0.1}
         responder = {"summary": "response summary", "recommended_actions": ["isolate host"]}
         events = [
@@ -119,13 +93,12 @@ class TestTheDetailRouteFallsBackToTheLedger:
         event_result.scalars = MagicMock(return_value=event_scalars)
 
         db = MagicMock()
-        # first execute -> ledger run row; second -> phase events (inside _ledger_phase_blocks)
         db.execute = AsyncMock(side_effect=[run_result, event_result])
 
         out = await cases.case_investigation_run(case_id="INC-1", run_id=run_id, db=db, user=_user())
 
         assert out["status"] == "completed"
-        assert out["recon"]["iocs"] == ["1.2.3.4"], "recon tab would render empty"
+        assert out["recon"]["iocs"] == ["192.0.2.1"], "recon tab would render empty"
         assert out["forensic"]["root_cause_hypothesis"] == "log tampering", "forensic tab would render empty"
         assert out["responder"]["recommended_actions"] == ["isolate host"], "response tab would render empty"
         assert len(out["audit_log"]) == 3, "timeline tab would render empty"
@@ -175,7 +148,7 @@ class TestPhaseBlocksReconstruction:
     async def test_a_malformed_llm_response_degrades_to_the_phase_summary(self) -> None:
         """A non-JSON agent output must not crash the tab; fall back to summary."""
         events = [
-            _event(1, "ReconAgent", "llm_response", None),  # payload response not valid JSON object
+            _event(1, "ReconAgent", "llm_response", None),
             _event(2, "ReconAgent", "recon", None, summary="phase summary survived"),
         ]
         events[0].payload = {"response": "not json at all"}

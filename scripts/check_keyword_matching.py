@@ -1,75 +1,5 @@
 #!/usr/bin/env python3
-"""Keyword matching over alert text: one vocabulary, and no identifier hits.
-
-Two failures, both found in ``services/agents`` and reported as #1607.
-
-**A keyword matched as a substring.** ``"c2" in text`` over the alert summary
-*and the stringified raw payload* fires on every AWS private hostname
-(``ip-10-0-1-7.ec2.internal``), on EC2 instance ids, and on hashes and base64
-blobs carrying the pair. The alert was scored critical at 0.9, which is above
-the model cascade's escalation floor, so it was never sent to the ML or LLM
-tier. The visible symptom is a wrong severity; the expensive one is an alert
-that silently skips analysis.
-
-**The vocabulary was declared twice and had drifted.** ``triage_agent`` held
-13 critical keywords, ``confidence/scoring`` held 11. An alert could be scored
-critical by one and denied the matching confidence bonus by the other.
-
-So this gate asserts two things, and refuses to pass without having measured
-both:
-
-``PARITY``
-    Exactly one module declares a severity vocabulary. Every other module that
-    does severity keyword matching imports it. A second literal list is the
-    drift, so the gate looks for the *declaration*, not for agreement between
-    two copies — two copies that happen to agree today is the state that
-    precedes the bug, not the absence of it.
-
-``COLLISION``
-    No keyword in any registered vocabulary matches any string in
-    :data:`OPAQUE`, and no *severity* keyword matches any string in
-    :data:`NAMED`. This is the arm that generalises: it does not know about
-    ``c2``, it knows that a keyword firing on a UUID is a bug whatever the
-    keyword is.
-
-Why the corpus is in two halves
--------------------------------
-The first draft was one list and reported 13 findings, of which 6 were the
-gate being wrong. ``aws``, ``iam``, ``s3`` and ``cloudtrail`` matched
-``arn:aws:iam::123456789012:role/app`` — and they *should*, because the
-corpus they come from is the investigator's topic router and that string is
-genuinely an AWS IAM event. ``backup`` and ``scheduled`` matched a sentence
-about a nightly backup, which is the swarm's *benign* hypothesis working
-exactly as designed. A gate that flags correct content gets switched off
-within a week, so the claim has to be narrower than "looks harmless".
-
-The real property is **coincidence**. ``aws`` in an ARN is not a coincidence:
-those three letters are there because it is AWS. ``c2`` in
-``i-0ab2c2d3e4f5`` is: that is random hex. So:
-
-:data:`OPAQUE`
-    values whose letters are an artefact of encoding — UUIDs, SHA-256 and MD5
-    digests, base64, JWTs, instance and volume ids, generated pod suffixes,
-    MAC addresses, Windows SIDs. Any keyword match here is coincidence by
-    construction, so *every* corpus is held to it.
-
-:data:`NAMED`
-    resources whose names carry real meaning — ARNs, service hostnames,
-    directory DNs. A topic router is supposed to match these. Nothing in one
-    should ever make an alert *critical*, so only the severity vocabularies
-    are held to it.
-
-Both halves are drawn from shapes a SOC pipeline actually carries rather than
-from guesses. Several entries were chosen because they contain ``c2``
-(``base64("secret")`` begins ``c2``; a MAC octet can be ``c2``), but the gate
-runs every keyword against every string, so it catches the next collision
-without anyone having predicted which keyword it will be — which is how it
-caught the MAC address case that the original fix did not handle.
-
-The matcher under test is the production one, imported from
-``services/agents``. A gate that re-implemented the boundary rule would be
-measuring its own copy, which is the failure this tree keeps finding.
-"""
+"""Keyword matching CI gate."""
 
 from __future__ import annotations
 
@@ -84,18 +14,13 @@ from gate_toolkit import repo_root, self_test_if_requested  # noqa: E402
 
 self_test_if_requested(__file__)
 
-#: The one module allowed to declare a severity vocabulary.
 _CANONICAL = "services/agents/app/keywords.py"
 
-#: Modules that score alert severity and must read the canonical vocabulary
-#: rather than carry their own copy.
 _CONSUMERS = (
     "services/agents/app/agents/triage_agent.py",
     "services/agents/app/confidence/scoring.py",
 )
 
-#: Names that mean "this module is declaring a severity vocabulary". A second
-#: declaration under any of these names in a consumer is the drift returning.
 _VOCAB_NAMES = (
     "_CRITICAL_KEYWORDS",
     "_HIGH_KEYWORDS",
@@ -103,9 +28,6 @@ _VOCAB_NAMES = (
     "HIGH_KEYWORDS",
 )
 
-#: Every keyword corpus matched against alert or payload text, as
-#: ``(module, attribute path)``. Each is read with ``ast`` and every string
-#: literal inside it is run against :data:`INNOCUOUS`.
 _CORPORA = (
     ("services/agents/app/keywords.py", "CRITICAL_KEYWORDS"),
     ("services/agents/app/keywords.py", "HIGH_KEYWORDS"),
@@ -115,10 +37,7 @@ _CORPORA = (
     ("services/agents/app/swarm/hypotheses.py", "contradicts_keywords"),
 )
 
-#: Values whose letters are an artefact of encoding or allocation. A keyword
-#: found inside one has coincided with it. Every corpus is held to these.
 OPAQUE: tuple[str, ...] = (
-    # --- AWS hostnames and resource ids -----------------------------------
     "ip-10-0-1-7.ec2.internal",
     "ip-172-31-5-200.us-west-2.compute.internal",
     "ec2-54-80-12-3.compute-1.amazonaws.com",
@@ -131,12 +50,10 @@ OPAQUE: tuple[str, ...] = (
     "AKIAIOSFODNN7EXAMPLE",
     "ASIAIOSFODNN7EXAMPLE",
     "EC2AMAZ-1A2B3C4",
-    # --- Azure / GCP generated names --------------------------------------
     "aks-syspool-c2f4a1b6-vmss000003",
     "stprodarchivec2a4.blob.core.windows.net",
     "gke-prod-cluster-default-pool-a1c2d3e4-9xkp",
     "api-deployment-7d9c2f4b8-xk2lp",
-    # --- Digests, tokens, identifiers --------------------------------------
     "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
     "c2a4e6b8-1234-4567-89ab-cdef01234567",
     "d41d8cd98f00b204e9800998ecf8427e",
@@ -145,21 +62,12 @@ OPAQUE: tuple[str, ...] = (
     "9c2f1e0b7a6d5c4b3a29180f7e6d5c4b3a29180f",
     "c2VjcmV0LXRva2VuLXZhbHVl",
     "aGVsbG8gd29ybGQgdGhpcyBpcyBmaW5l",
-    # Joined from its segments rather than written out. gitleaks' `jwt` rule
-    # matches the three-segment shape and not the contents, so a literal here
-    # fails the repo's own secret scan on a value that decodes to
-    # {"alg":"HS256","typ":"JWT"} / {"sub":"12345"} / b"signature". The joined
-    # string is byte-identical, so the corpus this gate measures is unchanged.
     ".".join(("eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9", "eyJzdWIiOiIxMjM0NSJ9", "c2lnbmF0dXJl")),
-    # --- Host, hardware and directory identifiers --------------------------
     "DESKTOP-C2A4B6",
     "00:1a:c2:3b:4c:5d",
     "S-1-5-21-3623811015-3361044348-30300820-1013",
 )
 
-#: Resources whose names carry real meaning. A topic router is meant to match
-#: these; only the severity vocabularies are held to them, because nothing in
-#: a resource name should make an alert critical on its own.
 NAMED: tuple[str, ...] = (
     "arn:aws:iam::123456789012:role/AWSServiceRoleForAutoScaling",
     "arn:aws:s3:::reports-archive-prod/2026/10/inventory.parquet",
@@ -176,7 +84,6 @@ NAMED: tuple[str, ...] = (
     "Autoscaling replaced instance i-0ab2c2d3e4f5a6b7 in asg web-prod",
 )
 
-#: The corpora whose keywords decide *severity*. Held to both halves.
 _SEVERITY_CORPORA = frozenset(
     {
         ("services/agents/app/keywords.py", "CRITICAL_KEYWORDS"),
@@ -262,7 +169,6 @@ def _legacy_vocabularies(root: Path) -> dict[str, set[str]]:
     for relative in _CONSUMERS:
         tree = _module(root, relative)
         literals = {k for k in _literals_under(tree, "_CRITICAL_KEYWORDS") if k.strip()}
-        # The scorer inlined its copy in the function rather than as a constant.
         literals |= {k for k in _function_literals(tree, "_has_critical_keyword") if k.strip()}
         if literals:
             found[relative] = literals
@@ -277,7 +183,7 @@ def _load_matcher(root: Path):  # noqa: ANN202 - returns the production module
         sys.path.insert(0, str(agents))
     try:
         from app.keywords import display, matches, normalise  # noqa: PLC0415
-    except ImportError as exc:  # the canonical vocabulary is not there at all
+    except ImportError as exc:
         print(f"FAIL: there is no canonical severity vocabulary at {_CANONICAL} ({exc})")
         legacy = _legacy_vocabularies(root)
         for relative, words in sorted(legacy.items()):
@@ -305,7 +211,6 @@ def main() -> int:
     display, matches, normalise = _load_matcher(root)
     failures: list[str] = []
 
-    # --- PARITY ----------------------------------------------------------
     canonical = _module(root, _CANONICAL)
     declared = _declares(canonical, _VOCAB_NAMES)
     if not {"CRITICAL_KEYWORDS", "HIGH_KEYWORDS"} <= declared:
@@ -322,7 +227,6 @@ def main() -> int:
         if not _imports_from(tree, "app.keywords"):
             failures.append(f"{relative} scores severity but does not import from app.keywords")
 
-    # --- COLLISION --------------------------------------------------------
     corpora_checked = 0
     keywords_checked = 0
     comparisons = 0
@@ -333,8 +237,6 @@ def main() -> int:
             failures.append(f"{relative}:{attribute} yielded no keywords; the gate would pass over an empty corpus")
             continue
         corpora_checked += 1
-        # Severity keywords answer for named resources too: a topic router may
-        # match an ARN, a critical verdict may not.
         samples = OPAQUE + NAMED if (relative, attribute) in _SEVERITY_CORPORA else OPAQUE
         for keyword in keywords:
             keywords_checked += 1

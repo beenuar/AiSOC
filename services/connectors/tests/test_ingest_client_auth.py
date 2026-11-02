@@ -121,13 +121,7 @@ def _batch_size(request: httpx.Request) -> int:
 
 @pytest.mark.asyncio
 async def test_push_events_chunks_oversized_batches(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A poll larger than the ingest cap never produces an oversized request (#1635).
-
-    The transport refuses any body over ``MAX_BATCH_SIZE`` with 413, which is
-    what the Go ingest service does. Chunking has to stay under that cap, and
-    the accepted/rejected counts have to be the sum across chunks so the
-    scheduler can still tell whether every submitted event was accepted.
-    """
+    """An event batch exceeding the maximum batch size is chunked."""
     requests_seen: list[int] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -137,16 +131,11 @@ async def test_push_events_chunks_oversized_batches(monkeypatch: pytest.MonkeyPa
         assert request.headers["x-tenant-id"] == str(TENANT)
         if batch_size > MAX_BATCH_SIZE:
             return httpx.Response(413, text=f"batch size exceeds maximum of {MAX_BATCH_SIZE}")
-        # One rejection in the tail chunk, so the summed counts are not just
-        # a copy of the event list length.
         rejected = 1 if batch_size < MAX_BATCH_SIZE else 0
         return httpx.Response(200, json={"accepted": batch_size - rejected, "rejected": rejected})
 
     client = _client(monkeypatch, handler, service_token="svc-secret")
 
-    # 2500 is above the cap and not a round multiple, so the last chunk is a
-    # short one. Without chunking the transport answers 413 and the push
-    # raises; with it, the requests are 1000, 1000, and 500.
     result = await client.push_events(
         tenant_id=TENANT,
         connector_id=uuid.uuid4(),
@@ -205,13 +194,7 @@ async def test_push_events_does_not_chunk_when_under_cap(monkeypatch: pytest.Mon
 
 @pytest.mark.asyncio
 async def test_chunk_that_is_still_too_large_is_a_hard_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A 413 on one chunk aborts the push.
-
-    Chunking only splits at the client's cap. If a chunk is still too large
-    for the ingest service, the refusal has to surface as ``IngestClientError``
-    rather than being retried or dropped — otherwise the server-side guard
-    stops meaning anything.
-    """
+    """A 413 on one chunk aborts the push."""
     calls = 0
 
     def handler(request: httpx.Request) -> httpx.Response:

@@ -56,19 +56,11 @@ logger = logging.getLogger(__name__)
 # polls to hang the scheduler thread for minutes if Kafka is wedged.
 _DEFAULT_TIMEOUT_S = 30.0
 
-# Shared per-request event cap with services/ingest/internal/config/config.go
-# (``mustGetEnvInt("MAX_BATCH_SIZE", 1000)``). Every paginating connector can
-# exceed 1,000 events in a single poll burst (#1635), so IngestClient splits
-# outbound event lists into chunks of at most this size before posting.
 MAX_BATCH_SIZE = 1000
 
 
 def resolve_max_batch_size() -> int:
-    """Resolve the per-request batch ceiling from ``MAX_BATCH_SIZE`` or default.
-
-    Reads the same environment variable as the Go ingest service so an operator
-    tuning ``MAX_BATCH_SIZE`` does not have to configure two different names.
-    """
+    """Resolve the per-request batch ceiling from ``MAX_BATCH_SIZE`` or default."""
     raw = os.getenv("MAX_BATCH_SIZE", "").strip()
     if raw:
         try:
@@ -168,11 +160,6 @@ class IngestClient:
         "rejected": 0}`` without making a network call — this is the common
         case (a poll cycle that found no new alerts).
 
-        When ``events`` exceeds ``MAX_BATCH_SIZE`` (#1635), it is partitioned
-        into chunks of at most ``self._max_batch_size`` and each chunk is posted
-        sequentially. The returned ``accepted`` and ``rejected`` counts are the
-        sums across all chunks so the scheduler's "advance cursor only if every
-        submitted event was accepted" invariant continues to hold unchanged.
         """
         if not events:
             return {"accepted": 0, "rejected": 0}
@@ -236,8 +223,6 @@ class IngestClient:
             # Pull the body so logs show *why* — typically a missing or
             # rejected credential, an undeclared tenant, or an oversized
             # batch, all of which we want surfaced rather than swallowed.
-            # A 413 on a single chunk remains a hard error so the server-side
-            # guard never becomes unreachable.
             body_preview = resp.text[:500]
             hint = ""
             if resp.status_code in (401, 403):
