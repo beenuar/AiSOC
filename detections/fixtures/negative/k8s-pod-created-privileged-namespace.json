@@ -1,0 +1,5 @@
+{
+  "k8s_namespace": "kube-system",
+  "k8s_resource": "pods",
+  "k8s_verb": "delete"
+}

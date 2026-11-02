@@ -1,0 +1,23 @@
+id: det-data-exfil-027
+name: Box Shared Link Created On An Item
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Box Shared Link
+  Created On An Item'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.ITEM_SHARED_LINK"
+false_positives:
+- Ordinary internal collaboration
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

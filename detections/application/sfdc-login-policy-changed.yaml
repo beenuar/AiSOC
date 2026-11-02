@@ -1,0 +1,23 @@
+id: det-application-109
+name: Salesforce Login Policy Changed
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Salesforce Login
+  Policy Changed'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: application
+log_source:
+  product: salesforce
+  service: setup-audit
+detection:
+  condition: |
+    event_type == "salesforce.loginPolicyChanged"
+false_positives:
+- IP-range policy updated for a new office
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

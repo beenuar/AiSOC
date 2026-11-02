@@ -326,6 +326,30 @@ class GCPCloudAuditConnector(BaseConnector):
             "actor": actor,
             "actor_email": actor if "@" in actor else None,
             "event_type": f"gcp.audit.{service.split('.')[0] or 'unknown'}",
+            # `protoPayload` and `resource` arrive as dicts and the engine
+            # flattens `raw_event` one level, so the method name — the one
+            # field every Cloud Audit detection is about — was reachable
+            # only as the free-text `title`. `event_type` carries the
+            # *service*, which is far too coarse to clause on: every IAM
+            # call in the estate shares `gcp.audit.iam`.
+            "method_name": method,
+            "service_name": service,
+            "resource_name": proto.get("resourceName"),
+            "resource_type": resource.get("type"),
+            "project_id": (resource.get("labels") or {}).get("project_id"),
+            "caller_user_agent": request_meta.get("callerSuppliedUserAgent"),
+            "principal_subject": auth_info.get("principalSubject"),
+            "service_account_delegation": bool(auth_info.get("serviceAccountDelegationInfo")),
+            # Whether a service or a person acted is the discriminating
+            # clause of the Apps Script family: that service creates its own
+            # projects, so a *user* creating one under the same system folder
+            # is borrowing the folder's trust. Google's service accounts all
+            # live under `.gserviceaccount.com`, which is a property of the
+            # address rather than a guess, so the connector states it rather
+            # than leaving every rule to re-derive it from a suffix test.
+            "actor_is_service_account": actor.endswith(".gserviceaccount.com"),
+            "status_code": status.get("code"),
+            "operation_succeeded": succeeded,
             "raw_event": raw,
             "created_at": raw.get("timestamp"),
         }

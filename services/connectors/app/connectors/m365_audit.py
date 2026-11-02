@@ -325,6 +325,20 @@ class M365AuditConnector(BaseConnector):
             "actor_email": actor if "@" in actor else None,
             "src_ip": raw.get("ClientIP"),
             "workload": workload,
+            "operation": operation,
+            "result_status": result_status or None,
+            "object_id": raw.get("ObjectId"),
+            "record_type": raw.get("RecordType"),
+            # `Parameters` is a list of {Name, Value} pairs and the engine
+            # flattens `raw_event` one level, so the address an inbox rule
+            # forwards to -- the entire content of the business-email-
+            # compromise detections -- was invisible. Each pair is lifted as
+            # `param_<name lowercased>`, keeping Microsoft's own names.
+            **{
+                f"param_{str(pair.get('Name')).lower()}": pair.get("Value")
+                for pair in (raw.get("Parameters") or [])
+                if isinstance(pair, dict) and pair.get("Name")
+            },
             "event_type": (f"m365.{workload.lower()}.{operation.replace(' ', '').lower()}" if workload and operation else "m365.audit"),
             "raw_event": raw,
             "created_at": raw.get("CreationTime"),

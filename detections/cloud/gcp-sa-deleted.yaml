@@ -1,0 +1,24 @@
+id: det-cloud-196
+name: GCP Service Account Deleted
+description: Removing a service account breaks whatever depended on it, which is either a decommission
+  or an attempt to disrupt.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1531
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: iam
+detection:
+  condition: |
+    method_name == "google.iam.admin.v1.DeleteServiceAccount"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

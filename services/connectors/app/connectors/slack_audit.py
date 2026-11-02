@@ -119,16 +119,101 @@ class SlackAuditConnector(BaseConnector):
             logger.warning("slack_audit.fetch_exception", error=str(exc))
             return []
 
+    #: Actions that are a compromise or a control being removed, not routine
+    #: workspace traffic. Slack's audit-log action reference is the source;
+    #: `scripts/vendor_event_vocabulary.py` transcribes the whole list and a
+    #: gate refuses a rule naming an action that is not in it.
+    _HIGH_RISK_ACTIONS = frozenset(
+        {
+            "organization_export_started",
+            "organization_public_url_updated",
+            "pref.allow_message_deletion",
+            "pref.sso_setting_changed",
+            "pref.two_factor_auth_changed",
+            "role_change_to_admin",
+            "role_change_to_owner",
+            "user_session_invalidation_disabled",
+            "workspace_public_url_updated",
+        }
+    )
+    _MEDIUM_RISK_ACTIONS = frozenset(
+        {
+            "app_installed",
+            "app_scopes_expanded",
+            "app_token_rotated",
+            "channel_converted_to_private",
+            "external_shared_channel_connected",
+            "file_downloaded",
+            "guest_created",
+            "user_channel_join",
+        }
+    )
+
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Flatten Slack's three-level audit entry into the engine's namespace.
+
+        The engine flattens `raw_event` exactly one level, and every
+        discriminating value in a Slack audit entry sits two or three levels
+        down: the signing-in user is `actor.user.email`, the address is
+        `context.ip_address`, the app's scopes are `entity.app.scopes`. This
+        method read `actor.user.name` for a description string and discarded
+        the rest, so a rule clausing on any of them compared `None` and could
+        never fire — the same shape as the Okta `outcome.result` defect.
+
+        Lifted names follow the ones the rest of the corpus already uses
+        (`src_ip`, `actor_email`, `user_agent`) so a cross-source rule does
+        not need a Slack-specific spelling.
+        """
         action = raw.get("action") or "audit_event"
-        actor = ((raw.get("actor") or {}).get("user") or {}).get("name")
+        actor_block = (raw.get("actor") or {}).get("user") or {}
+        context = raw.get("context") or {}
+        entity = raw.get("entity") or {}
+        entity_type = entity.get("type")
+        # Slack keys the described object by its own type: a channel entity
+        # carries `entity.channel`, an app entity `entity.app`. Reading the
+        # keyed block rather than guessing keeps one path for all of them.
+        entity_block = entity.get(entity_type) if isinstance(entity_type, str) else None
+        entity_block = entity_block if isinstance(entity_block, dict) else {}
+        app_block = entity_block if entity_type == "app" else {}
+        channel_block = entity_block if entity_type == "channel" else {}
+
+        severity = "info"
+        if action in self._HIGH_RISK_ACTIONS:
+            severity = "high"
+        elif action in self._MEDIUM_RISK_ACTIONS:
+            severity = "medium"
+
+        created = raw.get("date_create")
+        created_iso: str | None = None
+        if isinstance(created, int | float):
+            created_iso = datetime.fromtimestamp(created, tz=UTC).isoformat()
+        elif isinstance(created, str):
+            created_iso = created
+
         return {
             "source": "slack_audit",
             "category": "saas",
-            "severity": "info",
+            "severity": severity,
             "title": f"Slack: {action}",
-            "description": f"actor={actor}" if actor else None,
+            "description": f"actor={actor_block.get('name')}; action={action}; entity={entity_type}",
             "alert_id": raw.get("id"),
+            "external_id": raw.get("id"),
             "host": None,
+            "event_type": f"slack.{action}",
+            "action": action,
+            "actor": actor_block.get("name"),
+            "actor_email": actor_block.get("email"),
+            "actor_id": actor_block.get("id"),
+            "src_ip": context.get("ip_address"),
+            "user_agent": context.get("ua"),
+            "entity_type": entity_type,
+            "entity_id": entity_block.get("id"),
+            "entity_name": entity_block.get("name"),
+            "app_scopes": app_block.get("scopes"),
+            "app_is_distributed": app_block.get("is_distributed"),
+            "channel_privacy": channel_block.get("privacy"),
+            "channel_is_shared": channel_block.get("is_shared"),
+            "channel_is_org_shared": channel_block.get("is_org_shared"),
             "raw_event": raw,
+            "created_at": created_iso,
         }

@@ -1,0 +1,23 @@
+id: det-application-201
+name: Slack App Scopes Expanded After Install
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack App Scopes
+  Expanded After Install'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1528
+- tlp.white
+category: application
+log_source:
+  product: slack
+  service: audit
+detection:
+  condition: |
+    event_type == "slack.app_scopes_expanded"
+false_positives:
+- Vendor shipping a feature that needs a new scope, with change approval
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

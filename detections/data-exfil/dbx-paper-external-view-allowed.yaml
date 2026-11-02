@@ -1,0 +1,23 @@
+id: det-data-exfil-068
+name: Dropbox Paper External Viewing Allowed
+description: External viewing on Paper documents is sharing outside the team.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: data-exfil
+log_source:
+  product: dropbox
+  service: events
+detection:
+  condition: |
+    event_type == "dropbox.paper_external_view_allow"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

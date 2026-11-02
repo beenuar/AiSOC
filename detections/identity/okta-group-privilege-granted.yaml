@@ -1,0 +1,23 @@
+id: det-identity-278
+name: Okta Administrator Privilege Granted To A Group
+description: A group grant reaches everyone in the group, now and later.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.003
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "group.privilege.grant"
+false_positives:
+- Documented break-glass procedure
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

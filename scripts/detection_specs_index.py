@@ -19,6 +19,14 @@ Tier mapping:
   hand-authored rather than synthesised, because the content of these
   rules is a relationship and a fixture copied from the clause cannot
   test it.
+* `detection_specs_part5_families.py` — depth 2 wave 2 item 2.1. Named
+  scenario families over SaaS and cloud sources. Each spec declares the
+  family it belongs to and the category it generates into, and every one
+  is replayed through its real connector and the real engine by
+  `scripts/check_scenario_family_alignment.py`.
+* `detection_specs_part6_coverage.py` — the same item's second pass, which
+  closed the 800-condition target. Each spec carries the vendor envelope
+  that proves it, so a rule edited without its proof fails immediately.
 """
 
 from __future__ import annotations
@@ -39,14 +47,26 @@ from detection_specs_part3_endpoint import ENDPOINT_EXTRA  # type: ignore[import
 from detection_specs_part3_identity import IDENTITY_EXTRA  # type: ignore[import-not-found]
 from detection_specs_part3_network import NETWORK_EXTRA  # type: ignore[import-not-found]
 from detection_specs_part4_threat_anomaly import THREAT_ANOMALY  # type: ignore[import-not-found]
+from detection_specs_part5_families import (  # type: ignore[import-not-found]
+    FAMILIES_APPLICATION,
+    FAMILIES_CLOUD,
+    FAMILIES_DATA_EXFIL,
+    FAMILIES_IDENTITY,
+)
+from detection_specs_part6_coverage import (  # type: ignore[import-not-found]
+    COVERAGE_APPLICATION,
+    COVERAGE_CLOUD,
+    COVERAGE_DATA_EXFIL,
+    COVERAGE_IDENTITY,
+)
 
 CATEGORIES: dict[str, list[dict]] = {
-    "cloud": [*CLOUD, *CLOUD_EXTRA],
-    "identity": [*IDENTITY, *IDENTITY_EXTRA],
+    "cloud": [*CLOUD, *CLOUD_EXTRA, *FAMILIES_CLOUD, *COVERAGE_CLOUD],
+    "identity": [*IDENTITY, *IDENTITY_EXTRA, *FAMILIES_IDENTITY, *COVERAGE_IDENTITY],
     "endpoint": [*ENDPOINT, *ENDPOINT_EXTRA],
     "network": [*NETWORK, *NETWORK_EXTRA],
-    "application": [*APPLICATION, *APPLICATION_EXTRA],
-    "data-exfil": DATA_EXFIL,
+    "application": [*APPLICATION, *APPLICATION_EXTRA, *FAMILIES_APPLICATION, *COVERAGE_APPLICATION],
+    "data-exfil": [*DATA_EXFIL, *FAMILIES_DATA_EXFIL, *COVERAGE_DATA_EXFIL],
     # Depth plan 3.5. Its own category because the claim is different:
     # these pair a threat condition with a depth plan 3.4 baseline score,
     # so a fresh install has the rule before it has the signal. Counted

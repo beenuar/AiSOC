@@ -1,0 +1,24 @@
+id: det-cloud-303
+name: AWS Console Login Profile Updated
+description: Setting a console password on an account that had none, or changing one, is how a programmatic
+  identity gains an interactive session.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: cloud
+log_source:
+  product: aws
+  service: iam
+detection:
+  condition: |
+    event_name == "UpdateLoginProfile"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,23 @@
+id: det-identity-277
+name: Okta Application Assigned To A User
+description: Application assignment is how Okta access is actually granted.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "application.user_membership.add"
+false_positives:
+- Documented break-glass procedure
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

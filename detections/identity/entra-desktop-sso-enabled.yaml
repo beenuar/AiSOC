@@ -1,0 +1,24 @@
+id: det-identity-246
+name: Entra Seamless Single Sign-On Enabled
+description: Seamless sign-on trusts a Kerberos ticket from the on-premises domain.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1556
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Enable Desktop SSO"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,3852 @@
+"""Depth 2 wave 2 item 2.1, second pass — closing the 800-condition target.
+
+The first pass shipped 86 rules and reported 569 of 800, naming the blocker
+as authoring effort rather than impossibility. This module is that effort.
+Every rule here is held to the same standard: replayed through its **real
+connector** and the **real engine** and watched to fire on a well-formed
+event of its log source.
+
+Why the proof payload lives next to the rule
+--------------------------------------------
+Each entry carries the vendor envelope that proves it, and
+`scripts/check_scenario_family_alignment.py` reads it from the spec. The
+risk in that arrangement is obvious — a proof derived from the clause proves
+nothing — so two things hold it honest:
+
+* the payload is written in the **vendor's** shape, with the vendor's own
+  nesting, and the connector is what flattens it. A rule clausing on
+  `new_value` is proven by an envelope that carries the value three levels
+  down inside `targetResources[0].modifiedProperties[0].newValue`, which a
+  clause-derived sample would never have;
+* the event or method name is checked against
+  `scripts/vendor_event_vocabulary.py`, transcribed from the vendor's
+  published list, so a name the vendor does not emit fails whatever the
+  payload says.
+
+Keeping them adjacent also means a rule edited without its proof fails
+immediately, where a distant table drifts quietly.
+
+Severity ladder: `info | low | medium | high | critical`, five tiers, and
+`critical` is reserved for direct credential compromise or a control being
+removed rather than used as a synonym for "important".
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from detection_specs_part3_helpers import (  # type: ignore[import-not-found]
+    FP_AUTOMATION,
+    FP_BACKUP,
+    FP_BREAK_GLASS,
+    FP_ONBOARD,
+    FP_PATCH,
+    FP_TUNING,
+    S,
+)
+
+# ---------------------------------------------------------------------------
+# Vendor envelopes. Each returns a payload in the shape the vendor's API
+# returns it, carrying the vendor's own nesting. Addresses are RFC 5737
+# documentation ranges.
+# ---------------------------------------------------------------------------
+
+
+def gcp_entry(method: str, service: str, project: str = "example-prod", **extra: Any) -> dict[str, Any]:
+    """A Cloud Audit log entry, as Cloud Logging exports it."""
+    proto: dict[str, Any] = {
+        "@type": "type.googleapis.com/google.cloud.audit.AuditLog",
+        "serviceName": service,
+        "methodName": method,
+        "authenticationInfo": {"principalEmail": extra.pop("principal", "engineer@example.com")},
+        "requestMetadata": {"callerIp": "203.0.113.5", "callerSuppliedUserAgent": extra.pop("agent", "google-cloud-sdk/470.0.0")},
+        "resourceName": extra.pop("resource_name", f"projects/{project}"),
+        "status": extra.pop("status", {}),
+    }
+    proto.update(extra.pop("proto", {}))
+    return {
+        "logName": f"projects/{project}/logs/cloudaudit.googleapis.com%2Factivity",
+        "insertId": "proof",
+        "timestamp": "2026-11-01T10:00:00Z",
+        "severity": extra.pop("log_severity", "NOTICE"),
+        "resource": {"type": extra.pop("resource_type", "project"), "labels": {"project_id": project}},
+        "protoPayload": proto,
+        **extra,
+    }
+
+
+def entra_audit(activity: str, category: str, **extra: Any) -> dict[str, Any]:
+    """A Graph directoryAudits record, with its target nested as Graph nests it."""
+    modified = extra.pop("modified", None)
+    target: dict[str, Any] = {
+        "type": extra.pop("target_type", "User"),
+        "id": "t1",
+        "userPrincipalName": extra.pop("target_user", "victim@example.com"),
+        "displayName": "Victim",
+    }
+    if modified:
+        target["modifiedProperties"] = [modified]
+    return {
+        "_aisoc_event_kind": "directoryAudit",
+        "id": "proof",
+        "activityDateTime": "2026-11-01T10:00:00Z",
+        "activityDisplayName": activity,
+        "category": category,
+        "result": extra.pop("result", "success"),
+        "resultReason": "",
+        "operationType": extra.pop("operation_type", "Update"),
+        "loggedByService": "Core Directory",
+        "initiatedBy": {"user": {"id": "u1", "userPrincipalName": "admin@example.com", "ipAddress": "203.0.113.5"}},
+        "targetResources": [target],
+        **extra,
+    }
+
+
+def entra_signin(**extra: Any) -> dict[str, Any]:
+    """A Graph riskySignIns record."""
+    device = {"deviceId": "d1", "operatingSystem": "Windows 11", "browser": "Edge", "isCompliant": extra.pop("compliant", True)}
+    return {
+        "_aisoc_event_kind": "riskySignIn",
+        "id": "proof",
+        "createdDateTime": "2026-11-01T10:00:00Z",
+        "userPrincipalName": "user@example.com",
+        "userDisplayName": "User",
+        "appDisplayName": extra.pop("app", "Azure Portal"),
+        "ipAddress": "203.0.113.5",
+        "clientAppUsed": extra.pop("client_app", "Browser"),
+        "riskLevelAggregated": extra.pop("risk", "high"),
+        "riskLevelDuringSignIn": extra.pop("risk_during", "high"),
+        "riskState": extra.pop("risk_state", "atRisk"),
+        "riskEventTypes_v2": extra.pop("risk_events", ["unfamiliarFeatures"]),
+        "correlationId": "c1",
+        "sessionId": "s1",
+        "autonomousSystemNumber": 64496,
+        "userAgent": "Mozilla/5.0",
+        "authenticationRequirement": extra.pop("auth_requirement", "multiFactorAuthentication"),
+        "conditionalAccessStatus": extra.pop("ca_status", "success"),
+        "isInteractive": extra.pop("interactive", True),
+        "resourceDisplayName": "Microsoft Graph",
+        "incomingTokenType": extra.pop("token_type", "none"),
+        "status": {"errorCode": 0},
+        "location": {"countryOrRegion": "US", "city": "Austin"},
+        "deviceDetail": device,
+        **extra,
+    }
+
+
+def k8s_entry(verb: str, resource: str, **extra: Any) -> dict[str, Any]:
+    """A Kubernetes audit event, as the API server writes it."""
+    object_ref: dict[str, Any] = {"resource": resource}
+    for key in ("subresource", "namespace", "name", "apiGroup", "apiVersion"):
+        if key in extra:
+            object_ref[key] = extra.pop(key)
+    return {
+        "kind": "Event",
+        "apiVersion": "audit.k8s.io/v1",
+        "level": "RequestResponse",
+        "auditID": "proof",
+        "stage": "ResponseComplete",
+        "requestURI": extra.pop("uri", f"/api/v1/{resource}"),
+        "verb": verb,
+        "user": {"username": extra.pop("username", "system:serviceaccount:default:builder"), "groups": ["system:serviceaccounts"]},
+        "sourceIPs": ["203.0.113.5"],
+        "userAgent": extra.pop("user_agent", "kubectl/v1.29"),
+        "objectRef": object_ref,
+        "responseStatus": {"code": extra.pop("code", 201)},
+        "requestReceivedTimestamp": "2026-11-01T10:00:00Z",
+        **extra,
+    }
+
+
+def github_entry(action: str, **extra: Any) -> dict[str, Any]:
+    """An organisation audit-log entry, per GitHub's event reference."""
+    return {
+        "_aisoc_stream": "audit_log",
+        "_document_id": "proof",
+        "@timestamp": 1793952000000,
+        "created_at": 1793952000000,
+        "action": action,
+        "actor": "proof-actor",
+        "actor_ip": "203.0.113.5",
+        "org": "example-org",
+        "user": "proof-actor",
+        **extra,
+    }
+
+
+def gitlab_entry(message: str, **extra: Any) -> dict[str, Any]:
+    """A GitLab audit event, as the audit_events API returns it."""
+    details = {
+        "custom_message": message,
+        "author_name": "User",
+        "target_id": 3,
+        "target_type": extra.pop("target_type", "User"),
+        "target_details": extra.pop("target_details", "victim@example.com"),
+        "ip_address": "203.0.113.5",
+    }
+    details.update(extra.pop("details", {}))
+    return {
+        "_aisoc_stream": "audit_events",
+        "id": 1,
+        "created_at": "2026-11-01T10:00:00Z",
+        "author_id": 1,
+        "author_name": "User",
+        "entity_id": 7,
+        "entity_type": extra.pop("entity_type", "Project"),
+        "entity_path": "group/project",
+        "details": details,
+        **extra,
+    }
+
+
+def m365_entry(operation: str, workload: str, **extra: Any) -> dict[str, Any]:
+    """A Management Activity API record."""
+    parameters = [{"Name": name, "Value": value} for name, value in (extra.pop("parameters", {}) or {}).items()]
+    return {
+        "Id": "proof",
+        "CreationTime": "2026-11-01T10:00:00",
+        "Operation": operation,
+        "Workload": workload,
+        "RecordType": extra.pop("record_type", 1),
+        "UserId": "user@example.com",
+        "ClientIP": "203.0.113.5",
+        "ResultStatus": extra.pop("result", "Succeeded"),
+        "ObjectId": extra.pop("object_id", "obj1"),
+        "Parameters": parameters,
+        **extra,
+    }
+
+
+def okta_entry(event_type: str, **extra: Any) -> dict[str, Any]:
+    """A System Log event, in Okta's own envelope."""
+    return {
+        "uuid": "proof",
+        "published": "2026-11-01T10:00:00.000Z",
+        "eventType": event_type,
+        "severity": "INFO",
+        "displayMessage": event_type,
+        "actor": {"id": "00u1", "type": "User", "alternateId": "user@example.com", "displayName": "User"},
+        "client": {
+            "userAgent": {
+                "rawUserAgent": "Mozilla/5.0",
+                "os": extra.pop("client_os", "Mac OS X"),
+                "browser": extra.pop("browser", "CHROME"),
+            },
+            "ipAddress": "203.0.113.5",
+            "device": "Computer",
+        },
+        "outcome": {"result": extra.pop("outcome", "SUCCESS"), "reason": extra.pop("reason", "")},
+        "authenticationContext": {"authenticationStep": 0, "externalSessionId": "s1"},
+        "securityContext": {"asNumber": 64496, "asOrg": "example", "isp": "example", "domain": "example.com", "isProxy": False},
+        **extra,
+    }
+
+
+def confluence_entry(summary: str, category: str, **extra: Any) -> dict[str, Any]:
+    """An Atlassian audit record, with its affected object nested as a list."""
+    return {
+        "id": 1,
+        "creationDate": 1793952000000,
+        "author": {"type": "user", "displayName": "Admin", "accountId": "a1", "email": "admin@example.com"},
+        "remoteAddress": "203.0.113.5",
+        "summary": summary,
+        "description": "",
+        "category": category,
+        "affectedObjects": [{"name": extra.pop("target", "victim@example.com"), "objectType": extra.pop("target_type", "User")}],
+        "changedValues": [{"name": extra.pop("changed", "Permission"), "oldValue": "user", "newValue": extra.pop("new_value", "admin")}],
+        **extra,
+    }
+
+
+def box_entry(event_type: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "type": "event",
+        "event_id": "proof",
+        "created_at": "2026-11-01T10:00:00-00:00",
+        "event_type": event_type,
+        "ip_address": "203.0.113.5",
+        "created_by": {"type": "user", "id": "11", "name": "Alice", "login": "alice@example.com"},
+        "source": {
+            "item_type": extra.pop("item_type", "file"),
+            "item_id": "f1",
+            "item_name": "forecast.xlsx",
+            "parent": {"id": "0"},
+            "owned_by": {"login": "alice@example.com"},
+        },
+        "additional_details": extra.pop("additional", {}),
+        **extra,
+    }
+
+
+def dropbox_entry(tag: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "timestamp": "2026-11-01T10:00:00Z",
+        "event_category": {".tag": extra.pop("category", "sharing")},
+        "event_type": {".tag": tag, "description": tag.replace("_", " ")},
+        "actor": {
+            ".tag": "user",
+            "user": {
+                ".tag": "team_member",
+                "account_id": "a1",
+                "display_name": "Alice",
+                "email": "alice@example.com",
+                "team_member_id": "m1",
+            },
+        },
+        "origin": {"geo_location": {"ip_address": "203.0.113.5", "city": "Austin", "country": "US"}, "access_method": {".tag": "end_user"}},
+        "assets": [{".tag": "file", "path": {"contextual": "/forecast.xlsx"}}],
+        **extra,
+    }
+
+
+def onepassword_entry(category: str, signin_type: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "uuid": "proof",
+        "session_uuid": "s1",
+        "timestamp": "2026-11-01T10:00:00Z",
+        "category": category,
+        "type": signin_type,
+        "country": extra.pop("country", "US"),
+        "target_user": {"uuid": "u1", "email": "alice@example.com", "name": "Alice"},
+        "client": {
+            "app_name": extra.pop("app", "1Password for Mac"),
+            "app_version": "8.10.0",
+            "platform_name": "macOS",
+            "os_name": "macOS",
+            "ip_address": "203.0.113.5",
+        },
+        **extra,
+    }
+
+
+def salesforce_entry(action: str, section: str = "Manage Users", **extra: Any) -> dict[str, Any]:
+    return {
+        "attributes": {"type": "SetupAuditTrail"},
+        "Id": "0Ym000000000001",
+        "Action": action,
+        "Section": section,
+        "Display": f"{action} recorded by the setup audit trail",
+        "CreatedDate": "2026-11-01T10:00:00.000+0000",
+        "CreatedById": "005000000000001",
+        "DelegateUser": extra.pop("delegate", None),
+        **extra,
+    }
+
+
+def snowflake_login(**overrides: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "EVENT_ID": "1",
+        "EVENT_TIMESTAMP": "2026-11-01T10:00:00Z",
+        "USER_NAME": "ANALYST",
+        "CLIENT_IP": "203.0.113.5",
+        "REPORTED_CLIENT_TYPE": "SNOWFLAKE_UI",
+        "FIRST_AUTHENTICATION_FACTOR": "PASSWORD",
+        "SECOND_AUTHENTICATION_FACTOR": None,
+        "IS_SUCCESS": "YES",
+        "ERROR_CODE": None,
+        "ERROR_MESSAGE": None,
+    }
+    row.update(overrides)
+    return row
+
+
+def snowflake_query(query_type: str, **overrides: Any) -> dict[str, Any]:
+    row: dict[str, Any] = {
+        "QUERY_ID": "1",
+        "START_TIME": "2026-11-01T10:00:00Z",
+        "USER_NAME": "ANALYST",
+        "ROLE_NAME": "ANALYST_ROLE",
+        "WAREHOUSE_NAME": "WH_ANALYTICS",
+        "DATABASE_NAME": "PROD",
+        "SCHEMA_NAME": "PUBLIC",
+        "QUERY_TYPE": query_type,
+        "EXECUTION_STATUS": "SUCCESS",
+        "ROWS_PRODUCED": 10,
+        "BYTES_SCANNED": 1024,
+    }
+    row.update(overrides)
+    return row
+
+
+def R(
+    *,
+    family: str,
+    category: str,
+    emitter: str,
+    proof: dict[str, Any],
+    derived: dict[str, Any] | None = None,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    """A spec carrying the family it belongs to and the payload that proves it.
+
+    `derived` names the fields fusion stamps *around* the connector output —
+    the item 1.6 IP classification and the business-hours booleans. They are
+    declared separately from the payload so the proof stays honest about
+    which half produced which value: the connector cannot emit `ip_class`
+    and a payload pretending otherwise would hide a real wiring break.
+    """
+    spec = S(**kwargs)
+    spec["family"] = family
+    spec["_category"] = category
+    spec["proof"] = (emitter, proof)
+    if derived:
+        spec["proof_derived"] = derived
+    return spec
+
+
+def by_category(*groups: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
+    out: dict[str, list[dict[str, Any]]] = {}
+    for group in groups:
+        for spec in group:
+            out.setdefault(spec.pop("_category"), []).append(spec)
+    return out
+
+
+# ===========================================================================
+# Family: cloud-enumeration-and-abuse — Google Cloud
+#
+# Method names are Cloud Audit `protoPayload.methodName` values, transcribed
+# into `scripts/vendor_event_vocabulary.py`. The connector lifts
+# `method_name`, `service_name`, `project_id`, `caller_user_agent` and
+# `actor_is_service_account`; `event_type` carries only the service, which
+# every IAM call in an estate shares, so nothing here clauses on it.
+# ===========================================================================
+
+#: (slug, name, severity, mitre, service, method, description)
+_GCP: list[tuple[str, str, str, list[str], str, str, str]] = [
+    # --- IAM: identity and privilege ---
+    (
+        "gcp-sa-created",
+        "GCP Service Account Created",
+        "medium",
+        ["t1136"],
+        "iam",
+        "google.iam.admin.v1.CreateServiceAccount",
+        "A new non-human identity. Routine during provisioning, and the first step of persistence when it is not.",
+    ),
+    (
+        "gcp-sa-deleted",
+        "GCP Service Account Deleted",
+        "medium",
+        ["t1531"],
+        "iam",
+        "google.iam.admin.v1.DeleteServiceAccount",
+        "Removing a service account breaks whatever depended on it, which is either a decommission or an attempt to disrupt.",
+    ),
+    (
+        "gcp-sa-disabled",
+        "GCP Service Account Disabled",
+        "medium",
+        ["t1531"],
+        "iam",
+        "google.iam.admin.v1.DisableServiceAccount",
+        "Disabling an identity an attacker does not control is a denial step; disabling one they do is cleanup.",
+    ),
+    (
+        "gcp-sa-enabled",
+        "GCP Service Account Re-Enabled",
+        "medium",
+        ["t1098"],
+        "iam",
+        "google.iam.admin.v1.EnableServiceAccount",
+        "A dormant identity brought back is an identity nobody is watching.",
+    ),
+    (
+        "gcp-sa-key-created",
+        "GCP Service Account Key Created",
+        "high",
+        ["t1098.001", "t1528"],
+        "iam",
+        "google.iam.admin.v1.CreateServiceAccountKey",
+        "A downloadable key is a long-lived credential that leaves the estate with whoever holds it.",
+    ),
+    (
+        "gcp-sa-key-deleted",
+        "GCP Service Account Key Deleted",
+        "low",
+        ["t1070"],
+        "iam",
+        "google.iam.admin.v1.DeleteServiceAccountKey",
+        "Key rotation looks like this, and so does removing the key that was used.",
+    ),
+    (
+        "gcp-sa-updated",
+        "GCP Service Account Updated",
+        "low",
+        ["t1098"],
+        "iam",
+        "google.iam.admin.v1.UpdateServiceAccount",
+        "Description and display-name changes are how an identity is made to look routine.",
+    ),
+    (
+        "gcp-custom-role-created",
+        "GCP Custom IAM Role Created",
+        "medium",
+        ["t1098"],
+        "iam",
+        "google.iam.admin.v1.CreateRole",
+        "A custom role is the usual way to grant a permission set no predefined role offers.",
+    ),
+    (
+        "gcp-custom-role-updated",
+        "GCP Custom IAM Role Updated",
+        "high",
+        ["t1098"],
+        "iam",
+        "google.iam.admin.v1.UpdateRole",
+        "Adding a permission to a role grants it everywhere the role is bound, with no binding change to notice.",
+    ),
+    (
+        "gcp-custom-role-deleted",
+        "GCP Custom IAM Role Deleted",
+        "medium",
+        ["t1531"],
+        "iam",
+        "google.iam.admin.v1.DeleteRole",
+        "Deleting a role revokes it from every principal bound to it at once.",
+    ),
+    (
+        "gcp-custom-role-undeleted",
+        "GCP Custom IAM Role Restored",
+        "medium",
+        ["t1098"],
+        "iam",
+        "google.iam.admin.v1.UndeleteRole",
+        "A restored role restores every binding that referenced it.",
+    ),
+    # --- Resource Manager: the project perimeter ---
+    (
+        "gcp-project-iam-policy-set",
+        "GCP Project IAM Policy Replaced",
+        "high",
+        ["t1098.001"],
+        "cloudresourcemanager",
+        "SetIamPolicy",
+        "SetIamPolicy replaces the whole binding set, so a grant and a revocation look identical in the method name alone.",
+    ),
+    (
+        "gcp-project-created",
+        "GCP Project Created",
+        "medium",
+        ["t1578"],
+        "cloudresourcemanager",
+        "CreateProject",
+        "A new project is a new perimeter, often outside whatever guardrails the existing ones carry.",
+    ),
+    (
+        "gcp-project-deleted",
+        "GCP Project Deleted",
+        "high",
+        ["t1485"],
+        "cloudresourcemanager",
+        "DeleteProject",
+        "Deleting a project takes its logs with it.",
+    ),
+    (
+        "gcp-project-undeleted",
+        "GCP Project Restored",
+        "medium",
+        ["t1578"],
+        "cloudresourcemanager",
+        "UndeleteProject",
+        "A project restored inside the 30-day window returns with everything it held.",
+    ),
+    (
+        "gcp-project-moved",
+        "GCP Project Moved Between Folders",
+        "high",
+        ["t1578"],
+        "cloudresourcemanager",
+        "MoveProject",
+        "Moving a project changes which organisation policies apply to it.",
+    ),
+    (
+        "gcp-project-updated",
+        "GCP Project Metadata Updated",
+        "low",
+        ["t1578"],
+        "cloudresourcemanager",
+        "UpdateProject",
+        "Labels and names drive a great deal of automation, including guardrails keyed on them.",
+    ),
+    # --- Logging: the thing that records everything else ---
+    (
+        "gcp-log-sink-deleted",
+        "GCP Log Sink Deleted",
+        "critical",
+        ["t1562.008"],
+        "logging",
+        "google.logging.v2.ConfigServiceV2.DeleteSink",
+        "Deleting the sink stops the export an investigation reads, while the console still shows logs flowing.",
+    ),
+    (
+        "gcp-log-sink-updated",
+        "GCP Log Sink Updated",
+        "high",
+        ["t1562.008"],
+        "logging",
+        "google.logging.v2.ConfigServiceV2.UpdateSink",
+        "A sink filter narrowed is a sink that no longer carries the events it was written for.",
+    ),
+    (
+        "gcp-log-sink-created",
+        "GCP Log Sink Created",
+        "medium",
+        ["t1537"],
+        "logging",
+        "google.logging.v2.ConfigServiceV2.CreateSink",
+        "A sink pointing outside the organisation is a supported way to copy every audit event elsewhere.",
+    ),
+    (
+        "gcp-log-deleted",
+        "GCP Log Deleted",
+        "critical",
+        ["t1070"],
+        "logging",
+        "google.logging.v2.LoggingServiceV2.DeleteLog",
+        "DeleteLog removes entries that were already written.",
+    ),
+    (
+        "gcp-log-exclusion-created",
+        "GCP Log Exclusion Created",
+        "high",
+        ["t1562.008"],
+        "logging",
+        "google.logging.v2.ConfigServiceV2.CreateExclusion",
+        "An exclusion stops matching entries being stored at all, so nothing later recovers them.",
+    ),
+    # --- KMS: the keys ---
+    (
+        "gcp-kms-key-version-destroyed",
+        "GCP KMS Key Version Destroyed",
+        "critical",
+        ["t1485"],
+        "cloudkms",
+        "google.cloud.kms.v1.KeyManagementService.DestroyCryptoKeyVersion",
+        "Destroying a key version makes everything it encrypted unrecoverable.",
+    ),
+    (
+        "gcp-kms-key-created",
+        "GCP KMS Crypto Key Created",
+        "low",
+        ["t1486"],
+        "cloudkms",
+        "google.cloud.kms.v1.KeyManagementService.CreateCryptoKey",
+        "A key created outside the usual pipeline is a key nobody rotates.",
+    ),
+    (
+        "gcp-kms-primary-version-changed",
+        "GCP KMS Primary Key Version Changed",
+        "high",
+        ["t1486"],
+        "cloudkms",
+        "google.cloud.kms.v1.KeyManagementService.UpdateCryptoKeyPrimaryVersion",
+        "New data encrypts under a different version from here on.",
+    ),
+    (
+        "gcp-kms-iam-policy-set",
+        "GCP KMS Key IAM Policy Set",
+        "critical",
+        ["t1098.001"],
+        "cloudkms",
+        "google.cloud.kms.v1.KeyManagementService.SetIamPolicy",
+        "Granting decrypt on a key is equivalent to granting read on everything it protects.",
+    ),
+    # --- Secret Manager ---
+    (
+        "gcp-secret-accessed",
+        "GCP Secret Version Accessed",
+        "medium",
+        ["t1552.001"],
+        "secretmanager",
+        "google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion",
+        "The read that returns the secret value, as distinct from listing secret names.",
+    ),
+    (
+        "gcp-secret-created",
+        "GCP Secret Created",
+        "low",
+        ["t1552.001"],
+        "secretmanager",
+        "google.cloud.secretmanager.v1.SecretManagerService.CreateSecret",
+        "A secret created outside the deployment pipeline is one nobody rotates.",
+    ),
+    (
+        "gcp-secret-version-added",
+        "GCP Secret Version Added",
+        "medium",
+        ["t1098"],
+        "secretmanager",
+        "google.cloud.secretmanager.v1.SecretManagerService.AddSecretVersion",
+        "Adding a version is how a credential is replaced with one the attacker knows.",
+    ),
+    (
+        "gcp-secret-deleted",
+        "GCP Secret Deleted",
+        "high",
+        ["t1485"],
+        "secretmanager",
+        "google.cloud.secretmanager.v1.SecretManagerService.DeleteSecret",
+        "Deleting a secret breaks whatever reads it.",
+    ),
+    (
+        "gcp-secret-iam-policy-set",
+        "GCP Secret IAM Policy Set",
+        "high",
+        ["t1098.001"],
+        "secretmanager",
+        "google.cloud.secretmanager.v1.SecretManagerService.SetIamPolicy",
+        "Granting accessor on a secret grants the secret.",
+    ),
+    # --- Compute: hosts, metadata and the network edge ---
+    (
+        "gcp-instance-created",
+        "GCP Compute Instance Created",
+        "low",
+        ["t1578.002"],
+        "compute",
+        "v1.compute.instances.insert",
+        "An instance created outside the deployment pipeline runs whatever its startup script says.",
+    ),
+    (
+        "gcp-instance-deleted",
+        "GCP Compute Instance Deleted",
+        "medium",
+        ["t1485"],
+        "compute",
+        "v1.compute.instances.delete",
+        "Deleting an instance destroys its local disk and anything an investigation wanted from it.",
+    ),
+    (
+        "gcp-instance-metadata-set",
+        "GCP Compute Instance Metadata Set",
+        "high",
+        ["t1059"],
+        "compute",
+        "v1.compute.instances.setMetadata",
+        "Instance metadata carries the startup script and the SSH keys, so a metadata write is code execution and access in one call.",
+    ),
+    (
+        "gcp-project-metadata-set",
+        "GCP Project-Wide Instance Metadata Set",
+        "critical",
+        ["t1098.004"],
+        "compute",
+        "v1.compute.projects.setCommonInstanceMetadata",
+        "Project-wide metadata applies to every instance that does not override it, so one SSH key here is access to the whole fleet.",
+    ),
+    (
+        "gcp-instance-access-config-added",
+        "GCP Compute Instance Given A Public Address",
+        "high",
+        ["t1133"],
+        "compute",
+        "v1.compute.instances.addAccessConfig",
+        "An access config is what puts a private instance on the public internet.",
+    ),
+    (
+        "gcp-instance-iam-policy-set",
+        "GCP Compute Instance IAM Policy Set",
+        "high",
+        ["t1098.001"],
+        "compute",
+        "v1.compute.instances.setIamPolicy",
+        "Instance-level IAM grants reach the instance's own service account.",
+    ),
+    (
+        "gcp-instance-serial-port-read",
+        "GCP Compute Serial Port Output Read",
+        "medium",
+        ["t1552"],
+        "compute",
+        "v1.compute.instances.getSerialPortOutput",
+        "Serial console output routinely contains credentials printed during boot.",
+    ),
+    (
+        "gcp-instance-service-account-set",
+        "GCP Compute Instance Service Account Changed",
+        "high",
+        ["t1078.004"],
+        "compute",
+        "v1.compute.instances.setServiceAccount",
+        "Attaching a more privileged service account to an instance you control is privilege escalation without touching IAM policy.",
+    ),
+    (
+        "gcp-firewall-created",
+        "GCP Firewall Rule Created",
+        "high",
+        ["t1562.004"],
+        "compute",
+        "v1.compute.firewalls.insert",
+        "A new allow rule is the usual way an exposed port appears.",
+    ),
+    (
+        "gcp-firewall-patched",
+        "GCP Firewall Rule Modified",
+        "high",
+        ["t1562.004"],
+        "compute",
+        "v1.compute.firewalls.patch",
+        "Widening a source range on an existing rule leaves the rule count unchanged.",
+    ),
+    (
+        "gcp-firewall-deleted",
+        "GCP Firewall Rule Deleted",
+        "high",
+        ["t1562.004"],
+        "compute",
+        "v1.compute.firewalls.delete",
+        "Deleting a deny rule exposes whatever it protected.",
+    ),
+    (
+        "gcp-network-created",
+        "GCP VPC Network Created",
+        "medium",
+        ["t1578"],
+        "compute",
+        "v1.compute.networks.insert",
+        "A new network is a new perimeter with its own rules.",
+    ),
+    (
+        "gcp-subnetwork-patched",
+        "GCP Subnetwork Modified",
+        "medium",
+        ["t1578"],
+        "compute",
+        "v1.compute.subnetworks.patch",
+        "Enabling private Google access or flow logs changes what is visible and reachable.",
+    ),
+    (
+        "gcp-route-created",
+        "GCP Network Route Created",
+        "high",
+        ["t1565"],
+        "compute",
+        "v1.compute.routes.insert",
+        "A route can send traffic through an instance the attacker controls.",
+    ),
+    (
+        "gcp-disk-snapshot-created",
+        "GCP Disk Snapshot Created",
+        "high",
+        ["t1005", "t1537"],
+        "compute",
+        "v1.compute.disks.createSnapshot",
+        "A snapshot is a complete copy of a disk that can be shared to another project.",
+    ),
+    (
+        "gcp-image-created",
+        "GCP Compute Image Created",
+        "medium",
+        ["t1537"],
+        "compute",
+        "v1.compute.images.insert",
+        "An image built from a running disk carries whatever was on it.",
+    ),
+    (
+        "gcp-vpn-tunnel-created",
+        "GCP VPN Tunnel Created",
+        "high",
+        ["t1133"],
+        "compute",
+        "v1.compute.vpnTunnels.insert",
+        "A tunnel joins the VPC to a network outside it.",
+    ),
+    # --- Storage ---
+    (
+        "gcp-bucket-iam-policy-set",
+        "GCP Storage Bucket IAM Policy Set",
+        "high",
+        ["t1098.001"],
+        "storage",
+        "storage.setIamPermissions",
+        "The call that makes a bucket public also makes it private; the method name alone does not say which.",
+    ),
+    (
+        "gcp-bucket-created",
+        "GCP Storage Bucket Created",
+        "low",
+        ["t1537"],
+        "storage",
+        "storage.buckets.create",
+        "A bucket created outside the pipeline is one no lifecycle policy covers.",
+    ),
+    (
+        "gcp-bucket-deleted",
+        "GCP Storage Bucket Deleted",
+        "high",
+        ["t1485"],
+        "storage",
+        "storage.buckets.delete",
+        "Deleting a bucket destroys its contents and any logs written into it.",
+    ),
+    (
+        "gcp-bucket-updated",
+        "GCP Storage Bucket Configuration Updated",
+        "medium",
+        ["t1562"],
+        "storage",
+        "storage.buckets.update",
+        "Versioning, retention and logging are all bucket configuration.",
+    ),
+    (
+        "gcp-object-deleted",
+        "GCP Storage Object Deleted",
+        "low",
+        ["t1485"],
+        "storage",
+        "storage.objects.delete",
+        "One object deletion is routine; the rule exists so the windowed engine can count them.",
+    ),
+    (
+        "gcp-hmac-key-created",
+        "GCP Storage HMAC Key Created",
+        "high",
+        ["t1098.001"],
+        "storage",
+        "storage.hmacKeys.create",
+        "An HMAC key lets a service account be used through the S3-compatible API, which most tooling does not log as GCP access.",
+    ),
+    # --- BigQuery ---
+    (
+        "gcp-bq-dataset-updated",
+        "GCP BigQuery Dataset Access Updated",
+        "high",
+        ["t1098.001"],
+        "bigquery",
+        "google.cloud.bigquery.v2.DatasetService.UpdateDataset",
+        "Dataset access is where BigQuery sharing lives, including sharing with allAuthenticatedUsers.",
+    ),
+    (
+        "gcp-bq-table-inserted",
+        "GCP BigQuery Table Created",
+        "low",
+        ["t1074"],
+        "bigquery",
+        "google.cloud.bigquery.v2.TableService.InsertTable",
+        "A staging table is how a large extract is assembled before it leaves.",
+    ),
+    (
+        "gcp-bq-job-inserted",
+        "GCP BigQuery Job Submitted",
+        "low",
+        ["t1530"],
+        "bigquery",
+        "google.cloud.bigquery.v2.JobService.InsertJob",
+        "Every query and every export is a job; this is the volume signal rather than an alert.",
+    ),
+    (
+        "gcp-bq-table-deleted",
+        "GCP BigQuery Table Deleted",
+        "medium",
+        ["t1485"],
+        "bigquery",
+        "google.cloud.bigquery.v2.TableService.DeleteTable",
+        "Deleting a table after reading it is the cleanup half of an extract.",
+    ),
+    # --- GKE ---
+    (
+        "gcp-gke-cluster-created",
+        "GCP GKE Cluster Created",
+        "medium",
+        ["t1578"],
+        "container",
+        "google.container.v1.ClusterManager.CreateCluster",
+        "A cluster created outside the platform pipeline is one with nobody's admission policies on it.",
+    ),
+    (
+        "gcp-gke-cluster-updated",
+        "GCP GKE Cluster Updated",
+        "high",
+        ["t1578"],
+        "container",
+        "google.container.v1.ClusterManager.UpdateCluster",
+        "Cluster update is where network policy, authorised networks and logging are turned off.",
+    ),
+    (
+        "gcp-gke-master-auth-set",
+        "GCP GKE Master Authentication Changed",
+        "critical",
+        ["t1098"],
+        "container",
+        "google.container.v1.ClusterManager.SetMasterAuth",
+        "Setting master auth issues credentials for the control plane.",
+    ),
+    (
+        "gcp-gke-cluster-deleted",
+        "GCP GKE Cluster Deleted",
+        "high",
+        ["t1485"],
+        "container",
+        "google.container.v1.ClusterManager.DeleteCluster",
+        "Deleting a cluster destroys every workload on it.",
+    ),
+    (
+        "gcp-gke-node-pool-updated",
+        "GCP GKE Node Pool Management Changed",
+        "medium",
+        ["t1578"],
+        "container",
+        "google.container.v1.ClusterManager.SetNodePoolManagement",
+        "Turning off auto-upgrade keeps a known-vulnerable node image in service.",
+    ),
+    # --- Serverless ---
+    (
+        "gcp-function-created",
+        "GCP Cloud Function Created",
+        "medium",
+        ["t1053"],
+        "cloudfunctions",
+        "google.cloud.functions.v1.CloudFunctionsService.CreateFunction",
+        "A function is code that runs with a service account and outlives the session that created it.",
+    ),
+    (
+        "gcp-function-updated",
+        "GCP Cloud Function Updated",
+        "high",
+        ["t1053"],
+        "cloudfunctions",
+        "google.cloud.functions.v1.CloudFunctionsService.UpdateFunction",
+        "Updating a trusted function's source is persistence inside something nobody re-reviews.",
+    ),
+    (
+        "gcp-function-iam-policy-set",
+        "GCP Cloud Function IAM Policy Set",
+        "high",
+        ["t1098.001"],
+        "cloudfunctions",
+        "google.cloud.functions.v1.CloudFunctionsService.SetIamPolicy",
+        "Granting invoker to allUsers makes the function a public endpoint.",
+    ),
+    (
+        "gcp-run-service-replaced",
+        "GCP Cloud Run Service Replaced",
+        "high",
+        ["t1525"],
+        "run",
+        "google.cloud.run.v1.Services.ReplaceService",
+        "Replacing a service swaps the container image it runs.",
+    ),
+    (
+        "gcp-run-iam-policy-set",
+        "GCP Cloud Run IAM Policy Set",
+        "high",
+        ["t1098.001"],
+        "run",
+        "google.cloud.run.v1.Services.SetIamPolicy",
+        "Granting invoker to allUsers exposes the service publicly.",
+    ),
+    # --- Messaging, DNS and service enablement ---
+    (
+        "gcp-pubsub-topic-created",
+        "GCP Pub/Sub Topic Created",
+        "low",
+        ["t1537"],
+        "pubsub",
+        "google.pubsub.v1.Publisher.CreateTopic",
+        "A topic is a supported route for data to leave an estate.",
+    ),
+    (
+        "gcp-pubsub-subscription-created",
+        "GCP Pub/Sub Subscription Created",
+        "medium",
+        ["t1537"],
+        "pubsub",
+        "google.pubsub.v1.Subscriber.CreateSubscription",
+        "A subscription on an existing topic copies everything published to it.",
+    ),
+    (
+        "gcp-dns-record-changed",
+        "GCP DNS Record Changed",
+        "high",
+        ["t1565"],
+        "dns",
+        "dns.changes.create",
+        "A record change redirects whatever resolves through it.",
+    ),
+    (
+        "gcp-dns-zone-created",
+        "GCP DNS Managed Zone Created",
+        "medium",
+        ["t1583.002"],
+        "dns",
+        "dns.managedZones.create",
+        "A zone in the estate's own project lends it the estate's reputation.",
+    ),
+    (
+        "gcp-service-enabled",
+        "GCP Service API Enabled",
+        "medium",
+        ["t1578"],
+        "serviceusage",
+        "google.api.serviceusage.v1.ServiceUsage.EnableService",
+        "Enabling an API is the first step to using a service the estate does not normally run.",
+    ),
+    (
+        "gcp-service-disabled",
+        "GCP Service API Disabled",
+        "high",
+        ["t1562"],
+        "serviceusage",
+        "google.api.serviceusage.v1.ServiceUsage.DisableService",
+        "Disabling an API breaks everything depending on it, including security tooling.",
+    ),
+    # --- Organisation policy and security posture ---
+    (
+        "gcp-org-policy-set",
+        "GCP Organisation Policy Set",
+        "critical",
+        ["t1562"],
+        "orgpolicy",
+        "google.cloud.orgpolicy.v2.OrgPolicy.UpdatePolicy",
+        "Organisation policy is the guardrail every project inherits.",
+    ),
+    (
+        "gcp-org-policy-deleted",
+        "GCP Organisation Policy Deleted",
+        "critical",
+        ["t1562"],
+        "orgpolicy",
+        "google.cloud.orgpolicy.v2.OrgPolicy.DeletePolicy",
+        "Deleting a constraint removes it from every project below it.",
+    ),
+    (
+        "gcp-scc-source-updated",
+        "GCP Security Command Center Source Updated",
+        "high",
+        ["t1562"],
+        "securitycenter",
+        "google.cloud.securitycenter.v1.SecurityCenter.UpdateSource",
+        "Changing a finding source changes what the security console reports.",
+    ),
+    (
+        "gcp-scc-notification-deleted",
+        "GCP Security Command Center Notification Deleted",
+        "high",
+        ["t1562.008"],
+        "securitycenter",
+        "google.cloud.securitycenter.v1.SecurityCenter.DeleteNotificationConfig",
+        "Deleting the notification config stops findings reaching whoever reads them.",
+    ),
+    (
+        "gcp-iap-settings-updated",
+        "GCP Identity-Aware Proxy Settings Updated",
+        "high",
+        ["t1562"],
+        "iap",
+        "google.cloud.iap.v1.IdentityAwareProxyAdminService.UpdateIapSettings",
+        "IAP is the access control in front of the application.",
+    ),
+    (
+        "gcp-iap-iam-policy-set",
+        "GCP Identity-Aware Proxy IAM Policy Set",
+        "high",
+        ["t1098.001"],
+        "iap",
+        "google.cloud.iap.v1.IdentityAwareProxyAdminService.SetIamPolicy",
+        "Granting IAP access is granting the application behind it.",
+    ),
+    (
+        "gcp-workload-identity-pool-created",
+        "GCP Workload Identity Pool Created",
+        "high",
+        ["t1199"],
+        "iam",
+        "google.iam.v1.WorkloadIdentityPools.CreateWorkloadIdentityPool",
+        "A workload identity pool lets an external identity provider mint GCP credentials without a key.",
+    ),
+    (
+        "gcp-workload-identity-provider-created",
+        "GCP Workload Identity Provider Created",
+        "critical",
+        ["t1199"],
+        "iam",
+        "google.iam.v1.WorkloadIdentityPools.CreateWorkloadIdentityPoolProvider",
+        "A provider is the trust itself: whoever controls the external issuer can obtain GCP access.",
+    ),
+]
+
+GCP_RULES: list[dict] = [
+    R(
+        family="cloud-enumeration-and-abuse",
+        category="cloud",
+        emitter="gcp_cloud_audit",
+        proof=gcp_entry(method, f"{service}.googleapis.com"),
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="gcp",
+        service=service,
+        when={"method_name": method},
+        fp=[FP_AUTOMATION, FP_TUNING],
+        playbook="tpl-triage",
+        description=description,
+    )
+    for slug, name, severity, mitre, service, method, description in _GCP
+]
+
+
+# ===========================================================================
+# Family: entra-federated-identity
+#
+# Graph directory-audit activities and risky sign-ins. The audit half
+# clauses on `activity_key` rather than `event_type`, because `event_type`
+# carries the audit *category* and every role grant, removal and
+# eligibility change in a tenant shares `azure.entra.audit.rolemanagement`.
+# ===========================================================================
+
+#: (slug, name, severity, mitre, activity, category, description)
+_ENTRA_AUDIT: list[tuple[str, str, str, list[str], str, str, str]] = [
+    # --- Role and privilege ---
+    (
+        "entra-role-member-added",
+        "Entra Member Added To A Directory Role",
+        "high",
+        ["t1098.003"],
+        "Add member to role",
+        "RoleManagement",
+        "The target account and the role it received are inside targetResources, which the connector now lifts.",
+    ),
+    (
+        "entra-role-member-removed",
+        "Entra Member Removed From A Directory Role",
+        "medium",
+        ["t1531"],
+        "Remove member from role",
+        "RoleManagement",
+        "Removing an administrator is either offboarding or an attacker reducing who can stop them.",
+    ),
+    (
+        "entra-role-eligible-member-added",
+        "Entra Eligible Member Added To A Privileged Role",
+        "high",
+        ["t1098.003"],
+        "Add eligible member to role",
+        "RoleManagement",
+        "Eligibility is standing permission to activate the role later, which no active-assignment report shows.",
+    ),
+    (
+        "entra-role-definition-added",
+        "Entra Custom Role Definition Created",
+        "medium",
+        ["t1098"],
+        "Add role definition",
+        "RoleManagement",
+        "A custom role grants a permission set no built-in role offers.",
+    ),
+    (
+        "entra-role-definition-updated",
+        "Entra Custom Role Definition Updated",
+        "high",
+        ["t1098"],
+        "Update role definition",
+        "RoleManagement",
+        "Adding a permission to a role grants it everywhere the role is assigned, with no assignment change to notice.",
+    ),
+    # --- Applications and service principals ---
+    (
+        "entra-service-principal-added",
+        "Entra Service Principal Added",
+        "medium",
+        ["t1136"],
+        "Add service principal",
+        "ApplicationManagement",
+        "A service principal is a non-human identity that survives every password reset.",
+    ),
+    (
+        "entra-service-principal-removed",
+        "Entra Service Principal Removed",
+        "medium",
+        ["t1531"],
+        "Remove service principal",
+        "ApplicationManagement",
+        "Removing a service principal breaks whatever authenticated as it.",
+    ),
+    (
+        "entra-service-principal-credential-added",
+        "Entra Service Principal Credential Added",
+        "critical",
+        ["t1098.001"],
+        "Add service principal credentials",
+        "ApplicationManagement",
+        "A new secret or certificate on an existing service principal is persistence that no user sign-in reveals.",
+    ),
+    (
+        "entra-service-principal-credential-removed",
+        "Entra Service Principal Credential Removed",
+        "medium",
+        ["t1070"],
+        "Remove service principal credentials",
+        "ApplicationManagement",
+        "Rotation looks like this, and so does removing the credential that was used.",
+    ),
+    (
+        "entra-application-added",
+        "Entra Application Registered",
+        "medium",
+        ["t1136"],
+        "Add application",
+        "ApplicationManagement",
+        "A registered application is an identity with its own consent surface.",
+    ),
+    (
+        "entra-application-updated",
+        "Entra Application Updated",
+        "high",
+        ["t1098"],
+        "Update application",
+        "ApplicationManagement",
+        "Reply URLs and required permissions are both application properties.",
+    ),
+    (
+        "entra-application-certs-updated",
+        "Entra Application Certificates And Secrets Updated",
+        "critical",
+        ["t1098.001"],
+        "Update application – Certificates and secrets management",
+        "ApplicationManagement",
+        "The activity Graph logs when a credential is added to an app registration.",
+    ),
+    (
+        "entra-application-deleted",
+        "Entra Application Deleted",
+        "medium",
+        ["t1485"],
+        "Delete application",
+        "ApplicationManagement",
+        "Deleting the registration removes the audit trail an investigation would follow.",
+    ),
+    (
+        "entra-app-owner-added",
+        "Entra Owner Added To An Application",
+        "high",
+        ["t1098"],
+        "Add owner to application",
+        "ApplicationManagement",
+        "An application owner can add credentials to it, which is privilege escalation one step removed.",
+    ),
+    (
+        "entra-sp-owner-added",
+        "Entra Owner Added To A Service Principal",
+        "high",
+        ["t1098"],
+        "Add owner to service principal",
+        "ApplicationManagement",
+        "Same escalation path as an application owner, on the directory object.",
+    ),
+    (
+        "entra-oauth-grant-added",
+        "Entra OAuth2 Permission Grant Added",
+        "high",
+        ["t1528"],
+        "Add OAuth2PermissionGrant",
+        "ApplicationManagement",
+        "A delegated permission grant is an application acting as a user.",
+    ),
+    (
+        "entra-app-role-assigned",
+        "Entra App Role Assigned To A Service Principal",
+        "critical",
+        ["t1098.001"],
+        "Add app role assignment to service principal",
+        "ApplicationManagement",
+        "Application permissions are not scoped to a user, so one grant reaches the whole tenant.",
+    ),
+    (
+        "entra-app-role-assigned-user",
+        "Entra App Role Assignment Granted To A User",
+        "medium",
+        ["t1098"],
+        "Add app role assignment grant to user",
+        "ApplicationManagement",
+        "The user-scoped half of the same mechanism.",
+    ),
+    (
+        "entra-consent-to-application",
+        "Entra Consent Granted To An Application",
+        "high",
+        ["t1528"],
+        "Consent to application",
+        "ApplicationManagement",
+        "Illicit consent is the textbook route to a mailbox without a password.",
+    ),
+    # --- Credentials and factors ---
+    (
+        "entra-user-password-reset",
+        "Entra User Password Reset By An Administrator",
+        "high",
+        ["t1098"],
+        "Reset user password",
+        "UserManagement",
+        "An administrator-driven reset locks the owner out and lets whoever asked for it in.",
+    ),
+    (
+        "entra-user-password-changed",
+        "Entra User Changed Their Own Password",
+        "low",
+        ["t1098"],
+        "Change user password",
+        "UserManagement",
+        "Routine, and the second half of a takeover once the recovery factors have moved.",
+    ),
+    (
+        "entra-user-security-info-registered",
+        "Entra Security Information Registered By The User",
+        "medium",
+        ["t1556.006"],
+        "User registered security info",
+        "UserManagement",
+        "A new authentication method registered from an unfamiliar session is persistence.",
+    ),
+    (
+        "entra-user-security-info-deleted",
+        "Entra Security Information Deleted By The User",
+        "high",
+        ["t1556.006"],
+        "User deleted security info",
+        "UserManagement",
+        "Deleting the owner's factor leaves only the attacker's.",
+    ),
+    (
+        "entra-admin-security-info-registered",
+        "Entra Security Information Registered By An Administrator",
+        "high",
+        ["t1556.006"],
+        "Admin registered security info",
+        "UserManagement",
+        "An administrator adding a factor to someone else's account is the help-desk social-engineering path.",
+    ),
+    (
+        "entra-admin-security-info-deleted",
+        "Entra Security Information Deleted By An Administrator",
+        "critical",
+        ["t1556.006"],
+        "Admin deleted security info",
+        "UserManagement",
+        "Removing another account's factor is the step that makes a password alone sufficient.",
+    ),
+    (
+        "entra-user-default-security-info-changed",
+        "Entra Default Authentication Method Changed",
+        "medium",
+        ["t1556.006"],
+        "User changed default security info",
+        "UserManagement",
+        "Moving the default to a weaker method lowers the bar for every later sign-in.",
+    ),
+    (
+        "entra-refresh-tokens-revoked",
+        "Entra Refresh Tokens Invalidated",
+        "medium",
+        ["t1531"],
+        "Update StsRefreshTokenValidFrom Timestamp",
+        "UserManagement",
+        "Session revocation. A response action when the team does it and a disruption when nobody did.",
+    ),
+    # --- Accounts ---
+    (
+        "entra-user-added",
+        "Entra User Account Created",
+        "medium",
+        ["t1136"],
+        "Add user",
+        "UserManagement",
+        "A new account is persistence that survives every password reset on the compromised one.",
+    ),
+    (
+        "entra-user-deleted",
+        "Entra User Account Deleted",
+        "medium",
+        ["t1531"],
+        "Delete user",
+        "UserManagement",
+        "Deletion is reversible for 30 days and removes the account from every report in the meantime.",
+    ),
+    (
+        "entra-user-restored",
+        "Entra User Account Restored",
+        "high",
+        ["t1098"],
+        "Restore user",
+        "UserManagement",
+        "Restoring a deleted account returns it with its group memberships.",
+    ),
+    (
+        "entra-user-updated",
+        "Entra User Account Updated",
+        "low",
+        ["t1098"],
+        "Update user",
+        "UserManagement",
+        "User update covers the proxy addresses and alternate identifiers sign-in resolves through.",
+    ),
+    (
+        "entra-account-disabled",
+        "Entra Account Disabled",
+        "medium",
+        ["t1531"],
+        "Disable account",
+        "UserManagement",
+        "Disabling an account is containment when the team does it.",
+    ),
+    (
+        "entra-account-enabled",
+        "Entra Account Re-Enabled",
+        "high",
+        ["t1098"],
+        "Enable account",
+        "UserManagement",
+        "Re-enabling a disabled account is the quietest way back into a tenant.",
+    ),
+    (
+        "entra-external-user-invited",
+        "Entra External User Invited",
+        "medium",
+        ["t1199"],
+        "Invite external user",
+        "UserManagement",
+        "A guest is an identity outside the organisation's own controls.",
+    ),
+    (
+        "entra-external-invite-redeemed",
+        "Entra External User Invitation Redeemed",
+        "medium",
+        ["t1199"],
+        "Redeem external user invite",
+        "UserManagement",
+        "Redemption is when the guest identity starts working.",
+    ),
+    # --- Groups and units ---
+    (
+        "entra-group-added",
+        "Entra Group Created",
+        "low",
+        ["t1098"],
+        "Add group",
+        "GroupManagement",
+        "Groups carry access, so a new one is a new grant surface.",
+    ),
+    (
+        "entra-group-member-added",
+        "Entra Member Added To A Group",
+        "medium",
+        ["t1098"],
+        "Add member to group",
+        "GroupManagement",
+        "Group membership is how most access is actually granted.",
+    ),
+    (
+        "entra-group-member-removed",
+        "Entra Member Removed From A Group",
+        "low",
+        ["t1531"],
+        "Remove member from group",
+        "GroupManagement",
+        "Routine leaver processing, and also access removal nobody asked for.",
+    ),
+    (
+        "entra-group-updated",
+        "Entra Group Updated",
+        "medium",
+        ["t1098"],
+        "Update group",
+        "GroupManagement",
+        "Changing a dynamic group's membership rule changes who is in it without any membership event.",
+    ),
+    (
+        "entra-group-deleted",
+        "Entra Group Deleted",
+        "medium",
+        ["t1531"],
+        "Delete group",
+        "GroupManagement",
+        "Deleting a group revokes everything it granted at once.",
+    ),
+    (
+        "entra-admin-unit-created",
+        "Entra Administrative Unit Created",
+        "medium",
+        ["t1098"],
+        "Create administrative unit",
+        "DirectoryManagement",
+        "An administrative unit scopes who may administer whom.",
+    ),
+    # --- Policy and tenant trust ---
+    (
+        "entra-ca-policy-added",
+        "Entra Conditional Access Policy Added",
+        "high",
+        ["t1556"],
+        "Add conditional access policy",
+        "Policy",
+        "A new policy in report-only mode changes nothing; one in enforced mode changes everything.",
+    ),
+    (
+        "entra-ca-policy-updated",
+        "Entra Conditional Access Policy Updated",
+        "critical",
+        ["t1556"],
+        "Update conditional access policy",
+        "Policy",
+        "An exclusion added to a policy is the usual way multi-factor enforcement is bypassed for one account.",
+    ),
+    (
+        "entra-ca-policy-deleted",
+        "Entra Conditional Access Policy Deleted",
+        "critical",
+        ["t1556"],
+        "Delete conditional access policy",
+        "Policy",
+        "Deleting the policy removes the control from everyone it covered.",
+    ),
+    (
+        "entra-named-location-added",
+        "Entra Named Location Added",
+        "high",
+        ["t1556"],
+        "Add named location",
+        "Policy",
+        "A named location marked trusted exempts whatever sits inside it from conditional access.",
+    ),
+    (
+        "entra-named-location-updated",
+        "Entra Named Location Updated",
+        "high",
+        ["t1556"],
+        "Update named location",
+        "Policy",
+        "Widening a trusted range is the same bypass with no new object to notice.",
+    ),
+    (
+        "entra-policy-updated",
+        "Entra Directory Policy Updated",
+        "high",
+        ["t1556"],
+        "Update policy",
+        "Policy",
+        "Authorization and token-lifetime policies both update through this activity.",
+    ),
+    (
+        "entra-authorization-policy-updated",
+        "Entra Authorization Policy Updated",
+        "critical",
+        ["t1556"],
+        "Update authorization policy",
+        "Policy",
+        "The authorization policy decides whether ordinary users may register applications and invite guests.",
+    ),
+    (
+        "entra-cross-tenant-access-updated",
+        "Entra Cross-Tenant Access Setting Updated",
+        "critical",
+        ["t1199"],
+        "Update cross-tenant access setting",
+        "DirectoryManagement",
+        "Inbound trust settings decide which other tenants' identities and multi-factor claims are accepted here.",
+    ),
+    (
+        "entra-partner-added",
+        "Entra Partner Added To The Tenant",
+        "critical",
+        ["t1199"],
+        "Add partner to company",
+        "DirectoryManagement",
+        "A delegated administration partner can administer the tenant.",
+    ),
+    (
+        "entra-domain-added",
+        "Entra Domain Added To The Tenant",
+        "high",
+        ["t1098"],
+        "Add unverified domain",
+        "DirectoryManagement",
+        "A domain added and then verified lets the holder mint identities in the tenant's namespace.",
+    ),
+    (
+        "entra-domain-verified",
+        "Entra Domain Verified",
+        "critical",
+        ["t1098"],
+        "Verify domain",
+        "DirectoryManagement",
+        "Verification is the moment the namespace becomes usable.",
+    ),
+    (
+        "entra-domain-federation-set",
+        "Entra Domain Federation Settings Changed",
+        "critical",
+        ["t1484.002"],
+        "Set federation settings on domain",
+        "DirectoryManagement",
+        "Federation settings decide which identity provider's assertions the tenant trusts, which is the whole authentication decision.",
+    ),
+    (
+        "entra-domain-removed",
+        "Entra Domain Removed From The Tenant",
+        "high",
+        ["t1531"],
+        "Remove domain from company",
+        "DirectoryManagement",
+        "Removing a domain invalidates every identity under it.",
+    ),
+    (
+        "entra-company-settings-updated",
+        "Entra Company Settings Updated",
+        "medium",
+        ["t1562"],
+        "Set Company Information",
+        "DirectoryManagement",
+        "Company settings include whether users may consent to applications.",
+    ),
+    (
+        "entra-desktop-sso-enabled",
+        "Entra Seamless Single Sign-On Enabled",
+        "high",
+        ["t1556"],
+        "Enable Desktop SSO",
+        "DirectoryManagement",
+        "Seamless sign-on trusts a Kerberos ticket from the on-premises domain.",
+    ),
+    (
+        "entra-desktop-sso-disabled",
+        "Entra Seamless Single Sign-On Disabled",
+        "medium",
+        ["t1562"],
+        "Disable Desktop SSO",
+        "DirectoryManagement",
+        "Turning it off breaks sign-in for everyone relying on it.",
+    ),
+    # --- Devices ---
+    (
+        "entra-device-added",
+        "Entra Device Registered",
+        "medium",
+        ["t1098.005"],
+        "Add device",
+        "Device",
+        "A device registered shortly after a risky sign-in is the broker-registration persistence step.",
+    ),
+    (
+        "entra-device-deleted",
+        "Entra Device Deleted",
+        "medium",
+        ["t1531"],
+        "Delete device",
+        "Device",
+        "Deleting a device removes the compliance signal conditional access reads.",
+    ),
+    (
+        "entra-device-owner-added",
+        "Entra Registered Owner Added To A Device",
+        "high",
+        ["t1098"],
+        "Add registered owner to device",
+        "Device",
+        "The registered owner is who the device authenticates as.",
+    ),
+    (
+        "entra-device-updated",
+        "Entra Device Updated",
+        "low",
+        ["t1098"],
+        "Update device",
+        "Device",
+        "Device attributes drive conditional-access compliance decisions.",
+    ),
+]
+
+#: (slug, name, severity, mitre, clause, description)
+_ENTRA_SIGNIN: list[tuple[str, str, str, list[str], dict[str, Any], str]] = [
+    (
+        "entra-signin-risk-high-at-risk",
+        "Entra Sign-In At High Risk",
+        "high",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "riskLevelDuringSignIn": "high"},
+        "Microsoft's own risk verdict on the sign-in itself.",
+    ),
+    (
+        "entra-signin-risk-confirmed-compromised",
+        "Entra Sign-In Risk Confirmed Compromised",
+        "critical",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "riskState": "confirmedCompromised"},
+        "Confirmed rather than suspected, by Microsoft or by an analyst.",
+    ),
+    (
+        "entra-signin-ca-failure",
+        "Entra Sign-In Blocked By Conditional Access",
+        "medium",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "conditionalAccessStatus": "failure"},
+        "A blocked attempt is evidence of an attempt.",
+    ),
+    (
+        "entra-signin-ca-not-applied",
+        "Entra Risky Sign-In With No Conditional Access Applied",
+        "high",
+        ["t1556"],
+        {"event_type": "azure.entra.signin.risky", "conditionalAccessStatus": "notApplied"},
+        "A risky sign-in that no policy evaluated is an exclusion working as configured, which is the thing to check.",
+    ),
+    (
+        "entra-signin-single-factor-risky",
+        "Entra Risky Sign-In Satisfied By A Single Factor",
+        "high",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "mfa_satisfied": False},
+        "Microsoft states the authentication requirement directly, so this is a fact rather than an inference.",
+    ),
+    (
+        "entra-signin-noncompliant-device",
+        "Entra Risky Sign-In From A Non-Compliant Device",
+        "high",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "device_compliant": False},
+        "Compliance is the signal conditional access reads; a risky sign-in from an unmanaged device had none of it.",
+    ),
+    (
+        "entra-signin-legacy-client",
+        "Entra Sign-In Using A Legacy Authentication Client",
+        "high",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "client_app_in": ["Other clients", "IMAP4", "POP3", "SMTP", "Exchange ActiveSync"]},
+        "Legacy protocols cannot present a second factor, which is why they are the preferred path into a tenant.",
+    ),
+    (
+        "entra-signin-noninteractive-risky",
+        "Entra Risky Non-Interactive Sign-In",
+        "high",
+        ["t1550.001"],
+        {"event_type": "azure.entra.signin.risky", "isInteractive": False},
+        "A non-interactive sign-in is a token being used, not a person signing in, so no factor is presented.",
+    ),
+    (
+        "entra-signin-from-anonymizer",
+        "Entra Sign-In From An Anonymizing Or Hosting Network",
+        "high",
+        ["t1090.003"],
+        {"event_type": "azure.entra.signin.risky", "ip_class_in": ["vpn", "tor_exit", "public_proxy", "hosting_provider"]},
+        "The ingest classification and its dataset version travel with the alert.",
+    ),
+    (
+        "entra-signin-anonymized-ip-risk",
+        "Entra Sign-In Flagged As Anonymized IP Address",
+        "high",
+        ["t1090.003"],
+        {"event_type": "azure.entra.signin.risky", "riskEventTypes_v2_has_any": ["anonymizedIPAddress"]},
+        "Microsoft's own anonymizer verdict, independent of the ingest dataset.",
+    ),
+    (
+        "entra-signin-impossible-travel",
+        "Entra Sign-In Flagged As Atypical Travel",
+        "high",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "riskEventTypes_v2_has_any": ["unlikelyTravel"]},
+        "Two sign-ins too far apart to be one person.",
+    ),
+    (
+        "entra-signin-password-spray",
+        "Entra Sign-In Flagged As Password Spray",
+        "high",
+        ["t1110.003"],
+        {"event_type": "azure.entra.signin.risky", "riskEventTypes_v2_has_any": ["passwordSpray"]},
+        "Microsoft correlates across accounts, which a single-account rule cannot.",
+    ),
+    (
+        "entra-signin-leaked-credentials",
+        "Entra Sign-In With Leaked Credentials",
+        "critical",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "riskEventTypes_v2_has_any": ["leakedCredentials"]},
+        "The password is known to be public.",
+    ),
+    (
+        "entra-signin-malicious-ip",
+        "Entra Sign-In From An Address Microsoft Flags Malicious",
+        "high",
+        ["t1078.004"],
+        {"event_type": "azure.entra.signin.risky", "riskEventTypes_v2_has_any": ["maliciousIPAddress"]},
+        "Microsoft's threat intelligence on the source address.",
+    ),
+    (
+        "entra-signin-token-issuer-anomaly",
+        "Entra Sign-In With An Anomalous Token Issuer",
+        "critical",
+        ["t1606.002"],
+        {"event_type": "azure.entra.signin.risky", "riskEventTypes_v2_has_any": ["tokenIssuerAnomaly"]},
+        "A SAML token whose issuer does not look like the tenant's own identity provider is the golden-SAML shape.",
+    ),
+    (
+        "entra-signin-token-replay",
+        "Entra Sign-In Flagged As Token Issuer Replay",
+        "critical",
+        ["t1550.001"],
+        {"event_type": "azure.entra.signin.risky", "riskEventTypes_v2_has_any": ["suspiciousBrowser", "anomalousToken"]},
+        "An anomalous token is a token used in a way the issuing session does not explain.",
+    ),
+]
+
+ENTRA_RULES: list[dict] = [
+    R(
+        family="entra-federated-identity",
+        category="identity",
+        emitter="azure_entra",
+        proof=entra_audit(activity, category),
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="azure",
+        service="entra-audit",
+        when={"activity": activity},
+        fp=[FP_ONBOARD, FP_AUTOMATION, FP_BREAK_GLASS],
+        playbook="tpl-privilege-escalation",
+        description=description,
+    )
+    for slug, name, severity, mitre, activity, category, description in _ENTRA_AUDIT
+] + [
+    R(
+        family="entra-federated-identity",
+        category="identity",
+        emitter="azure_entra",
+        proof=entra_signin(
+            **{
+                k: v
+                for k, v in {
+                    "risk_during": clause.get("riskLevelDuringSignIn"),
+                    "risk_state": clause.get("riskState"),
+                    "ca_status": clause.get("conditionalAccessStatus"),
+                    "auth_requirement": None if clause.get("mfa_satisfied") is not False else "singleFactorAuthentication",
+                    "compliant": clause.get("device_compliant"),
+                    "client_app": (clause.get("client_app_in") or [None])[0],
+                    "interactive": clause.get("isInteractive"),
+                    "risk_events": clause.get("riskEventTypes_v2_has_any"),
+                }.items()
+                if v is not None
+            }
+        ),
+        derived={"ip_class": "tor_exit"} if "ip_class_in" in clause else None,
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="azure",
+        service="entra-signin",
+        when=clause,
+        fp=["Staff member travelling, on a corporate VPN, or using a client the tenant still permits"],
+        playbook="tpl-account-takeover",
+        description=description,
+        neg_field=next(k.replace("_in", "").replace("_has_any", "") for k in clause if k != "event_type"),
+    )
+    for slug, name, severity, mitre, clause, description in _ENTRA_SIGNIN
+]
+
+
+# ===========================================================================
+# Family: kubernetes-control-plane
+#
+# The connector already lifts the whole audit event (`k8s_verb`,
+# `k8s_resource`, `k8s_subresource`, `k8s_namespace`, `k8s_object_name`,
+# `k8s_user`, `k8s_api_group`, `k8s_response_code`), so nothing here needed
+# a connector change — which is worth saying, because the reachability gate
+# cannot tell a field that is lifted from one that merely appears in the
+# connector's source.
+# ===========================================================================
+
+#: (slug, name, severity, mitre, clause, proof kwargs, description)
+_K8S: list[tuple[str, str, str, list[str], dict[str, Any], dict[str, Any], str]] = [
+    (
+        "k8s-clusterrolebinding-created",
+        "Kubernetes ClusterRoleBinding Created",
+        "high",
+        ["t1098"],
+        {"k8s_verb": "create", "k8s_resource": "clusterrolebindings"},
+        {"verb": "create", "resource": "clusterrolebindings", "apiGroup": "rbac.authorization.k8s.io"},
+        "A cluster-wide binding grants its role in every namespace at once.",
+    ),
+    (
+        "k8s-clusterrole-created",
+        "Kubernetes ClusterRole Created",
+        "medium",
+        ["t1098"],
+        {"k8s_verb": "create", "k8s_resource": "clusterroles"},
+        {"verb": "create", "resource": "clusterroles", "apiGroup": "rbac.authorization.k8s.io"},
+        "A cluster role is a permission set waiting for a binding.",
+    ),
+    (
+        "k8s-rolebinding-created",
+        "Kubernetes RoleBinding Created",
+        "medium",
+        ["t1098"],
+        {"k8s_verb": "create", "k8s_resource": "rolebindings"},
+        {"verb": "create", "resource": "rolebindings", "namespace": "prod", "apiGroup": "rbac.authorization.k8s.io"},
+        "Namespace-scoped, so narrower than a cluster binding and the usual first step.",
+    ),
+    (
+        "k8s-rbac-deleted",
+        "Kubernetes RBAC Binding Deleted",
+        "medium",
+        ["t1531"],
+        {"k8s_verb": "delete", "k8s_resource": "clusterrolebindings"},
+        {"verb": "delete", "resource": "clusterrolebindings", "apiGroup": "rbac.authorization.k8s.io", "code": 200},
+        "Deleting a binding revokes it from everyone it covered.",
+    ),
+    (
+        "k8s-pod-exec",
+        "Kubernetes Exec Into A Running Pod",
+        "high",
+        ["t1609"],
+        {"k8s_verb": "create", "k8s_resource": "pods", "k8s_subresource": "exec"},
+        {"verb": "create", "resource": "pods", "subresource": "exec", "namespace": "prod", "name": "web-1", "code": 101},
+        "Interactive access to a running container, which leaves no trace in the image.",
+    ),
+    (
+        "k8s-pod-attach",
+        "Kubernetes Attach To A Running Pod",
+        "high",
+        ["t1609"],
+        {"k8s_verb": "create", "k8s_resource": "pods", "k8s_subresource": "attach"},
+        {"verb": "create", "resource": "pods", "subresource": "attach", "namespace": "prod", "name": "web-1", "code": 101},
+        "Attach reaches the main process rather than a new shell.",
+    ),
+    (
+        "k8s-pod-portforward",
+        "Kubernetes Port-Forward To A Pod",
+        "high",
+        ["t1572"],
+        {"k8s_verb": "create", "k8s_resource": "pods", "k8s_subresource": "portforward"},
+        {"verb": "create", "resource": "pods", "subresource": "portforward", "namespace": "prod", "name": "web-1", "code": 101},
+        "Port-forward tunnels a cluster-internal service to the operator's own machine.",
+    ),
+    (
+        "k8s-pod-proxy",
+        "Kubernetes Proxy Request To A Pod",
+        "medium",
+        ["t1572"],
+        {"k8s_verb": "create", "k8s_resource": "pods", "k8s_subresource": "proxy"},
+        {"verb": "create", "resource": "pods", "subresource": "proxy", "namespace": "prod", "name": "web-1"},
+        "The API server proxies the request, so it reaches the pod with the API server's network position.",
+    ),
+    (
+        "k8s-pod-created-privileged-namespace",
+        "Kubernetes Pod Created In A System Namespace",
+        "high",
+        ["t1610"],
+        {"k8s_verb": "create", "k8s_resource": "pods", "k8s_namespace": "kube-system"},
+        {"verb": "create", "resource": "pods", "namespace": "kube-system", "name": "helper"},
+        "kube-system carries the cluster's own privileged service accounts.",
+    ),
+    (
+        "k8s-secret-read",
+        "Kubernetes Secret Read",
+        "medium",
+        ["t1552.007"],
+        {"k8s_verb": "get", "k8s_resource": "secrets"},
+        {"verb": "get", "resource": "secrets", "namespace": "prod", "name": "db-credentials", "code": 200},
+        "One secret read is routine for a controller and not for a person.",
+    ),
+    (
+        "k8s-secret-listed",
+        "Kubernetes Secrets Listed",
+        "high",
+        ["t1552.007"],
+        {"k8s_verb": "list", "k8s_resource": "secrets"},
+        {"verb": "list", "resource": "secrets", "namespace": "prod", "code": 200},
+        "Listing returns every secret in the namespace in one response.",
+    ),
+    (
+        "k8s-secret-created",
+        "Kubernetes Secret Created",
+        "low",
+        ["t1552.007"],
+        {"k8s_verb": "create", "k8s_resource": "secrets"},
+        {"verb": "create", "resource": "secrets", "namespace": "prod", "name": "new-token"},
+        "A secret created outside the deployment pipeline is one nobody rotates.",
+    ),
+    (
+        "k8s-serviceaccount-token-created",
+        "Kubernetes Service Account Token Requested",
+        "high",
+        ["t1528"],
+        {"k8s_verb": "create", "k8s_resource": "serviceaccounts", "k8s_subresource": "token"},
+        {"verb": "create", "resource": "serviceaccounts", "subresource": "token", "namespace": "prod", "name": "deployer"},
+        "A projected token is a bearer credential for the service account that can leave the cluster.",
+    ),
+    (
+        "k8s-serviceaccount-created",
+        "Kubernetes Service Account Created",
+        "medium",
+        ["t1136"],
+        {"k8s_verb": "create", "k8s_resource": "serviceaccounts"},
+        {"verb": "create", "resource": "serviceaccounts", "namespace": "prod", "name": "deployer"},
+        "A service account is an identity the cluster will mint tokens for.",
+    ),
+    (
+        "k8s-daemonset-created",
+        "Kubernetes DaemonSet Created",
+        "high",
+        ["t1610"],
+        {"k8s_verb": "create", "k8s_resource": "daemonsets"},
+        {"verb": "create", "resource": "daemonsets", "namespace": "kube-system", "name": "agent", "apiGroup": "apps"},
+        "A DaemonSet runs on every node, including the ones added later.",
+    ),
+    (
+        "k8s-cronjob-created",
+        "Kubernetes CronJob Created",
+        "high",
+        ["t1053.003"],
+        {"k8s_verb": "create", "k8s_resource": "cronjobs"},
+        {"verb": "create", "resource": "cronjobs", "namespace": "prod", "name": "report", "apiGroup": "batch"},
+        "A CronJob is scheduled execution that survives every pod restart.",
+    ),
+    (
+        "k8s-job-created",
+        "Kubernetes Job Created",
+        "low",
+        ["t1610"],
+        {"k8s_verb": "create", "k8s_resource": "jobs"},
+        {"verb": "create", "resource": "jobs", "namespace": "prod", "name": "migrate", "apiGroup": "batch"},
+        "A one-shot workload, routine in a pipeline and a way to run a container once otherwise.",
+    ),
+    (
+        "k8s-deployment-patched",
+        "Kubernetes Deployment Patched",
+        "low",
+        ["t1525"],
+        {"k8s_verb": "patch", "k8s_resource": "deployments"},
+        {"verb": "patch", "resource": "deployments", "namespace": "prod", "name": "web", "apiGroup": "apps", "code": 200},
+        "Patching the image is how a workload starts running different code.",
+    ),
+    (
+        "k8s-webhook-created",
+        "Kubernetes Admission Webhook Created",
+        "critical",
+        ["t1554"],
+        {"k8s_verb": "create", "k8s_resource": "mutatingwebhookconfigurations"},
+        {"verb": "create", "resource": "mutatingwebhookconfigurations", "name": "injector", "apiGroup": "admissionregistration.k8s.io"},
+        "A mutating webhook rewrites every object admitted to the cluster, which is cluster-wide persistence.",
+    ),
+    (
+        "k8s-validating-admission-webhook-deleted",
+        "Kubernetes Validating Webhook Deleted",
+        "high",
+        ["t1562"],
+        {"k8s_verb": "delete", "k8s_resource": "validatingwebhookconfigurations"},
+        {
+            "verb": "delete",
+            "resource": "validatingwebhookconfigurations",
+            "name": "policy",
+            "apiGroup": "admissionregistration.k8s.io",
+            "code": 200,
+        },
+        "Deleting the validating webhook removes the admission control that would have refused the next object.",
+    ),
+    (
+        "k8s-namespace-created",
+        "Kubernetes Namespace Created",
+        "low",
+        ["t1610"],
+        {"k8s_verb": "create", "k8s_resource": "namespaces"},
+        {"verb": "create", "resource": "namespaces", "name": "staging-2"},
+        "A namespace created outside the platform pipeline carries none of its policies.",
+    ),
+    (
+        "k8s-namespace-deleted",
+        "Kubernetes Namespace Deleted",
+        "high",
+        ["t1485"],
+        {"k8s_verb": "delete", "k8s_resource": "namespaces"},
+        {"verb": "delete", "resource": "namespaces", "name": "prod", "code": 200},
+        "Deleting a namespace deletes everything in it.",
+    ),
+    (
+        "k8s-networkpolicy-deleted",
+        "Kubernetes NetworkPolicy Deleted",
+        "high",
+        ["t1562.004"],
+        {"k8s_verb": "delete", "k8s_resource": "networkpolicies"},
+        {
+            "verb": "delete",
+            "resource": "networkpolicies",
+            "namespace": "prod",
+            "name": "default-deny",
+            "apiGroup": "networking.k8s.io",
+            "code": 200,
+        },
+        "Deleting a default-deny policy opens the namespace to lateral traffic.",
+    ),
+    (
+        "k8s-forbidden-request",
+        "Kubernetes Request Refused By RBAC",
+        "medium",
+        ["t1087"],
+        {"k8s_response_code": 403},
+        {"verb": "list", "resource": "secrets", "namespace": "prod", "code": 403},
+        "A 403 is an attempt that failed, which is the signal a permission probe leaves.",
+    ),
+    (
+        "k8s-unauthenticated-request",
+        "Kubernetes Request From An Unauthenticated Caller",
+        "high",
+        ["t1078"],
+        {"k8s_user": "system:anonymous"},
+        {"verb": "get", "resource": "pods", "namespace": "prod", "username": "system:anonymous", "code": 200},
+        "An anonymous request that was not refused means anonymous access is bound to something.",
+    ),
+    (
+        "k8s-impersonation-used",
+        "Kubernetes Request Used Impersonation",
+        "high",
+        ["t1134"],
+        {"k8s_impersonated_user_neq": ""},
+        {"verb": "list", "resource": "secrets", "namespace": "prod", "impersonatedUser": {"username": "admin@example.com"}, "code": 200},
+        "Impersonation lets one principal act as another, and the audit event is the only place it is visible.",
+    ),
+]
+
+K8S_RULES: list[dict] = [
+    R(
+        family="kubernetes-control-plane",
+        category="cloud",
+        emitter="kubernetes_audit",
+        proof=k8s_entry(**proof_kwargs),
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="kubernetes",
+        service="audit",
+        when=clause,
+        fp=[FP_AUTOMATION, FP_PATCH],
+        playbook="tpl-triage",
+        description=description,
+    )
+    for slug, name, severity, mitre, clause, proof_kwargs, description in _K8S
+]
+
+
+# ===========================================================================
+# Family: code-platform-compromise
+#
+# GitHub organisation audit actions and GitLab audit events. GitHub action
+# names come from its audit-log event reference and are transcribed into the
+# vocabulary module, which is what refuses `deploy_key.create` — a name
+# GitHub has never logged, matched by a rule that looked fine. GitLab builds
+# its event_type from a free-text message, so these clause on `action_key`.
+# ===========================================================================
+
+#: (slug, name, severity, mitre, action, description)
+_GITHUB: list[tuple[str, str, str, list[str], str, str]] = [
+    (
+        "gh-org-member-added",
+        "GitHub Organisation Member Added",
+        "medium",
+        ["t1136"],
+        "org.add_member",
+        "A new member reaches every repository the organisation's default permission covers.",
+    ),
+    (
+        "gh-org-member-removed",
+        "GitHub Organisation Member Removed",
+        "low",
+        ["t1531"],
+        "org.remove_member",
+        "Routine offboarding, and also access removal nobody asked for.",
+    ),
+    (
+        "gh-org-member-invited",
+        "GitHub Organisation Invitation Sent",
+        "medium",
+        ["t1136"],
+        "org.invite_member",
+        "An invitation to an address outside the company is how an outsider becomes an insider.",
+    ),
+    (
+        "gh-org-owner-promoted",
+        "GitHub Organisation Member Promoted To Owner",
+        "critical",
+        ["t1098.003"],
+        "org.update_member",
+        "Owner reaches every repository, every secret and the audit log itself.",
+    ),
+    (
+        "gh-org-2fa-disabled",
+        "GitHub Organisation Two-Factor Requirement Disabled",
+        "critical",
+        ["t1556.006"],
+        "org.disable_two_factor_requirement",
+        "Removing the requirement lets every member drop their second factor.",
+    ),
+    (
+        "gh-org-oauth-app-restrictions-disabled",
+        "GitHub OAuth Application Restrictions Disabled",
+        "critical",
+        ["t1528"],
+        "org.disable_oauth_app_restrictions",
+        "With restrictions off, any member can authorise any application against organisation data.",
+    ),
+    (
+        "gh-org-saml-disabled",
+        "GitHub Organisation SAML Disabled",
+        "critical",
+        ["t1556"],
+        "org.disable_saml",
+        "Disabling SAML returns the organisation to password authentication.",
+    ),
+    (
+        "gh-org-default-permission-changed",
+        "GitHub Organisation Default Repository Permission Changed",
+        "high",
+        ["t1098"],
+        "org.update_default_repository_permission",
+        "The default decides what a new member reaches before anyone grants them anything.",
+    ),
+    (
+        "gh-org-runner-registered",
+        "GitHub Self-Hosted Runner Registered",
+        "high",
+        ["t1053"],
+        "org.register_self_hosted_runner",
+        "A self-hosted runner executes workflow code on hardware the organisation does not inspect.",
+    ),
+    (
+        "gh-org-runner-removed",
+        "GitHub Self-Hosted Runner Removed",
+        "medium",
+        ["t1070"],
+        "org.remove_self_hosted_runner",
+        "Removing the runner after using it is the cleanup half.",
+    ),
+    (
+        "gh-repo-created",
+        "GitHub Repository Created",
+        "low",
+        ["t1074"],
+        "repo.create",
+        "A new repository is a destination, and automation creating one is worth knowing about.",
+    ),
+    (
+        "gh-repo-destroyed",
+        "GitHub Repository Deleted",
+        "high",
+        ["t1485"],
+        "repo.destroy",
+        "Deleting a repository removes its history and its audit context.",
+    ),
+    (
+        "gh-repo-visibility-changed",
+        "GitHub Repository Visibility Changed",
+        "critical",
+        ["t1537"],
+        "repo.access",
+        "GitHub logs a public/private flip as repo.access, not repo.visibility_change — a rule naming the latter could never fire.",
+    ),
+    (
+        "gh-repo-transferred",
+        "GitHub Repository Transferred",
+        "critical",
+        ["t1537"],
+        "repo.transfer",
+        "A transfer moves the repository to an owner outside the organisation's controls.",
+    ),
+    (
+        "gh-repo-archived",
+        "GitHub Repository Archived",
+        "low",
+        ["t1485"],
+        "repo.archived",
+        "Archiving freezes a repository, which is also how work is hidden from active review.",
+    ),
+    (
+        "gh-deploy-key-added",
+        "GitHub Deploy Key Added",
+        "high",
+        ["t1098.004"],
+        "public_key.create",
+        "GitHub logs a deploy key add as public_key.create; the repo field is what distinguishes it from a user SSH key.",
+    ),
+    (
+        "gh-branch-protection-overridden",
+        "GitHub Branch Protection Overridden",
+        "high",
+        ["t1562"],
+        "protected_branch.policy_override",
+        "An override is a push that the protection rule should have refused.",
+    ),
+    (
+        "gh-branch-protection-destroyed",
+        "GitHub Branch Protection Removed",
+        "critical",
+        ["t1562"],
+        "protected_branch.destroy",
+        "Removing protection lets the default branch be rewritten.",
+    ),
+    (
+        "gh-branch-protection-review-disabled",
+        "GitHub Required Reviews Disabled On A Protected Branch",
+        "critical",
+        ["t1562"],
+        "protected_branch.dismiss_stale_reviews",
+        "Dismissing stale reviews automatically is how an approved change becomes a different change.",
+    ),
+    (
+        "gh-secret-created",
+        "GitHub Actions Secret Created",
+        "medium",
+        ["t1552"],
+        "org.create_actions_secret",
+        "A secret is a credential every workflow in scope can read.",
+    ),
+    (
+        "gh-secret-removed",
+        "GitHub Actions Secret Removed",
+        "medium",
+        ["t1070"],
+        "org.remove_actions_secret",
+        "Removing a secret breaks whatever used it.",
+    ),
+    (
+        "gh-personal-access-token-granted",
+        "GitHub Fine-Grained Token Granted Organisation Access",
+        "high",
+        ["t1528"],
+        "personal_access_token.access_granted",
+        "A token with organisation access is a credential outside the session model entirely.",
+    ),
+    (
+        "gh-personal-access-token-requested",
+        "GitHub Fine-Grained Token Access Requested",
+        "medium",
+        ["t1528"],
+        "personal_access_token.request_created",
+        "The request precedes the grant, so it is the earlier signal.",
+    ),
+    (
+        "gh-oauth-app-authorized",
+        "GitHub OAuth Application Authorised Against The Organisation",
+        "high",
+        ["t1528"],
+        "oauth_application.create",
+        "An authorised application reaches organisation data with the authorising member's scope.",
+    ),
+    (
+        "gh-hook-created",
+        "GitHub Webhook Created",
+        "medium",
+        ["t1537"],
+        "hook.create",
+        "A webhook copies repository events to whatever endpoint it names.",
+    ),
+    (
+        "gh-hook-config-changed",
+        "GitHub Webhook Configuration Changed",
+        "high",
+        ["t1537"],
+        "hook.config_changed",
+        "Changing the URL redirects the copy without creating a new hook to notice.",
+    ),
+    (
+        "gh-environment-created",
+        "GitHub Deployment Environment Created",
+        "medium",
+        ["t1053"],
+        "environment.create",
+        "An environment carries its own secrets and its own protection rules.",
+    ),
+    (
+        "gh-ip-allow-list-disabled",
+        "GitHub Organisation IP Allow List Disabled",
+        "high",
+        ["t1562"],
+        "org.disable_ip_allow_list",
+        "The allow list is the network control in front of the organisation.",
+    ),
+    (
+        "gh-ip-allow-entry-created",
+        "GitHub IP Allow List Entry Created",
+        "high",
+        ["t1562"],
+        "ip_allow_list_entry.create",
+        "Adding an entry is how an attacker's own address is admitted to an otherwise closed organisation.",
+    ),
+    (
+        "gh-audit-log-streaming-disabled",
+        "GitHub Audit Log Streaming Disabled",
+        "critical",
+        ["t1562.008"],
+        "org.audit_log_export",
+        "Exporting or disabling the stream both touch the record an investigation reads.",
+    ),
+]
+
+#: (slug, name, severity, mitre, action_key, custom_message, description)
+_GITLAB: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "gl-deploy-key-added",
+        "GitLab Deploy Key Added",
+        "high",
+        ["t1098.004"],
+        "added_deploy_key",
+        "Added deploy key",
+        "A deploy key is repository access that no member list shows.",
+    ),
+    (
+        "gl-deploy-key-removed",
+        "GitLab Deploy Key Removed",
+        "medium",
+        ["t1070"],
+        "removed_deploy_key",
+        "Removed deploy key",
+        "Removing the key after using it is the cleanup half.",
+    ),
+    (
+        "gl-member-added",
+        "GitLab Member Added To A Project Or Group",
+        "medium",
+        ["t1136"],
+        "added_user_access",
+        "Added user access",
+        "Membership is how GitLab access is granted.",
+    ),
+    (
+        "gl-member-access-changed",
+        "GitLab Member Access Level Changed",
+        "high",
+        ["t1098"],
+        "changed_access_level",
+        "Changed access level",
+        "Maintainer and owner both reach protected branches and CI variables.",
+    ),
+    (
+        "gl-member-removed",
+        "GitLab Member Removed",
+        "low",
+        ["t1531"],
+        "removed_user_access",
+        "Removed user access",
+        "Routine offboarding, and also access removal nobody asked for.",
+    ),
+    (
+        "gl-project-visibility-changed",
+        "GitLab Project Visibility Changed",
+        "critical",
+        ["t1537"],
+        "changed_visibility",
+        "Changed visibility",
+        "A private project made public is an exposure with no file transfer to detect.",
+    ),
+    (
+        "gl-protected-branch-removed",
+        "GitLab Protected Branch Removed",
+        "critical",
+        ["t1562"],
+        "removed_protected_branch",
+        "Removed protected branch",
+        "Removing protection lets the branch be rewritten.",
+    ),
+    (
+        "gl-two-factor-disabled",
+        "GitLab Two-Factor Enforcement Disabled",
+        "critical",
+        ["t1556.006"],
+        "changed_require_two_factor_authentication",
+        "Changed require two factor authentication",
+        "Group-level enforcement is what makes the second factor mandatory.",
+    ),
+    (
+        "gl-personal-access-token-created",
+        "GitLab Personal Access Token Created",
+        "high",
+        ["t1528"],
+        "added_personal_access_token",
+        "Added personal access token",
+        "A token is a credential outside the session model.",
+    ),
+    (
+        "gl-ci-variable-added",
+        "GitLab CI Variable Added",
+        "medium",
+        ["t1552"],
+        "added_ci_variable",
+        "Added ci variable",
+        "A CI variable is a credential every pipeline in scope reads.",
+    ),
+    (
+        "gl-service-account-created",
+        "GitLab Service Account Created",
+        "medium",
+        ["t1136"],
+        "created_service_account",
+        "Created service account",
+        "A non-human identity that survives every member change.",
+    ),
+    (
+        "gl-group-saml-changed",
+        "GitLab Group SAML Configuration Changed",
+        "critical",
+        ["t1556"],
+        "changed_group_saml",
+        "Changed group saml",
+        "SAML settings decide which identity provider's assertions the group trusts.",
+    ),
+]
+
+GITHUB_RULES: list[dict] = [
+    R(
+        family="code-platform-compromise",
+        category="application",
+        emitter="github",
+        proof=github_entry(action, repo="example-org/payments-core")
+        if "." in action and action.split(".")[0] in {"repo", "protected_branch", "public_key", "hook", "environment"}
+        else github_entry(action),
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="github",
+        service="audit",
+        when={"event_type": f"github.{action}"},
+        fp=[FP_ONBOARD, FP_AUTOMATION],
+        playbook="tpl-triage",
+        description=description,
+    )
+    for slug, name, severity, mitre, action, description in _GITHUB
+] + [
+    R(
+        family="code-platform-compromise",
+        category="application",
+        emitter="gitlab",
+        proof=gitlab_entry(message),
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="gitlab",
+        service="audit",
+        when={"action_key": action_key},
+        fp=[FP_ONBOARD, FP_AUTOMATION],
+        playbook="tpl-triage",
+        description=description,
+    )
+    for slug, name, severity, mitre, action_key, message, description in _GITLAB
+]
+
+
+# ===========================================================================
+# Family: saas-admin-control-weakening
+#
+# The per-source minimums depth plan 3.6 sets for SaaS sources, over the
+# telemetry each connector genuinely collects. Two of the plan's named
+# sources are refused rather than met: Zoom has no connector in this tree,
+# and the ServiceNow connector reads the `incident` table only, so its
+# platform-audit events are not collected at all. Both refusals are
+# recorded in DEPTH2_PROGRESS.md and are not revisited here to move a count.
+# ===========================================================================
+
+#: (slug, name, severity, mitre, operation, workload, description)
+_M365: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "m365-inbox-rule-created",
+        "M365 Inbox Rule Created",
+        "high",
+        ["t1114.003"],
+        "New-InboxRule",
+        "Exchange",
+        "A forwarding or delete rule is the textbook business-email-compromise "
+        "step; the connector lifts the parameters, so the destination is visible.",
+    ),
+    (
+        "m365-inbox-rule-modified",
+        "M365 Inbox Rule Modified",
+        "high",
+        ["t1114.003"],
+        "Set-InboxRule",
+        "Exchange",
+        "Modifying an existing rule leaves the rule count unchanged.",
+    ),
+    (
+        "m365-inbox-rules-updated",
+        "M365 Inbox Rules Updated From A Client",
+        "medium",
+        ["t1114.003"],
+        "UpdateInboxRules",
+        "Exchange",
+        "The client-side path to the same change.",
+    ),
+    (
+        "m365-transport-rule-created",
+        "M365 Transport Rule Created",
+        "critical",
+        ["t1114.002"],
+        "New-TransportRule",
+        "Exchange",
+        "A transport rule acts on every message in the organisation, not one mailbox.",
+    ),
+    (
+        "m365-transport-rule-modified",
+        "M365 Transport Rule Modified",
+        "critical",
+        ["t1114.002"],
+        "Set-TransportRule",
+        "Exchange",
+        "Same reach, with no new rule to notice.",
+    ),
+    (
+        "m365-mailbox-permission-added",
+        "M365 Mailbox Permission Granted",
+        "high",
+        ["t1098.002"],
+        "Add-MailboxPermission",
+        "Exchange",
+        "Full-access permission on another mailbox reads it without a sign-in to that account.",
+    ),
+    (
+        "m365-recipient-permission-added",
+        "M365 Send-As Permission Granted",
+        "high",
+        ["t1098.002"],
+        "Add-RecipientPermission",
+        "Exchange",
+        "Send-as lets a message leave as somebody else.",
+    ),
+    (
+        "m365-mailbox-forwarding-set",
+        "M365 Mailbox Configuration Changed",
+        "high",
+        ["t1114.003"],
+        "Set-Mailbox",
+        "Exchange",
+        "Set-Mailbox is where forwarding addresses and audit settings both live.",
+    ),
+    (
+        "m365-management-role-assigned",
+        "M365 Exchange Management Role Assigned",
+        "critical",
+        ["t1098.003"],
+        "New-ManagementRoleAssignment",
+        "Exchange",
+        "Exchange roles are a privilege surface of their own, separate from directory roles.",
+    ),
+    (
+        "m365-audit-config-changed",
+        "M365 Admin Audit Log Configuration Changed",
+        "critical",
+        ["t1562.008"],
+        "Set-AdminAuditLogConfig",
+        "Exchange",
+        "The setting that decides what the audit log records.",
+    ),
+    (
+        "m365-mail-items-accessed",
+        "M365 Mail Items Accessed",
+        "medium",
+        ["t1114.002"],
+        "MailItemsAccessed",
+        "Exchange",
+        "The record that shows which messages were actually read, which is what scopes a compromise.",
+    ),
+    (
+        "m365-anonymous-link-created",
+        "M365 Anonymous Sharing Link Created",
+        "high",
+        ["t1537"],
+        "AnonymousLinkCreated",
+        "SharePoint",
+        "An anonymous link needs no account to open.",
+    ),
+    (
+        "m365-sharing-invitation-created",
+        "M365 External Sharing Invitation Created",
+        "medium",
+        ["t1537"],
+        "SharingInvitationCreated",
+        "SharePoint",
+        "An invitation to an address outside the tenant.",
+    ),
+    (
+        "m365-company-link-created",
+        "M365 Organisation-Wide Sharing Link Created",
+        "medium",
+        ["t1537"],
+        "CompanyLinkCreated",
+        "SharePoint",
+        "Everyone in the tenant, which is broader than the document's own permissions.",
+    ),
+    (
+        "m365-site-admin-added",
+        "M365 SharePoint Site Collection Administrator Added",
+        "high",
+        ["t1098"],
+        "SiteCollectionAdminAdded",
+        "SharePoint",
+        "A site collection administrator reaches every document in the site.",
+    ),
+    (
+        "m365-file-sync-downloaded",
+        "M365 Full File Sync Downloaded",
+        "medium",
+        ["t1530"],
+        "FileSyncDownloadedFull",
+        "OneDrive",
+        "A full sync copies the library to a device.",
+    ),
+]
+
+#: (slug, name, severity, mitre, event type, outcome, description)
+_OKTA: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "okta-mfa-factor-deactivated",
+        "Okta MFA Factor Deactivated",
+        "critical",
+        ["t1556.006"],
+        "user.mfa.factor.deactivate",
+        "SUCCESS",
+        "Removing a factor leaves whatever the attacker registered.",
+    ),
+    (
+        "okta-mfa-factors-reset",
+        "Okta All MFA Factors Reset",
+        "critical",
+        ["t1556.006"],
+        "user.mfa.factor.reset_all",
+        "SUCCESS",
+        "A full reset is the help-desk social-engineering outcome.",
+    ),
+    (
+        "okta-api-token-created",
+        "Okta API Token Created",
+        "critical",
+        ["t1098.001"],
+        "system.api_token.create",
+        "SUCCESS",
+        "An API token acts with its creator's privileges and presents no factor.",
+    ),
+    (
+        "okta-api-token-revoked",
+        "Okta API Token Revoked",
+        "medium",
+        ["t1070"],
+        "system.api_token.revoke",
+        "SUCCESS",
+        "Rotation looks like this, and so does removing the token that was used.",
+    ),
+    (
+        "okta-impersonation-initiated",
+        "Okta Administrator Impersonation Initiated",
+        "high",
+        ["t1078"],
+        "user.session.impersonation.initiate",
+        "SUCCESS",
+        "Impersonation lets support act as a user; it is legitimate and it is also indistinguishable from the user without this event.",
+    ),
+    (
+        "okta-impersonation-granted",
+        "Okta Impersonation Grant Issued",
+        "high",
+        ["t1078"],
+        "user.session.impersonation.grant",
+        "SUCCESS",
+        "The grant is what makes the impersonation usable.",
+    ),
+    (
+        "okta-policy-rule-deactivated",
+        "Okta Policy Rule Deactivated",
+        "critical",
+        ["t1556"],
+        "policy.rule.deactivate",
+        "SUCCESS",
+        "A deactivated sign-on rule stops enforcing whatever it required.",
+    ),
+    (
+        "okta-policy-updated",
+        "Okta Policy Updated",
+        "high",
+        ["t1556"],
+        "policy.lifecycle.update",
+        "SUCCESS",
+        "Policy update covers the factor and session requirements.",
+    ),
+    (
+        "okta-network-zone-updated",
+        "Okta Network Zone Updated",
+        "high",
+        ["t1556"],
+        "zone.update",
+        "SUCCESS",
+        "A trusted zone widened exempts whatever sits inside it.",
+    ),
+    (
+        "okta-app-assigned-to-user",
+        "Okta Application Assigned To A User",
+        "medium",
+        ["t1098"],
+        "application.user_membership.add",
+        "SUCCESS",
+        "Application assignment is how Okta access is actually granted.",
+    ),
+    (
+        "okta-group-privilege-granted",
+        "Okta Administrator Privilege Granted To A Group",
+        "critical",
+        ["t1098.003"],
+        "group.privilege.grant",
+        "SUCCESS",
+        "A group grant reaches everyone in the group, now and later.",
+    ),
+    (
+        "okta-threat-detected",
+        "Okta ThreatInsight Detection",
+        "high",
+        ["t1110"],
+        "security.threat.detected",
+        "SUCCESS",
+        "Okta's own verdict on the source, correlated across its whole customer base.",
+    ),
+    (
+        "okta-user-suspended",
+        "Okta User Suspended",
+        "medium",
+        ["t1531"],
+        "user.lifecycle.suspend",
+        "SUCCESS",
+        "Containment when the team does it.",
+    ),
+    (
+        "okta-user-unsuspended",
+        "Okta Suspended User Re-Activated",
+        "high",
+        ["t1098"],
+        "user.lifecycle.unsuspend",
+        "SUCCESS",
+        "Re-activating a suspended account is the quietest way back in.",
+    ),
+]
+
+#: (slug, name, severity, mitre, summary, category, description)
+_ATLASSIAN: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "atl-site-admin-granted",
+        "Atlassian Site Administrator Granted",
+        "critical",
+        ["t1098.003"],
+        "Granted site admin",
+        "Permissions",
+        "Site administration reaches every space and every user.",
+    ),
+    (
+        "atl-user-removed-from-site",
+        "Atlassian User Removed From The Site",
+        "medium",
+        ["t1531"],
+        "Removed user from site",
+        "Users",
+        "Routine offboarding, and also access removal nobody asked for.",
+    ),
+    (
+        "atl-group-removed-from-site",
+        "Atlassian Group Removed From The Site",
+        "high",
+        ["t1531"],
+        "Removed group from site",
+        "Permissions",
+        "Removing a group revokes everything it granted at once.",
+    ),
+    (
+        "atl-permissions-granted-to-anyone",
+        "Atlassian Permissions Granted To Anyone",
+        "critical",
+        ["t1537"],
+        "Permissions granted to anyone",
+        "Permissions",
+        "Anonymous permission makes the content public.",
+    ),
+    (
+        "atl-anonymous-access-enabled",
+        "Atlassian Anonymous Access Enabled",
+        "critical",
+        ["t1537"],
+        "Anonymous access enabled",
+        "Permissions",
+        "The site-wide version of the same exposure.",
+    ),
+    (
+        "atl-site-export-started",
+        "Atlassian Site Export Started",
+        "critical",
+        ["t1530"],
+        "Site export started",
+        "Content",
+        "An export is the whole site in one file.",
+    ),
+    (
+        "atl-external-share-link-created",
+        "Atlassian External Share Link Created",
+        "high",
+        ["t1537"],
+        "External share link created",
+        "Content",
+        "A link that works without an account.",
+    ),
+    (
+        "atl-public-link-enabled",
+        "Atlassian Public Link Enabled",
+        "high",
+        ["t1537"],
+        "Public link enabled",
+        "Content",
+        "The page becomes readable to anyone holding the URL.",
+    ),
+    (
+        "atl-bulk-delete",
+        "Atlassian Bulk Delete Performed",
+        "high",
+        ["t1485"],
+        "Bulk delete",
+        "Content",
+        "Bulk deletion destroys content and the history behind it.",
+    ),
+    (
+        "atl-site-wide-deletion",
+        "Atlassian Site-Wide Deletion",
+        "critical",
+        ["t1485"],
+        "Site-wide deletion",
+        "Content",
+        "The broadest destructive action the product offers.",
+    ),
+    (
+        "atl-space-permissions-updated",
+        "Atlassian Space Permissions Updated",
+        "medium",
+        ["t1098"],
+        "Space permissions updated",
+        "Permissions",
+        "Space permissions decide who reads the space.",
+    ),
+    (
+        "atl-page-permissions-updated",
+        "Atlassian Page Permissions Updated",
+        "low",
+        ["t1098"],
+        "Page permissions updated",
+        "Permissions",
+        "Page-level restriction, narrower than a space change.",
+    ),
+    (
+        "atl-restrictions-updated",
+        "Atlassian Content Restrictions Updated",
+        "medium",
+        ["t1098"],
+        "Restrictions updated",
+        "Permissions",
+        "Restrictions are what keep a page from the rest of the space.",
+    ),
+    (
+        "atl-global-permissions-updated",
+        "Atlassian Global Permissions Updated",
+        "high",
+        ["t1098"],
+        "Global permissions updated",
+        "Permissions",
+        "Global permissions decide who may do anything at all.",
+    ),
+    (
+        "atl-user-added-to-group",
+        "Atlassian User Added To A Group",
+        "medium",
+        ["t1098"],
+        "User added to group",
+        "Users",
+        "Group membership is how Atlassian access is granted.",
+    ),
+    (
+        "atl-user-removed-from-group",
+        "Atlassian User Removed From A Group",
+        "low",
+        ["t1531"],
+        "User removed from group",
+        "Users",
+        "Routine offboarding, and also access removal nobody asked for.",
+    ),
+    ("atl-group-created", "Atlassian Group Created", "low", ["t1098"], "Group created", "Users", "A new group is a new grant surface."),
+    (
+        "atl-group-deleted",
+        "Atlassian Group Deleted",
+        "medium",
+        ["t1531"],
+        "Group deleted",
+        "Users",
+        "Deleting a group revokes everything it granted.",
+    ),
+    (
+        "atl-space-deleted",
+        "Atlassian Space Deleted",
+        "high",
+        ["t1485"],
+        "Space deleted",
+        "Content",
+        "A space deletion takes every page in it.",
+    ),
+]
+
+SAAS_RULES: list[dict] = (
+    [
+        R(
+            family="saas-admin-control-weakening",
+            category="application",
+            emitter="m365_audit",
+            proof=m365_entry(operation, workload),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="m365",
+            service=workload.lower(),
+            when={"operation": operation},
+            fp=[FP_AUTOMATION, FP_ONBOARD],
+            playbook="tpl-triage",
+            description=description,
+        )
+        for slug, name, severity, mitre, operation, workload, description in _M365
+    ]
+    + [
+        R(
+            family="saas-admin-control-weakening",
+            category="identity",
+            emitter="okta",
+            proof=okta_entry(event_type, outcome=outcome),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="okta",
+            service="system-log",
+            when={"event_type": event_type},
+            fp=[FP_BREAK_GLASS, FP_AUTOMATION],
+            playbook="tpl-triage",
+            description=description,
+        )
+        for slug, name, severity, mitre, event_type, outcome, description in _OKTA
+    ]
+    + [
+        R(
+            family="saas-admin-control-weakening",
+            category="application",
+            emitter="confluence_audit",
+            proof=confluence_entry(summary, category_name),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="atlassian",
+            service="audit",
+            when={"summary_key": summary.strip().lower().replace(" ", "_")},
+            fp=[FP_AUTOMATION, FP_ONBOARD],
+            playbook="tpl-triage",
+            description=description,
+        )
+        for slug, name, severity, mitre, summary, category_name, description in _ATLASSIAN
+    ]
+)
+
+
+#: (slug, name, severity, mitre, event_type, description) — Box
+_BOX: list[tuple[str, str, str, list[str], str, str]] = [
+    (
+        "box-item-downloaded",
+        "Box Item Downloaded",
+        "low",
+        ["t1530"],
+        "ITEM_DOWNLOAD",
+        "One download is routine; the rule exists so volume can be counted against it.",
+    ),
+    ("box-item-deleted", "Box Item Deleted", "low", ["t1485"], "DELETE", "Deletion after download is the cleanup half of an extract."),
+    (
+        "box-collaboration-invited",
+        "Box Collaboration Invitation Sent",
+        "medium",
+        ["t1199"],
+        "COLLABORATION_INVITE",
+        "An invitation to an address outside the enterprise.",
+    ),
+    (
+        "box-collaboration-role-changed",
+        "Box Collaboration Role Changed",
+        "medium",
+        ["t1098"],
+        "COLLABORATION_ROLE_CHANGE",
+        "Raising a collaborator from viewer to editor changes what they can take.",
+    ),
+    (
+        "box-failed-login",
+        "Box Sign-In Failed",
+        "low",
+        ["t1110"],
+        "FAILED_LOGIN",
+        "One failure is a typo; the rule exists so a run of them can be counted.",
+    ),
+    (
+        "box-group-admin-created",
+        "Box Group Administrator Created",
+        "high",
+        ["t1098.003"],
+        "GROUP_ADMIN_CREATED",
+        "A group administrator reaches everything the group reaches.",
+    ),
+    (
+        "box-two-factor-disabled",
+        "Box Two-Factor Authentication Disabled",
+        "critical",
+        ["t1556.006"],
+        "DISABLE_TWO_FACTOR_AUTH",
+        "Removing the second factor makes the password sufficient.",
+    ),
+    (
+        "box-retention-removed",
+        "Box Retention Policy Removed",
+        "high",
+        ["t1485"],
+        "DATA_RETENTION_REMOVE_RETENTION",
+        "Removing retention lets content be deleted that policy was keeping.",
+    ),
+    (
+        "box-legal-hold-deleted",
+        "Box Legal Hold Assignment Deleted",
+        "critical",
+        ["t1485"],
+        "LEGAL_HOLD_ASSIGNMENT_DELETE",
+        "A legal hold removed is evidence that may now be destroyed.",
+    ),
+    (
+        "box-oauth-token-revoked",
+        "Box OAuth2 Access Token Revoked",
+        "low",
+        ["t1070"],
+        "OAUTH2_ACCESS_TOKEN_REVOKE",
+        "Routine rotation, and also removing the token that was used.",
+    ),
+]
+
+#: (slug, name, severity, mitre, tag, description) — Dropbox
+_DROPBOX: list[tuple[str, str, str, list[str], str, str]] = [
+    (
+        "dbx-file-downloaded",
+        "Dropbox File Downloaded",
+        "low",
+        ["t1530"],
+        "file_download",
+        "One download is routine; the rule exists so volume can be counted.",
+    ),
+    (
+        "dbx-shared-link-created",
+        "Dropbox Shared Link Created",
+        "medium",
+        ["t1537"],
+        "shared_link_create",
+        "A link works for anyone holding it, subject to its audience.",
+    ),
+    (
+        "dbx-member-status-changed",
+        "Dropbox Member Status Changed",
+        "medium",
+        ["t1531"],
+        "member_change_status",
+        "Suspension and reinstatement both land here.",
+    ),
+    (
+        "dbx-member-email-changed",
+        "Dropbox Member Email Changed",
+        "high",
+        ["t1098"],
+        "member_change_email",
+        "Changing the address changes where recovery mail goes.",
+    ),
+    (
+        "dbx-two-factor-policy-changed",
+        "Dropbox Two-Factor Policy Changed",
+        "critical",
+        ["t1556.006"],
+        "tfa_change_policy",
+        "Team-wide enforcement is what makes the second factor mandatory.",
+    ),
+    ("dbx-device-unlinked", "Dropbox Device Unlinked", "low", ["t1070"], "device_unlink", "Unlinking the device used is the cleanup half."),
+    ("dbx-group-created", "Dropbox Group Created", "low", ["t1098"], "group_create", "A new group is a new grant surface."),
+    (
+        "dbx-group-member-added",
+        "Dropbox Member Added To A Group",
+        "medium",
+        ["t1098"],
+        "group_add_member",
+        "Group membership is how Dropbox access is granted.",
+    ),
+    (
+        "dbx-paper-external-view-allowed",
+        "Dropbox Paper External Viewing Allowed",
+        "high",
+        ["t1537"],
+        "paper_external_view_allow",
+        "External viewing on Paper documents is sharing outside the team.",
+    ),
+    (
+        "dbx-sign-in-as-session-started",
+        "Dropbox Administrator Signed In As A Member",
+        "high",
+        ["t1078"],
+        "sign_in_as_session_start",
+        "Administrative impersonation, legitimate and otherwise indistinguishable from the member.",
+    ),
+]
+
+#: (slug, name, severity, mitre, category, signin type, description) — 1Password
+_ONEPASSWORD: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "1p-totp-bad",
+        "1Password Time-Based Code Rejected",
+        "medium",
+        ["t1621"],
+        "mfa_failed",
+        "totp_bad",
+        "The password was right and the code was not.",
+    ),
+    (
+        "1p-totp-timeout",
+        "1Password Time-Based Code Timed Out",
+        "low",
+        ["t1621"],
+        "mfa_failed",
+        "totp_timeout",
+        "A timeout is usually clock drift and occasionally a relayed code arriving too late.",
+    ),
+    (
+        "1p-totp-disabled",
+        "1Password Time-Based Code Factor Disabled",
+        "high",
+        ["t1556.006"],
+        "mfa_failed",
+        "totp_disabled",
+        "The factor is no longer available on the account.",
+    ),
+    (
+        "1p-u2f-bad",
+        "1Password Security Key Rejected",
+        "high",
+        ["t1621"],
+        "mfa_failed",
+        "u2f_bad",
+        "A hardware key cannot be phished, so a rejection is a mismatch worth reading.",
+    ),
+    (
+        "1p-u2f-disabled",
+        "1Password Security Key Factor Disabled",
+        "high",
+        ["t1556.006"],
+        "mfa_failed",
+        "u2f_disabled",
+        "Removing the strongest factor leaves the weaker ones.",
+    ),
+    (
+        "1p-duo-bad",
+        "1Password Duo Verification Rejected",
+        "medium",
+        ["t1621"],
+        "mfa_failed",
+        "duo_bad",
+        "The second factor was refused by Duo.",
+    ),
+    (
+        "1p-ip-blocked",
+        "1Password Sign-In Blocked By Address",
+        "medium",
+        ["t1078"],
+        "firewall_failed",
+        "ip_blocked",
+        "The account firewall refused the source address.",
+    ),
+    (
+        "1p-country-blocked",
+        "1Password Sign-In Blocked By Country",
+        "medium",
+        ["t1078"],
+        "firewall_failed",
+        "country_blocked",
+        "The account firewall refused the source country.",
+    ),
+    (
+        "1p-continent-blocked",
+        "1Password Sign-In Blocked By Continent",
+        "low",
+        ["t1078"],
+        "firewall_failed",
+        "continent_blocked",
+        "The broadest of the geographic rules.",
+    ),
+    (
+        "1p-anonymous-blocked",
+        "1Password Sign-In Blocked As Anonymous",
+        "high",
+        ["t1090.003"],
+        "firewall_failed",
+        "anonymous_blocked",
+        "1Password's own anonymizer verdict, independent of the ingest dataset.",
+    ),
+    (
+        "1p-all-blocked",
+        "1Password Sign-In Blocked By A Deny-All Rule",
+        "medium",
+        ["t1078"],
+        "firewall_failed",
+        "all_blocked",
+        "A deny-all rule means the account is meant to be unreachable from anywhere not explicitly allowed.",
+    ),
+    (
+        "1p-password-secret-bad",
+        "1Password Account Password Or Secret Key Wrong",
+        "medium",
+        ["t1110"],
+        "credentials_failed",
+        "password_secret_bad",
+        "Both halves are required, so this does not say which was wrong.",
+    ),
+    (
+        "1p-mfa-missing",
+        "1Password Sign-In Missing A Required Second Factor",
+        "medium",
+        ["t1621"],
+        "mfa_failed",
+        "mfa_missing",
+        "The client did not present a factor the policy requires.",
+    ),
+    (
+        "1p-modern-version-missing",
+        "1Password Client Too Old To Sign In",
+        "low",
+        ["t1078"],
+        "modern_version_failed",
+        "modern_version_missing",
+        "An unmanaged or very old client.",
+    ),
+]
+
+#: (slug, name, severity, mitre, action, section, description) — Salesforce
+_SALESFORCE: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "sfdc-user-deactivated",
+        "Salesforce User Deactivated",
+        "medium",
+        ["t1531"],
+        "deactivateUser",
+        "Manage Users",
+        "Routine offboarding, and also access removal nobody asked for.",
+    ),
+    (
+        "sfdc-user-frozen",
+        "Salesforce User Frozen",
+        "medium",
+        ["t1531"],
+        "frozeUser",
+        "Manage Users",
+        "Freezing is the reversible half of deactivation.",
+    ),
+    (
+        "sfdc-user-created",
+        "Salesforce User Created",
+        "medium",
+        ["t1136"],
+        "newUser",
+        "Manage Users",
+        "A new user is persistence that survives a password reset on the compromised one.",
+    ),
+    (
+        "sfdc-password-changed",
+        "Salesforce Password Changed",
+        "low",
+        ["t1098"],
+        "changedPassword",
+        "Manage Users",
+        "Routine, and the second half of a takeover.",
+    ),
+    (
+        "sfdc-permission-set-group-created",
+        "Salesforce Permission Set Group Created",
+        "medium",
+        ["t1098"],
+        "PermSetGroupCreate",
+        "Manage Users",
+        "A group bundles permission sets, so one assignment grants several.",
+    ),
+    (
+        "sfdc-policy-created",
+        "Salesforce Transaction Security Policy Created",
+        "medium",
+        ["t1562"],
+        "createdPolicy",
+        "Transaction Security",
+        "Transaction security policies are the product's own detection layer.",
+    ),
+    (
+        "sfdc-policy-updated",
+        "Salesforce Transaction Security Policy Updated",
+        "high",
+        ["t1562"],
+        "updatedPolicy",
+        "Transaction Security",
+        "A policy relaxed stops blocking what it was written for.",
+    ),
+    (
+        "sfdc-interface-url-changed",
+        "Salesforce Interface URL Changed",
+        "high",
+        ["t1565"],
+        "changedInterfaceUrl",
+        "Custom Settings",
+        "An interface URL is where the product sends a user.",
+    ),
+    (
+        "sfdc-login-as-partner",
+        "Salesforce Login-As Granted To A Partner",
+        "high",
+        ["t1199"],
+        "loginAsGrantedToPartnerBT",
+        "Manage Users",
+        "A partner acting as a user is third-party access to that user's data.",
+    ),
+]
+
+#: (slug, name, severity, mitre, query type, description) — Snowflake
+_SNOWFLAKE: list[tuple[str, str, str, list[str], str, str]] = [
+    (
+        "snow-revoke-executed",
+        "Snowflake Privilege Revoked",
+        "medium",
+        ["t1531"],
+        "REVOKE",
+        "Revocation is routine governance and also an attacker reducing who can see them.",
+    ),
+    ("snow-create-role", "Snowflake Role Created", "medium", ["t1098"], "CREATE_ROLE", "A role is a permission set waiting for a grant."),
+    (
+        "snow-drop-user",
+        "Snowflake User Dropped",
+        "high",
+        ["t1531"],
+        "DROP_USER",
+        "Dropping a user removes their access and their query history association.",
+    ),
+    (
+        "snow-alter-user",
+        "Snowflake User Altered",
+        "high",
+        ["t1098"],
+        "ALTER_USER",
+        "ALTER USER is where a password, a default role and an RSA public key are all set.",
+    ),
+    (
+        "snow-create-stage",
+        "Snowflake Stage Created",
+        "high",
+        ["t1537"],
+        "CREATE_STAGE",
+        "An external stage is a supported route for data to leave into object storage.",
+    ),
+    (
+        "snow-create-share",
+        "Snowflake Share Created",
+        "critical",
+        ["t1537"],
+        "CREATE_SHARE",
+        "A share makes data readable from another Snowflake account entirely.",
+    ),
+    (
+        "snow-alter-share",
+        "Snowflake Share Altered",
+        "critical",
+        ["t1537"],
+        "ALTER_SHARE",
+        "Adding an account to an existing share needs no new object.",
+    ),
+    (
+        "snow-create-network-policy",
+        "Snowflake Network Policy Created",
+        "medium",
+        ["t1562"],
+        "CREATE_NETWORK_POLICY",
+        "Network policy is the address control in front of the account.",
+    ),
+    (
+        "snow-alter-network-policy",
+        "Snowflake Network Policy Altered",
+        "high",
+        ["t1562"],
+        "ALTER_NETWORK_POLICY",
+        "Widening the allowed range admits whatever it now covers.",
+    ),
+    (
+        "snow-drop-table",
+        "Snowflake Table Dropped",
+        "medium",
+        ["t1485"],
+        "DROP",
+        "Dropping a table after reading it is the cleanup half of an extract.",
+    ),
+    (
+        "snow-copy-into-location",
+        "Snowflake Copy Into A Location",
+        "high",
+        ["t1537"],
+        "COPY",
+        "COPY INTO a stage writes query results outside the warehouse.",
+    ),
+]
+
+STORAGE_RULES: list[dict] = (
+    [
+        R(
+            family="saas-data-movement",
+            category="data-exfil",
+            emitter="box",
+            proof=box_entry(event_type),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="box",
+            service="events",
+            when={"event_type": f"box.{event_type}"},
+            fp=[FP_AUTOMATION, FP_BACKUP],
+            playbook="tpl-exfiltration",
+            description=description,
+        )
+        for slug, name, severity, mitre, event_type, description in _BOX
+    ]
+    + [
+        R(
+            family="saas-data-movement",
+            category="data-exfil",
+            emitter="dropbox",
+            proof=dropbox_entry(tag),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="dropbox",
+            service="events",
+            when={"event_type": f"dropbox.{tag}"},
+            fp=[FP_AUTOMATION, FP_BACKUP],
+            playbook="tpl-exfiltration",
+            description=description,
+        )
+        for slug, name, severity, mitre, tag, description in _DROPBOX
+    ]
+    + [
+        R(
+            family="saas-authentication-abuse",
+            category="identity",
+            emitter="onepassword",
+            proof=onepassword_entry(category_name, signin_type),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="onepassword",
+            service="signin-attempts",
+            when={"signin_type": signin_type},
+            fp=[FP_TUNING],
+            playbook="tpl-account-takeover",
+            description=description,
+        )
+        for slug, name, severity, mitre, category_name, signin_type, description in _ONEPASSWORD
+    ]
+    + [
+        R(
+            family="third-party-access",
+            category="application",
+            emitter="salesforce",
+            proof=salesforce_entry(action, section),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="salesforce",
+            service="setup-audit",
+            when={"event_type": f"salesforce.{action}"},
+            fp=[FP_ONBOARD, FP_AUTOMATION],
+            playbook="tpl-triage",
+            description=description,
+        )
+        for slug, name, severity, mitre, action, section, description in _SALESFORCE
+    ]
+    + [
+        R(
+            family="saas-data-movement",
+            category="data-exfil",
+            emitter="snowflake",
+            proof=snowflake_query(query_type),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="snowflake",
+            service="query-history",
+            when={"query_type": query_type},
+            fp=[FP_AUTOMATION, FP_BACKUP],
+            playbook="tpl-exfiltration",
+            description=description,
+        )
+        for slug, name, severity, mitre, query_type, description in _SNOWFLAKE
+    ]
+)
+
+#: Every rule in this module, partitioned onto its `detections/<category>/`.
+BY_CATEGORY = by_category(GCP_RULES, ENTRA_RULES, K8S_RULES, GITHUB_RULES, SAAS_RULES, STORAGE_RULES)
+
+COVERAGE_CLOUD: list[dict] = BY_CATEGORY.get("cloud", [])
+COVERAGE_IDENTITY: list[dict] = BY_CATEGORY.get("identity", [])
+COVERAGE_APPLICATION: list[dict] = BY_CATEGORY.get("application", [])
+COVERAGE_DATA_EXFIL: list[dict] = BY_CATEGORY.get("data-exfil", [])
+
+
+def cloudtrail_entry(event_name: str, event_source: str, **extra: Any) -> dict[str, Any]:
+    """A LookupEvents envelope, which is the shape this connector reads.
+
+    The connector takes `EventName` from the envelope and everything else
+    out of `CloudTrailEvent`, a JSON **string** holding the full record. A
+    sample shaped like a raw CloudTrail record rather than a lookup result
+    normalises with `event_name` empty and every identity field `None` —
+    which is what a first pass at this proof produced, and is exactly the
+    kind of wrong-envelope mistake the replay is here to catch.
+    """
+    import json as _json
+
+    detail = {
+        "eventVersion": "1.08",
+        "eventTime": "2026-11-01T10:00:00Z",
+        "eventSource": event_source,
+        "eventName": event_name,
+        "awsRegion": "us-east-1",
+        "sourceIPAddress": "203.0.113.5",
+        "userAgent": "aws-cli/2.15.0",
+        "userIdentity": {
+            "type": extra.pop("identity_type", "IAMUser"),
+            "arn": "arn:aws:iam::111122223333:user/alice",
+            "userName": "alice",
+            "accountId": "111122223333",
+        },
+        "requestParameters": extra.pop("request", {}),
+        "recipientAccountId": "111122223333",
+        "eventID": "proof",
+        "readOnly": extra.pop("read_only", False),
+        "managementEvent": True,
+    }
+    return {
+        "EventId": "proof",
+        "EventName": event_name,
+        "EventTime": "2026-11-01T10:00:00Z",
+        "EventSource": event_source,
+        "Username": "alice",
+        "CloudTrailEvent": _json.dumps(detail),
+        **extra,
+    }
+
+
+#: (slug, name, severity, mitre, event name, event source, description)
+_AWS: list[tuple[str, str, str, list[str], str, str, str]] = [
+    (
+        "aws-login-profile-updated",
+        "AWS Console Login Profile Updated",
+        "high",
+        ["t1098"],
+        "UpdateLoginProfile",
+        "iam.amazonaws.com",
+        "Setting a console password on an account that had none, or changing one, is how a programmatic identity gains an interactive "
+        "session.",
+    ),
+    (
+        "aws-user-added-to-group",
+        "AWS User Added To An IAM Group",
+        "high",
+        ["t1098"],
+        "AddUserToGroup",
+        "iam.amazonaws.com",
+        "Group membership carries whatever policies the group holds, with no policy attachment to notice.",
+    ),
+    (
+        "aws-secret-value-retrieved",
+        "AWS Secrets Manager Secret Retrieved",
+        "medium",
+        ["t1552.001"],
+        "GetSecretValue",
+        "secretsmanager.amazonaws.com",
+        "The call that returns the secret value, as distinct from listing secret names.",
+    ),
+    (
+        "aws-cloud-control-resource-created",
+        "AWS Cloud Control Resource Created",
+        "high",
+        ["t1578"],
+        "CreateResource",
+        "cloudcontrolapi.amazonaws.com",
+        "Cloud Control is a generic API that creates resources of any supported "
+        "type, so a principal that never used it reaching for it is a detection "
+        "the per-service rules all miss.",
+    ),
+    (
+        "aws-saml-role-assumed",
+        "AWS Role Assumed Through SAML",
+        "medium",
+        ["t1078.004"],
+        "AssumeRoleWithSAML",
+        "sts.amazonaws.com",
+        "Federated assumption is how most human access arrives, and is the step a forged assertion lands on.",
+    ),
+    (
+        "aws-snapshot-shared-externally",
+        "AWS Snapshot Copy Shared With Another Account",
+        "critical",
+        ["t1537"],
+        "SharedSnapshotCopyInitiated",
+        "ec2.amazonaws.com",
+        "AWS records this when another account copies a snapshot that was shared with it, which is the data leaving.",
+    ),
+    (
+        "aws-organizations-policy-detached",
+        "AWS Organizations Policy Detached",
+        "critical",
+        ["t1562"],
+        "DetachPolicy",
+        "organizations.amazonaws.com",
+        "Detaching a service control policy removes the guardrail from every account below it.",
+    ),
+    (
+        "aws-organizations-account-left",
+        "AWS Account Removed From The Organisation",
+        "critical",
+        ["t1562"],
+        "RemoveAccountFromOrganization",
+        "organizations.amazonaws.com",
+        "An account outside the organisation inherits none of its policies.",
+    ),
+]
+
+AWS_RULES: list[dict] = [
+    R(
+        family="cloud-enumeration-and-abuse",
+        category="cloud",
+        emitter="aws_cloudtrail",
+        proof=cloudtrail_entry(event_name, event_source),
+        slug=slug,
+        name=name,
+        severity=severity,
+        mitre=mitre,
+        product="aws",
+        service=event_source.split(".")[0],
+        when={"event_name": event_name},
+        fp=[FP_AUTOMATION, FP_BREAK_GLASS],
+        playbook="tpl-triage",
+        description=description,
+    )
+    for slug, name, severity, mitre, event_name, event_source, description in _AWS
+]
+
+BY_CATEGORY_AWS = by_category(AWS_RULES)
+COVERAGE_CLOUD.extend(BY_CATEGORY_AWS.get("cloud", []))

@@ -1,0 +1,24 @@
+id: det-identity-245
+name: Entra Company Settings Updated
+description: Company settings include whether users may consent to applications.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1562
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Set Company Information"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

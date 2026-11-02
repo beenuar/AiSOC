@@ -1,0 +1,24 @@
+id: det-application-101
+name: Slack File Downloaded From An Anonymizing Network
+description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack File Downloaded
+  From An Anonymizing Network'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: application
+log_source:
+  product: slack
+  service: audit
+detection:
+  condition: |
+    event_type == "slack.file_downloaded"
+    AND ip_class IN ["vpn", "tor_exit", "public_proxy", "hosting_provider"]
+false_positives:
+- Staff member on a corporate VPN whose egress is classified as hosting
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

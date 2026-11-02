@@ -1,0 +1,23 @@
+id: det-data-exfil-052
+name: Box Collaboration Invitation Sent
+description: An invitation to an address outside the enterprise.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.COLLABORATION_INVITE"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

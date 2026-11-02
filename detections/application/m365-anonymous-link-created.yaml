@@ -1,0 +1,23 @@
+id: det-application-167
+name: M365 Anonymous Sharing Link Created
+description: An anonymous link needs no account to open.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: sharepoint
+detection:
+  condition: |
+    operation == "AnonymousLinkCreated"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

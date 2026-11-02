@@ -110,6 +110,52 @@ PROOF_EVENTS: dict[str, dict[str, Any]] = {
     # fields are proven against the same entries.
     "ident-github-org-collaborator-removed-bulk": _entry("org.remove_member", user="departed-user"),
     "ident-github-deploy-key-added-org-wide": _entry("public_key.create", repo="example-org/payments-core"),
+    # ── Wave-2 2.1's GitHub scenario family ──────────────────────────────
+    #
+    # Thirty rules clausing on `event_type`, which the connector writes as
+    # `github.{action}`. Each entry below carries the *unprefixed* action
+    # GitHub documents, so the prefixing is the connector's work and the
+    # match proves the two agree — which is the whole reason this gate
+    # exists. Issue #1545 found 11 of 12 rules clausing on unprefixed names
+    # that nothing emits, and one (`deploy_key.create`) on an action GitHub
+    # does not have at all.
+    #
+    # Repo-scoped events carry `repo`; the org-scoped ones must not, because
+    # a repo field on an org event is a shape GitHub never sends.
+    "gh-org-member-added": _entry("org.add_member", user="new-hire"),
+    "gh-org-member-removed": _entry("org.remove_member", user="departed-user"),
+    "gh-org-member-invited": _entry("org.invite_member", user="invited-user"),
+    "gh-org-owner-promoted": _entry("org.update_member", user="promoted-user"),
+    "gh-org-2fa-disabled": _entry("org.disable_two_factor_requirement"),
+    "gh-org-oauth-app-restrictions-disabled": _entry("org.disable_oauth_app_restrictions"),
+    "gh-org-saml-disabled": _entry("org.disable_saml"),
+    "gh-org-default-permission-changed": _entry("org.update_default_repository_permission"),
+    "gh-org-runner-registered": _entry("org.register_self_hosted_runner"),
+    "gh-org-runner-removed": _entry("org.remove_self_hosted_runner"),
+    "gh-repo-created": _entry("repo.create", repo="example-org/payments-core"),
+    "gh-repo-destroyed": _entry("repo.destroy", repo="example-org/payments-core"),
+    # `repo.access` is the visibility change; the two extra fields are what
+    # GitHub sends alongside it and what makes the direction readable.
+    "gh-repo-visibility-changed": _entry("repo.access", repo="example-org/payments-core", public_repo=True, previous_visibility="private"),
+    "gh-repo-transferred": _entry("repo.transfer", repo="example-org/payments-core"),
+    "gh-repo-archived": _entry("repo.archived", repo="example-org/payments-core"),
+    "gh-deploy-key-added": _entry("public_key.create", repo="example-org/payments-core"),
+    "gh-branch-protection-overridden": _entry("protected_branch.policy_override", repo="example-org/payments-core", branch="main"),
+    "gh-branch-protection-destroyed": _entry("protected_branch.destroy", repo="example-org/payments-core", branch="main"),
+    "gh-branch-protection-review-disabled": _entry(
+        "protected_branch.dismiss_stale_reviews", repo="example-org/payments-core", branch="main"
+    ),
+    "gh-secret-created": _entry("org.create_actions_secret"),
+    "gh-secret-removed": _entry("org.remove_actions_secret"),
+    "gh-personal-access-token-granted": _entry("personal_access_token.access_granted"),
+    "gh-personal-access-token-requested": _entry("personal_access_token.request_created"),
+    "gh-oauth-app-authorized": _entry("oauth_application.create"),
+    "gh-hook-created": _entry("hook.create", repo="example-org/payments-core"),
+    "gh-hook-config-changed": _entry("hook.config_changed", repo="example-org/payments-core"),
+    "gh-environment-created": _entry("environment.create", repo="example-org/payments-core"),
+    "gh-ip-allow-list-disabled": _entry("org.disable_ip_allow_list"),
+    "gh-ip-allow-entry-created": _entry("ip_allow_list_entry.create"),
+    "gh-audit-log-streaming-disabled": _entry("org.audit_log_export"),
 }
 
 

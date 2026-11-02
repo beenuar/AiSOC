@@ -1,0 +1,23 @@
+id: det-data-exfil-073
+name: Snowflake User Altered
+description: ALTER USER is where a password, a default role and an RSA public key are all set.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: data-exfil
+log_source:
+  product: snowflake
+  service: query-history
+detection:
+  condition: |
+    query_type == "ALTER_USER"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

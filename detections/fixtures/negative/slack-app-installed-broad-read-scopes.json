@@ -1,0 +1,6 @@
+{
+  "app_scopes": [
+    "__benign__"
+  ],
+  "event_type": "slack.app_installed"
+}

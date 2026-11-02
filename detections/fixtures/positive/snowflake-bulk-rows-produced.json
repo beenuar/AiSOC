@@ -1,0 +1,4 @@
+{
+  "event_type": "snowflake.query.select",
+  "rows_produced": 1000100.0
+}

@@ -1,0 +1,25 @@
+id: det-cloud-285
+name: Kubernetes Pod Created In A System Namespace
+description: kube-system carries the cluster's own privileged service accounts.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1610
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    k8s_verb == "create"
+    AND k8s_resource == "pods"
+    AND k8s_namespace == "kube-system"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

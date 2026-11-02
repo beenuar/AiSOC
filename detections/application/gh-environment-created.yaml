@@ -1,0 +1,23 @@
+id: det-application-140
+name: GitHub Deployment Environment Created
+description: An environment carries its own secrets and its own protection rules.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1053
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.environment.create"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

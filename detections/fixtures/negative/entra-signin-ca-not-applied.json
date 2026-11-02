@@ -1,0 +1,4 @@
+{
+  "conditionalAccessStatus": "failure",
+  "event_type": "azure.entra.signin.risky"
+}

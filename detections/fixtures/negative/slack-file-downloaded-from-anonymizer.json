@@ -1,0 +1,4 @@
+{
+  "event_type": "slack.file_downloaded",
+  "ip_class": "__benign__"
+}

@@ -1,0 +1,24 @@
+id: det-application-156
+name: M365 Inbox Rule Created
+description: A forwarding or delete rule is the textbook business-email-compromise step; the connector
+  lifts the parameters, so the destination is visible.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1114.003
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: exchange
+detection:
+  condition: |
+    operation == "New-InboxRule"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

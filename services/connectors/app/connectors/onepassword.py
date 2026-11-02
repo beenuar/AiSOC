@@ -129,6 +129,20 @@ class OnePasswordConnector(BaseConnector):
             "src_ip": client_info.get("ip_address"),
             "hostname": None,
             "actor": raw.get("target_user", {}).get("email"),
+            # `client` and `target_user` are dicts, and the engine flattens
+            # `raw_event` one level — so the app, platform and the signing-in
+            # identity were all invisible to a rule. The sign-in category is
+            # the whole content of these detections and had no `event_type`
+            # to clause on either.
+            "event_type": f"onepassword.signin.{category}",
+            "actor_email": raw.get("target_user", {}).get("email"),
+            "signin_category": category,
+            "signin_type": raw.get("type"),
+            "src_country": raw.get("country"),
+            "client_app": client_info.get("app_name"),
+            "client_version": client_info.get("app_version"),
+            "client_os": client_info.get("os_name") or client_info.get("platform_name"),
+            "session_id": raw.get("session_uuid"),
             "raw_event": raw,
             "created_at": raw.get("timestamp"),
         }

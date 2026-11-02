@@ -1,0 +1,23 @@
+id: det-cloud-263
+name: GCP Pub/Sub Topic Created
+description: A topic is a supported route for data to leave an estate.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: pubsub
+detection:
+  condition: |
+    method_name == "google.pubsub.v1.Publisher.CreateTopic"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,22 @@
+id: det-application-097
+name: Slack Message Deletion Permission Widened
+description: Letting members delete messages removes the record an investigation reads.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1070
+- tlp.white
+category: application
+log_source:
+  product: slack
+  service: audit
+detection:
+  condition: |
+    event_type == "slack.pref.allow_message_deletion"
+false_positives:
+- Retention policy change with approval
+playbook: tpl-defense-evasion
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

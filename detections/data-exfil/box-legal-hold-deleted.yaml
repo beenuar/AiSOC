@@ -1,0 +1,23 @@
+id: det-data-exfil-058
+name: Box Legal Hold Assignment Deleted
+description: A legal hold removed is evidence that may now be destroyed.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.LEGAL_HOLD_ASSIGNMENT_DELETE"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

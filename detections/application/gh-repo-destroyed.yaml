@@ -1,0 +1,23 @@
+id: det-application-125
+name: GitHub Repository Deleted
+description: Deleting a repository removes its history and its audit context.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1485
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.repo.destroy"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

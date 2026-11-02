@@ -1,0 +1,23 @@
+id: det-identity-270
+name: Okta API Token Created
+description: An API token acts with its creator's privileges and presents no factor.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.001
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "system.api_token.create"
+false_positives:
+- Documented break-glass procedure
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

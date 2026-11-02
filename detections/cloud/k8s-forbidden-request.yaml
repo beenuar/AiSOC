@@ -1,0 +1,23 @@
+id: det-cloud-299
+name: Kubernetes Request Refused By RBAC
+description: A 403 is an attempt that failed, which is the signal a permission probe leaves.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1087
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    k8s_response_code == 403
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,24 @@
+id: det-identity-182
+name: 1Password Sign-In Failed On Second Factor
+description: The credential was right and the factor was not, which separates a password-guessing attempt
+  from one that already holds the password.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1621
+- mitre.attack.t1110
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    event_type == "onepassword.signin.mfa_failed"
+false_positives:
+- Clock drift on a time-based code generator
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

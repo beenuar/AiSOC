@@ -1,0 +1,24 @@
+id: det-cloud-294
+name: Kubernetes Deployment Patched
+description: Patching the image is how a workload starts running different code.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1525
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    k8s_verb == "patch"
+    AND k8s_resource == "deployments"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

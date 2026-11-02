@@ -1,0 +1,26 @@
+id: det-identity-166
+name: Workspace Sign-In From An Anonymizing Or Hosting Network
+description: A successful sign-in from an address the pinned ingest dataset classes as VPN, Tor, proxy
+  or hosting. The class and its dataset version travel on the alert.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.004
+- mitre.attack.t1090.003
+- tlp.white
+category: identity
+log_source:
+  product: google-workspace
+  service: login
+detection:
+  condition: |
+    event_type == "workspace.login.login_success"
+    AND ip_class IN ["vpn", "tor_exit", "public_proxy", "hosting_provider"]
+false_positives:
+- Corporate VPN egress classified as a hosting provider
+- Authorised red-team or penetration test
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

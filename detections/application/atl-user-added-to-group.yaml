@@ -1,0 +1,23 @@
+id: det-application-186
+name: Atlassian User Added To A Group
+description: Group membership is how Atlassian access is granted.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: atlassian
+  service: audit
+detection:
+  condition: |
+    summary_key == "user_added_to_group"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

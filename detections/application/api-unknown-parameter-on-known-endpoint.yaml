@@ -1,0 +1,24 @@
+id: det-application-111
+name: Unknown Parameter Sent To A Profiled API Endpoint
+description: A parameter name this templated endpoint has not received before, on an endpoint with at
+  least 50 requests of history. A mass-assignment or hidden-parameter probe looks exactly like this; so
+  does a deploy, which is why the false positive is named.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: api-gateway
+  service: access-log
+detection:
+  condition: |
+    api_unknown_parameter == true
+false_positives:
+- A release that added a parameter; the profile relearns it within the window
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,23 @@
+id: det-data-exfil-059
+name: Box OAuth2 Access Token Revoked
+description: Routine rotation, and also removing the token that was used.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1070
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.OAUTH2_ACCESS_TOKEN_REVOKE"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'
