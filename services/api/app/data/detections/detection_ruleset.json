@@ -1,5 +1,5 @@
 {
-  "count": 1192,
+  "count": 1196,
   "rules": [
     {
       "category": "application",
@@ -1375,6 +1375,79 @@
     },
     {
       "category": "application",
+      "id": "det-application-091",
+      "match_when": {
+        "baseline_agent_tool_rarity_gte": 0.95,
+        "tool_name_in": [
+          "execute_command",
+          "run_shell",
+          "write_file",
+          "delete_file",
+          "send_email",
+          "create_user",
+          "grant_permission",
+          "deploy",
+          "terraform_apply",
+          "database_write"
+        ]
+      },
+      "mitre": [
+        "T1059"
+      ],
+      "name": "AI Agent Called a High-Risk Tool It Has Never Used",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-agent-new-high-risk-tool"
+    },
+    {
+      "category": "application",
+      "id": "det-application-092",
+      "match_when": {
+        "baseline_agent_volume_z_gte": 3.0,
+        "outcome": "blocked"
+      },
+      "mitre": [
+        "T1078"
+      ],
+      "name": "Guardrail Violations Rose Sharply for One AI Agent",
+      "product": "ai_guardrail",
+      "service": "runtime",
+      "severity": "high",
+      "slug": "ai-agent-guardrail-violation-rate"
+    },
+    {
+      "category": "application",
+      "id": "det-application-093",
+      "match_when": {
+        "baseline_agent_token_spend_z_gte": 4.0
+      },
+      "mitre": [
+        "T1496"
+      ],
+      "name": "AI Agent Spend Far Above Its Own Baseline",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "medium",
+      "slug": "ai-agent-token-spend-anomaly"
+    },
+    {
+      "category": "application",
+      "id": "det-application-094",
+      "match_when": {
+        "baseline_gateway_key_token_spend_z_gte": 4.0
+      },
+      "mitre": [
+        "T1496"
+      ],
+      "name": "AI Gateway Key Spend Far Above Its Own Baseline",
+      "product": "ai_runtime",
+      "service": "runtime",
+      "severity": "medium",
+      "slug": "ai-gateway-key-spend-anomaly"
+    },
+    {
+      "category": "application",
       "id": "det-application-086",
       "match_when": {
         "outcome": "denied"
@@ -1462,7 +1535,7 @@
     {
       "category": "application",
       "family": "third-party-access",
-      "id": "det-application-091",
+      "id": "det-application-204",
       "match_when": {
         "event_type": "slack.organization_export_started"
       },
@@ -1479,7 +1552,7 @@
     {
       "category": "application",
       "family": "third-party-access",
-      "id": "det-application-092",
+      "id": "det-application-205",
       "match_when": {
         "event_type": "slack.role_change_to_owner"
       },
@@ -1495,7 +1568,7 @@
     {
       "category": "application",
       "family": "third-party-access",
-      "id": "det-application-093",
+      "id": "det-application-206",
       "match_when": {
         "event_type": "slack.role_change_to_admin"
       },
@@ -1511,7 +1584,7 @@
     {
       "category": "application",
       "family": "third-party-access",
-      "id": "det-application-094",
+      "id": "det-application-207",
       "match_when": {
         "event_type": "slack.pref.sso_setting_changed"
       },

@@ -297,8 +297,33 @@ _BASELINE_DERIVED_FIELDS = frozenset(
         "baseline_client_family_rarity",
         "baseline_location_rarity",
         "baseline_principal_volume_z",
-        "baseline_oauth_app_volume_z",
         "baseline_peer_deviation",
+        # Sub-principal baselines (wave-2 7.3, and wave-2 1.4's mechanism).
+        # `baselines.SUB_PRINCIPAL_FIELDS` generates these from its keys, so
+        # a kind added there must be added here too — which is precisely
+        # what the bidirectional test in `test_baselines.py` enforces, and
+        # what caught this list when the sub-principal table landed.
+        "baseline_oauth_app_volume_z",
+        "baseline_agent_volume_z",
+        "baseline_gateway_key_volume_z",
+        # Per-agent novelty and rate (depth 6.4's "tools, resources, volume,
+        # token spend, hours").
+        "baseline_agent_tool_rarity",
+        "baseline_agent_model_rarity",
+        "baseline_agent_hour_rarity",
+        "baseline_agent_token_spend_z",
+        "baseline_gateway_key_token_spend_z",
+        # Depth plan wave 2, 1.4 — per-sub-principal baselines. A token, an
+        # OAuth app, a service account or an AI agent acting for a human
+        # gets its own baseline, because a stolen credential acts *as* the
+        # user and leaves the user's own numbers untouched.
+        "baseline_sub_principal_kind",
+        "baseline_sub_principal_rarity",
+        "baseline_sub_principal_volume_z",
+        "baseline_token_cadence",
+        "baseline_token_cadence_shift",
+        "baseline_token_reactivated_after_idle",
+        "baseline_token_new_asn_after_creation",
     }
 )
 
@@ -427,6 +452,46 @@ def _family(field: str) -> str:
     return "other"
 
 
+def _module_field_names(path: Path) -> set[str]:
+    """Every string-literal dict key appearing in one module."""
+    names: set[str] = set()
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (SyntaxError, OSError):
+        return names
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    names.add(key.value)
+        # `d["key"] = v` and `d.get("key")` also declare a field name.
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
+            if isinstance(node.slice.value, str):
+                names.add(node.slice.value)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"get", "pop", "setdefault"} and node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    names.add(first.value)
+    return names
+
+
+def _connector_namespace_by_module() -> dict[str, set[str]]:
+    """Connector module stem -> the field names that module names.
+
+    The union of this is what most callers want, but not every caller: a
+    rule declares the ``log_source.product`` it matches, and "some connector
+    somewhere names this field" is a weaker statement than "the source this
+    rule reads emits it". Keeping the split lets a caller ask the stronger
+    question. See ``check_enrichment_decisions``, which found a GitHub rule
+    credited with a ``scopes`` field only an unrelated connector emits.
+    """
+    sources = list(CONNECTORS.rglob("*.py"))
+    if AI_SDK.is_dir():
+        sources += list(AI_SDK.rglob("*.py"))
+    return {path.stem: _module_field_names(path) for path in sorted(sources)}
+
+
 def _connector_namespace() -> set[str]:
     """Every string-literal dict key appearing in a connector module.
 
@@ -435,28 +500,8 @@ def _connector_namespace() -> set[str]:
     f-string prefix is still picked up as a literal where one exists.
     """
     namespace: set[str] = set(_PLATFORM_FIELDS)
-    sources = list(CONNECTORS.rglob("*.py"))
-    if AI_SDK.is_dir():
-        sources += list(AI_SDK.rglob("*.py"))
-    for path in sorted(sources):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, OSError):
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Dict):
-                for key in node.keys:
-                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                        namespace.add(key.value)
-            # `d["key"] = v` and `d.get("key")` also declare a field name.
-            elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
-                if isinstance(node.slice.value, str):
-                    namespace.add(node.slice.value)
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                if node.func.attr in {"get", "pop", "setdefault"} and node.args:
-                    first = node.args[0]
-                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
-                        namespace.add(first.value)
+    for names in _connector_namespace_by_module().values():
+        namespace |= names
     return namespace
 
 

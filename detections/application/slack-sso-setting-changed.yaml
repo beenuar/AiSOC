@@ -1,4 +1,4 @@
-id: det-application-094
+id: det-application-207
 name: Slack Single Sign-On Setting Changed
 description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Single
   Sign-On Setting Changed'. Watch the 1 documented false-positive case before tuning.

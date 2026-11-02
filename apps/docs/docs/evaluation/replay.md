@@ -378,6 +378,76 @@ which the kit refuses to do unless you pass `--hosted` — and `unverified`
 when calls were placed that the gateway did not attribute, which is reported
 as unknown rather than quietly as `none`.
 
+## Published outcomes: **not measured**
+
+<!-- Wave-2 plan 4.6. This section is the item's deliverable. It is here
+     rather than on the benchmark page because the reproduction belongs
+     beside the tool, and because a reader who has got this far is the one
+     asking the question. -->
+
+Everything above describes a capability. This section records what has
+actually been measured with it, and the honest answer is **nothing**.
+
+| Outcome | Value | Denominator |
+|---|---|---|
+| False-positive reduction | *not measured* | — |
+| Escalation rate | *not measured* | — |
+| Time to verdict | *not measured* | — |
+
+**Not `0`.** A zero here would say AiSOC was replayed against a real queue
+and reduced nothing, which is a claim nobody is entitled to make. The three
+rows are absent because the run has never happened.
+
+### Why
+
+`make replay-eval` reads a window of **closed findings from a SIEM that
+somebody's analysts have already labelled**. That is the whole point of it:
+the grader compares AiSOC's verdict with a human decision, so the input
+cannot be synthesised without the measurement becoming a comparison between
+the product and a fixture somebody wrote to be compared against.
+
+No design partner has offered a window of their closed alerts. Until one
+does, there is no denominator, and a published figure would be fabricated.
+The synthetic corpus on the [benchmark page](../benchmark.md) measures
+something different and says so.
+
+### The exact reproduction, for whoever runs it first
+
+Against a deployment with a SIEM connector configured and at least one
+labelled, closed finding in the window:
+
+```bash
+# The connector id is the row in Settings → Connectors, or:
+#   curl -s -H "Authorization: Bearer $TOKEN" \
+#        "$AISOC_URL/api/v1/connectors" | jq -r '.items[] | "\(.id)\t\(.connector_type)"'
+
+make replay-eval ARGS="--connector-id <uuid> \
+                       --since 2026-07-01T00:00:00Z \
+                       --until 2026-10-01T00:00:00Z"
+
+# Verify the signed bundle it wrote, before reading a number out of it:
+make replay-eval-verify ARGS="aisoc-replay-<id>.bundle.json"
+```
+
+Pin `--since` and `--until`. An omitted window dates from now, which is a
+different window on a second run and therefore not reproducible — the caveat
+stated under [Reproducibility](#reproducibility-stated-precisely).
+
+Three things to read before quoting any figure the run produces:
+
+- **the `unlabeled` count.** Rows an analyst closed as *Undetermined*,
+  *Unknown* or *Other* are excluded from accuracy rather than folded into
+  `true_positive`. A history that is mostly unlabeled yields a report that
+  says so instead of a confident number over a handful of rows;
+- **the sample size beside every rate.** A precision of 1.00 over two
+  predictions is not a precision of 1.00 over two hundred;
+- **the attribution block.** A run whose calls no party attributed is not
+  published as that model's performance.
+
+When this has been run, replace the table above with the measured figures,
+their denominators, the hardware and the commit — and leave this paragraph
+in place, so the next reader can tell a measured row from an absent one.
+
 ## Reproducibility, stated precisely
 
 **A report reproduces byte for byte between two runs over the same pinned

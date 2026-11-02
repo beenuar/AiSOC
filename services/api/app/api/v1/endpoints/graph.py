@@ -13,13 +13,16 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.v1.deps import CurrentUser, DBSession, get_current_user, require_permission
 from app.api.v1.endpoints.alert_writeback import service_token_valid
+from app.db.database import get_db
 from app.services import graph_service
 from app.services.context_import import import_context
 from app.services.incident_context import get_identity_context_for_accounts, get_incident_context
 from app.services.investigation_tools import BACKED_TOOLS, TOOLS, dispatch
+from app.services.workforce_context import get_workforce_context_for_accounts
 
 logger = logging.getLogger(__name__)
 
@@ -990,6 +993,7 @@ class IdentityContextResponse(BaseModel):
 async def identity_context_for_triage(
     tenant_id: uuid.UUID,
     accounts: Annotated[list[str], Query()],
+    db: Annotated[AsyncSession, Depends(get_db)],
     as_of: datetime | None = None,
     limit: Annotated[int, Query(ge=1, le=25)] = 5,
     x_aisoc_service_token: Annotated[str | None, Header()] = None,
@@ -1028,6 +1032,19 @@ async def identity_context_for_triage(
         )
 
     rows = await get_identity_context_for_accounts(str(tenant_id), list(accounts), limit=limit)
+
+    # The CORE half. The reader above is Neo4j, which is a `full`-profile
+    # service, so on the deployment `make up` produces it answers nothing
+    # and this whole context dimension is silently dead. Migration 131 puts
+    # the same facts in Postgres, written by the connector scheduler.
+    #
+    # Graph rows first and entity-store rows appended: the graph import
+    # carries relationships the table does not, and an account present in
+    # both should be described by the richer source. Accounts the graph did
+    # not answer for are the ones this adds, which on CORE is all of them.
+    seen_accounts = {str(row.get("account") or "").lower() for row in rows}
+    store_rows = await get_workforce_context_for_accounts(db, str(tenant_id), list(accounts), limit=limit)
+    rows = list(rows) + [row for row in store_rows if str(row.get("account") or "").lower() not in seen_accounts]
 
     kept: list[dict[str, Any]] = []
     excluded = 0

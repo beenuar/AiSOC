@@ -66,7 +66,7 @@ PACKAGED = REPO / "services" / "api" / "app" / "data" / "detections"
 #: regeneration that silently empties one is a failure here rather than a
 #: quieter comparison of two numbers that moved together.
 ARTEFACTS: dict[str, int] = {
-    "detection_ruleset.json": 1192,
+    "detection_ruleset.json": 1196,
     "detection_ruleset_imported.json": 1770,
     "windowed_ruleset.json": 76,
 }
@@ -87,14 +87,15 @@ PYTHON_RESIDENT_WINDOWED = 3
 #: which they never were. Wave-2 7.4 moved it 2609 -> 2613: four AI rules on
 #: the provider feeds 7.1 added, each replayed through the real connector and
 #: the real engine in `services/fusion/tests/test_ai_rule_pack_replay.py`
-#: with a negative twin differing in exactly one field. Wave-2 2.1 moved it
-#: 2613 -> 3041 across two authoring passes: 86 scenario-family rules, then
-#: 338 more closing depth plan 3.6's 800-condition target, every one of them
-#: replayed through its real connector and the real engine by
+#: with a negative twin differing in exactly one field, and 7.1's own four
+#: AI-agent rules took it 2613 -> 2617. Wave-2 2.1 moved it 2617 -> 3045
+#: across two authoring passes: 86 scenario-family rules, then 338 more
+#: closing depth plan 3.6's 800-condition target, every one of them replayed
+#: through its real connector and the real engine by
 #: `scripts/check_scenario_family_alignment.py`. The same work removed 44
 #: orphan YAML files and two duplicate slugs, each of which had been
 #: inflating the *published* total above what the engine loads.
-FUSION_LOADED_TOTAL = 3041
+FUSION_LOADED_TOTAL = 3045
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")

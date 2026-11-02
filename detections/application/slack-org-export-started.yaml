@@ -1,4 +1,4 @@
-id: det-application-091
+id: det-application-204
 name: Slack Organisation Export Started
 description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Organisation
   Export Started'. Watch the 1 documented false-positive case before tuning.

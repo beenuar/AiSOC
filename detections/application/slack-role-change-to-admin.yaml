@@ -1,4 +1,4 @@
-id: det-application-093
+id: det-application-206
 name: Slack Role Changed To Workspace Admin
 description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed
   To Workspace Admin'. Watch the 2 documented false-positive cases before tuning.

@@ -1,4 +1,4 @@
-id: det-application-092
+id: det-application-205
 name: Slack Role Changed To Organisation Owner
 description: AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed
   To Organisation Owner'. Watch the 1 documented false-positive case before tuning.

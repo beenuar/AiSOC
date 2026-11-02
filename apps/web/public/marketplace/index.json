@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T19:29:59Z",
+  "generated": "2026-11-02T04:43:51Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,29 +20,29 @@
     }
   ],
   "stats": {
-    "total": 7571,
-    "playbooks": 88,
-    "playbook_packs": 63,
-    "detections": 7403,
-    "plugins": 80,
-    "verified": 1450,
+    "total": 7579,
+    "playbooks": 89,
+    "playbook_packs": 64,
+    "detections": 7407,
+    "plugins": 83,
+    "verified": 1458,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1450
+      "stable": 1458
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
-      "stable": 1289
+      "stable": 1293
     },
-    "executable": 3130,
+    "executable": 3138,
     "quarantined": 4441,
-    "executable_detections": 2962,
+    "executable_detections": 2966,
     "reference_only_detections": 4441,
-    "not_a_detection": 168
+    "not_a_detection": 172
   },
   "mitre_coverage": {
     "unique_techniques": 395,
@@ -116,7 +116,7 @@
       "T1056.001": 3,
       "T1056.002": 1,
       "T1057": 3,
-      "T1059": 50,
+      "T1059": 51,
       "T1059.001": 132,
       "T1059.002": 3,
       "T1059.003": 24,
@@ -142,7 +142,7 @@
       "T1072": 4,
       "T1074": 2,
       "T1074.001": 4,
-      "T1078": 64,
+      "T1078": 66,
       "T1078.001": 5,
       "T1078.002": 7,
       "T1078.003": 3,
@@ -261,7 +261,7 @@
       "T1490": 20,
       "T1491": 1,
       "T1491.001": 2,
-      "T1496": 4,
+      "T1496": 6,
       "T1497.001": 1,
       "T1498": 3,
       "T1498.001": 1,
@@ -321,7 +321,7 @@
       "T1550.002": 6,
       "T1550.003": 3,
       "T1550.004": 1,
-      "T1552": 6,
+      "T1552": 7,
       "T1552.001": 19,
       "T1552.002": 3,
       "T1552.004": 7,
@@ -443,7 +443,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2832,
+    "total_with_mitre": 2837,
     "unique_techniques_all_rules": 494,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -535,7 +535,7 @@
       "T1056.001": 4,
       "T1056.002": 4,
       "T1057": 8,
-      "T1059": 122,
+      "T1059": 123,
       "T1059.001": 243,
       "T1059.002": 11,
       "T1059.003": 41,
@@ -567,7 +567,7 @@
       "T1072": 9,
       "T1074": 5,
       "T1074.001": 6,
-      "T1078": 146,
+      "T1078": 148,
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 12,
@@ -700,7 +700,7 @@
       "T1491": 3,
       "T1491.001": 4,
       "T1495": 1,
-      "T1496": 15,
+      "T1496": 17,
       "T1497": 7,
       "T1497.001": 3,
       "T1497.003": 3,
@@ -775,7 +775,7 @@
       "T1550.002": 7,
       "T1550.003": 9,
       "T1550.004": 2,
-      "T1552": 25,
+      "T1552": 26,
       "T1552.001": 41,
       "T1552.002": 7,
       "T1552.003": 3,
@@ -984,7 +984,7 @@
         "T1055.001": 1,
         "T1055.012": 1,
         "T1056.001": 1,
-        "T1059": 9,
+        "T1059": 10,
         "T1059.001": 5,
         "T1059.002": 3,
         "T1059.004": 8,
@@ -1000,7 +1000,7 @@
         "T1071.004": 6,
         "T1074": 2,
         "T1074.001": 1,
-        "T1078": 55,
+        "T1078": 57,
         "T1078.001": 4,
         "T1078.002": 3,
         "T1078.003": 2,
@@ -1069,7 +1069,7 @@
         "T1489": 2,
         "T1490": 7,
         "T1491": 1,
-        "T1496": 2,
+        "T1496": 4,
         "T1498": 4,
         "T1498.001": 2,
         "T1498.002": 2,
@@ -1113,7 +1113,7 @@
         "T1550.002": 2,
         "T1550.003": 1,
         "T1550.004": 1,
-        "T1552": 5,
+        "T1552": 6,
         "T1552.001": 15,
         "T1552.004": 2,
         "T1552.005": 1,
@@ -32897,59 +32897,8 @@
     {
       "id": "det-application-091",
       "type": "detection",
-      "name": "Slack Organisation Export Started",
-      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Organisation Export Started'. Watch the 1 documented false-positive case before tuning.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "critical",
-      "category": "application",
-      "mitre_techniques": [
-        "T1530",
-        "T1567"
-      ],
-      "log_source": "slack",
-      "playbook": "tpl-exfiltration",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "executable": true,
-      "path": "detections/application/slack-org-export-started.yaml",
-      "sha256": "949cc300f96ecbf8614a8d32cc8f9b8a50e4d358575997fc535aa2a7c3352134"
-    },
-    {
-      "id": "det-application-092",
-      "type": "detection",
-      "name": "Slack Role Changed To Organisation Owner",
-      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed To Organisation Owner'. Watch the 1 documented false-positive case before tuning.",
-      "version": "1.0.0",
-      "author": "AiSOC",
-      "tags": [
-        "tlp.white"
-      ],
-      "severity": "critical",
-      "category": "application",
-      "mitre_techniques": [
-        "T1098.003"
-      ],
-      "log_source": "slack",
-      "playbook": "tpl-privilege-escalation",
-      "verified": true,
-      "source": "core",
-      "tier": "stable",
-      "enabled": true,
-      "executable": true,
-      "path": "detections/application/slack-role-change-to-owner.yaml",
-      "sha256": "27c33178bb313acab83701fbbec8358d5552413bf12b389a804cfd625d9b787a"
-    },
-    {
-      "id": "det-application-093",
-      "type": "detection",
-      "name": "Slack Role Changed To Workspace Admin",
-      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed To Workspace Admin'. Watch the 2 documented false-positive cases before tuning.",
+      "name": "AI Agent Called a High-Risk Tool It Has Never Used",
+      "description": "An agent reached for a tool that changes an estate and has essentially no history of using it. Novelty is per agent and not global: execute_command is routine for a deployment bot and alarming for a summariser, and a count across the estate cannot tell them apart. The high-risk list is the same one the AI estate's exposure score reads, so an operator sees one definition of 'changes an estate' in both places.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
@@ -32958,42 +32907,92 @@
       "severity": "high",
       "category": "application",
       "mitre_techniques": [
-        "T1098.003"
+        "T1059"
       ],
-      "log_source": "slack",
+      "log_source": "ai_runtime",
       "playbook": "tpl-privilege-escalation",
       "verified": true,
       "source": "core",
       "tier": "stable",
       "enabled": true,
       "executable": true,
-      "path": "detections/application/slack-role-change-to-admin.yaml",
-      "sha256": "7a5e7410ebd4757cf2382b16a2b5e86f6c4f379750164de5d9627a6278694289"
+      "path": "detections/application/ai-agent-new-high-risk-tool.yaml",
+      "sha256": "fc48436662f0dd55a69767ec526db0e0250cf2cc6ce104bc3b2d58c1588122c9"
     },
     {
-      "id": "det-application-094",
+      "id": "det-application-092",
       "type": "detection",
-      "name": "Slack Single Sign-On Setting Changed",
-      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Single Sign-On Setting Changed'. Watch the 1 documented false-positive case before tuning.",
+      "name": "Guardrail Violations Rose Sharply for One AI Agent",
+      "description": "A single agent is being blocked far more often than its own history. One guardrail violation is noise \u2014 a user phrasing something awkwardly \u2014 while a rise against that agent's own baseline is someone probing for a phrasing that gets through. Scored per agent rather than per tenant, because a busy estate's total hides one agent's change completely.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
         "tlp.white"
       ],
-      "severity": "critical",
+      "severity": "high",
       "category": "application",
       "mitre_techniques": [
-        "T1556"
+        "T1078"
       ],
-      "log_source": "slack",
-      "playbook": "tpl-defense-evasion",
+      "log_source": "ai_guardrail",
+      "playbook": "tpl-triage",
       "verified": true,
       "source": "core",
       "tier": "stable",
       "enabled": true,
       "executable": true,
-      "path": "detections/application/slack-sso-setting-changed.yaml",
-      "sha256": "2b2557a9ff3d1548042441e64e1a7c28743984fe66d5128838acd56ac38785e0"
+      "path": "detections/application/ai-agent-guardrail-violation-rate.yaml",
+      "sha256": "222223b191af005fd502992b1f893559eac7d44a84744cf4fcc6334c1a73e27a"
+    },
+    {
+      "id": "det-application-093",
+      "type": "detection",
+      "name": "AI Agent Spend Far Above Its Own Baseline",
+      "description": "Cost is the signal that notices an agent being used for something other than its job \u2014 an exfiltration loop, a stolen credential driving inference, or a prompt that has started recursing. It reads the gateway's own billed figure rather than recomputing one from token counts, so it cannot disagree with the invoice. An unpriced request contributes nothing instead of a zero.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1496"
+      ],
+      "log_source": "ai_runtime",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/ai-agent-token-spend-anomaly.yaml",
+      "sha256": "7e0fce9e3b1ea87270f409319239d515adb493edb19c6f8cde54cb695de2e9b6"
+    },
+    {
+      "id": "det-application-094",
+      "type": "detection",
+      "name": "AI Gateway Key Spend Far Above Its Own Baseline",
+      "description": "The same question asked of the key rather than the agent, and the two are not the same incident: a leaked key driving inference from outside the estate moves the key's baseline while every agent on it looks ordinary. Both are needed, which is why the baseline module keys on sub-principals rather than on one chosen subject.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "medium",
+      "category": "application",
+      "mitre_techniques": [
+        "T1496"
+      ],
+      "log_source": "ai_runtime",
+      "playbook": "tpl-triage",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/ai-gateway-key-spend-anomaly.yaml",
+      "sha256": "9c4e914639eabcf54da286c112ca9c468ff577bd27a764c585019921e0a6c7cc"
     },
     {
       "id": "det-application-095",
@@ -35723,6 +35722,107 @@
       "executable": true,
       "path": "detections/application/slack-external-shared-channel-connected.yaml",
       "sha256": "498a7879bdc18c5ebb18f3096ca1ce53e9aba56d7672593a75a86d31df6c8848"
+    },
+    {
+      "id": "det-application-204",
+      "type": "detection",
+      "name": "Slack Organisation Export Started",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Organisation Export Started'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1530",
+        "T1567"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-exfiltration",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-org-export-started.yaml",
+      "sha256": "93db97d59f7a95b31a00ca3b2fcc9b85a744c2cd6a4b9f3c9d70e15a7540d05a"
+    },
+    {
+      "id": "det-application-205",
+      "type": "detection",
+      "name": "Slack Role Changed To Organisation Owner",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed To Organisation Owner'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-role-change-to-owner.yaml",
+      "sha256": "bbe6277fa23e7983107d248790f04fb23cb972fd2618f42cb41f784dcc33317e"
+    },
+    {
+      "id": "det-application-206",
+      "type": "detection",
+      "name": "Slack Role Changed To Workspace Admin",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Role Changed To Workspace Admin'. Watch the 2 documented false-positive cases before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "high",
+      "category": "application",
+      "mitre_techniques": [
+        "T1098.003"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-privilege-escalation",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-role-change-to-admin.yaml",
+      "sha256": "5baa9e72cdbdbe48c0e41e201516fc56a1493004881bf7c0a500c8d2eeaabbe3"
+    },
+    {
+      "id": "det-application-207",
+      "type": "detection",
+      "name": "Slack Single Sign-On Setting Changed",
+      "description": "AiSOC v1 curated detection. Triggers on the application signal described by 'Slack Single Sign-On Setting Changed'. Watch the 1 documented false-positive case before tuning.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "tlp.white"
+      ],
+      "severity": "critical",
+      "category": "application",
+      "mitre_techniques": [
+        "T1556"
+      ],
+      "log_source": "slack",
+      "playbook": "tpl-defense-evasion",
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "enabled": true,
+      "executable": true,
+      "path": "detections/application/slack-sso-setting-changed.yaml",
+      "sha256": "f6f96a224db90e561988d6ef893bc4a30e759c3682afe8434b64985fa6bd827a"
     },
     {
       "id": "det-cloud-001",
@@ -56818,8 +56918,8 @@
       "enabled": false,
       "executable": false,
       "path": "detections/identity/ident-github-pat-classic-created-with-broad-scopes.yaml",
-      "quarantine_reason": "not executable (needs-external-source): classic-PAT creation never reaches the org audit log \u2014 the documented personal_access_token.* lifecycle covers fine-grained tokens \u2014 and no audit entry carries a created token's scopes: the common `token_scopes` field describes the token that authenticated the API call, not the token being created.",
-      "sha256": "3857957fad4cd0871d68735956badce1c5d0d27abdf05c16dcee134dd2f3def1"
+      "quarantine_reason": "not executable (needs-external-source): classic-PAT creation never reaches the org audit log \u2014 the documented personal_access_token.* lifecycle covers fine-grained tokens \u2014 and no audit entry carries a created token's scopes: the common `token_scopes` field describes the token that authenticated the API call, not the token being created. Briefly un-retired on the strength of the gate reporting `scopes` resolvable; that field reaches the namespace from llm_usage.py and from no GitHub path at all, which is the blind spot the gate's product scoping now closes.",
+      "sha256": "9b602156772e03201b9b513536dc3b20dcba8601b5849320361a1653a22e60f3"
     },
     {
       "id": "det-identity-155",
@@ -245406,6 +245506,34 @@
       "sha256": "ed2372767ec6db41d847f245c24690635a167243571cbec100e61fb48ffb0632"
     },
     {
+      "id": "ai-agent-kill-switch-v1",
+      "type": "playbook",
+      "name": "AI Agent Kill Switch",
+      "description": "Stop one compromised AI agent: block its gateway key, deactivate the provider key behind it, kill the agent process on the host, and ask the model one bounded question about whether the account itself needs demoting. Every containment step is behind an approval, and the approval declares what happens if nobody answers. Distinct from services/actions kill_switch.py, which is the platform-wide autonomy stop and is not an agent control.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "ai-agent",
+        "ai-estate",
+        "kill-switch"
+      ],
+      "severity": "critical",
+      "trigger": "alert",
+      "steps": 6,
+      "category": "ai-agent-kill-switch",
+      "mitre_techniques": [
+        "T1552",
+        "T1078"
+      ],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "pack": true,
+      "enabled": true,
+      "path": "playbooks/packs/v1/ai-agent-kill-switch/ai-agent-kill-switch.playbook.json",
+      "sha256": "7afaf51f7054d764440438b57f880a35b641987b32ca83b272342c90719e3585"
+    },
+    {
       "id": "anomalous-behavior-response-v1",
       "type": "playbook",
       "name": "Anomalous User Behavior Response",
@@ -248097,6 +248225,32 @@
       "sha256": "985bb360b3ecb9cb252c48a84b321d85dfb454e9ac4483ef62353a0373d8fd10"
     },
     {
+      "id": "bamboohr",
+      "type": "plugin",
+      "name": "BambooHR Connector",
+      "description": "Employment status, start and last-day dates, manager, department and worker type from BambooHR, as triage context. Read-only. The employee endpoint is read with an explicit field list, so compensation, date of birth and home address are never requested, let alone stored.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "hr",
+        "workforce",
+        "identity",
+        "context",
+        "bamboohr"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/bamboohr.py",
+      "min_aisoc_version": "21.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/bamboohr/plugin.yaml",
+      "sha256": "c058cbc9927c18df427ae672d3c80930ed5b8c9437d2f6c2c8ada75b06382d6f"
+    },
+    {
       "id": "box",
       "type": "plugin",
       "name": "Box Connector",
@@ -248889,6 +249043,33 @@
       "sha256": "ea68a64d4da29f71904de2452bff2d1e9d775f79938b24370bcd2f9a0c9a3722"
     },
     {
+      "id": "microsoft_intune",
+      "type": "plugin",
+      "name": "Microsoft Intune Connector",
+      "description": "Managed device context from Microsoft Intune through Microsoft Graph: device owner, compliance state, OS version, encryption and threat-defence agent state. Read-only; the app registration needs only the Read.All permission.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "mdm",
+        "device",
+        "compliance",
+        "endpoint",
+        "intune",
+        "microsoft"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/microsoft_intune.py",
+      "min_aisoc_version": "21.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/microsoft_intune/plugin.yaml",
+      "sha256": "08595b41af02b6e3e2e7bcf0ae6b982e7fee7f3889fe881788a737540b98849a"
+    },
+    {
       "id": "mimecast",
       "type": "plugin",
       "name": "Mimecast Email Security Connector",
@@ -249294,6 +249475,32 @@
       "tier": "stable",
       "path": "plugins/rapid7-insightidr/plugin.yaml",
       "sha256": "d3eebd528cc17c4984879f33b71ae14af8a85fd317e715383e0ccee1ee916461"
+    },
+    {
+      "id": "rippling",
+      "type": "plugin",
+      "name": "Rippling Connector",
+      "description": "Employment status, start and end dates, manager, department and worker type from Rippling. Read-only. Only the department and employment-type relationships are expanded, so compensation and personal data are never fetched.",
+      "version": "1.0.0",
+      "author": "AiSOC Core Team",
+      "tags": [
+        "hr",
+        "workforce",
+        "identity",
+        "context",
+        "rippling"
+      ],
+      "plugin_type": "connector",
+      "license": "MIT",
+      "homepage": "https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/rippling.py",
+      "min_aisoc_version": "21.0.0",
+      "sdks": [],
+      "mitre_techniques": [],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "path": "plugins/rippling/plugin.yaml",
+      "sha256": "8499ceabc071dac745b545856a5e784b77fabf105229123f5a57d3454af2baf2"
     },
     {
       "id": "salesforce",

@@ -102,6 +102,21 @@ SESSION_FIELD_PATTERNS: tuple[tuple[str, str], ...] = (
 ALLOWED: dict[str, str] = {
     "scripts/check_session_projection.py": "this gate, which has to name the patterns it looks for",
     "services/ingest/internal/activity/session_test.go": "the producer's own tests, which assert on these fields by name",
+    "services/fusion/tests/test_sub_principal_baselines_reproduction.py": (
+        "names the vendor field to assert the consumer **ignores** it. The "
+        "sub-principal resolver used to read GitHub's digest itself and pin "
+        "its normalisation against the Go side; that is a second derivation "
+        "of a session key, so it now reads activity.session and this test is "
+        "the negative control proving the old path resolves nothing. Naming "
+        "the field is the assertion, which is the inverse of the hazard."
+    ),
+    "services/ingest/internal/activity/github_token_key_test.go": (
+        "the producer's own test for the GitHub credential key, same reason as "
+        "session_test.go beside it: it asserts that session.go reads the vendor "
+        "field with TrimSpace and no case folding. Naming the field is the test's "
+        "subject, and this file sits inside the one component allowed to derive "
+        "the projection rather than downstream of it."
+    ),
     "services/connectors/app/connectors/okta.py": (
         "the Okta connector lifts authenticationContext.externalSessionId to a top-level "
         "`session_id` in normalize() so the windowed AiTM rules (depth 7.3) can group on it — "

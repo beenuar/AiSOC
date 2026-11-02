@@ -291,11 +291,104 @@ async def _propose_detection_from_hunt(db: AsyncSession, hunt: SavedHunt, hit_co
     logger.info("hunt_scheduler.detection_proposed hunt_id=%s tenant=%s hits=%d", hunt.id, hunt.tenant_id, hit_count)
 
 
+def _hunt_report_recipients() -> list[str]:
+    """Who, if anyone, gets the hunt report by email.
+
+    **Off by default**, and empty is the default. Emailing a person is one
+    of the things this plan requires to ship off until somebody turns it on,
+    and an unset variable must mean "nobody asked for this", never "mail
+    the account that happens to be configured".
+    """
+    raw = os.getenv("AISOC_HUNT_REPORT_RECIPIENTS", "")
+    return [address.strip() for address in raw.split(",") if address.strip()]
+
+
+async def _email_hunt_report(db: AsyncSession, hunt: SavedHunt, hit_count: int) -> None:
+    """Build the hunt report and mail its PDF (wave 2, Phase 5.2).
+
+    The PDF renderer, the report builder and the SMTP layer all existed;
+    nothing connected them. `aisoc_hunt_reports` and the report scheduler's
+    `ReportArtefact` are different surfaces, so a hunt report could be
+    generated and downloaded but never delivered.
+
+    Three properties, each deliberate:
+
+    * **Labelled HUNTING OUTPUT.** ADR-0015 requires it in the subject as
+      well as in the document, because the subject line is what a recipient
+      reads first and a scheduled search that mails a PDF is the surface a
+      reader most easily mistakes for a compliance report.
+    * **Best-effort.** A mail relay that is down must not cost the case the
+      hunt just opened. Every failure is logged and swallowed here, which is
+      the same posture `_propose_detection_from_hunt` already has.
+    * **An unconfigured relay is a skip, not a failure.** `send_mail`
+      reports `skipped` with the setting name, which is the difference
+      between "we chose not to" and "it broke".
+    """
+    recipients = _hunt_report_recipients()
+    if not recipients or hit_count <= 0:
+        return
+
+    from app.services import hunt_report as hunt_report_service
+    from app.services.digest_pdf import WeasyPrintUnavailableError
+    from app.services.smtp_delivery import send_mail
+
+    try:
+        report = await hunt_report_service.build_from_hunt(db, tenant_id=hunt.tenant_id, saved_hunt_id=hunt.id)
+        row = await hunt_report_service.persist(
+            db,
+            report,
+            tenant_id=hunt.tenant_id,
+            source_kind="saved_hunt",
+            source_id=hunt.id,
+            case_id=None,
+            generated_by="hunt-scheduler",
+        )
+        body = hunt_report_service.render_pdf(row)
+        filename = f"hunt-report-{hunt.id.hex[:8]}.pdf"
+        media_type = "application/pdf"
+    except WeasyPrintUnavailableError as exc:
+        # WeasyPrint's native stack is routinely absent outside the API
+        # image. Mail the HTML rather than nothing: the report is the
+        # deliverable and the format is not.
+        logger.info("hunt_scheduler.report_pdf_unavailable hunt_id=%s err=%s", hunt.id, exc)
+        body = hunt_report_service.render_html(row).encode("utf-8")
+        filename = f"hunt-report-{hunt.id.hex[:8]}.html"
+        media_type = "text/html"
+    except Exception:
+        logger.exception("hunt_scheduler.report_build_failed hunt_id=%s", hunt.id)
+        return
+
+    try:
+        result = await send_mail(
+            recipients=recipients,
+            subject=f"[{hunt_report_service.HUNTING_OUTPUT_LABEL}] {hunt.name} — {hit_count} match(es)",
+            text_body=(
+                f"{hunt_report_service.HUNTING_OUTPUT_LABEL}\n\n"
+                f"The saved hunt {hunt.name!r} matched {hit_count} time(s) on its scheduled run.\n\n"
+                "This is the result of a hunt query over a chosen window. It is not a compliance "
+                "artefact and not a record of retention or coverage: finding nothing does not mean "
+                "nothing happened, only that this query over this window matched nothing.\n\n"
+                f"Original question: {hunt.nl_query}\n"
+            ),
+            attachment=(filename, body, media_type),
+        )
+        logger.info(
+            "hunt_scheduler.report_mailed hunt_id=%s status=%s detail=%s",
+            hunt.id,
+            result.status,
+            str(result.detail)[:200].replace("\r", "").replace("\n", " "),
+        )
+    except Exception:
+        logger.exception("hunt_scheduler.report_mail_failed hunt_id=%s", hunt.id)
+
+
 async def _on_hunt_hits(db: AsyncSession, hunt: SavedHunt, hit_count: int) -> None:
-    """Default hit handler: open a case AND propose a detection (Wave 1)."""
+    """Default hit handler: open a case, propose a detection, mail the report."""
     await _open_case_for_hits(db, hunt, hit_count)
     with contextlib.suppress(Exception):
         await _propose_detection_from_hunt(db, hunt, hit_count)
+    with contextlib.suppress(Exception):
+        await _email_hunt_report(db, hunt, hit_count)
 
 
 # ---------------------------------------------------------------------------
@@ -358,10 +451,21 @@ async def _execute_hunt(db: AsyncSession, hunt: SavedHunt) -> int:
 
     max_rows = int(getattr(settings, "HUNT_SCHEDULER_MAX_ROWS", 500))
     try:
-        credentials = await resolve_tenant_warehouse(
-            db,
-            hunt.tenant_id,
-            connector_types=provider.connector_types,
+        # A provider that declares no connector types needs no connected
+        # warehouse — its store is deployment configuration rather than
+        # something a tenant bought (wave 2, Phase 5.2; the lake is the only
+        # one today). Asking the credential resolver for an empty connector
+        # set would raise `HuntNotConfigured`, which the handler below turns
+        # into a soft skip and a zero: the exact silent-zero this provider
+        # exists to remove.
+        credentials = (
+            await resolve_tenant_warehouse(
+                db,
+                hunt.tenant_id,
+                connector_types=provider.connector_types,
+            )
+            if provider.connector_types
+            else None
         )
         return await provider.run_hunt(hunt, credentials=credentials, max_rows=max_rows)
     except HuntNotConfigured as exc:
