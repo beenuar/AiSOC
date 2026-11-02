@@ -203,7 +203,16 @@ def _scalar(text: str) -> Any:
         return False
     if re.fullmatch(r"-?\d+", text):
         return int(text)
-    if re.fullmatch(r"-?\d*\.\d+", text):
+    # Split on the first '.' and check each half separately, rather than
+    # `-?\d*\.\d+` in one pattern. The single pattern makes `\d*` and the
+    # literal '.' ambiguous over a run of digits, so a long all-digit value —
+    # which an author can simply type into a rule — costs more than it should
+    # to reject. Splitting first leaves two unambiguous patterns and the same
+    # answer: a second '.' lands in `frac` and fails `\d+` exactly as the
+    # combined pattern's backtracking did.
+    unsigned = text[1:] if text.startswith("-") else text
+    whole, dot, frac = unsigned.partition(".")
+    if dot and re.fullmatch(r"\d*", whole) and re.fullmatch(r"\d+", frac):
         return float(text)
     return text
 

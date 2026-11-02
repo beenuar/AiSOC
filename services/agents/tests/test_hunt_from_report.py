@@ -153,7 +153,12 @@ def test_defanged_indicators_are_refanged_before_matching():
     nothing in exactly the documents this feature exists for."""
     indicators, _, _ = extract_indicators(REPORT)
     domains = {i.value for i in indicators if i.kind == "domain"}
-    assert "evil-c2.example.net" in domains
+    # Set containment rather than `in`: the refanged host must be a whole
+    # value the extractor emitted, never a substring of some longer string it
+    # mistook for a domain. The second assertion is the half that was missing
+    # — refanging has to remove the defanged spelling, not sit beside it.
+    assert domains.issuperset({"evil-c2.example.net"})
+    assert not [d for d in domains if "[.]" in d or d.startswith("hxxp")]
 
 
 def test_every_indicator_carries_where_it_was_found():
