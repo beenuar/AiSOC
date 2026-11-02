@@ -1916,11 +1916,23 @@ async def _ledger_phase_blocks(
     responder = phase("responder", "responder")
 
     # Router-path runs (kafka auto-triage) persist no per-agent llm_response
-    # events, so the blocks above come back empty even though the run completed.
+    # events, so the blocks above carry only a triage_verdict summary and no
+    # real IOC/MITRE/root-cause/action payload — the tabs render near-empty.
     # The router now persists its structured InvestigationState as a
-    # `router_state` artifact at run close; fall back to it so those runs' tabs
-    # render too. Investigator-path runs have events, so this never fires there.
-    if not any((recon, forensic, responder)) and audit_log == []:
+    # `router_state` artifact at run close; fall back to it whenever the blocks
+    # lack actual content. Investigator-path runs carry real payloads, so the
+    # guard below never fires there and their event-derived blocks win.
+    def _has_content(block: dict[str, Any], keys: tuple[str, ...]) -> bool:
+        return any(block.get(k) not in (None, "", [], {}) for k in keys)
+
+    needs_router = not any(
+        (
+            _has_content(recon, ("iocs", "mitre_techniques")),
+            _has_content(forensic, ("root_cause_hypothesis", "artefacts")),
+            _has_content(responder, ("recommended_actions",)),
+        )
+    )
+    if needs_router:
         blocks = await _router_state_blocks(db, tenant_id, run_uuid)
         if blocks is not None:
             recon, forensic, responder, audit_log = blocks
