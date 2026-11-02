@@ -31,6 +31,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.models.alert import AlertSeverity, RawAlert
+from app.services.alert_sink import root_cause_key
 
 TENANT = UUID("11111111-1111-1111-1111-111111111111")
 
@@ -541,6 +542,174 @@ def test_folding_then_correlating_still_accounts_for_every_input() -> None:
         f"\n[eval] full-cohort accounting: {len(stream)} inputs = "
         f"{retained_alone} retained alone + {attached_to_group} attached to a group + "
         f"{folded_count} folded occurrences + {pending_or_failed} pending/failed"
+    )
+
+
+# ── Phase 3.3, second half: cross-vendor root-cause collapse ──────────────
+#
+# A third reduction, and a third labelled row. It folds nothing the other
+# two fold: correlation groups *related* alerts, repeat folding folds *the
+# same finding arriving again*, and this folds *different vendors reporting
+# one root cause*. Four products raising their own finding about one public
+# bucket produce four different fingerprints, so every dedup layer correctly
+# leaves all four standing — and the analyst closes the same
+# misconfiguration four times.
+#
+# Measured on the fixed cohort below, driving the real
+# `alert_sink.root_cause_key`:
+#
+#   1000 inputs -> 832 records, 168 folded, of which 51 findings carry more
+#   than one vendor — the number that makes a finding worth having, because
+#   one product raising a finding is a finding and four agreeing is a
+#   different claim
+#
+# Published separately from the other two and never summed with them: the
+# three reduce different things over overlapping inputs, and a reader adding
+# them would count some alerts three times. That is the defect the retracted
+# 75.3 % figure carried — a headline whose denominator nobody could name.
+CROSS_VENDOR_REDUCTION_PCT = 16.8
+
+#: The products that each raise their own finding about one cloud resource.
+#: Real connector type ids, because the vendor count is the number that
+#: makes the finding worth having and a fake vendor would inflate it.
+_CLOUD_VENDORS = ("aws_security_hub", "azure_defender_cloud", "wiz", "aws_guardduty")
+
+
+def build_cross_vendor_stream(size: int = STREAM_SIZE) -> list[tuple[datetime, RawAlert]]:
+    """Cloud-posture traffic in which several products report one root cause.
+
+    Roughly a fifth of the stream is other vendors re-reporting a
+    misconfiguration a first vendor already raised — each with its own
+    title, its own severity and its own fingerprint, which is why none of
+    the existing dedup layers touches them.
+    """
+    start = datetime(2026, 9, 22, 8, 0, tzinfo=UTC)
+    stream: list[tuple[datetime, RawAlert]] = []
+    for n in range(size):
+        offset = timedelta(minutes=_seeded(n, "rc-time", 1440))
+        if _seeded(n, "rc-shared", 100) < 24:
+            # One of 60 misconfigured resources, reported by one of four
+            # products. Same resource, same technique, same principal;
+            # different vendor, title and severity, so the fingerprints
+            # differ and only the root-cause key joins them.
+            which = _seeded(n, "rc-which", 60)
+            vendor = _CLOUD_VENDORS[_seeded(n, "rc-vendor", len(_CLOUD_VENDORS))]
+            alert = RawAlert(
+                tenant_id=TENANT,
+                source=vendor,
+                title=f"{vendor}: public access on storage-{which:03d}",
+                hostname=f"storage-{which:03d}",
+                username=f"deployer-{which % 7:02d}",
+                mitre_techniques=["T1530"],
+                severity=AlertSeverity.HIGH if vendor == "aws_guardduty" else AlertSeverity.MEDIUM,
+                connector_type=vendor,
+            )
+        else:
+            alert = RawAlert(
+                tenant_id=TENANT,
+                source="synthetic",
+                title=f"unrelated finding {n}",
+                hostname=f"ws-{_seeded(n, 'rc-host', 400):03d}",
+                username=f"user-{_seeded(n, 'rc-user', 200):03d}",
+                mitre_techniques=[f"T{1000 + _seeded(n, 'rc-tech', 90):04d}"],
+                severity=AlertSeverity.MEDIUM,
+                connector_type="synthetic",
+            )
+        stream.append((start + offset, alert))
+    return stream
+
+
+def collapse_by_root_cause(
+    stream: list[tuple[datetime, RawAlert]],
+) -> tuple[dict[tuple[str, str, str], list[RawAlert]], list[RawAlert]]:
+    """Split a stream into root-cause findings and the alerts with no key.
+
+    Drives the real `root_cause_key` rather than a copy of it: a measurement
+    that re-implemented the derivation would be a producer compared against
+    itself, which this repository has shipped before.
+    """
+    findings: dict[tuple[str, str, str], list[RawAlert]] = {}
+    unkeyed: list[RawAlert] = []
+    for _, alert in sorted(stream, key=lambda pair: pair[0]):
+        key = root_cause_key(alert)
+        if key is None:
+            unkeyed.append(alert)
+            continue
+        findings.setdefault(key, []).append(alert)
+    return findings, unkeyed
+
+
+def test_cross_vendor_collapse_is_its_own_labelled_figure() -> None:
+    """A third reduction, published beside the other two and never summed."""
+    stream = build_cross_vendor_stream()
+    findings, unkeyed = collapse_by_root_cause(stream)
+
+    records = len(findings) + len(unkeyed)
+    reduction = 1 - (records / len(stream))
+    multi_vendor = {k: v for k, v in findings.items() if len({a.connector_type for a in v}) > 1}
+
+    print(
+        f"\n[eval] cross-vendor root cause (real root_cause_key): {len(stream)} inputs -> "
+        f"{records} records = {reduction:.1%}; {len(multi_vendor)} finding(s) carry more than one vendor"
+    )
+
+    assert round(reduction * 100, 1) == CROSS_VENDOR_REDUCTION_PCT, (
+        f"cross-vendor reduction is now {reduction:.1%} but CROSS_VENDOR_REDUCTION_PCT says "
+        f"{CROSS_VENDOR_REDUCTION_PCT} %, which is what the published surfaces print."
+    )
+    assert multi_vendor, "no finding collapsed more than one vendor; this cohort does not exercise the feature"
+    assert len({CROSS_VENDOR_REDUCTION_PCT, PUBLISHED_REDUCTION_PCT, REPEAT_STREAM_DEDUP_PCT}) == 3, (
+        "two of the three published reductions have become the same number; they measure different things and must stay separately labelled"
+    )
+
+
+def test_an_incomplete_key_never_collapses_anything() -> None:
+    """A NULL does not match another NULL.
+
+    "We do not know the principal" is not evidence that two findings share
+    one, and treating absence as agreement is how a conservative key becomes
+    a wide one.
+    """
+    missing_user = RawAlert(tenant_id=TENANT, source="a", title="x", hostname="h", mitre_techniques=["T1530"])
+    missing_tech = RawAlert(tenant_id=TENANT, source="a", title="x", hostname="h", username="u")
+    missing_host = RawAlert(tenant_id=TENANT, source="a", title="x", username="u", mitre_techniques=["T1530"])
+    for alert in (missing_user, missing_tech, missing_host):
+        assert root_cause_key(alert) is None
+
+
+def test_the_same_resource_under_a_different_technique_is_a_different_finding() -> None:
+    """Resource alone over-collapses — the lesson v21 paid for."""
+    exfil = RawAlert(tenant_id=TENANT, source="a", title="x", hostname="h", username="u", mitre_techniques=["T1530"])
+    recon = RawAlert(tenant_id=TENANT, source="b", title="y", hostname="h", username="u", mitre_techniques=["T1087"])
+    assert root_cause_key(exfil) != root_cause_key(recon)
+
+
+def test_every_input_is_accounted_for_across_all_three_reductions() -> None:
+    """The balance invariant, extended to the third fold.
+
+    Nothing may vanish into a numerator. An alert is either the first report
+    of its root cause (retained), a later vendor's report of one already
+    recorded (folded, and still resolvable to the finding), or carries no
+    root-cause key at all (retained individually).
+    """
+    stream = build_cross_vendor_stream()
+    findings, unkeyed = collapse_by_root_cause(stream)
+
+    retained = len(findings) + len(unkeyed)
+    folded = sum(len(members) - 1 for members in findings.values())
+
+    assert retained + folded == len(stream), f"{retained} retained + {folded} folded = {retained + folded}, against {len(stream)} inputs"
+
+    # Resolvability, not only balance: every folded report must still point
+    # at the finding that absorbed it. A count that balances while pointing
+    # nowhere cannot be audited.
+    for key, members in findings.items():
+        for member in members:
+            assert root_cause_key(member) == key
+
+    print(
+        f"[eval] cross-vendor accounting: {len(stream)} inputs = {len(findings)} findings + "
+        f"{len(unkeyed)} unkeyed + {folded} folded into a finding"
     )
 
 

@@ -86,6 +86,34 @@ class PersistResult:
         return self.verified and self.outcome in (PersistOutcome.INSERTED, PersistOutcome.DUPLICATE)
 
 
+def root_cause_key(alert: Any) -> tuple[str, str, str] | None:
+    """The `(resource, technique, principal)` this alert is about, or None.
+
+    Pure and module-level so the reduction suite drives the **real**
+    derivation. A measurement that re-implemented this would be a producer
+    compared against a copy of itself, which this repository has shipped
+    before and now gates against.
+
+    All three must be present. A NULL does not match another NULL: "we do
+    not know the principal" is not evidence that two findings share one, and
+    treating absence as agreement is exactly how a conservative key becomes
+    a wide one — the `correlation_key()` narrowing ladder is the same
+    argument.
+    """
+    resource = str(getattr(alert, "hostname", "") or "").strip().lower()
+    if not resource:
+        # A cloud finding names a resource rather than a host. `external_id`
+        # is the vendor's own finding id and is deliberately NOT used: it is
+        # unique per vendor, so it could never join two of them.
+        resource = str(getattr(alert, "domain", "") or "").strip().lower()
+    techniques = list(getattr(alert, "mitre_techniques", []) or [])
+    technique = str(techniques[0]).strip().upper() if techniques else ""
+    principal = str(getattr(alert, "originating_human", None) or getattr(alert, "username", "") or "").strip().lower()
+    if not resource or not technique or not principal:
+        return None
+    return resource, technique, principal
+
+
 _INSERT_SQL = """
 INSERT INTO alerts (
     id, tenant_id, title, description, severity, status,
@@ -225,6 +253,77 @@ ON CONFLICT (tenant_id, alert_id) DO UPDATE
            AND NOT ($3::text IS NOT NULL AND jsonb_array_length(ao.payload_ids) >= $5),
        updated_at = NOW()
  WHERE $3::text IS NULL OR NOT (ao.payload_ids @> jsonb_build_array($3::text))
+"""
+
+#: Collapse findings from different vendors that share a root cause (3.3).
+#:
+#: Migration 151 keeps same-fingerprint repeats. It cannot reach this half:
+#: Security Hub, Defender for Cloud, a CNAPP connector and GuardDuty each
+#: raising their own finding about one public bucket produce four different
+#: fingerprints, so every dedup layer correctly leaves all four standing.
+#: They are four reports of one root cause, and the analyst closes the same
+#: misconfiguration four times.
+#:
+#: The key is the triple `(resource, technique, principal)`, and the
+#: conjunction is the control: resource alone over-collapses (two unrelated
+#: findings on one busy host are two findings — the lesson v21 paid for),
+#: technique alone is a category, principal alone is an account's whole day.
+#:
+#: `vendor_count` is recomputed from the membership rather than incremented,
+#: for the reason the phishing fan-out already records: an increment counts
+#: deliveries, and a redelivered message would make two vendors look like
+#: three. The membership insert is `ON CONFLICT DO NOTHING`, so the count is
+#: a property of the set and a replay changes nothing.
+_ROOT_CAUSE_FINDING_SQL = """
+INSERT INTO root_cause_findings AS f
+    (tenant_id, resource, technique, principal, vendor_count, member_count,
+     severity, first_seen, last_seen)
+VALUES ($1, $2, $3, $4, 1, 1, $5, COALESCE($6::timestamptz, NOW()), COALESCE($6::timestamptz, NOW()))
+ON CONFLICT (tenant_id, resource, technique, principal) DO UPDATE
+   SET first_seen = LEAST(f.first_seen, EXCLUDED.first_seen),
+       last_seen = GREATEST(f.last_seen, EXCLUDED.last_seen),
+       updated_at = NOW()
+RETURNING id
+"""
+
+#: Link the original. Nothing is deleted and nothing is rewritten: the
+#: eval-honesty rule is that deduplicated evidence must still resolve to its
+#: retained record, and a finding that replaced its members would make the
+#: survivor's vendor and severity an accident of arrival order.
+_ROOT_CAUSE_MEMBER_SQL = """
+INSERT INTO alert_root_cause_members (tenant_id, finding_id, alert_id, connector_type)
+VALUES ($1, $2, $3, $4)
+ON CONFLICT (tenant_id, finding_id, alert_id) DO NOTHING
+"""
+
+#: Recompute the counts and the severity from the membership.
+#:
+#: Severity is the **highest** any member carried, not an average: a finding
+#: containing one critical report is a critical finding, and averaging would
+#: let three low reports bury it. Ordered by the five-tier ladder explicitly,
+#: because alphabetical order puts `critical` below `low`.
+_ROOT_CAUSE_RECOUNT_SQL = """
+UPDATE root_cause_findings f
+   SET member_count = m.members,
+       vendor_count = m.vendors,
+       severity = COALESCE(m.worst, f.severity),
+       updated_at = NOW()
+  FROM (
+    SELECT COUNT(*) AS members,
+           COUNT(DISTINCT rcm.connector_type) AS vendors,
+           (SELECT a.severity
+              FROM alert_root_cause_members i
+              JOIN alerts a ON a.id = i.alert_id AND a.tenant_id = i.tenant_id
+             WHERE i.tenant_id = $1 AND i.finding_id = $2
+             ORDER BY CASE lower(a.severity)
+                        WHEN 'critical' THEN 5 WHEN 'high' THEN 4
+                        WHEN 'medium' THEN 3 WHEN 'low' THEN 2
+                        WHEN 'info' THEN 1 ELSE 0 END DESC
+             LIMIT 1) AS worst
+      FROM alert_root_cause_members rcm
+     WHERE rcm.tenant_id = $1 AND rcm.finding_id = $2
+  ) m
+ WHERE f.tenant_id = $1 AND f.id = $2
 """
 
 #: Ceiling on the retained payload-id window. Deliberately the same number as
@@ -655,6 +754,11 @@ class AlertSink:
             logger.warning("alert_sink.insert_filtered", alert_id=canonical_id)
             return PersistResult(PersistOutcome.FAILED, None, retryable=True)
 
+        # Phase 3.3, second half. On the insert path only: a duplicate has
+        # already been folded by migration 151's occurrence rollup, and
+        # linking it again would count one vendor twice.
+        await self._link_root_cause(conn, alert, alert_id=row["id"])
+
         return PersistResult(PersistOutcome.INSERTED, str(row["id"]))
 
     async def _surviving_alert_id(self, conn: Any, alert: Any) -> Any | None:
@@ -772,6 +876,44 @@ class AlertSink:
                 await self._link_source_finding_safely(fused, alert_id=result.alert_id)
 
         return results
+
+    async def _link_root_cause(self, conn: Any, alert: Any, *, alert_id: Any) -> None:
+        """Collapse this alert into a root-cause finding, if it has one (3.3).
+
+        Best-effort, like every other provenance write here: the finding is
+        worth three statements, never the alert the caller has just made
+        durable.
+
+        Only runs for a genuinely inserted alert. A duplicate has already
+        been folded by 151 and linking it again would count one vendor twice.
+        """
+        key = root_cause_key(alert)
+        if key is None:
+            return
+        resource, technique, principal = key
+        try:
+            row = await conn.fetchrow(
+                _ROOT_CAUSE_FINDING_SQL,
+                alert.tenant_id,
+                resource,
+                technique,
+                principal,
+                str(getattr(getattr(alert, "severity", None), "value", getattr(alert, "severity", "")) or "medium"),
+                getattr(alert, "event_time", None),
+            )
+            finding_id = row["id"] if row else None
+            if finding_id is None:
+                return
+            await conn.execute(
+                _ROOT_CAUSE_MEMBER_SQL,
+                alert.tenant_id,
+                finding_id,
+                alert_id,
+                str(getattr(alert, "connector_type", "") or ""),
+            )
+            await conn.execute(_ROOT_CAUSE_RECOUNT_SQL, alert.tenant_id, finding_id)
+        except Exception as exc:  # noqa: BLE001 — the finding is not worth the alert
+            logger.warning("alert_sink.root_cause_link_failed", error=str(exc))
 
     async def _record_deduplicated_event(self, conn: Any, alert: Any) -> None:
         """Keep a folded-away repeat, as provenance and as a counted occurrence.
