@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-02T00:28:07Z",
+  "generated": "2026-11-02T01:47:31Z",
   "categories": [
     {
       "id": "playbooks",
@@ -20,29 +20,29 @@
     }
   ],
   "stats": {
-    "total": 7194,
-    "playbooks": 88,
-    "playbook_packs": 63,
+    "total": 7195,
+    "playbooks": 89,
+    "playbook_packs": 64,
     "detections": 7023,
     "plugins": 83,
-    "verified": 1073,
+    "verified": 1074,
     "community": 1,
     "by_tier": {
       "beta": 7,
       "community": 1,
       "imported": 6113,
-      "stable": 1073
+      "stable": 1074
     },
     "detections_by_tier": {
       "community": 1,
       "imported": 6113,
       "stable": 909
     },
-    "executable": 2709,
+    "executable": 2710,
     "quarantined": 4485,
     "executable_detections": 2538,
     "reference_only_detections": 4485,
-    "not_a_detection": 171
+    "not_a_detection": 172
   },
   "mitre_coverage": {
     "unique_techniques": 391,
@@ -141,7 +141,7 @@
       "T1071.004": 10,
       "T1072": 4,
       "T1074.001": 4,
-      "T1078": 51,
+      "T1078": 52,
       "T1078.001": 5,
       "T1078.002": 7,
       "T1078.003": 3,
@@ -318,7 +318,7 @@
       "T1550.002": 6,
       "T1550.003": 3,
       "T1550.004": 1,
-      "T1552": 3,
+      "T1552": 4,
       "T1552.001": 16,
       "T1552.002": 3,
       "T1552.004": 7,
@@ -439,7 +439,7 @@
       "T1686.003": 10,
       "T1689": 1
     },
-    "total_with_mitre": 2408,
+    "total_with_mitre": 2409,
     "unique_techniques_all_rules": 494,
     "techniques_all_rules": {
       "T1001.003": 2,
@@ -563,7 +563,7 @@
       "T1072": 9,
       "T1074": 3,
       "T1074.001": 6,
-      "T1078": 134,
+      "T1078": 135,
       "T1078.001": 10,
       "T1078.002": 14,
       "T1078.003": 12,
@@ -771,7 +771,7 @@
       "T1550.002": 7,
       "T1550.003": 9,
       "T1550.004": 2,
-      "T1552": 22,
+      "T1552": 23,
       "T1552.001": 38,
       "T1552.002": 7,
       "T1552.003": 3,
@@ -996,7 +996,7 @@
         "T1071.001": 10,
         "T1071.004": 6,
         "T1074.001": 1,
-        "T1078": 43,
+        "T1078": 44,
         "T1078.001": 4,
         "T1078.002": 3,
         "T1078.003": 2,
@@ -1107,7 +1107,7 @@
         "T1550.002": 2,
         "T1550.003": 1,
         "T1550.004": 1,
-        "T1552": 2,
+        "T1552": 3,
         "T1552.001": 12,
         "T1552.004": 2,
         "T1552.005": 2,
@@ -235959,6 +235959,34 @@
       "enabled": true,
       "path": "detections/playbooks/account-takeover-response.yaml",
       "sha256": "ed2372767ec6db41d847f245c24690635a167243571cbec100e61fb48ffb0632"
+    },
+    {
+      "id": "ai-agent-kill-switch-v1",
+      "type": "playbook",
+      "name": "AI Agent Kill Switch",
+      "description": "Stop one compromised AI agent: block its gateway key, deactivate the provider key behind it, kill the agent process on the host, and ask the model one bounded question about whether the account itself needs demoting. Every containment step is behind an approval, and the approval declares what happens if nobody answers. Distinct from services/actions kill_switch.py, which is the platform-wide autonomy stop and is not an agent control.",
+      "version": "1.0.0",
+      "author": "AiSOC",
+      "tags": [
+        "ai-agent",
+        "ai-estate",
+        "kill-switch"
+      ],
+      "severity": "critical",
+      "trigger": "alert",
+      "steps": 6,
+      "category": "ai-agent-kill-switch",
+      "mitre_techniques": [
+        "T1552",
+        "T1078"
+      ],
+      "verified": true,
+      "source": "core",
+      "tier": "stable",
+      "pack": true,
+      "enabled": true,
+      "path": "playbooks/packs/v1/ai-agent-kill-switch/ai-agent-kill-switch.playbook.json",
+      "sha256": "7afaf51f7054d764440438b57f880a35b641987b32ca83b272342c90719e3585"
     },
     {
       "id": "anomalous-behavior-response-v1",
