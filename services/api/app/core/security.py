@@ -74,6 +74,18 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # ClickHouse client still enforces row caps and timeouts; the
         # permission only controls who *can* query at all.
         "hunts:read",
+        # Resolving an identity's effective cloud/IdP permissions
+        # (GET /identity/{principal_id}/effective-permissions). The route
+        # enforced nothing at all, so every role in the tenant reached it
+        # and so did an API key scoped to something else entirely
+        # (GHSA-q23c-9pj3-cw75). Held by the roles that investigate and
+        # withheld from `viewer`: the envelope names allowed and denied
+        # actions, resource ARNs, admin roles and the policy chain behind
+        # them, which is a map of where privilege lives in the estate.
+        #
+        # `infosec` is derived from soc_analyst | threat_hunter below, so
+        # it inherits this without a fifth edit.
+        "identity:read",
         "lake:query",
         "lake:read_schema",
         # The live-action registry: which vendors can perform which response
@@ -133,6 +145,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         "threat_intel:write",
         # SOC leads run investigations across the lake routinely.
         "hunts:read",
+        "identity:read",
         "lake:query",
         "lake:read_schema",
         "actions:read",
@@ -172,6 +185,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # alerts don't tell the whole story. Schema is read-only and
         # the rate limiter caps abuse.
         "hunts:read",
+        "identity:read",
         "lake:query",
         "lake:read_schema",
         # Analysts already hold playbooks:execute, and a dry run touches no
@@ -206,6 +220,7 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # workspace for hypothesis-driven investigation across raw
         # events, alert metrics, and IOC enrichments.
         "hunts:read",
+        "identity:read",
         "lake:query",
         "lake:read_schema",
         # Read the registry to know what response is available for a finding;
