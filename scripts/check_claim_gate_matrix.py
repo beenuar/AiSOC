@@ -81,6 +81,46 @@ def check_summary_block(text: str, counts: dict[str, int]) -> list[str]:
     return problems
 
 
+def rewrite_summary_block(text: str, counts: dict[str, int]) -> str:
+    """Return ``text`` with the summary stanza restated from ``counts``.
+
+    The stanza is the only place in this file that repeats a number the table
+    already holds, which is why it is the only thing that drifts: two pull
+    requests each adding a row merge without conflicting, and the stanza is
+    then stale by two while describing a tree neither of them produced. Making
+    it writable removes the hand-edit that the surrounding prose has always
+    asked for but no command performed.
+
+    Refuses rather than guesses. A missing or duplicated heading is left for
+    :func:`check_summary_block` to report, because a writer that repairs a
+    duplicated block has to choose which copy was meant and cannot know.
+    """
+    lines = text.splitlines(keepends=True)
+    headings = [i for i, line in enumerate(lines) if line.strip() == _SUMMARY_HEADING]
+    if len(headings) != 1:
+        raise ValueError(
+            f"expected exactly one '{_SUMMARY_HEADING}' heading, found {len(headings)} — "
+            "fix the duplication by hand; a writer cannot tell which copy was intended"
+        )
+
+    start = headings[0] + 1
+    patterns = {field: re.compile(rf"^-\s*{re.escape(field)}:\s*\d+\s*$") for field in _SUMMARY_FIELDS}
+    seen: set[str] = set()
+    for i in range(start, len(lines)):
+        stripped = lines[i].rstrip("\n")
+        for field, pattern in patterns.items():
+            if pattern.match(stripped):
+                lines[i] = f"- {field}: {counts[field]}\n"
+                seen.add(field)
+    missing = [f for f in _SUMMARY_FIELDS if f not in seen]
+    if missing:
+        raise ValueError(
+            f"summary block does not state {', '.join(missing)} — add the line(s) by hand first, "
+            "since where they belong is a judgement about the document"
+        )
+    return "".join(lines)
+
+
 def _parse_status_rows(text: str) -> list[str]:
     """Return the Status cell of every data row in the claim-to-gate table."""
     lines = text.splitlines()
@@ -182,6 +222,14 @@ def check_profiles(text: str) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--print", dest="print_only", action="store_true")
+    parser.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "restate the summary stanza from the parsed rows, and print the figures the two "
+            "prose sites must carry. Use this instead of editing a number by hand."
+        ),
+    )
     parser.add_argument("--max-no-gate", type=int, default=MAX_NO_GATE)
     args = parser.parse_args()
 
@@ -222,10 +270,29 @@ def main() -> int:
     if args.print_only:
         return 0
 
-    drift = check_summary_block(
-        text,
-        {"Total": len(statuses), "GATED": gated, "PARTIAL": partial, "NO GATE": no_gate},
-    )
+    counts = {"Total": len(statuses), "GATED": gated, "PARTIAL": partial, "NO GATE": no_gate}
+
+    if args.write:
+        try:
+            updated = rewrite_summary_block(text, counts)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+        if updated != text:
+            MATRIX.write_text(updated, encoding="utf-8")
+            print(f"rewrote the summary stanza in {MATRIX}")
+        else:
+            print("summary stanza already agrees with the table")
+        # The other two sites are prose, not a field list, so they are reported
+        # rather than rewritten: a regex confident enough to edit a sentence is
+        # confident enough to mangle one, and these two carry the figure inside
+        # a paragraph that explains it.
+        print("these two publish the same figure and are checked against this table:")
+        print(f"  ROADMAP.md                                 -> {counts['Total']} rows, {gated} GATED")
+        print(f"  apps/docs/docs/compliance/evidence-pack.md  -> {gated} rows GATED")
+        return 0
+
+    drift = check_summary_block(text, counts)
     if drift:
         print(f"ERROR: the written summary does not match the table ({len(drift)} problem(s)):", file=sys.stderr)
         for problem in drift:

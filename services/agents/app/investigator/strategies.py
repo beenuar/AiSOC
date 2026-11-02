@@ -28,6 +28,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from app.keywords import matches, normalise
+
 # Pivots a strategy can ask for. Must match tool names in
 # ``app.tools.investigation`` and ``app.tools.customer_tools``; the drift test
 # and ``scripts/check_investigation_depth.py`` assert it in both directions.
@@ -194,7 +196,7 @@ STRATEGIES: tuple[Strategy, ...] = (
         ),
         min_pivots=2,
         techniques=("T1566", "T1204", "T1598"),
-        keywords=("phish", "email", "attachment", "url", "proxy", "sender"),
+        keywords=("phish*", "email", "attachment", "url", "proxy", "sender"),
     ),
     Strategy(
         id="c2-beaconing",
@@ -222,7 +224,7 @@ STRATEGIES: tuple[Strategy, ...] = (
         ),
         min_pivots=3,
         techniques=("T1071", "T1095", "T1573", "T1008"),
-        keywords=("beacon", "c2", "command and control", "dns", "outbound", "periodic"),
+        keywords=("beacon*", "c2", "command and control", "dns", "outbound", "periodic"),
     ),
     Strategy(
         id="lateral-movement",
@@ -304,7 +306,7 @@ STRATEGIES: tuple[Strategy, ...] = (
         ),
         min_pivots=3,
         techniques=("T1041", "T1567", "T1048", "T1030"),
-        keywords=("exfil", "upload", "transfer", "egress", "large", "dlp"),
+        keywords=("exfil*", "upload", "transfer", "egress", "large", "dlp"),
     ),
     Strategy(
         id="privilege-escalation",
@@ -332,7 +334,7 @@ STRATEGIES: tuple[Strategy, ...] = (
         ),
         min_pivots=2,
         techniques=("T1068", "T1078.003", "T1098", "T1548"),
-        keywords=("privilege", "escalat", "admin", "sudo", "role", "group membership", "grant"),
+        keywords=("privilege*", "escalat*", "admin*", "sudo", "role", "group membership", "grant*"),
     ),
     Strategy(
         id="persistence-established",
@@ -401,8 +403,14 @@ def select_strategy(
     classification, whereas a keyword can appear in any narrative. Ties go to
     the earlier strategy, and no match falls back to general triage rather
     than to no strategy at all.
+
+    Keywords match at token boundaries (:mod:`app.keywords`). As substrings,
+    ``c2`` picked the beaconing strategy for any alert mentioning an EC2
+    host, which then set the investigation's system guidance and the
+    recorded ``strategy_id`` — so the model was told to go looking for
+    beaconing that was never indicated (#1607).
     """
-    text = (summary or "").lower()
+    text = normalise(summary or "")
     mapped = {t.upper() for t in (techniques or [])}
 
     best: Strategy | None = None
@@ -417,7 +425,7 @@ def select_strategy(
             # T1078.004 is still an identity problem.
             if any(m == technique or m.startswith(technique + ".") for m in mapped):
                 score += 10
-        score += sum(2 for keyword in strategy.keywords if keyword in text)
+        score += sum(2 for keyword in strategy.keywords if matches(text, keyword))
 
         if score > best_score:
             best, best_score = strategy, score
