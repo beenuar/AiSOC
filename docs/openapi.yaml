@@ -4532,6 +4532,62 @@ paths:
                 $ref: '#/components/schemas/ConfidenceResponse'
       security:
       - HTTPBearer: []
+  /api/v1/detection-proposals/coverage-gaps:
+    get:
+      tags:
+      - detection_rules
+      - dac
+      summary: List Coverage Gaps
+      description: 'Rank what this tenant''s connected sources are not covered for.
+
+
+        Depth 2 wave 2 item 2.5. The governed proposal flow below already runs
+
+        end to end; what it lacked was a reason to start, so coverage grew
+
+        wherever attention fell. This supplies the ranking and nothing else —
+
+        it writes no proposal, because ranking a gap and drafting a rule are
+
+        different authorities and the drafting path''s approver requirement
+
+        would be meaningless if the ranker could reach past it.
+
+
+        Read-only, scoped to the caller''s own tenant. A tenant that has
+
+        connected nothing has no gaps rather than a catalogue of everything
+
+        AiSOC could in principle detect.'
+      operationId: list_coverage_gaps_api_v1_detection_proposals_coverage_gaps_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 50
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Coverage Gaps Api V1 Detection Proposals Coverage
+                  Gaps Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/detection-proposals:
     get:
       tags:
