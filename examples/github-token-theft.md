@@ -9,7 +9,14 @@
 - **Fixture:** [`examples/alerts/github-token-theft.json`](./alerts/github-token-theft.json)
 - **MITRE techniques:** T1078, T1555, T1567
 - **Severity at intake:** `high`
-- **Confidence band (sandbox):** 87/100, `high`
+- **What the sandbox computes:** `event_burst` — 4 clones in 11.0 s, all inside one 60 s window
+
+> **The step-by-step below describes the full stack.** The offline
+> `aisoc-sandbox` run shows the same ledger *shape* but computes only what
+> arithmetic over these events can give it — there is no model, no graph, no
+> Qdrant and no lake in the wheel, and it emits no confidence score, no
+> automation tier and no verdict. Values it cannot compute say so, with the
+> reason attached. What it does compute for this scenario is listed above.
 
 ## Run it
 
@@ -39,7 +46,7 @@ infostealer behaviour against the OS-native keystore is consistent
 with the access pattern (machine compromised, PAT lifted, used
 immediately).
 
-**Decision:** Confidence `high` (87/100).
+**Decision (sandbox):** 2 of 4 signals computed from the events, 1 fired. No confidence score: the sandbox runs no model, so it has nothing to calibrate one from.
 
 ### Step 2 · HuntAgent · hunt
 
@@ -60,7 +67,9 @@ path and the secrets-at-rest path:
 - `secrets.rotate({"repositories": ["acme/secrets-vault", "acme/iam"]})`
 - `case.create(...)` at severity `high`
 
-**Decision:** 5 actions proposed; awaiting analyst approval (severity high).
+**Decision (live stack):** 5 actions proposed; awaiting analyst approval (severity high).
+
+**Decision (sandbox):** the same actions are listed as call *shapes*, each marked `executed: false`. The automation tier and the approval posture read `not computed` — the live stack resolves both from the capability contract and the approval matrix, and neither is a thing a severity label can select.
 
 ## What the analyst would do next
 

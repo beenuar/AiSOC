@@ -10,7 +10,14 @@
 - **Fixture:** [`examples/alerts/phishing-payload.json`](./alerts/phishing-payload.json)
 - **MITRE techniques:** T1566, T1566.002
 - **Severity at intake:** `high`
-- **Confidence band (sandbox):** 87/100, `high`
+- **What the sandbox computes:** `recorded_domain_age` — the payload records `domain_age_days=9`, under the 14-day threshold (read off the event, not looked up)
+
+> **The step-by-step below describes the full stack.** The offline
+> `aisoc-sandbox` run shows the same ledger *shape* but computes only what
+> arithmetic over these events can give it — there is no model, no graph, no
+> Qdrant and no lake in the wheel, and it emits no confidence score, no
+> automation tier and no verdict. Values it cannot compute say so, with the
+> reason attached. What it does compute for this scenario is listed above.
 
 ## Run it
 
@@ -41,7 +48,7 @@ email delivery** (under 10 minutes), and the destination domain
 **registered less than 14 days ago** — both are public indicators of
 campaign-style credential phishing.
 
-**Decision:** Confidence `high` (87/100).
+**Decision (sandbox):** 2 of 4 signals computed from the events, 1 fired. No confidence score: the sandbox runs no model, so it has nothing to calibrate one from.
 
 ### Step 2 · HuntAgent · hunt
 
@@ -61,7 +68,9 @@ Proposes the canonical phishing containment:
 - `email.search_and_purge({"sender": "no-reply@acme-paychecks.com"})`
 - `case.create(...)` at severity `high`
 
-**Decision:** 5 actions proposed; awaiting analyst approval (severity high).
+**Decision (live stack):** 5 actions proposed; awaiting analyst approval (severity high).
+
+**Decision (sandbox):** the same actions are listed as call *shapes*, each marked `executed: false`. The automation tier and the approval posture read `not computed` — the live stack resolves both from the capability contract and the approval matrix, and neither is a thing a severity label can select.
 
 ## What the analyst would do next
 
