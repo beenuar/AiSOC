@@ -8,7 +8,14 @@
 - **Fixture:** [`examples/alerts/lateral-movement.json`](./alerts/lateral-movement.json)
 - **MITRE techniques:** T1078, T1078.004
 - **Severity at intake:** `high`
-- **Confidence band (sandbox):** 83/100, `high`
+- **What the sandbox computes:** `geo_velocity` — Saint Petersburg 0.13 h after New York, 6,888.5 km apart: an implied 53,115.6 km/h, above the 1,000 km/h threshold, so the travel really is impossible; `source_diversity` — 2 source addresses across 2 countries
+
+> **The step-by-step below describes the full stack.** The offline
+> `aisoc-sandbox` run shows the same ledger *shape* but computes only what
+> arithmetic over these events can give it — there is no model, no graph, no
+> Qdrant and no lake in the wheel, and it emits no confidence score, no
+> automation tier and no verdict. Values it cannot compute say so, with the
+> reason attached. What it does compute for this scenario is listed above.
 
 ## Run it
 
@@ -41,37 +48,47 @@ authenticated through the same `FACTOR_PROVIDER`.
 
 Cross-references the user against Qdrant for prior cases involving
 `alice@example.com` and walks the Neo4j graph two hops out from the
-user node to surface devices and groups the user owns. The decision
-copy ("authenticated session signals look legitimate at the protocol
-layer, but the geo pivot between sequential events is physically
-impossible — classic credential takeover") mirrors what an analyst
-would write at handoff.
+user node to surface devices and groups the user owns.
+
+Offline, none of that is available, so the sandbox says only what it
+worked out: `alice@example.com appears at Saint Petersburg, RU 0.13 h
+after New York, US — 6,888.5 km apart, implied speed 53,115.6 km/h,
+above the 1,000 km/h threshold.` The related-case count and the entity
+risk score read `not computed in the sandbox`, each naming the store it
+would have come from.
 
 > would-call `qdrant.semantic_search({"k": 5, "collection": "cases"})`
 >
 > would-call `graph.neighbours({"depth": 2})`
 
-**Decision:** Confidence `high` (83/100).
+**Decision (sandbox):** 3 of 4 signals computed from the events, 2 fired. No confidence score: the sandbox runs no model, so it has nothing to calibrate one from.
 
 ### Step 2 · HuntAgent · hunt
 
 Translates the hypothesis "any activity by `alice@example.com` in last
-24 h" into an ES|QL query and sweeps the warm tier. The pivot reveals
-nothing else compromised beyond the alert payload — a clean,
-contained incident.
+24 h" into an ES|QL query and sweeps the warm tier.
+
+Offline there is no warm tier to sweep, so the sandbox runs no query
+and reports no result: `matches_found` reads `not computed`, and so
+does `additional_compromised_entities` — *unknown* rather than zero,
+because a search that never ran did not find nothing, it looked
+nowhere.
 
 > would-call `nl_to_query.translate({"hypothesis": "any activity by alice@example.com in last 24h"})`
 >
 > would-call `lake.query({"language": "ES|QL", "row_cap": 1000})`
 
-**Decision:** Pivot complete; no additional compromised entities.
+**Decision (sandbox):** Pivot not performed; the entities the live
+HuntAgent would sweep on are listed, and nothing is claimed about them.
 
 ### Step 3 · RespondAgent · respond
 
 Proposes the graduated containment: revoke every active session,
-require password reset, create the case, page the SOC on-call. The
-**blast radius is human_approval_required** because the severity is
-`high`; nothing executes without analyst confirmation.
+require password reset, create the case, page the SOC on-call. Each
+verb is graded against its capability contract and the approval matrix
+of confidence against blast radius, and a session revocation at this
+confidence lands in **`human_approval_required`**; nothing executes
+without analyst confirmation.
 
 > would-call `user.session.revoke_all({"user": "alice@example.com"})`
 >
@@ -81,7 +98,9 @@ require password reset, create the case, page the SOC on-call. The
 >
 > would-call `case.notify({"channel": "slack", "audience": "soc-on-call"})`
 
-**Decision:** 4 actions proposed; awaiting analyst approval before execution.
+**Decision (live stack):** 4 actions proposed; awaiting analyst approval before execution.
+
+**Decision (sandbox):** the same actions are listed as call *shapes*, each marked `executed: false`. The automation tier and the approval posture read `not computed` — the live stack resolves both from the capability contract and the approval matrix, and neither is a thing a severity label can select.
 
 ## What the analyst would do next
 
