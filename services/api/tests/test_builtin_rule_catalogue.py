@@ -66,7 +66,7 @@ PACKAGED = REPO / "services" / "api" / "app" / "data" / "detections"
 #: regeneration that silently empties one is a failure here rather than a
 #: quieter comparison of two numbers that moved together.
 ARTEFACTS: dict[str, int] = {
-    "detection_ruleset.json": 764,
+    "detection_ruleset.json": 768,
     "detection_ruleset_imported.json": 1770,
     "windowed_ruleset.json": 76,
 }
@@ -88,19 +88,7 @@ PYTHON_RESIDENT_WINDOWED = 3
 #: the provider feeds 7.1 added, each replayed through the real connector and
 #: the real engine in `services/fusion/tests/test_ai_rule_pack_replay.py`
 #: with a negative twin differing in exactly one field.
-#:
-#: It briefly read 2614. `ident-github-pat-classic-created-with-broad-scopes`
-#: was un-retired because the enrichment-decision gate reported every field
-#: it reads as resolvable, and a retirement whose reason has stopped being
-#: true is a rule withheld for nothing. The reason had not stopped being
-#: true: the gate resolved fields against the union of every connector's
-#: field names, and `scopes` reaches that union from `llm_usage.py` while
-#: GitHub's own connector emits no such field and its audit log carries no
-#: created-token scopes. The rule is retired again and the gate now scopes
-#: the namespace to the connector a rule's `log_source.product` names, so
-#: the signal that caused this cannot recur. The count going back down is
-#: the honest direction: a rule that cannot fire was never executable.
-FUSION_LOADED_TOTAL = 2613
+FUSION_LOADED_TOTAL = 2617
 
 TENANT = uuid.UUID("aaaaaaaa-0000-0000-0000-00000000a173")
 ACTOR = uuid.UUID("bbbbbbbb-0000-0000-0000-00000000b173")
