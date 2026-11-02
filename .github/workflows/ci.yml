@@ -594,6 +594,14 @@ jobs:
       # content hash, so a hand-edited fonts.css or a swapped binary fails
       # here. Refreshing from Google is a deliberate act
       # (`scripts/fetch_web_fonts.py`), never a build-time accident.
+      #
+      # The self-test runs first and hand-breaks each comparison in turn — a
+      # drifted unicode-range, a manifest face naming a missing file, a woff2
+      # whose bytes no longer match its filename hash, an orphan file — so a
+      # green check below means the comparison still happens rather than that
+      # it found nothing.
+      - name: Webfont gate — self-test
+        run: python3 scripts/generate_web_font_css.py --self-test
       - name: Verify self-hosted webfonts are in sync
         run: python3 scripts/generate_web_font_css.py --check
       # Same shape, for the detection / marketplace figures. The landing page

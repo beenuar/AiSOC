@@ -32,10 +32,18 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# `scripts/` is on sys.path when this file is run as a program, but not when a
+# test loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root, self_test_main  # noqa: E402 - needs the sys.path line above
+
+REPO_ROOT = repo_root()
 WEB = REPO_ROOT / "apps" / "web"
 FONT_PAYLOAD_DIR = WEB / "public" / "fonts"
 MANIFEST = WEB / "src" / "fonts" / "manifest.json"
@@ -265,6 +273,61 @@ def verify_payload(manifest: dict) -> list[str]:
     return problems
 
 
+def _injected_cases() -> list[tuple[str, bool]]:
+    """Prove the comparisons still fire, by breaking each one on purpose.
+
+    "Refuses an empty tree" says the gate fails closed; it says nothing about
+    whether it can still see drift in a tree that *does* have content. Each
+    case below perturbs exactly one thing a real refresh could get wrong and
+    requires the gate to notice.
+    """
+    global FONT_PAYLOAD_DIR  # noqa: PLW0603 - restored in the `finally` below
+    manifest = json.loads(MANIFEST.read_text())
+    first = next(iter(manifest["families"].values()))
+    sample = first["faces"][0]
+    real_dir = FONT_PAYLOAD_DIR
+    cases: list[tuple[str, bool]] = []
+
+    drifted = json.loads(MANIFEST.read_text())
+    next(iter(drifted["families"].values()))["faces"][0]["unicodeRange"] = "U+0041"
+    cases.append(("a changed unicode-range in the manifest changes the generated stylesheet", render(drifted) != render(manifest)))
+
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp)
+            for woff2 in real_dir.glob("*.woff2"):
+                shutil.copy2(woff2, scratch / woff2.name)
+            FONT_PAYLOAD_DIR = scratch
+
+            cases.append(("an untouched payload reports no problems", verify_payload(manifest) == []))
+
+            (scratch / sample["file"]).unlink()
+            cases.append(("a manifest face naming a missing file is refused", verify_payload(manifest) != []))
+
+            # Right name, wrong bytes — the case a swapped font would produce.
+            (scratch / sample["file"]).write_bytes(b"wOF2" + b"\x00" * 64)
+            problems = verify_payload(manifest)
+            cases.append(
+                (
+                    "a woff2 whose bytes no longer match its filename hash is refused",
+                    any("content hash" in p for p in problems),
+                )
+            )
+
+            shutil.copy2(real_dir / sample["file"], scratch / sample["file"])
+            (scratch / "orphan-latin-00000000.woff2").write_bytes(b"wOF2")
+            cases.append(
+                (
+                    "a woff2 on disk that no manifest face references is refused",
+                    any("orphan" in p for p in verify_payload(manifest)),
+                )
+            )
+    finally:
+        FONT_PAYLOAD_DIR = real_dir
+
+    return cases
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -272,7 +335,15 @@ def main() -> int:
         action="store_true",
         help="Fail if fonts.css is stale or the vendored payload disagrees with the manifest.",
     )
+    parser.add_argument(
+        "--self-test",
+        action="store_true",
+        help="Prove this gate still detects drift, then exit.",
+    )
     args = parser.parse_args()
+
+    if args.self_test:
+        return self_test_main("generate_web_font_css.py", ["--check"], extra=_injected_cases())
 
     if not MANIFEST.exists():
         print(f"Missing {MANIFEST.relative_to(REPO_ROOT)} — run scripts/fetch_web_fonts.py")
