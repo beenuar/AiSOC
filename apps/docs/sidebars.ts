@@ -126,6 +126,7 @@ const sidebars: SidebarsConfig = {
         "connectors/elastic",
         "connectors/email-inbox",
         "connectors/exabeam",
+        "connectors/extrahop",
         "connectors/falco",
         "connectors/fleetdm",
         "connectors/gcp-cloud-audit",
