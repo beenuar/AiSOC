@@ -119,6 +119,9 @@ type EnrichRequest struct {
 	IOCType IOCType `json:"ioc_type"`
 	Value   string  `json:"value"`
 	Force   bool    `json:"force"` // bypass cache
+	// TenantID scopes both the rate limit and the cache. Depth plan wave 2,
+	// item 8.3.
+	TenantID string `json:"tenant_id,omitempty"`
 }
 
 // BulkEnrichRequest handles multiple IOCs in one call.

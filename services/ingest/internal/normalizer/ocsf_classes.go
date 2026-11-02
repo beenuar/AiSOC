@@ -203,6 +203,18 @@ var connectorOCSFClass = map[string]connectorClass{
 	// Flow records and network-monitoring telemetry.
 	"aws_vpc_flow":  {classUID: classNetworkActivity},
 	"zeek_suricata": {classUID: classNetworkActivity},
+	// extrahop is network-shaped and deliberately *not* 4001. RevealX reads
+	// /detections, not flows: each record has already passed the vendor's
+	// own correlation and carries a risk score, so it is a finding in the
+	// same sense a Splunk notable is, and 4001 would leave a mid-band
+	// detection archived to the lake and never alerted.
+	//
+	// Stated here rather than left to the 2001 default, which would reach
+	// the same uid by falling through. The connector's profile in
+	// `normalizer.go` already declares 2001 and its module docstring says
+	// so, and a class two files assert and this table omits is the drift
+	// this table exists to catch.
+	"extrahop": {classUID: classSecurityFinding},
 	// Sublime reads /v1/messages, which is every message rather than only
 	// the flagged ones, and defaults an unrecognised verdict to info.
 	"sublime_security": {classUID: classEmailActivity},

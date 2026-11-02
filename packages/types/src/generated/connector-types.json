@@ -10,8 +10,8 @@
     "aliases": 2,
     "canonical-fold": 5,
     "profile": 6,
-    "registry": 90,
-    "total": 101
+    "registry": 91,
+    "total": 102
   },
   "generatedFrom": [
     "services/connectors/app/connectors/__init__.py",
@@ -55,6 +55,7 @@
     "elastic",
     "email_inbox",
     "exabeam",
+    "extrahop",
     "falco",
     "fleetdm",
     "gcp_cloud_audit",
@@ -158,6 +159,7 @@
     "elastic": "registry",
     "email_inbox": "registry",
     "exabeam": "registry",
+    "extrahop": "registry",
     "falco": "registry",
     "fleetdm": "registry",
     "gcp_cloud_audit": "registry",

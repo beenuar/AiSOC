@@ -105,6 +105,35 @@ CAPABILITY_CONTRACTS: dict[str, CapabilityContract] = {
             "caller never supplies query text."
         ),
     ),
+    "lookup_network_flows": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=("A read leaves nothing behind to read back. Same reasoning as lookup_cloud_audit and search_siem."),
+        note=(
+            "Flow and protocol records involving one address, from an NDR "
+            "appliance's recordstore. The address and the window are typed "
+            "arguments; the caller never supplies query text. A deployment "
+            "with no recordstore answers a refusal rather than an empty "
+            "result, because 'no flows' and 'nothing was searched' are "
+            "different facts and only one is evidence."
+        ),
+    ),
+    "lookup_network_device": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap=("A read leaves nothing behind to read back. Same reasoning as lookup_cloud_audit and search_siem."),
+        note=(
+            "What an NDR appliance has discovered at one address: role, "
+            "analysis level, criticality and observed software. Read-only; "
+            "the vendor's write verbs on a device are deliberately absent."
+        ),
+    ),
     "lookup_endpoint_telemetry": CapabilityContract(
         impact=ActionImpact.READ_ONLY,
         approval=ApprovalRequirement.AUTOMATIC,

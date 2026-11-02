@@ -13,11 +13,36 @@ import (
 // Handler holds dependencies for HTTP handlers.
 type Handler struct {
 	enricher *enricher.Enricher
+	limiter  *enricher.RateLimiter
 }
 
 // New creates a new HTTP handler.
-func New(e *enricher.Enricher) *Handler {
-	return &Handler{enricher: e}
+//
+// `limiter` may be nil, which means unlimited. That is the honest default
+// for a caller that has not been updated, and it is the direction the
+// config already chose: RATE_LIMIT_RPS defaults to 100 and a malformed
+// value parses to 0, so reading an unset rate as "allow nothing" would turn
+// enrichment off across the deployment with no message anywhere.
+func New(e *enricher.Enricher, limiter *enricher.RateLimiter) *Handler {
+	return &Handler{enricher: e, limiter: limiter}
+}
+
+// rateLimitKey is the bucket a request spends from.
+//
+// Per tenant, with requests carrying no tenant sharing one bucket rather
+// than bypassing the limit. A missing tenant must not be the way around the
+// limiter, which is what an empty-means-unlimited rule would make it.
+func rateLimitKey(tenantID string) string {
+	if strings.TrimSpace(tenantID) == "" {
+		return "_untenanted"
+	}
+	return tenantID
+}
+
+// refuse answers 429 with the header a client needs to behave.
+func refuse(w http.ResponseWriter) {
+	w.Header().Set("Retry-After", "1")
+	writeError(w, http.StatusTooManyRequests, "enrichment rate limit exceeded for this tenant")
 }
 
 type errorResponse struct {
@@ -41,6 +66,11 @@ func (h *Handler) EnrichIOC(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.IOCType == "" {
 		writeError(w, http.StatusBadRequest, "ioc_type is required")
+		return
+	}
+
+	if h.limiter != nil && !h.limiter.Allow(rateLimitKey(req.TenantID)) {
+		refuse(w)
 		return
 	}
 
@@ -80,6 +110,25 @@ func (h *Handler) BulkEnrich(w http.ResponseWriter, r *http.Request) {
 		item.Value = strings.TrimSpace(item.Value)
 		if item.Value == "" || item.IOCType == "" {
 			errCount++
+			continue
+		}
+
+		// One token per item, not one per request. A bulk call carrying a
+		// hundred indicators reaches a hundred third-party lookups, so
+		// charging it as a single request would make `/enrich/bulk` the way
+		// around the limit rather than a convenience.
+		if h.limiter != nil && !h.limiter.Allow(rateLimitKey(item.TenantID)) {
+			errCount++
+			results = append(results, enricher.EnrichmentResult{
+				IOCType: item.IOCType,
+				Value:   item.Value,
+				// Named rather than silently dropped. An item missing from
+				// a bulk response with no reason reads as "nothing known
+				// about this indicator", which is a statement about the
+				// indicator rather than about our budget.
+				EnrichmentErrors: []string{"rate limit exceeded for this tenant; not enriched"},
+				EnrichedAt:       time.Now(),
+			})
 			continue
 		}
 

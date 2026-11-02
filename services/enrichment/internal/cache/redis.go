@@ -82,3 +82,21 @@ func (c *Client) Close() error {
 func MakeKey(iocType, value string) string {
 	return fmt.Sprintf("aisoc:enrich:%s:%s", iocType, value)
 }
+
+// MakeTenantKey scopes a cached enrichment to one tenant.
+//
+// Depth plan wave 2, item 8.3. Two tenants legitimately enable different
+// providers, so the merged result for one is not the answer for the other.
+// A shared key would serve tenant A's VirusTotal verdict to tenant B, who
+// switched VirusTotal off, which is the same disclosure the provider gate
+// prevents, arriving through the cache instead of through the network.
+//
+// An empty tenant falls back to the unscoped key rather than to a literal
+// "" segment, so a caller that has not been updated keeps its existing
+// cache entries instead of silently missing every one of them.
+func MakeTenantKey(tenantID, iocType, value string) string {
+	if tenantID == "" {
+		return MakeKey(iocType, value)
+	}
+	return fmt.Sprintf("aisoc:enrich:t:%s:%s:%s", tenantID, iocType, value)
+}
