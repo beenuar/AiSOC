@@ -43,6 +43,7 @@ import re
 import shutil
 import sys
 import tempfile
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -60,6 +61,26 @@ MANIFEST = REPO_ROOT / "apps" / "web" / "src" / "fonts" / "manifest.json"
 # Chrome UA. Google serves `ttf` to clients it does not recognise, so this is
 # load-bearing rather than cosmetic — it is what gets us `woff2`.
 USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/104.0.0.0 Safari/537.36"
+
+# The only two hosts this script may contact: the stylesheet API and the font
+# CDN that stylesheet points at.
+ALLOWED_HOSTS = frozenset({"fonts.googleapis.com", "fonts.gstatic.com"})
+
+# An opener carrying *only* the handlers an https GET needs. Both
+# `build_opener()` and the default `urlopen` install FileHandler and
+# FTPHandler; omitting them means a `file://` or `ftp://` URL arriving in a
+# Google response has no handler to serve it and raises, rather than being
+# fetched and written into the repository as a font. UnknownHandler is here
+# so that refusal is a clean URLError instead of `open()` returning None.
+# HTTPHandler is absent too, so plain http cannot be used either.
+_OPENER = urllib.request.OpenerDirector()
+for _handler in (
+    urllib.request.HTTPSHandler(),
+    urllib.request.HTTPRedirectHandler(),
+    urllib.request.HTTPErrorProcessor(),
+    urllib.request.UnknownHandler(),
+):
+    _OPENER.add_handler(_handler)
 
 
 @dataclass(frozen=True)
@@ -104,8 +125,20 @@ def _declaration(body: str, prop: str) -> str:
 
 
 def _get(url: str) -> bytes:
+    """Fetch `url`, which must be https on one of the two Google font hosts.
+
+    The font-file URLs are read out of a stylesheet Google returns, so they
+    are attacker-influenced in principle. `urllib` honours `file://`, which
+    would turn an odd response into "read a local file and commit it as a
+    font", so the opener below is built with no file, ftp or plain-http
+    handler at all — those schemes are not merely rejected, they are
+    unrepresentable. The host allowlist is the second, legible layer.
+    """
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or parsed.hostname not in ALLOWED_HOSTS:
+        raise SystemExit(f"Refusing to fetch {url!r}: not https on {sorted(ALLOWED_HOSTS)}")
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310 - fixed https host
+    with _OPENER.open(request, timeout=30) as response:
         return response.read()
 
 
