@@ -25,6 +25,11 @@ from app.connectors.base import (
 
 logger = structlog.get_logger()
 
+# /api/v2/logs returns at most 100 entries per page, and a search query can
+# page through at most 1,000 results in total.
+_PER_PAGE = 100
+_MAX_PAGES = 10
+
 
 class Auth0Connector(BaseConnector):
     """Auth0 tenant logs."""
@@ -113,32 +118,45 @@ class Auth0Connector(BaseConnector):
         if not token:
             return []
         since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        items: list[dict[str, Any]] = []
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self._base}/api/v2/logs",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Accept": "application/json",
-                    },
-                    params={
-                        "q": f"date:[{since} TO *]",
-                        "per_page": 100,
-                        "sort": "date:-1",
-                    },
-                )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "auth0.fetch_failed",
-                        status=resp.status_code,
-                        body=resp.text[:300],
+                # Reading only page 0 kept the newest 100 entries of the window
+                # and dropped the rest; the next poll's window starts later, so
+                # those entries were never read.
+                for page in range(_MAX_PAGES):
+                    resp = await client.get(
+                        f"{self._base}/api/v2/logs",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": "application/json",
+                        },
+                        params={
+                            "q": f"date:[{since} TO *]",
+                            "per_page": _PER_PAGE,
+                            "page": page,
+                            "sort": "date:-1",
+                        },
                     )
-                    return []
-                items = resp.json() or []
-                return [self.normalize(i) for i in items]
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "auth0.fetch_failed",
+                            status=resp.status_code,
+                            body=resp.text[:300],
+                        )
+                        if not items:
+                            return []
+                        break
+                    batch = resp.json() or []
+                    items.extend(batch)
+                    if len(batch) < _PER_PAGE:
+                        break
+                else:
+                    logger.warning("auth0.fetch_page_cap_reached", pages=_MAX_PAGES, logs=len(items))
         except Exception as exc:
             logger.warning("auth0.fetch_exception", error=str(exc))
             return []
+        return [self.normalize(i) for i in items]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         type_code = (raw.get("type") or "").lower()
