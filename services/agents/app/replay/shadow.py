@@ -95,9 +95,11 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
+from app.context import cloud_posture as cloud_posture_module
 from app.context import dispositions as dispositions_module
 from app.context import identity as identity_module
 from app.context import knowledge_base
+from app.context.cloud_posture import CloudPostureContext
 from app.context.dispositions import RecentDispositions
 from app.context.identity import IdentityContext
 from app.context.knowledge_base import RunbookRetrieval
@@ -114,7 +116,7 @@ __all__ = [
 #: for each one before the first read, and a store whose counter was created
 #: lazily would be absent from the method note precisely when it was never
 #: consulted, which is the case worth seeing.
-_CUTOFF_STORES: tuple[str, ...] = ("runbooks", "dispositions", "identities")
+_CUTOFF_STORES: tuple[str, ...] = ("runbooks", "dispositions", "identities", "cloud_posture")
 
 #: Keys that may carry a row's recorded time, newest-authority first. The
 #: outcome-prior shape (``first_seen`` / ``last_seen``), the tenant-skill
@@ -529,4 +531,14 @@ class FrozenTriageContextReader:
             as_of=self._snapshot.split_at,
         )
         self._account("identities", found, served=len(found.identities))
+        return found
+
+    async def fetch_cloud_posture_context(self, tenant_id: str | None, *, resources: list[str]) -> CloudPostureContext:
+        self.reads["fetch_cloud_posture_context"] += 1
+        found = await cloud_posture_module.fetch_cloud_posture_context(
+            tenant_id,
+            resources=resources,
+            as_of=self._snapshot.split_at,
+        )
+        self._account("cloud_posture", found, served=len(found.findings))
         return found

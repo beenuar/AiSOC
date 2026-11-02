@@ -46,6 +46,7 @@ from app.agents.auto_triage_agent import run_auto_triage
 from app.agents.dispositions import AUTO_CLOSEABLE_DISPOSITIONS, NEEDS_REVIEW, normalize_disposition
 from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
+from app.context import cloud_posture as cloud_posture_module
 from app.context import dispositions as dispositions_module
 from app.context import identity as identity_module
 from app.context import knowledge_base, vendor_evidence
@@ -144,6 +145,7 @@ _METRICS = {
     "runbooks_refused_for_injection": 0,
     "recent_dispositions_read": 0,
     "identity_context_read": 0,
+    "cloud_posture_read": 0,
     "privilege_context_read": 0,
     "errors": 0,
 }
@@ -769,6 +771,10 @@ class FusedAlertTriageWorker:
                     # here.
                     await self._attach_recent_dispositions(state)
                     await self._attach_identity_context(state)
+                    # Depth-2 8.1: and what a CNAPP already knows is wrong
+                    # with the resource. Same cutoff-frozen shape as the two
+                    # above, so it takes no point in time from here either.
+                    await self._attach_cloud_posture(state)
                     await self._attach_vendor_evidence(state)
                     # Depth 2 wave 2, 1.1. Unlike the three above, this one
                     # *does* take a point in time, and it is the alert's own:
@@ -1237,6 +1243,27 @@ class FusedAlertTriageWorker:
             return
         state.identity_context = found.as_state()
         _METRICS["identity_context_read"] += len(found.identities)
+
+    async def _attach_cloud_posture(self, state: InvestigationState) -> None:
+        """Record what is already known to be wrong with this alert's resources.
+
+        A tenant with no CNAPP connected gets nothing here and nothing in the
+        prompt. That is the correct outcome and it is not the same as a clean
+        estate: an empty block is silence, while a block saying the resource
+        has no findings is a claim, and an exculpatory one.
+        """
+        resources = cloud_posture_module.resources_for(state.raw_alert)
+        if not resources:
+            return
+        try:
+            found = await self._reader.fetch_cloud_posture_context(str(state.tenant_id), resources=resources)
+        except Exception as exc:  # noqa: BLE001 - posture context is advisory, triage is not
+            logger.warning("auto_triage_worker.cloud_posture_lookup_failed", error=str(exc)[:200])
+            return
+        if not found.findings:
+            return
+        state.cloud_posture_context = found.as_state()
+        _METRICS["cloud_posture_read"] += len(found.findings)
 
     @staticmethod
     def _event_time_of(state: InvestigationState) -> datetime | None:

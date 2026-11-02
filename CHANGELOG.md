@@ -7,8 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **`GET /posture/summary` now returns `null` rather than `0` for every count
+  when nothing has collected.** The eight integer fields on `PostureSummary`
+  — `total`, `critical`, `high`, `medium`, `low`, `open`, `resolved` and
+  `suppressed` — become nullable, which changes their generated SDK types
+  from `int` to `int | None`.
+
+  The break could not be preserved, because the old type *was* the defect.
+  `posture_findings` had no production writer at all, so the endpoint counted
+  an empty table and answered `total: 0, critical: 0` on every deployment —
+  a sentence that reads "your cloud estate is clean" about an estate nobody
+  has looked at. No integer can carry that distinction: `0` has to mean
+  "collected, and found nothing", which leaves `null` as the only honest
+  value for "nothing has collected". Keeping the type and adding `collected`
+  beside it would have left the old fields still saying zero, so every client
+  that did not adopt the new flag would keep reading the same false clean
+  bill.
+
+  Migrating a client is reading `collected` first: when it is false the
+  counts are absent and the correct render is "not scanned", not a zero.
+
 ### Added
 
+- **A CNAPP's findings reach a verdict as context about the resource, not as
+  more alerts** (depth plan wave 2, item 8.1). The Wiz connector read
+  `issues` and nothing else; it now also reads vulnerability findings,
+  configuration findings and runtime detections, each off until the tenant
+  enables it, and none of them becomes an alert.
+
+  What was absent, and it was not the connector. `posture_findings` has
+  shipped since migration `017` with RLS, six indices, a REST surface and a
+  compliance-evidence mapper, and its only writer in the whole tree was
+  `POST /posture/findings` — a route a human calls by hand. No connector, no
+  scanner and no scheduler had ever written a row. `posture_scan_runs` had no
+  writer at all. A module-reachability gate passes on both, because the code
+  does run; what it reads is a table nothing fills.
+
+  So the measurable consequence was a confident zero: `GET /posture/summary`
+  counted an empty table and answered `total: 0, critical: 0` on every
+  deployment, which says "your cloud estate is clean" about an estate nobody
+  has looked at. The summary now carries `collected`, derived from a run row
+  the collector writes on every poll *including* a poll that found nothing,
+  and returns null rather than `0` when nothing has collected. The same
+  distinction reaches the prompt: a tenant with no CNAPP gets no posture
+  block at all rather than a line saying the resource has no findings, which
+  a model would reasonably read as exculpatory.
+
+  Where each class lands is the design. Vulnerabilities go to
+  `asset_vulnerabilities` through the `fetch_vulnerability_findings` hook
+  that already existed and was implemented by two connectors — a second home
+  for per-asset CVE state would be a second answer to "are we exposed".
+  Configuration findings and runtime detections go to `posture_findings`,
+  which a verdict queries by resource. Matching is an array overlap over
+  every identifier a resource answers to, because an alert knows a bucket by
+  its ARN while the CNAPP knows it by its own graph id and a display name.
+
+  Read through Postgres rather than the graph, deliberately: the five
+  incident-context dimensions are 100% Neo4j, which is a `full`-profile
+  service, so a posture finding that only reached a verdict there would be a
+  capability most deployments do not have, described as one they do.
+
+  **Secrets are refused rather than built.** Wiz detects exposed secrets, but
+  no public reference documents a top-level secrets query the way it
+  documents the other three, and writing one from the product's marketing
+  surface would be inventing an endpoint. The three queries that did ship
+  were verified against two independently maintained, shipped third-party
+  integrations that drive the same shapes.
+
+  One vendor quirk worth recording: Wiz applies a default type filter of
+  `GENERATED_THREAT` the moment any filter is sent, silently dropping
+  `MATCH_ONLY` detections — the weak signals the read exists to supply. Both
+  types are named explicitly and a test asserts it on the *request*, because
+  a tenant missing the filter still gets rows, just the wrong subset.
+
+  Proven live: eight cases against real Postgres as the DML-only `aisoc_app`
+  role, with a negative control that makes a re-poll reset `first_detected_at`
+  and requires the suite to go red. A sixth channel was added to the
+  injection scan, because a cloud resource name is chosen by whoever created
+  the resource. `apps/docs/docs/connectors/cloud-security-depth.md` records
+  the same depth check across all five registered cloud-security connectors,
+  naming six further gaps and the one refusal.
 - **Response reaches the cloud, SaaS and code-platform estate.** The live
   action surface covered hosts, user sessions, mail, network blocks, SIEM
   and tickets, and stopped there: an AWS key in an attacker's hands, a
@@ -189,6 +269,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and never fire on real traffic. A missing Go toolchain fails the gate
   rather than reporting "not checked", because a gate that skips silently is
   indistinguishable from one that passed.
+
+### Fixed
+
+- **The only throughput gate a pull request runs is now derived from a
+  published figure** (depth plan wave 2, item 8.4). `perf.yml` asserted
+  `--assert-floor 1000` on the in-process fusion hot path, under a comment
+  claiming a ">200x margin below the measured number" — a number that
+  appeared on no page, so nobody could check either figure or say what
+  regression the gate would catch. The end-to-end job whose floors *are*
+  bound to the published page is nightly, so on a pull request this was the
+  only throughput assertion running at all.
+
+  The harness was measured at 140,692 events/s and published with hardware,
+  date and commit; the floor moved to 7,000, a stated 20.1x. Two negative
+  controls: reverting the floor fails at 140.7x against a 25x ceiling, and
+  deleting the published section fails with the reason rather than passing
+  over an absent claim.
+
+  The performance page also separated two gaps it had been conflating: no
+  cloud-hardware run and no managed-Kubernetes run are different missing
+  things, and the `kind` table is neither of them.
+
+- **The Wiz connector's documented severity ladder was wrong.** The page said
+  AiSOC collapses Wiz's five tiers into four with `CRITICAL` mapping to
+  `high`; the connector has mapped `CRITICAL` to `critical` all along. Wiz
+  was also the only one of the five cloud-security connectors shipping
+  without a marketplace manifest.
 
 ## [21.0.0] - 2026-10-31
 

@@ -1,0 +1,56 @@
+id: wiz
+name: Wiz Connector
+version: "1.1.0"
+plugin_type: connector
+tier: stable
+description: >
+  Wiz cloud security. Pulls open issues as alerts, and optionally three
+  further finding classes as triage context rather than as alerts:
+  vulnerability findings into the per-asset CVE inventory, and configuration
+  findings and runtime detections into the cloud-posture store, where a
+  verdict can ask what is already known to be wrong with the resource an
+  alert touched. Each context read is off until the tenant enables it.
+author: AiSOC Core Team
+tags: [cloud, cnapp, cspm, cwpp, ciem, vulnerability, runtime, wiz]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/wiz.py
+license: MIT
+min_aisoc_version: "7.1.0"
+config_schema:
+  type: object
+  required: [client_id, client_secret, api_endpoint_url]
+  properties:
+    client_id:
+      type: string
+      description: Wiz service-account client ID
+    client_secret:
+      type: string
+      description: Wiz service-account client secret
+      secret: true
+    api_endpoint_url:
+      type: string
+      description: >
+        Your tenant's GraphQL API endpoint, for example
+        https://api.us20.app.wiz.io/graphql.
+    auth_url:
+      type: string
+      description: >
+        OAuth2 token endpoint. Override only for gov-cloud tenants.
+      default: "https://auth.app.wiz.io/oauth/token"
+    collect_vulnerabilities:
+      type: boolean
+      description: >
+        Pull per-asset CVE findings into the vulnerability inventory rather
+        than the alert queue. Needs the read:vulnerabilities scope.
+      default: false
+    collect_configuration_findings:
+      type: boolean
+      description: >
+        Pull failed cloud-configuration checks as posture context for triage.
+        Needs the read:cloud_configuration scope.
+      default: false
+    collect_runtime_detections:
+      type: boolean
+      description: >
+        Pull runtime threat detections as posture context for triage. Needs
+        the read:detections scope.
+      default: false

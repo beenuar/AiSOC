@@ -42,6 +42,8 @@ from app.closure.qa_sampling import ClosureQaSampler
 from app.confidence import eligibility
 from app.confidence.claim_support import score_claim_support
 from app.context import vendor_evidence as vendor_evidence_module
+from app.context.cloud_posture import basis as posture_basis
+from app.context.cloud_posture import render_for_prompt as render_posture
 from app.context.dispositions import basis as disposition_basis
 from app.context.dispositions import render_for_prompt as render_dispositions
 from app.context.identity import basis as identity_basis
@@ -205,6 +207,16 @@ def _scannable_fields(state: InvestigationState) -> list[tuple[str, Any]]:
         if isinstance(row, dict):
             fields.append((f"organisation_memory[{index}].statement", row.get("statement")))
 
+    # Depth-2 8.1, and a sixth channel for the same reason as the three above.
+    # A cloud resource name is chosen by whoever created the resource, which
+    # in a compromise is the attacker, and a CNAPP reads it verbatim; a rule
+    # title is vendor text but a custom rule's title is the customer's own
+    # free text. Both reach the preamble, so both are scanned.
+    for index, row in enumerate((state.cloud_posture_context or {}).get("findings") or []):
+        if isinstance(row, dict):
+            fields.append((f"cloud_posture.findings[{index}].rule_title", row.get("rule_title")))
+            fields.append((f"cloud_posture.findings[{index}].resource_name", row.get("resource_name")))
+
     skill = state.tenant_skill or {}
     if skill.get("triage_guidance"):
         fields.append(("tenant_skill.triage_guidance", skill.get("triage_guidance")))
@@ -323,6 +335,13 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     who = render_identity(state.identity_context)
     if who:
         preamble.append(sanitize_text(who, max_len=_MAX_CONTEXT_BLOCK_CHARS))
+    # Depth-2 8.1. The state the resource was already in. A rule title and a
+    # resource name come from the tenant's own CNAPP reading their cloud
+    # estate, where a resource name is attacker-influenced in every provider,
+    # so this takes the same second sanitising pass as the blocks above.
+    posture = render_posture(state.cloud_posture_context)
+    if posture:
+        preamble.append(sanitize_text(posture, max_len=_MAX_CONTEXT_BLOCK_CHARS))
 
     # What that principal could do when it acted (depth 2 wave 2, 1.1).
     # First-party like the block above -- it is the platform's own derivation
@@ -701,6 +720,7 @@ async def run_auto_triage(state: InvestigationState) -> InvestigationState:
     state.confidence_basis.extend(citation_basis(state.knowledge_base))
     state.confidence_basis.extend(disposition_basis(state.recent_dispositions))
     state.confidence_basis.extend(identity_basis(state.identity_context))
+    state.confidence_basis.extend(posture_basis(state.cloud_posture_context))
     # Depth 2 wave 2, 1.1. Every line here names the tool that produced
     # it, so an auditor can match the claim to a `tool_call` row rather
     # than taking the prompt's word for it.

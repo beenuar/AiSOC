@@ -231,6 +231,15 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "narrowing of one, and it is bound into every node of the Cypher through the same _scoped() predicate the incident-context "
         "traversal uses, so a shared Identity node cannot bridge two tenants",
     ),
+    "services/api/app/api/v1/endpoints/posture.py::resource_findings_for_triage": (
+        "service_token_valid",
+        "the agents service asks what is already known to be wrong with the resources an alert touched, on the path of a "
+        "triage, and holds no session; the shared service token is the credential, compared in constant time and failing "
+        "closed when unset. The named tenant is the scope rather than a narrowing of one, for the same reason as the "
+        "siblings above, and it is the first predicate of both statements the route runs. The resource keys come from the "
+        "alert and are therefore attacker-influenced, so they are bound as parameters and matched against a stored array; "
+        "they can narrow the result and can never widen the tenant predicate",
+    ),
     "services/api/app/api/v1/endpoints/knowledge_base.py::retrieve_runbooks_for_triage": (
         "service_token_valid",
         "the agents service retrieves this tenant's runbooks here on the path of a triage and holds no session; the "

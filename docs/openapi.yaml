@@ -36579,41 +36579,88 @@ components:
       title: PortfolioTenantOut
     PostureSummary:
       properties:
+        collected:
+          type: boolean
+          title: Collected
+        last_collected_at:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Last Collected At
+        sources:
+          items:
+            type: string
+          type: array
+          title: Sources
         total:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Total
         critical:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Critical
         high:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: High
         medium:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Medium
         low:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Low
         open:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Open
         resolved:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Resolved
         suppressed:
-          type: integer
+          anyOf:
+          - type: integer
+          - type: 'null'
           title: Suppressed
       type: object
       required:
-      - total
-      - critical
-      - high
-      - medium
-      - low
-      - open
-      - resolved
-      - suppressed
+      - collected
       title: PostureSummary
+      description: 'Counts, and whether they mean anything.
+
+
+        Until depth-2 item 8.1 this model was eight bare integers over a table
+
+        whose only writer was the hand-called route above, so every deployment
+
+        that had never POSTed a finding by hand read a confident
+
+        ``total: 0, critical: 0`` — which says "your cloud estate is clean" about
+
+        an estate nobody has looked at.
+
+
+        ``collected`` is the discriminator. It is derived from
+
+        ``posture_scan_runs``, which a collector writes on every poll including a
+
+        poll that found nothing, so "nobody has collected" and "collected, and the
+
+        estate is clean" stop being the same answer. When it is false the counts
+
+        are ``None`` rather than ``0``: a renderer cannot accidentally display an
+
+        absent measurement as a reassuring number.'
     PreferencesPatch:
       properties:
         preferences:

@@ -650,6 +650,12 @@ class ConnectorScheduler:
         # fetch that fails must not be reported as a successful sync.
         await self._sync_vulnerability_findings(connector, target)
 
+        # A CNAPP's configuration findings and runtime detections are posture
+        # context about a resource, not events about a moment, so they take
+        # the same shape of detour: their own hook, their own `try`, and a
+        # failure that costs the poll nothing. Depth-2 item 8.1.
+        await self._sync_cloud_security_findings(connector, target)
+
         # Workforce and device context, for the same reason and by the same
         # route. `import_context` in the API had exactly one production
         # caller before this -- a manual POST -- so a tenant's HR data was
@@ -1105,6 +1111,65 @@ class ConnectorScheduler:
         except Exception:
             logger.exception(
                 "connector.scheduler.vulnerability_sync_failed id=%s type=%s",
+                target.id,
+                target.connector_type,
+            )
+
+    async def _sync_cloud_security_findings(self, connector: Any, target: Any) -> None:
+        """Materialise a CNAPP's posture findings as triage context, if it has any.
+
+        Depth-2 item 8.1. Written here rather than posted to the API for the
+        same reason as the vulnerability sync directly above: the API's
+        service principal is deliberately read-only, and this service already
+        holds both a database engine and the tenant id it is polling for.
+
+        Nothing here becomes an alert. Phase 8 is read-only, and a CNAPP's
+        standing backlog of misconfigurations pushed into an analyst queue is
+        the noise a CNAPP exists to triage.
+        """
+        fetch = getattr(connector, "fetch_cloud_security_findings", None)
+        if fetch is None:
+            return
+
+        started = datetime.now(UTC)
+        try:
+            findings = await fetch()
+        except Exception:
+            logger.exception(
+                "connector.scheduler.cloud_security_fetch_failed id=%s type=%s",
+                target.id,
+                target.connector_type,
+            )
+            return
+
+        if not findings:
+            # Deliberately no run row. A connector whose three context reads
+            # are all switched off returns `[]` every poll, and writing a run
+            # for it would make `GET /posture/summary` report "collected,
+            # nothing found" for a tenant that has collected nothing — the
+            # confident zero this item exists to stop publishing.
+            return
+
+        try:
+            from app.cloud_security import sync_cloud_security_findings
+
+            counts = await sync_cloud_security_findings(
+                self._engine,
+                tenant_id=target.tenant_id,
+                source=str(target.connector_type),
+                findings=findings,
+                started_at=started,
+            )
+            logger.info(
+                "connector.scheduler.cloud_security_synced id=%s inserted=%d touched=%d skipped=%d",
+                target.id,
+                counts["findings_inserted"],
+                counts["findings_touched"],
+                counts["skipped"],
+            )
+        except Exception:
+            logger.exception(
+                "connector.scheduler.cloud_security_sync_failed id=%s type=%s",
                 target.id,
                 target.connector_type,
             )
