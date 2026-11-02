@@ -51,6 +51,7 @@ fan-out shape, not LLM variance.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 import uuid
@@ -581,6 +582,54 @@ async def _persist_report_artifact(
         )
 
 
+async def _persist_router_state(
+    ledger_module: Any,
+    *,
+    run_id: uuid.UUID,
+    tenant_id: uuid.UUID | None,
+    state: InvestigationState,
+) -> None:
+    """Persist the router's structured InvestigationState as a ledger artifact.
+
+    The router's flat state has no per-agent recon/forensic/responder blocks and
+    persists none of its findings/MITRE/actions to the ledger, so after an agents
+    restart those case-workspace tabs render empty for router-path runs. The
+    investigator path avoids this because it writes per-agent llm_response events;
+    the router has no equivalent. Persisting the structured state (not report_md,
+    which is already stored) lets the API ledger fallback rebuild the phase tabs.
+
+    Best-effort: a ledger failure must never block the live stream, matching
+    :func:`_persist_report_artifact`.
+    """
+    if tenant_id is None:
+        return
+    try:
+        payload = json.dumps(
+            {
+                "verdict": state.verdict,
+                "confidence": state.confidence,
+                "confidence_basis": list(state.confidence_basis),
+                "findings": list(state.findings),
+                "mitre_mappings": list(state.mitre_mappings),
+                "proposed_actions": [_serialise_action(a) for a in state.proposed_actions],
+                "alert_summary": state.alert_summary,
+                "ioc_enrichments": state.ioc_enrichments if isinstance(state.ioc_enrichments, dict) else {},
+            }
+        )
+    except (TypeError, ValueError) as exc:
+        logger.warning("router.stream.router_state_serialise_failed", run_id=str(run_id), error=str(exc))
+        return
+    try:
+        await ledger_module.record_artifact(
+            run_id=run_id,
+            tenant_id=tenant_id,
+            kind="router_state",
+            content=payload,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("router.stream.router_state_artifact_failed", run_id=str(run_id), error=str(exc))
+
+
 async def _complete_run_safe(
     ledger_module: Any,
     *,
@@ -883,6 +932,12 @@ class RouterOrchestrator:
                 tenant_id=tenant_id,
                 report_md=report_md,
             )
+            await _persist_router_state(
+                ledger_module,
+                run_id=run_id,
+                tenant_id=tenant_id,
+                state=state,
+            )
             await _complete_run_safe(
                 ledger_module,
                 run_id=run_id,
@@ -1096,6 +1151,12 @@ class RouterOrchestrator:
             run_id=run_id,
             tenant_id=tenant_id,
             report_md=report_md,
+        )
+        await _persist_router_state(
+            ledger_module,
+            run_id=run_id,
+            tenant_id=tenant_id,
+            state=state,
         )
         await _complete_run_safe(
             ledger_module,
