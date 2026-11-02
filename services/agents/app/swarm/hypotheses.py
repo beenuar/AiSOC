@@ -26,7 +26,7 @@ HYPOTHESES: list[Hypothesis] = [
     Hypothesis(
         key="ransomware_staging",
         label="Ransomware staging",
-        supports_keywords=frozenset({"ransomware", "encrypt", "shadow copy", "vssadmin", "lockbit", ".lockbit", "ransom note"}),
+        supports_keywords=frozenset({"ransomware", "encrypt*", "shadow copy", "vssadmin", "lockbit", ".lockbit", "ransom note"}),
         contradicts_keywords=frozenset({"backup completed", "scheduled backup"}),
         techniques=frozenset({"T1486", "T1490"}),
     ),

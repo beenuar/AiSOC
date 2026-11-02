@@ -30,6 +30,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   counts are absent and the correct render is "not scanned", not a zero.
 ### Fixed
 
+- **The offline sandbox read two spellings of "timestamp" and silently
+  computed nothing for the rest.** Found by writing a payload the way a
+  stranger would: the same benign login as the previous report, timed with
+  `"ts"` instead of `"published"`, returned `not_computable` on every
+  time-based signal. The behaviour was honest — it named the missing input
+  rather than inventing a verdict — but
+  `_parse_timestamp(event.get("published") or event.get("timestamp"))`
+  accepted exactly two spellings while the actor reader accepted four and
+  the address reader four, which is backwards: a timestamp has *more*
+  ordinary spellings than an actor, not fewer. Measured over the spellings
+  a stranger would plausibly write, **13 of 63 probes passed**. Since the
+  package is used by running it against your own alert file, that is the
+  difference between a tool that works and one that appears to do nothing.
+
+  No existing test could have caught it, and that is the part worth
+  keeping: every bundled fixture says `published`, so replaying the corpus
+  could only ever confirm that `published` works. A corpus written in its
+  parser's own dialect cannot reveal a dialect gap.
+
+  All field reads now go through one declared table, `FIELD_VOCABULARY`,
+  covering event time (16 spellings, ISO-8601 or epoch), actor (14, plus 4
+  honoured only when nested), source address (13), city, country,
+  coordinates, domain age and destination. Actor, address and position are
+  also read through declared container objects up to three levels deep, so
+  the shapes Okta, Microsoft Entra and Elastic Common Schema actually ship
+  resolve without reshaping. Position now **prefers coordinates the payload
+  carries** over a city centroid: explicit `lat`/`lon` is not a weaker
+  input than the table but a strictly better one, while the table stays
+  narrow and still names a city it cannot resolve rather than substituting
+  a country centroid. 63 of 63 probes pass after.
+
+  Widening was not allowed to buy a new confident answer, which took three
+  guards. Two events timed only to a calendar date both land on midnight,
+  so the elapsed time is zero and the implied speed infinite — without a
+  precision guard the sandbox reports "one actor was in two places at once"
+  from a payload that never carried an hour, proven by reverting the guard
+  alone and watching it fire. Event times are read from the top of the
+  event only, so a nested `user.created_at` can never stand in for the time
+  of the event. And `0,0`, out-of-range coordinates and half a coordinate
+  pair are refused or fall back to the city table, never plotted. An
+  unrecognised spelling still returns `not_computed` naming the field.
+  Gated by a new vocabulary arm in `scripts/check_sandbox_honesty.py` that
+  generates its fixtures from the vocabulary table itself, plus
+  `test_field_vocabulary.py` (134 cases). Signal output for all five
+  bundled scenarios is unchanged, byte for byte.
+
 - **The offline sandbox's verdict followed the label on the input file, not
   the events.** Reported by a community reviewer who fed `aisoc-sandbox` a
   harmless login — same user, same address, New York both times, eight hours
