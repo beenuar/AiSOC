@@ -886,7 +886,13 @@ jobs:
         run: |
           set -euo pipefail
           python -m pytest ../../tests/isolation/test_root_cause_findings_live.py -v --tb=short -rs | tee /tmp/rootcause.log
-          grep -qE '^[0-9]+ passed' /tmp/rootcause.log \
+          # Same pattern as the occurrence guard above, and for both its
+          # reasons. Unanchored, because pytest's summary line begins with
+          # `=====` and `^[0-9]+ passed` therefore matches nothing — the
+          # guard failed a run in which all six tests passed. And
+          # `[1-9][0-9]*` rather than `[0-9]+`, so a run that collected
+          # nothing and reported `0 passed` is still a failure.
+          grep -qE '[1-9][0-9]* passed' /tmp/rootcause.log \
             || { echo "::error::the root-cause live suite did not report any passing test"; exit 1; }
           ! grep -qE 'skipped' /tmp/rootcause.log \
             || { echo "::error::the root-cause live suite skipped a test; its DSNs must both be set"; exit 1; }
