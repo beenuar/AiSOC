@@ -70,10 +70,7 @@ def _expected_rule_total() -> int:
     still asserts the real thing: that a clean run reports the whole corpus
     rather than a subset.
     """
-    return sum(
-        len(json.loads((REPO / PACKAGED / name).read_text(encoding="utf-8"))["rules"])
-        for name in (*ARTEFACTS, GENERATED)
-    )
+    return sum(len(json.loads((REPO / PACKAGED / name).read_text(encoding="utf-8"))["rules"]) for name in (*ARTEFACTS, GENERATED))
 
 
 def _check(root: pathlib.Path) -> subprocess.CompletedProcess[str]:
