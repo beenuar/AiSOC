@@ -1,28 +1,15 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, JetBrains_Mono } from 'next/font/google';
 import { Toaster } from 'react-hot-toast';
 import './globals.css';
+import '@/fonts/fonts.css';
+import { FontPreloads } from '@/components/fonts/FontPreloads';
 import { PwaBootstrap } from '@/components/pwa/PwaBootstrap';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { themeBootstrapScript } from '@/components/theme/themeScript';
+import { CONSOLE_FONT_PRELOADS } from '@/fonts/preloads';
 import { docs } from '@/lib/docs';
 import { DISCOVERY_KEYWORDS, getPublicSiteUrl } from '@/lib/site';
 import { CONNECTOR_COUNT } from '@/data/connectorCount';
-
-const inter = Inter({
-  subsets: ['latin'],
-  variable: '--font-inter',
-  display: 'swap',
-});
-
-const jetbrainsMono = JetBrains_Mono({
-  subsets: ['latin'],
-  variable: '--font-mono',
-  display: 'swap',
-  // Only load on demand — monospace font is used in code blocks, not every page,
-  // so preloading eagerly causes "preloaded but unused" browser warnings.
-  preload: false,
-});
 
 const siteUrl = getPublicSiteUrl();
 
@@ -172,13 +159,12 @@ export default function RootLayout({
     // bootstrap script (rendered first thing inside <body>) flips this to
     // light/system if the user previously chose so, before any pixels are
     // painted — that's why we don't see a flash.
-    <html
-      lang="en"
-      data-theme="dark"
-      className={`${inter.variable} ${jetbrainsMono.variable}`}
-      suppressHydrationWarning
-    >
+    // `font-console-vars` declares --font-inter and --font-mono, which the
+    // Tailwind `sans` and `mono` stacks read. It replaces the two class names
+    // `next/font/google` used to generate for the same two variables.
+    <html lang="en" data-theme="dark" className="font-console-vars" suppressHydrationWarning>
       <body className="bg-surface-base text-fg-primary antialiased">
+        <FontPreloads hrefs={CONSOLE_FONT_PRELOADS} />
         <script
           // eslint-disable-next-line react/no-danger -- pre-hydration theme bootstrap
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}

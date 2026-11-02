@@ -576,6 +576,26 @@ jobs:
       # commit the result.
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
+      # Same shape again, for the self-hosted webfonts. `apps/web` used to
+      # load five faces through `next/font/google`, which resolves them by
+      # fetching from Google *during `next build`* — so every build surface,
+      # including the published image and a contributor's laptop, depended on
+      # a third party being reachable and on its response not changing. Both
+      # failed: an unreachable fonts.gstatic.com fails the build with
+      # `Can't resolve '@vercel/turbopack-next/internal/font/google/font'`,
+      # and when Google began serving one shared variable file for the two
+      # Source Code Pro weights this app asks for, Turbopack could not
+      # resolve that either and `main` went red with no commit having touched
+      # the web app.
+      #
+      # The faces are vendored under apps/web/public/fonts now. This check is
+      # offline on purpose — it compares the generated stylesheet and preload
+      # lists against the manifest, and every vendored file against its own
+      # content hash, so a hand-edited fonts.css or a swapped binary fails
+      # here. Refreshing from Google is a deliberate act
+      # (`scripts/fetch_web_fonts.py`), never a build-time accident.
+      - name: Verify self-hosted webfonts are in sync
+        run: python3 scripts/generate_web_font_css.py --check
       # Same shape, for the detection / marketplace figures. The landing page
       # carried three different wrong answers to "how many detections" — 6,998
       # in four places, 7,117 for the marketplace, 218 on the contributor
