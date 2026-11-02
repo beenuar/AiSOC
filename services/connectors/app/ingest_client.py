@@ -60,7 +60,35 @@ _DEFAULT_TIMEOUT_S = 30.0
 # mirrors MAX_BATCH_SIZE in services/ingest/internal/config/config.go (default
 # 1000). Declared here so IngestClient can chunk oversized polls before they
 # reach the ingest service and are refused with HTTP 413.
+#
+# The two numbers are kept honest by
+# ``test_max_batch_size_matches_ingest_service_config``, which reads the Go
+# default out of config.go rather than trusting this comment.
 MAX_BATCH_SIZE = 1000
+
+
+def resolve_max_batch_size() -> int:
+    """The per-request event ceiling this client chunks to.
+
+    Reads the same ``MAX_BATCH_SIZE`` variable the Go ingest service reads, so
+    a deployment that lowers the server's cap can lower the client's with it.
+    The two run in separate containers, so alignment is the operator's job:
+    set the variable for both, or leave it unset for both and they agree on
+    the shared default. A value the client cannot parse, or one below 1, is
+    ignored in favour of the default rather than disabling chunking — an
+    unparseable override must not be the reason a poll is discarded whole.
+    """
+    raw = os.getenv("MAX_BATCH_SIZE", "").strip()
+    if raw:
+        try:
+            parsed = int(raw)
+        except ValueError:
+            logger.warning("MAX_BATCH_SIZE=%r is not an integer; chunking at the default %d", raw, MAX_BATCH_SIZE)
+            return MAX_BATCH_SIZE
+        if parsed > 0:
+            return parsed
+        logger.warning("MAX_BATCH_SIZE=%d is not positive; chunking at the default %d", parsed, MAX_BATCH_SIZE)
+    return MAX_BATCH_SIZE
 
 
 def resolve_service_token() -> str:
@@ -95,11 +123,16 @@ class IngestClient:
         *,
         timeout_seconds: float = _DEFAULT_TIMEOUT_S,
         service_token: str | None = None,
+        max_batch_size: int | None = None,
     ) -> None:
         # Strip trailing slash so we can append paths without doubling up.
         self._base_url = base_url.rstrip("/")
         self._timeout = timeout_seconds
         self._service_token = (service_token if service_token is not None else resolve_service_token()).strip()
+        resolved_batch_size = max_batch_size if max_batch_size is not None else resolve_max_batch_size()
+        if resolved_batch_size < 1:
+            raise ValueError(f"max_batch_size must be >= 1, got {resolved_batch_size}")
+        self._max_batch_size = resolved_batch_size
         self._client: httpx.AsyncClient | None = None
         if not self._service_token:
             # Warned once here rather than per poll. Every push will be
@@ -157,11 +190,20 @@ class IngestClient:
         # chunk is pushed separately and the accepted/rejected counts are
         # summed, so the scheduler's "advance only if everything was accepted"
         # rule continues to work unchanged.
+        #
+        # A chunk that is refused raises out of the loop, which is deliberate:
+        # the remaining chunks are not attempted, and the scheduler withholds
+        # both the checkpoint and the queue acknowledgements. Chunks already
+        # accepted before the refusal are redelivered on the next poll, so the
+        # cost of a mid-batch failure is duplicates, never a gap — the same
+        # trade the scheduler already makes between its checkpoint write and
+        # its acks.
         total_accepted = 0
         total_rejected = 0
+        chunk_size = self._max_batch_size
 
-        for i in range(0, len(events), MAX_BATCH_SIZE):
-            chunk = events[i : i + MAX_BATCH_SIZE]
+        for i in range(0, len(events), chunk_size):
+            chunk = events[i : i + chunk_size]
             result = await self._push_chunk(
                 tenant_id=tenant_id,
                 connector_id=connector_id,
@@ -169,8 +211,8 @@ class IngestClient:
                 events=chunk,
                 source_format=source_format,
             )
-            total_accepted += result.get("accepted", 0)
-            total_rejected += result.get("rejected", 0)
+            total_accepted += int(result.get("accepted", 0) or 0)
+            total_rejected += int(result.get("rejected", 0) or 0)
 
         return {"accepted": total_accepted, "rejected": total_rejected}
 
@@ -238,4 +280,4 @@ class IngestClient:
         return data
 
 
-__all__ = ["IngestClient", "IngestClientError", "MAX_BATCH_SIZE"]
+__all__ = ["MAX_BATCH_SIZE", "IngestClient", "IngestClientError", "resolve_max_batch_size", "resolve_service_token"]
