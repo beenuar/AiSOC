@@ -365,11 +365,6 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 - Total: 351
 - GATED: 346
 
-## Summary
-
-- PARTIAL: 5
-- NO GATE: 0
-
 Counts come from `scripts/check_claim_gate_matrix.py`, which is also the gate. Recompute
 rather than editing a number here: a count copied into prose goes stale silently, and the
 parser stops at the first blank line inside the table, so a stray blank desynchronises this
