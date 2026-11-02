@@ -216,35 +216,39 @@ async def get_effective_permissions(
 ) -> dict[str, Any]:
     """Resolve and return the effective-permissions envelope.
 
-    Cache write is dispatched as a FastAPI ``BackgroundTask`` so the request
-    returns as soon as the resolver finishes — the UI never waits on Neo4j.
-
-    Authorization
-    -------------
-    This bound ``get_current_user`` alone and made no authorization decision
-    (GHSA-q23c-9pj3-cw75). The tenant was always derived correctly from the
-    credential, so it was never a cross-tenant defect — but *every* role in
-    the tenant reached it, ``viewer`` included, and so did an API key scoped
-    to something unrelated, because a key's scopes are only ever read by
-    ``require_permission`` and this route never called it. What comes back is
-    an identity's allowed and denied actions, resource ids and ARNs, and the
-    policy chain behind them; with ``AISOC_EFFECTIVE_PERMISSIONS_LIVE=1`` the
-    server also spends the tenant's own stored connector credential to collect
-    it.
-
-    The reporter recommended an object-level check — may this caller inspect
-    *that* ``principal_id``. Deliberately not that: nothing in this product
-    relates a console user to a provider principal (``users`` has no such
-    column, and ``identity_links`` relates two *provider* identifiers to each
-    other), so there is no relation to consult and the check would reduce to
-    "is this your own id", which no caller could satisfy. Inspecting any
-    identity in the tenant is the job; the control is who may do it at all.
-
-    A refusal here is **403, not 404**: no id is being probed, the caller is
-    authenticated inside the right tenant, and "you may not do this" discloses
-    nothing they did not already know. The 404 convention belongs to the
-    routes where the id itself is the secret.
+    Requires ``identity:read``. Cache write is dispatched as a FastAPI
+    ``BackgroundTask`` so the request returns as soon as the resolver
+    finishes — the UI never waits on Neo4j.
     """
+    # Why the permission, and why not the check the report asked for.
+    #
+    # Kept out of the docstring because FastAPI publishes that verbatim into
+    # docs/openapi.yaml, and a reader of the API reference does not need an
+    # advisory's history — but the next reader of this function does.
+    #
+    # This bound `get_current_user` alone and made no authorization decision
+    # (GHSA-q23c-9pj3-cw75). The tenant was always derived correctly from the
+    # credential, so it was never a cross-tenant defect — but *every* role in
+    # the tenant reached it, `viewer` included, and so did an API key scoped
+    # to something unrelated, because a key's scopes are only ever read by
+    # `require_permission` and this route never called it. What comes back is
+    # an identity's allowed and denied actions, resource ids and ARNs, and the
+    # policy chain behind them; with `AISOC_EFFECTIVE_PERMISSIONS_LIVE=1` the
+    # server also spends the tenant's own stored connector credential to
+    # collect it.
+    #
+    # The reporter recommended an object-level check — may this caller inspect
+    # *that* `principal_id`. Deliberately not that: nothing in this product
+    # relates a console user to a provider principal (`users` has no such
+    # column, and `identity_links` relates two *provider* identifiers to each
+    # other), so there is no relation to consult and the check would reduce to
+    # "is this your own id", which no caller could satisfy. Inspecting any
+    # identity in the tenant is the job; the control is who may do it at all.
+    #
+    # A refusal here is 403, not 404: no id is being probed, the caller is
+    # authenticated inside the right tenant, and "you may not do this"
+    # discloses nothing they did not already know. The 404 convention belongs
+    # to the routes where the id itself is the secret.
 
     if provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(

@@ -12134,9 +12134,11 @@ paths:
       description: 'Resolve and return the effective-permissions envelope.
 
 
-        Cache write is dispatched as a FastAPI ``BackgroundTask`` so the request
+        Requires ``identity:read``. Cache write is dispatched as a FastAPI
 
-        returns as soon as the resolver finishes — the UI never waits on Neo4j.'
+        ``BackgroundTask`` so the request returns as soon as the resolver
+
+        finishes — the UI never waits on Neo4j.'
       operationId: get_effective_permissions_api_v1_identity__principal_id__effective_permissions_get
       security:
       - HTTPBearer: []
