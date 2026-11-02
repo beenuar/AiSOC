@@ -124,10 +124,18 @@ class EventWarehouseProvider(Protocol):
         self,
         hunt: SavedHunt,
         *,
-        credentials: WarehouseCredentials,
+        credentials: WarehouseCredentials | None,
         max_rows: int = 500,
     ) -> int:
         """Execute ``hunt`` against ``credentials`` and return the hit count.
+
+        ``credentials`` is ``None`` exactly when the provider declares an
+        empty :attr:`connector_types` — a backend whose address is deployment
+        configuration rather than something a tenant connected (wave 2, Phase
+        5.2; the lake is the only one today). Widened here rather than
+        suppressed at the call site: the scheduler genuinely passes ``None``
+        for such a provider, and a signature that said otherwise would be the
+        type checker agreeing with a contract the code does not keep.
 
         Implementations must:
 

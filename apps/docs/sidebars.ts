@@ -34,6 +34,7 @@ const sidebars: SidebarsConfig = {
         "concepts/live-actions",
         "concepts/retro-hunts",
         "concepts/hunting-agent",
+        "concepts/scheduled-hunts",
         "concepts/automation-maturity",
         "concepts/self-play",
         "concepts/investigation-swarm",
