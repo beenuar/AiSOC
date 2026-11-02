@@ -372,8 +372,6 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 
 - Total: 359
 - GATED: 354
-- Total: 359
-- GATED: 354
 - PARTIAL: 5
 - NO GATE: 0
 
