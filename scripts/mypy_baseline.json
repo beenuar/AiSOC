@@ -138,6 +138,10 @@
       "no-any-return": 1,
       "untyped-decorator": 2
     },
+    "tests/test_field_vocabulary.py": {
+      "import-not-found": 1,
+      "untyped-decorator": 15
+    },
     "tests/test_honesty.py": {
       "import-not-found": 1,
       "untyped-decorator": 6
