@@ -373,6 +373,12 @@ class ShadowModeTriageWriter:
         author: str,
         alert_id: Any = None,
         injection_suspected: bool = False,
+        # Phase 4.4(a). Accepted by every writer because
+        # `test_outcome_writer_signature_parity` requires the canonical
+        # keyword set to be identical across them — a writer that silently
+        # dropped it would store a prior with no evidence, invisible to
+        # similarity forever.
+        alert: dict[str, Any] | None = None,
     ) -> None:
         # An outcome prior lets a later identical alert close without triage.
         # A shadow verdict must never reach that far: it would act on a future
