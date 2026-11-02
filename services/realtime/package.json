@@ -14,7 +14,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.3.0",
-    "express-rate-limit": "^8.7.1",
+    "express-rate-limit": "^8.7.2",
     "ioredis": "^6.0.0",
     "kafkajs": "^2.2.4",
     "pino": "^10.4.0",
@@ -31,7 +31,7 @@
     "eslint": "^10.13.0",
     "tsx": "^4.23.15",
     "typescript": "^5.3.3",
-    "typescript-eslint": "^8.71.2"
+    "typescript-eslint": "^8.72.1"
   },
   "optionalDependencies": {
     "@opentelemetry/api": "^1.10.0",
