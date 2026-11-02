@@ -59,6 +59,31 @@ _ALLOWED_ROUTES = frozenset(
         "soc-emea",
     }
 )
+#: Every operator ``_cmp`` can evaluate. Must match ``ALLOWED_OPS`` in
+#: ``services/api/app/services/business_context/models.py``; the two are held
+#: equal by ``scripts/check_business_context_grammar.py``, which compares the
+#: two published names rather than scraping either evaluator's source.
+#:
+#: Published as a module constant because the alternative — deriving the set
+#: by parsing ``_cmp`` — is how a drift check ends up asserting against its
+#: own copy of the answer.
+COMPARATOR_OPS: frozenset[str] = frozenset(
+    {
+        "eq",
+        "ne",
+        "lt",
+        "lte",
+        "gt",
+        "gte",
+        "contains",
+        "startswith",
+        "endswith",
+        "in",
+        "not_in",
+        "exists",
+        "not_exists",
+    }
+)
 _ENABLED_ENV = "AISOC_BUSINESS_CONTEXT_ENABLED"
 _RULES_FILE_ENV = "AISOC_BUSINESS_CONTEXT_RULES_FILE"
 
@@ -98,6 +123,19 @@ class BusinessContextRule:
     then: RuleAction
     enabled: bool = True
     priority: int = 100
+
+
+class _UnknownOperator(ValueError):
+    """A leaf names a comparator no evaluator implements.
+
+    Separate from the structural ``ValueError``s ``_parse_condition`` raises so
+    the loader can give it its own diagnostic. Subclasses ``ValueError`` so any
+    caller already catching that keeps working.
+    """
+
+    def __init__(self, op: str) -> None:
+        super().__init__(f"{op!r} is not one of {sorted(COMPARATOR_OPS)}")
+        self.op = op
 
 
 def _dotted(alert: dict[str, Any], path: str) -> Any:
@@ -187,7 +225,13 @@ def _parse_condition(node: Any) -> RuleCondition:
         kids = negated if isinstance(negated, list) else [negated]
         return RuleCondition(logical="not", children=tuple(_parse_condition(k) for k in kids))
 
-    return RuleCondition(field=node.get("field"), op=node.get("op"), value=node.get("value"))
+    op = node.get("op")
+    if op is not None and op not in COMPARATOR_OPS:
+        # Checked here rather than in the caller because a leaf is reachable
+        # from arbitrary aggregator depth, and a top-level-only check would
+        # pass `{all: [{op: neq}]}` straight through.
+        raise _UnknownOperator(str(op))
+    return RuleCondition(field=node.get("field"), op=op, value=node.get("value"))
 
 
 def load_rules_from_yaml(source: str) -> list[BusinessContextRule]:
@@ -228,6 +272,12 @@ def load_rules_from_yaml(source: str) -> list[BusinessContextRule]:
             route = None
         try:
             when = _parse_condition(entry.get("when") or {})
+        except _UnknownOperator as exc:
+            # Its own event name, matching rule_route_rejected: this is an
+            # out-of-grammar *value*, not a malformed document, and it is the
+            # one that silently decides the rule never fires.
+            logger.warning("business_context.rule_op_rejected", rule_id=rid, op=exc.op)
+            continue
         except (ValueError, AttributeError, TypeError) as exc:
             logger.warning("business_context.rule_skipped", rule_id=rid, error=str(exc))
             continue

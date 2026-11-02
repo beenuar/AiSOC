@@ -540,9 +540,12 @@ jobs:
       # key" differently about the same text is the drift this prevents.
       - name: Verify vendored AI redaction patterns are in sync
         run: python scripts/sync_vendored_ai_redaction.py --check
-      # The GPU preflight's own self-test. The real verdict depends on the
-      # host, so CI can only assert that the refusals fire and say something
-      # actionable -- which is the part that rots, since the advice is prose.
+      # The prompt-injection patterns, generated from the agents guard's own
+      # rule table rather than hand-copied. The repository scanner (wave-2
+      # 7.2) flags an agent-instruction file or a skill whose text tries to
+      # steer an agent; a hand-picked subset would silently miss whatever
+      # pattern was added to the guard after the next incident. Needs the
+      # agents service importable, so it runs after that install step.
       - name: GPU preflight — self-test
         run: python3 scripts/check_gpu_runtime.py --self-test
       # Gap-closure Phase 2.2. The sixth mirror, and the one where drift is a
@@ -600,15 +603,29 @@ jobs:
         run: python3 scripts/check_alert_reduction_claims.py --self-test
       - name: Verify the retracted alert-reduction figure stays retracted
         run: python3 scripts/check_alert_reduction_claims.py --check
-      # Same family, same reason. The three customer outcomes a buyer asks
-      # for first are recorded as not measured because no design partner has
-      # offered a queue to replay; that record is worth what stops it being
-      # replaced by a figure, or — worse — by a zero, which reads as a
-      # measurement that found nothing.
-      - name: Outcome claims — self-test
+      # Wave-2 plan 4.6. The three outcomes a buyer asks for first can only be
+      # measured by replaying somebody's real closed alerts, no design partner
+      # has offered a window, and all three are recorded as *not measured*.
+      # This gate is what stops that record becoming a number — including the
+      # worse version, a `0`, which reads as "measured and reduced nothing".
+      # It reads the state off the replay page rather than carrying its own
+      # copy, so publishing a real measurement retires the prohibition without
+      # anyone editing the gate.
+      - name: Customer-outcome claims — self-test
         run: python3 scripts/check_outcome_claims.py --self-test
-      - name: Verify no surface publishes an unmeasured outcome
+      - name: No customer-outcome figure nobody measured
         run: python3 scripts/check_outcome_claims.py
+      # Wave-2 plan 4.3. A business-context rule is authored and validated in
+      # `services/api` and evaluated on the triage hot path in
+      # `services/agents`. The two ship as separate images, cannot import each
+      # other, and so declare the operator grammar twice. Drift is silent in
+      # the direction that matters: the console accepts the rule, the worker
+      # has no branch for the operator and falls through to False, and the
+      # tenant gets a saved rule that never fires and no diagnostic.
+      - name: Business-context grammar — self-test
+        run: python3 scripts/check_business_context_grammar.py --self-test
+      - name: Both business-context engines agree on the operator grammar
+        run: python3 scripts/check_business_context_grammar.py --check
       # And the mirror: a caveat saying a console surface is "not built"
       # reads as modesty and works as an exemption, since an absent surface
       # needs no claim row and no gate. Three of the six the matrix called

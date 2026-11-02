@@ -875,6 +875,195 @@ export const brandingApi = {
     }
     return response.blob();
   },
+
+  /**
+   * Write branding for the organisation the caller's tenant belongs to.
+   *
+   * A tenant in no operator organisation gets a 409 from the route, which is
+   * a real answer and not an error: there is nothing to brand. Callers
+   * branch on it rather than rendering a failure.
+   */
+  async update(body: BrandingUpdate): Promise<Branding> {
+    return request<Branding>("/api/v1/branding", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    });
+  },
+
+  /**
+   * Upload a logo or favicon.
+   *
+   * Multipart, so the JSON content type `apiHeaders` sets by default has to
+   * go — the browser must write its own `multipart/form-data` header with
+   * the boundary it generated, and overriding it produces a body the server
+   * cannot parse.
+   */
+  async uploadAsset(kind: "logo" | "favicon", file: File): Promise<BrandAsset> {
+    const headers = apiHeaders();
+    delete headers["Content-Type"];
+    const form = new FormData();
+    form.append("file", file);
+    const response = await fetch(`${API_BASE}/api/v1/branding/assets/${kind}`, {
+      method: "POST",
+      headers,
+      body: form,
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      // The route's 422 messages name the reason (wrong magic bytes, an SVG
+      // the sanitiser refused, an unsupported type). Surfacing that verbatim
+      // is the difference between "upload failed" and an operator knowing to
+      // re-export the file.
+      let detail = `branding asset upload failed (${response.status})`;
+      try {
+        const parsed = JSON.parse(text) as { detail?: string };
+        if (parsed.detail) detail = parsed.detail;
+      } catch {
+        /* a non-JSON body is already covered by the status-code fallback */
+      }
+      throw new ApiError(detail, response.status, text);
+    }
+    return JSON.parse(text) as BrandAsset;
+  },
+
+  async deleteAsset(kind: "logo" | "favicon"): Promise<void> {
+    return request<void>(`/api/v1/branding/assets/${kind}`, { method: "DELETE" });
+  },
+};
+
+/** The writable subset of {@link Branding}; `logo_url` is set by upload. */
+export interface BrandingUpdate {
+  product_name?: string | null;
+  primary_color?: string | null;
+  accent_color?: string | null;
+  support_email?: string | null;
+  support_url?: string | null;
+  sender_name?: string | null;
+  footer_text?: string | null;
+}
+
+export interface BrandAsset {
+  id: string;
+  kind: string;
+  content_type: string;
+  bytes: number;
+  sanitized: boolean;
+  removed?: { elements: string[]; attributes: string[] };
+}
+
+// ─── Data lifecycle: retention (wave 2, Phase 9.5) ──────────────────────────
+//
+// `/data-lifecycle/retention` has had GET and PUT since migration 049 and no
+// console binding at all, so a tenant's retention was settable only by curl.
+
+export interface RetentionPolicy {
+  raw_events_days: number;
+  alerts_days: number;
+  audit_days: number;
+  /**
+   * Whether this deployment actually deletes on these windows.
+   *
+   * `RETENTION_WORKER_ENABLED` defaults to false, so the console must be able
+   * to say "this is a stated policy, nothing is deleting yet" rather than
+   * implying a deletion that does not happen.
+   */
+  purge_worker_enabled: boolean;
+  purge_worker_dry_run: boolean;
+}
+
+export const retentionApi = {
+  get: () => request<RetentionPolicy>("/api/v1/data-lifecycle/retention"),
+
+  /**
+   * Partial by design: the route merges each absent field with what is
+   * stored, so sending one window never silently resets the other two.
+   */
+  update: (body: Partial<RetentionPolicy>) =>
+    request<RetentionPolicy>("/api/v1/data-lifecycle/retention", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+};
+
+// ─── MSSP rule packs and delegations (wave 2, Phase 9.5) ────────────────────
+
+export interface RulePack {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PackAssignment {
+  id: string;
+  pack_id: string;
+  child_tenant_id: string;
+  enabled: boolean;
+  parameter_overrides: Record<string, unknown>;
+  created_at: string;
+}
+
+export const rulePacksApi = {
+  list: () => request<RulePack[]>("/api/v1/mssp/rule-packs"),
+
+  create: (body: { name: string; description?: string | null; category?: string | null; is_default?: boolean }) =>
+    request<RulePack>("/api/v1/mssp/rule-packs", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  update: (id: string, body: Partial<{ name: string; description: string | null; category: string | null; is_default: boolean }>) =>
+    request<RulePack>(`/api/v1/mssp/rule-packs/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  remove: (id: string) => request<void>(`/api/v1/mssp/rule-packs/${id}`, { method: "DELETE" }),
+
+  /**
+   * Assign a pack to one managed tenant.
+   *
+   * Assignment is what makes a pack take effect, so a console that only
+   * created packs would leave an operator with a library that detects
+   * nothing — which is why this is on the panel and not deferred.
+   */
+  assign: (id: string, body: { child_tenant_id: string; enabled?: boolean; parameter_overrides?: Record<string, unknown> }) =>
+    request<PackAssignment>(`/api/v1/mssp/rule-packs/${id}/assign`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+};
+
+export interface Delegation {
+  id: string;
+  parent_tenant_id: string;
+  child_tenant_id: string;
+  granted_role: string;
+  granted_by_user: string | null;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+}
+
+export const delegationsApi = {
+  /** Live grants only; the route filters revoked rows out server-side. */
+  list: () => request<Delegation[]>("/api/v1/mssp/delegations"),
+
+  /**
+   * The route refuses a role the caller does not itself hold — 403 when the
+   * role exists and is above them, 422 when it is not a role at all. Both
+   * messages are written for an operator, so callers surface them verbatim.
+   */
+  create: (body: { child_tenant_id: string; granted_role: string; expires_at?: string | null }) =>
+    request<Delegation>("/api/v1/mssp/delegations", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  revoke: (id: string) => request<void>(`/api/v1/mssp/delegations/${id}`, { method: "DELETE" }),
 };
 
 export interface RetroHuntSettings {
