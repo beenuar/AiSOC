@@ -207,3 +207,82 @@ class OktaClient:
                 "login": login_or_id,
                 "factors_reset": reset_count,
             }
+
+    # ------------------------------------------------------------------
+    # Wave-2 Phase 6.1: OAuth grants and refresh tokens
+    # ------------------------------------------------------------------
+    #
+    # `clear_sessions` ends the browser session. It does not touch the
+    # OAuth grants the user has consented to, nor the refresh tokens
+    # already issued against them, so an application that holds a refresh
+    # token keeps minting access tokens for a user whose sessions were
+    # "cleared" — which reads in the timeline as containment that happened.
+    #
+    # Reference, fetched before these were written:
+    #   https://developer.okta.com/docs/api/openapi/okta-management/management/tag/UserGrant/
+
+    async def list_grants(self, login_or_id: str) -> list[dict[str, Any]]:
+        """OAuth 2.0 grants the user has consented to."""
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            user = await self._find_user(client, login_or_id)
+            resp = await client.get(
+                f"{self._domain}/api/v1/users/{user['id']}/grants",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            rows = resp.json() if resp.content else []
+        return [
+            {
+                "id": row.get("id"),
+                "client_id": row.get("clientId"),
+                "scope_id": row.get("scopeId"),
+                "status": row.get("status"),
+                "created": row.get("created"),
+            }
+            for row in rows
+        ]
+
+    async def revoke_grants(self, login_or_id: str, *, grant_id: str | None = None) -> dict[str, Any]:
+        """Revoke one grant, or every grant the user holds.
+
+        Not platform-reversible: a revoked consent is re-established by the
+        user consenting again at the application's prompt, which AiSOC
+        cannot do on their behalf and should not.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            user = await self._find_user(client, login_or_id)
+            path = f"{self._domain}/api/v1/users/{user['id']}/grants"
+            if grant_id:
+                path = f"{path}/{grant_id}"
+            resp = await client.delete(path, headers=self._headers())
+            resp.raise_for_status()
+        logger.info("okta.revoke_grants.success", user=login_or_id, grant_id=grant_id or "all")
+        return {
+            "success": True,
+            "action": "revoke_oauth_grant",
+            "user_id": user["id"],
+            "grant_id": grant_id,
+            "scope": "one" if grant_id else "all",
+        }
+
+    async def revoke_refresh_tokens(self, login_or_id: str, client_id: str) -> dict[str, Any]:
+        """Revoke every refresh token this user holds for one application.
+
+        Narrower than `revoke_grants`: the consent survives, the tokens
+        already minted under it do not. That is the right action when the
+        application is legitimate and one token leaked.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            user = await self._find_user(client, login_or_id)
+            resp = await client.delete(
+                f"{self._domain}/api/v1/users/{user['id']}/clients/{client_id}/tokens",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+        logger.info("okta.revoke_refresh_tokens.success", user=login_or_id, client_id=client_id)
+        return {
+            "success": True,
+            "action": "revoke_token",
+            "user_id": user["id"],
+            "client_id": client_id,
+        }

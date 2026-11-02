@@ -1,0 +1,27 @@
+id: det-application-090
+name: AI Assistant Interaction Touched Many Resources at Once
+description: One assistant turn that read a large number of distinct resources. An assistant with a user's
+  full grant is an exfiltration path that authenticates as that user and looks like ordinary application
+  traffic; volume in a single interaction is the shape that separates answering a question from sweeping
+  a drive.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: application
+log_source:
+  product: microsoft_copilot
+  service: audit
+detection:
+  condition: |
+    event_type ENDSWITH ".CopilotInteraction"
+    AND accessed_resource_count >= 25
+false_positives:
+- A summarisation task over a large shared folder, run deliberately
+- A migration or audit the owner initiated
+playbook: tpl-data-exfil
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

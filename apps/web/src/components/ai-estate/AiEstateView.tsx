@@ -32,6 +32,8 @@ const KINDS = [
   { value: "ide_extension", label: "IDE extensions" },
   { value: "provider_key", label: "Provider keys" },
   { value: "oauth_grant", label: "OAuth grants" },
+  { value: "hosted_agent", label: "Hosted agents" },
+  { value: "repo_ai_artifact", label: "Repository AI config" },
 ] as const;
 
 const SOURCE_LIMITS: Record<string, string> = {
@@ -39,6 +41,8 @@ const SOURCE_LIMITS: Record<string, string> = {
   endpoint: "EDR and osquery process telemetry: knows the device and the binary. Never the model.",
   provider_audit: "Provider audit log: knows the account and the key. Never a device.",
   oauth_audit: "Directory consent events: knows the application and its scopes. Never a device.",
+  provider_admin: "Provider admin API: knows the agent's model, tools, MCP servers and skills. Never a device, because there is not one.",
+  code_platform: "Repository scan: knows the repository and the file. Never the device or the runtime.",
   declared: "Registered by an operator rather than observed.",
 };
 

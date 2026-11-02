@@ -1,0 +1,20 @@
+{
+  "actor": "octocat",
+  "actor_email": "octocat",
+  "category": "saas",
+  "created_at": 1761800000000,
+  "description": "provider=github_copilot; event_type=github_copilot.copilot.content_exclusion_changed; actor=octocat",
+  "event_type": "github_copilot.copilot.content_exclusion_changed",
+  "external_id": "ce-1",
+  "provider": "github_copilot",
+  "raw_event": {
+    "_document_id": "ce-1",
+    "action": "copilot.content_exclusion_changed",
+    "actor": "octocat",
+    "created_at": 1761800000000,
+    "org": "acme"
+  },
+  "severity": "critical",
+  "source": "llm_usage",
+  "title": "GitHub Copilot audit: copilot.content_exclusion_changed"
+}

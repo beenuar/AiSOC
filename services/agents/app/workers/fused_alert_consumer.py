@@ -48,7 +48,8 @@ from app.agents.triage_agent import run_triage
 from app.confidence.groundedness import score_groundedness
 from app.context import dispositions as dispositions_module
 from app.context import identity as identity_module
-from app.context import knowledge_base
+from app.context import knowledge_base, vendor_evidence
+from app.context import privilege as privilege_module
 from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
@@ -112,6 +113,10 @@ _METRICS = {
     "outcome_suppressed": 0,
     "ungrounded_demoted": 0,
     "llm_failed_held_for_review": 0,
+    # Phase 4.5. Counted rather than inferred from the ledger, so a
+    # deployment that turned the pre-fetch on can tell "no vendor answered"
+    # from "the pre-fetch never ran".
+    "vendor_reads_executed": 0,
     "persist_retries": 0,
     "dead_lettered": 0,
     "approvals_raised": 0,
@@ -139,6 +144,7 @@ _METRICS = {
     "runbooks_refused_for_injection": 0,
     "recent_dispositions_read": 0,
     "identity_context_read": 0,
+    "privilege_context_read": 0,
     "errors": 0,
 }
 
@@ -763,6 +769,13 @@ class FusedAlertTriageWorker:
                     # here.
                     await self._attach_recent_dispositions(state)
                     await self._attach_identity_context(state)
+                    await self._attach_vendor_evidence(state)
+                    # Depth 2 wave 2, 1.1. Unlike the three above, this one
+                    # *does* take a point in time, and it is the alert's own:
+                    # the posture store is versioned precisely so "what could
+                    # this identity do when it acted" is answerable, and
+                    # passing no time would silently ask the other question.
+                    await self._attach_privilege_context(state)
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
@@ -1181,6 +1194,30 @@ class FusedAlertTriageWorker:
         state.recent_dispositions = found.as_state()
         _METRICS["recent_dispositions_read"] += len(found.decisions)
 
+    async def _attach_vendor_evidence(self, state: InvestigationState) -> None:
+        """Ask the vendors that raised this alert what they know (Phase 4.5).
+
+        Off unless `AISOC_TRIAGE_VENDOR_EVIDENCE` is set: this reaches the
+        customer's vendor API on every fused alert, which is the condition
+        the plan reserves for opt-in, and auto-triage is the hot path.
+
+        In the context stage rather than inside `run_auto_triage` so it sits
+        with the other context fetches and shares their failure posture —
+        additive, never the verdict. A vendor that is down must cost the
+        alert nothing, and the renderer says COULD NOT CHECK rather than
+        letting an absent answer read as a clean one.
+        """
+        if not vendor_evidence.enabled():
+            return
+        try:
+            state.vendor_evidence = await vendor_evidence.collect(
+                state.raw_alert,
+                tenant_id=str(state.tenant_id or ""),
+            )
+            _METRICS["vendor_reads_executed"] += len(state.vendor_evidence.executed_capabilities)
+        except Exception as exc:  # noqa: BLE001 — context is additive
+            logger.warning("auto_triage_worker.vendor_evidence_failed", error=str(exc)[:200])
+
     async def _attach_identity_context(self, state: InvestigationState) -> None:
         """Record who is behind the accounts this alert names, if anyone knows.
 
@@ -1200,6 +1237,57 @@ class FusedAlertTriageWorker:
             return
         state.identity_context = found.as_state()
         _METRICS["identity_context_read"] += len(found.identities)
+
+    @staticmethod
+    def _event_time_of(state: InvestigationState) -> datetime | None:
+        """The alert's own event time, or ``None`` to mean "do not guess".
+
+        ``None`` propagates to a lookup at *now*, which is the honest
+        fallback for an alert that carries no timestamp: the alternative is
+        inventing one, and a fabricated point in time selects a posture
+        version with the same confidence as a real one.
+        """
+        raw = state.raw_alert or {}
+        for key in ("event_time", "timestamp", "first_seen", "@timestamp"):
+            value = raw.get(key)
+            if isinstance(value, datetime):
+                return value if value.tzinfo else value.replace(tzinfo=UTC)
+            if isinstance(value, str) and value.strip():
+                try:
+                    parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        return None
+
+    async def _attach_privilege_context(self, state: InvestigationState) -> None:
+        """What those accounts could do when they acted (depth 2 wave 2, 1.1).
+
+        Separate from ``_attach_identity_context`` and not gated on it, which
+        is the part worth stating: a cloud principal that no directory import
+        knows about still has effective permissions, and making privilege
+        conditional on a directory hit would lose exactly the service
+        accounts and assumed roles the tag set is most useful for.
+
+        The event's own timestamp is passed, never ``now()``: a role revoked
+        after the event is still what explains the event.
+        """
+        accounts = identity_module.accounts_for(state.raw_alert)
+        if not accounts:
+            return
+        try:
+            found = await privilege_module.fetch_privilege_context(
+                str(state.tenant_id),
+                principals=accounts,
+                at=self._event_time_of(state),
+            )
+        except Exception as exc:  # noqa: BLE001 - privilege context is advisory, triage is not
+            logger.warning("auto_triage_worker.privilege_lookup_failed", error=str(exc)[:200])
+            return
+        if not found:
+            return
+        state.privilege_context = found.as_state()
+        _METRICS["privilege_context_read"] += len(found.principals)
 
     async def _maybe_suppress_from_memory(
         self,
@@ -1461,6 +1549,11 @@ class FusedAlertTriageWorker:
             proposed_actions=recommendations,
             business_context=state.business_context,
             business_impact=state.business_impact,
+            # Phase 4.5. The reads that happened, as ledger rows, in the same
+            # transaction as the verdict they informed. `None` when the
+            # pre-fetch is off, which writes no rows and restores the
+            # previous shape exactly.
+            vendor_reads=(state.vendor_evidence.as_state()["reads"] if getattr(state, "vendor_evidence", None) is not None else None),
             auto_closed=state.status is AgentStatus.COMPLETED,
             iterations=state.iteration_count,
             tokens=tokens,

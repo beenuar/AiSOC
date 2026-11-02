@@ -6,7 +6,7 @@
 > async coroutines, valid capabilities, secret fields marked `secret`).
 > Live-vendor sandbox smoke is a separate wave; this gates the contract.
 
-**87 / 87 connectors conform** to the runtime contract.
+**90 / 90 connectors conform** to the runtime contract.
 
 | connector | category | fields | vaulted | caps | test_connection | fetch_alerts | normalize |
 |-----------|----------|-------:|--------:|-----:|:---------------:|:------------:|:---------:|
@@ -23,6 +23,7 @@
 | azure_defender | edr | 3 | 1 | 5 | ✅ | ✅ | ✅ |
 | azure_entra | iam | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | azure_event_hubs | cloud | 6 | 1 | 2 | ✅ | ✅ | ✅ |
+| bamboohr | hr | 3 | 1 | 1 | ✅ | ✅ | — |
 | box | saas | 1 | 1 | 3 | ✅ | ✅ | ✅ |
 | carbon_black | edr | 4 | 1 | 6 | ✅ | ✅ | ✅ |
 | chronicle | siem | 4 | 1 | 5 | ✅ | ✅ | ✅ |
@@ -56,8 +57,9 @@
 | jumpcloud | iam | 1 | 1 | 2 | ✅ | ✅ | ✅ |
 | kubernetes_audit | cloud | 5 | 1 | 2 | ✅ | ✅ | ✅ |
 | lacework | cloud | 4 | 1 | 5 | ✅ | ✅ | ✅ |
-| llm_usage | saas | 2 | 1 | 2 | ✅ | ✅ | ✅ |
+| llm_usage | saas | 4 | 1 | 2 | ✅ | ✅ | ✅ |
 | m365_audit | saas | 3 | 1 | 1 | ✅ | ✅ | ✅ |
+| microsoft_intune | mdm | 3 | 1 | 1 | ✅ | ✅ | — |
 | microsoft_sentinel | siem | 6 | 1 | 2 | ✅ | ✅ | ✅ |
 | mimecast | saas | 3 | 1 | 4 | ✅ | ✅ | ✅ |
 | netskope | network | 3 | 1 | 3 | ✅ | ✅ | ✅ |
@@ -73,6 +75,7 @@
 | qradar | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | qualys | cloud | 3 | 1 | 3 | ✅ | ✅ | ✅ |
 | rapid7_insightidr | siem | 2 | 1 | 4 | ✅ | ✅ | ✅ |
+| rippling | hr | 2 | 1 | 1 | ✅ | ✅ | — |
 | salesforce | saas | 4 | 2 | 4 | ✅ | ✅ | ✅ |
 | securonix | siem | 3 | 1 | 2 | ✅ | ✅ | ✅ |
 | sentinelone | edr | 3 | 1 | 4 | ✅ | ✅ | ✅ |

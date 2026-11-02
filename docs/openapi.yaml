@@ -11900,6 +11900,208 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/kinds:
+    get:
+      tags:
+      - access-review
+      summary: The finding kinds this review can produce
+      description: 'Published so the console can render a filter without hardcoding
+        a copy.
+
+
+        A second list in the frontend is how a kind ends up filterable on one
+
+        surface and invisible on the other; this repository has that defect on
+
+        record in the playbook editor''s step-type union.'
+      operationId: list_kinds_api_v1_access_review_kinds_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Kinds Api V1 Access Review Kinds Get
+      security:
+      - HTTPBearer: []
+  /api/v1/access-review/summary:
+    get:
+      tags:
+      - access-review
+      summary: Review state and counts, with an honest empty state
+      operationId: review_summary_api_v1_access_review_summary_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: provider
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Review Summary Api V1 Access Review Summary Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/findings:
+    get:
+      tags:
+      - access-review
+      summary: Open access-review findings
+      operationId: list_findings_api_v1_access_review_findings_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: provider
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+      - name: kind
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Kind
+      - name: include_acknowledged
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+          title: Include Acknowledged
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 500
+          minimum: 1
+          default: 100
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Findings Api V1 Access Review Findings Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/run:
+    post:
+      tags:
+      - access-review
+      summary: Recompute the review from current posture and usage
+      description: 'Recompute. Reads only — no vendor object is touched by this call.
+
+
+        Guarded by ``compliance:read`` rather than a write permission on
+
+        purpose: the only thing it writes is this tenant''s own review rows, and
+
+        requiring a write scope would put the review behind a permission an
+
+        auditor is deliberately not given.'
+      operationId: run_review_api_v1_access_review_run_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: provider
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Provider
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Run Review Api V1 Access Review Run Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/access-review/findings/{finding_id}/acknowledge:
+    post:
+      tags:
+      - access-review
+      summary: Acknowledge a finding
+      description: 'Record that a person decided this one is fine.
+
+
+        A 404 rather than a 403 for a finding belonging to another tenant: a
+
+        403 would make this route an existence oracle over every tenant''s
+
+        finding ids, and a genuine miss is byte-identical to a cross-tenant
+
+        attempt from the caller''s side either way.'
+      operationId: acknowledge_api_v1_access_review_findings__finding_id__acknowledge_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: finding_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Finding Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcknowledgeRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Acknowledge Api V1 Access Review Findings  Finding
+                  Id  Acknowledge Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/identity/effective-permissions/providers:
     get:
       tags:
@@ -19152,6 +19354,163 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/identity-resolution/links:
+    get:
+      tags:
+      - identity-resolution
+      summary: Every proposed link touching one identity
+      operationId: list_links_api_v1_identity_resolution_links_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          description: A source-scoped identity, e.g. okta:alice@example.com
+          title: Key
+        description: A source-scoped identity, e.g. okta:alice@example.com
+      - name: include_weak
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: true
+          title: Include Weak
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Links Api V1 Identity Resolution Links Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/identity-resolution/cluster:
+    get:
+      tags:
+      - identity-resolution
+      summary: Who else is this person
+      description: Merge-strength links only, bounded. See the store for why both.
+      operationId: cluster_api_v1_identity_resolution_cluster_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: key
+        in: query
+        required: true
+        schema:
+          type: string
+          title: Key
+      - name: max_depth
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 6
+          minimum: 1
+          default: 3
+          title: Max Depth
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Cluster Api V1 Identity Resolution Cluster Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/identity-resolution/resolve:
+    post:
+      tags:
+      - identity-resolution
+      summary: Resolve a set of identities into links
+      description: 'Run resolution over the supplied records.
+
+
+        ``settings:write`` rather than a read permission because ``persist``
+
+        writes the tenant''s identity graph, and a caller who may not change
+
+        tenant configuration should not be able to decide who is the same
+
+        person.'
+      operationId: resolve_api_v1_identity_resolution_resolve_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResolveRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response Resolve Api V1 Identity Resolution Resolve Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/identity-resolution/links/{link_id}/decide:
+    post:
+      tags:
+      - identity-resolution
+      summary: Confirm or reject a proposed link
+      description: A 404 for another tenant's link, so this is not an existence oracle.
+      operationId: decide_api_v1_identity_resolution_links__link_id__decide_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: link_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Link Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DecideRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Decide Api V1 Identity Resolution Links  Link Id  Decide
+                  Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/reports/templates:
     get:
       tags:
@@ -21303,6 +21662,290 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-assets/scan/hosted-agents:
+    post:
+      tags:
+      - ai-estate
+      summary: Scan Hosted Agents
+      description: 'Inventory the agents configured in a provider''s control plane.
+
+
+        These are invisible to every other discovery path: endpoint telemetry
+
+        never sees them, and gateway telemetry sees their traffic without
+
+        knowing what they were configured to do.'
+      operationId: scan_hosted_agents_api_v1_ai_assets_scan_hosted_agents_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HostedAgentScanRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/ai-assets/scan/repositories:
+    post:
+      tags:
+      - ai-estate
+      summary: Scan Repositories
+      description: 'Record the agent instructions, skills and MCP config a repository
+        carries.
+
+
+        Everything read here is attacker-controlled: these files are checked
+
+        in, editable by anyone who can land a pull request, and read by an
+
+        agent verbatim as instructions. `ai_repo_scan` sanitises and caps every
+
+        excerpt and runs the prompt-injection patterns over the content at
+
+        capture, storing matched pattern *names* and never the matching text —
+
+        see that module''s header.'
+      operationId: scan_repositories_api_v1_ai_assets_scan_repositories_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RepositoryScanRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScanResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/ai-chat-compliance/config:
+    get:
+      tags:
+      - ai-estate
+      summary: Get Config
+      operationId: get_config_api_v1_ai_chat_compliance_config_get
+      security:
+      - HTTPBearer: []
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+    put:
+      tags:
+      - ai-estate
+      summary: Put Config
+      description: 'Store the tenant''s key and switches.
+
+
+        Encryption happens before the row is written, and a vault failure is a
+
+        503 rather than a silently-plaintext row: storing the key unencrypted
+
+        because the vault was unavailable is the worst outcome available here.'
+      operationId: put_config_api_v1_ai_chat_compliance_config_put
+      security:
+      - HTTPBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfigRequest'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConfigResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+    delete:
+      tags:
+      - ai-estate
+      summary: Delete Config
+      description: 'Stop collecting, and optionally remove what was collected.
+
+
+        Disabling without purging is the default because an operator turning a
+
+        feature off should not silently destroy evidence an investigation may
+
+        be relying on. Purging is the explicit choice, and it is the one a
+
+        data-subject request needs.'
+      operationId: delete_config_api_v1_ai_chat_compliance_config_delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: purge
+        in: query
+        required: false
+        schema:
+          type: boolean
+          description: Also delete everything already collected for this tenant.
+          default: false
+          title: Purge
+        description: Also delete everything already collected for this tenant.
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-chat-compliance/events:
+    get:
+      tags:
+      - ai-estate
+      summary: List Events
+      operationId: list_events_api_v1_ai_chat_compliance_events_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-chat-compliance/content-labels:
+    get:
+      tags:
+      - ai-estate
+      summary: List Content Labels
+      operationId: list_content_labels_api_v1_ai_chat_compliance_content_labels_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: label
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          description: Filter to one classification label.
+          title: Label
+        description: Filter to one classification label.
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 200
+          minimum: 1
+          default: 50
+          title: Limit
+      - name: offset
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+          title: Offset
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContentLabelListResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/ai-chat-compliance/collect:
+    post:
+      tags:
+      - ai-estate
+      summary: Collect Now
+      description: 'Run one collection pass for this tenant.
+
+
+        Explicit rather than scheduled. Every read here reaches a third party
+
+        with the tenant''s own credential, and the plan''s rule for anything
+
+        that reaches out is off by default and enabled per tenant — so the
+
+        tenant decides when it runs, not a loop that started the moment a key
+
+        was saved.
+
+
+        A tenant with no configuration, or with collection disabled, gets a
+
+        zero-count response whose `skipped` says which it was. The two are
+
+        different states and a bare zero cannot tell them apart.'
+      operationId: collect_now_api_v1_ai_chat_compliance_collect_post
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CollectionResponse'
+      security:
+      - HTTPBearer: []
   /api/v1/war-rooms/cases/{case_id}:
     post:
       tags:
@@ -22328,6 +22971,15 @@ paths:
       - HTTPBearer: []
 components:
   schemas:
+    AcknowledgeRequest:
+      properties:
+        note:
+          type: string
+          maxLength: 2000
+          title: Note
+          default: ''
+      type: object
+      title: AcknowledgeRequest
     ActionCount:
       properties:
         action:
@@ -23142,6 +23794,16 @@ components:
           - type: string
           - type: 'null'
           title: Disposition
+        src_ip_class:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class
+        src_ip_class_dataset_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class Dataset Version
         affected_ips:
           items: {}
           type: array
@@ -23600,6 +24262,16 @@ components:
           - type: string
           - type: 'null'
           title: Disposition
+        src_ip_class:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class
+        src_ip_class_dataset_version:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Src Ip Class Dataset Version
         affected_ips:
           items: {}
           type: array
@@ -24577,6 +25249,62 @@ components:
       - node_count
       - edge_count
       title: AttackPathResponse
+    AuditEventListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/AuditEventModel'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        collectionEnabled:
+          type: boolean
+          title: Collectionenabled
+      type: object
+      required:
+      - items
+      - total
+      - collectionEnabled
+      title: AuditEventListResponse
+    AuditEventModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        eventType:
+          type: string
+          title: Eventtype
+        occurredAt:
+          type: string
+          title: Occurredat
+        actorEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actoremail
+        actorIp:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actorip
+        chatExternalId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Chatexternalid
+        projectExternalId:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Projectexternalid
+      type: object
+      required:
+      - id
+      - eventType
+      - occurredAt
+      title: AuditEventModel
     AuditEventOut:
       properties:
         id:
@@ -25809,6 +26537,51 @@ components:
       - is_enabled
       - created_at
       title: CollectionOut
+    CollectionResponse:
+      properties:
+        users:
+          type: integer
+          title: Users
+        projects:
+          type: integer
+          title: Projects
+        events:
+          type: integer
+          title: Events
+        contentLabels:
+          type: integer
+          title: Contentlabels
+        assets:
+          type: integer
+          title: Assets
+        errors:
+          items:
+            type: string
+          type: array
+          title: Errors
+        skipped:
+          additionalProperties:
+            type: string
+          type: object
+          title: Skipped
+      type: object
+      required:
+      - users
+      - projects
+      - events
+      - contentLabels
+      - assets
+      title: CollectionResponse
+      description: 'What one collection pass did, per sink.
+
+
+        Per sink rather than one total: a single number presented as the
+
+        operation''s result reads as total failure when one sink failed and the
+
+        others worked, which is how a threat-intel pass reported `indexed: 0`
+
+        beside a successful write of 1,739 rows.'
     CommentResponse:
       properties:
         id:
@@ -26181,6 +26954,70 @@ components:
       - medianConfidence
       - lowConfidence
       title: ConfidenceSummary
+    ConfigRequest:
+      properties:
+        provider:
+          type: string
+          title: Provider
+          description: 'One of: anthropic'
+        accessKey:
+          type: string
+          minLength: 8
+          title: Accesskey
+          description: Stored vault-encrypted; never returned.
+        enabled:
+          type: boolean
+          title: Enabled
+          description: Collect the directory and the activity feed.
+          default: false
+        contentLabels:
+          type: boolean
+          title: Contentlabels
+          description: Additionally derive classification labels and one bounded snippet
+            from message text. Off by default even when collection is on.
+          default: false
+      type: object
+      required:
+      - provider
+      - accessKey
+      title: ConfigRequest
+    ConfigResponse:
+      properties:
+        configured:
+          type: boolean
+          title: Configured
+        provider:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Provider
+        enabled:
+          type: boolean
+          title: Enabled
+          default: false
+        contentLabels:
+          type: boolean
+          title: Contentlabels
+          default: false
+        hasKey:
+          type: boolean
+          title: Haskey
+          default: false
+        lastCollectedAt:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lastcollectedat
+        lastError:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Lasterror
+      type: object
+      required:
+      - configured
+      title: ConfigResponse
+      description: The tenant's configuration, without the key.
     ConfirmRequest:
       properties:
         mfa_token:
@@ -26453,6 +27290,74 @@ components:
       - uploads_enabled
       - consent_text
       title: ConsentResponse
+    ContentLabelListResponse:
+      properties:
+        items:
+          items:
+            $ref: '#/components/schemas/ContentLabelModel'
+          type: array
+          title: Items
+        total:
+          type: integer
+          title: Total
+        contentLabelsEnabled:
+          type: boolean
+          title: Contentlabelsenabled
+      type: object
+      required:
+      - items
+      - total
+      - contentLabelsEnabled
+      title: ContentLabelListResponse
+    ContentLabelModel:
+      properties:
+        id:
+          type: string
+          title: Id
+        chatExternalId:
+          type: string
+          title: Chatexternalid
+        actorEmail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Actoremail
+        labels:
+          items:
+            type: string
+          type: array
+          title: Labels
+        secretKinds:
+          items:
+            type: string
+          type: array
+          title: Secretkinds
+        snippet:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Snippet
+        snippetTruncated:
+          type: boolean
+          title: Snippettruncated
+          default: false
+        messagesExamined:
+          type: integer
+          title: Messagesexamined
+        messagesMatched:
+          type: integer
+          title: Messagesmatched
+        occurredAt:
+          type: string
+          title: Occurredat
+      type: object
+      required:
+      - id
+      - chatExternalId
+      - messagesExamined
+      - messagesMatched
+      - occurredAt
+      title: ContentLabelModel
     ContextImportRequest:
       properties:
         departments:
@@ -27818,6 +28723,15 @@ components:
       - window_days
       - label
       title: DashboardPeriod
+    DecideRequest:
+      properties:
+        decision:
+          type: string
+          title: Decision
+      type: object
+      required:
+      - decision
+      title: DecideRequest
     DecisionRequest:
       properties:
         decision:
@@ -30615,6 +31529,17 @@ components:
       - cells
       - generated_at
       title: HeatmapResponse
+    HostedAgentScanRequest:
+      properties:
+        adminKey:
+          type: string
+          minLength: 8
+          title: Adminkey
+          description: Provider admin key. Used for this call and not stored.
+      type: object
+      required:
+      - adminKey
+      title: HostedAgentScanRequest
     HuntPlanClause:
       properties:
         field:
@@ -31024,6 +31949,49 @@ components:
       - last_seen
       - created_at
       title: IOCOut
+    IdentityRecord:
+      properties:
+        source:
+          type: string
+          title: Source
+        id:
+          type: string
+          title: Id
+        email:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Email
+        email_verified:
+          type: boolean
+          title: Email Verified
+          default: false
+        upn:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Upn
+        employee_id:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Employee Id
+        display_name:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Display Name
+        maps_to:
+          items:
+            type: string
+          type: array
+          title: Maps To
+      type: object
+      required:
+      - source
+      - id
+      title: IdentityRecord
+      description: One source-scoped identity offered for resolution.
     IdentityTimeline:
       properties:
         timeline_id:
@@ -36934,6 +37902,31 @@ components:
       - campaign_id
       - campaign_created
       title: ReportResponse
+    RepositoryScanRequest:
+      properties:
+        repositories:
+          additionalProperties:
+            additionalProperties:
+              type: string
+            type: object
+          type: object
+          title: Repositories
+          description: 'repository -> {path: content}. Only recognised AI artefact
+            paths are read.'
+      type: object
+      required:
+      - repositories
+      title: RepositoryScanRequest
+      description: 'Files a code-platform connector has already fetched.
+
+
+        The console passes what the connector read rather than this service
+
+        cloning anything: the connector already holds the tenant''s code-platform
+
+        credential and the governed read path, and a second fetcher here would
+
+        be a second place that credential has to live.'
     ResetRequest:
       properties:
         reason:
@@ -36945,6 +37938,19 @@ components:
       required:
       - reason
       title: ResetRequest
+    ResolveRequest:
+      properties:
+        records:
+          items:
+            $ref: '#/components/schemas/IdentityRecord'
+          type: array
+          title: Records
+        persist:
+          type: boolean
+          title: Persist
+          default: false
+      type: object
+      title: ResolveRequest
     RetentionOut:
       properties:
         raw_events_days:
@@ -38733,6 +39739,25 @@ components:
       required:
       - tenant_id
       title: ScanRequest
+    ScanResponse:
+      properties:
+        assets:
+          type: integer
+          title: Assets
+        errors:
+          items:
+            type: string
+          type: array
+          title: Errors
+        skipped:
+          additionalProperties:
+            type: string
+          type: object
+          title: Skipped
+      type: object
+      required:
+      - assets
+      title: ScanResponse
     ScanRunOut:
       properties:
         id:

@@ -606,6 +606,105 @@ LLM_USAGE_RULES: list[dict] = [
         fp=["New automation onboarding (change ticket)"],
         playbook="tpl-persistence",
     ),
+    # ----------------------------------------------------------------
+    # Wave-2 7.4. Four rules on the providers wave-2 7.1 added, each
+    # clausing only on a field the connector really emits at the top
+    # level — which is the whole lesson of the GitHub pass, where 1 of 12
+    # rules fired on real connector output because the rest claused on
+    # names nothing produced. Every one of these is replayed through
+    # `LlmUsageConnector.normalize()` and the real engine in
+    # `services/fusion/tests/test_ai_rule_pack_replay.py`.
+    # ----------------------------------------------------------------
+    S(
+        slug="llm-copilot-content-exclusion-changed",
+        name="Copilot Content Exclusion Changed",
+        severity="critical",
+        mitre=["t1562.001"],
+        product="github_copilot",
+        service="audit",
+        when={"event_type_endswith": ".copilot.content_exclusion_changed"},
+        fp=["Exclusion list edited as part of an approved repository onboarding"],
+        playbook="tpl-defense-evasion",
+        description=(
+            "Content exclusion is the control that stops a coding assistant reading the "
+            "paths an organisation has declared off limits — key material, customer data, "
+            "anything it has decided a model must not see. A change to it is a change to "
+            "that boundary, and it is made in a settings page rather than in a pull "
+            "request, so nothing else reviews it."
+        ),
+    ),
+    S(
+        slug="llm-copilot-agent-mcp-config-changed",
+        name="Hosted Coding Agent MCP Server List Changed",
+        severity="high",
+        mitre=["t1195"],
+        product="github_copilot",
+        service="audit",
+        when={"event_type_endswith": ".copilot.swe_agent_mcp_config_updated"},
+        fp=["A reviewed addition of an internal MCP server"],
+        playbook="tpl-supply-chain",
+        description=(
+            "The MCP server list decides what a hosted coding agent can reach and what it "
+            "is told. Adding a server is adding a party that can instruct the agent, which "
+            "is a scope change rather than a settings change — and the agent runs on the "
+            "provider's infrastructure, so no endpoint control sees the result."
+        ),
+    ),
+    S(
+        slug="llm-ai-app-granted-write-scope",
+        name="AI Application Consented a Write Scope",
+        severity="high",
+        mitre=["t1098.001"],
+        product="entra_consent",
+        service="audit",
+        when={
+            "event_type_endswith": ".consent_to_application",
+            # `granted_scopes`, the name the connector promotes. A bare
+            # `scopes` collided with GitHub's token scopes in the
+            # detection-field gate's union-of-all-connectors namespace.
+            "granted_scopes_has_any": [
+                "Mail.ReadWrite",
+                "Mail.Send",
+                "Files.ReadWrite.All",
+                "Sites.ReadWrite.All",
+                "Directory.ReadWrite.All",
+                "User.ReadWrite.All",
+            ],
+        },
+        fp=["An AI application approved through the organisation's own review process"],
+        playbook="tpl-privilege-escalation",
+        description=(
+            "A consent grant handing an AI application the ability to change a mailbox, a "
+            "drive, a site or the directory itself. The read equivalent is an exposure; "
+            "this one can act. The decisive field is the granted scope, which the "
+            "connector lifts out of the free-text consent property — a grant whose scopes "
+            "stay buried is indistinguishable from one that was granted nothing."
+        ),
+    ),
+    S(
+        slug="llm-copilot-bulk-resource-access",
+        name="AI Assistant Interaction Touched Many Resources at Once",
+        severity="medium",
+        mitre=["t1530"],
+        product="microsoft_copilot",
+        service="audit",
+        when={
+            "event_type_endswith": ".CopilotInteraction",
+            "accessed_resource_count_gte": 25,
+        },
+        fp=[
+            "A summarisation task over a large shared folder, run deliberately",
+            "A migration or audit the owner initiated",
+        ],
+        playbook="tpl-data-exfil",
+        description=(
+            "One assistant turn that read a large number of distinct resources. An "
+            "assistant with a user's full grant is an exfiltration path that authenticates "
+            "as that user and looks like ordinary application traffic; volume in a single "
+            "interaction is the shape that separates answering a question from sweeping a "
+            "drive."
+        ),
+    ),
     S(
         slug="llm-project-deleted",
         name="LLM Provider Project Deleted",
@@ -751,6 +850,117 @@ AI_RUNTIME_RULES: list[dict] = [
             "ever being transmitted: the SDK reports which patterns matched while "
             "sending only a digest, so this fires even under the default hashed "
             "capture mode."
+        ),
+    ),
+    # ----------------------------------------------------------------
+    # Wave-2 7.4, the four targets Phase 7.3's baselines unblock.
+    #
+    # Each clauses on a `baseline_agent_*` or `baseline_gateway_key_*`
+    # derived field, which `services/fusion/app/services/baselines.py`
+    # computes per sub-principal and `scripts/check_detection_fields.py`
+    # knows about. Novelty and rate are properties of a *history*, so the
+    # stateless matcher cannot express them on its own — which is exactly
+    # why these four could not be written before 7.3 and were recorded as
+    # blocked rather than shipped clausing on fields nothing produced.
+    #
+    # Thresholds are stated as floors on an already-bounded score: rarity
+    # is in [0,1] and a z-score is in deviations, so the numbers below are
+    # readable without knowing the corpus.
+    # ----------------------------------------------------------------
+    S(
+        slug="ai-agent-new-high-risk-tool",
+        name="AI Agent Called a High-Risk Tool It Has Never Used",
+        severity="high",
+        mitre=["t1059"],
+        product="ai_runtime",
+        service="runtime",
+        when={
+            "tool_name_in": [
+                "execute_command",
+                "run_shell",
+                "write_file",
+                "delete_file",
+                "send_email",
+                "create_user",
+                "grant_permission",
+                "deploy",
+                "terraform_apply",
+                "database_write",
+            ],
+            "baseline_agent_tool_rarity_gte": 0.95,
+        },
+        fp=[
+            "An agent whose scope was widened deliberately, with the change recorded",
+            "The first run after a deployment that added the tool",
+        ],
+        playbook="tpl-privilege-escalation",
+        description=(
+            "An agent reached for a tool that changes an estate and has essentially no "
+            "history of using it. Novelty is per agent and not global: execute_command is "
+            "routine for a deployment bot and alarming for a summariser, and a count across "
+            "the estate cannot tell them apart. The high-risk list is the same one the AI "
+            "estate's exposure score reads, so an operator sees one definition of "
+            "'changes an estate' in both places."
+        ),
+    ),
+    S(
+        slug="ai-agent-guardrail-violation-rate",
+        name="Guardrail Violations Rose Sharply for One AI Agent",
+        severity="high",
+        mitre=["t1078"],
+        product="ai_guardrail",
+        service="runtime",
+        when={"outcome": "blocked", "baseline_agent_volume_z_gte": 3.0},
+        fp=[
+            "A newly tightened guardrail policy, where the rise is the policy and not the agent",
+            "A load test replaying blocked prompts",
+        ],
+        playbook="tpl-triage",
+        description=(
+            "A single agent is being blocked far more often than its own history. One "
+            "guardrail violation is noise — a user phrasing something awkwardly — while a "
+            "rise against that agent's own baseline is someone probing for a phrasing that "
+            "gets through. Scored per agent rather than per tenant, because a busy estate's "
+            "total hides one agent's change completely."
+        ),
+    ),
+    S(
+        slug="ai-agent-token-spend-anomaly",
+        name="AI Agent Spend Far Above Its Own Baseline",
+        severity="medium",
+        mitre=["t1496"],
+        product="ai_runtime",
+        service="runtime",
+        when={"baseline_agent_token_spend_z_gte": 4.0},
+        fp=[
+            "A deliberately larger job, such as a backfill or a bulk summarisation",
+            "A model change that raised the per-request cost for every agent",
+        ],
+        playbook="tpl-triage",
+        description=(
+            "Cost is the signal that notices an agent being used for something other than "
+            "its job — an exfiltration loop, a stolen credential driving inference, or a "
+            "prompt that has started recursing. It reads the gateway's own billed figure "
+            "rather than recomputing one from token counts, so it cannot disagree with the "
+            "invoice. An unpriced request contributes nothing instead of a zero."
+        ),
+    ),
+    S(
+        slug="ai-gateway-key-spend-anomaly",
+        name="AI Gateway Key Spend Far Above Its Own Baseline",
+        severity="medium",
+        mitre=["t1496"],
+        product="ai_runtime",
+        service="runtime",
+        when={"baseline_gateway_key_token_spend_z_gte": 4.0},
+        fp=["A key deliberately shared with a new workload"],
+        playbook="tpl-triage",
+        description=(
+            "The same question asked of the key rather than the agent, and the two are not "
+            "the same incident: a leaked key driving inference from outside the estate "
+            "moves the key's baseline while every agent on it looks ordinary. Both are "
+            "needed, which is why the baseline module keys on sub-principals rather than "
+            "on one chosen subject."
         ),
     ),
     S(

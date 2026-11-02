@@ -4,10 +4,12 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     access_conditions,
+    access_review,
     admin_users,
     agent_tools,
     agents,
     ai_assets,
+    ai_chat_compliance,
     airgap,
     alert_explain,
     alert_writeback,
@@ -47,6 +49,7 @@ from app.api.v1.endpoints import (
     hunt_reports,
     hunts,
     identity_graph,
+    identity_resolution,
     identity_timeline,
     inbox,
     inbox_itsm,
@@ -237,6 +240,7 @@ api_router.include_router(replay.public_router)
 # Resolves "what can principal X actually do?" across AWS / Azure / GCP /
 # Okta / Google Workspace and caches the result as :EFFECTIVE_PERMISSION
 # edges in Neo4j. Backs apps/web/src/app/(app)/identity/permissions.
+api_router.include_router(access_review.router)
 api_router.include_router(effective_permissions.router)
 
 # Signed email-approval links (T3.6). Unauthenticated by necessity — the
@@ -345,6 +349,7 @@ api_router.include_router(threat_intel.router)
 api_router.include_router(posture.router)
 api_router.include_router(easm.router)
 api_router.include_router(identity_graph.router)
+api_router.include_router(identity_resolution.router)
 api_router.include_router(reports.router)
 # Depth 9.5: a natural-language hunt or a retro-hunt that found something
 # becomes a readable, cited report, exportable through the same WeasyPrint
@@ -446,6 +451,7 @@ api_router.include_router(realtime.router)
 # The module shipped in #1303 with no include site, so its three routes were
 # unreachable on that branch; mounted here by the merge train.
 api_router.include_router(ai_assets.router)
+api_router.include_router(ai_chat_compliance.router)
 
 # Case war rooms — depth 9.4. One action opens a Slack channel for a case,
 # invites the assignees and mirrors the timeline; the sweep worker is started
