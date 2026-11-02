@@ -22,6 +22,7 @@ Sub-agent runners are monkeypatched to deterministic shims that
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 import uuid
 from pathlib import Path
@@ -310,7 +311,7 @@ async def test_stream_done_carries_report_and_state(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_stream_ledger_calls_in_order(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ledger sees start_run → N×record_event → record_artifact → complete_run."""
+    """Ledger sees start_run → N×record_event → 2×record_artifact → complete_run."""
     _patch_runners(monkeypatch)
     tenant_id = uuid.uuid4()
     spy = _install_ledger_spy(monkeypatch, tenant_id=tenant_id)
@@ -322,10 +323,10 @@ async def test_stream_ledger_calls_in_order(monkeypatch: pytest.MonkeyPatch) -> 
     # Boundaries: must open with start_run and close with complete_run.
     assert methods[0] == "start_run"
     assert methods[-1] == "complete_run"
-    # record_artifact lands after every record_event but before complete_run.
-    assert methods[-2] == "record_artifact"
+    # Both artifacts land after every record_event but before complete_run.
+    assert methods[-3:-1] == ["record_artifact", "record_artifact"], methods
     # Between the bookends, only record_event is allowed.
-    middle = methods[1:-2]
+    middle = methods[1:-3]
     assert middle and all(m == "record_event" for m in middle), middle
     # One record_event per step yielded.
     step_count = sum(1 for e in events if e["type"] == "step")
@@ -336,12 +337,24 @@ async def test_stream_ledger_calls_in_order(monkeypatch: pytest.MonkeyPatch) -> 
     assert recorded_seqs == sorted(recorded_seqs)
     assert recorded_seqs == list(range(1, len(recorded_seqs) + 1))
 
-    # Artifact is the Markdown report.
-    ((_, artifact_kwargs),) = (c for c in spy.calls if c[0] == "record_artifact")
-    assert artifact_kwargs["kind"] == "report_md"
-    assert artifact_kwargs["tenant_id"] == tenant_id
-    assert artifact_kwargs["content"]  # non-empty
-    assert str(state.incident_id) in artifact_kwargs["content"]
+    # Two artifacts, in a fixed order: the Markdown report, then the structured
+    # router state the API's ledger fallback rebuilds the phase tabs from. The
+    # second is asserted by content as well as by kind, because a router-path
+    # run writes no per-agent llm_response events — this artifact is the only
+    # record of its findings, and an empty one rebuilds empty tabs silently.
+    artifacts = [kw for m, kw in spy.calls if m == "record_artifact"]
+    assert [a["kind"] for a in artifacts] == ["report_md", "router_state"]
+    assert all(a["tenant_id"] == tenant_id for a in artifacts)
+
+    report_kwargs, router_state_kwargs = artifacts
+    assert report_kwargs["content"]  # non-empty
+    assert str(state.incident_id) in report_kwargs["content"]
+
+    persisted = json.loads(router_state_kwargs["content"])
+    assert persisted["verdict"] == state.verdict
+    assert persisted["findings"] == list(state.findings)
+    assert persisted["mitre_mappings"] == list(state.mitre_mappings)
+    assert len(persisted["proposed_actions"]) == len(state.proposed_actions)
 
     # complete_run carries the terminal status.
     ((_, complete_kwargs),) = (c for c in spy.calls if c[0] == "complete_run")
@@ -421,11 +434,18 @@ async def test_stream_auto_close_short_circuits(monkeypatch: pytest.MonkeyPatch)
     assert events[1]["info"]["signals"] == []
     assert events[1]["state"]["status"] == "completed"
 
-    # Ledger sequence on the short path: start_run, one record_event,
-    # record_artifact, complete_run.
+    # Ledger sequence on the short path: start_run, one record_event, the
+    # report and router-state artifacts, complete_run. The short path persists
+    # the router state too — a run that auto-closed is exactly the one an
+    # analyst reopens to see why.
     assert spy.methods_in_order() == [
         "start_run",
         "record_event",
         "record_artifact",
+        "record_artifact",
         "complete_run",
+    ]
+    assert [kw["kind"] for m, kw in spy.calls if m == "record_artifact"] == [
+        "report_md",
+        "router_state",
     ]
