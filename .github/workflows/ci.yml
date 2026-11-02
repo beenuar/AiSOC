@@ -623,25 +623,6 @@ jobs:
         run: python3 scripts/check_business_context_grammar.py --self-test
       - name: Both business-context engines agree on the operator grammar
         run: python3 scripts/check_business_context_grammar.py --check
-      # Wave 2, Phase 9.5 prerequisite. A caveat saying a console page is
-      # "not built" reads as modesty and works as an exemption: a surface
-      # recorded as absent needs no claim row and no gate. Three shipped
-      # pages were sitting behind one such sentence, and one of them —
-      # /settings/users — had no test at all. `check_claim_gate_matrix`
-      # cannot see this: it counts rows and statuses and does not read a
-      # caveat's prose.
-      - name: 'Unbuilt-surface claims — self-test'
-        run: python3 scripts/check_unbuilt_claims.py --self-test
-      - name: Every 'not built' claim about a console page is still true
-      # Same family, same reason. The three customer outcomes a buyer asks
-      # for first are recorded as not measured because no design partner has
-      # offered a queue to replay; that record is worth what stops it being
-      # replaced by a figure, or — worse — by a zero, which reads as a
-      # measurement that found nothing.
-      - name: Outcome claims — self-test
-        run: python3 scripts/check_outcome_claims.py --self-test
-      - name: Verify no surface publishes an unmeasured outcome
-        run: python3 scripts/check_outcome_claims.py
       # And the mirror: a caveat saying a console surface is "not built"
       # reads as modesty and works as an exemption, since an absent surface
       # needs no claim row and no gate. Three of the six the matrix called
