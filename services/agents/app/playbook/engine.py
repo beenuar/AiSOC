@@ -28,7 +28,7 @@ import httpx
 
 from app.playbook import pause as playbook_pause
 
-from . import action_bridge, idempotency, references, verification
+from . import action_bridge, ask_model, idempotency, references, timeout_outcome, verification
 from .bounds import (
     ABSOLUTE_MAX_LOOP_ITERATIONS,
     ABSOLUTE_MAX_PARALLEL_BRANCHES,
@@ -822,6 +822,18 @@ async def _suspend_for_approval(pr: PlaybookRun, step: PlaybookStep, step_idx: i
         logger.warning("Approval step %s has no tenant in context; cannot suspend", step.name)
         return None
 
+    # Wave-2 6.3. The deadline behaviour is read here and carried on the
+    # pause row, because the sweeper that fires it runs in another process
+    # and has no playbook to consult. A step that declares something
+    # unrunnable fails closed rather than suspending into a deadline
+    # nothing can honour — the alternative is discovering it three hours
+    # into an incident.
+    try:
+        declared_timeout = timeout_outcome.validate_timeout_outcome(step.params)
+    except timeout_outcome.TimeoutOutcomeError as exc:
+        logger.error("Approval step %s declares an unusable timeout outcome: %s", step.name, exc)
+        return None
+
     approval_id = await _create_approval(pr, step, tenant_id, http)
 
     return await playbook_pause.suspend(
@@ -835,6 +847,7 @@ async def _suspend_for_approval(pr: PlaybookRun, step: PlaybookStep, step_idx: i
         step_results=pr.step_results,
         approval_id=approval_id,
         ttl_hours=_approval_ttl(step),
+        **declared_timeout.to_row(),
     )
 
 
@@ -1809,6 +1822,49 @@ async def _deliver_verification_prompt(
     )
 
 
+async def _control_ask_model(
+    step: PlaybookStep,
+    pr: PlaybookRun,
+    http: httpx.AsyncClient,
+    *,
+    dry_run: bool,
+    path: tuple[str, ...] = (),
+) -> tuple[StepStatus, dict]:
+    """Ask one bounded question and report the branch it selected.
+
+    A misconfigured step fails rather than silently deciding: a question
+    with no fallback branch, or with answers nobody can give, is an
+    authoring error and the run should stop on it. A *model* that fails —
+    absent, erroring, or answering off-list — is not an error, and takes
+    the declared fallback.
+    """
+    try:
+        config = ask_model.AskModelStepConfig.from_params(step.params, timeout_seconds=step.timeout_seconds)
+    except ask_model.AskModelConfigError as exc:
+        return StepStatus.FAILED, {"error": f"ask_model step {step.name!r} is not usable: {exc}", "misconfigured": True}
+
+    record = await ask_model.ask(config, pr.context, dry_run=dry_run)
+
+    # The answer is ledgered on the run and announced on the stream, so an
+    # auditor can see the question that was asked, what came back and which
+    # branch it chose — not merely that a step called "triage question"
+    # succeeded.
+    await _emit(
+        pr.run_id,
+        "step.ask_model",
+        {
+            "step": step.name,
+            "question": record["question"],
+            "answer": record.get("answer"),
+            "valid": record.get("valid"),
+            "fallback_taken": record.get("fallback_taken"),
+            "next_step_id": record.get("next_step_id"),
+        },
+        http,
+    )
+    return StepStatus.SUCCESS, record
+
+
 #: Step types the run loop hands to a control-flow coroutine rather than to
 #: ``_HANDLERS``. Keyed here rather than tested with an ``in`` against a set
 #: so a type added to one and not the other cannot silently fall through to
@@ -1818,6 +1874,11 @@ _CONTROL_FLOW: dict[StepType, Any] = {
     StepType.PARALLEL: _control_parallel,
     StepType.LOOP: _control_loop,
     StepType.VERIFY_USER: _control_verify_user,
+    # Wave-2 Phase 6.2. Routed here rather than into `_HANDLERS` for a
+    # security reason, not a structural one: `_HANDLERS` entries are the
+    # ones that reach `action_bridge`, and the whole point of this step is
+    # that it decides a branch and cannot act. A test asserts the routing.
+    StepType.ASK_MODEL: _control_ask_model,
 }
 
 
@@ -2153,6 +2214,19 @@ class PlaybookEngine:
                     pr.error = f"step '{step.name}' failed"
                     break
 
+                # Advance: a step that selected its own next step wins.
+                #
+                # Only `ask_model` produces this today, and the id it names
+                # came out of the author's own `branches` map rather than
+                # out of the model's reply — so the worst an injected
+                # instruction can do is pick a branch the playbook already
+                # contains. An id that is not in this playbook is ignored
+                # rather than trusted.
+                chosen = result.get("next_step_id") if step_status == StepStatus.SUCCESS else None
+                if chosen and chosen in step_index:
+                    current_idx = step_index[chosen]
+                    continue
+
                 # Advance: branching on success
                 if step_status == StepStatus.SUCCESS and step.next_true and step.next_true in step_index:
                     current_idx = step_index[step.next_true]
@@ -2182,3 +2256,106 @@ class PlaybookEngine:
             await _emit(pr.run_id, "run.done", pr.to_dict(), http)
 
         return pr
+
+
+async def run_timeout_outcomes(expired: list[dict[str, Any]]) -> list[str]:
+    """Act on every approval deadline that declared something to do.
+
+    Wave-2 Phase 6.3. Until this existed, every approval in the product
+    behaved identically at its deadline: the action did not happen, and
+    nothing else happened either. For the step that isolates a host
+    believed to be exfiltrating, "nobody answered, so we did nothing" is a
+    decision nobody made on purpose.
+
+    Two properties that keep this from being a way round an approval:
+
+    **The verb is named in the playbook.** There is no "escalate to
+    whatever seems appropriate"; a timeout can only run what the author
+    wrote down, and the writing-down is checked when the playbook is saved.
+
+    **It is dispatched through the ordinary governed path.** A timeout is
+    not a tier promotion. The capability is graded by its own contract, so
+    a verb the tenant's autonomy tier would not auto-execute queues for an
+    analyst here exactly as it would anywhere else — the operator who looks
+    later sees an action waiting rather than an action taken.
+
+    Takes the rows ``pause.expire_due_returning`` handed back rather than
+    re-reading them: the declaration lives on a row the expiry has just
+    stopped being ``waiting``, so a second read would find nothing and a
+    read beforehand would be a second cross-tenant sweep racing the first.
+
+    Returns the pause ids it acted on.
+    """
+    acted: list[str] = []
+
+    for row in expired:
+        if str(row.get("timeout_outcome") or timeout_outcome.STAY_PAUSED) == timeout_outcome.STAY_PAUSED:
+            # The default, and the behaviour every playbook had before this
+            # existed: the action does not happen and the platform stays
+            # out of it. Recorded as expired by the statement above, which
+            # is what keeps it from being a silent hang.
+            continue
+        pause_id = str(row.get("id"))
+        tenant_id = str(row.get("tenant_id"))
+        outcome = str(row.get("timeout_outcome") or timeout_outcome.STAY_PAUSED)
+        params = dict(row.get("timeout_params") or {})
+        if isinstance(params, str):
+            try:
+                params = json.loads(params)
+            except (TypeError, ValueError):
+                params = {}
+        target = str(params.pop("target", "") or "")
+
+        record: dict[str, Any] = {
+            "outcome": outcome,
+            "at": datetime.now(UTC).isoformat(),
+            "reason": "the approval deadline passed with no decision",
+        }
+
+        if outcome == timeout_outcome.ROLLBACK:
+            # The rollback authority is the actions service, reached the
+            # same way every other vendor-touching step is. Recording the
+            # request rather than performing it here keeps one dispatch
+            # path, which is what stops a second, ungoverned one appearing.
+            record["rollback_requested"] = True
+            record["run_id"] = row.get("run_id")
+            logger.info(
+                "playbook_timeout: run %s rolls back after its approval deadline",
+                row.get("run_id"),
+            )
+        elif outcome == timeout_outcome.CONTAIN:
+            capability = str(row.get("timeout_capability") or "")
+            try:
+                report = await action_bridge.dispatch_step(
+                    capability=capability,
+                    tenant_id=tenant_id,
+                    target=target,
+                    params=params,
+                    vendor_id=str(params.get("vendor_id") or ""),
+                    confidence=None,
+                    playbook_run_id=str(row.get("run_id") or ""),
+                    playbook_step_id=f"{row.get('step_id')}:timeout",
+                )
+                record["dispatch"] = report
+                # `executed` is the single field meaning a vendor was
+                # touched. A queued or blocked action is a correct outcome
+                # here and must not read as a containment that happened.
+                record["executed"] = bool(report.get("executed"))
+            except Exception as exc:  # noqa: BLE001 - a failed timeout action is recorded, never raised into the sweeper
+                record["error"] = str(exc)
+                record["executed"] = False
+                logger.warning(
+                    "playbook_timeout: containment %s for run %s failed: %s",
+                    capability,
+                    row.get("run_id"),
+                    exc,
+                )
+        else:
+            # A future outcome added to the column's CHECK and not to this
+            # function is recorded rather than silently doing nothing.
+            record["unhandled"] = True
+
+        await playbook_pause.record_timeout_result(pause_id=pause_id, tenant_id=tenant_id, result=record)
+        acted.append(pause_id)
+
+    return acted

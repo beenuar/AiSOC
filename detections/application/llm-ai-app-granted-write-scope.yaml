@@ -16,7 +16,7 @@ log_source:
 detection:
   condition: |
     event_type ENDSWITH ".consent_to_application"
-    AND scopes HAS_ANY ["Mail.ReadWrite", "Mail.Send", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Directory.ReadWrite.All", "User.ReadWrite.All"]
+    AND granted_scopes HAS_ANY ["Mail.ReadWrite", "Mail.Send", "Files.ReadWrite.All", "Sites.ReadWrite.All", "Directory.ReadWrite.All", "User.ReadWrite.All"]
 false_positives:
 - An AI application approved through the organisation's own review process
 playbook: tpl-privilege-escalation

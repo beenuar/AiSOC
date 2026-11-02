@@ -23,6 +23,7 @@ from app.services.confidence import ConfidenceScorer
 from app.services.correlator import Correlator
 from app.services.deduplicator import Deduplicator
 from app.services.entity_risk import EntityRiskEngine, EntityRiskRecord
+from app.services.identity_privilege_context import STAMP_KEY as PRIVILEGE_STAMP_KEY
 from app.services.ml_scorer import MLScorer
 from app.services.narrative import (
     NarrativeFactor,
@@ -127,6 +128,7 @@ class FusionEngine:
         enricher: AlertEnricher | None = None,
         asset_resolver: Any = None,
         memory_provider: Any = None,
+        privilege_resolver: Any = None,
     ) -> None:
         self._dedup = deduplicator
         self._correlator = correlator
@@ -146,6 +148,11 @@ class FusionEngine:
         # scorer's asset_criticality factor (optional; None = factor reads
         # "unknown"). `app.services.asset_context.AssetContextResolver`.
         self._asset_resolver = asset_resolver
+        # Depth 2 wave 2, 1.1 — the privilege the actor held at event time,
+        # for the scorer's `identity_privilege` factor and the console
+        # queue's priority basis (optional; None = every alert stamps
+        # "unknown", which is the honest state and not a silent default).
+        self._privilege_resolver = privilege_resolver
         # Confidence + explainability is intrinsic to a fused alert — every
         # alert leaves the engine with a high/med/low label and an evidence
         # chain. The scorer is pure / stateless so we instantiate a default.
@@ -226,6 +233,21 @@ class FusionEngine:
                     fused.enrichments["asset_context"] = asset_ctx
             except Exception as exc:
                 logger.warning("fuse_asset_context_failed", error=str(exc))
+
+        # --- Step 2.7: Privilege at event time (depth 2 wave 2, 1.1) ---
+        # The actor half of the same question step 2.6 asks about the asset.
+        # Note the asymmetry with the stamp above, which is deliberate: that
+        # one writes only on a match, this one writes `unknown` too. An
+        # absent asset row means the tenant has no CMDB entry for a host,
+        # which is ordinary; an absent privilege fact can equally mean the
+        # provider's posture has never been collected, and the scorer and
+        # the queue both need to be able to tell that from an ordinary
+        # account.
+        if self._privilege_resolver is not None:
+            try:
+                fused.enrichments[PRIVILEGE_STAMP_KEY] = await self._privilege_resolver.resolve(alert)
+            except Exception as exc:
+                logger.warning("fuse_identity_privilege_failed", error=str(exc))
 
         # --- Step 3: ML scoring ---
         try:

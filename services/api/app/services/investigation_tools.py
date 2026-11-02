@@ -32,6 +32,7 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Any
 
 from app.db.clickhouse import execute_lake_query
@@ -489,6 +490,199 @@ async def persistence_mechanisms(tenant_id: uuid.UUID | str, hostname: str) -> T
     return unavailable("persistence_mechanisms", "persistence")
 
 
+async def identity_effective_permissions(
+    tenant_id: uuid.UUID | str,
+    principal_id: str,
+    *,
+    at: str | None = None,
+    provider: str | None = None,
+) -> ToolResult:
+    """What this identity could do, as of ``at`` — not as of now.
+
+    The only tool here that reads Postgres rather than the lake, because
+    posture is not telemetry: it is a versioned fact with an interval, and
+    the interval is the whole point. An alert is triaged minutes to days
+    after the event, so "what can this identity do" and "what could it do
+    when it acted" are different questions, and on an alert raised before
+    somebody revoked a role they have different answers — the second being
+    the one that explains the alert.
+
+    ``at`` is the event timestamp. Omitting it means *now*, which is the
+    right default for an interactive question about a live identity and the
+    wrong one for triage, so the triage caller always passes it.
+    """
+    from app.db.database import AsyncSessionLocal  # noqa: PLC0415 — keeps the lake tools import-light
+    from app.services.identity_privilege_store import privilege_at, usage_for_principal
+
+    when = _parse_at(at)
+    try:
+        async with AsyncSessionLocal() as session:
+            fact = await privilege_at(
+                session,
+                tenant_id=_as_uuid(tenant_id),
+                principal_id=principal_id,
+                at=when,
+                provider=provider,
+            )
+            if fact is None:
+                # Distinct from "this identity has no permissions". Phrased
+                # so a model relaying it cannot turn it into evidence of
+                # harmlessness, which is what an empty result would become.
+                return ToolResult(
+                    tool="identity_effective_permissions",
+                    available=False,
+                    reason=(
+                        f"No posture snapshot covers {when.isoformat()} for {principal_id!r}. "
+                        f"The privilege tier is unknown — this is a gap in collection, not "
+                        f"evidence that the identity is unprivileged."
+                    ),
+                    query_description=f"privilege facts valid at {when.isoformat()}",
+                )
+            usage = await usage_for_principal(
+                session,
+                tenant_id=_as_uuid(tenant_id),
+                provider=fact.privilege.provider,
+                principal_id=fact.privilege.principal_id,
+            )
+    except Exception as exc:  # noqa: BLE001 — a lookup failure is not an absence
+        logger.warning("investigation_tool.identity_effective_permissions failed err=%s", type(exc).__name__)
+        return ToolResult(
+            tool="identity_effective_permissions",
+            available=False,
+            reason=(f"Privilege lookup failed ({type(exc).__name__}). This is a lookup failure, not an absence of privilege."),
+        )
+
+    privilege = fact.privilege
+    row: dict[str, Any] = {
+        "principal_id": privilege.principal_id,
+        "provider": privilege.provider,
+        "privilege_tier": privilege.tier,
+        "tags": privilege.tags.as_dict(),
+        "tags_set": privilege.tags.set_tags(),
+        "evidence": privilege.evidence,
+        "action_count": privilege.action_count,
+        "resource_count": privilege.resource_count,
+        "valid_from": fact.valid_from.isoformat() if fact.valid_from else None,
+        "valid_until": fact.valid_until.isoformat() if fact.valid_until else None,
+        "snapshot_was_partial": privilege.partial_source,
+        # Three states, not two: measured-and-used, measured-and-unused, and
+        # not measured at all. A CORE install has no lake, so the third is
+        # the common case and collapsing it into the second would make every
+        # permission look abandoned.
+        "usage_measured": usage.measured,
+        "actions_used_in_window": sorted(usage.used) if usage.measured else None,
+        "usage_window": (
+            {
+                "start": usage.window_start.isoformat() if usage.window_start else None,
+                "end": usage.window_end.isoformat() if usage.window_end else None,
+                "source": usage.source,
+            }
+            if usage.measured
+            else None
+        ),
+    }
+    return ToolResult(
+        tool="identity_effective_permissions",
+        rows=[row],
+        row_count=1,
+        query_description=(f"effective permissions for {privilege.provider}:{privilege.principal_id} as of {when.isoformat()}"),
+    )
+
+
+async def changes_before_alert(
+    tenant_id: uuid.UUID | str,
+    subjects: str,
+    *,
+    at: str | None = None,
+    days: int = 7,
+) -> ToolResult:
+    """Every recorded change touching these identities before the alert.
+
+    Depth plan wave 2, 1.5. ``subjects`` is a comma-separated list of
+    identities or resources, because the question is usually about a person
+    *and* the thing they touched, and two tool calls to ask one question is
+    how a model runs out of its step budget.
+
+    Reads versioned posture and the audit lake, and says which of the two
+    answered. "Nothing changed" and "we could not look" are returned as
+    different results, which is the whole reason this is a tool rather than
+    a query: the second must never read as the first.
+    """
+    from app.db.database import AsyncSessionLocal  # noqa: PLC0415 — keeps the lake tools import-light
+    from app.services.change_timeline import changes_before
+
+    names = [s.strip() for s in str(subjects or "").split(",") if s.strip()]
+    if not names:
+        return ToolResult(
+            tool="changes_before_alert",
+            available=False,
+            reason="No identity or resource was named, so there was nothing to look up.",
+        )
+
+    when = _parse_at(at)
+    try:
+        async with AsyncSessionLocal() as session:
+            timeline = await changes_before(
+                session,
+                tenant_id=_as_uuid(tenant_id),
+                subjects=names,
+                at=when,
+                days=days,
+            )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("investigation_tool.changes_before_alert failed err=%s", type(exc).__name__)
+        return ToolResult(
+            tool="changes_before_alert",
+            available=False,
+            reason=(f"The change lookup failed ({type(exc).__name__}). This is a lookup failure, not an absence of change."),
+        )
+
+    payload = timeline.as_dict()
+    if not timeline.measured:
+        return ToolResult(
+            tool="changes_before_alert",
+            available=False,
+            reason=payload["reason"],
+            query_description=f"changes to {', '.join(names)} in the {days} day(s) before {when.isoformat()}",
+        )
+
+    return ToolResult(
+        tool="changes_before_alert",
+        rows=payload["changes"],
+        row_count=payload["change_count"],
+        # Carried even on a zero-row answer, because "read both sources and
+        # found nothing" is a measured result and has to read like one.
+        reason=payload.get("reason"),
+        query_description=(
+            f"changes to {', '.join(names)} in the {days} day(s) before {when.isoformat()}; "
+            f"read {', '.join(payload['sources_read'])}"
+            + (f"; could not read {', '.join(payload['sources_failed'])}" if payload["sources_failed"] else "")
+        ),
+    )
+
+
+def _parse_at(at: str | None) -> datetime:
+    """An ISO timestamp, or now. An unparseable one is now, with no pretence.
+
+    Raising would turn a model's sloppy timestamp into a failed triage step;
+    silently reading it as the epoch would return "no snapshot covers 1970"
+    and read as a collection gap. Falling back to now is the only option
+    whose wrongness is visible in the answer, which echoes back the time it
+    actually used.
+    """
+    if not at:
+        return datetime.now(tz=UTC)
+    try:
+        parsed = datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.now(tz=UTC)
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def _as_uuid(value: uuid.UUID | str) -> uuid.UUID:
+    return value if isinstance(value, uuid.UUID) else uuid.UUID(str(value))
+
+
 #: Name -> coroutine. The dispatch table the API endpoint and the agent
 #: registry both read, so the two cannot drift.
 TOOLS: dict[str, Any] = {
@@ -499,6 +693,8 @@ TOOLS: dict[str, Any] = {
     "fleet_ioc_hunt": fleet_ioc_hunt,
     "entity_timeline": entity_timeline,
     "technique_activity": technique_activity,
+    "identity_effective_permissions": identity_effective_permissions,
+    "changes_before_alert": changes_before_alert,
     "process_tree": process_tree,
     "mailbox_activity": mailbox_activity,
     "oauth_grants": oauth_grants,
@@ -516,6 +712,14 @@ BACKED_TOOLS = frozenset(
         "fleet_ioc_hunt",
         "entity_timeline",
         "technique_activity",
+        # Backed by `identity_privilege_facts` (migration 124) rather than
+        # the lake, which is why it is the one entry here that can answer on
+        # a CORE install with no ClickHouse.
+        "identity_effective_permissions",
+        # Reads both: versioned posture in Postgres and audit events in
+        # the lake. It reports which of the two answered, so a CORE install
+        # gets the posture half and is told the other was not read.
+        "changes_before_alert",
     }
 )
 

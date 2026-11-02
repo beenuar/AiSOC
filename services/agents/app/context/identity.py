@@ -51,7 +51,7 @@ import os
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any
 
 import httpx
@@ -208,6 +208,111 @@ def _shape(payload: Mapping[str, Any], *, limit: int) -> IdentityContext:
     )
 
 
+#: A departure this many days out or fewer counts as "departing". 30 days
+#: because it is the common notice period and because the exfiltration
+#: literature puts the elevated window in the final weeks; it is a default
+#: rather than a constant, and the number is stated in the prompt so a
+#: reader is never guessing which window produced the phrase.
+DEPARTING_WITHIN_DAYS = 30
+
+#: Bounded per principal: the prompt budget is shared with the evidence,
+#: and a fleet user with forty enrolled devices must not crowd it out.
+_MAX_DEVICES_PER_PRINCIPAL = 3
+
+
+def _parse_date(value: Any) -> date | None:
+    """An ISO-8601 calendar date, or None.
+
+    Dates only. A last day is a calendar date in a jurisdiction and not an
+    instant, so a value carrying a time is truncated rather than converted:
+    treating it as UTC would move somebody's departure by a day for half
+    the world.
+    """
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return date.fromisoformat(value.strip()[:10])
+    except ValueError:
+        return None
+
+
+def derive_employment_facts(row: Mapping[str, Any], *, today: date | None = None) -> dict[str, Any]:
+    """Tenure, departure proximity and contractor status, from one row.
+
+    Each is derived rather than stored, and each is absent rather than
+    false when the underlying date is missing. A principal whose start date
+    nobody imported is not a new joiner, and one with no end date is not
+    "definitely staying" -- they are unknown, and the prompt says nothing
+    instead of saying something reassuring.
+    """
+    now = today or date.today()  # noqa: DTZ011 - a calendar date, deliberately
+    facts: dict[str, Any] = {}
+
+    start = _parse_date(row.get("start_date"))
+    if start is not None:
+        facts["tenure_days"] = max(0, (now - start).days)
+
+    end = _parse_date(row.get("end_date"))
+    if end is not None:
+        remaining = (end - now).days
+        facts["days_until_departure"] = remaining
+        # Both directions are facts, and the past one is the sharper of the
+        # two: an account whose last day has passed and which is still
+        # authenticating is the single highest-signal row this source holds.
+        facts["departed"] = remaining < 0
+        facts["departing_soon"] = 0 <= remaining <= DEPARTING_WITHIN_DAYS
+
+    employment = str(row.get("employment_type") or "").strip().lower()
+    if employment in {"contractor", "contingent", "temp", "temporary"}:
+        facts["is_contractor"] = True
+    elif employment in {"employee", "full-time", "part-time", "full time", "part time"}:
+        facts["is_contractor"] = False
+    # Anything else, including "unknown" and a value no mapping covers,
+    # leaves the key absent. A contractor read as staff loses exactly the
+    # signal this field exists for, and the reverse is a false accusation.
+
+    return facts
+
+
+def _render_device_line(device: Mapping[str, Any]) -> str | None:
+    """One device, as a bounded phrase, or None when it says nothing."""
+    hostname = sanitize_text(str(device.get("hostname") or ""), max_len=_MAX_FIELD_CHARS)
+    compliance = str(device.get("compliance_state") or "").strip().lower()
+    bits: list[str] = []
+    if compliance == "noncompliant":
+        bits.append("NOT COMPLIANT with this tenant's device policy")
+    elif compliance == "in_grace_period":
+        bits.append("in the policy grace period")
+    elif compliance == "compliant":
+        bits.append("compliant")
+    elif compliance in {"", "unknown", "not_enrolled"}:
+        # Said explicitly. An unmanaged or unevaluated device is a real
+        # state and is not the same as a compliant one; leaving it out
+        # would let the reader assume the quieter of the two.
+        bits.append("compliance not evaluated by the MDM")
+
+    encrypted = device.get("encrypted")
+    if encrypted is False:
+        bits.append("disk NOT encrypted")
+    elif encrypted is True:
+        bits.append("disk encrypted")
+    # None is silent: "not reported" is not a finding.
+
+    agent = sanitize_text(str(device.get("edr_agent_health") or ""), max_len=40).lower()
+    if agent and agent not in {"secured", "cleared", "unknown"}:
+        bits.append(f"threat-defence agent state {agent}")
+
+    os_version = sanitize_text(str(device.get("os_version") or ""), max_len=40)
+    os_name = sanitize_text(str(device.get("os_name") or ""), max_len=40)
+    if os_name or os_version:
+        bits.append(" ".join(part for part in (os_name, os_version) if part))
+
+    if not bits:
+        return None
+    label = hostname or "an enrolled device"
+    return f"{label}: " + ", ".join(bits)
+
+
 def render_for_prompt(state_value: Mapping[str, Any] | None) -> str:
     """The prompt block, or ``""`` when the tenant has imported nothing.
 
@@ -244,17 +349,53 @@ def render_for_prompt(state_value: Mapping[str, Any] | None) -> str:
         employment = sanitize_text(str(row.get("employment_type") or ""), max_len=40)
         if employment:
             bits.append(employment)
+
+        # Depth plan wave 2, item 1.3. Derived from the dates the row
+        # already carries and stated with the window that produced each
+        # phrase, so "departing soon" is never a number the reader has to
+        # guess at. Absent when the date is absent: a principal whose start
+        # date nobody imported is not a new joiner, and one with no end date
+        # is not "definitely staying".
+        facts = derive_employment_facts(row)
+        if facts.get("departed"):
+            bits.append("LAST DAY HAS PASSED and the account is still authenticating")
+        elif facts.get("departing_soon"):
+            bits.append(f"departing in {facts['days_until_departure']} day(s)")
+        if facts.get("is_contractor"):
+            bits.append("contractor, not an employee")
+        tenure = facts.get("tenure_days")
+        if isinstance(tenure, int) and tenure <= 30:
+            bits.append(f"joined {tenure} day(s) ago")
+
         lines.append(f"- {account}: " + ", ".join(bits) if bits else f"- {account}: no directory record")
+
+        # The device half, indented under its owner. Rendered only when the
+        # MDM said something: a principal with no enrolled device gets no
+        # line, because "no device found" on a tenant with no MDM connector
+        # is a statement about our coverage and not about the principal.
+        devices = row.get("devices")
+        if isinstance(devices, list):
+            for device in devices[:_MAX_DEVICES_PER_PRINCIPAL]:
+                if not isinstance(device, Mapping):
+                    continue
+                rendered = _render_device_line(device)
+                if rendered:
+                    lines.append(f"  - device {rendered}")
 
     if not lines:
         return ""
 
     return (
-        "Directory context for the principals in this alert, from this tenant's own imported "
-        "HR or identity data:\n" + "\n".join(lines) + "\nThis describes the account holder, not the activity. It is a reason to weigh the "
-        "activity differently, never a verdict on its own: an inactive account authenticating is "
-        "worth escalating, and a senior title is not evidence that anything was authorised. The "
-        "record reflects the last directory import and may be out of date."
+        "Directory, HR and device context for the principals in this alert, from this tenant's own "
+        "connected HR system, directory import or MDM:\n"
+        + "\n".join(lines)
+        + "\nThis describes the account holder, not the activity, and a device line describes the "
+        "device rather than what was done on it. It is a reason to "
+        "weigh the activity differently, never a verdict on its own: an account whose last day has "
+        "passed authenticating is worth escalating, and a senior title is not evidence that "
+        f'anything was authorised. "Departing" means a recorded last day within {DEPARTING_WITHIN_DAYS} days. The record '
+        "reflects the last import or sync and may be out of date; a device with no line said "
+        "nothing, which is not the same as a device that reported no problem."
     )
 
 
@@ -268,4 +409,31 @@ def basis(state_value: Mapping[str, Any] | None) -> list[str]:
     line = f"Directory context in prompt: {len(rows)} principal(s)"
     if inactive:
         line += f", {inactive} no longer active in the directory"
-    return [line]
+    out = [line]
+
+    # Each derived fact is cited separately rather than folded into the
+    # count above, because the confidence basis is what a reviewer reads to
+    # see which input moved a verdict, and "1 principal in prompt" does not
+    # say that one of them left last week.
+    derived = [derive_employment_facts(r) for r in rows]
+    departed = sum(1 for f in derived if f.get("departed"))
+    departing = sum(1 for f in derived if f.get("departing_soon"))
+    contractors = sum(1 for f in derived if f.get("is_contractor"))
+    if departed:
+        out.append(f"HR context: {departed} principal(s) whose recorded last day has passed")
+    if departing:
+        out.append(f"HR context: {departing} principal(s) departing within {DEPARTING_WITHIN_DAYS} days")
+    if contractors:
+        out.append(f"HR context: {contractors} principal(s) recorded as contractors")
+
+    devices = [d for r in rows for d in (r.get("devices") or []) if isinstance(d, Mapping)]
+    if devices:
+        noncompliant = sum(1 for d in devices if str(d.get("compliance_state") or "").lower() == "noncompliant")
+        unencrypted = sum(1 for d in devices if d.get("encrypted") is False)
+        detail = f"Device context in prompt: {len(devices)} enrolled device(s)"
+        if noncompliant:
+            detail += f", {noncompliant} not compliant"
+        if unencrypted:
+            detail += f", {unencrypted} with no disk encryption"
+        out.append(detail)
+    return out

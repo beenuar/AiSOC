@@ -1,0 +1,29 @@
+id: bamboohr
+name: BambooHR Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Employment status, start and last-day dates, manager, department and worker
+  type from BambooHR, as triage context. Read-only. The employee endpoint is
+  read with an explicit field list, so compensation, date of birth and home
+  address are never requested, let alone stored.
+author: AiSOC Core Team
+tags: [hr, workforce, identity, context, bamboohr]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/bamboohr.py
+license: MIT
+min_aisoc_version: "21.0.0"
+config_schema:
+  type: object
+  required: [subdomain, api_key]
+  properties:
+    subdomain:
+      type: string
+      description: The first label of your BambooHR URL. acme.bamboohr.com gives acme.
+    api_key:
+      type: string
+      description: API key from your BambooHR profile. Needs directory and employee read access.
+      secret: true
+    max_employees:
+      type: integer
+      description: Ceiling on the per-employee reads one sync will make. Defaults to 5000.

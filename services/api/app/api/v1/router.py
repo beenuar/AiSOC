@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     access_conditions,
+    access_review,
     admin_users,
     agent_tools,
     agents,
@@ -48,6 +49,7 @@ from app.api.v1.endpoints import (
     hunt_reports,
     hunts,
     identity_graph,
+    identity_resolution,
     identity_timeline,
     inbox,
     inbox_itsm,
@@ -238,6 +240,7 @@ api_router.include_router(replay.public_router)
 # Resolves "what can principal X actually do?" across AWS / Azure / GCP /
 # Okta / Google Workspace and caches the result as :EFFECTIVE_PERMISSION
 # edges in Neo4j. Backs apps/web/src/app/(app)/identity/permissions.
+api_router.include_router(access_review.router)
 api_router.include_router(effective_permissions.router)
 
 # Signed email-approval links (T3.6). Unauthenticated by necessity — the
@@ -346,6 +349,7 @@ api_router.include_router(threat_intel.router)
 api_router.include_router(posture.router)
 api_router.include_router(easm.router)
 api_router.include_router(identity_graph.router)
+api_router.include_router(identity_resolution.router)
 api_router.include_router(reports.router)
 # Depth 9.5: a natural-language hunt or a retro-hunt that found something
 # becomes a readable, cited report, exportable through the same WeasyPrint

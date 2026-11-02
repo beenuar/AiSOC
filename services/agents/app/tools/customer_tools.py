@@ -49,7 +49,7 @@ from typing import Any
 import httpx
 import structlog
 
-from app.tools.registry import Tool
+from app.tools.tool import Tool
 
 logger = structlog.get_logger()
 
@@ -196,6 +196,183 @@ def _detail(response: httpx.Response) -> str:
         if isinstance(detail, str):
             return detail
     return ""
+
+
+# ------------------------------------------- effective permissions (1.1)
+
+
+EFFECTIVE_PERMISSIONS_TOOL = "identity_effective_permissions"
+
+EFFECTIVE_PERMISSIONS_DESCRIPTION = (
+    "What a cloud or identity-provider principal could actually do AT THE TIME OF THE EVENT: "
+    "its privilege tier, whether it can escalate its own or others' access, whether it can read "
+    "resources the customer marked sensitive, whether it is third-party or vendor-owned, and "
+    "whether it reaches another account or project. Pass the alert's own timestamp as `at`, not "
+    "the current time: a role revoked after the event still explains the event. An answer of "
+    "'unknown' means no posture snapshot covers that moment and is NOT evidence that the "
+    "identity is unprivileged."
+)
+
+EFFECTIVE_PERMISSIONS_PARAMETERS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "principal_id": {
+            "type": "string",
+            "description": (
+                "The principal as the alert names it: an AWS ARN or user name, an Entra object id "
+                "or UPN, a GCP member, an Okta or Workspace user, or a code-platform login."
+            ),
+        },
+        "at": {
+            "type": "string",
+            "description": (
+                "ISO-8601 timestamp of the event being investigated. Omitting it asks about now, which is a different question."
+            ),
+        },
+        "provider": {
+            "type": "string",
+            "enum": ["aws", "azure", "gcp", "gws", "github", "okta"],
+            "description": ("Optional. Omit it to search every provider that knows this principal and take the strongest privilege found."),
+        },
+    },
+    "required": ["principal_id"],
+}
+
+
+async def identity_effective_permissions(
+    principal_id: str,
+    at: str = "",
+    provider: str = "",
+    *,
+    tenant_id: str = "",
+) -> dict[str, Any]:
+    """Ask the API what this identity could do when it acted.
+
+    Goes through ``/investigate/query``, the same typed-pivot door the
+    console uses, rather than a second route of its own. Two reasons, both
+    learned here: one dispatch table means the console and the model cannot
+    be offered different tools, and the pivot endpoint already takes the
+    tenant from the authenticated principal rather than from the request, so
+    a model cannot redirect the read.
+    """
+    what = f"the effective permissions of {principal_id!r}"
+    args: dict[str, Any] = {"principal_id": principal_id}
+    if at:
+        args["at"] = at
+    if provider:
+        args["provider"] = provider
+
+    body = await _call(
+        "/api/v1/graph/investigate/query",
+        {"tool": EFFECTIVE_PERMISSIONS_TOOL, "args": args},
+        what,
+        tenant_id,
+    )
+    if body.get("available") is False:
+        # The API already distinguishes "no snapshot covers this time" from
+        # "the lookup failed", and both arrive here as available=false with
+        # their own reason. Rewriting either into a generic failure would
+        # lose the distinction the whole tool exists to preserve.
+        return body
+
+    rows = body.get("rows") or []
+    if not rows:
+        return _could_not_check(what, "The privilege lookup returned no record for this principal.")
+
+    row = dict(rows[0])
+    row["available"] = True
+    row["outcome"] = "resolved"
+    if row.get("usage_measured") is False:
+        # Said in words because a null field is the kind of thing a model
+        # fills in with a plausible guess.
+        row["usage_note"] = (
+            "Which of these permissions were actually exercised was NOT measured on this "
+            "deployment (the event lake is a `full`-profile component). Do not conclude that "
+            "unused means unexercised."
+        )
+    if row.get("snapshot_was_partial"):
+        row["coverage_note"] = (
+            "The posture snapshot behind this answer was incomplete, so the real permission set may be larger than what is listed."
+        )
+    return row
+
+
+# ------------------------------------------ what changed before (1.5)
+
+
+CHANGES_BEFORE_TOOL = "changes_before_alert"
+
+CHANGES_BEFORE_DESCRIPTION = (
+    "Every recorded change touching these identities or resources in the days BEFORE this alert: "
+    "role and group grants, policy edits, OAuth consents, MFA factor changes, sharing changes and "
+    "key creation. Reads the customer's versioned posture and their audit events, and says which "
+    "of the two it could read. An answer of 'could not read' is a gap in visibility and is NOT "
+    "evidence that nothing changed."
+)
+
+CHANGES_BEFORE_PARAMETERS: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "subjects": {
+            "type": "string",
+            "description": (
+                "Comma-separated identities or resources from the alert. Ask about the actor and "
+                "the thing it touched together rather than in two calls."
+            ),
+        },
+        "at": {
+            "type": "string",
+            "description": "ISO-8601 timestamp of the alert. The window ends here.",
+        },
+        "days": {
+            "type": "integer",
+            "description": "How many days before `at` to look. Default 7, maximum 90.",
+        },
+    },
+    "required": ["subjects"],
+}
+
+
+async def changes_before_alert(
+    subjects: str,
+    at: str = "",
+    days: int = 7,
+    *,
+    tenant_id: str = "",
+) -> dict[str, Any]:
+    """Ask the API what changed before this alert.
+
+    Through `/investigate/query` like the privilege tool, for the same
+    reason: one dispatch table means the console and the model cannot be
+    offered different tools, and the endpoint takes the tenant from the
+    authenticated principal rather than from the request.
+    """
+    what = f"changes to {subjects!r} before this alert"
+    args: dict[str, Any] = {"subjects": subjects, "days": int(days or 7)}
+    if at:
+        args["at"] = at
+
+    body = await _call(
+        "/api/v1/graph/investigate/query",
+        {"tool": CHANGES_BEFORE_TOOL, "args": args},
+        what,
+        tenant_id,
+    )
+    if body.get("available") is False:
+        return body
+
+    rows = body.get("rows") or []
+    return {
+        "available": True,
+        "outcome": "resolved",
+        "change_count": len(rows),
+        "changes": rows,
+        "query": body.get("query"),
+        # Present even when the list is empty: "read both sources and found
+        # nothing" is a measured result, and without this sentence a model
+        # reads an empty list as a failed lookup -- or worse, the reverse.
+        "note": body.get("reason"),
+    }
 
 
 # ------------------------------------------------------------- SIEM search
@@ -538,6 +715,12 @@ async def scoped_customer_tools(tenant_id: str) -> tuple[list[Tool], list[str]]:
 
 
 __all__ = [
+    "CHANGES_BEFORE_DESCRIPTION",
+    "CHANGES_BEFORE_PARAMETERS",
+    "CHANGES_BEFORE_TOOL",
+    "EFFECTIVE_PERMISSIONS_DESCRIPTION",
+    "EFFECTIVE_PERMISSIONS_PARAMETERS",
+    "EFFECTIVE_PERMISSIONS_TOOL",
     "INDICATOR_TYPES",
     "SIEM_SEARCH_TOOL",
     "UNTRUSTED_NOTICE",

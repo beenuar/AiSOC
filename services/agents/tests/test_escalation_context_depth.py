@@ -33,6 +33,7 @@ from app.agents.investigation_agent import _bundle_findings
 # asserting nothing.
 from app.llm import tool_loop
 from app.models.state import AgentStatus, InvestigationState
+from app.security.agent_identity import issue_identity
 from app.workers import fused_alert_consumer as consumer
 from app.workers.fused_alert_consumer import FusedAlertTriageWorker
 from app.workers.triage_persistence import LiveTriageWriter
@@ -203,6 +204,8 @@ async def test_the_tool_loop_routes_through_the_llm_contract(
         def bind_tools(self, schemas):  # noqa: ANN001
             return self
 
-    out = await tool_loop.run_with_tools(_LLM(), system="s", user="u", registry=ToolRegistry())
+    out = await tool_loop.run_with_tools(
+        _LLM(), system="s", user="u", registry=ToolRegistry(), identity=issue_identity("triage", run_id="run-1")
+    )
     assert called, "the loop bypassed safe_ainvoke"
     assert out["content"] == "done"

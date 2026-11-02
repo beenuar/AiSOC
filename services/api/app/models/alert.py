@@ -67,6 +67,17 @@ class Alert(Base):
     # rail's "Deep Explain" button via /api/v1/alerts/{id}/explain.
     narrative: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # Anonymizer or hosting class of the source address, stamped at ingest
+    # from a pinned local dataset (migration 130, depth plan wave 2 item
+    # 1.6), with the dataset version that answered beside it.
+    #
+    # NULL means the dataset had no entry, and that is the ordinary case:
+    # three of the five classes ship with no records because no source for
+    # them survived the licence check. Every surface renders NULL as unknown
+    # and never as "not an anonymizer".
+    src_ip_class: Mapped[str | None] = mapped_column(Text, nullable=True)
+    src_ip_class_dataset_version: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     # Entities (denormalized for fast querying)
     affected_ips: Mapped[list] = mapped_column(JSONB, default=list)
     affected_hosts: Mapped[list] = mapped_column(JSONB, default=list)

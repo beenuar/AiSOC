@@ -394,6 +394,8 @@ def promote_normalized_event(message: dict[str, Any]) -> RawAlert | None:
         description=description,
         severity=severity,
         src_ip=_get_nested(ocsf, "src_endpoint", "ip"),
+        src_ip_class=_get_nested(ocsf, "activity", "location", "ip_class"),
+        src_ip_class_dataset_version=_get_nested(ocsf, "activity", "location", "ip_class_dataset_version"),
         dst_ip=_get_nested(ocsf, "dst_endpoint", "ip"),
         hostname=_get_nested(ocsf, "device", "name"),
         username=_get_nested(ocsf, "actor", "user", "name"),

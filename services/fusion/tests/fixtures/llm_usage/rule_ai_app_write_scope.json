@@ -8,21 +8,24 @@
   "description": "provider=entra_consent; event_type=entra_consent.consent_to_application; actor=carol@example.com",
   "event_type": "entra_consent.consent_to_application",
   "external_id": "ws-1",
+  "granted_scopes": [
+    "Mail.ReadWrite"
+  ],
   "provider": "entra_consent",
   "raw_event": {
     "activityDateTime": "2026-10-30T09:15:00Z",
     "activityDisplayName": "Consent to application",
     "application_id": "app-1",
     "application_name": "Acme AI Notetaker",
+    "granted_scopes": [
+      "Mail.ReadWrite"
+    ],
     "id": "ws-1",
     "initiatedBy": {
       "user": {
         "userPrincipalName": "carol@example.com"
       }
     },
-    "scopes": [
-      "Mail.ReadWrite"
-    ],
     "targetResources": [
       {
         "displayName": "Acme AI Notetaker",
@@ -36,9 +39,6 @@
       }
     ]
   },
-  "scopes": [
-    "Mail.ReadWrite"
-  ],
   "severity": "high",
   "source": "llm_usage",
   "title": "Entra consent audit: consent_to_application"

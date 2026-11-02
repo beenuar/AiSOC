@@ -26,6 +26,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from app.llm.contract import safe_ainvoke
 from app.prompting.tool_results import render_tool_message
+from app.security.agent_identity import AgentIdentity
 from app.tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
@@ -37,12 +38,18 @@ async def run_with_tools(
     system: str,
     user: str,
     registry: ToolRegistry,
+    identity: AgentIdentity,
     max_iters: int = 4,
 ) -> dict[str, Any]:
     """Run a tool-calling conversation and return the final content + tool trace.
 
     Returns ``{"content": str, "tool_trace": [...], "iterations": int,
     "truncated": bool}``.
+
+    ``identity`` is required rather than defaulted (wave-2 7.3). This loop
+    is the only production caller of ``registry.execute``, so a default
+    here would be the default for the whole service — and an identity that
+    defaults to "allow" is a control that protects nothing.
     """
     bound = llm.bind_tools(registry.openai_schemas())
     messages: list[Any] = [SystemMessage(content=system), HumanMessage(content=user)]
@@ -70,7 +77,7 @@ async def run_with_tools(
             name = call.get("name", "")
             args = call.get("args", {}) or {}
             call_id = call.get("id", "") or ""
-            result = await registry.execute(name, args)
+            result = await registry.execute(name, args, identity=identity)
             trace.append({"tool": name, "args": args, "result_preview": str(result)[:200]})
             # The only place in this service where a tool result becomes text
             # a model reads. Depth plan 1.3 turned that from an accident of

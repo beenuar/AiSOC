@@ -1,0 +1,28 @@
+id: microsoft_intune
+name: Microsoft Intune Connector
+version: "1.0.0"
+plugin_type: connector
+tier: stable
+description: >
+  Managed device context from Microsoft Intune through Microsoft Graph: device
+  owner, compliance state, OS version, encryption and threat-defence agent
+  state. Read-only; the app registration needs only the Read.All permission.
+author: AiSOC Core Team
+tags: [mdm, device, compliance, endpoint, intune, microsoft]
+homepage: https://github.com/beenuar/AiSOC/tree/main/services/connectors/app/connectors/microsoft_intune.py
+license: MIT
+min_aisoc_version: "21.0.0"
+config_schema:
+  type: object
+  required: [tenant_id, client_id, client_secret]
+  properties:
+    tenant_id:
+      type: string
+      description: Directory (tenant) ID of the Entra tenant.
+    client_id:
+      type: string
+      description: Application (client) ID of the app registration.
+    client_secret:
+      type: string
+      description: Client secret for the app registration. Needs DeviceManagementManagedDevices.Read.All with admin consent.
+      secret: true

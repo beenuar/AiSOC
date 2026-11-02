@@ -210,9 +210,34 @@ def _python_services() -> int:
     return sum(1 for p in d.iterdir() if p.is_dir() and not p.name.startswith(".")) if d.is_dir() else 0
 
 
+def _executor_arms() -> dict[str, int] | None:
+    """Count response arms from the generated artefact.
+
+    Depth 5.5 asks for an arm-count line in ``make stats``. It reads the
+    artefact rather than re-deriving the count, so there is exactly one
+    definition of "arm" in the tree: ``check_executor_arm_count.py`` owns
+    it, and a second implementation here would be free to drift — which is
+    how this figure came to be quoted three different ways in the first
+    place.
+    """
+    path = ROOT / "docs" / "audit" / "executor-arms.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    return {
+        "arms": int(data.get("arms", 0)),
+        "verbs": int(data.get("verbs", 0)),
+        "vendors": int(data.get("vendors", 0)),
+    }
+
+
 def collect() -> dict:
     stats: dict = {
         "connectors": _connectors(),
+        "executor_arms": _executor_arms(),
         "detections_executable": _executable_detections(),
         "detections_threat_anomaly": _threat_anomaly_detections(),
         "detections_files_on_disk": _detection_files_on_disk(),
@@ -243,6 +268,9 @@ def _render(stats: dict) -> str:
         f"  YAML files under detections/   {stats['detections_yaml_files']}  (the extra {playbook_yaml} are response playbooks, not rules)",
         f"  Services in repo               {stats['services_in_repo']}",
     ]
+    arms = stats.get("executor_arms")
+    if arms:
+        lines.append(f"  Response arms (executors)      {arms['arms']} over {arms['verbs']} verbs across {arms['vendors']} vendors")
     if c:
         lines.append(f"  Compose services               {c['core']} core + {c['optional']} optional = {c['total']}")
     if g:

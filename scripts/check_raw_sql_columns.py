@@ -219,6 +219,16 @@ FOREIGN_ENGINE_TABLES: dict[str, str] = {
     # Vendor SQL this product sends to a customer's own warehouse.
     "SNOWFLAKE": "Snowflake's account usage views, queried in the customer's own warehouse.",
     "SetupAuditTrail": "A vendor audit view, queried in the customer's own system.",
+    # Salesforce SOQL, evaluated by the customer's own Salesforce org. The
+    # parser reads it as SQL because SOQL is SQL-shaped; none of these is a
+    # table any migration here creates, and none of them is reachable from
+    # this product's database at all.
+    "UserLogin": "Salesforce SOQL object: IsFrozen lives here rather than on User, and the query runs in the customer's org.",
+    "AuthSession": "Salesforce SOQL object, queried in the customer's org to find the sessions a user holds.",
+    # Capital U, and this matcher is case-sensitive: the Postgres table is
+    # `users` and stays checked. Narrow on purpose, because a generic name
+    # on this list is a name that masks a real finding.
+    "User": "Salesforce SOQL object (capital U; the Postgres `users` table is a different name and stays compared).",
 }
 
 #: Names the parser reads as a table that are not one.

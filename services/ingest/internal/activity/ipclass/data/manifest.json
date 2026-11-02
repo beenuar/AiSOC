@@ -1,0 +1,112 @@
+{
+  "all_classes": [
+    "vpn",
+    "tor_exit",
+    "public_proxy",
+    "residential_proxy",
+    "hosting_provider"
+  ],
+  "built_at": "2026-11-01T07:51:59+00:00",
+  "covered_classes": [
+    "tor_exit",
+    "hosting_provider"
+  ],
+  "record_count": 21726,
+  "records_sha256": "01b8ebfa897112917bf3516a55bc156e0e04f667a3855ae8f003213b78e3d76e",
+  "sources": [
+    {
+      "accepted": 1228,
+      "class": "tor_exit",
+      "id": "tor-project-bulk-exit-list",
+      "parsed": 1228,
+      "provider": "tor",
+      "redistribution": "cc-by-3.0-us",
+      "terms_url": "https://www.torproject.org/",
+      "upstream_sha256": "52badb0aa61c85238e61ac6f60c09e2c4d4a1fccd955ee9d7530af4e15502660",
+      "url": "https://check.torproject.org/torbulkexitlist"
+    },
+    {
+      "accepted": 11449,
+      "class": "hosting_provider",
+      "id": "aws-ip-ranges",
+      "parsed": 17754,
+      "provider": "aws",
+      "redistribution": "publisher-published-for-consumption",
+      "terms_url": "https://docs.aws.amazon.com/vpc/latest/userguide/aws-ip-ranges.html",
+      "upstream_sha256": "eb08e02b858289ca80b9f17aa82ffff062aafdc770f9157e6955f5a953b33e2a",
+      "url": "https://ip-ranges.amazonaws.com/ip-ranges.json"
+    },
+    {
+      "accepted": 1151,
+      "class": "hosting_provider",
+      "id": "gcp-cloud-ip-ranges",
+      "parsed": 1151,
+      "provider": "gcp",
+      "redistribution": "publisher-published-for-consumption",
+      "terms_url": "https://cloud.google.com/vpc/docs/configure-private-google-access",
+      "upstream_sha256": "35983b89fce4eb308602545d7d1a939caa68d4561ad54da48d92e2f76612038c",
+      "url": "https://www.gstatic.com/ipranges/cloud.json"
+    },
+    {
+      "accepted": 15,
+      "class": "hosting_provider",
+      "id": "cloudflare-ipv4",
+      "parsed": 15,
+      "provider": "cloudflare",
+      "redistribution": "publisher-published-for-consumption",
+      "terms_url": "https://www.cloudflare.com/ips/",
+      "upstream_sha256": "f02c6d83bc01ab0ae8577160e036d700c7455359bce054df884e5d7d9e4e9e7b",
+      "url": "https://www.cloudflare.com/ips-v4"
+    },
+    {
+      "accepted": 24,
+      "class": "hosting_provider",
+      "id": "fastly-public-ip-list",
+      "parsed": 24,
+      "provider": "fastly",
+      "redistribution": "publisher-published-for-consumption",
+      "terms_url": "https://developer.fastly.com/reference/api/utils/public-ip-list/",
+      "upstream_sha256": "b5e8800ff76c2a8fdcedb7d9b27f23b6cb3158034b157540e594651d42b60bc6",
+      "url": "https://api.fastly.com/public-ip-list"
+    },
+    {
+      "accepted": 1236,
+      "class": "hosting_provider",
+      "id": "digitalocean-geo",
+      "parsed": 1236,
+      "provider": "digitalocean",
+      "redistribution": "publisher-published-for-consumption",
+      "terms_url": "https://docs.digitalocean.com/products/platform/",
+      "upstream_sha256": "53f733ab125ae5474dc6f13447e891c09511bbd5cd53578a2d45115dca748bc4",
+      "url": "https://www.digitalocean.com/geo/google.csv"
+    },
+    {
+      "accepted": 5505,
+      "class": "hosting_provider",
+      "id": "linode-geo",
+      "parsed": 5505,
+      "provider": "linode",
+      "redistribution": "publisher-published-for-consumption",
+      "terms_url": "https://www.linode.com/docs/",
+      "upstream_sha256": "23b9e5dc6caa321c7c69de76bdd9c79a9d379015ad0ccfe22f7010bc90de33fd",
+      "url": "https://geoip.linode.com/"
+    },
+    {
+      "accepted": 1118,
+      "class": "hosting_provider",
+      "id": "oracle-public-ip-ranges",
+      "parsed": 1118,
+      "provider": "oracle",
+      "redistribution": "publisher-published-for-consumption",
+      "terms_url": "https://docs.oracle.com/en-us/iaas/Content/General/Concepts/addressranges.htm",
+      "upstream_sha256": "c070ef9ff7bea6d63e56e19578d083ffbdbd535c1344d6b74d36d23cce2cd228",
+      "url": "https://docs.oracle.com/iaas/tools/public_ip_ranges.json"
+    }
+  ],
+  "tenant_supplied_only": [
+    "vpn",
+    "public_proxy",
+    "residential_proxy"
+  ],
+  "version": "2026.11.01"
+}

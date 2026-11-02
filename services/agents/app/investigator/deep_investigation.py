@@ -44,6 +44,7 @@ from app.llm.tool_loop import run_with_tools
 from app.mcp.tools import build_mcp_toolset
 from app.prompting.envelope import system_rule
 from app.prompting.tool_results import unverified_tool_claims
+from app.security.agent_identity import issue_identity
 from app.tools.customer_tools import scoped_customer_tools
 from app.tools.investigation import investigation_tools
 from app.tools.registry import default_registry
@@ -496,10 +497,23 @@ async def run_deep_investigation(
         # nonce is appended to the system message here: an MCP result is
         # fenced with it, and a fence the system prompt never explains is a
         # delimiter rather than a boundary.
+        run_id = str(getattr(state, "run_id", None) or "unknown-run")
+        # Wave-2 7.3. The investigator acts under its own short-lived
+        # identity, scoped to the pivots it is allowed to reach, and every
+        # tool call it makes writes an audit row naming the agent and run.
+        identity = issue_identity("investigation", run_id=run_id)
+
         mcp = await build_mcp_toolset(tenant_id, run_id=getattr(state, "run_id", None))
         if mcp.tools:
             for tool in mcp.tools:
                 registry.register(tool)
+            # `build_mcp_toolset` has already classified each tool and
+            # refused the destructive ones (`app/mcp/policy.py`), so these
+            # names arrive approved. Extending the scope with them is one
+            # control handing its verdict to the other; the alternative —
+            # a static table naming a tenant's MCP tools — cannot exist,
+            # because they are discovered at run time.
+            identity = identity.with_granted_tools({t.name for t in mcp.tools})
             system = f"{system}\n\n{system_rule(mcp.nonce)}"
             result.mcp_tools = [t.name for t in mcp.tools]
         result.mcp_refusals = [f"{name}: {classification}" for name, classification, _ in mcp.refusals]
@@ -510,6 +524,7 @@ async def run_deep_investigation(
                 system=system,
                 user=_summarise_alert(state),
                 registry=registry,
+                identity=identity,
                 max_iters=max_iterations or MAX_ITERATIONS,
             ),
             timeout=BUDGET_SECONDS,

@@ -225,7 +225,10 @@ async def test_entra_consent_reads_directory_audits_and_extracts_scopes():
     assert len(events) == 1, "only the consent grant is an OAuth-grant observation"
     # The scopes are the whole point: `Mail.Read` is in BROAD_OAUTH_SCOPES
     # and is what makes the AI estate score this grant as broad.
-    assert events[0]["raw_event"]["scopes"] == ["Files.ReadWrite.All", "Mail.Read"]
+    # `granted_scopes`, not `scopes`: see the connector's `_enrich`. The
+    # detection-field gate unions every connector's namespace, so a bare
+    # `scopes` here made an unrelated retired GitHub rule look reachable.
+    assert events[0]["raw_event"]["granted_scopes"] == ["Files.ReadWrite.All", "Mail.Read"]
     assert events[0]["event_type"] == "entra_consent.consent_to_application"
 
 

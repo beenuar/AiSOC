@@ -164,7 +164,12 @@ async def test_another_tenants_inventory_is_invisible(db) -> None:
 
     resp = await build_queue(db, tenant_id=TENANT, user_id=USER, owner="unassigned")
     item = next(i for i in resp.items if i.id == kiosk_alert.id)
-    assert item.priority_basis["rationale"] == [], "no same-tenant asset matched; severity alone"
+    # Since 1.1 the basis carries a 1.0 row recording that the actor's
+    # privilege at event time could not be resolved. The assertion is on
+    # the *asset* half: no same-tenant asset matched, so no asset factor
+    # appears and the score is untouched.
+    assert [r["factor"] for r in item.priority_basis["rationale"]] == [1.0], "no same-tenant asset matched; severity alone"
+    assert not any("asset" in r["reason"] for r in item.priority_basis["rationale"])
 
 
 @pytest.mark.asyncio
@@ -177,4 +182,8 @@ async def test_no_inventory_scores_severity_alone(db) -> None:
     item = next(i for i in resp.items if i.id == alert.id)
     assert item.priority_score == 600  # high base, no multipliers
     assert item.priority_basis["base"] == 600
-    assert item.priority_basis["rationale"] == []
+    # One 1.0 row, which moves nothing: with no posture collected the
+    # actor's privilege is unknown, and the basis says so rather than
+    # omitting the question. The score is still severity alone.
+    assert [r["factor"] for r in item.priority_basis["rationale"]] == [1.0]
+    assert "unknown" in item.priority_basis["rationale"][0]["reason"]

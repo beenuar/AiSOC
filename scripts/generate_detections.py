@@ -575,6 +575,12 @@ def assign_ids(categories: dict) -> tuple[dict[str, str], list[str]]:
 # so a rule matching `actor_eq_target` or `is_business_hours` is reachable
 # even though no connector emits either.
 
+#: Derived fields whose names are not self-describing by prefix.
+#: `ip_class` is here rather than under an `is_` prefix because it is
+#: a class, not a boolean: a boolean would have to answer "false" for
+#: an address the dataset has never heard of.
+_NAMED_DERIVED_FIELDS = frozenset({"ip_is_internal", "ip_class"})
+
 _COMPARISON_RE = re.compile(r"^(?P<left>.+?)_(?P<op>eq|neq)_(?P<right>.+)$")
 
 DEFAULT_BUSINESS_START_HOUR = 8
@@ -690,6 +696,44 @@ def ip_privacy_fields(event: dict[str, Any], requested: set[str] | None = None) 
     return {"ip_is_internal": any(addr in net for net in _INTERNAL_NETWORKS)}
 
 
+def ip_class_fields(event: dict[str, Any], requested: set[str] | None = None) -> dict[str, str]:
+    """Compute `ip_class` from `src_ip` when some rule asks for it.
+
+    Live events never reach this: ingest stamps the class onto the activity
+    projection from the same pinned dataset, and the detection engine lifts
+    it into the flat namespace, where it wins because `enrich` lets the
+    event's own value stand. This exists so a committed fixture, which
+    carries a `src_ip` and no activity projection, classifies the same way.
+    Without it a rule matching `ip_class` would pass its fixtures and never
+    fire live, or the reverse.
+
+    Absent, never false: three of the five classes ship with no records, so
+    "no entry" is the ordinary answer and a rule gated on
+    `ip_class: hosting_provider` must not fire because we did not know.
+    """
+    if not requested or "ip_class" not in requested:
+        return {}
+    answer = _classify_source_ip(event)
+    if answer is None:
+        return {}
+    return {
+        "ip_class": answer.ip_class,
+        "ip_class_source": answer.source,
+        "ip_class_dataset_version": answer.version,
+    }
+
+
+def _classify_source_ip(event: dict[str, Any]) -> Any:
+    # sys.path insert rather than a package-relative import: this module is
+    # run as a script, imported by sibling scripts, and imported by the
+    # fusion parity test from a different working directory.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from ip_class_dataset import classify  # noqa: PLC0415
+
+    raw = event.get("src_ip")
+    return classify(raw) if isinstance(raw, str) else None
+
+
 def enrich(
     event: dict[str, Any],
     requested: set[str] | None = None,
@@ -706,6 +750,7 @@ def enrich(
     derived.update(time_of_day_fields(event, business_start=business_start, business_end=business_end))
     derived.update(comparison_fields(event, requested))
     derived.update(ip_privacy_fields(event, requested))
+    derived.update(ip_class_fields(event, requested))
     return event if not derived else {**derived, **event}
 
 
@@ -724,7 +769,7 @@ def requested_derived_fields(rules: list[dict[str, Any]]) -> set[str]:
                     walk(value)
                     continue
                 field, _ = _split_op(key)
-                if _COMPARISON_RE.match(field) or field.startswith("is_") or field == "ip_is_internal":
+                if _COMPARISON_RE.match(field) or field.startswith("is_") or field in _NAMED_DERIVED_FIELDS:
                     names.add(field)
         elif isinstance(clause, list):
             for item in clause:

@@ -45,6 +45,7 @@ export type StepType =
   | "osquery_live_query"
   | "approval"
   | "verify_user"
+  | "ask_model"
   | "disable_user"
   | "reset_password"
   | "revoke_session"

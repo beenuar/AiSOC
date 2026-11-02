@@ -126,8 +126,14 @@ __all__ = [
 AGENT_TOOL_NAMES: frozenset[str] = frozenset(
     {
         # app/tools/registry.py :: default_registry
+        "changes_before_alert",
         "enrich_ioc",
         "extract_iocs",
+        # Depth 2 wave 2, 1.1. Worth the guard more than most: a fabricated
+        # "identity_effective_permissions: standard, no tags" is a sentence
+        # that closes an alert, and it is one an injected runbook could ask
+        # a model to write.
+        "identity_effective_permissions",
         "lookup_file_hash",
         "lookup_technique",
         "map_to_mitre",

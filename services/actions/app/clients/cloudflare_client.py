@@ -147,3 +147,52 @@ class CloudflareClient:
                 "list_id": list_id,
                 "result": result,
             }
+
+    # ------------------------------------------------------------------
+    # Wave-2 Phase 6.1: Gateway URL lists
+    # ------------------------------------------------------------------
+    #
+    # `sinkhole_domain` above feeds a DOMAIN-typed Gateway list. A URL list
+    # is the same endpoint against a list whose type is URL, which is what
+    # contains a single phishing page without taking down everything else
+    # on the host.
+    #
+    # Reference, fetched before these were written:
+    #   https://developers.cloudflare.com/api/resources/zero_trust/subresources/gateway/subresources/lists/methods/edit/
+    #   https://developers.cloudflare.com/cloudflare-one/traffic-policies/lists/
+
+    async def _edit_gateway_list(self, account_id: str, list_id: str, *, append: list[str], remove: list[str]) -> dict[str, Any]:
+        """PATCH a Gateway list incrementally.
+
+        Incremental rather than replace: two concurrent containments that
+        each read, modify and write a shared list lose one of the two
+        entries, and the losing action still reports success.
+        """
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.patch(
+                f"{_BASE}/accounts/{account_id}/gateway/lists/{list_id}/items",
+                headers=self._headers(),
+                json={"append": [{"value": value} for value in append], "remove": remove},
+            )
+            return self._unwrap(resp)
+
+    async def block_url(self, url: str, account_id: str, list_id: str) -> dict[str, Any]:
+        result = await self._edit_gateway_list(account_id, list_id, append=[url], remove=[])
+        logger.info("cloudflare.block_url.success", url=url, list_id=list_id)
+        return {"success": True, "action": "block_url", "url": url, "list_id": list_id, "result": result}
+
+    async def allow_url(self, url: str, account_id: str, list_id: str) -> dict[str, Any]:
+        result = await self._edit_gateway_list(account_id, list_id, append=[], remove=[url])
+        logger.info("cloudflare.allow_url.success", url=url, list_id=list_id)
+        return {"success": True, "action": "allow_url", "url": url, "list_id": list_id, "result": result}
+
+    async def get_gateway_list_items(self, account_id: str, list_id: str) -> list[str]:
+        """Read a Gateway list's entries back. The probe for the arms above."""
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{_BASE}/accounts/{account_id}/gateway/lists/{list_id}/items",
+                headers=self._headers(),
+            )
+            result = self._unwrap(resp)
+        rows = result if isinstance(result, list) else (result or {}).get("result") or []
+        return [str(row.get("value")) for row in rows if isinstance(row, dict) and row.get("value")]

@@ -16,22 +16,22 @@ todos:
     status: pending
   - id: p1-1-effective-permissions-everywhere
     content: "Phase 1.1: depth 2.6 as specified, plus runtime-usage overlay, computed can-escalate / data-access / third-party / cross-account tags, and the AWS policy semantics the resolver does not yet model"
-    status: pending
+    status: completed
   - id: p1-2-access-review
     content: "Phase 1.2: access review and right-sizing (granted vs used over a window, best-fit role, humans holding long-lived keys, outside collaborators with admin) as read-only findings and a review page"
-    status: pending
+    status: completed
   - id: p1-3-hr-device-context
     content: "Phase 1.3: HR connectors (Workday, BambooHR, Rippling) and MDM connectors (Intune, Kandji, Jamf promoted from plugin) feeding employment status, manager, tenure, device owner and compliance into the identity graph and triage"
-    status: pending
+    status: in_progress
   - id: p1-4-sub-principal-baselines
     content: "Phase 1.4: baselines per sub-principal (OAuth app, token, service account, AI agent acting for a human); GitHub tokens joined to scopes and classified by cadence"
-    status: pending
+    status: completed
   - id: p1-5-change-before-alert
     content: "Phase 1.5: a cited 'what changed before this alert' tool over versioned posture and audit events (role, policy, OAuth consent, MFA, sharing)"
-    status: pending
+    status: completed
   - id: p1-6-anonymizer-classes
     content: "Phase 1.6: VPN, Tor, proxy and hosting-provider classes stamped at ingest from a pinned local dataset with its version recorded"
-    status: pending
+    status: in_progress
   - id: p2-1-content-depth
     content: "Phase 2.1: depth 3.6 as specified (at least 800 executable cloud, identity, SaaS and code conditions) with the scenario families listed in this plan"
     status: pending
@@ -49,7 +49,7 @@ todos:
     status: pending
   - id: p3-1-identity-resolution
     content: "Phase 3.1: identity resolution across IdP, EDR device user, proxy user, cloud principal, code platform login and Workspace, with confidence and evidence"
-    status: pending
+    status: completed
   - id: p3-2-attack-stories
     content: "Phase 3.2: cross-source attack stories linked by resolved identity, session, role chain and shared indicator, with story-level severity and a ledger reason for any escalation"
     status: pending
@@ -91,16 +91,16 @@ todos:
     status: pending
   - id: p6-1-verb-breadth
     content: "Phase 6.1: depth 5.5 as specified (at least 150 arms, cloud and SaaS containment first)"
-    status: pending
+    status: completed
   - id: p6-2-plain-language-playbooks
     content: "Phase 6.2: depth 5.6 as specified, plus a bounded 'ask the model' step type that branches on a schema-valid answer and cannot act"
-    status: pending
+    status: completed
   - id: p6-3-time-gates-timeouts
     content: "Phase 6.3: business-hours conditions in approval rules and declared timeout outcomes (pause, rollback, or a named limited containment)"
-    status: pending
+    status: completed
   - id: p6-4-ticket-sync
     content: "Phase 6.4: verify Jira and ServiceNow two-way sync end to end; finish whichever direction is missing"
-    status: pending
+    status: completed
   - id: p7-1-provider-coverage
     content: "Phase 7.1: depth 6.3 as specified, plus enterprise chat compliance logs stored as labels and bounded snippets only"
     status: pending
@@ -115,7 +115,7 @@ todos:
     status: pending
   - id: p7-5-ai-containment
     content: "Phase 7.5: depth 6.6 as specified, plus role demotion, workspace removal and spend caps where the provider API allows"
-    status: pending
+    status: completed
   - id: p8-1-cnapp-depth
     content: "Phase 8.1: CNAPP connector depth beyond issues (vulnerabilities, configuration findings, secrets, runtime detections) used as triage context"
     status: pending
@@ -127,7 +127,7 @@ todos:
     status: pending
   - id: p8-4-scale-evidence
     content: "Phase 8.4: first depth plan 4.4 cloud-hardware run and 4.5 managed-cluster run, published or recorded as blocked"
-    status: pending
+    status: completed
   - id: p9-1-voice-that-acts
     content: "Phase 9.1: build on-device voice input behind the existing voice.ts interface, then read-back and voice approval of a pending response with biometric step-up; no audio leaves the device"
     status: pending

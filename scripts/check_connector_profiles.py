@@ -252,6 +252,31 @@ def _class_connector_id(tree: ast.Module) -> str | None:
     return None
 
 
+def _emits_no_events(tree: ast.Module) -> bool:
+    """Whether `fetch_alerts` is a declared no-op returning an empty list.
+
+    A context-only connector -- an HR system or an MDM, which report state
+    rather than security events -- is pollable by the ordinary scheduler and
+    writes through the context-import path, never through ingest. It has no
+    events for a normalization profile to describe, so the hazard the
+    strict-mode check exists for cannot reach it: there is nothing to reject
+    and nothing to resolve to a bare title.
+
+    Deliberately narrow. Only a body whose single statement is `return []`
+    (after an optional docstring) counts, so a connector that fetches
+    anything at all still needs a profile. A connector that later starts
+    emitting stops matching this and the gate asks for its profile again.
+    """
+    functions = (ast.FunctionDef, ast.AsyncFunctionDef)
+    for fn in (n for n in ast.walk(tree) if isinstance(n, functions) and n.name == "fetch_alerts"):
+        body = [n for n in fn.body if not (isinstance(n, ast.Expr) and isinstance(n.value, ast.Constant))]
+        if len(body) != 1:
+            return False
+        stmt = body[0]
+        return isinstance(stmt, ast.Return) and isinstance(stmt.value, ast.List) and not stmt.value.elts
+    return False
+
+
 def _emits_canonical_envelope(tree: ast.Module) -> bool:
     """Whether the connector's normalized event carries `raw_event` + `source`.
 
@@ -278,7 +303,14 @@ def _emits_canonical_envelope(tree: ast.Module) -> bool:
 
 
 def parse_connectors(directory: Path) -> dict[str, bool]:
-    """connector_id -> emits a canonical envelope."""
+    """connector_id -> reaches strict mode.
+
+    True when the connector emits a canonical envelope, and also true when
+    it emits no events at all: both mean strict mode has nothing to reject.
+    The two are collapsed here because every caller asks the same question
+    -- "can an event from this connector fail to resolve" -- and for a
+    context-only connector the answer is that there is no event.
+    """
     out: dict[str, bool] = {}
     for path in sorted(directory.glob("*.py")):
         if path.name in {"__init__.py", "base.py"}:
@@ -286,7 +318,7 @@ def parse_connectors(directory: Path) -> dict[str, bool]:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         connector_id = _class_connector_id(tree)
         if connector_id:
-            out[connector_id] = _emits_canonical_envelope(tree)
+            out[connector_id] = _emits_canonical_envelope(tree) or _emits_no_events(tree)
     return out
 
 

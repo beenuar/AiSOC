@@ -23,7 +23,11 @@
 // meaning "a person", the result is `unknown` rather than a default.
 package activity
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/activity/ipclass"
+)
 
 // ActorKind is the closed set the projection may report.
 //
@@ -113,7 +117,19 @@ type Location struct {
 	// are different facts.
 	Reputation      float64 `json:"reputation,omitempty"`
 	ReputationKnown bool    `json:"reputation_known"`
-	Device          string  `json:"device,omitempty"`
+	// IPClass is the anonymizer or hosting class of a public address, from
+	// the pinned local dataset in `activity/ipclass`. Empty means the
+	// dataset had no entry, never "ordinary": three of the five classes
+	// ship with no records and are tenant-supplied, so a false negative is
+	// the normal case and a boolean would assert what the data cannot.
+	//
+	// IPClassDatasetVersion travels with it because the dataset is
+	// refreshed and an address changes class over time. A class with no
+	// version is a claim nobody can date.
+	IPClass               string `json:"ip_class,omitempty"`
+	IPClassSource         string `json:"ip_class_source,omitempty"`
+	IPClassDatasetVersion string `json:"ip_class_dataset_version,omitempty"`
+	Device                string `json:"device,omitempty"`
 	// Client is the parsed user agent. The raw string is kept beside it
 	// because every parser is a lossy summary of a string an attacker can
 	// choose, and a hunt needs the original.
@@ -155,6 +171,12 @@ func Project(connectorType string, payload, ocsf map[string]any) Activity {
 		Outcome:  deriveOutcome(payload, vendor, ocsf),
 	}
 	act.Location = deriveLocation(payload, vendor, ocsf)
+	// Anonymizer and hosting class, from the pinned local dataset. Here and
+	// not in the normalizer so that every caller of Project gets it: a
+	// classifier wired into one call site is the "built but nothing calls
+	// it" shape this repository keeps finding, and Project is the single
+	// place the location is assembled.
+	stampIPClass(&act.Location)
 	// Last: the derived session key falls back to the principal, the address
 	// and the parsed client, so it needs the actor and the location already
 	// filled.
@@ -207,3 +229,41 @@ func firstStr(m map[string]any, paths ...[]string) string {
 	}
 	return ""
 }
+
+// stampIPClass fills the anonymizer or hosting class on a location, from the
+// pinned dataset embedded in `activity/ipclass`.
+//
+// Only public addresses are looked up, through the same `IsPublicIP`
+// predicate the geography enricher uses. A second copy of "is this worth
+// looking up" is how the two would come to disagree, and the privacy
+// property the enricher holds — an internal address is never sent anywhere
+// and never described — has to hold here too even though this lookup is
+// local: an alert saying a 10.x address is a hosting range would be wrong
+// and would also publish the customer's addressing scheme into the class.
+func stampIPClass(loc *Location) {
+	if loc == nil || !IsPublicIP(loc.IP) {
+		return
+	}
+	classification, ok := ipclass.Lookup(loc.IP)
+	if !ok {
+		return
+	}
+	loc.IPClass = classification.Class
+	loc.IPClassSource = classification.Provider
+	loc.IPClassDatasetVersion = classification.Version
+}
+
+// SampleIPForClass exposes one address the pinned dataset classifies as
+// `class`. Tests use it instead of hardcoding an address, so a dataset
+// refresh that moves a relay does not read as a regression, and so a test
+// cannot pass against a dataset that silently became empty.
+func SampleIPForClass(class string) string {
+	return ipclass.SampleAddressForClass(class)
+}
+
+// IPClassDatasetVersion and IPClassDatasetSize report what is loaded, for
+// the readiness surface and for the gate that refuses an empty embed.
+func IPClassDatasetVersion() string { return ipclass.Version() }
+
+// IPClassDatasetSize is the record count of the embedded dataset.
+func IPClassDatasetSize() int { return ipclass.Size() }

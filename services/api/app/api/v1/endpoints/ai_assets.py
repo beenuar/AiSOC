@@ -36,6 +36,7 @@ from sqlalchemy import select, update
 from app.api.v1.deps import CurrentUser, require_permission
 from app.db.rls import TenantDBSession
 from app.models.ai_asset import AI_ASSET_KINDS, AiAsset
+from app.services.ai_estate_collectors import collect_hosted_agents, scan_repositories_for_ai_config
 from app.services.ai_inventory import score_risk
 
 logger = structlog.get_logger()
@@ -211,3 +212,87 @@ async def sanction_ai_asset(
     row.risk_reasons = reasons
     row.attributes = attributes
     return _to_model(row)
+
+
+# ---------------------------------------------------------------------------
+# Discovery (wave-2 7.2)
+#
+# Both routes are read-only against the vendor — the plan's rule for this
+# phase — and both write their findings through the one `score_risk`.
+# Explicit rather than scheduled, for the same reason the chat-compliance
+# collector is: each reaches a third party with the tenant's own
+# credential.
+# ---------------------------------------------------------------------------
+
+
+class HostedAgentScanRequest(BaseModel):
+    adminKey: str = Field(..., min_length=8, description="Provider admin key. Used for this call and not stored.")
+
+
+class RepositoryScanRequest(BaseModel):
+    """Files a code-platform connector has already fetched.
+
+    The console passes what the connector read rather than this service
+    cloning anything: the connector already holds the tenant's code-platform
+    credential and the governed read path, and a second fetcher here would
+    be a second place that credential has to live.
+    """
+
+    repositories: dict[str, dict[str, str]] = Field(
+        ...,
+        description="repository -> {path: content}. Only recognised AI artefact paths are read.",
+    )
+
+
+class ScanResponse(BaseModel):
+    assets: int
+    errors: list[str] = Field(default_factory=list)
+    skipped: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/scan/hosted-agents", response_model=ScanResponse)
+async def scan_hosted_agents(
+    payload: HostedAgentScanRequest,
+    db: TenantDBSession,
+    current_user: Annotated[CurrentUser, Depends(require_permission("ai_estate:write"))],
+) -> ScanResponse:
+    """Inventory the agents configured in a provider's control plane.
+
+    These are invisible to every other discovery path: endpoint telemetry
+    never sees them, and gateway telemetry sees their traffic without
+    knowing what they were configured to do.
+    """
+    result = await collect_hosted_agents(db, current_user.tenant_id, payload.adminKey)
+    logger.info(
+        "ai_estate.hosted_agent_scan",
+        tenant_id=str(current_user.tenant_id),
+        actor=str(current_user.user_id),
+        assets=result.assets,
+    )
+    return ScanResponse(assets=result.assets, errors=result.errors, skipped=result.skipped)
+
+
+@router.post("/scan/repositories", response_model=ScanResponse)
+async def scan_repositories(
+    payload: RepositoryScanRequest,
+    db: TenantDBSession,
+    current_user: Annotated[CurrentUser, Depends(require_permission("ai_estate:write"))],
+) -> ScanResponse:
+    """Record the agent instructions, skills and MCP config a repository carries.
+
+    Everything read here is attacker-controlled: these files are checked
+    in, editable by anyone who can land a pull request, and read by an
+    agent verbatim as instructions. `ai_repo_scan` sanitises and caps every
+    excerpt and runs the prompt-injection patterns over the content at
+    capture, storing matched pattern *names* and never the matching text —
+    see that module's header.
+    """
+    result = await scan_repositories_for_ai_config(db, current_user.tenant_id, payload.repositories)
+    logger.info(
+        "ai_estate.repository_scan",
+        tenant_id=str(current_user.tenant_id),
+        actor=str(current_user.user_id),
+        repositories=len(payload.repositories),
+        assets=result.assets,
+    )
+    return ScanResponse(assets=result.assets, errors=result.errors, skipped=result.skipped)

@@ -73,6 +73,16 @@ CREATE TABLE IF NOT EXISTS aisoc.raw_events (
     -- Zero and "nobody answered" are different facts: without this flag a
     -- clean verdict and an unreachable enrichment service are the same row.
     src_reputation_known UInt8 DEFAULT 0,
+    -- Anonymizer and hosting class, stamped at ingest from a pinned local
+    -- dataset (depth plan wave 2, 1.6). The dataset version rides beside the
+    -- class because the dataset is refreshed: without it a reclassification
+    -- and a change in behaviour look identical in a historical query.
+    -- Empty means the dataset had no entry, never "an ordinary address":
+    -- three of the five classes ship with no records and are tenant-supplied.
+    -- Kept in lockstep with lake_migrations.py's 005_ip_class.
+    src_ip_class    LowCardinality(String) DEFAULT '',
+    src_ip_class_source LowCardinality(String) DEFAULT '',
+    src_ip_class_dataset_version LowCardinality(String) DEFAULT '',
     client_family   LowCardinality(String) DEFAULT '',
     client_version  String DEFAULT '',
     client_category LowCardinality(String) DEFAULT '',

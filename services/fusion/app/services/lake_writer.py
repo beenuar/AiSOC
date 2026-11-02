@@ -119,6 +119,12 @@ _COLUMNS = (
     "src_as_org",
     "src_reputation",
     "src_reputation_known",
+    # Anonymizer and hosting class (depth plan wave 2, 1.6), with the pinned
+    # dataset version that answered. A class with no version cannot be dated,
+    # and this dataset is refreshed.
+    "src_ip_class",
+    "src_ip_class_source",
+    "src_ip_class_dataset_version",
     "client_family",
     "client_version",
     "client_category",
@@ -333,6 +339,9 @@ def _activity_columns(ocsf: dict[str, Any]) -> dict[str, Any]:
         "src_as_org": _as_str(location.get("as_org")),
         "src_reputation": _as_float(location.get("reputation")),
         "src_reputation_known": 1 if location.get("reputation_known") else 0,
+        "src_ip_class": _as_str(location.get("ip_class")),
+        "src_ip_class_source": _as_str(location.get("ip_class_source")),
+        "src_ip_class_dataset_version": _as_str(location.get("ip_class_dataset_version")),
         "client_family": _as_str(client.get("family")),
         "client_version": _as_str(client.get("version")),
         "client_category": _as_str(client.get("category")),

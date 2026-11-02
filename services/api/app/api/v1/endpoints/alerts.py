@@ -97,6 +97,14 @@ class AlertResponse(BaseModel):
     confidence_label: str | None = None
     confidence_rationale: list | None = None
     disposition: str | None = None
+    # Anonymizer or hosting class of the source address, stamped at ingest
+    # from a pinned local dataset (depth plan wave 2, 1.6). NULL means the
+    # dataset had no entry, which is the ordinary case: three of the five
+    # classes ship with no records. The console renders NULL as nothing at
+    # all rather than as a reassuring "not an anonymizer" chip, and the
+    # dataset version is sent with it so a six-month-old alert can be dated.
+    src_ip_class: str | None = None
+    src_ip_class_dataset_version: str | None = None
     affected_ips: list
     affected_hosts: list
     affected_users: list

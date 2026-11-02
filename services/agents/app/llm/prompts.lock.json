@@ -67,6 +67,10 @@
     "sha256": "1a2b1b2e6362381ee6119e20337238ff0aff2863491b7bf45e8dd800015ca857",
     "version": "1"
   },
+  "playbook.ask_model.system": {
+    "sha256": "bc902fceadc7bf9411f4bb6c3dd126a82cd4a823f9b229c99f41a76275db1dee",
+    "version": "1"
+  },
   "playbook_drafter.system": {
     "sha256": "279222ab899d40fbfb1aff5837f650ccc751fa1fec7b8d52dc044a2e6a689f6c",
     "version": "1"

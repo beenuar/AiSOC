@@ -494,7 +494,15 @@ class LlmUsageConnector(BaseConnector):
                 out["application_id"] = app_id
             scopes = _entra_scopes(target)
             if scopes:
-                out["scopes"] = scopes
+                # `granted_scopes`, not `scopes`. A consent grant's scopes
+                # and a GitHub token's scopes are different things that
+                # happen to share a word, and the detection-field gate
+                # judges reachability against the **union** of every
+                # connector's namespace — so emitting a bare `scopes` here
+                # made a retired GitHub PAT rule look resolvable when
+                # nothing had changed for GitHub at all. A precise name
+                # costs nothing and does not lie to a gate.
+                out["granted_scopes"] = scopes
             return out
         if self._provider == "google_gemini":
             events = raw.get("events")

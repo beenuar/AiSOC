@@ -45,6 +45,13 @@ direction things actually change slips past while the gate prints OK.
               map is archived to the lake and never alerts, silently, which is
               exactly how the borrowed ``splunk_enterprise`` profile broke 26
               connectors.
+  CONTEXT     every entry claiming ``contextOnly`` is telling the truth. A
+              context-only connector emits no ingest events at all, so it
+              carries no generic-mapping debt and is counted apart from the
+              ceiling below. That exemption is only worth having if it cannot
+              be taken by writing the words: the claim is checked against the
+              connector's own ``fetch_alerts``, and one that can emit anything
+              fails **and stays counted**, so a false claim buys no headroom.
 
 It also reports the **count of connector types on the generic mapping**, which
 is the figure the depth plan's Phase 2 is graded against, and holds it with
@@ -94,6 +101,14 @@ CONNECTORS_REL = Path("services/connectors/app/connectors")
 #:
 #: The number that must stay at zero is `unclassified`, which is a hard
 #: failure rather than a ceiling: every one of the 42 below carries a reason.
+#:
+#: Connectors that emit no ingest events at all are **not** counted here and
+#: do not consume the ceiling. The bucket measures one thing — events taking
+#: the lenient default — and a connector whose `fetch_alerts` returns an empty
+#: list has no event to take it. Counting those would make the figure grow for
+#: a reason it does not describe, and the honest response to that is to count
+#: them separately, not to raise the number. See `contextOnly`, which is
+#: verified against the connector rather than believed.
 MAX_GENERIC = 42
 
 #: OCSF categories whose events fusion promotes unconditionally.
@@ -145,7 +160,7 @@ def parse_classes(src: str, consts: dict[str, int]) -> dict[int, tuple[str, int]
 
 
 def parse_connector_classes(src: str, consts: dict[str, int]) -> dict[str, dict]:
-    """connector type -> {"class_uid": int|None, "reason": str|None}."""
+    """connector type -> {"class_uid": int|None, "reason": str|None, "context_only": bool}."""
     block = _go_block(src, "var connectorOCSFClass = map[string]connectorClass{")
     out: dict[str, dict] = {}
     for name, body in re.findall(r'^\t"([a-z0-9_]+)":\s*\{([^}]*)\},?$', block, re.MULTILINE):
@@ -157,7 +172,11 @@ def parse_connector_classes(src: str, consts: dict[str, int]) -> dict[str, dict]
             if key not in consts:
                 raise GateError(f"connector {name!r} names class constant {key!r}, which is not declared")
             class_uid = consts[key]
-        out[name] = {"class_uid": class_uid, "reason": reason_match.group(1) if reason_match else None}
+        out[name] = {
+            "class_uid": class_uid,
+            "reason": reason_match.group(1) if reason_match else None,
+            "context_only": bool(re.search(r"contextOnly:\s*true\b", body)),
+        }
     return out
 
 
@@ -209,30 +228,72 @@ def parse_canonical_severity_promotes(src: str) -> bool:
 # --------------------------------------------------------------------------
 # Python side
 # --------------------------------------------------------------------------
-def parse_declared_connectors(directory: Path) -> set[str]:
-    """Every `connector_id` the connectors service declares."""
-    out: set[str] = set()
+def _connector_id(cls: ast.ClassDef) -> str | None:
+    """The `connector_id` a class declares, or None."""
+    for stmt in cls.body:
+        # The value is bound in each branch rather than read off
+        # `stmt` afterwards: past the if/elif the name is still an
+        # `ast.stmt`, which has no `.value`, so the later read was
+        # four unchecked attribute accesses that happened to be safe.
+        if isinstance(stmt, ast.Assign):
+            target = next((getattr(t, "id", None) for t in stmt.targets), None)
+            value: ast.expr | None = stmt.value
+        elif isinstance(stmt, ast.AnnAssign):
+            target = getattr(stmt.target, "id", None)
+            value = stmt.value
+        else:
+            continue
+        if target == "connector_id" and isinstance(value, ast.Constant) and isinstance(value.value, str) and value.value:
+            return value.value
+    return None
+
+
+def _connector_classes(directory: Path):
+    """Every (connector_id, ClassDef) the connectors service declares."""
     for path in sorted(directory.glob("*.py")):
         if path.name in {"__init__.py", "base.py"}:
             continue
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for cls in (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef)):
-            for stmt in cls.body:
-                # The value is bound in each branch rather than read off
-                # `stmt` afterwards: past the if/elif the name is still an
-                # `ast.stmt`, which has no `.value`, so the later read was
-                # four unchecked attribute accesses that happened to be safe.
-                if isinstance(stmt, ast.Assign):
-                    target = next((getattr(t, "id", None) for t in stmt.targets), None)
-                    value: ast.expr | None = stmt.value
-                elif isinstance(stmt, ast.AnnAssign):
-                    target = getattr(stmt.target, "id", None)
-                    value = stmt.value
-                else:
-                    continue
-                if target == "connector_id" and isinstance(value, ast.Constant) and isinstance(value.value, str) and value.value:
-                    out.add(value.value)
-    return out
+            name = _connector_id(cls)
+            if name is not None:
+                yield name, cls
+
+
+def parse_declared_connectors(directory: Path) -> set[str]:
+    """Every `connector_id` the connectors service declares."""
+    return {name for name, _ in _connector_classes(directory)}
+
+
+def _emits_events(cls: ast.ClassDef) -> bool:
+    """Whether this connector's `fetch_alerts` can hand ingest an event.
+
+    Conservative in one direction on purpose. Anything the parser cannot
+    *prove* returns nothing but an empty list counts as emitting: a connector
+    is only ever credited with emitting nothing, never penalised for it, so
+    the unproven case falls on the side that keeps it counted against the
+    ceiling. An inherited or absent `fetch_alerts` therefore reads as
+    emitting, which is also what the base class does.
+    """
+    fn = next(
+        (s for s in cls.body if isinstance(s, ast.FunctionDef | ast.AsyncFunctionDef) and s.name == "fetch_alerts"),
+        None,
+    )
+    if fn is None:
+        return True
+    # A generator hands values out without returning them, so `return` tells
+    # us nothing about what it emits.
+    if any(isinstance(n, ast.Yield | ast.YieldFrom) for n in ast.walk(fn)):
+        return True
+    returns = [n for n in ast.walk(fn) if isinstance(n, ast.Return)]
+    if not returns:
+        return True
+    return not all(isinstance(n.value, ast.List) and not n.value.elts for n in returns)
+
+
+def parse_connector_emission(directory: Path) -> dict[str, bool]:
+    """connector type -> whether its `fetch_alerts` can emit an event."""
+    return {name: _emits_events(cls) for name, cls in _connector_classes(directory)}
 
 
 # --------------------------------------------------------------------------
@@ -243,6 +304,7 @@ def evaluate(
     classes: dict[int, tuple[str, int]],
     connector_classes: dict[str, dict],
     profiles: dict[str, dict],
+    emits_events: dict[str, bool],
     canonical_severity_promotes: bool,
     max_generic: int,
     check_count: bool,
@@ -289,10 +351,33 @@ def evaluate(
                     "for a reviewer to disagree with it",
                 )
             )
+        # CONTEXT. The exemption from the ceiling is only worth having if it
+        # is checked. Both arms leave the connector counted as generic below,
+        # so a claim the tree does not support costs the author a failure and
+        # gains them nothing.
+        if entry["context_only"]:
+            if entry["class_uid"] is not None:
+                failures.append(
+                    (
+                        "context-only-with-class",
+                        f"{name!r} is marked context-only and also names a class; a connector that emits no "
+                        "event has nothing to carry a class, so one of the two is not what happens",
+                    )
+                )
+            elif emits_events.get(name, True):
+                failures.append(
+                    (
+                        "context-only-emits-events",
+                        f"{name!r} is marked context-only, but its fetch_alerts can return an event. Those "
+                        "events reach the normalizer and take the lenient 2001 default, which is the debt the "
+                        "ceiling counts: give it a class, or stop claiming it emits nothing",
+                    )
+                )
 
     # PY -> GO. The direction the defect lived in: a declared connector with
     # no decision at all, reaching the default silently.
     generic: list[str] = []
+    context_only: list[str] = []
     for name in sorted(declared):
         decision = connector_classes.get(name)
         if decision is None:
@@ -306,7 +391,12 @@ def evaluate(
             )
             generic.append(name)
         elif decision["class_uid"] is None:
-            generic.append(name)
+            # Only a *verified* claim leaves the bucket. An unverified one
+            # has already been reported above and is still counted here.
+            if decision["context_only"] and not emits_events.get(name, True):
+                context_only.append(name)
+            else:
+                generic.append(name)
 
     # PROMOTION. A class a connector is mapped to must be able to promote.
     for name, entry in sorted(connector_classes.items()):
@@ -366,6 +456,7 @@ def evaluate(
         "generic_connectors": generic,
         "generic_with_reason": sorted(set(generic) - set(unclassified)),
         "unclassified": unclassified,
+        "context_only": context_only,
         "classes": len(classes),
     }
 
@@ -397,10 +488,11 @@ def load(root: Path) -> dict:
         "classes": parse_classes(classes_src, consts),
         "connector_classes": parse_connector_classes(classes_src, consts),
         "profiles": parse_profile_classes(normalizer_src),
+        "emits_events": parse_connector_emission(connectors_dir),
         "canonical_severity_promotes": parse_canonical_severity_promotes(normalizer_src),
     }
     # An empty parse means the format moved, not that the tree is clean.
-    for name in ("declared", "classes", "connector_classes", "profiles"):
+    for name in ("declared", "classes", "connector_classes", "profiles", "emits_events"):
         if not data[name]:
             raise GateError(f"parsed zero {name} — refusing to report a clean tree from an empty read")
     if not data["canonical_severity_promotes"]:
@@ -459,6 +551,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     if stats["generic_connectors"]:
         print(f"                 {', '.join(stats['generic_connectors'])}")
+    if stats["context_only"]:
+        print(f"                 {len(stats['context_only'])} context-only, emitting no ingest event (not counted above)")
+        print(f"                 {', '.join(stats['context_only'])}")
     print()
     if failures:
         print(f"FAIL — {len(failures)} finding(s):")
@@ -504,31 +599,35 @@ def self_test(root: Path) -> int:
         (
             "GO -> PY: a table entry naming a connector that does not exist",
             "class-names-nothing",
-            mutate(connector_classes=lambda d: d.update({"acme_xdr_9000": {"class_uid": 4001, "reason": None}})),
+            mutate(connector_classes=lambda d: d.update({"acme_xdr_9000": {"class_uid": 4001, "reason": None, "context_only": False}})),
             MAX_GENERIC,
         ),
         (
             "GO -> PY: an entry carrying both a class and a reason",
             "class-entry-ambiguous",
-            mutate(connector_classes=lambda d: d.update({"okta": {"class_uid": 3002, "reason": "also stays generic somehow"}})),
+            mutate(
+                connector_classes=lambda d: d.update(
+                    {"okta": {"class_uid": 3002, "reason": "also stays generic somehow", "context_only": False}}
+                )
+            ),
             MAX_GENERIC,
         ),
         (
             "GO -> PY: an entry carrying neither",
             "class-entry-empty",
-            mutate(connector_classes=lambda d: d.update({"okta": {"class_uid": None, "reason": None}})),
+            mutate(connector_classes=lambda d: d.update({"okta": {"class_uid": None, "reason": None, "context_only": False}})),
             MAX_GENERIC + 1,
         ),
         (
             "GO -> PY: a class uid outside the service's closed set",
             "class-uid-unknown",
-            mutate(connector_classes=lambda d: d.update({"okta": {"class_uid": 9999, "reason": None}})),
+            mutate(connector_classes=lambda d: d.update({"okta": {"class_uid": 9999, "reason": None, "context_only": False}})),
             MAX_GENERIC,
         ),
         (
             "GO -> PY: a reason too thin to review",
             "class-reason-thin",
-            mutate(connector_classes=lambda d: d.update({"splunk": {"class_uid": None, "reason": "noisy"}})),
+            mutate(connector_classes=lambda d: d.update({"splunk": {"class_uid": None, "reason": "noisy", "context_only": False}})),
             MAX_GENERIC + 1,
         ),
         (
@@ -561,6 +660,34 @@ def self_test(root: Path) -> int:
             "COUNT: the generic-mapping count rises above the committed ceiling",
             "generic-count-grew",
             mutate(declared=lambda s: s.add("acme_telemetry")),
+            MAX_GENERIC,
+        ),
+        (
+            "CONTEXT: a context-only claim contradicted by the connector's own fetch_alerts",
+            "context-only-emits-events",
+            mutate(emits_events=lambda d: d.update({"bamboohr": True})),
+            MAX_GENERIC + 1,
+        ),
+        (
+            "CONTEXT: an entry claiming context-only and a class at once",
+            "context-only-with-class",
+            mutate(connector_classes=lambda d: d.update({"okta": {"class_uid": 3002, "reason": None, "context_only": True}})),
+            MAX_GENERIC,
+        ),
+        # The control that makes the exemption safe to have at all: claiming
+        # it without the tree supporting the claim must not buy the author
+        # room under the ceiling. If this ever stops firing, `contextOnly`
+        # has become a way to opt out of the count by typing a word.
+        (
+            "COUNT: an unsupported context-only claim buys no ceiling headroom",
+            "generic-count-grew",
+            mutate(
+                declared=lambda s: s.add("acme_telemetry"),
+                connector_classes=lambda d: d.update(
+                    {"acme_telemetry": {"class_uid": None, "reason": "claims to emit nothing, but does", "context_only": True}}
+                ),
+                emits_events=lambda d: d.update({"acme_telemetry": True}),
+            ),
             MAX_GENERIC,
         ),
     ]

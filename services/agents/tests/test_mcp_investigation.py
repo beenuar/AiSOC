@@ -32,6 +32,7 @@ from app.mcp import tools as tools_module
 from app.mcp.config import McpServerConfig
 from app.mcp.policy import namespaced
 from app.mcp.tools import LEDGER_SEQ_BASE, build_mcp_toolset
+from app.security.agent_identity import issue_identity
 from app.tools.registry import ToolRegistry
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import create_connected_server_and_client_session
@@ -147,7 +148,11 @@ async def test_done_when_an_investigation_calls_a_read_tool_and_refuses_a_destru
             _final("One detection on WIN-DC-01; containment was not available to me."),
         ]
     )
-    loop = await run_with_tools(llm, system="You are an analyst.", user="Investigate WIN-DC-01.", registry=registry)
+    # The MCP tools are namespaced and discovered at run time, so the
+    # identity is extended with exactly what the MCP policy approved —
+    # which is how production reaches them too.
+    identity = issue_identity("investigation", run_id="run-1").with_granted_tools(set(registry.names()))
+    loop = await run_with_tools(llm, system="You are an analyst.", user="Investigate WIN-DC-01.", registry=registry, identity=identity)
 
     advertised = {s["function"]["name"] for s in (llm.bound_tools or [])}
     assert namespaced("vendor", "isolate_host") not in advertised
@@ -159,7 +164,7 @@ async def test_done_when_an_investigation_calls_a_read_tool_and_refuses_a_destru
     # The read tool's result did carry the server's data, fenced. Asserted
     # against the registry the loop used rather than against the trace, whose
     # preview is a 200-character debug string.
-    direct = await registry.execute(namespaced("vendor", "get_detections"), {"hostname": "WIN-DC-01"})
+    direct = await registry.execute(namespaced("vendor", "get_detections"), {"hostname": "WIN-DC-01"}, identity=identity)
     assert "DET-4471" in direct["content"]
     assert direct["untrusted"] is True
 

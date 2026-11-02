@@ -933,6 +933,394 @@ def contract_for_action_type(action_type_value: str) -> CapabilityContract | Non
     return CAPABILITY_CONTRACTS.get(aliased)
 
 
+#: Wave-2 Phase 6.1 (depth 5.5): cloud, SaaS and code-platform containment.
+#:
+#: One verification note covers most of this block, so it is stated once
+#: here rather than copied twenty times. Every verb below has a real
+#: read-back on its client — ``list_access_keys``, ``get_service_account``,
+#: ``get_workflow``, ``get_org_membership``, ``get_category`` and so on —
+#: and none of them is reachable from ``PostActionVerifier``, because that
+#: registry is keyed on ``ActionType`` and these verbs are live-action
+#: capabilities with no legacy ActionType behind them. That is the same
+#: recorded gap ``unisolate_host`` carries and it is a wiring gap, not a
+#: vendor one: the read exists and is registered as its own read verb, so
+#: an analyst or a playbook can run it, but governance does not treat these
+#: as self-verifying. Which is why none of them is AUTOMATIC — unverifiable
+#: means not autonomous, and the ladder here is ANALYST at the lightest.
+_PROBE_GAP_NO_ACTION_TYPE = (
+    "The vendor exposes a read-back and this client implements it, but "
+    "PostActionVerifier is keyed on ActionType and this verb is a "
+    "live-action capability with no ActionType, so the verifier cannot be "
+    "reached for it — the same gap unisolate_host records. Recorded rather "
+    "than left blank, and the reason this verb is not AUTOMATIC at any "
+    "confidence. The read is separately dispatchable as its own read verb."
+)
+
+_PHASE61_CONTRACTS: dict[str, CapabilityContract] = {
+    # ── Cloud identity: access keys ────────────────────────────────────────
+    "deactivate_access_key": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="reactivate_access_key",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Stops one long-lived cloud credential. HIGH rather than MODERATE "
+            "because the holder is usually a pipeline rather than a person: "
+            "nobody notices for an hour and then a deploy fails. The key is "
+            "deactivated, never deleted, which is what makes the reverse real."
+        ),
+    ),
+    "reactivate_access_key": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="deactivate_access_key",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Restoring a credential is a decision that the incident is over, so it needs the same approval as taking it away.",
+    ),
+    # ── Cloud identity: role sessions ──────────────────────────────────────
+    "revoke_role_sessions": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_role_sessions",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Denies everything to credentials issued before a cut-off, keyed "
+            "on the token's issue time. Sessions minted after it keep working, "
+            "which is what makes this usable mid-incident: the role is not "
+            "broken, only the credentials already in circulation. The effect "
+            "is an inline policy, so the rollback is deleting that policy."
+        ),
+    ),
+    "restore_role_sessions": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="revoke_role_sessions",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Removes only the revocation policy this platform wrote. A rollback that could delete any inline policy on any role is an "
+            "escalation primitive wearing a rollback's clothes."
+        ),
+    ),
+    # ── Cloud identity: service identities ─────────────────────────────────
+    "disable_service_identity": CapabilityContract(
+        impact=ActionImpact.SEVERE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="enable_service_identity",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "SEVERE rather than HIGH, and the distinction is the whole reason "
+            "this is not disable_user: a service account is load-bearing for "
+            "something other people depend on, so the outage is a service "
+            "outage. Reversible, and real while it lasts."
+        ),
+    ),
+    "enable_service_identity": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="disable_service_identity",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "The route back for the most disruptive identity verb. It exists because a containment whose reverse resolves to nothing is "
+            "not a containment anybody will enable."
+        ),
+    ),
+    # ── Cloud identity: tokens and grants ──────────────────────────────────
+    "revoke_token": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "The verb-level truth is the conservative one: most vendors cannot "
+            "un-revoke. GitHub states plainly that a revoked credential cannot "
+            "be reactivated; a deleted Workspace application password is gone; "
+            "a revoked Salesforce refresh token takes its access tokens with "
+            "it. GCP is the exception and it has its own verb (restore_token) "
+            "that an operator dispatches deliberately. Declaring PLATFORM here "
+            "because one vendor can would be a false promise on the other four, "
+            "and the rollback path would believe it had a route back."
+        ),
+    ),
+    "restore_token": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="revoke_token",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Only meaningful where the vendor disables a credential rather than destroying it — today that is a GCP service-account key.",
+    ),
+    "revoke_oauth_grant": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Revoking a consent is not platform-reversible anywhere: re-consent "
+            "is the user's decision at the application's own prompt, which this "
+            "platform cannot make for them and should not. MANDATORY_HUMAN "
+            "because the same verb that cuts an attacker's application also "
+            "cuts a tenant's own integrations, and the input naming which grant "
+            "to revoke travels through alert text an attacker may have written."
+        ),
+    ),
+    "get_oauth_grants": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap="A read leaves nothing behind to read back. Same reasoning as search_siem.",
+        note="What this identity has consented to, which is the list an analyst needs before choosing a grant to revoke.",
+    ),
+    "get_cloud_identity": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap="A read leaves nothing behind to read back. Same reasoning as search_siem.",
+        note=(
+            "State and credentials of one cloud or SaaS identity. Also the "
+            "read-back behind most of the containment verbs in this block: a "
+            "playbook can dispatch it after a containment to see the effect, "
+            "which is the half of verification that is reachable today."
+        ),
+    ),
+    # ── Cloud workload ─────────────────────────────────────────────────────
+    "quarantine_instance": CapabilityContract(
+        impact=ActionImpact.SEVERE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="release_instance",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Replaces the instance's security groups with a quarantine group. "
+            "Distinct from isolate_host, which needs an EDR agent — this works "
+            "on the agentless workload that is the usual compromised one. The "
+            "groups it replaced are captured in the result, because they are "
+            "the only record of what to put back."
+        ),
+    ),
+    "release_instance": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="quarantine_instance",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Restores named security groups. The caller supplies them; this verb never guesses what an instance used to have.",
+    ),
+    # ── Code platform ──────────────────────────────────────────────────────
+    "remove_org_member": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_org_member",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Removes a person from an organisation and all its teams. The reverse re-invites them, which restores access rather than "
+            "restoring the session — the user has to accept."
+        ),
+    ),
+    "restore_org_member": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="remove_org_member",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Re-invites at the role the caller names, defaulting to member. Re-inviting at admin by default would make a rollback an "
+            "escalation."
+        ),
+    ),
+    "revoke_deploy_key": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Deleting a deploy key breaks whatever deploys with it. Not "
+            "platform-reversible: the host stores only the public half and "
+            "re-adding needs key material this platform never holds, so an "
+            "operator restores it from their own copy — a decision they should "
+            "be making anyway."
+        ),
+    ),
+    "disable_workflow": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="enable_workflow",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Stops a CI workflow running. The containment for a tampered pipeline, and the thing that stops a team shipping, which is why "
+            "it is not automatic."
+        ),
+    ),
+    "enable_workflow": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="disable_workflow",
+        required_permission=_CONTAIN,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Turning a pipeline back on after a tampering incident is a decision, not a cleanup step.",
+    ),
+    "get_secret_scanning_alerts": CapabilityContract(
+        impact=ActionImpact.READ_ONLY,
+        approval=ApprovalRequirement.AUTOMATIC,
+        reversal=Reversal.NOT_APPLICABLE,
+        required_permission=_INVESTIGATE,
+        has_verification_probe=False,
+        verification_gap="A read leaves nothing behind to read back. Same reasoning as search_siem.",
+        note=(
+            "Open secret-scanning alerts on the repositories a compromised "
+            "token could reach. Secret values are never returned by the vendor "
+            "and are not stored here: the type and the location are what an "
+            "analyst needs, and the secret itself is what you are trying not "
+            "to spread."
+        ),
+    ),
+    # ── Secure web gateway ─────────────────────────────────────────────────
+    "block_url": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="allow_url",
+        required_permission=_NETWORK,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "One URL rather than the whole host, which is the point: blocking "
+            "the domain to contain a single phishing page takes down everything "
+            "else on that host. Same impact tier as block_domain because the "
+            "enforcement is the customer's own gateway policy either way."
+        ),
+    ),
+    "allow_url": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="block_url",
+        required_permission=_NETWORK,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Removes an entry this platform added. Un-blocking is a decision with the same weight as blocking.",
+    ),
+}
+
+CAPABILITY_CONTRACTS.update(_PHASE61_CONTRACTS)
+
+#: Wave-2 Phase 7.5 (depth 6.6): containment for the AI estate.
+#:
+#: Three verbs, and the reason they are verbs of their own rather than
+#: flags on `disable_user` is the blast radius. Demoting a compromised
+#: project owner stops them minting provider keys and leaves their work
+#: intact; removing them from a workspace takes their access to everything
+#: in it; capping spend stops a runaway agent without touching anybody's
+#: membership at all. Collapsing those into one verb would force the
+#: widest action every time.
+_PHASE75_CONTRACTS: dict[str, CapabilityContract] = {
+    "demote_role": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="demote_role",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Lowers a principal's role on a provider or workspace. Its own "
+            "reverse, because the operation is 'set the role' and the "
+            "rollback is setting it back — a separate promote verb would be "
+            "a second way to grant privilege, which is not a thing to add "
+            "for symmetry's sake."
+        ),
+    ),
+    "remove_workspace_member": CapabilityContract(
+        impact=ActionImpact.HIGH,
+        approval=ApprovalRequirement.MANDATORY_HUMAN,
+        reversal=Reversal.MANUAL_ONLY,
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Takes a person out of an AI workspace, with no route back the "
+            "platform owns: re-adding somebody is an invitation they have "
+            "to accept. The route-back rule exists to bound *autonomous* "
+            "damage, so the coherent posture is a human who accepts the "
+            "irreversibility knowingly rather than an analyst approval over "
+            "a rollback that does not exist. demote_role is the reversible "
+            "action for the same situation and is the one to reach for "
+            "first."
+        ),
+    ),
+    "set_spend_cap": CapabilityContract(
+        impact=ActionImpact.MODERATE,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="restore_spend_cap",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note=(
+            "Caps what one key may spend. The softest containment in this "
+            "block: a key spending anomalously is not necessarily a key in "
+            "an attacker's hands, and a cap stops the bleeding without "
+            "breaking anything that is behaving."
+        ),
+    ),
+    "restore_spend_cap": CapabilityContract(
+        impact=ActionImpact.LOW,
+        approval=ApprovalRequirement.ANALYST,
+        reversal=Reversal.PLATFORM,
+        reverse_capability="set_spend_cap",
+        required_permission=_IDENTITY,
+        has_verification_probe=False,
+        verification_gap=_PROBE_GAP_NO_ACTION_TYPE,
+        note="Puts a budget back. The caller supplies the figure; this verb never guesses what a key used to be allowed.",
+    ),
+}
+
+CAPABILITY_CONTRACTS.update(_PHASE75_CONTRACTS)
+
+
 def apply_contract(cls: type) -> type:
     """Class decorator: stamp the capability's contract onto an executor.
 

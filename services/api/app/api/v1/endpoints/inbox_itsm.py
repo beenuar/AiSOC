@@ -343,6 +343,43 @@ def _map_inbound_status(vendor: str, raw_status: str | None) -> str | None:
     return None
 
 
+#: AiSOC statuses nothing inbound may move a case out of.
+#:
+#: `closed` is the terminal state — it is the transition that writes
+#: `closed_at`, and the one the funnel and the MTTR window are measured
+#: from. `resolved` is an intermediate state despite the name, which is the
+#: distinction that made the defect below possible: both Jira `Done` and
+#: ServiceNow `Resolved` map to `resolved`, so a redelivery after a close
+#: looked like a forward transition.
+_TERMINAL_STATUSES: frozenset[str] = frozenset({"closed"})
+
+#: Where each AiSOC status sits on the case lifecycle, so "backwards" is a
+#: comparison rather than a special case per pair.
+_STATUS_ORDER: tuple[str, ...] = ("new", "triaged", "investigating", "contained", "resolved", "closed")
+
+
+def _is_backwards_from_terminal(current: str | None, incoming: str | None) -> bool:
+    """True when an inbound status would move a closed case back open.
+
+    Scoped to terminal states on purpose. An ITSM legitimately reopens a
+    ticket, and a reopen that AiSOC should mirror is a transition out of
+    `closed` that an *operator* made in the ITSM — but it arrives as a
+    status this product can map to an earlier state, which is
+    indistinguishable from a retry. Until the vendor payloads carry enough
+    to tell a reopen from a redelivery, refusing the move is the safe
+    direction: a case that stays closed is visible and correctable, a case
+    silently reopened by a retry is neither.
+    """
+    if not current or not incoming or current not in _TERMINAL_STATUSES:
+        return False
+    try:
+        return _STATUS_ORDER.index(incoming) < _STATUS_ORDER.index(current)
+    except ValueError:
+        # A status outside the ladder is not comparable, and the caller
+        # already refuses anything the vendor map could not resolve.
+        return False
+
+
 async def _fetch_token_and_connector(
     db: Any,
     *,
@@ -733,8 +770,19 @@ async def inbound_itsm_webhook(
             note=(f"{vendor} status '{raw_status}' has no AiSOC equivalent; last_synced_at bumped."),
         )
 
-    if new_status == ref_row.status:
-        # Idempotent redelivery — case is already in the target state.
+    if new_status == ref_row.status or _is_backwards_from_terminal(ref_row.status, new_status):
+        # Idempotent redelivery — case is already in the target state, or
+        # further along than the ticket is.
+        #
+        # The second half is wave-2 6.4, and it is a real defect rather
+        # than a hardening: the check was an exact equality, so a case a
+        # human had **closed** in AiSOC, receiving an ordinary Jira
+        # redelivery of `Done` (which maps to the *intermediate*
+        # `resolved`), was moved backwards out of its terminal state. Jira
+        # retries up to five times and ServiceNow retries until it gets a
+        # 2xx, so this needed no unusual sequence at all — only a close
+        # followed by a retry.
+        #
         # Touch sync columns and return.
         await db.execute(
             text(
@@ -755,7 +803,15 @@ async def inbound_itsm_webhook(
             old_status=ref_row.status,
             new_status=new_status,
             status_changed=False,
-            note="Case already in target state; sync timestamps refreshed.",
+            note=(
+                "Case already in target state; sync timestamps refreshed."
+                if new_status == ref_row.status
+                else (
+                    f"Case is {ref_row.status}, which is terminal; the inbound "
+                    f"'{raw_status}' maps to '{new_status}' and would move it "
+                    f"backwards, so only the sync timestamps were refreshed."
+                )
+            ),
         )
 
     # Real status change. The actor label leaks the connector_type only,

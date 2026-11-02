@@ -1,6 +1,6 @@
 {
   "event_type": "head-.consent_to_application",
-  "scopes": [
+  "granted_scopes": [
     "Mail.ReadWrite"
   ]
 }

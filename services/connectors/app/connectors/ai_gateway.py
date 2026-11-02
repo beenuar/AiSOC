@@ -165,6 +165,7 @@ class AIGatewayConnector(BaseConnector):
         outcome = str(raw.get("status") or raw.get("outcome") or "success").lower()
         agent_id = str(raw.get("agent_id") or raw.get("user") or raw.get("api_key_alias") or "unknown-agent")
         tool_name = str(raw.get("tool") or raw.get("tool_name") or (f"model:{model}" if model else "unknown"))
+        gateway_key = _key_name(raw)
 
         finding_type = self._finding_type(raw, model, outcome)
         severity = self._severity(finding_type, outcome)
@@ -192,6 +193,31 @@ class AIGatewayConnector(BaseConnector):
             "session_id": raw.get("session_id") or raw.get("trace_id"),
             "raw_event": raw,
         }
+        # Promoted rather than left in `raw_event`. The engine flattens
+        # `raw_event` exactly one level, so these would be reachable — but
+        # the baseline module and the AI estate read a *named* field, and
+        # a value the connector reads and does not name is how seven Okta
+        # rules came to be unable to fire.
+        if gateway_key:
+            # The subject a spend baseline is keyed on, an alert titles and
+            # a console row renders. Never the raw hash: the vendor masks
+            # `key_name` for that reason, and a hash in a Redis key is a
+            # credential identifier in a place nobody is guarding.
+            event["gateway_key"] = gateway_key
+        # The gateway's own figures. Not recomputed here from token counts
+        # and a price table: that would be a second meter disagreeing with
+        # the one that is actually billed.
+        #
+        # Absent stays absent. A gateway that did not price a request must
+        # not teach a spend baseline that the request was free, because a
+        # baseline fed zeros learns the agent costs nothing and then never
+        # flags anything again.
+        cost = _number(raw.get("spend"), raw.get("response_cost"))
+        if cost is not None:
+            event["request_cost_usd"] = cost
+        total = _number(raw.get("total_tokens"))
+        if total is not None:
+            event["total_tokens"] = total
         if finding_type:
             event["finding_type"] = finding_type
         return event
@@ -239,3 +265,41 @@ class AIGatewayConnector(BaseConnector):
         if finding_type == _FINDING_UNAPPROVED_MODEL:
             return f"Agent {agent_id} used unapproved model {model}"
         return f"AI activity: {tool_name} by {agent_id}"
+
+
+def _key_name(raw: dict[str, Any]) -> str | None:
+    """The billed key's human-readable name, never its hash.
+
+    `key_alias` is what an operator sets; `key_name` is the vendor's own
+    masked form (`sk-...KE_A`) and is the right fallback for an unaliased
+    key, because falling through to nothing would give every unaliased key
+    one shared subject and turn a per-key baseline into an estate-wide one.
+
+    Field names from the gateway's published spend record:
+    https://docs.litellm.ai/docs/proxy/cost_tracking
+    """
+    for field in ("key_alias", "api_key_alias", "key_name"):
+        value = raw.get(field)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text[:200]
+    return None
+
+
+def _number(*values: Any) -> float | int | None:
+    """The first value that is genuinely numeric, or None.
+
+    `None` and the empty string both mean "the gateway did not say", and
+    both must stay unknown rather than becoming `0`.
+    """
+    for value in values:
+        if value is None or value == "":
+            continue
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        return int(number) if number.is_integer() else number
+    return None

@@ -22,7 +22,9 @@ enabled: false
 quarantine_reason: 'not executable (needs-external-source): classic-PAT creation never reaches the org
   audit log — the documented personal_access_token.* lifecycle covers fine-grained tokens — and no audit
   entry carries a created token''s scopes: the common `token_scopes` field describes the token that authenticated
-  the API call, not the token being created.'
+  the API call, not the token being created. Briefly un-retired on the strength of the gate reporting
+  `scopes` resolvable; that field reaches the namespace from llm_usage.py and from no GitHub path at all,
+  which is the blind spot the gate''s product scoping now closes.'
 author: AiSOC
 created: '2026-05-03'
 modified: '2026-05-03'

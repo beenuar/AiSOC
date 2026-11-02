@@ -358,3 +358,147 @@ class AzureEntraClient:
             resp.raise_for_status()
             logger.info("entra.require_mfa.success", user_id=user_id)
             return {"success": True, "action": "require_mfa", "user_id": user_id}
+
+    # ------------------------------------------------------------------
+    # Wave-2 Phase 6.1: service-identity and OAuth-grant containment
+    # ------------------------------------------------------------------
+    #
+    # Everything above acts on a *user*. The identity that a leaked CI
+    # credential or a consented application actually runs as is a service
+    # principal or a delegated grant, and nothing here could touch either,
+    # so the containment surface stopped at the half of the directory that
+    # has a person behind it.
+    #
+    # References, fetched before these were written:
+    #   https://learn.microsoft.com/en-us/graph/api/serviceprincipal-update
+    #   https://learn.microsoft.com/en-us/graph/api/oauth2permissiongrant-delete
+    #   https://learn.microsoft.com/en-us/graph/api/resources/oauth2permissiongrant
+
+    async def set_service_principal_enabled(self, service_principal_id: str, *, enabled: bool) -> dict[str, Any]:
+        """PATCH ``accountEnabled`` on a service principal.
+
+        One method for both directions so the disable and its rollback
+        cannot drift into different request shapes, which is how a rollback
+        comes to target a field the containment never set.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.patch(
+                f"{_GRAPH}/servicePrincipals/{service_principal_id}",
+                headers=self._headers(),
+                json={"accountEnabled": enabled},
+            )
+            resp.raise_for_status()
+            logger.info(
+                "entra.service_principal.updated",
+                service_principal_id=service_principal_id,
+                enabled=enabled,
+            )
+            return {
+                "success": True,
+                "action": "enable_service_identity" if enabled else "disable_service_identity",
+                "service_principal_id": service_principal_id,
+                "account_enabled": enabled,
+            }
+
+    async def disable_service_principal(self, service_principal_id: str) -> dict[str, Any]:
+        return await self.set_service_principal_enabled(service_principal_id, enabled=False)
+
+    async def enable_service_principal(self, service_principal_id: str) -> dict[str, Any]:
+        return await self.set_service_principal_enabled(service_principal_id, enabled=True)
+
+    async def get_service_principal(self, service_principal_id: str) -> dict[str, Any]:
+        """The read the service-identity probe uses."""
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_GRAPH}/servicePrincipals/{service_principal_id}",
+                headers=self._headers(),
+                params={"$select": "id,appId,displayName,accountEnabled,servicePrincipalType"},
+            )
+            resp.raise_for_status()
+            body = resp.json()
+            return {
+                "id": body.get("id"),
+                "app_id": body.get("appId"),
+                "display_name": body.get("displayName"),
+                "account_enabled": body.get("accountEnabled"),
+                "service_principal_type": body.get("servicePrincipalType"),
+            }
+
+    async def list_oauth2_permission_grants(self, *, principal_id: str | None = None) -> list[dict[str, Any]]:
+        """Delegated permission grants, optionally for one principal.
+
+        Graph's ``$filter`` on this resource is limited; filtering on
+        ``principalId`` is the supported form and is what an incident
+        actually asks ("what did this user consent to").
+        """
+        params: dict[str, str] = {}
+        if principal_id:
+            params["$filter"] = f"principalId eq '{principal_id}'"
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.get(
+                f"{_GRAPH}/oauth2PermissionGrants",
+                headers=self._headers(),
+                params=params or None,
+            )
+            resp.raise_for_status()
+            body = resp.json()
+        return [
+            {
+                "id": row.get("id"),
+                "client_id": row.get("clientId"),
+                "consent_type": row.get("consentType"),
+                "principal_id": row.get("principalId"),
+                "resource_id": row.get("resourceId"),
+                "scope": row.get("scope"),
+            }
+            for row in body.get("value", [])
+        ]
+
+    async def delete_oauth2_permission_grant(self, grant_id: str) -> dict[str, Any]:
+        """DELETE one delegated grant.
+
+        There is no Graph call that re-creates a deleted grant with the same
+        id, so this is not platform-reversible: re-consent is a user action
+        on the application's own consent prompt. The contract says so rather
+        than naming a reverse capability that would resolve to nothing.
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.delete(
+                f"{_GRAPH}/oauth2PermissionGrants/{grant_id}",
+                headers=self._headers(),
+            )
+            resp.raise_for_status()
+            logger.info("entra.oauth2_grant.deleted", grant_id=grant_id)
+            return {"success": True, "action": "revoke_oauth_grant", "grant_id": grant_id}
+
+    async def remove_service_principal_password(self, service_principal_id: str, key_id: str) -> dict[str, Any]:
+        """``POST /servicePrincipals/{id}/removePassword``: drop one secret.
+
+        The narrow containment for a leaked application secret: the
+        identity keeps working on its other credentials, and the one that
+        leaked stops. Irreversible by construction — Graph never returns a
+        removed secret and ``addPassword`` mints a new value, so the
+        contract declares no rollback instead of naming one that would
+        hand back a different credential and call it a restore.
+
+        Reference: https://learn.microsoft.com/en-us/graph/api/serviceprincipal-removepassword
+        """
+        async with httpx.AsyncClient(timeout=20.0) as client:
+            await self._ensure_token(client)
+            resp = await client.post(
+                f"{_GRAPH}/servicePrincipals/{service_principal_id}/removePassword",
+                headers=self._headers(),
+                json={"keyId": key_id},
+            )
+            resp.raise_for_status()
+            logger.info("entra.remove_sp_password.success", service_principal_id=service_principal_id, key_id=key_id)
+            return {
+                "success": True,
+                "action": "revoke_token",
+                "service_principal_id": service_principal_id,
+                "key_id": key_id,
+            }

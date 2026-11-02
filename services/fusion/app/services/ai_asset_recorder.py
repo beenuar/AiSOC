@@ -725,7 +725,9 @@ def _from_provider_audit(tenant_id: str, ocsf: dict[str, Any], now: float) -> li
         return []
 
     attributes: dict[str, Any] = {"event_type": event_type}
-    scopes = fields.get("scopes")
+    # `granted_scopes` is what the connector promotes for a consent grant;
+    # `scopes` is kept for any producer that emits the plainer name.
+    scopes = fields.get("granted_scopes") or fields.get("scopes")
     if not (isinstance(scopes, list) and scopes):
         # The OCSF-native path some producers use. Kept so an event that
         # does carry evidence.scopes is still read, rather than trading one
