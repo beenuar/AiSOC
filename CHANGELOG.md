@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### BREAKING
+
+- **`GET /posture/summary` now returns `null` rather than `0` for every count
+  when nothing has collected.** The eight integer fields on `PostureSummary`
+  — `total`, `critical`, `high`, `medium`, `low`, `open`, `resolved` and
+  `suppressed` — become nullable, which changes their generated SDK types
+  from `int` to `int | None`.
+
+  The break could not be preserved, because the old type *was* the defect.
+  `posture_findings` had no production writer at all, so the endpoint counted
+  an empty table and answered `total: 0, critical: 0` on every deployment —
+  a sentence that reads "your cloud estate is clean" about an estate nobody
+  has looked at. No integer can carry that distinction: `0` has to mean
+  "collected, and found nothing", which leaves `null` as the only honest
+  value for "nothing has collected". Keeping the type and adding `collected`
+  beside it would have left the old fields still saying zero, so every client
+  that did not adopt the new flag would keep reading the same false clean
+  bill.
+
+  Migrating a client is reading `collected` first: when it is false the
+  counts are absent and the correct render is "not scanned", not a zero.
+
 ### Added
 
 - **A CNAPP's findings reach a verdict as context about the resource, not as
