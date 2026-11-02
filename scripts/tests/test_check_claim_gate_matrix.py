@@ -130,3 +130,70 @@ def test_prose_after_the_block_cannot_satisfy_a_missing_figure() -> None:
     """A sentence saying "NO GATE: 0" in running text is not the figure line."""
     without = BLOCK.replace("- NO GATE: 0\n", "") + "\nThe table has NO GATE: 0 rows.\n"
     assert any("does not state 'NO GATE'" in p for p in _problems(without))
+
+
+# ─── `--write` restates the figure instead of a human editing three files ────
+#
+# The stanza is the only place in the matrix that repeats a number the table
+# already holds, so it is the only thing that drifts: two pull requests each
+# adding a row merge without conflicting, and the stanza is then stale by two
+# while describing a tree neither of them produced. That is what took `main`
+# red and reddened five open pull requests with it. The detector above has
+# always reported it; nothing could fix it, and the prose asking the reader to
+# "recompute rather than editing a number here" named no command that would.
+
+
+def _rewrite(text: str, counts: dict[str, int] | None = None) -> str:
+    return MODULE.rewrite_summary_block(text, counts or TRUTH)
+
+
+def test_a_drifted_block_is_restated_from_the_table() -> None:
+    stale = BLOCK.replace("- Total: 12", "- Total: 10").replace("- GATED: 9", "- GATED: 7")
+    assert _problems(stale), "fixture is not actually drifted"
+    assert _problems(_rewrite(stale)) == []
+
+
+def test_rewriting_is_idempotent() -> None:
+    once = _rewrite(BLOCK.replace("- Total: 12", "- Total: 10"))
+    assert _rewrite(once) == once
+
+
+def test_only_the_figures_change() -> None:
+    """Prose around the stanza is left alone — this is not a formatter."""
+
+    stale = BLOCK.replace("- Total: 12", "- Total: 10")
+    rewritten = _rewrite(stale)
+    assert "Counts come from the gate." in rewritten
+    assert rewritten.count("## Summary") == 1
+    assert len(rewritten.splitlines()) == len(stale.splitlines())
+
+
+def test_a_duplicated_block_is_refused_rather_than_repaired() -> None:
+    """A writer cannot know which copy was meant, so it must not choose."""
+
+    try:
+        _rewrite(BLOCK + "\n" + BLOCK)
+    except ValueError as exc:
+        assert "found 2" in str(exc)
+    else:
+        raise AssertionError("a duplicated stanza was silently rewritten")
+
+
+def test_a_missing_figure_is_refused_rather_than_inserted() -> None:
+    """Where a missing line belongs is a judgement about the document."""
+
+    try:
+        _rewrite(BLOCK.replace("- PARTIAL: 3\n", ""))
+    except ValueError as exc:
+        assert "does not state" in str(exc) and "PARTIAL" in str(exc)
+    else:
+        raise AssertionError("a missing figure was invented")
+
+
+def test_a_file_with_no_block_is_refused() -> None:
+    try:
+        _rewrite("# Matrix\n\nno stanza here\n")
+    except ValueError as exc:
+        assert "found 0" in str(exc)
+    else:
+        raise AssertionError("a file with no stanza was rewritten")
