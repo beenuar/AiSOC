@@ -1380,3 +1380,90 @@ that has to carry the delta.
 **Deviations:** D3 (three classes have no redistributable source), D4
 (tenant-supplied lists designed, not built).
 
+
+### 7.3 — Agent identity and per-agent baselines (depth 6.4 / parity 6.7)
+
+[#1601](https://github.com/beenuar/AiSOC/pull/1601), base `main`.
+
+**Reproduced gap.** `docs/audit/depth2-baseline/lane-e-phase73-reproduction.py`,
+runnable from a bare checkout: no module under `services/agents` defines an
+agent identity; `ToolRegistry.execute` takes no caller, declares no scope and
+writes no audit row; `baselines.py` declares seven derived fields and none is
+keyed on an AI agent.
+
+**Half A.** Short-lived identity per run, least-privilege tool scope enforced
+at `ToolRegistry.execute` — the one chokepoint every tool call passes
+through, because a check an agent performs on itself is one a steered agent
+can be talked out of. Identity is required, not optional. Nothing in the
+scope table changes an estate; a test forbids it.
+
+**Half B — one mechanism, built for Lane A.** `SUB_PRINCIPAL_FIELDS` replaces
+the hardcoded OAuth-app block, with the dict key as the field prefix so
+`baseline_oauth_app_volume_z` keeps its published name. Lane A's 1.4 adds
+`token` and `service_account` as one entry each. Eight new derived fields.
+
+**Negative controls.** Making identity optional fails one named test;
+removing the `agent` entry fails eight baseline tests.
+
+### 7.4 — four more targets shipped, two still blocked
+
+Executable detections **2,530 → 2,534** on `main`'s base (and 2,534 again on
+the landing branch, which carries the other four — the two PRs touch
+different rules and the figure is regenerated in each).
+
+Shipped and replayed through the real connector, the real `BaselineStore`
+and the real engine: `ai-agent-new-high-risk-tool`,
+`ai-agent-guardrail-violation-rate`, `ai-agent-token-spend-anomaly`,
+`ai-gateway-key-spend-anomaly`.
+
+### D5 — The 7.1 labels reach the engine as events, not as a query
+
+Decided explicitly, as the brief requires, and **not yet implemented**.
+
+The chat-content labels from 7.1 live in `aisoc_ai_chat_content_labels` in
+Postgres; the detection engine evaluates a stream. Two options:
+
+*The rule reads it where it lives* — refused. The engine is stateless and
+evaluates per event with no database handle; giving it one would mean a
+Postgres round trip per event on the hot path, and the one place that
+pattern exists (the tenant tuning overlay) is a per-tenant cache loaded
+once, not a per-event read.
+
+*The label reaches the stream* — chosen. The collector emits one OCSF event
+per newly labelled conversation, through the same ingest path a connector
+uses, carrying the labels, the shape names and the bounded snippet it
+already stores. A rule then clauses on `labels_has_any` exactly as every
+other rule clauses on connector fields, with no new mechanism and no new
+hot-path cost.
+
+**What it needs:** the API service has no ingest client — `IngestClient`
+lives in `services/connectors` — so this is either a small vendored client
+in the API or a move of the collector into the connectors service. That is
+a structural decision touching another lane's tree, which is why it is
+recorded here rather than guessed at. Nothing is shipped clausing on
+`labels` until it exists.
+
+### D6 — The enrichment-decision gate judges reachability globally
+
+Found while landing 7.1: `scripts/check_enrichment_decisions.py` asks
+whether a retired rule's fields are resolvable against the **union of every
+connector's** namespace. Promoting a field called `scopes` on Entra consent
+events therefore made `ident-github-pat-classic-created-with-broad-scopes`
+look reachable, and the gate demanded it be un-retired — while GitHub's
+audit log still does not carry a created classic PAT's scopes, so the rule
+could not fire.
+
+Worked around correctly by renaming the field to `granted_scopes`, which is
+more precise anyway. **The gate weakness is not fixed:** a rule's
+reachability should be judged against the fields its own `log_source`
+emits. Left recorded rather than changed, because it is a shared gate
+several lanes depend on and a scoping change belongs with its owner.
+
+### D7 — Lane A's Phase 1.4 had not landed when 7.3 was built
+
+`origin/main` was fetched before starting and again before committing;
+`baselines.py` on `main` still had no sub-principal mechanism. 7.3 therefore
+built the shared one rather than waiting. It is additive — a dict entry per
+kind, plus one name appended to `PRINCIPAL_FIELDS` — so if 1.4 lands first
+the two combine rather than conflict. If both touch the file, combine; never
+take one side.

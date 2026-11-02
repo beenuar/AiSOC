@@ -297,8 +297,22 @@ _BASELINE_DERIVED_FIELDS = frozenset(
         "baseline_client_family_rarity",
         "baseline_location_rarity",
         "baseline_principal_volume_z",
-        "baseline_oauth_app_volume_z",
         "baseline_peer_deviation",
+        # Sub-principal baselines (wave-2 7.3, and wave-2 1.4's mechanism).
+        # `baselines.SUB_PRINCIPAL_FIELDS` generates these from its keys, so
+        # a kind added there must be added here too — which is precisely
+        # what the bidirectional test in `test_baselines.py` enforces, and
+        # what caught this list when the sub-principal table landed.
+        "baseline_oauth_app_volume_z",
+        "baseline_agent_volume_z",
+        "baseline_gateway_key_volume_z",
+        # Per-agent novelty and rate (depth 6.4's "tools, resources, volume,
+        # token spend, hours").
+        "baseline_agent_tool_rarity",
+        "baseline_agent_model_rarity",
+        "baseline_agent_hour_rarity",
+        "baseline_agent_token_spend_z",
+        "baseline_gateway_key_token_spend_z",
         # Depth plan wave 2, 1.4 — per-sub-principal baselines. A token, an
         # OAuth app, a service account or an AI agent acting for a human
         # gets its own baseline, because a stolen credential acts *as* the

@@ -216,7 +216,7 @@ def _captured_system(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """Capture the system prompt the tool loop is given, and answer immediately."""
     seen: list[str] = []
 
-    async def _fake_loop(model: Any, *, system: str, user: str, registry: Any, max_iters: int) -> dict[str, Any]:
+    async def _fake_loop(model: Any, *, system: str, user: str, registry: Any, identity: Any, max_iters: int) -> dict[str, Any]:
         seen.append(system)
         return {"content": "nothing to add", "tool_trace": [], "iterations": 1, "truncated": False}
 
