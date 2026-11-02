@@ -74,15 +74,32 @@ class TestDefaults:
         # both connected.
         assert available_providers()[0] == "elasticsearch"
 
-    def test_registry_ships_two_live_drivers(self) -> None:
-        assert set(available_providers()) == {"elasticsearch", "splunk"}
+    def test_registry_ships_three_live_drivers(self) -> None:
+        """Two connector-backed warehouses plus the deployment's own lake.
+
+        The lake joined in wave 2, Phase 5.2. It declares no connector types
+        because its address is deployment configuration rather than something
+        a tenant connected, and it sits last so a tenant's own SIEM — which
+        holds history AiSOC never ingested — always wins.
+        """
+        assert set(available_providers()) == {"elasticsearch", "splunk", "lake"}
+
+    def test_the_lake_is_last_so_a_connected_siem_always_wins(self) -> None:
+        assert available_providers()[-1] == "lake"
 
     def test_chronicle_scaffold_is_gone(self) -> None:
         """It read a ``udm`` translation nothing emits, gated on settings that
         were never fields, and reported itself as a supported warehouse."""
         assert "chronicle" not in available_providers()
 
-    def test_candidate_connector_types_covers_every_driver(self) -> None:
+    def test_candidate_connector_types_covers_every_connector_backed_driver(self) -> None:
+        """The lake contributes nothing, and that is the point.
+
+        `candidate_connector_types` is the set the scheduler asks the
+        database about. A provider that needs no connected warehouse must not
+        widen that query, or a tenant would appear to have "connected" the
+        lake.
+        """
         assert set(candidate_connector_types()) == {"elastic", "splunk"}
 
 

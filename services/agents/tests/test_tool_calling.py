@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from app.agents.tool_loop import run_with_tools
+from app.security.agent_identity import issue_identity
 from app.tools.registry import Tool, ToolRegistry, default_registry
 
 
@@ -47,10 +48,11 @@ def test_registry_exposes_openai_schemas():
 @pytest.mark.asyncio
 async def test_registry_execute_runs_real_tool_and_handles_unknown():
     reg = default_registry()
-    iocs = await reg.execute("extract_iocs", {"text": "beacon to evil.example and 45.9.148.99"})
+    identity = issue_identity("investigation", run_id="run-1")
+    iocs = await reg.execute("extract_iocs", {"text": "beacon to evil.example and 45.9.148.99"}, identity=identity)
     assert isinstance(iocs, list)
     # Unknown tool fails soft.
-    err = await reg.execute("nope", {})
+    err = await reg.execute("nope", {}, identity=identity)
     assert "error" in err
 
 
@@ -58,7 +60,13 @@ async def test_registry_execute_runs_real_tool_and_handles_unknown():
 async def test_tool_loop_executes_selected_tool_then_answers():
     reg = default_registry()
     llm = _FakeLLM([_tool_call("extract_iocs", {"text": "45.9.148.99 and evil.example"}), _final("Two IOCs found.")])
-    out = await run_with_tools(llm, system="You are an analyst.", user="Find IOCs.", registry=reg)
+    out = await run_with_tools(
+        llm,
+        system="You are an analyst.",
+        user="Find IOCs.",
+        registry=reg,
+        identity=issue_identity("investigation", run_id="run-1"),
+    )
     assert out["truncated"] is False
     assert out["content"] == "Two IOCs found."
     assert out["iterations"] == 2
@@ -71,7 +79,9 @@ async def test_tool_loop_is_bounded_by_max_iters():
     # A model that always asks for a tool must not loop forever.
     reg = ToolRegistry([Tool(name="noop", description="noop", parameters={"type": "object", "properties": {}}, fn=lambda: {"ok": True})])
     llm = _FakeLLM([_tool_call("noop", {})])  # always returns a tool call
-    out = await run_with_tools(llm, system="s", user="u", registry=reg, max_iters=3)
+    out = await run_with_tools(
+        llm, system="s", user="u", registry=reg, identity=issue_identity("investigation", run_id="run-1"), max_iters=3
+    )
     assert out["truncated"] is True
     assert out["iterations"] == 3
     assert len(out["tool_trace"]) == 3

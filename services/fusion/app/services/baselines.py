@@ -127,6 +127,10 @@ PRINCIPAL_FIELDS: tuple[str, ...] = (
     "principal",
     "user_arn",
     "userPrincipalName",
+    # The human an AI agent acted for. The `ai-runtime` template maps it to
+    # `actor.user.name`, which is to say the vendor and the schema already
+    # agree it is the principal; this module simply could not see it.
+    "on_behalf_of",
 )
 
 #: Event fields naming the OAuth application acting, for the per-application
@@ -141,6 +145,70 @@ OAUTH_APP_FIELDS: tuple[str, ...] = (
     "oauth_app",
 )
 
+#: Sub-principals: the things that act *as* a principal without being one.
+#:
+#: The OAuth application was the only one of these for a while, special-cased
+#: inside `derived_fields`. Wave-2 Phase 1.4 asks for baselines per
+#: sub-principal (OAuth app, personal access token, service account, and an
+#: AI agent acting for a human) and wave-2 Phase 7.3 asks for per-agent
+#: baselines. Those are the same mechanism with different subjects, so this
+#: is a table and not four blocks of code: a new kind is one entry, and the
+#: console cannot end up with two ways of saying the same thing.
+#:
+#: **The key is the field prefix.** `oauth_app` produces
+#: `baseline_oauth_app_volume_z`, which is already published and must not
+#: move; `agent` produces `baseline_agent_volume_z`. Deriving the name from
+#: the key rather than from a second mapping means a reader can tell which
+#: entry produced a field without consulting anything.
+#:
+#: Every chain must name at least one field a connector really emits — the
+#: rule above `RARITY_FIELDS`, for the same reason. `agent_id`, `agent_name`
+#: and `gateway_key` all come from `ai_gateway.normalize()` and the
+#: `ai-runtime` ingest template.
+SUB_PRINCIPAL_FIELDS: dict[str, tuple[str, ...]] = {
+    "oauth_app": OAUTH_APP_FIELDS,
+    "agent": ("agent_id", "agent_name"),
+    # The gateway key a request was billed to. A compromised key used by a
+    # well-behaved agent and a misbehaving agent on a normal key are
+    # different incidents; only a baseline per subject separates them.
+    "gateway_key": ("gateway_key",),
+}
+
+#: Per-kind rarity attributes: which of this subject's choices are worth
+#: scoring for novelty. Keyed `kind -> {attribute: field chain}` and producing
+#: `baseline_{kind}_{attribute}_rarity`.
+#:
+#: Rarity is per subject, never global, and for an agent that is the whole
+#: value: `execute_command` is routine for a deployment bot and alarming for
+#: a summariser, and a global count cannot tell them apart.
+SUB_PRINCIPAL_RARITY: dict[str, dict[str, tuple[str, ...]]] = {
+    "agent": {
+        "tool": ("tool_name",),
+        "model": ("model",),
+    },
+}
+
+#: Kinds whose hour-of-day is baselined, producing
+#: `baseline_{kind}_hour_rarity`. Computed from the event clock rather than
+#: read from a field, because no connector emits an hour — stated here so it
+#: does not look like an omission from `SUB_PRINCIPAL_RARITY`.
+#:
+#: An agent that has only ever run inside a nightly window and suddenly runs
+#: at midday is the signal. A human's working hours are already covered by
+#: the principal baseline, so this is deliberately not every kind.
+HOUR_BASELINE_KINDS: frozenset[str] = frozenset({"agent"})
+
+#: Kinds whose spend is baselined, producing
+#: `baseline_{kind}_token_spend_z`. Depth 6.4 asks for token spend per agent;
+#: wave-2 7.4 asks for it per key as well.
+SPEND_BASELINE_KINDS: frozenset[str] = frozenset({"agent", "gateway_key"})
+
+#: Where the cost of one request is read from. The gateway's own figure, in
+#: dollars, promoted by `ai_gateway.normalize()`. Not recomputed here from
+#: token counts and a price table: that would be a second meter disagreeing
+#: with the one that is actually billed.
+SPEND_VALUE_FIELDS: tuple[str, ...] = ("request_cost_usd",)
+
 #: Event fields naming the peer group a principal belongs to. Depth plan 3.4
 #: names the Phase 2.5 posture snapshot as the source; until that lands, the
 #: group is taken from whatever the identity provider already puts on the
@@ -154,6 +222,60 @@ PEER_GROUP_FIELDS: tuple[str, ...] = (
     "department",
 )
 
+#: The kinds of actor that get a baseline of their own (depth plan wave 2,
+#: 1.4). Every one of these acts *on a human's behalf*, which is why folding
+#: them into the human's baseline is backwards for the case these baselines
+#: exist to catch: a stolen token acts as the user, so the user's own volume
+#: and rarity stay normal while the token's do not.
+#:
+#: `oauth_app` is listed here as well as keeping its older volume-only
+#: baseline, so the two namespaces do not collide: the old one is keyed
+#: `vol:oauth_app` on the app name, the new one is keyed on
+#: `sub:<kind>:<id>` and carries rarity too.
+SUB_PRINCIPAL_KINDS: tuple[str, ...] = ("oauth_app", "api_token", "service_account", "ai_agent")
+
+#: Vendor fields that name a token, per connector. Order is precedence.
+#:
+#: Deliberately **not** including GitHub's credential digest. That value is
+#: a session key, and the session key has exactly one producer:
+#: `services/ingest/internal/activity/session.go`. A consumer that re-derived
+#: it would be the second derivation ADR-0010 forbids -- the two would agree
+#: until the next vendor-schema change and then disagree silently, leaving
+#: Postgres, the lake and the graph holding different answers to "which
+#: session was this". :func:`_session_credential_key` reads the producer's
+#: projection instead, and `scripts/check_session_projection.py` is the gate
+#: that refuses the shortcut.
+TOKEN_FIELDS: tuple[str, ...] = (
+    "token_id",
+    "access_key_id",
+    "accessKeyId",
+    "api_key_id",
+)
+
+#: `session.key_kind` values whose key *is* the credential, so the session
+#: key doubles as the token's identity. `session.go` documents the
+#: vocabulary; `vendor_credential` is the one GitHub's digest lands under.
+CREDENTIAL_KEY_KINDS: frozenset[str] = frozenset({"vendor_credential"})
+
+#: Fields naming a service account or workload identity.
+SERVICE_ACCOUNT_FIELDS: tuple[str, ...] = (
+    "service_account",
+    "serviceAccountEmail",
+    "service_account_email",
+    "workload_identity",
+)
+
+#: Fields naming an AI agent acting for a person. Kept distinct from a
+#: service account: an agent's cadence is interactive by nature, so folding
+#: it into the service-account baseline would make every agent look like a
+#: cron job that went rogue.
+AI_AGENT_FIELDS: tuple[str, ...] = (
+    "agent_id",
+    "ai_agent",
+    "assistant_id",
+    "agent_name",
+)
+
 #: Every derived field this module can produce. Asserted against the gate's
 #: own table in `services/fusion/tests/test_baselines.py`, in both
 #: directions, so the two cannot drift the way the matcher's operator list
@@ -162,10 +284,44 @@ DERIVED_FIELDS: frozenset[str] = frozenset(
     set(RARITY_FIELDS)
     | {
         "baseline_principal_volume_z",
-        "baseline_oauth_app_volume_z",
         "baseline_peer_deviation",
+        # Depth plan wave 2, 1.4 — the sub-principal summary fields. One
+        # set for all kinds rather than one per kind, so they are named
+        # here while the per-kind families below are generated.
+        "baseline_sub_principal_kind",
+        "baseline_sub_principal_rarity",
+        "baseline_sub_principal_volume_z",
+        "baseline_token_cadence",
+        "baseline_token_cadence_shift",
+        "baseline_token_reactivated_after_idle",
+        "baseline_token_new_asn_after_creation",
     }
+    # Generated from the tables above rather than listed again. A hand-kept
+    # second list is how a field comes to be computed and undeclared, or
+    # declared and never computed — and the gate compares this set against
+    # the one `scripts/check_detection_fields.py` builds, so either
+    # direction of drift would be a false verdict rather than a loud one.
+    | {f"baseline_{kind}_volume_z" for kind in SUB_PRINCIPAL_FIELDS}
+    | {f"baseline_{kind}_{attribute}_rarity" for kind, attributes in SUB_PRINCIPAL_RARITY.items() for attribute in attributes}
+    | {f"baseline_{kind}_hour_rarity" for kind in HOUR_BASELINE_KINDS}
+    | {f"baseline_{kind}_token_spend_z" for kind in SPEND_BASELINE_KINDS}
 )
+
+#: A token silent for this long and then active again is worth a signal.
+#: Sixty days from the plan; it is also comfortably longer than any leave
+#: pattern, so a returning holidaymaker's token does not fire it.
+IDLE_REACTIVATION_SECONDS = 60 * 24 * 3600
+
+#: How soon after a token first appears a new ASN is suspicious. A token
+#: created and used from somewhere else within the hour is the shape of a
+#: credential that left the building before its first legitimate use.
+NEW_TOKEN_ASN_WINDOW_SECONDS = 3600
+
+#: Calls needed before a cadence claim is made. Three calls do not
+#: establish a rhythm, and `scripted` returned for an unwatched token would
+#: make the cadence-shift signal fire on the fourth call of every new token
+#: in the estate.
+CADENCE_MIN_SAMPLES = 8
 
 
 def _first_present(event: dict[str, Any], candidates: tuple[str, ...]) -> str | None:
@@ -183,6 +339,179 @@ def _first_present(event: dict[str, Any], candidates: tuple[str, ...]) -> str | 
 def resolve_principal(event: dict[str, Any]) -> str | None:
     """The principal this event is about, or None if it names none."""
     return _first_present(event, PRINCIPAL_FIELDS)
+
+
+def resolve_sub_principals(event: dict[str, Any]) -> list[tuple[str, str]]:
+    """Every sub-principal this event names, as ``(kind, subject)``.
+
+    A list rather than one value, because a single gateway span names both
+    the agent that acted and the key it was billed to, and those are
+    different incidents when they go wrong.
+
+    An event naming none — which is every ordinary cloud and identity
+    event — returns empty, and the caller emits nothing. A baseline with no
+    subject is not a baseline, and inventing a placeholder would give every
+    such event one shared subject and an unbounded Redis key space.
+    """
+    out: list[tuple[str, str]] = []
+    for kind, chain in SUB_PRINCIPAL_FIELDS.items():
+        subject = _first_present(event, chain)
+        if subject is not None:
+            out.append((kind, subject))
+    return out
+
+
+@dataclass(frozen=True)
+class SubPrincipal:
+    """A token, app, service account or agent acting on a human's behalf."""
+
+    kind: str
+    id: str
+    #: The human it acts for, where the event names one. Carried so a
+    #: signal about the token can be attributed to a person without a
+    #: second lookup, and left empty rather than guessed when it does not.
+    on_behalf_of: str = ""
+
+    @property
+    def subject(self) -> str:
+        """The baseline key. Namespaced by kind so two vendors' ids cannot collide."""
+        return f"sub:{self.kind}:{self.id}"
+
+
+def _verbatim(event: dict[str, Any], candidates: tuple[str, ...]) -> str | None:
+    """First present candidate, trimmed and **not** case-folded.
+
+    Every other field in this module goes through :func:`_first_present`,
+    which lowercases — correct for a username, wrong for an opaque token id
+    or a digest. A lowercased key would never join to what the producer
+    wrote, on every event, silently and with no error anywhere.
+    """
+    for name in candidates:
+        value = event.get(name)
+        # A string, not anything stringifiable: coercing a number here would
+        # mint a baseline key under an id no other store uses.
+        if not isinstance(value, str):
+            continue
+        text = value.strip()
+        if text:
+            return text
+    return None
+
+
+def _session_credential_key(event: dict[str, Any]) -> str | None:
+    """The session key, when the vendor's session *is* a credential.
+
+    Reads `activity.session` — what `session.go` wrote — rather than the
+    vendor field it was derived from. That is the whole point: one producer,
+    many consumers, so the baseline store, the session store, the lake and
+    the graph cannot disagree about which session an event belongs to.
+
+    Returns ``None`` for every other `key_kind`, including a vendor session
+    id: a session id is not a token identity, and keying a token baseline on
+    one would merge every token used in that session into a single subject.
+    """
+    activity = event.get("activity")
+    if not isinstance(activity, dict):
+        return None
+    session = activity.get("session")
+    if not isinstance(session, dict):
+        return None
+    if str(session.get("key_kind") or "") not in CREDENTIAL_KEY_KINDS:
+        return None
+    key = session.get("key")
+    if not isinstance(key, str):
+        return None
+    text = key.strip()
+    return text or None
+
+
+def resolve_sub_principal(event: dict[str, Any]) -> SubPrincipal | None:
+    """The sub-principal acting, or ``None`` when the event names only a human.
+
+    Precedence is narrowest-first: a token is more specific than the app it
+    belongs to, which is more specific than the service account. An event
+    naming several gets the narrowest, because that is the subject whose
+    baseline a compromise would move.
+    """
+    on_behalf_of = resolve_principal(event) or ""
+
+    # The producer's projection first. Where the vendor's session *is* a
+    # credential — a GitHub token is the case this was built for — the
+    # session key is the token's identity, already trimmed and un-folded by
+    # the one component allowed to derive it.
+    credential = _session_credential_key(event)
+    if credential:
+        return SubPrincipal(kind="api_token", id=credential, on_behalf_of=on_behalf_of)
+
+    token = _verbatim(event, TOKEN_FIELDS)
+    if token:
+        return SubPrincipal(kind="api_token", id=token, on_behalf_of=on_behalf_of)
+
+    agent = _first_present(event, AI_AGENT_FIELDS)
+    if agent:
+        return SubPrincipal(kind="ai_agent", id=agent, on_behalf_of=on_behalf_of)
+
+    app = _first_present(event, OAUTH_APP_FIELDS)
+    if app:
+        return SubPrincipal(kind="oauth_app", id=app, on_behalf_of=on_behalf_of)
+
+    account = _first_present(event, SERVICE_ACCOUNT_FIELDS)
+    if account:
+        return SubPrincipal(kind="service_account", id=account, on_behalf_of=on_behalf_of)
+
+    return None
+
+
+def classify_cadence(hours: list[int]) -> str:
+    """``scheduled`` | ``scripted`` | ``interactive`` | ``unknown``.
+
+    From the hours-of-day a token has been seen at. The three classes are
+    separated by *regularity* and *spread*, which is what the signal needs:
+    the interesting transition is a token that behaved like a machine
+    starting to behave like a person at a keyboard.
+
+    * **scheduled** — even intervals across the clock. A cron job is the
+      canonical case, and the tell is that the gaps between successive
+      active hours barely vary.
+    * **interactive** — concentrated inside a working day, with repeats
+      within the same hour. A person.
+    * **scripted** — regular but not evenly spaced, or spread without the
+      within-hour clustering of a human.
+    * **unknown** below :data:`CADENCE_MIN_SAMPLES`. Returning a class for
+      a token nobody has watched would make the cadence-shift signal fire
+      on the ninth call of every new token in the estate.
+    """
+    if len(hours) < CADENCE_MIN_SAMPLES:
+        return "unknown"
+
+    distinct = sorted({h % 24 for h in hours})
+    if len(distinct) < 2:
+        # Everything in one hour of the day, repeatedly: a daily job.
+        return "scheduled"
+
+    spread = len(distinct)
+    repeats = len(hours) - spread
+
+    # Interactive is tested **first**, and the order is the whole
+    # classifier. A person working 09:00-17:00 produces consecutive active
+    # hours whose gaps are almost all 1, which is indistinguishable from an
+    # hourly cron by regularity alone. What separates them is that a person
+    # calls several times within the same hour and a timer does not, so the
+    # repeat count has to be consulted before the regularity is.
+    if repeats >= 2 and max(distinct) - min(distinct) <= 12 and spread <= 12:
+        return "interactive"
+
+    # Gaps between consecutive active hours. The wrap-around gap is
+    # deliberately excluded: an hourly job that runs only through the
+    # morning has one 13-hour gap at the end of its day, and counting it
+    # would make every part-time schedule look irregular.
+    gaps = [b - a for a, b in zip(distinct, distinct[1:], strict=False)]
+    mean_gap = sum(gaps) / len(gaps)
+    variance = sum((g - mean_gap) ** 2 for g in gaps) / len(gaps)
+
+    if variance <= 1.0 and spread >= 6:
+        return "scheduled"
+    return "scripted"
 
 
 @dataclass(frozen=True)
@@ -351,6 +680,35 @@ class BaselineStore:
             return None
         return score
 
+    # -- continuous amounts -----------------------------------------------
+
+    async def observe_amount(self, tenant: str, subject: str, kind: str, value: float) -> float | None:
+        """Fold one measured amount into this subject's history; return its z-score.
+
+        Distinct from `observe_volume`, which counts events into an hourly
+        bucket. Spend is a quantity carried by the event itself, so there is
+        nothing to bucket: each request's cost is one observation.
+
+        Scored against the history *before* this observation, so a value
+        cannot flatten the distribution it is being judged against — the
+        first large spend scores against what came before it rather than
+        against a mean it has already moved.
+        """
+        key = self._key(tenant, subject, f"amt:{kind}")
+        try:
+            state = await self._redis.hgetall(key)
+            stats = _decode_stats(state)
+            score = z_score(stats, float(value), min_samples=MIN_VOLUME_SAMPLES)
+            advanced = welford_add(stats, float(value))
+            await self._redis.hset(key, "count", str(advanced["count"]))
+            await self._redis.hset(key, "mean", str(advanced["mean"]))
+            await self._redis.hset(key, "m2", str(advanced["m2"]))
+            await self._redis.expire(key, self._ttl)
+        except Exception as exc:  # noqa: BLE001 — see the class docstring
+            logger.debug("baselines.amount_unavailable", kind=kind, error=str(exc))
+            return None
+        return score
+
     # -- peer group -------------------------------------------------------
 
     async def observe_peer(self, tenant: str, group: str, subject: str, value: float) -> float | None:
@@ -394,12 +752,24 @@ class BaselineStore:
         if not tenant:
             return {}
         principal = resolve_principal(event)
-        if not principal:
+        sub_principals = resolve_sub_principals(event)
+        if not principal and not sub_principals:
+            # Previously this returned on `not principal` alone, and that
+            # skipped the whole module for any event naming a non-human
+            # subject. A gateway span names an agent and a key and often no
+            # person at all — an agent running on a schedule acts for
+            # nobody — so every per-agent baseline was computed for exactly
+            # zero events, while the field names read as working.
+            #
+            # "No subject of any kind" is still nothing to baseline, which
+            # is what this now says.
             return {}
 
         out: dict[str, Any] = {}
 
         for field, candidates in RARITY_FIELDS.items():
+            if not principal:
+                break
             value = _first_present(event, candidates)
             if value is None:
                 continue
@@ -411,18 +781,61 @@ class BaselineStore:
                 continue
             out[field] = round(self.rarity(count, total), 4)
 
-        volume = await self.observe_volume(tenant, principal, "principal", now=now)
-        if volume is not None:
-            out["baseline_principal_volume_z"] = round(volume, 4)
+        if principal:
+            volume = await self.observe_volume(tenant, principal, "principal", now=now)
+            if volume is not None:
+                out["baseline_principal_volume_z"] = round(volume, 4)
 
-        app = _first_present(event, OAUTH_APP_FIELDS)
-        if app is not None:
-            app_volume = await self.observe_volume(tenant, app, "oauth_app", now=now)
-            if app_volume is not None:
-                out["baseline_oauth_app_volume_z"] = round(app_volume, 4)
+        # Every sub-principal this event names, through one loop. The OAuth
+        # application used to be special-cased here; it is now the first
+        # entry in SUB_PRINCIPAL_FIELDS and produces the same published
+        # field name, because the name is derived from the key.
+        for kind, subject in sub_principals:
+            sub_volume = await self.observe_volume(tenant, subject, kind, now=now)
+            if sub_volume is not None:
+                out[f"baseline_{kind}_volume_z"] = round(sub_volume, 4)
 
-        group = _first_present(event, PEER_GROUP_FIELDS)
-        if group is not None:
+            for attribute, candidates in SUB_PRINCIPAL_RARITY.get(kind, {}).items():
+                value = _first_present(event, candidates)
+                if value is None:
+                    continue
+                counted = await self.observe_value(tenant, subject, f"{kind}:{attribute}", value)
+                if counted is None:
+                    continue
+                count, total = counted
+                if total < self._min_observations:
+                    continue
+                out[f"baseline_{kind}_{attribute}_rarity"] = round(self.rarity(count, total), 4)
+
+            if kind in HOUR_BASELINE_KINDS:
+                hour = time.strftime("%H", time.gmtime(now if now is not None else time.time()))
+                counted = await self.observe_value(tenant, subject, f"{kind}:hour", hour)
+                if counted is not None:
+                    count, total = counted
+                    if total >= self._min_observations:
+                        out[f"baseline_{kind}_hour_rarity"] = round(self.rarity(count, total), 4)
+
+            if kind in SPEND_BASELINE_KINDS:
+                cost = _amount(event, SPEND_VALUE_FIELDS)
+                # Absent stays absent. A gateway that did not price a
+                # request must not teach the baseline the request was free:
+                # a spend baseline fed zeros learns this agent costs nothing
+                # and then never flags anything again.
+                if cost is not None:
+                    spend = await self.observe_amount(tenant, subject, f"spend:{kind}", cost)
+                    if spend is not None:
+                        out[f"baseline_{kind}_token_spend_z"] = round(spend, 4)
+
+        # Depth plan wave 2, 1.4. The sub-principal gets a baseline of its
+        # own, on the same store, so a stolen token moves a number even
+        # while the human it acts for looks entirely normal.
+        out.update(await self._sub_principal_fields(tenant, event, now=now))
+
+        group = _first_present(event, PEER_GROUP_FIELDS) if principal else None
+        # `principal` is re-tested rather than relied on through `group`:
+        # the implication holds, but it holds three lines away and a type
+        # checker cannot see it — and neither can the next reader.
+        if group is not None and principal:
             # The member's own hourly volume is the quantity compared across
             # the group. Rarity is not comparable between principals — one
             # person's rare action is another's routine — but "how much does
@@ -431,6 +844,106 @@ class BaselineStore:
             deviation = await self.observe_peer(tenant, group, principal, 1.0)
             if deviation is not None:
                 out["baseline_peer_deviation"] = round(deviation, 4)
+
+        return out
+
+    async def _sub_principal_fields(self, tenant: str, event: dict[str, Any], *, now: float | None = None) -> dict[str, Any]:
+        """The four 1.4 signals for whichever sub-principal acted.
+
+        Every one is fail-soft the same way the rest of the store is: an
+        unreachable Redis contributes no key. A missing key reads as "no
+        observation", never as a zero, because the consumers are detection
+        rules and a zero would be a claim.
+        """
+        subject = resolve_sub_principal(event)
+        if subject is None:
+            return {}
+
+        when = now if now is not None else time.time()
+        out: dict[str, Any] = {"baseline_sub_principal_kind": subject.kind}
+
+        # Rarity of this action for *this token*, which is the question the
+        # human's own rarity cannot answer.
+        action = _first_present(event, RARITY_FIELDS["baseline_action_rarity"])
+        if action is not None:
+            counted = await self.observe_value(tenant, subject.subject, "action", action)
+            if counted is not None:
+                count, total = counted
+                if total >= self._min_observations:
+                    out["baseline_sub_principal_rarity"] = round(self.rarity(count, total), 4)
+
+        volume = await self.observe_volume(tenant, subject.subject, subject.kind, now=when)
+        if volume is not None:
+            out["baseline_sub_principal_volume_z"] = round(volume, 4)
+
+        state = await self._advance_token_state(tenant, subject, event, when)
+        out.update(state)
+        return out
+
+    async def _advance_token_state(
+        self,
+        tenant: str,
+        subject: SubPrincipal,
+        event: dict[str, Any],
+        when: float,
+    ) -> dict[str, Any]:
+        """Cadence, idle reactivation and first-ASN-after-creation, in one hash.
+
+        One Redis hash per sub-principal holding the hours it has been seen
+        at, its last-seen timestamp, its first-seen timestamp and the ASNs
+        it has used. Three signals out of one round trip, because this runs
+        on the fusion hot path.
+        """
+        key = self._key(tenant, subject.subject, "token")
+        hour = int((when % 86400) // 3600)
+        asn = _first_present(event, ("asn", "src_asn", "autonomous_system", "as_number"))
+
+        try:
+            state = await self._redis.hgetall(key)
+            previous_cadence = _field(state, "cadence") or "unknown"
+            last_seen = float(_field(state, "last_seen") or 0.0)
+            first_seen = float(_field(state, "first_seen") or 0.0)
+            seen_hours = [int(h) for h in (_field(state, "hours") or "").split(",") if h.strip().isdigit()]
+            known_asns = {a for a in (_field(state, "asns") or "").split(",") if a}
+
+            seen_hours = (seen_hours + [hour])[-48:]
+            cadence = classify_cadence(seen_hours)
+
+            updates: dict[str, Any] = {
+                "hours": ",".join(str(h) for h in seen_hours),
+                "last_seen": repr(when),
+                "cadence": cadence,
+            }
+            if first_seen <= 0:
+                first_seen = when
+                updates["first_seen"] = repr(when)
+            if asn:
+                updates["asns"] = ",".join(sorted({*known_asns, asn}))
+
+            await self._redis.hset(key, mapping=updates)
+            await self._redis.expire(key, self._ttl)
+        except Exception as exc:  # noqa: BLE001 — see the class docstring
+            logger.debug("baselines.token_state_unavailable", error=str(exc))
+            return {}
+
+        out: dict[str, Any] = {"baseline_token_cadence": cadence}
+
+        # A machine identity that starts behaving like a person. Only
+        # claimed when *both* classes are known: a shift out of `unknown`
+        # is the token being watched long enough, not the token changing.
+        if previous_cadence in {"scheduled", "scripted"} and cadence == "interactive" and previous_cadence != cadence:
+            out["baseline_token_cadence_shift"] = f"{previous_cadence}->{cadence}"
+
+        if last_seen > 0 and (when - last_seen) >= IDLE_REACTIVATION_SECONDS:
+            out["baseline_token_reactivated_after_idle"] = round((when - last_seen) / 86400.0, 2)
+
+        # A new ASN *shortly after the token first appeared*. Not "a new ASN
+        # ever": tokens legitimately move networks, and a signal that fires
+        # on every office-to-home switch is one that gets tuned out. The
+        # window makes this the specific shape of a credential that left
+        # the building before its first legitimate use.
+        if asn and asn not in known_asns and known_asns and (when - first_seen) <= NEW_TOKEN_ASN_WINDOW_SECONDS:
+            out["baseline_token_new_asn_after_creation"] = asn
 
         return out
 
@@ -449,12 +962,16 @@ class BaselineStore:
             if field in RARITY_FIELDS:
                 kind, attribute = "rarity", field
                 value = _first_present(event, RARITY_FIELDS[field]) or ""
+            elif field.endswith("_rarity"):
+                kind, attribute = "rarity", field
+                value = _signal_subject(event, field)
             elif field == "baseline_peer_deviation":
                 kind, attribute = "peer", field
                 value = _first_present(event, PEER_GROUP_FIELDS) or ""
             else:
-                kind, attribute = "volume", field
-                value = principal if field == "baseline_principal_volume_z" else (_first_present(event, OAUTH_APP_FIELDS) or "")
+                kind = "spend" if field.endswith("_token_spend_z") else "volume"
+                attribute = field
+                value = principal if field == "baseline_principal_volume_z" else _signal_subject(event, field)
             out.append(
                 AnomalySignal(
                     kind=kind,
@@ -492,3 +1009,34 @@ def _decode_stats(state: Any) -> dict[str, float]:
         except ValueError:
             continue
     return out
+
+
+def _amount(event: dict[str, Any], candidates: tuple[str, ...]) -> float | None:
+    """The first candidate carrying a genuinely numeric value, or None.
+
+    `None`, the empty string and anything unparseable all mean "not
+    measured", and all stay `None`. Coercing them to `0.0` is the shape
+    that has produced four separate meters in this repository reading zero
+    for four different reasons.
+    """
+    for name in candidates:
+        value = event.get(name)
+        if value is None or value == "":
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+    return None
+
+
+def _signal_subject(event: dict[str, Any], field: str) -> str:
+    """Which subject produced a generated sub-principal field.
+
+    Derived by matching the field's prefix against the table that generated
+    it, rather than by a second mapping that could disagree with the first.
+    """
+    for kind in SUB_PRINCIPAL_FIELDS:
+        if field.startswith(f"baseline_{kind}_"):
+            return _first_present(event, SUB_PRINCIPAL_FIELDS[kind]) or ""
+    return ""

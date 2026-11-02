@@ -318,11 +318,238 @@ def test_detection_shaped_stream_reduction_and_purity() -> None:
     assert sum(len(group) for group in members.values()) == len(stream), "every alert resolves to exactly one group; nothing may vanish"
 
 
+# ── Phase 3.3: repeat folding, measured and labelled separately ───────────
+#
+# Deduplication and correlation are two different reductions and this file
+# publishes them as two different numbers. Correlation groups *related*
+# alerts; deduplication folds *the same alert arriving again*. Adding them
+# into one headline would be the oldest trick in this category — the
+# "75.3 %" this suite exists to retract was exactly a number whose
+# denominator nobody could name.
+#
+# Fusion's fold is permanent, not windowed. The 300 s Redis check in
+# `Deduplicator` is a fast path; `uq_alerts_tenant_dedup` (migration 120) is
+# on `(tenant_id, dedup_hash)` with no time component, so a repeat folds onto
+# the surviving row however much later it arrives. The fold below models the
+# index, which is the authority.
+#
+# Measured on the fixed cohort below, same method both times:
+#
+#   before 3.3  1000 inputs -> 716 alerts, and 284 folded repeats left no
+#               trace anywhere: no count, no window, no link back. The only
+#               residue was a `source_event_ids` append, capped at 200 and
+#               shared with multi-event correlation, so its length is not a
+#               repeat count
+#   after  3.3  1000 inputs -> 716 alerts, 284 repeats retained as linked
+#               occurrences on the alert each folded onto, each resolving to
+#               that alert's id
+#
+# The *reduction is identical before and after, and that is the point*: 3.3
+# folds nothing new. It stops throwing away what the fold removed. The
+# number worth publishing is therefore not a bigger reduction — it is the
+# same reduction with its 284 inputs accounted for instead of absent, which
+# is why this is a separately labelled row and not an addition to either
+# correlation figure.
+REPEAT_STREAM_DEDUP_PCT = 28.4
+
+#: How many distinct findings the repeating vendors emit. A small set that
+#: repeats hard is the real shape: a GuardDuty brute-force finding re-reported
+#: every few minutes for a day is one finding and hundreds of deliveries.
+_REPEATING_FINDINGS = 24
+
+
+def build_repeat_stream(size: int = STREAM_SIZE) -> list[tuple[datetime, RawAlert]]:
+    """Vendor-shaped traffic in which some findings are re-reported.
+
+    Deliberately not uniform. Roughly a quarter of the stream is re-delivery
+    of a small set of noisy findings, and the rest are distinct — which is
+    what a cloud-security connector's output actually looks like, and what
+    makes the dedup figure worth publishing separately from correlation.
+    """
+    start = datetime(2026, 9, 22, 8, 0, tzinfo=UTC)
+    stream: list[tuple[datetime, RawAlert]] = []
+    for n in range(size):
+        offset = timedelta(minutes=_seeded(n, "repeat-time", 1440))
+        if _seeded(n, "is-repeat", 100) < 30:
+            # A re-report of one of the noisy findings. Identical in every
+            # field `fingerprint()` reads, which is what makes it a repeat
+            # rather than a similar alert.
+            which = _seeded(n, "which-finding", _REPEATING_FINDINGS)
+            alert = RawAlert(
+                tenant_id=TENANT,
+                source="AWS GuardDuty",
+                title=f"UnauthorizedAccess:EC2/SSHBruteForce finding {which:02d}",
+                hostname=f"i-{which:04d}",
+                severity=AlertSeverity.HIGH,
+                mitre_techniques=["T1110"],
+            )
+        else:
+            # Detection-shaped, carrying a rule_id and no tactics. Shaped this
+            # way deliberately: a cohort whose non-repeating half cannot group
+            # would let the composition test below pass with correlation doing
+            # nothing at all, which is a test that proves the two reductions
+            # compose by never exercising one of them.
+            alert = RawAlert(
+                tenant_id=TENANT,
+                source="synthetic",
+                title=f"distinct alert {n}",
+                hostname=f"ws-{_seeded(n, 'distinct-host', 60):03d}",
+                severity=AlertSeverity.MEDIUM,
+                rule_id=DETECTION_RULES[_seeded(n, "repeat-rule", len(DETECTION_RULES))],
+                mitre_tactics=[],
+            )
+        stream.append((start + offset, alert))
+    return stream
+
+
+def fold_repeats(
+    stream: list[tuple[datetime, RawAlert]],
+) -> tuple[dict[str, tuple[datetime, RawAlert]], dict[str, list[tuple[datetime, RawAlert]]]]:
+    """Split a stream into surviving alerts and the repeats that folded onto them.
+
+    Mirrors what the sink does: the first sighting of a fingerprint becomes
+    the row, and every later one is a `DUPLICATE` that `_record_deduplicated_event`
+    turns into an occurrence. Keyed on `fingerprint()` — the same function
+    that produces `alerts.dedup_hash` — rather than on a copy of its field
+    list, because a test that re-implemented the fingerprint would measure
+    itself.
+    """
+    surviving: dict[str, tuple[datetime, RawAlert]] = {}
+    folded: dict[str, list[tuple[datetime, RawAlert]]] = {}
+    for when, alert in sorted(stream, key=lambda pair: pair[0]):
+        fingerprint = alert.fingerprint()
+        if fingerprint in surviving:
+            folded.setdefault(fingerprint, []).append((when, alert))
+        else:
+            surviving[fingerprint] = (when, alert)
+    return surviving, folded
+
+
+def test_repeat_folding_reduction_is_its_own_labelled_figure() -> None:
+    """The dedup reduction, published separately from correlation.
+
+    Two numbers that answer two questions. Nothing here is added to the
+    correlation figure, and the test asserts that they are not equal so a
+    future edit cannot quietly make one stand in for the other.
+    """
+    stream = build_repeat_stream()
+    surviving, folded = fold_repeats(stream)
+    folded_count = sum(len(repeats) for repeats in folded.values())
+    reduction = 1 - (len(surviving) / len(stream))
+
+    print(
+        f"\n[eval] repeat folding (real fingerprint()): {len(stream)} inputs -> "
+        f"{len(surviving)} alerts, {folded_count} folded = {reduction:.1%}"
+    )
+
+    assert round(reduction * 100, 1) == REPEAT_STREAM_DEDUP_PCT, (
+        f"repeat-folding reduction is now {reduction:.1%} but REPEAT_STREAM_DEDUP_PCT says "
+        f"{REPEAT_STREAM_DEDUP_PCT} %, which is what the published surfaces print. Update the "
+        "constant and re-run `python3 scripts/check_alert_reduction_claims.py`."
+    )
+    assert REPEAT_STREAM_DEDUP_PCT != PUBLISHED_REDUCTION_PCT, (
+        "the dedup figure and the correlation figure have become the same number; they measure "
+        "different things and must stay separately labelled"
+    )
+
+
+def test_every_folded_repeat_is_accounted_for_and_resolves_to_its_alert() -> None:
+    """The eval-honesty balance, extended to cover folding.
+
+    The rule the replay scorer holds for closures and that
+    `test_detection_shaped_stream_reduction_and_purity` holds for grouping:
+    every input lands in exactly one bucket and the buckets sum to the
+    denominator. Folding adds a bucket, and this is where a repeat could
+    vanish into a reduction numerator — 258 inputs disappearing into a
+    headline with nothing to point at.
+
+    Two properties, not one. Balance says nothing was lost *in aggregate*;
+    resolvability says each folded repeat can still be followed back to the
+    record that absorbed it. A count that balances while pointing nowhere is
+    the shape of a number that cannot be audited.
+    """
+    stream = build_repeat_stream()
+    surviving, folded = fold_repeats(stream)
+
+    retained = len(surviving)
+    folded_count = sum(len(repeats) for repeats in folded.values())
+
+    assert retained + folded_count == len(stream), (
+        f"{retained} retained + {folded_count} folded = {retained + folded_count}, "
+        f"against {len(stream)} inputs; a repeat vanished into the reduction"
+    )
+
+    # Every folded repeat resolves to the alert it folded onto, by the same
+    # key the database uses. `deterministic_id()` is derived from the
+    # fingerprint, so this is the id an occurrence row's `alert_id` carries.
+    for fingerprint, repeats in folded.items():
+        assert fingerprint in surviving, f"{len(repeats)} repeats folded onto no retained alert"
+        _, survivor = surviving[fingerprint]
+        for _, repeat in repeats:
+            assert repeat.deterministic_id() == survivor.deterministic_id(), (
+                "a folded repeat does not resolve to the retained alert's id, so its "
+                "occurrence row would point at a row that is not its survivor"
+            )
+
+    # And the count a reader sees is the total sighting count, survivor
+    # included — the `COALESCE(occurrence_count, 1)` contract from migration
+    # 151, stated here as the arithmetic rather than as a comment. Summing
+    # it back to the denominator is what makes that contract checkable: a
+    # count that excluded the survivor would land one short per repeated
+    # finding, and the shortfall would be invisible in any single row.
+    sightings_from_rows = sum(len(repeats) + 1 for repeats in folded.values())
+    singletons = [f for f in surviving if f not in folded]
+    assert sightings_from_rows + len(singletons) == len(stream), (
+        f"occurrence counts sum to {sightings_from_rows} sightings over repeated findings plus "
+        f"{len(singletons)} seen once, against {len(stream)} inputs — the count does not include "
+        "the surviving alert, so every published total is one short per finding"
+    )
+    assert len(singletons) + len(folded) == retained, "every retained alert either repeated or did not; there is no third state"
+
+
+def test_folding_then_correlating_still_accounts_for_every_input() -> None:
+    """The two reductions compose without losing anything between them.
+
+    Fusion folds first and correlates second, so the correlation figure is
+    computed over *surviving* alerts. The risk this pins is double-counting:
+    a repeat that folded must not also appear as a grouped member, or the
+    combined accounting would exceed the denominator and the two published
+    percentages could be added together by a reader without noticing.
+    """
+    stream = build_repeat_stream()
+    surviving, folded = fold_repeats(stream)
+    folded_count = sum(len(repeats) for repeats in folded.values())
+
+    members = _group_members(list(surviving.values()))
+    grouped_members = sum(len(group) for group in members.values())
+
+    assert grouped_members == len(surviving), "correlation saw a different number of alerts than folding retained"
+
+    # The four buckets of the full-cohort rule, summing to the denominator.
+    retained_alone = sum(1 for group in members.values() if len(group) == 1)
+    attached_to_group = sum(len(group) for group in members.values() if len(group) > 1)
+    pending_or_failed = 0  # deterministic cohort: nothing is in flight
+
+    total = retained_alone + attached_to_group + folded_count + pending_or_failed
+    assert total == len(stream), (
+        f"retained alone {retained_alone} + attached to a group {attached_to_group} + "
+        f"folded {folded_count} + pending {pending_or_failed} = {total}, "
+        f"against {len(stream)} inputs"
+    )
+
+    print(
+        f"\n[eval] full-cohort accounting: {len(stream)} inputs = "
+        f"{retained_alone} retained alone + {attached_to_group} attached to a group + "
+        f"{folded_count} folded occurrences + {pending_or_failed} pending/failed"
+    )
+
+
 def test_the_stream_is_reproducible() -> None:
     """A measurement that moves between runs is not a measurement."""
     first = group_by_real_key(build_stream())
     second = group_by_real_key(build_stream())
     assert first == second
+    assert fold_repeats(build_repeat_stream())[0].keys() == fold_repeats(build_repeat_stream())[0].keys()
 
 
 def test_a_wider_window_reduces_more() -> None:

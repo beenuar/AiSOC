@@ -532,6 +532,7 @@ async def persist_auto_triage(
     llm_exchanges: list[dict[str, Any]] | None = None,
     business_context: dict[str, Any] | None = None,
     business_impact: dict[str, Any] | None = None,
+    vendor_reads: list[dict[str, Any]] | None = None,
 ) -> bool:
     """Durably record an auto-triage outcome (issue #571) in ONE transaction:
 
@@ -657,6 +658,46 @@ async def persist_auto_triage(
                         exchange.get("input_hash"),
                         exchange.get("output_hash"),
                         int(exchange.get("duration_ms") or 0),
+                    )
+
+                # Phase 4.5. The vendor reads auto-triage made before it
+                # reasoned, each a real `tool_call` row.
+                #
+                # At seq 2 and up rather than before the model call, even
+                # though that is when they happened: seq 0 and 1 are the
+                # verdict's and the model call's keys and the
+                # `(run_id, seq)` uniqueness is what makes a replay
+                # idempotent, so renumbering them would cost that. The
+                # `ts` on each row carries the real ordering. The same
+                # reasoning the seq-0 comment above already records.
+                #
+                # In this transaction rather than through `record_event`
+                # because the whole point of `persist_auto_triage` is that
+                # the outcome lands atomically: a run whose tool calls
+                # committed and whose verdict did not would be a ledger
+                # claiming evidence for a decision it does not hold.
+                for offset, read in enumerate(vendor_reads or []):
+                    await conn.execute(
+                        """
+                        INSERT INTO investigation_events
+                          (id, run_id, tenant_id, seq, ts, kind, agent, summary,
+                           payload, duration_ms, created_at)
+                        VALUES
+                          ($1, $2, $3, $4, now(), 'tool_call', $5, $6, $7::jsonb, $8, now())
+                        ON CONFLICT (run_id, seq) DO NOTHING
+                        """,
+                        uuid.uuid4(),
+                        run_id,
+                        tenant_id,
+                        2 + offset,
+                        "auto_triage:vendor_evidence",
+                        (
+                            f"{read.get('capability')} {read.get('target')} -> "
+                            f"{'executed' if read.get('executed') else 'could not check'}"
+                            f" ({read.get('status')})"
+                        )[:8000],
+                        json.dumps(read, default=str),
+                        int(read.get("elapsed_ms") or 0),
                     )
 
                 verdict_event_id = uuid.uuid4()

@@ -74,6 +74,12 @@ SCAN_FILES: tuple[Path, ...] = (
 #: Where the real figure is pinned, beside the measurement that produces it.
 REAL_MEASUREMENT = REPO_ROOT / "services" / "fusion" / "tests" / "test_alert_reduction_real.py"
 _PINNED = re.compile(r"^PUBLISHED_REDUCTION_PCT\s*=\s*(?P<pct>\d+(?:\.\d+)?)\s*$", re.MULTILINE)
+#: Phase 3.3's repeat-folding figure. A separate row, so a separate pin: the
+#: two reductions measure different things and a reader who added them would
+#: be double-counting. Binding only one of them to its measurement would
+#: leave the other free to drift, which is how a published number goes stale
+#: silently.
+_PINNED_DEDUP = re.compile(r"^REPEAT_STREAM_DEDUP_PCT\s*=\s*(?P<pct>\d+(?:\.\d+)?)\s*$", re.MULTILINE)
 
 #: The legacy figure, in every spelling a surface has used for it.
 LEGACY_FIGURE = re.compile(r"\b75\.3\s*%|\b0\.753\b")
@@ -93,6 +99,27 @@ def published_reduction_pct() -> float:
     if match is None:
         raise SystemExit(f"{Path(sys.argv[0]).name}: no PUBLISHED_REDUCTION_PCT in {REAL_MEASUREMENT.relative_to(REPO_ROOT)}")
     return float(match.group("pct"))
+
+
+def published_dedup_pct() -> float:
+    """Phase 3.3's repeat-folding figure, read from the test that measures it.
+
+    Same rule as ``published_reduction_pct``: not a literal here, because a
+    gate carrying its own copy of a number cannot detect that number moving.
+    """
+    if not REAL_MEASUREMENT.is_file():
+        raise SystemExit(f"{Path(sys.argv[0]).name}: {REAL_MEASUREMENT} missing — nothing pins the dedup figure")
+    match = _PINNED_DEDUP.search(REAL_MEASUREMENT.read_text(encoding="utf-8"))
+    if match is None:
+        raise SystemExit(f"{Path(sys.argv[0]).name}: no REPEAT_STREAM_DEDUP_PCT in {REAL_MEASUREMENT.relative_to(REPO_ROOT)}")
+    return float(match.group("pct"))
+
+
+#: The one surface that publishes the repeat-folding row. Deliberately
+#: narrower than ``FIGURE_BEARING_SURFACES``: deduplication is not a headline
+#: comparison metric and putting it on the comparison table would invite
+#: exactly the addition this gate exists to prevent.
+DEDUP_FIGURE_SURFACE = REPO_ROOT / "apps" / "docs" / "docs" / "benchmarks" / "alert-reduction.md"
 
 
 def real_figure_pattern(pct: float) -> re.Pattern[str]:
@@ -257,7 +284,40 @@ def violations(files: dict[Path, str], pct: float, *, whole_tree: bool = False) 
     if whole_tree:
         for missing in sorted(required - seen_bearing):
             found.append(f"{missing}: named in FIGURE_BEARING_SURFACES but not present — remove it or restore the page")
+        found.extend(_dedup_violations(files))
 
+    return found
+
+
+def _dedup_violations(files: dict[Path, str]) -> list[str]:
+    """The repeat-folding row must quote what the suite measured, and stand alone.
+
+    Whole-tree only, for the same reason the missing-surface check is: the
+    self-test drives injected snippets, and a check that asks "is this page
+    present" would fire on every one of them.
+    """
+    dedup_pct = published_dedup_pct()
+    rel = DEDUP_FIGURE_SURFACE.relative_to(REPO_ROOT)
+    text = files.get(DEDUP_FIGURE_SURFACE)
+    if text is None:
+        return [f"{rel}: publishes the repeat-folding row and is not present — remove the pin or restore the page"]
+
+    found: list[str] = []
+    if not real_figure_pattern(dedup_pct).search(text):
+        found.append(
+            f"{rel}: does not quote {dedup_pct:g}%, which is what REPEAT_STREAM_DEDUP_PCT in "
+            "services/fusion/tests/test_alert_reduction_real.py measures."
+        )
+
+    # The two reductions must stay separately labelled. A page that quoted
+    # their sum would be publishing a number no suite measures, over a
+    # denominator that counts some inputs twice.
+    combined = published_reduction_pct() + dedup_pct
+    if real_figure_pattern(combined).search(text):
+        found.append(
+            f"{rel}: quotes {combined:g}%, the sum of the correlation and repeat-folding figures. "
+            "They reduce different things over overlapping inputs and must never be added."
+        )
     return found
 
 

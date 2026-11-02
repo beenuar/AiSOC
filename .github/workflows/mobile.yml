@@ -87,6 +87,31 @@ jobs:
             echo "No APNs key and no FCM service account exist, so nothing has been delivered to a device."
             fail=1
           fi
+          # Wave 2, Phase 9.2. The row this replaces read "Transcription is
+          # on-device by construction", which is true of the *module* and
+          # reads as a working feature. `src/lib/voice.ts` has no recogniser
+          # behind it and no screen importing it — the only file in the
+          # repository that mentions it is the README itself. Until 9.1
+          # wires one, the row must say so.
+          #
+          # The second clause is what keeps this honest once 9.1 lands: the
+          # module may exist and still have reached no handset, which is the
+          # 9.2 block and needs developer accounts nobody has provisioned.
+          if ! grep -qiE '^\| Voice input \| \*\*No\.' README.md; then
+            echo "::error::apps/mobile/README.md no longer states that voice input does not exist."
+            echo "src/lib/voice.ts is an interface with no recogniser and no screen using it."
+            echo "If wave-2 Phase 9.1 has landed, this guard moves to the handset row below rather than being deleted."
+            fail=1
+          fi
+          if ! grep -qiE '^\| Voice path run on a real handset \| \*\*No' README.md; then
+            echo "::error::apps/mobile/README.md no longer states that no handset has run the voice path."
+            echo "That needs 9.1's recogniser to exist AND an Apple developer account or a Google Play account."
+            fail=1
+          fi
+          # A guard that greps for four lines in a file it never opened
+          # reports success. Cheap to assert, and the exact shape of vacuous
+          # pass this workflow's own header is about.
+          test -s README.md || { echo "::error::README.md is empty or missing; nothing was checked"; fail=1; }
           [ "$fail" -eq 0 ] && echo "OK: the README claims exactly what these jobs prove."
           exit "$fail"
 

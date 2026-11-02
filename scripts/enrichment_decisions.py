@@ -202,7 +202,10 @@ DECISIONS: dict[str, Refusal] = {
         "personal_access_token.* lifecycle covers fine-grained tokens — and no "
         "audit entry carries a created token's scopes: the common `token_scopes` "
         "field describes the token that authenticated the API call, not the token "
-        "being created.",
+        "being created. Briefly un-retired on the strength of the gate reporting "
+        "`scopes` resolvable; that field reaches the namespace from llm_usage.py "
+        "and from no GitHub path at all, which is the blind spot the gate's "
+        "product scoping now closes.",
     ),
     "identity/app-token-broad-default": Refusal(
         NEEDS_CONNECTOR_FIELD,
