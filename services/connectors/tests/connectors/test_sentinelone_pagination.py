@@ -9,9 +9,13 @@ from app.connectors.sentinelone import SentinelOneConnector
 
 
 def _threat(i: int) -> dict:
+    # ``confidenceLevel`` is spelled the way the vendor spells it. The threats
+    # endpoint publishes ``malicious`` / ``suspicious`` / ``n/a``, not a
+    # Low-High ladder, so a fixture saying "High" describes a response
+    # SentinelOne never sends.
     return {
         "id": f"t-{i}",
-        "threatInfo": {"threatName": f"threat-{i}", "confidenceLevel": "High"},
+        "threatInfo": {"threatName": f"threat-{i}", "confidenceLevel": "malicious"},
         "agentRealtimeInfo": {"agentComputerName": f"host-{i}"},
     }
 
@@ -63,3 +67,35 @@ async def test_fetch_alerts_stops_without_cursor(monkeypatch: pytest.MonkeyPatch
 
     assert calls == 1
     assert [e["external_id"] for e in out] == ["t-1"]
+
+
+@pytest.mark.asyncio
+async def test_every_page_carries_the_same_filters(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the cursor may change between pages.
+
+    The parameters are what scope the sweep: ``createdAt__gte`` is the poll
+    window and ``siteIds`` is the tenant's slice of the console. An edit that
+    rebuilt the parameter dict per page instead of mutating one would drop
+    both after page one, and the sweep would start returning threats from
+    every other site in the account — a scope leak that reads as a working
+    paginator, because the threat count goes up rather than down.
+    """
+    next_cursor = {None: "cursor-2", "cursor-2": None}
+    seen: list[dict[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(dict(request.url.params))
+        cursor = request.url.params.get("cursor")
+        return httpx.Response(200, json={"data": [_threat(1)], "pagination": {"nextCursor": next_cursor[cursor]}})
+
+    _patch_client(monkeypatch, handler)
+    conn = SentinelOneConnector(api_token="t", base_url="https://s1.example", site_id="site-7")  # noqa: S106 — test
+    await conn.fetch_alerts(since_seconds=900)
+
+    assert len(seen) == 2, "expected a second request, otherwise there is nothing to compare across pages"
+    first, second = seen
+    assert "cursor" not in first, "the first request must not send a cursor"
+    assert second["cursor"] == "cursor-2"
+    assert first["siteIds"] == second["siteIds"] == "site-7"
+    assert first["createdAt__gte"] == second["createdAt__gte"]
+    assert {k: v for k, v in second.items() if k != "cursor"} == first
