@@ -14,6 +14,8 @@ from typing import Any
 import httpx
 import structlog
 
+from app.keywords import matches, normalise
+
 logger = structlog.get_logger()
 
 _ENRICHMENT_URL = os.getenv("ENRICHMENT_SERVICE_URL", "http://enrichment:8080")
@@ -106,11 +108,16 @@ _MITRE_KEYWORDS: dict[str, str] = {
 
 
 def map_to_mitre(text: str) -> list[str]:
-    """Heuristic keyword-to-technique mapper (extend with ATT&CK dataset)."""
+    """Heuristic keyword-to-technique mapper (extend with ATT&CK dataset).
+
+    Matching is at token boundaries: as a substring, ``c2`` attributed T1071
+    to any text naming an EC2 host, which puts a technique on the alert that
+    nothing in it indicates (#1607).
+    """
     hits: list[str] = []
-    lower = text.lower()
+    lower = normalise(text)
     for keyword, technique_id in _MITRE_KEYWORDS.items():
-        if keyword in lower and technique_id not in hits:
+        if matches(lower, keyword) and technique_id not in hits:
             hits.append(technique_id)
     return hits
 
