@@ -1059,6 +1059,38 @@ def _patch_repo_calls(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_an_extrahop_instance_gets_a_job_that_will_fire():
+    """Depth plan wave 2, 8.2: the seventh registration surface.
+
+    A connector the scheduler registers PAUSED polls nothing, reports
+    healthy and produces an empty queue. That is the #527 regression this
+    repository already paid for once, and a new connector is exactly where
+    it would come back unnoticed, because every other surface would look
+    correct.
+
+    A real AsyncIOScheduler and not the fake, for the same reason the test
+    below gives: the failure is a pure APScheduler semantic the fake cannot
+    reproduce.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+    inst = _make_instance(connector_type="extrahop", connector_config={"poll_interval_seconds": 120})
+    sched = ConnectorScheduler(engine=_FakeEngine([inst]), ingest_client=_FakeIngestClient(), vault=_FakeVault())
+    sched._poll_one = AsyncMock()
+
+    aps = AsyncIOScheduler(timezone="UTC")
+    aps.start(paused=False)
+    sched._scheduler = aps
+    try:
+        await sched.reload_jobs()
+        job = aps.get_job(f"connector:{inst.id}")
+        assert job is not None, "no polling job was scheduled for an enabled ExtraHop instance"
+        assert job.next_run_time is not None, "the ExtraHop polling job was registered PAUSED (#527 regression)"
+    finally:
+        aps.shutdown(wait=False)
+
+
+@pytest.mark.asyncio
 async def test_reload_registers_active_not_paused_job():
     """A newly enabled connector gets a non-null next_run_time (not paused)."""
     from apscheduler.schedulers.asyncio import AsyncIOScheduler
