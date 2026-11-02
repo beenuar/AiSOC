@@ -133,13 +133,14 @@
     }
   },
   "packages/aisoc-sandbox": {
-    "src/aisoc_sandbox/cli.py": {
-      "attr-defined": 7
-    },
     "tests/test_determinism.py": {
       "import-not-found": 1,
       "no-any-return": 1,
       "untyped-decorator": 2
+    },
+    "tests/test_honesty.py": {
+      "import-not-found": 1,
+      "untyped-decorator": 6
     },
     "tests/test_smoke.py": {
       "attr-defined": 2,
