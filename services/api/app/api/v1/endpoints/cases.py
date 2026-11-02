@@ -50,6 +50,11 @@ from sqlalchemy import select, text
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
 from app.core.logging import safe_log_value
+from app.models.investigation import (
+    InvestigationArtifact,
+    InvestigationEvent,
+    InvestigationRun,
+)
 from app.services import case_orchestration, case_status, evidence_custody
 from app.services.audit import emit_audit
 from app.services.branding.resolver import resolve_branding
@@ -1756,8 +1761,6 @@ async def list_case_investigations(
         pass
     # Agents service has no list route (or is unreachable) — fall back to the
     # local ledger, which every run persists to anyway.
-    from app.models.investigation import InvestigationRun
-
     rows = (
         (
             await db.execute(
@@ -1789,9 +1792,7 @@ async def list_case_investigations(
     }
 
 
-async def _ledger_investigation_run(
-    db, tenant_id: uuid.UUID, cid: Any, run_id: str
-) -> dict[str, Any] | None:
+async def _ledger_investigation_run(db, tenant_id: uuid.UUID, cid: Any, run_id: str) -> dict[str, Any] | None:
     """The investigation-run envelope from the Postgres ledger.
 
     Agents' `_runs` is process-local and empties on restart; every run is
@@ -1800,8 +1801,6 @@ async def _ledger_investigation_run(
     Tenant-scoped and case-bound: a run id from another tenant, or one that
     belongs to a different case, returns None so the caller keeps its 404.
     """
-    from app.models.investigation import InvestigationRun
-
     if not _looks_like_uuid(run_id):
         # The ledger keys runs by UUID id; a non-UUID run_id cannot match one.
         return None
@@ -1883,16 +1882,18 @@ async def _ledger_phase_blocks(
     llm_response body, with a fallback to the phase-event summary so the tab is
     never blank when *some* record exists.
     """
-    from app.models.investigation import InvestigationEvent
-
     rows = (
-        await db.execute(
-            select(InvestigationEvent)
-            .where(InvestigationEvent.tenant_id == tenant_id)
-            .where(InvestigationEvent.run_id == run_uuid)
-            .order_by(InvestigationEvent.seq.asc())
+        (
+            await db.execute(
+                select(InvestigationEvent)
+                .where(InvestigationEvent.tenant_id == tenant_id)
+                .where(InvestigationEvent.run_id == run_uuid)
+                .order_by(InvestigationEvent.seq.asc())
+            )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     audit_log = _audit_from_events(rows)
 
@@ -1951,18 +1952,20 @@ async def _router_state_blocks(
     audit trail is synthesised from the same fields so the timeline tab is not
     blank. Returns None when no artifact exists (caller keeps its empty blocks).
     """
-    from app.models.investigation import InvestigationArtifact
-
     row = (
-        await db.execute(
-            select(InvestigationArtifact)
-            .where(InvestigationArtifact.tenant_id == tenant_id)
-            .where(InvestigationArtifact.run_id == run_uuid)
-            .where(InvestigationArtifact.kind == "router_state")
-            .order_by(InvestigationArtifact.created_at.desc())
-            .limit(1)
+        (
+            await db.execute(
+                select(InvestigationArtifact)
+                .where(InvestigationArtifact.tenant_id == tenant_id)
+                .where(InvestigationArtifact.run_id == run_uuid)
+                .where(InvestigationArtifact.kind == "router_state")
+                .order_by(InvestigationArtifact.created_at.desc())
+                .limit(1)
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     if row is None or not row.content:
         return None
     try:
@@ -1990,31 +1993,54 @@ async def _router_state_blocks(
     }
     audit_log: list[dict[str, Any]] = []
     if st.get("verdict"):
-        audit_log.append({"kind": "verdict", "agent": "router", "summary": f"verdict={st.get('verdict')} confidence={st.get('confidence')}", "timestamp": ts})
+        audit_log.append(
+            {
+                "kind": "verdict",
+                "agent": "router",
+                "summary": f"verdict={st.get('verdict')} confidence={st.get('confidence')}",
+                "timestamp": ts,
+            }
+        )
     for f in st.get("findings", []):
         audit_log.append({"kind": "finding", "agent": "router", "summary": str(f), "timestamp": ts})
     for a in st.get("proposed_actions", []):
         if isinstance(a, dict):
-            audit_log.append({"kind": "action", "agent": "router", "summary": a.get("description") or a.get("action_type", ""), "timestamp": ts})
+            audit_log.append(
+                {"kind": "action", "agent": "router", "summary": a.get("description") or a.get("action_type", ""), "timestamp": ts}
+            )
     return recon, forensic, responder, audit_log
 
 
-async def _ledger_report_md(db, tenant_id: uuid.UUID, run_id: str) -> str | None:
-    """The persisted Markdown report body for a run, from investigation_artifacts."""
-    from app.models.investigation import InvestigationArtifact
+async def _ledger_report_md(db, tenant_id: uuid.UUID, cid: Any, run_id: str) -> str | None:
+    """The persisted Markdown report body for a run, from investigation_artifacts.
 
+    Bound to the case in the URL as well as the tenant. The warm path answers
+    404 when the run names a different case, so without the join below the
+    cold path would be the weaker of the two: a caller who knows any run id in
+    their tenant could read its report through a case they are looking at.
+    ``investigation_artifacts`` carries no case id of its own, so the binding
+    goes through ``investigation_runs`` — the only table that has one, and
+    whose ``case_id`` is TEXT.
+    """
     if not _looks_like_uuid(run_id):
         return None
     row = (
-        await db.execute(
-            select(InvestigationArtifact)
-            .where(InvestigationArtifact.tenant_id == tenant_id)
-            .where(InvestigationArtifact.run_id == uuid.UUID(run_id))
-            .where(InvestigationArtifact.kind == "report_md")
-            .order_by(InvestigationArtifact.created_at.desc())
-            .limit(1)
+        (
+            await db.execute(
+                select(InvestigationArtifact)
+                .join(InvestigationRun, InvestigationRun.id == InvestigationArtifact.run_id)
+                .where(InvestigationArtifact.tenant_id == tenant_id)
+                .where(InvestigationRun.tenant_id == tenant_id)
+                .where(InvestigationRun.case_id.in_([str(cid), run_id]))
+                .where(InvestigationArtifact.run_id == uuid.UUID(run_id))
+                .where(InvestigationArtifact.kind == "report_md")
+                .order_by(InvestigationArtifact.created_at.desc())
+                .limit(1)
+            )
         )
-    ).scalars().first()
+        .scalars()
+        .first()
+    )
     return row.content if row and row.content else None
 
 
@@ -2108,14 +2134,16 @@ async def case_investigation_report_md(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Investigation run not found for this case",
             )
-        resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.md", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
+        resp = await _agents_proxy(
+            "GET", f"/api/v1/investigations/{safe_run_id}/report.md", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)}
+        )
         if resp.status_code >= 400:
             raise HTTPException(status_code=resp.status_code, detail=resp.text)
         return PlainTextResponse(content=resp.text, media_type="text/markdown; charset=utf-8")
 
     # Agents cold (`_runs` empty after restart): serve the report body persisted
     # to investigation_artifacts at run close, scoped to this tenant + case.
-    body = await _ledger_report_md(db, user.tenant_id, run_id)
+    body = await _ledger_report_md(db, user.tenant_id, cid, run_id)
     if body is None:
         raise HTTPException(status_code=meta.status_code, detail=meta.text)
     return PlainTextResponse(content=body, media_type="text/markdown; charset=utf-8")

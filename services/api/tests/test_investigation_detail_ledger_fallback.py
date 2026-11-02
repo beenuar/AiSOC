@@ -28,7 +28,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
 from app.api.v1.endpoints import cases
 
 
