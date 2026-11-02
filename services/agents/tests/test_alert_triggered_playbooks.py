@@ -25,6 +25,12 @@ from typing import Any
 import pytest
 from app.playbook import alert_trigger, engine, store
 
+#: The shipped pack playbooks carry no owner and are visible to every
+#: tenant, so any tenant ref answers the same set. The store now requires
+#: one on every read (GHSA-27wx-pcv5-pr7q) and this names that it is
+#: deliberately arbitrary rather than meaningful.
+_ANY_TENANT = "aaaaaaaa-0000-0000-0000-00000000000a"
+
 
 class _State:
     def __init__(self, **kw) -> None:  # noqa: ANN003
@@ -141,7 +147,7 @@ class TestRunning:
             name = "Contain"
 
         class _Store:
-            def find_matching(self, event, context):  # noqa: ANN001, ANN202, ARG002
+            def find_matching(self, event, context, *, tenant_id):  # noqa: ANN001, ANN202, ARG002
                 return [_Playbook()]
 
         monkeypatch.setattr(engine, "PlaybookEngine", _Engine)
@@ -174,7 +180,7 @@ class TestRunning:
             name = "Contain"
 
         class _Store:
-            def find_matching(self, event, context):  # noqa: ANN001, ANN202, ARG002
+            def find_matching(self, event, context, *, tenant_id):  # noqa: ANN001, ANN202, ARG002
                 return [_Playbook()]
 
         monkeypatch.setattr(engine, "PlaybookEngine", _Engine)
@@ -255,7 +261,7 @@ class TestTheTriggerEventMatchesTheCorpus:
 
         store = PlaybookStore.default()
         store.seed_defaults()
-        declared = {str(pb.trigger.get("on")) for pb in store.list()}
+        declared = {str(pb.trigger.get("on")) for pb in store.list(tenant_id=_ANY_TENANT)}
 
         assert TRIGGER_EVENT in declared, (
             f"run_for_alert asks for {TRIGGER_EVENT!r} and no shipped playbook declares it "
@@ -277,7 +283,9 @@ class TestTheTriggerEventMatchesTheCorpus:
         store = PlaybookStore.default()
         store.seed_defaults()
 
-        wanted = next(pb for pb in store.list() if pb.enabled and pb.trigger.get("tags") and pb.trigger.get("severity"))
+        wanted = next(
+            pb for pb in store.list(tenant_id=_ANY_TENANT) if pb.enabled and pb.trigger.get("tags") and pb.trigger.get("severity")
+        )
         context = alert_context(
             _State(
                 raw_alert={
@@ -287,7 +295,7 @@ class TestTheTriggerEventMatchesTheCorpus:
             )
         )
 
-        matches: list[Any] = list(store.find_matching(TRIGGER_EVENT, context))
+        matches: list[Any] = list(store.find_matching(TRIGGER_EVENT, context, tenant_id=_ANY_TENANT))
         assert matches, (
             f"the real store matched no playbook on an alert built from {wanted.id}'s own "
             "trigger, so the alert-trigger path is wired to nothing"

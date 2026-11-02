@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import html
 import logging
-from typing import Any
+from dataclasses import dataclass
+from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from fastapi.responses import HTMLResponse
@@ -31,7 +32,11 @@ from app.playbook import (
 )
 from app.playbook import engine as engine_module
 from app.playbook import pause as playbook_pause
-from app.security.tenant_scope import require_console_or_service_auth
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 
 logger = logging.getLogger("aisoc.api.playbooks")
 #: Default-deny. The console reaches this router directly through a Next
@@ -57,8 +62,69 @@ waits_router = APIRouter(prefix="/api/v1/playbook-waits", tags=["playbooks"])
 #: is not enough.
 verifications_router = APIRouter(prefix="/api/v1/playbook-verifications", tags=["playbooks"])
 
+#: The resolved caller, bound as a handler parameter.
+#:
+#: The router-level ``dependencies=[...]`` above authenticates every request
+#: and hands the result nowhere. That is how GHSA-27wx-pcv5-pr7q happened: a
+#: ``TenantPrincipal`` was resolved on every call and discarded, so the
+#: service knew who was asking and never asked. Declaring it here is what
+#: makes the tenant reachable from the handler — the dependency alone never
+#: was.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
+
+
+@dataclass(frozen=True)
+class _OwnedRun:
+    """A run and the tenant it belongs to.
+
+    ``_runs`` was a bare ``dict[str, PlaybookRun]`` — deployment-global, with
+    no tenant anywhere — so ``GET /runs/{id}`` returned any run to anyone
+    holding its id and ``GET /runs`` returned every tenant's runs to everyone
+    without needing one. A run record carries the *resolved* value of each
+    ``${NAME}`` integration reference, which is how the victim tenant's
+    vault-decrypted webhook URLs and bearer headers reached the attacker.
+    """
+
+    tenant_id: str
+    run: PlaybookRun
+
+
 # In-memory run store for Pillar-2 (swap for Redis/DB in production)
-_runs: dict[str, PlaybookRun] = {}
+_runs: dict[str, _OwnedRun] = {}
+
+
+def _remember(tenant_id: str, run: PlaybookRun) -> None:
+    _runs[run.run_id] = _OwnedRun(tenant_id=tenant_id, run=run)
+
+
+def _run_or_404(run_id: str, tenant_id: str) -> PlaybookRun:
+    """A run this tenant owns, or the same refusal an absent one gets.
+
+    404 rather than 403 deliberately: a 403 on a real id and a 404 on an
+    invented one would let a caller enumerate which run ids exist across every
+    tenant. The two answers are required to be byte-identical.
+    """
+    owned = _runs.get(run_id)
+    if owned is None or owned.tenant_id != tenant_id:
+        raise HTTPException(status_code=404, detail="Playbook run not found")
+    return owned.run
+
+
+def _remember_resumed(run: PlaybookRun) -> None:
+    """Record a run that resumed from a durable pause.
+
+    The two callback routes have no session — a vendor webhook and the subject
+    of an alert hold no credential by construction — so the tenant comes from
+    the run's own context, which the engine wrote from the *authenticated*
+    tenant when the run started. A run that somehow carries none is left
+    unrecorded rather than stored under an empty key that every tenant would
+    match: an absent scope must narrow to nothing, never widen to everything.
+    """
+    tenant_id = str(run.context.get("tenant_id") or run.trigger_context.get("tenant_id") or "")
+    if not tenant_id:
+        logger.warning("playbook run %s resumed with no tenant; not recording it", run.run_id)
+        return
+    _remember(tenant_id, run)
 
 
 # ---------------------------------------------------------------------------
@@ -112,15 +178,17 @@ async def draft_playbook_from_nl(req: DraftFromNLRequest) -> dict:
 
 
 @router.get("", summary="List all playbooks")
-async def list_playbooks(enabled_only: bool = False) -> list[dict]:
+async def list_playbooks(principal: ScopedPrincipal, enabled_only: bool = False) -> list[dict]:
     store = PlaybookStore.default()
-    return [pb.model_dump() for pb in store.list(enabled_only=enabled_only)]
+    tenant_id = str(scoped_tenant_or_403(principal))
+    return [pb.model_dump() for pb in store.list(tenant_id=tenant_id, enabled_only=enabled_only)]
 
 
 @router.post("", summary="Create a playbook", status_code=201)
-async def create_playbook(playbook: Playbook) -> dict:
+async def create_playbook(playbook: Playbook, principal: ScopedPrincipal) -> dict:
     store = PlaybookStore.default()
-    created = store.create(playbook)
+    tenant_id = str(scoped_tenant_or_403(principal))
+    created = store.create(playbook, tenant_id=tenant_id)
     return created.model_dump()
 
 
@@ -131,9 +199,10 @@ async def create_playbook(playbook: Playbook) -> dict:
 
 
 @router.get("/runs", summary="List recent playbook runs")
-async def list_runs(limit: int = 50) -> list[dict]:
+async def list_runs(principal: ScopedPrincipal, limit: int = 50) -> list[dict]:
+    tenant_id = str(scoped_tenant_or_403(principal))
     recent = sorted(
-        _runs.values(),
+        (owned.run for owned in _runs.values() if owned.tenant_id == tenant_id),
         key=lambda r: r.started_at or "",
         reverse=True,
     )[:limit]
@@ -141,11 +210,9 @@ async def list_runs(limit: int = 50) -> list[dict]:
 
 
 @router.get("/runs/{run_id}", summary="Get a playbook run result")
-async def get_run(run_id: str) -> dict:
-    pr = _runs.get(run_id)
-    if not pr:
-        raise HTTPException(status_code=404, detail="Playbook run not found")
-    return pr.to_dict()
+async def get_run(run_id: str, principal: ScopedPrincipal) -> dict:
+    tenant_id = str(scoped_tenant_or_403(principal))
+    return _run_or_404(run_id, tenant_id).to_dict()
 
 
 # ---------------------------------------------------------------------------
@@ -154,27 +221,32 @@ async def get_run(run_id: str) -> dict:
 
 
 @router.get("/{playbook_id}", summary="Get a playbook")
-async def get_playbook(playbook_id: str) -> dict:
+async def get_playbook(playbook_id: str, principal: ScopedPrincipal) -> dict:
     store = PlaybookStore.default()
-    pb = store.get(playbook_id)
+    tenant_id = str(scoped_tenant_or_403(principal))
+    pb = store.get(playbook_id, tenant_id=tenant_id)
     if not pb:
         raise HTTPException(status_code=404, detail="Playbook not found")
     return pb.model_dump()
 
 
 @router.put("/{playbook_id}", summary="Update a playbook")
-async def update_playbook(playbook_id: str, data: dict[str, Any]) -> dict:
+async def update_playbook(playbook_id: str, data: dict[str, Any], principal: ScopedPrincipal) -> dict:
     store = PlaybookStore.default()
-    updated = store.update(playbook_id, data)
+    tenant_id = str(scoped_tenant_or_403(principal))
+    updated = store.update(playbook_id, data, tenant_id=tenant_id)
     if not updated:
+        # Also the answer for a shipped pack playbook, which no tenant owns
+        # and none may edit.
         raise HTTPException(status_code=404, detail="Playbook not found")
     return updated.model_dump()
 
 
 @router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204, response_model=None)
-async def delete_playbook(playbook_id: str) -> None:
+async def delete_playbook(playbook_id: str, principal: ScopedPrincipal) -> None:
     store = PlaybookStore.default()
-    if not store.delete(playbook_id):
+    tenant_id = str(scoped_tenant_or_403(principal))
+    if not store.delete(playbook_id, tenant_id=tenant_id):
         raise HTTPException(status_code=404, detail="Playbook not found")
 
 
@@ -183,11 +255,30 @@ async def delete_playbook(playbook_id: str) -> None:
 # ---------------------------------------------------------------------------
 
 
-async def _execute(playbook: Playbook, context: dict[str, Any], dry_run: bool, run_holder: list) -> None:
+def _execution_context(body_context: dict[str, Any], tenant_id: str) -> dict[str, Any]:
+    """The context a run executes under, with the tenant taken from the credential.
+
+    ``tenant_id`` is **removed** from whatever the caller sent and then set
+    from the authenticated principal. Deleting rather than validating is the
+    point: the engine reads ``context["tenant_id"]`` when it resolves
+    ``${NAME}`` integration references, creates approvals and dispatches
+    actions, and a value the caller can supply is a value that can be wrong.
+    After this there is nothing left to compare.
+
+    That read is the whole of GHSA-27wx-pcv5-pr7q: naming another tenant here
+    made the platform resolve *their* vault-decrypted integration values and
+    write them into a run record the caller read straight back.
+    """
+    context = {k: v for k, v in body_context.items() if k != "tenant_id"}
+    context["tenant_id"] = tenant_id
+    return context
+
+
+async def _execute(playbook: Playbook, context: dict[str, Any], dry_run: bool, run_holder: list, tenant_id: str) -> None:
     """Background task: run the playbook and store the result."""
     engine = PlaybookEngine()
     pr = await engine.run(playbook, context, dry_run=dry_run)
-    _runs[pr.run_id] = pr
+    _remember(tenant_id, pr)
     run_holder.append(pr.run_id)
 
 
@@ -196,21 +287,25 @@ async def run_playbook(
     playbook_id: str,
     body: RunRequest,
     background_tasks: BackgroundTasks,
+    principal: ScopedPrincipal,
 ) -> dict:
     store = PlaybookStore.default()
-    pb = store.get(playbook_id)
+    tenant_id = str(scoped_tenant_or_403(principal))
+    pb = store.get(playbook_id, tenant_id=tenant_id)
     if not pb:
         raise HTTPException(status_code=404, detail="Playbook not found")
+
+    context = _execution_context(body.context, tenant_id)
 
     # Create a placeholder run immediately so the caller can poll it
     from app.playbook.engine import PlaybookRun as _PR
     from app.playbook.engine import RunStatus as _RS
 
-    placeholder = _PR(pb, body.context)
+    placeholder = _PR(pb, context)
     placeholder.status = _RS.PENDING
-    _runs[placeholder.run_id] = placeholder
+    _remember(tenant_id, placeholder)
 
-    background_tasks.add_task(_execute_and_update, pb, body.context, body.dry_run, placeholder.run_id)
+    background_tasks.add_task(_execute_and_update, pb, context, body.dry_run, placeholder.run_id, tenant_id)
 
     return {
         "run_id": placeholder.run_id,
@@ -220,13 +315,19 @@ async def run_playbook(
     }
 
 
-async def _execute_and_update(playbook: Playbook, context: dict[str, Any], dry_run: bool, run_id: str) -> None:
+async def _execute_and_update(
+    playbook: Playbook,
+    context: dict[str, Any],
+    dry_run: bool,
+    run_id: str,
+    tenant_id: str,
+) -> None:
     """Background task: overwrite placeholder with real run."""
     engine = PlaybookEngine()
     pr = await engine.run(playbook, context, dry_run=dry_run)
     # Preserve the pre-allocated run_id
     pr.run_id = run_id
-    _runs[run_id] = pr
+    _remember(tenant_id, pr)
 
 
 # ---------------------------------------------------------------------------
@@ -269,7 +370,7 @@ async def _resume_wait_in_background(resume_token: str) -> None:
         # sweeper's timer, got there first.
         logger.info("playbook wait callback matched no waiting run (already resumed)")
         return
-    _runs[run.run_id] = run
+    _remember_resumed(run)
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +408,7 @@ async def answer_verification(resume_token: str, answer: str, sig: str = Query("
     if run is None:
         return HTMLResponse(_verification_html(_VERIFY_REFUSED_TITLE, _VERIFY_REFUSED_BODY, ok=False), status_code=400)
 
-    _runs[run.run_id] = run
+    _remember_resumed(run)
     return HTMLResponse(
         _verification_html(
             "Thanks — that's recorded",

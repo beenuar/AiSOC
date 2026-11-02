@@ -207,9 +207,7 @@ def test_a_run_executes_as_the_credentials_tenant_not_the_body(client: TestClien
     assert record.status_code == 200, record.text
     executed_as = record.json()["context"]["tenant_id"]
 
-    assert executed_as == str(TENANT_A), (
-        f"a tenant-A caller named tenant B in the body and the run executed as {executed_as}"
-    )
+    assert executed_as == str(TENANT_A), f"a tenant-A caller named tenant B in the body and the run executed as {executed_as}"
 
 
 def test_the_engine_resolves_integration_references_for_the_credentials_tenant(
@@ -244,9 +242,7 @@ def test_the_engine_resolves_integration_references_for_the_credentials_tenant(
     assert accepted.status_code == 202, accepted.text
 
     assert asked, "the http step never resolved a reference, so this test proves nothing"
-    assert asked == [str(TENANT_A)], (
-        f"the engine resolved another tenant's integration references: asked for {asked}"
-    )
+    assert asked == [str(TENANT_A)], f"the engine resolved another tenant's integration references: asked for {asked}"
 
 
 def test_a_tenant_cannot_read_another_tenants_run(client: TestClient) -> None:
@@ -262,9 +258,7 @@ def test_a_tenant_cannot_read_another_tenants_run(client: TestClient) -> None:
 
     response = client.get(f"/api/v1/playbooks/runs/{victim_run}", headers=auth(TENANT_A))
 
-    assert response.status_code == 404, (
-        f"tenant A read tenant B's run record: {response.status_code} {response.text[:300]}"
-    )
+    assert response.status_code == 404, f"tenant A read tenant B's run record: {response.status_code} {response.text[:300]}"
 
 
 def test_a_foreign_run_is_indistinguishable_from_one_that_does_not_exist(client: TestClient) -> None:
@@ -276,9 +270,7 @@ def test_a_foreign_run_is_indistinguishable_from_one_that_does_not_exist(client:
     absent = client.get(f"/api/v1/playbooks/runs/{uuid.uuid4()}", headers=auth(TENANT_A))
 
     assert foreign.status_code == absent.status_code == 404
-    assert foreign.json() == absent.json(), (
-        f"a foreign run is distinguishable from an absent one: {foreign.json()} vs {absent.json()}"
-    )
+    assert foreign.json() == absent.json(), f"a foreign run is distinguishable from an absent one: {foreign.json()} vs {absent.json()}"
 
 
 def test_run_listing_shows_only_the_callers_own_runs(client: TestClient) -> None:
@@ -406,7 +398,7 @@ def test_the_shipped_pack_library_stays_readable_by_every_tenant(client: TestCli
     """
     from app.playbook.store import PlaybookStore
 
-    builtin = [pb for pb in PlaybookStore.default().list() if pb.tenant_id is None]
+    builtin = [pb for pb in PlaybookStore.default().list(tenant_id=str(TENANT_A)) if pb.tenant_id is None]
     if not builtin:
         pytest.skip("no pack playbooks are present in this checkout")
 

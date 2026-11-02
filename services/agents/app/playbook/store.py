@@ -157,37 +157,71 @@ class PlaybookStore:
     # CRUD
     # ------------------------------------------------------------------
 
-    def list(self, *, enabled_only: bool = False) -> list[Playbook]:
-        pbs = list(self._playbooks.values())
+    # ``tenant_id`` is keyword-only and required on every method below, so a
+    # new call site cannot forget it the way every existing one had
+    # (GHSA-27wx-pcv5-pr7q). The same reasoning as the API gateway's
+    # ``_proxy(..., tenant_id=...)``: an argument that may be omitted is an
+    # argument that will be.
+
+    def _visible(self, pb: Playbook, tenant_id: str) -> bool:
+        """Whether *tenant_id* may see *pb* at all.
+
+        Two kinds of row live in one store: shipped pack content, which has no
+        owner and belongs to everybody, and a tenant's own playbooks. Anything
+        else is invisible — not filtered after the fact, but never a candidate.
+        """
+        return pb.tenant_id is None or pb.tenant_id == tenant_id
+
+    def _owned(self, pb: Playbook, tenant_id: str) -> bool:
+        """Whether *tenant_id* may *modify* ``pb``.
+
+        Narrower than :meth:`_visible` on purpose: the shipped library is
+        readable by every tenant and writable by none, so one tenant cannot
+        edit a pack playbook out from under all the others.
+        """
+        return pb.tenant_id is not None and pb.tenant_id == tenant_id
+
+    def list(self, *, tenant_id: str, enabled_only: bool = False) -> list[Playbook]:
+        pbs = [p for p in self._playbooks.values() if self._visible(p, tenant_id)]
         if enabled_only:
             pbs = [p for p in pbs if p.enabled]
         return pbs
 
-    def get(self, playbook_id: str) -> Playbook | None:
-        return self._playbooks.get(playbook_id)
+    def get(self, playbook_id: str, *, tenant_id: str) -> Playbook | None:
+        pb = self._playbooks.get(playbook_id)
+        if pb is None or not self._visible(pb, tenant_id):
+            # One answer for "no such playbook" and "somebody else's", so the
+            # store cannot be used to learn which ids exist in other tenants.
+            return None
+        return pb
 
-    def create(self, playbook: Playbook) -> Playbook:
+    def create(self, playbook: Playbook, *, tenant_id: str) -> Playbook:
         now = datetime.now(UTC).isoformat()
         if not playbook.id:
             playbook = playbook.model_copy(update={"id": str(uuid.uuid4())})
-        playbook = playbook.model_copy(update={"created_at": now, "updated_at": now})
+        # The owner is stamped from the caller's credential here, overwriting
+        # whatever the request body said. Validating a body-supplied owner
+        # would leave a value to get wrong; there is no such value.
+        playbook = playbook.model_copy(update={"created_at": now, "updated_at": now, "tenant_id": tenant_id})
         self._playbooks[playbook.id] = playbook
         self._save()
         return playbook
 
-    def update(self, playbook_id: str, data: dict[str, Any]) -> Playbook | None:
+    def update(self, playbook_id: str, data: dict[str, Any], *, tenant_id: str) -> Playbook | None:
         pb = self._playbooks.get(playbook_id)
-        if pb is None:
+        if pb is None or not self._owned(pb, tenant_id):
             return None
         now = datetime.now(UTC).isoformat()
+        data = {k: v for k, v in data.items() if k != "tenant_id"}
         data["updated_at"] = now
         updated = pb.model_copy(update=data)
         self._playbooks[playbook_id] = updated
         self._save()
         return updated
 
-    def delete(self, playbook_id: str) -> bool:
-        if playbook_id not in self._playbooks:
+    def delete(self, playbook_id: str, *, tenant_id: str) -> bool:
+        pb = self._playbooks.get(playbook_id)
+        if pb is None or not self._owned(pb, tenant_id):
             return False
         del self._playbooks[playbook_id]
         self._save()
@@ -197,11 +231,18 @@ class PlaybookStore:
     # Trigger matching
     # ------------------------------------------------------------------
 
-    def find_matching(self, event: str, context: dict[str, Any]) -> list[Playbook]:
-        """Return all enabled playbooks whose trigger matches this event/context."""
+    def find_matching(self, event: str, context: dict[str, Any], *, tenant_id: str) -> list[Playbook]:
+        """Return all enabled playbooks whose trigger matches this event/context.
+
+        Scoped like every other read: an alert in one tenant must not fire
+        another tenant's automation. This is the trigger half of
+        GHSA-27wx-pcv5-pr7q — the advisory reported the HTTP route, and the
+        same global store is reached from ``alert_trigger.run_for_alert``,
+        which already knows the alert's tenant and had nowhere to pass it.
+        """
         matches: list[Playbook] = []
         for pb in self._playbooks.values():
-            if not pb.enabled:
+            if not pb.enabled or not self._visible(pb, tenant_id):
                 continue
             trigger = pb.trigger
             if trigger.get("on") != event:
@@ -225,15 +266,25 @@ class PlaybookStore:
     # ------------------------------------------------------------------
 
     def seed_defaults(self) -> int:
-        """Seed the store with built-in starter playbooks if store is empty."""
+        """Seed the store with built-in starter playbooks if store is empty.
+
+        Written straight into the index rather than through :meth:`create`,
+        because these are library content and must carry **no** owner: they
+        are seeded once at boot, by the service rather than on behalf of any
+        caller, and stamping them with whichever tenant happened to start the
+        process would hide them from every other one.
+        """
         if self._playbooks:
             return 0
         from .templates import STARTER_PLAYBOOKS
 
+        now = datetime.now(UTC).isoformat()
         count = 0
         for pb_dict in STARTER_PLAYBOOKS:
             pb = Playbook.model_validate(pb_dict)
-            self.create(pb)
+            pb = pb.model_copy(update={"tenant_id": None, "created_at": now, "updated_at": now})
+            self._playbooks[pb.id] = pb
             count += 1
+        self._save()
         logger.info("Seeded %d default playbooks", count)
         return count

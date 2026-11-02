@@ -146,7 +146,10 @@ async def run_for_alert(state: Any) -> TriggerOutcome:
         from app.playbook.store import PlaybookStore
 
         store = PlaybookStore.default()
-        matches: list[Any] = list(store.find_matching(TRIGGER_EVENT, context))
+        # Scoped to the alert's own tenant: the store holds every tenant's
+        # playbooks plus the shipped library, so an unscoped match let one
+        # tenant's alert fire another tenant's automation.
+        matches: list[Any] = list(store.find_matching(TRIGGER_EVENT, context, tenant_id=str(tenant_id)))
     except Exception as exc:  # noqa: BLE001
         logger.warning("alert_playbooks.match_failed", error=str(exc))
         outcome.skipped_reason = f"could not match playbooks: {exc}"

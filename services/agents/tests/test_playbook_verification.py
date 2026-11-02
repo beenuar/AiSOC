@@ -390,7 +390,7 @@ async def _store_returns(monkeypatch: pytest.MonkeyPatch, playbook: Playbook) ->
     from app.playbook import store as store_module
 
     class _Store:
-        def get(self, _id: str) -> Playbook:
+        def get(self, _id: str, *, tenant_id: str | None = None) -> Playbook:
             return playbook
 
     monkeypatch.setattr(store_module.PlaybookStore, "default", classmethod(lambda _cls: _Store()))
