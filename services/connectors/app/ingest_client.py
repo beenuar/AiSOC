@@ -56,6 +56,12 @@ logger = logging.getLogger(__name__)
 # polls to hang the scheduler thread for minutes if Kafka is wedged.
 _DEFAULT_TIMEOUT_S = 30.0
 
+# Maximum batch size the ingest service will accept in one request. This
+# mirrors MAX_BATCH_SIZE in services/ingest/internal/config/config.go (default
+# 1000). Declared here so IngestClient can chunk oversized polls before they
+# reach the ingest service and are refused with HTTP 413.
+MAX_BATCH_SIZE = 1000
+
 
 def resolve_service_token() -> str:
     """The shared secret this service presents to ``/v1/ingest``.
@@ -139,10 +145,50 @@ class IngestClient:
         An empty event list short-circuits and returns ``{"accepted": 0,
         "rejected": 0}`` without making a network call — this is the common
         case (a poll cycle that found no new alerts).
+
+        If the event list exceeds MAX_BATCH_SIZE, it is split into chunks and
+        pushed separately. The returned counts are summed across all chunks.
+        This prevents oversized polls from being refused with HTTP 413.
         """
         if not events:
             return {"accepted": 0, "rejected": 0}
 
+        # Chunk the event list if it exceeds the ingest service's cap. Each
+        # chunk is pushed separately and the accepted/rejected counts are
+        # summed, so the scheduler's "advance only if everything was accepted"
+        # rule continues to work unchanged.
+        total_accepted = 0
+        total_rejected = 0
+
+        for i in range(0, len(events), MAX_BATCH_SIZE):
+            chunk = events[i : i + MAX_BATCH_SIZE]
+            result = await self._push_chunk(
+                tenant_id=tenant_id,
+                connector_id=connector_id,
+                connector_type=connector_type,
+                events=chunk,
+                source_format=source_format,
+            )
+            total_accepted += result.get("accepted", 0)
+            total_rejected += result.get("rejected", 0)
+
+        return {"accepted": total_accepted, "rejected": total_rejected}
+
+    async def _push_chunk(
+        self,
+        *,
+        tenant_id: uuid.UUID | str,
+        connector_id: uuid.UUID | str,
+        connector_type: str,
+        events: list[dict[str, Any]],
+        source_format: str,
+    ) -> dict[str, Any]:
+        """Push one chunk of events (at most MAX_BATCH_SIZE) to ingest.
+
+        This is the actual network call that push_events delegates to. It is
+        split out so chunking logic can live in push_events while the HTTP
+        shape stays here, testable independently.
+        """
         client = await self._get_client()
         # Use the batch endpoint — the non-batch and batch endpoints are
         # actually the same handler in the Go service, but ``/ingest/batch``
@@ -174,6 +220,8 @@ class IngestClient:
             # Pull the body so logs show *why* — typically a missing or
             # rejected credential, an undeclared tenant, or an oversized
             # batch, all of which we want surfaced rather than swallowed.
+            # A 413 on a single chunk stays a hard error: chunking must not
+            # make the ingest cap unreachable by retrying or dropping it.
             body_preview = resp.text[:500]
             hint = ""
             if resp.status_code in (401, 403):
@@ -190,4 +238,4 @@ class IngestClient:
         return data
 
 
-__all__ = ["IngestClient", "IngestClientError"]
+__all__ = ["IngestClient", "IngestClientError", "MAX_BATCH_SIZE"]
