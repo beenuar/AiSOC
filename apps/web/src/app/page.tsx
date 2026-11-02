@@ -4,7 +4,8 @@ import { redirect } from 'next/navigation';
 import { docs } from '@/lib/docs';
 import { homeRouteReport } from '@/lib/homeRoute';
 import { getPublicSiteUrl } from '@/lib/site';
-import { velvetFontVariables } from '@/lib/marketing-fonts';
+import { velvetFontVariables, VELVET_FONT_PRELOADS } from '@/lib/marketing-fonts';
+import { FontPreloads } from '@/components/fonts/FontPreloads';
 import { StickyNav } from '@/components/landing/sections/StickyNav';
 import { Hero } from '@/components/landing/sections/Hero';
 import { ProofStrip } from '@/components/landing/sections/ProofStrip';
@@ -277,6 +278,7 @@ export default function HomePage() {
         data-theme="dark"
         className={`velvet-root relative min-h-screen overflow-x-hidden bg-velvet-surface-base font-velvet-body text-velvet-content-primary ${velvetFontVariables}`}
       >
+        <FontPreloads hrefs={VELVET_FONT_PRELOADS} />
         <StickyNav />
         <Hero />
         <ProofStrip />
