@@ -32,7 +32,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 const api = vi.hoisted(() => ({
   branding: { get: vi.fn(), update: vi.fn(), uploadAsset: vi.fn(), deleteAsset: vi.fn(), logo: vi.fn() },
@@ -71,6 +71,8 @@ vi.mock('@/lib/api', () => ({
   delegationsApi: api.delegations,
   msspApi: api.mssp,
 }));
+
+import toast from 'react-hot-toast';
 
 import { BrandingPanel } from './BrandingPanel';
 import { RetentionPanel } from './RetentionPanel';
@@ -305,5 +307,344 @@ describe('DelegationsPanel', () => {
     render(<DelegationsPanel />);
     await waitFor(() => expect(screen.getByText('child-1')).toBeInTheDocument());
     expect(screen.getByTestId('delegations-children-unavailable')).toBeInTheDocument();
+  });
+});
+
+// ── The write paths ─────────────────────────────────────────────────────────
+//
+// Everything above drives the four reads. These drive the four *writes*, which
+// is where an operator page stops describing the estate and starts changing a
+// customer's. Two properties recur and are the reason this section exists:
+//
+//  - **A refused value must not reach the server.** Each panel validates in
+//    the browser so the operator is told which field is wrong before a round
+//    trip rather than after a 422 naming the request body. A validation that
+//    still calls the API is not a validation, and the only way to see the
+//    difference is to assert the mock was never called.
+//  - **A failed mutation must leave the row where it was.** `RulePacksPanel`
+//    says so in a comment — a pack shown as deleted while it still applies to
+//    a customer tenant is the dangerous direction — and delegations are the
+//    same shape: a grant that looks revoked and is not is standing authority
+//    over somebody else's tenant that nobody is watching.
+
+describe('RetentionPanel — saving', () => {
+  const policy = {
+    raw_events_days: 90,
+    alerts_days: 365,
+    audit_days: 730,
+    purge_worker_enabled: false,
+    purge_worker_dry_run: true,
+  };
+
+  const ready = async () => {
+    api.retention.get.mockResolvedValue(policy);
+    render(<RetentionPanel />);
+    await waitFor(() => expect(screen.getByLabelText('Raw events retention in days')).toBeInTheDocument());
+  };
+
+  it('refuses a window outside the bounds without a round trip', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText('Raw events retention in days'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save retention policy' }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Raw events must be a whole number of days between 1 and 3650'),
+    );
+    expect(api.retention.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a fractional window, because a day is the unit the purge worker counts in', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText('Alerts retention in days'), { target: { value: '30.5' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save retention policy' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(api.retention.update).not.toHaveBeenCalled();
+  });
+
+  it('saves the three windows together and says nothing is deleted while the worker is off', async () => {
+    await ready();
+    api.retention.update.mockResolvedValue({ ...policy, raw_events_days: 30 });
+    fireEvent.change(screen.getByLabelText('Raw events retention in days'), { target: { value: '30' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save retention policy' }));
+    await waitFor(() =>
+      expect(api.retention.update).toHaveBeenCalledWith({
+        raw_events_days: 30,
+        alerts_days: 365,
+        audit_days: 730,
+      }),
+    );
+    // The honesty property, on the write side this time: three editable
+    // numbers and a Save button imply deletion happens. With the worker off
+    // it does not, and the confirmation has to say so.
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Nothing is deleted'));
+  });
+
+  it('says the worker applies it only when the worker actually will', async () => {
+    await ready();
+    api.retention.update.mockResolvedValue({
+      ...policy,
+      purge_worker_enabled: true,
+      purge_worker_dry_run: false,
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save retention policy' }));
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('applies it on its next pass')),
+    );
+  });
+
+  it('keeps what was typed when the save fails, and never reports success', async () => {
+    await ready();
+    api.retention.update.mockRejectedValue(new Error('retention write refused'));
+    fireEvent.change(screen.getByLabelText('Audit log retention in days'), { target: { value: '400' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save retention policy' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('retention write refused'));
+    expect(toast.success).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Audit log retention in days')).toHaveValue('400');
+  });
+});
+
+describe('RulePacksPanel — writing', () => {
+  const pack = {
+    id: 'pack-1',
+    name: 'Retail baseline',
+    description: null,
+    category: 'retail',
+    is_default: false,
+    created_at: '2026-10-01T00:00:00Z',
+    updated_at: '2026-10-01T00:00:00Z',
+  };
+  const child = { id: 'child-1', name: 'Acme', mssp_role: 'managed' };
+
+  const ready = async (children: unknown[] = [child]) => {
+    api.rulePacks.list.mockResolvedValue([pack]);
+    api.mssp.listChildren.mockResolvedValue(children);
+    render(<RulePacksPanel />);
+    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+  };
+
+  it('refuses an unnamed pack without a round trip', async () => {
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'Create pack' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Name the pack'));
+    expect(api.rulePacks.create).not.toHaveBeenCalled();
+  });
+
+  it('creates a pack and re-reads the library rather than trusting its own copy', async () => {
+    await ready();
+    api.rulePacks.create.mockResolvedValue({ ...pack, id: 'pack-2', name: 'Clinic baseline' });
+    fireEvent.change(screen.getByLabelText('Rule pack name'), { target: { value: '  Clinic baseline  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create pack' }));
+    // Trimmed, and an omitted category is sent as null rather than ''.
+    await waitFor(() =>
+      expect(api.rulePacks.create).toHaveBeenCalledWith({ name: 'Clinic baseline', category: null }),
+    );
+    expect(api.rulePacks.list).toHaveBeenCalledTimes(2);
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Assign it to a managed tenant'));
+  });
+
+  it('keeps the pack on screen when the delete fails', async () => {
+    await ready();
+    api.rulePacks.remove.mockRejectedValue(new Error('pack still assigned'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('pack still assigned'));
+    // The dangerous direction: a pack shown as deleted that still applies to
+    // a customer tenant. The row must survive a failed delete.
+    expect(within(screen.getByRole('table')).getByText('Retail baseline')).toBeInTheDocument();
+  });
+
+  it('refuses an assignment with no tenant chosen, rather than guessing one', async () => {
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Choose the managed tenant to assign this pack to'),
+    );
+    expect(api.rulePacks.assign).not.toHaveBeenCalled();
+  });
+
+  it('assigns to the chosen tenant and names it back', async () => {
+    await ready();
+    api.rulePacks.assign.mockResolvedValue({});
+    fireEvent.change(screen.getByLabelText('Assign Retail baseline to tenant'), {
+      target: { value: 'child-1' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Assign' }));
+    await waitFor(() =>
+      expect(api.rulePacks.assign).toHaveBeenCalledWith('pack-1', {
+        child_tenant_id: 'child-1',
+        enabled: true,
+      }),
+    );
+    expect(toast.success).toHaveBeenCalledWith('Assigned "Retail baseline" to Acme.');
+  });
+});
+
+describe('DelegationsPanel — granting and revoking', () => {
+  const delegation = {
+    id: 'del-1',
+    parent_tenant_id: 'parent-1',
+    child_tenant_id: 'child-1',
+    granted_role: 'soc_analyst',
+    granted_by_user: 'user-1',
+    expires_at: null,
+    revoked_at: null,
+    created_at: '2026-10-01T00:00:00Z',
+  };
+  const child = { id: 'child-1', name: 'Acme', mssp_role: 'managed' };
+
+  const ready = async () => {
+    api.delegations.list.mockResolvedValue([delegation]);
+    api.mssp.listChildren.mockResolvedValue([child]);
+    render(<DelegationsPanel />);
+    await waitFor(() => expect(screen.getByRole('table')).toBeInTheDocument());
+  };
+
+  it('refuses a grant with no tenant chosen without a round trip', async () => {
+    await ready();
+    fireEvent.click(screen.getByRole('button', { name: 'Grant' }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Choose the managed tenant this grant is for'),
+    );
+    expect(api.delegations.create).not.toHaveBeenCalled();
+  });
+
+  it('grants a standing role with no expiry as an explicit null', async () => {
+    await ready();
+    api.delegations.create.mockResolvedValue(delegation);
+    fireEvent.change(screen.getByLabelText('Managed tenant'), { target: { value: 'child-1' } });
+    fireEvent.change(screen.getByLabelText('Granted role'), { target: { value: 'soc_lead' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Grant' }));
+    await waitFor(() =>
+      expect(api.delegations.create).toHaveBeenCalledWith({
+        child_tenant_id: 'child-1',
+        granted_role: 'soc_lead',
+        expires_at: null,
+      }),
+    );
+    // Re-read rather than appending locally: the row an operator audits has
+    // to be the one the server stored.
+    expect(api.delegations.list).toHaveBeenCalledTimes(2);
+  });
+
+  it('sends an expiry as an instant, not as the date string that was typed', async () => {
+    await ready();
+    api.delegations.create.mockResolvedValue(delegation);
+    fireEvent.change(screen.getByLabelText('Managed tenant'), { target: { value: 'child-1' } });
+    fireEvent.change(screen.getByLabelText('Expires on'), { target: { value: '2027-01-31' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Grant' }));
+    await waitFor(() => expect(api.delegations.create).toHaveBeenCalled());
+    const sent = api.delegations.create.mock.calls[0][0] as { expires_at: string };
+    expect(sent.expires_at).toBe(new Date('2027-01-31').toISOString());
+  });
+
+  it('revokes through the server and re-reads, rather than hiding the row', async () => {
+    await ready();
+    api.delegations.revoke.mockResolvedValue({});
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await waitFor(() => expect(api.delegations.revoke).toHaveBeenCalledWith('del-1'));
+    expect(api.delegations.list).toHaveBeenCalledTimes(2);
+    expect(toast.success).toHaveBeenCalledWith('Delegation revoked.');
+  });
+
+  it('keeps the grant on screen when the revoke fails', async () => {
+    await ready();
+    api.delegations.revoke.mockRejectedValue(new Error('revoke refused'));
+    fireEvent.click(screen.getByRole('button', { name: 'Revoke' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('revoke refused'));
+    // A grant that looks revoked and is not is standing authority over
+    // another tenant that nobody is now watching.
+    expect(within(screen.getByRole('table')).getByText('Acme')).toBeInTheDocument();
+  });
+});
+
+describe('BrandingPanel — saving and assets', () => {
+  const branding = {
+    product_name: 'AiSOC',
+    primary_color: '#1d4ed8',
+    accent_color: '#0ea5e9',
+    support_email: 'soc@example.com',
+    support_url: 'https://support.example.com',
+    sender_name: 'Security Operations',
+    footer_text: 'Internal use only',
+    logo_url: null,
+    org_id: 'org-1',
+    is_white_labelled: true,
+  };
+
+  const ready = async () => {
+    api.branding.get.mockResolvedValue(branding);
+    render(<BrandingPanel />);
+    await waitFor(() => expect(screen.getByLabelText('Product name')).toHaveValue('AiSOC'));
+  };
+
+  it('refuses a colour that is not six-digit hex without a round trip', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText('Primary colour'), { target: { value: 'blue' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save branding' }));
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(
+        'Primary colour must be a six-digit hex value such as #1d4ed8',
+      ),
+    );
+    expect(api.branding.update).not.toHaveBeenCalled();
+  });
+
+  it('refuses a support URL that is not https, because it is rendered as a link', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText('Support URL'), { target: { value: 'http://support.example.com' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save branding' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('https://')));
+    expect(api.branding.update).not.toHaveBeenCalled();
+  });
+
+  it('sends a cleared field as null rather than an empty string', async () => {
+    await ready();
+    api.branding.update.mockResolvedValue({ ...branding, footer_text: null });
+    fireEvent.change(screen.getByLabelText('Footer text'), { target: { value: '   ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save branding' }));
+    await waitFor(() => expect(api.branding.update).toHaveBeenCalled());
+    expect(api.branding.update.mock.calls[0][0]).toMatchObject({ footer_text: null });
+  });
+
+  it('treats a 409 on save as "no organisation to brand", not as a failed write', async () => {
+    await ready();
+    api.branding.update.mockRejectedValue(new FakeApiError('conflict', 409));
+    fireEvent.click(screen.getByRole('button', { name: 'Save branding' }));
+    // The distinction the panel exists to make: this tenant belongs to no
+    // operator organisation, which is an answer rather than a failure. The
+    // fields stay — the banner says they will save once an organisation
+    // exists — but the operator is told the reason, not "could not save".
+    await waitFor(() => expect(screen.getByTestId('branding-no-org')).toBeInTheDocument());
+    expect(toast.error).toHaveBeenCalledWith(
+      'This tenant belongs to no operator organisation, so there is nothing to brand.',
+    );
+    expect(screen.getByLabelText('Product name')).toBeInTheDocument();
+  });
+
+  it('says when an uploaded SVG was stripped, because what is stored is the stripped copy', async () => {
+    await ready();
+    api.branding.uploadAsset.mockResolvedValue({ sanitized: true });
+    const svg = new File(['<svg/>'], 'logo.svg', { type: 'image/svg+xml' });
+    fireEvent.change(screen.getByLabelText('Upload logo'), { target: { files: [svg] } });
+    await waitFor(() => expect(api.branding.uploadAsset).toHaveBeenCalledWith('logo', svg));
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('Scriptable content was removed'));
+    // Re-read: the stored asset is the sanitised output, not the file that
+    // was chosen, so the panel must show what the server kept.
+    expect(api.branding.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not claim a sanitised upload when nothing was stripped', async () => {
+    await ready();
+    api.branding.uploadAsset.mockResolvedValue({ sanitized: false });
+    const png = new File(['x'], 'logo.png', { type: 'image/png' });
+    fireEvent.change(screen.getByLabelText('Upload logo'), { target: { files: [png] } });
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Logo uploaded.'));
+  });
+
+  it('removes an asset and re-reads, so the default mark is shown from the server', async () => {
+    await ready();
+    api.branding.deleteAsset.mockResolvedValue({});
+    fireEvent.click(screen.getAllByRole('button', { name: 'Remove' })[0]);
+    await waitFor(() => expect(api.branding.deleteAsset).toHaveBeenCalledWith('logo'));
+    expect(api.branding.get).toHaveBeenCalledTimes(2);
+    expect(toast.success).toHaveBeenCalledWith(expect.stringContaining('default mark is used again'));
   });
 });
