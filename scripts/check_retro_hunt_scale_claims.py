@@ -34,7 +34,11 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root  # noqa: E402
+
+REPO_ROOT = repo_root()
 PAGE = REPO_ROOT / "apps" / "docs" / "docs" / "benchmarks" / "retro-hunt-scale.md"
 ARTEFACT = REPO_ROOT / "docs" / "perf" / "retro-hunt-scale.json"
 SWEEP = REPO_ROOT / "services" / "api" / "app" / "services" / "retro_hunt" / "sweep.py"
