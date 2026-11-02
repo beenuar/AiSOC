@@ -194,7 +194,7 @@ const sidebars: SidebarsConfig = {
     {
       type: "category",
       label: "Benchmarks",
-      items: ["benchmarks/alert-reduction"],
+      items: ["benchmarks/alert-reduction", "benchmarks/retro-hunt-scale"],
     },
     {
       type: "category",

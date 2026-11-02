@@ -540,9 +540,12 @@ jobs:
       # key" differently about the same text is the drift this prevents.
       - name: Verify vendored AI redaction patterns are in sync
         run: python scripts/sync_vendored_ai_redaction.py --check
-      # The GPU preflight's own self-test. The real verdict depends on the
-      # host, so CI can only assert that the refusals fire and say something
-      # actionable -- which is the part that rots, since the advice is prose.
+      # The prompt-injection patterns, generated from the agents guard's own
+      # rule table rather than hand-copied. The repository scanner (wave-2
+      # 7.2) flags an agent-instruction file or a skill whose text tries to
+      # steer an agent; a hand-picked subset would silently miss whatever
+      # pattern was added to the guard after the next incident. Needs the
+      # agents service importable, so it runs after that install step.
       - name: GPU preflight — self-test
         run: python3 scripts/check_gpu_runtime.py --self-test
       # Gap-closure Phase 2.2. The sixth mirror, and the one where drift is a
@@ -600,6 +603,37 @@ jobs:
         run: python3 scripts/check_alert_reduction_claims.py --self-test
       - name: Verify the retracted alert-reduction figure stays retracted
         run: python3 scripts/check_alert_reduction_claims.py --check
+      # Wave-2 plan 4.6. The three outcomes a buyer asks for first can only be
+      # measured by replaying somebody's real closed alerts, no design partner
+      # has offered a window, and all three are recorded as *not measured*.
+      # This gate is what stops that record becoming a number — including the
+      # worse version, a `0`, which reads as "measured and reduced nothing".
+      # It reads the state off the replay page rather than carrying its own
+      # copy, so publishing a real measurement retires the prohibition without
+      # anyone editing the gate.
+      - name: Customer-outcome claims — self-test
+        run: python3 scripts/check_outcome_claims.py --self-test
+      - name: No customer-outcome figure nobody measured
+        run: python3 scripts/check_outcome_claims.py
+      # Wave 2, Phase 9.5 prerequisite. A caveat saying a console page is
+      # "not built" reads as modesty and works as an exemption: a surface
+      # recorded as absent needs no claim row and no gate. Three shipped
+      # pages were sitting behind one such sentence, and one of them —
+      # /settings/users — had no test at all. `check_claim_gate_matrix`
+      # cannot see this: it counts rows and statuses and does not read a
+      # caveat's prose.
+      - name: 'Unbuilt-surface claims — self-test'
+        run: python3 scripts/check_unbuilt_claims.py --self-test
+      - name: Every 'not built' claim about a console page is still true
+        run: python3 scripts/check_unbuilt_claims.py
+      # Wave 2, Phase 5.5. The published retro-hunt ceiling is derived from
+      # MAX_BYTES_PER_SWEEP, so moving the product's budget must move the
+      # page or red the build: a published limit that quietly describes a
+      # budget the product no longer has is worse than no limit at all.
+      - name: Retro-hunt scale claims — self-test
+        run: python3 scripts/check_retro_hunt_scale_claims.py --self-test
+      - name: The published retro-hunt scale figures are the measured ones
+        run: python3 scripts/check_retro_hunt_scale_claims.py
       # Same family, same reason. The three customer outcomes a buyer asks
       # for first are recorded as not measured because no design partner has
       # offered a queue to replay; that record is worth what stops it being

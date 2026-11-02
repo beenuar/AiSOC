@@ -169,6 +169,10 @@ class InvestigationState(BaseModel):
     # excluded from the serialised state for the same reason the retrieval
     # dicts are shaped the way they are.
     vendor_evidence: Any = None
+    # Phase 4.2. What the reviewer pass did, including when it abstained.
+    # `None` means the pass did not run; an abstention is a dict saying so,
+    # and the two must not be collapsed.
+    reviewer_outcome: dict[str, Any] | None = None
     # What those principals could do *at the alert's event time*, as
     # `app.context.privilege.PrivilegeContext.as_state()` renders it (depth
     # plan wave 2, 1.1). Distinct from `identity_context`, which says who

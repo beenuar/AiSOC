@@ -192,6 +192,46 @@ measured* rather than `0`, because a zero in an accuracy column says the
 model got everything wrong, and "nobody has run it" is a different fact with
 a different remedy.
 
+### A reviewer pass that was measured and left off
+
+Wave-2 Phase 4.2 asked for a second pass over the decision contract that may
+escalate or demote but never close, with an explicit condition: ship it only
+if it improves balanced accuracy or auto-close precision **without lowering
+malicious recall**, and otherwise record the measurement and leave it off.
+
+It was built, measured, and is **off**.
+
+| Configuration | Balanced accuracy | Auto-close precision | Malicious recall |
+|---|---|---|---|
+| Reviewer off | 0.2500 | *not measured* | 0.0000 |
+| Reviewer on | 0.2500 | *not measured* | 0.0000 |
+
+Reproduce both rows:
+
+```bash
+AISOC_TRIAGE_REVIEWER=  python3 scripts/run_verdict_eval.py --model deterministic --deterministic --out off.json
+AISOC_TRIAGE_REVIEWER=1 python3 scripts/run_verdict_eval.py --model deterministic --deterministic --out on.json
+```
+
+No improvement on either figure, so the plan's condition says it stays off,
+and it does. `auto_close_precision` reads *not measured* rather than `0`
+because the deterministic path closed nothing and there is no denominator.
+
+**The reason is worth as much as the number.** The deterministic scorer
+makes no prose claims, so `supporting_evidence`, `contradictory_evidence`
+and `groundedness` are `None` on every item — the decision contract
+correctly reports them as *not evaluated* — and a reviewer whose inputs are
+all absent has nothing to act on. It abstains on all 72.
+
+So this measures the reviewer **on the only path available to measure it**,
+not the idea behind it. A funded hosted key, or a corpus replayed through
+the LLM path, is what turns this into a decision rather than an abstention;
+until then the rows above are what there is. The reviewer is deterministic
+rather than a second model call for the same reason: a model at 0.21–0.36
+balanced accuracy adjudicating another model at 0.21–0.36 is a coin flip
+refereeing a coin flip, and shipping that on an unmeasured design is the
+failure this page exists to prevent.
+
 ## Before and after
 
 `scripts/compare_eval_runs.py` publishes the delta between two runs, and
