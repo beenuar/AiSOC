@@ -81,6 +81,18 @@ class Capability(str, Enum):
     #: into ``asset_vulnerabilities`` (docs/cve-patch-policy.md): scanner
     #: findings are inventory rows with patch windows, not console alerts.
     PULL_VULNERABILITIES = "pull_vulnerabilities"
+    #: Pull *workforce context* -- employment status, start and last-day
+    #: dates, manager, department and worker type -- rather than events.
+    #: Connectors declaring it must expose ``fetch_workforce()``, which the
+    #: scheduler materialises into ``workforce_members`` (depth plan wave 2
+    #: item 1.3). An HR system reports slowly-changing state, not security
+    #: events, and pushing it through ingest would make "is this person
+    #: leaving" a lake search rather than a lookup.
+    PULL_WORKFORCE = "pull_workforce"
+    #: Pull *managed device state* -- owner, compliance, OS version,
+    #: encryption and agent health. Connectors declaring it must expose
+    #: ``fetch_devices()``, materialised into ``workforce_devices``.
+    PULL_DEVICE_INVENTORY = "pull_device_inventory"
 
     # QUERY — ad-hoc search across the source's index.
     QUERY_LOGS = "query_logs"
@@ -219,6 +231,84 @@ class Capability(str, Enum):
 
     # AUDIT — read-only configuration / posture queries.
     READ_AUDIT_TRAIL = "read_audit_trail"
+
+    # CLOUD IDENTITY — the credentials a workload runs as, rather than the
+    # person who owns them. Depth 5.5's first gap: the containment surface
+    # stopped at hosts, user sessions and mail, so a leaked CI key or an
+    # assumed-role session already in an attacker's hands had no verb at
+    # all and the answer was "open a ticket for the cloud team".
+    #
+    # Key deactivation and its reverse are separate verbs rather than one
+    # with a boolean, because the approval conversation is different in
+    # each direction: deactivating is containment, reactivating is a
+    # decision that the incident is over.
+    DEACTIVATE_ACCESS_KEY = "deactivate_access_key"
+    REACTIVATE_ACCESS_KEY = "reactivate_access_key"
+    # Not "revoke a session": STS has no such call. The documented
+    # mechanism, and what the IAM console's own button does, is a deny on
+    # credentials issued before a cut-off. Named for what it achieves
+    # rather than for the policy it writes.
+    REVOKE_ROLE_SESSIONS = "revoke_role_sessions"
+    RESTORE_ROLE_SESSIONS = "restore_role_sessions"
+    # A service account, service principal or managed identity — the
+    # non-human half of the directory. DISABLE_USER does not cover it:
+    # the endpoints differ, and so does the blast radius, because a
+    # service identity is usually load-bearing for a pipeline.
+    DISABLE_SERVICE_IDENTITY = "disable_service_identity"
+    ENABLE_SERVICE_IDENTITY = "enable_service_identity"
+    # The reverse of REVOKE_TOKEN where the vendor offers one. GCP can
+    # re-enable a disabled service-account key; most vendors cannot
+    # un-revoke a token, and their contracts say so rather than naming
+    # this verb and resolving to nothing.
+    RESTORE_TOKEN = "restore_token"
+    # A delegated OAuth consent. Revoking the session and the password
+    # leaves this untouched, which is how a contained account keeps
+    # serving an attacker's application a refresh token.
+    REVOKE_OAUTH_GRANT = "revoke_oauth_grant"
+    GET_OAUTH_GRANTS = "get_oauth_grants"
+    # Read the credentials and state of one cloud or SaaS identity. The
+    # read behind most of the probes above, and useful alone: "is this
+    # key still active" is the first question of a key-leak triage.
+    GET_CLOUD_IDENTITY = "get_cloud_identity"
+    # An instance moved onto a quarantine security group. Distinct from
+    # ISOLATE_HOST, which is an EDR agent action: this works on an
+    # instance with no agent, which is the usual case for the compromised
+    # workload that matters.
+    QUARANTINE_INSTANCE = "quarantine_instance"
+    RELEASE_INSTANCE = "release_instance"
+
+    # CODE PLATFORM — containment on the repository host.
+    REMOVE_ORG_MEMBER = "remove_org_member"
+    RESTORE_ORG_MEMBER = "restore_org_member"
+    REVOKE_DEPLOY_KEY = "revoke_deploy_key"
+    DISABLE_WORKFLOW = "disable_workflow"
+    ENABLE_WORKFLOW = "enable_workflow"
+    # The read that makes token revocation actionable: once a token is
+    # known compromised, the question is what else is exposed on the
+    # repositories it could reach.
+    GET_SECRET_SCANNING_ALERTS = "get_secret_scanning_alerts"
+
+    # SECURE WEB GATEWAY — a single URL rather than a whole host. Blocking
+    # the domain to contain one phishing page takes down everything else
+    # on that host with it.
+    BLOCK_URL = "block_url"
+    ALLOW_URL = "allow_url"
+
+    # AI ESTATE — containment for a model provider, its memberships and the
+    # gateway in front of it. Depth 6.6: the inventory could score a
+    # provider key's exposure and nothing could act on it, so a key found
+    # in a public repository was a finding with a recommendation.
+    #
+    # Demotion and removal are separate verbs because they are separate
+    # decisions: demoting a compromised project owner stops them minting
+    # keys and leaves their work intact, which is a far narrower action.
+    DEMOTE_ROLE = "demote_role"
+    REMOVE_WORKSPACE_MEMBER = "remove_workspace_member"
+    # Only a gateway offers this. Neither OpenAI's nor Anthropic's public
+    # admin API exposes a budget this platform can set, which is recorded
+    # in ai_provider_clients.py rather than left as a verb with no arm.
+    SET_SPEND_CAP = "set_spend_cap"
+    RESTORE_SPEND_CAP = "restore_spend_cap"
 
 
 # Ordered groupings used by the UI to render checkbox groups. The agent

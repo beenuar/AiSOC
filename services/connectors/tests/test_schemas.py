@@ -16,7 +16,13 @@ from app.connectors.base import BaseConnector, ConnectorSchema, Field
 # Deliberately its own category rather than folded into `saas`. A `saas`
 # connector pulls a vendor's audit log; these pull runtime activity from
 # software the customer operates, and the console groups by category.
-ALLOWED_CATEGORIES = {"siem", "edr", "cloud", "iam", "saas", "audit", "vcs", "ndr", "network", "ai"}
+# `hr` and `mdm` are their own categories rather than folded into `saas`
+# for the same reason `ai` is: a `saas` connector pulls a vendor's audit log
+# and produces events, while these produce slowly-changing *context* about
+# people and devices and emit no events at all. The console groups by
+# category, and a reader looking for "where does my employee data come
+# from" should not have to find it among twenty-two SaaS audit sources.
+ALLOWED_CATEGORIES = {"siem", "edr", "cloud", "iam", "saas", "audit", "vcs", "ndr", "network", "ai", "hr", "mdm"}
 ALLOWED_FIELD_TYPES = {"string", "secret", "select", "textarea", "boolean", "number"}
 
 

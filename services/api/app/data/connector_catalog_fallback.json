@@ -572,6 +572,41 @@
   },
   {
     "capabilities": [
+      "pull_workforce"
+    ],
+    "category": "hr",
+    "connector_id": "bamboohr",
+    "connector_name": "BambooHR",
+    "description": "Employment status, start and last-day dates, manager, department and worker type from BambooHR, as triage context. Read-only; no personal or compensation data is stored.",
+    "docs_url": "/docs/connectors/bamboohr",
+    "fields": [
+      {
+        "help_text": "The first label of your BambooHR URL: acme.bamboohr.com -> acme.",
+        "label": "Company subdomain",
+        "name": "subdomain",
+        "placeholder": "acme",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "Generated from your BambooHR profile under API Keys. Needs directory and employee read access.",
+        "label": "API key",
+        "name": "api_key",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": 5000,
+        "help_text": "A ceiling on the per-employee reads one sync will make.",
+        "label": "Maximum employees per sync",
+        "name": "max_employees",
+        "required": false,
+        "type": "number"
+      }
+    ]
+  },
+  {
+    "capabilities": [
       "pull_audit",
       "pivot_user",
       "read_audit_trail"
@@ -2011,7 +2046,7 @@
     "category": "saas",
     "connector_id": "llm_usage",
     "connector_name": "AI / LLM Usage Audit",
-    "description": "Pull organization audit logs from OpenAI or Anthropic \u2014 API key creation, role grants, logging/MFA changes, project deletes. Pairs with the llm-* detection rules. Auth is an admin/audit-scoped API key.",
+    "description": "Pull organization audit logs from an AI provider \u2014 API key creation, role grants, logging/MFA changes, Copilot agent and content-exclusion settings, and consent grants to AI applications. Pairs with the llm-* and ai-* detection rules. Auth is an admin/audit-scoped token.",
     "docs_url": "/docs/connectors/llm_usage",
     "fields": [
       {
@@ -2025,6 +2060,22 @@
           {
             "label": "Anthropic",
             "value": "anthropic"
+          },
+          {
+            "label": "Gemini in Google Workspace",
+            "value": "google_gemini"
+          },
+          {
+            "label": "GitHub Copilot",
+            "value": "github_copilot"
+          },
+          {
+            "label": "Microsoft 365 Copilot",
+            "value": "microsoft_copilot"
+          },
+          {
+            "label": "Microsoft Entra AI app consent",
+            "value": "entra_consent"
           }
         ],
         "required": true,
@@ -2035,6 +2086,22 @@
         "name": "api_key",
         "required": true,
         "type": "secret"
+      },
+      {
+        "help_text": "Required for GitHub Copilot: the audit-log endpoint is organization-scoped.",
+        "label": "GitHub organization",
+        "name": "organization",
+        "placeholder": "acme",
+        "required": false,
+        "type": "string"
+      },
+      {
+        "help_text": "Required for Microsoft 365 Copilot: the Management Activity API path is tenant-scoped.",
+        "label": "Microsoft tenant id",
+        "name": "tenant",
+        "placeholder": "00000000-0000-0000-0000-000000000000",
+        "required": false,
+        "type": "string"
       }
     ]
   },
@@ -2076,6 +2143,37 @@
       "supported_in_hosted": true,
       "token_url": "https://login.microsoftonline.com/common/oauth2/v2.0/token"
     }
+  },
+  {
+    "capabilities": [
+      "pull_device_inventory"
+    ],
+    "category": "mdm",
+    "connector_id": "microsoft_intune",
+    "connector_name": "Microsoft Intune",
+    "description": "Device owner, compliance state, OS version, encryption and threat-defence agent state from Microsoft Intune, as triage context. Read-only.",
+    "docs_url": "/docs/connectors/microsoft-intune",
+    "fields": [
+      {
+        "label": "Directory (tenant) ID",
+        "name": "tenant_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "label": "Application (client) ID",
+        "name": "client_id",
+        "required": true,
+        "type": "string"
+      },
+      {
+        "help_text": "The app registration needs the application permission DeviceManagementManagedDevices.Read.All, granted with admin consent.",
+        "label": "Client secret",
+        "name": "client_secret",
+        "required": true,
+        "type": "secret"
+      }
+    ]
   },
   {
     "capabilities": [
@@ -2718,6 +2816,33 @@
         "name": "api_key",
         "required": true,
         "type": "secret"
+      }
+    ]
+  },
+  {
+    "capabilities": [
+      "pull_workforce"
+    ],
+    "category": "hr",
+    "connector_id": "rippling",
+    "connector_name": "Rippling",
+    "description": "Employment status, start and end dates, manager, department and worker type from Rippling, as triage context. Read-only; compensation and personal data are never requested.",
+    "docs_url": "/docs/connectors/rippling",
+    "fields": [
+      {
+        "help_text": "A Rippling API token or installed-app access token carrying the workers.read scope.",
+        "label": "API token",
+        "name": "api_token",
+        "required": true,
+        "type": "secret"
+      },
+      {
+        "default": "https://rest.ripplingapis.com",
+        "help_text": "Override only if Rippling has given you a different regional host.",
+        "label": "API base URL",
+        "name": "base_url",
+        "required": false,
+        "type": "string"
       }
     ]
   },

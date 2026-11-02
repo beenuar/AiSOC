@@ -49,6 +49,7 @@ from app.confidence.groundedness import score_groundedness
 from app.context import dispositions as dispositions_module
 from app.context import identity as identity_module
 from app.context import knowledge_base, vendor_evidence
+from app.context import privilege as privilege_module
 from app.context.tenant_skills import select_skill
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
@@ -143,6 +144,7 @@ _METRICS = {
     "runbooks_refused_for_injection": 0,
     "recent_dispositions_read": 0,
     "identity_context_read": 0,
+    "privilege_context_read": 0,
     "errors": 0,
 }
 
@@ -768,6 +770,12 @@ class FusedAlertTriageWorker:
                     await self._attach_recent_dispositions(state)
                     await self._attach_identity_context(state)
                     await self._attach_vendor_evidence(state)
+                    # Depth 2 wave 2, 1.1. Unlike the three above, this one
+                    # *does* take a point in time, and it is the alert's own:
+                    # the posture store is versioned precisely so "what could
+                    # this identity do when it acted" is answerable, and
+                    # passing no time would silently ask the other question.
+                    await self._attach_privilege_context(state)
             # Bind a CostTracker so every LLM call on this path records its
             # token/cost (safe_ainvoke -> record_llm_call) — previously the
             # highest-volume LLM spend was recorded as $0 and invisible.
@@ -1229,6 +1237,57 @@ class FusedAlertTriageWorker:
             return
         state.identity_context = found.as_state()
         _METRICS["identity_context_read"] += len(found.identities)
+
+    @staticmethod
+    def _event_time_of(state: InvestigationState) -> datetime | None:
+        """The alert's own event time, or ``None`` to mean "do not guess".
+
+        ``None`` propagates to a lookup at *now*, which is the honest
+        fallback for an alert that carries no timestamp: the alternative is
+        inventing one, and a fabricated point in time selects a posture
+        version with the same confidence as a real one.
+        """
+        raw = state.raw_alert or {}
+        for key in ("event_time", "timestamp", "first_seen", "@timestamp"):
+            value = raw.get(key)
+            if isinstance(value, datetime):
+                return value if value.tzinfo else value.replace(tzinfo=UTC)
+            if isinstance(value, str) and value.strip():
+                try:
+                    parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+                except ValueError:
+                    continue
+                return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+        return None
+
+    async def _attach_privilege_context(self, state: InvestigationState) -> None:
+        """What those accounts could do when they acted (depth 2 wave 2, 1.1).
+
+        Separate from ``_attach_identity_context`` and not gated on it, which
+        is the part worth stating: a cloud principal that no directory import
+        knows about still has effective permissions, and making privilege
+        conditional on a directory hit would lose exactly the service
+        accounts and assumed roles the tag set is most useful for.
+
+        The event's own timestamp is passed, never ``now()``: a role revoked
+        after the event is still what explains the event.
+        """
+        accounts = identity_module.accounts_for(state.raw_alert)
+        if not accounts:
+            return
+        try:
+            found = await privilege_module.fetch_privilege_context(
+                str(state.tenant_id),
+                principals=accounts,
+                at=self._event_time_of(state),
+            )
+        except Exception as exc:  # noqa: BLE001 - privilege context is advisory, triage is not
+            logger.warning("auto_triage_worker.privilege_lookup_failed", error=str(exc)[:200])
+            return
+        if not found:
+            return
+        state.privilege_context = found.as_state()
+        _METRICS["privilege_context_read"] += len(found.principals)
 
     async def _maybe_suppress_from_memory(
         self,
