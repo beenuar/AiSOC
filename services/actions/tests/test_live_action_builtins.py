@@ -65,10 +65,15 @@ def test_register_builtin_executors_returns_full_count() -> None:
     # read verbs (SentinelOne agents and threats, Defender alerts, Entra
     # sign-ins, Google Workspace login audit) and two verbs whose subject is
     # neither a host nor a principal (AWS CloudTrail lookup, Defender
-    # endpoint-telemetry search). Plus 2 from depth plan wave 2 item 8.2:
-    # the two NDR read verbs, whose subject is a network address rather than
-    # a host or a principal, so neither fits an existing verb.
-    assert count == 91
+    # endpoint-telemetry search). Plus 62 from wave-2 Phase 6.1: cloud,
+    # SaaS, code-platform and secure-web-gateway containment, which is the
+    # half of the estate the response surface had never reached — no AWS
+    # key or role-session containment, no GCP or Azure service identity, no
+    # GitHub, Slack, Salesforce, Snowflake or 1Password, and no gateway
+    # verb for a single URL. Plus 14 from wave-2 Phase 7.5: AI-estate
+    # containment, where the inventory could score a provider key's
+    # exposure and nothing could act on it.
+    assert count == 165
 
 
 def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
@@ -83,17 +88,46 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
     pairs = {(d.vendor_id, d.capability) for d in descriptors}
 
     expected = {
+        ("ai_gateway", "get_cloud_identity"),
+        ("ai_gateway", "restore_spend_cap"),
+        ("ai_gateway", "restore_token"),
+        ("ai_gateway", "revoke_token"),
+        ("ai_gateway", "set_spend_cap"),
+        ("aisoc_direct", "osquery_live_query"),
+        ("anthropic", "demote_role"),
+        ("anthropic", "get_cloud_identity"),
+        ("anthropic", "remove_workspace_member"),
+        ("anthropic", "restore_token"),
+        ("anthropic", "revoke_token"),
+        ("aws", "deactivate_access_key"),
+        ("aws", "disable_user"),
+        ("aws", "enable_user"),
+        ("aws", "get_cloud_identity"),
+        ("aws", "lookup_cloud_audit"),
+        ("aws", "quarantine_instance"),
+        ("aws", "reactivate_access_key"),
+        ("aws", "release_instance"),
+        ("aws", "restore_role_sessions"),
+        ("aws", "revoke_role_sessions"),
         ("aws_security_groups", "allow_ip"),
         ("aws_security_groups", "block_ip"),
+        ("azure_entra", "disable_service_identity"),
         ("azure_entra", "disable_user"),
+        ("azure_entra", "enable_service_identity"),
         ("azure_entra", "enable_user"),
         ("azure_entra", "force_mfa"),
+        ("azure_entra", "get_cloud_identity"),
+        ("azure_entra", "get_oauth_grants"),
         ("azure_entra", "reset_password"),
+        ("azure_entra", "revoke_oauth_grant"),
         ("azure_entra", "revoke_session"),
+        ("azure_entra", "revoke_token"),
         ("cloudflare", "allow_domain"),
         ("cloudflare", "allow_ip"),
+        ("cloudflare", "allow_url"),
         ("cloudflare", "block_domain"),
         ("cloudflare", "block_ip"),
+        ("cloudflare", "block_url"),
         ("crowdstrike", "get_detections"),
         ("crowdstrike", "get_host"),
         ("crowdstrike", "isolate_host"),
@@ -104,50 +138,92 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("defender", "ack_alert"),
         ("defender", "block_ioc"),
         ("defender", "capture_forensics"),
-        ("defender", "update_alert_disposition"),
+        ("defender", "get_detections"),
         ("defender", "get_host"),
         ("defender", "isolate_host"),
+        ("defender", "lookup_endpoint_telemetry"),
         ("defender", "run_av_scan"),
         ("defender", "suppress_alert"),
         ("defender", "unisolate_host"),
+        ("defender", "update_alert_disposition"),
         ("elastic", "ack_alert"),
         ("elastic", "search_siem"),
         ("elastic", "suppress_alert"),
         ("elastic", "update_alert_disposition"),
         ("elastic", "update_watcher"),
+        ("email", "notify"),
+        ("entra", "get_user_activity"),
+        ("fleetdm", "osquery_live_query"),
         ("fortigate", "allow_ip"),
         ("fortigate", "block_ip"),
+        ("gcp", "disable_service_identity"),
+        ("gcp", "enable_service_identity"),
+        ("gcp", "get_cloud_identity"),
+        ("gcp", "restore_token"),
+        ("gcp", "revoke_token"),
         ("generic", "block_domain"),
+        ("github", "disable_workflow"),
+        ("github", "enable_workflow"),
+        ("github", "get_cloud_identity"),
+        ("github", "get_secret_scanning_alerts"),
+        ("github", "remove_org_member"),
+        ("github", "restore_org_member"),
+        ("github", "revoke_deploy_key"),
+        ("github", "revoke_token"),
+        ("google_workspace", "block_sender"),
         ("google_workspace", "disable_user"),
         ("google_workspace", "enable_user"),
+        ("google_workspace", "get_cloud_identity"),
+        ("google_workspace", "get_oauth_grants"),
+        ("google_workspace", "get_user_activity"),
+        ("google_workspace", "purge_email"),
         ("google_workspace", "reset_password"),
+        ("google_workspace", "restore_email"),
+        ("google_workspace", "revoke_oauth_grant"),
         ("google_workspace", "revoke_session"),
+        ("google_workspace", "revoke_token"),
+        ("google_workspace", "search_mailboxes"),
+        ("google_workspace", "unblock_sender"),
         ("jira", "create_ticket"),
+        ("m365", "block_sender"),
+        ("m365", "purge_email"),
+        ("m365", "restore_email"),
+        ("m365", "search_mailboxes"),
+        ("m365", "unblock_sender"),
+        ("netskope", "allow_domain"),
+        ("netskope", "allow_url"),
+        ("netskope", "block_domain"),
+        ("netskope", "block_url"),
         ("okta", "disable_user"),
         ("okta", "force_mfa"),
+        ("okta", "get_cloud_identity"),
+        ("okta", "get_oauth_grants"),
         ("okta", "get_user_activity"),
-        # Gap-closure Phase 4.2. Five of these are new vendor arms on the
-        # three read verbs above, which is what declaring a contract per
-        # capability buys: they inherit the READ_ONLY classification and
-        # cannot drift low. The two `lookup_*` verbs needed their own
-        # contract because their subject is neither a host nor a principal.
-        ("sentinelone", "get_host"),
-        ("sentinelone", "get_detections"),
-        ("defender", "get_detections"),
-        ("entra", "get_user_activity"),
-        ("google_workspace", "get_user_activity"),
-        ("aws", "lookup_cloud_audit"),
-        ("defender", "lookup_endpoint_telemetry"),
-        # Depth plan wave 2, 8.2: network evidence for a vendor alert.
-        ("extrahop", "lookup_network_flows"),
-        ("extrahop", "lookup_network_device"),
         ("okta", "reset_password"),
+        ("okta", "revoke_oauth_grant"),
+        ("okta", "revoke_token"),
         ("okta", "suspend_session"),
+        ("onepassword", "disable_user"),
+        ("onepassword", "enable_user"),
+        ("onepassword", "get_cloud_identity"),
+        ("openai", "demote_role"),
+        ("openai", "get_cloud_identity"),
+        ("openai", "remove_workspace_member"),
+        ("openai", "revoke_token"),
+        ("osctrl", "osquery_live_query"),
         ("pagerduty", "create_ticket"),
-        ("qradar", "update_alert_disposition"),
+        ("pagerduty", "notify"),
         ("panos", "allow_ip"),
         ("panos", "block_ip"),
+        ("qradar", "update_alert_disposition"),
+        ("salesforce", "disable_user"),
+        ("salesforce", "enable_user"),
+        ("salesforce", "get_cloud_identity"),
+        ("salesforce", "revoke_session"),
+        ("salesforce", "revoke_token"),
         ("sentinel", "update_alert_disposition"),
+        ("sentinelone", "get_detections"),
+        ("sentinelone", "get_host"),
         ("sentinelone", "isolate_host"),
         ("sentinelone", "kill_process"),
         ("sentinelone", "quarantine_file"),
@@ -156,38 +232,27 @@ def test_builtin_executors_cover_canonical_vendor_capability_pairs() -> None:
         ("sentinelone", "unisolate_host"),
         ("servicenow", "create_ticket"),
         ("slack", "chatops_verify"),
+        ("slack", "disable_user"),
+        ("slack", "enable_user"),
+        ("slack", "get_cloud_identity"),
         ("slack", "notify"),
-        # Depth 5.1 — `notify` had one arm while the playbook packs address
-        # four channels, and `osquery_live_query` was a step type whose only
-        # implementation imported these clients from a service that does not
-        # contain them.
-        ("teams", "notify"),
-        ("email", "notify"),
-        ("pagerduty", "notify"),
-        ("osctrl", "osquery_live_query"),
-        ("fleetdm", "osquery_live_query"),
-        ("aisoc_direct", "osquery_live_query"),
+        ("slack", "revoke_session"),
+        ("snowflake", "disable_user"),
+        ("snowflake", "enable_user"),
+        ("snowflake", "get_cloud_identity"),
+        ("snowflake", "revoke_session"),
         ("splunk", "ack_alert"),
         ("splunk", "create_notable_event"),
-        ("splunk", "suppress_alert"),
         ("splunk", "search_siem"),
+        ("splunk", "suppress_alert"),
         ("splunk", "sync_detection_rule"),
         ("splunk", "update_alert_disposition"),
         ("teams", "chatops_verify"),
-        # Depth 7.1 — mailbox remediation. Ten pairs: five verbs against
-        # Microsoft 365 and Google Workspace. Before these the registry had
-        # no way to touch a mailbox at all, so the phishing response could
-        # block the sender's domain and not remove the message.
-        ("m365", "search_mailboxes"),
-        ("m365", "purge_email"),
-        ("m365", "restore_email"),
-        ("m365", "block_sender"),
-        ("m365", "unblock_sender"),
-        ("google_workspace", "search_mailboxes"),
-        ("google_workspace", "purge_email"),
-        ("google_workspace", "restore_email"),
-        ("google_workspace", "block_sender"),
-        ("google_workspace", "unblock_sender"),
+        ("teams", "notify"),
+        ("zscaler", "allow_domain"),
+        ("zscaler", "allow_url"),
+        ("zscaler", "block_domain"),
+        ("zscaler", "block_url"),
     }
     assert pairs == expected
 
@@ -218,7 +283,7 @@ def test_register_builtin_executors_is_idempotent_with_overwrite() -> None:
     register_builtin_executors()
     # Second call without overwrite would raise — confirm overwrite works.
     count = register_builtin_executors(overwrite=True)
-    assert count == 91
+    assert count == 165
 
 
 def test_register_builtin_twice_without_overwrite_raises() -> None:

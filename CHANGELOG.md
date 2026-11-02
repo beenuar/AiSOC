@@ -76,6 +76,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Response reaches the cloud, SaaS and code-platform estate.** The live
+  action surface covered hosts, user sessions, mail, network blocks, SIEM
+  and tickets, and stopped there: an AWS key in an attacker's hands, a
+  compromised GCP service account, a leaked GitHub token, a Slack or
+  Salesforce or Snowflake or 1Password account under someone else's
+  control, or a phishing page on a shared host all ended with "open a
+  ticket for the cloud team". Measured before the change by the new gate,
+  the tree carried **89 executor arms over 39 verbs**; it now carries
+  **151 over 60 verbs across 34 vendors**, including AWS access-key
+  deactivation, role-session revocation keyed on `aws:TokenIssueTime`,
+  agentless instance quarantine and IAM-user containment; GCP and Entra
+  service-identity containment; Workspace, Entra and Okta OAuth-grant and
+  application-password revocation; GitHub member, deploy-key and workflow
+  containment plus credential revocation through GitHub's own revocation
+  API; Slack, Salesforce, Snowflake and 1Password user and session
+  containment; and single-URL blocks at Cloudflare Gateway, Zscaler and
+  Netskope. Each verb declares a capability contract, and the conservative
+  answer wins at verb level rather than the most capable vendor's:
+  `revoke_token` declares no platform rollback because GitHub states a
+  revoked credential cannot be reactivated, even though GCP can re-enable
+  a key — which has its own verb an operator dispatches deliberately.
+  Verification is a **recorded gap, not a claim**: every client here has a
+  real read-back and `PostActionVerifier` is keyed on `ActionType`, which
+  live-action capabilities do not have, so none of these verbs is
+  automatic at any confidence and the read-backs ship as dispatchable read
+  verbs instead.
+- **An arm count that cannot be quoted three ways.**
+  `scripts/check_executor_arm_count.py` counts by the declared rule —
+  class-level `capability = "..."` declarations under
+  `services/actions/app/live_actions/` — rather than the looser grep that
+  also matches `reverse_capability` arguments and reports 22 arms that do
+  not exist. It cross-checks the declared set against
+  `builtins._BUILTIN_ADAPTERS` **in both directions**, so a class that
+  declares a capability and never registers cannot pad the headline while
+  answering `executor_not_found` at dispatch. The artefact at
+  `docs/audit/executor-arms.json` is generated, and a hand edit fails the
+  gate. `make stats` now carries the line.
+
+- **A playbook can ask the model one bounded question and cannot be steered
+  into an action by the answer.** A new `ask_model` step asks a
+  multiple-choice question about the evidence and branches on it. The
+  answer set is closed and written by the playbook author; an answer
+  outside it takes a declared fallback branch, which is required, because
+  the case that matters is the one where the model does not decide. The
+  answer selects a key in the author's own branch map, so the model's text
+  never becomes a step id. It cannot call a verb, pinned three ways: it is
+  routed through the control-flow table rather than the handler table that
+  reaches the action bridge, an AST test asserts the module imports
+  nothing that can dispatch, and a tripwire test makes the model answer
+  with the name of a containment verb and watches the step decide nothing.
+  The step type is in sync across all five vocabularies the parity gate
+  reads.
+- **Time gates on automatic response.** A tenant may declare when
+  automatic execution is acceptable — outside business hours, with nobody
+  on call, or during a change freeze — each opt-in, each applying from a
+  declared impact floor. The direction is fixed and asserted over every
+  impact and requirement the approval matrix emits: a schedule may only
+  raise AUTOMATIC to ANALYST and returns a decision that already requires
+  a human untouched. An on-call state the platform could not read counts
+  as nobody on call, because a failed rota lookup must not silently
+  re-enable containment at three in the morning. A tenant with no schedule
+  configured is byte-identically unaffected.
+- **Approval deadlines that do something.** Until now every approval
+  behaved identically at its deadline: the action did not happen and
+  nothing else happened either, which for the step that isolates a host
+  believed to be exfiltrating is a decision nobody made on purpose. A step
+  may now declare `stay_paused` (the existing behaviour, chosen rather
+  than implied), `rollback`, or one **named** limited containment verb.
+  The named verb is graded by its own contract through the ordinary
+  governed path, so a timeout is not a tier promotion: a verb the tenant's
+  autonomy tier would not auto-execute queues here exactly as it would
+  anywhere else.
+- **AI-estate containment.** The AI inventory could score a provider key's
+  exposure and nothing could act on it, so a key found in a public
+  repository was a finding with a recommendation and no verb. Fourteen
+  arms across OpenAI, Anthropic and an AI gateway now cover key
+  revocation, role demotion, workspace removal and spend caps where the
+  provider API offers them, with an approved kill-switch playbook
+  composing them. The three providers give three different answers to "can
+  this be undone" and the arms carry each honestly rather than claiming
+  the most capable vendor's.
+
+### Fixed
+
+- **A vendor retry no longer reopens a closed case.** Inbound ITSM sync
+  compared the mapped status to the current one with an exact equality, so
+  a case a human had closed in AiSOC, receiving an ordinary Jira
+  redelivery of `Done` — which maps to the *intermediate* `resolved` — was
+  moved backwards out of its terminal state. No unusual sequence was
+  needed, only a close followed by a retry, and Jira retries up to five
+  times while ServiceNow retries until it gets a 2xx. Found by driving the
+  production handler end to end for the first time: four correct unit
+  tests could not see it because each mocks the next layer. The guard is
+  scoped to terminal states only, because an ITSM moving a ticket from
+  Resolved back to In Progress is a real transition this product should
+  mirror.
 - **HR and managed-device context, kept current by a connector on a
   schedule** (depth plan wave 2, item 1.3). Three new connectors --
   BambooHR, Rippling and Microsoft Intune -- feed employment status, start

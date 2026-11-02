@@ -471,7 +471,7 @@ RATCHET: dict[str, str] = {
         "matched on the 32-byte single-use state nonce, which is itself the credential"
     ),
     # -- deliberately cross-tenant surfaces ----------------------------------
-    "services/agents/app/playbook/pause.py::expire_due::aisoc_playbook_pauses": (
+    "services/agents/app/playbook/pause.py::expire_due_returning::aisoc_playbook_pauses": (
         "the approval-expiry sweep: a per-tenant sweep would need a list of tenants to "
         "iterate, and a tenant missing from that list would have approvals that never "
         "expire, which is the silent hang the sweep exists to prevent"

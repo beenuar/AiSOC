@@ -401,6 +401,46 @@ def _family(field: str) -> str:
     return "other"
 
 
+def _module_field_names(path: Path) -> set[str]:
+    """Every string-literal dict key appearing in one module."""
+    names: set[str] = set()
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (SyntaxError, OSError):
+        return names
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Dict):
+            for key in node.keys:
+                if isinstance(key, ast.Constant) and isinstance(key.value, str):
+                    names.add(key.value)
+        # `d["key"] = v` and `d.get("key")` also declare a field name.
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
+            if isinstance(node.slice.value, str):
+                names.add(node.slice.value)
+        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+            if node.func.attr in {"get", "pop", "setdefault"} and node.args:
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    names.add(first.value)
+    return names
+
+
+def _connector_namespace_by_module() -> dict[str, set[str]]:
+    """Connector module stem -> the field names that module names.
+
+    The union of this is what most callers want, but not every caller: a
+    rule declares the ``log_source.product`` it matches, and "some connector
+    somewhere names this field" is a weaker statement than "the source this
+    rule reads emits it". Keeping the split lets a caller ask the stronger
+    question. See ``check_enrichment_decisions``, which found a GitHub rule
+    credited with a ``scopes`` field only an unrelated connector emits.
+    """
+    sources = list(CONNECTORS.rglob("*.py"))
+    if AI_SDK.is_dir():
+        sources += list(AI_SDK.rglob("*.py"))
+    return {path.stem: _module_field_names(path) for path in sorted(sources)}
+
+
 def _connector_namespace() -> set[str]:
     """Every string-literal dict key appearing in a connector module.
 
@@ -409,28 +449,8 @@ def _connector_namespace() -> set[str]:
     f-string prefix is still picked up as a literal where one exists.
     """
     namespace: set[str] = set(_PLATFORM_FIELDS)
-    sources = list(CONNECTORS.rglob("*.py"))
-    if AI_SDK.is_dir():
-        sources += list(AI_SDK.rglob("*.py"))
-    for path in sorted(sources):
-        try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, OSError):
-            continue
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Dict):
-                for key in node.keys:
-                    if isinstance(key, ast.Constant) and isinstance(key.value, str):
-                        namespace.add(key.value)
-            # `d["key"] = v` and `d.get("key")` also declare a field name.
-            elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant):
-                if isinstance(node.slice.value, str):
-                    namespace.add(node.slice.value)
-            elif isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                if node.func.attr in {"get", "pop", "setdefault"} and node.args:
-                    first = node.args[0]
-                    if isinstance(first, ast.Constant) and isinstance(first.value, str):
-                        namespace.add(first.value)
+    for names in _connector_namespace_by_module().values():
+        namespace |= names
     return namespace
 
 

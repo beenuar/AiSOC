@@ -69,6 +69,26 @@ def check(
 
     namespace = fields_gate._connector_namespace() | fields_gate._template_namespace() | fields_gate._go_normalizer_namespace()
 
+    # The resolvability check below asks whether the *source a rule reads*
+    # can supply its fields, which is not the same question as whether any
+    # connector anywhere names them. `scopes` is emitted by the AI-estate
+    # connector and by nothing in GitHub's audit log, and on the flat union
+    # it un-retired a GitHub rule whose refusal says GitHub carries no
+    # created-token scopes at all.
+    #
+    # Template and normaliser fields stay shared: those are platform-wide
+    # normalisation that applies whatever the vendor. Only the connector
+    # half is scoped, and only when the product names a connector module —
+    # products like `windows` and `waf` name none, and those fall back to
+    # the full union, which is the behaviour this replaces.
+    by_module = fields_gate._connector_namespace_by_module()
+    shared = fields_gate._template_namespace() | fields_gate._go_normalizer_namespace() | set(fields_gate._PLATFORM_FIELDS)
+
+    def _namespace_for(spec: dict[str, Any]) -> set[str]:
+        product = ((spec.get("log_source") or {}).get("product") or "").strip()
+        own = by_module.get(product)
+        return shared | own if own is not None else namespace
+
     for key, decision in decisions.items():
         if key not in specs:
             problems.append(f"{key} is decided but no spec declares it; a slug was renamed or removed")
@@ -86,10 +106,11 @@ def check(
         # platform can now resolve is a rule that works, and retiring it
         # lowers the ratchet by removing a detection rather than by closing
         # a gap.
+        scoped = _namespace_for(specs[key])
         missing = [
             f
             for f in fields_gate._rule_fields(specs[key].get("match_when") or {})
-            if f not in namespace and not fields_gate._is_derivable(f, namespace)
+            if f not in scoped and not fields_gate._is_derivable(f, scoped)
         ]
         if not missing:
             problems.append(
@@ -125,6 +146,24 @@ def _self_test_injections(
     invented = dict(decisions)
     invented["identity/a-slug-that-does-not-exist"] = decisions[first]
     results.append(("catches a decision for a rule no spec declares", bool(check(invented, kinds, specs, engine_ids, lock, fields_gate))))
+
+    # Product scoping, proven in both directions. Scoping the connector
+    # namespace to the rule's own source makes the resolvability check fire
+    # less often, so it needs a control showing it still fires at all — and
+    # the clean-tree case above is the other half, since `scopes` reaches
+    # the union from an unrelated connector and must not count.
+    own_source = dict(specs)
+    own_source[first] = {
+        **specs[first],
+        "log_source": {"product": "github", "service": "audit"},
+        "match_when": {"action": "org.add_member"},
+    }
+    results.append(
+        (
+            "catches a retired rule whose own product's connector resolves every field",
+            bool(check(decisions, kinds, own_source, engine_ids, lock, fields_gate)),
+        )
+    )
 
     still_shipped = set(engine_ids) | {lock.get(first, "")}
     results.append(

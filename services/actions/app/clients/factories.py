@@ -21,7 +21,13 @@ does not move anyone's patch target.
 
 from __future__ import annotations
 
+from app.clients.ai_provider_clients import (
+    AIGatewayClient,
+    AnthropicAdminClient,
+    OpenAIAdminClient,
+)
 from app.clients.aws_cloudtrail_client import AWSCloudTrailClient
+from app.clients.aws_iam_client import AWSIAMClient
 from app.clients.aws_security_groups import AWSSecurityGroupsClient
 from app.clients.azure_entra_client import AzureEntraClient
 from app.clients.cloudflare_client import CloudflareClient
@@ -30,12 +36,19 @@ from app.clients.crowdstrike_rtr import CrowdStrikeRTRClient
 from app.clients.defender_client import DefenderClient
 from app.clients.extrahop_client import ExtraHopClient
 from app.clients.fortigate_client import FortiGateClient
+from app.clients.gcp_iam_client import GCPIAMClient
+from app.clients.github_client import GitHubClient
 from app.clients.gmail_client import GmailClient
 from app.clients.google_workspace_client import GoogleWorkspaceClient
 from app.clients.m365_mail_client import M365MailClient
 from app.clients.okta_client import OktaClient
+from app.clients.onepassword_client import OnePasswordClient
 from app.clients.panos_client import PanOsClient
+from app.clients.salesforce_client import SalesforceClient
 from app.clients.sentinelone_client import SentinelOneClient
+from app.clients.slack_admin_client import SlackAdminClient
+from app.clients.snowflake_client import SnowflakeClient
+from app.clients.swg_clients import NetskopeClient, ZscalerClient
 
 
 def _aws_client(params: dict) -> AWSSecurityGroupsClient | None:
@@ -251,8 +264,171 @@ def _gmail_client(params: dict) -> GmailClient | None:
         return None
 
 
+# ---------------------------------------------------------------------------
+# Wave-2 Phase 6.1 factories
+# ---------------------------------------------------------------------------
+#
+# Each ships a ``*_CLIENT_PARAM_KEYS`` tuple beside it. The tuple is not
+# documentation: ``tests/test_dry_run_credential_strip.py`` re-derives the
+# keys a factory reads by parsing its source and asserts the two agree, and
+# the per-arm dry-run test strips the tuple and requires the factory to go
+# ``None``. That pairing is what stops the defect this repository has
+# already shipped — a strip list naming ``splunk_host`` while the factory
+# read ``splunk_url``, so a "dry run" called the customer's production
+# Splunk.
+
+
+AWS_IAM_CLIENT_PARAM_KEYS = (
+    "aws_access_key_id",
+    "aws_secret_access_key",
+    "aws_session_token",
+    "aws_region",
+)
+
+
+def _aws_iam_client(params: dict) -> AWSIAMClient | None:
+    access_key_id = params.get("aws_access_key_id")
+    secret_access_key = params.get("aws_secret_access_key")
+    if not (access_key_id and secret_access_key):
+        return None
+    return AWSIAMClient(
+        access_key_id=access_key_id,
+        secret_access_key=secret_access_key,
+        session_token=params.get("aws_session_token"),
+        region=params.get("aws_region", "us-east-1"),
+    )
+
+
+GCP_IAM_CLIENT_PARAM_KEYS = ("gcp_service_account_key",)
+
+
+def _gcp_iam_client(params: dict) -> GCPIAMClient | None:
+    key = params.get("gcp_service_account_key")
+    if not key:
+        return None
+    try:
+        return GCPIAMClient(service_account_key=key)
+    except ValueError:
+        # A malformed key is a configuration error and the caller's
+        # "credentials not configured" branch is where it belongs: both
+        # mean the vendor was not reached, and raising here would turn it
+        # into an executor crash. Same reasoning as _gmail_client.
+        return None
+
+
+GITHUB_CLIENT_PARAM_KEYS = ("github_token",)
+
+
+def _github_client(params: dict) -> GitHubClient | None:
+    token = params.get("github_token")
+    if not token:
+        return None
+    return GitHubClient(token=token)
+
+
+SLACK_ADMIN_CLIENT_PARAM_KEYS = ("slack_admin_token", "slack_team_id")
+
+
+def _slack_admin_client(params: dict) -> SlackAdminClient | None:
+    token = params.get("slack_admin_token")
+    if not token:
+        return None
+    return SlackAdminClient(admin_token=token, team_id=params.get("slack_team_id"))
+
+
+SALESFORCE_CLIENT_PARAM_KEYS = ("salesforce_instance_url", "salesforce_access_token")
+
+
+def _salesforce_client(params: dict) -> SalesforceClient | None:
+    instance_url = params.get("salesforce_instance_url")
+    access_token = params.get("salesforce_access_token")
+    if not (instance_url and access_token):
+        return None
+    return SalesforceClient(instance_url=instance_url, access_token=access_token)
+
+
+SNOWFLAKE_CLIENT_PARAM_KEYS = (
+    "snowflake_account_url",
+    "snowflake_token",
+    "snowflake_token_type",
+    "snowflake_warehouse",
+    "snowflake_role",
+)
+
+
+def _snowflake_client(params: dict) -> SnowflakeClient | None:
+    account_url = params.get("snowflake_account_url")
+    token = params.get("snowflake_token")
+    if not (account_url and token):
+        return None
+    return SnowflakeClient(
+        account_url=account_url,
+        token=token,
+        token_type=params.get("snowflake_token_type", "OAUTH"),
+        warehouse=params.get("snowflake_warehouse"),
+        role=params.get("snowflake_role"),
+    )
+
+
+ONEPASSWORD_CLIENT_PARAM_KEYS = ("onepassword_scim_url", "onepassword_scim_token")
+
+
+def _onepassword_client(params: dict) -> OnePasswordClient | None:
+    bridge_url = params.get("onepassword_scim_url")
+    token = params.get("onepassword_scim_token")
+    if not (bridge_url and token):
+        return None
+    return OnePasswordClient(bridge_url=bridge_url, bearer_token=token)
+
+
+ZSCALER_CLIENT_PARAM_KEYS = ("zscaler_base_url", "zscaler_session_cookie")
+
+
+def _zscaler_client(params: dict) -> ZscalerClient | None:
+    base_url = params.get("zscaler_base_url")
+    cookie = params.get("zscaler_session_cookie")
+    if not (base_url and cookie):
+        return None
+    return ZscalerClient(base_url=base_url, session_cookie=cookie)
+
+
+NETSKOPE_CLIENT_PARAM_KEYS = ("netskope_base_url", "netskope_api_token")
+
+
+def _netskope_client(params: dict) -> NetskopeClient | None:
+    base_url = params.get("netskope_base_url")
+    token = params.get("netskope_api_token")
+    if not (base_url and token):
+        return None
+    return NetskopeClient(base_url=base_url, api_token=token)
+
+
 __all__ = [
+    "AI_GATEWAY_CLIENT_PARAM_KEYS",
+    "ANTHROPIC_ADMIN_CLIENT_PARAM_KEYS",
+    "AWS_IAM_CLIENT_PARAM_KEYS",
+    "GCP_IAM_CLIENT_PARAM_KEYS",
+    "OPENAI_ADMIN_CLIENT_PARAM_KEYS",
+    "GITHUB_CLIENT_PARAM_KEYS",
+    "NETSKOPE_CLIENT_PARAM_KEYS",
+    "ONEPASSWORD_CLIENT_PARAM_KEYS",
+    "SALESFORCE_CLIENT_PARAM_KEYS",
+    "SLACK_ADMIN_CLIENT_PARAM_KEYS",
+    "SNOWFLAKE_CLIENT_PARAM_KEYS",
+    "ZSCALER_CLIENT_PARAM_KEYS",
+    "_ai_gateway_client",
+    "_anthropic_admin_client",
     "_aws_client",
+    "_aws_iam_client",
+    "_gcp_iam_client",
+    "_github_client",
+    "_netskope_client",
+    "_onepassword_client",
+    "_openai_admin_client",
+    "_salesforce_client",
+    "_slack_admin_client",
+    "_snowflake_client",
+    "_zscaler_client",
     "_cloudflare_client",
     "_cloudtrail_client",
     "_cortex_client",
@@ -267,3 +443,38 @@ __all__ = [
     "_panos_client",
     "_s1_client",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Wave-2 Phase 7.5 factories (AI estate)
+# ---------------------------------------------------------------------------
+
+OPENAI_ADMIN_CLIENT_PARAM_KEYS = ("openai_admin_key",)
+
+
+def _openai_admin_client(params: dict) -> OpenAIAdminClient | None:
+    admin_key = params.get("openai_admin_key")
+    if not admin_key:
+        return None
+    return OpenAIAdminClient(admin_key=admin_key)
+
+
+ANTHROPIC_ADMIN_CLIENT_PARAM_KEYS = ("anthropic_admin_key",)
+
+
+def _anthropic_admin_client(params: dict) -> AnthropicAdminClient | None:
+    admin_key = params.get("anthropic_admin_key")
+    if not admin_key:
+        return None
+    return AnthropicAdminClient(admin_key=admin_key)
+
+
+AI_GATEWAY_CLIENT_PARAM_KEYS = ("ai_gateway_url", "ai_gateway_master_key")
+
+
+def _ai_gateway_client(params: dict) -> AIGatewayClient | None:
+    base_url = params.get("ai_gateway_url")
+    master_key = params.get("ai_gateway_master_key")
+    if not (base_url and master_key):
+        return None
+    return AIGatewayClient(base_url=base_url, master_key=master_key)
