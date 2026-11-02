@@ -44,6 +44,12 @@ from aisoc_sandbox.cli import main
 
 SEVERITIES = ["info", "low", "medium", "high", "critical"]
 
+#: The retired hand-typed corpus size. Kept as a pattern, not a substring:
+#: an ISO-8601 timestamp whose microseconds end in `800` reads as
+#: `...456800+00:00` and contains the literal. Same shape as the one
+#: `scripts/check_sandbox_honesty.py` uses, for the same reason.
+RETIRED_RULE_FIGURE = re.compile(r"(?<!\d)800\s*\+(?!\d)")
+
 
 # ---------------------------------------------------------------------------
 # The reporter's two inputs, verbatim in shape.
@@ -394,13 +400,45 @@ def test_no_stale_hand_typed_rule_count(scenario_id: str) -> None:
 
     Pinned against the generated constant rather than against a literal
     here, or this test becomes the next surface to go stale.
+
+    Matched with a pattern rather than `"800+" in emitted`: the blob carries
+    ISO-8601 timestamps, and a microsecond field ending in `800` puts the
+    literal inside `...:56.456800+00:00`. That made the assertion fail on
+    roughly one run in twenty for a reason no author could act on. The figure
+    this guards never has a digit on both sides of it; a timestamp always
+    does, which is the distinction the pattern draws.
     """
 
     from aisoc_sandbox._corpus import LIVE_ENGINE_EXECUTABLE_RULES
 
     emitted = json.dumps(run_investigation(load_scenario(scenario_id)).to_dict(), ensure_ascii=False)
-    assert "800+" not in emitted
+    assert not RETIRED_RULE_FIGURE.search(emitted)
     assert f"{LIVE_ENGINE_EXECUTABLE_RULES:,}" in emitted
+
+
+def test_the_retired_figure_pattern_still_catches_the_thing_it_is_for() -> None:
+    """The negative control for the pattern above.
+
+    Loosening a check to clear a flake is how a gate stops working, so the
+    distinction it now draws is asserted in both directions: every shape the
+    retired figure was found in must still match, and the timestamp that
+    caused the flake must not.
+    """
+
+    for caught in (
+        '{"rule_count": "800+"}',
+        '"rule_count": "800 +"',
+        "matched against 800+ rules",
+        '["800+"]',
+    ):
+        assert RETIRED_RULE_FIGURE.search(caught), caught
+
+    for ignored in (
+        '"started_at": "2026-11-02T22:45:56.456800+00:00"',
+        '"finished_at": "2026-11-02T22:45:56.800800+00:00"',
+        '{"rule_count": "2,538"}',
+    ):
+        assert not RETIRED_RULE_FIGURE.search(ignored), ignored
 
 
 @pytest.mark.parametrize("scenario_id", sorted(available_scenarios()))
