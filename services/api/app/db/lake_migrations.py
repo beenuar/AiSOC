@@ -170,6 +170,26 @@ _V4_SESSIONS = (
     "ALTER TABLE aisoc.raw_events ADD INDEX IF NOT EXISTS idx_session_id session_id TYPE bloom_filter(0.01) GRANULARITY 4",
 )
 
+# ── 005: anonymizer and hosting class ──────────────────────────────────────
+#
+# Depth plan wave 2, item 1.6. Ingest stamps the class from a pinned local
+# dataset, so a hunt asking "which logins came from a Tor exit relay last
+# quarter" is an index lookup rather than a JSONExtract over every ZSTD blob.
+#
+# The dataset version is a column beside the class and not a detail in the
+# blob, because the dataset is refreshed: an address that was a Tor exit in
+# March is not necessarily one in November, and a query that cannot see which
+# snapshot answered cannot tell a reclassification from a behaviour change.
+#
+# No bloom filter on `src_ip_class`: it is LowCardinality with five possible
+# values plus empty, so the primary index and the column's own dictionary
+# already answer it, and a filter would cost writes for nothing.
+_V5_IP_CLASS = (
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_ip_class LowCardinality(String) DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_ip_class_source LowCardinality(String) DEFAULT ''",
+    "ALTER TABLE aisoc.raw_events ADD COLUMN IF NOT EXISTS src_ip_class_dataset_version LowCardinality(String) DEFAULT ''",
+)
+
 
 MIGRATIONS: tuple[LakeMigration, ...] = (
     LakeMigration(
@@ -211,6 +231,16 @@ MIGRATIONS: tuple[LakeMigration, ...] = (
         statements=_V4_SESSIONS,
         needs_cluster_ddl=True,
         tags=("sessions", "depth-2.4"),
+    ),
+    LakeMigration(
+        id="005_ip_class",
+        description=(
+            "Adds the anonymizer and hosting classification columns (class, the publisher the record came "
+            "from, and the pinned dataset version that answered) to aisoc.raw_events."
+        ),
+        statements=_V5_IP_CLASS,
+        needs_cluster_ddl=True,
+        tags=("ip-class", "depth2-1.6"),
     ),
 )
 

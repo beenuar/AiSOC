@@ -58,7 +58,13 @@ import re
 import sys
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+# `scripts/` is on sys.path when this runs as a program but not when a test
+# loads it by path with importlib. gate_toolkit sits beside it either way.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root  # noqa: E402
+
+REPO_ROOT = repo_root()
 MATRIX = REPO_ROOT / "docs" / "audit" / "CLAIM_TO_GATE_MATRIX.md"
 CONSOLE = REPO_ROOT / "apps" / "web" / "src"
 

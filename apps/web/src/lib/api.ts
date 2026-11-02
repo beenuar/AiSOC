@@ -1257,6 +1257,34 @@ export interface AlertIOC {
 
 export type ConfidenceLabel = "high" | "medium" | "low";
 
+/**
+ * The closed set of anonymizer and hosting classes ingest can stamp.
+ * Mirrors `ALL_CLASSES` in `scripts/ip_class_dataset.py` and the dataset
+ * manifest; a value outside it is dropped rather than rendered, because an
+ * unrecognised class on a security surface reads as a finding nobody can
+ * explain.
+ */
+export type IpClass =
+  | "vpn"
+  | "tor_exit"
+  | "public_proxy"
+  | "residential_proxy"
+  | "hosting_provider";
+
+const IP_CLASSES: readonly IpClass[] = [
+  "vpn",
+  "tor_exit",
+  "public_proxy",
+  "residential_proxy",
+  "hosting_provider",
+];
+
+function asIpClass(value: unknown): IpClass | undefined {
+  return typeof value === "string" && (IP_CLASSES as readonly string[]).includes(value)
+    ? (value as IpClass)
+    : undefined;
+}
+
 export interface ConfidenceFactor {
   factor: string;
   label: string;
@@ -1363,6 +1391,17 @@ export interface Alert {
    */
   confidenceScore?: number;
   confidenceRationale?: ConfidenceFactor[];
+  /**
+   * Anonymizer or hosting class of the source address, stamped at ingest
+   * from a pinned local dataset. Absent means the dataset had no entry,
+   * which is the ordinary case: three of the five classes ship with no
+   * records because no redistributable source for them exists. Render
+   * absence as nothing at all, never as a reassuring "not an anonymizer".
+   */
+  srcIpClass?: IpClass;
+  /** Version of the dataset that produced `srcIpClass`. Shown beside the
+   *  chip because the dataset is refreshed and a class has to be datable. */
+  srcIpClassDatasetVersion?: string;
   ledgerRunId?: string;
   /** Analyst-corrected verdict (Tier 1.5 override loop). */
   disposition?: "true_positive" | "false_positive" | "benign" | "escalate" | null;
@@ -1643,6 +1682,11 @@ function normalizeAlert(raw: unknown): Alert {
     confidenceLabel: (r.confidence_label ?? r.confidenceLabel) as ConfidenceLabel | undefined,
     confidenceScore,
     confidenceRationale,
+    srcIpClass: asIpClass(r.src_ip_class ?? r.srcIpClass),
+    srcIpClassDatasetVersion: pickStr(
+      "src_ip_class_dataset_version",
+      "srcIpClassDatasetVersion",
+    ),
     ledgerRunId: pickStr("ledger_run_id", "ledgerRunId"),
     disposition: (r.disposition ?? null) as Alert["disposition"],
     narrative: (r.narrative as string | null | undefined) ?? null,
@@ -7506,4 +7550,111 @@ export const caseDepthApi = {
       method: 'PUT',
       body: JSON.stringify({ values }),
     }),
+};
+
+// ── Access review (depth plan wave 2, 1.2) ─────────────────────────────────
+//
+// Read-only. Every route below computes or reads findings; none of them
+// changes a vendor object, and the only write is a reviewer acknowledging a
+// finding, which is state about the review rather than about the estate.
+
+export interface AccessReviewFinding {
+  id: string;
+  run_id: string;
+  kind: string;
+  provider: string;
+  principal_id: string;
+  severity: "info" | "low" | "medium" | "high" | "critical";
+  title: string;
+  detail: string;
+  /** The object a person should go and change. Never empty. */
+  object_hint: string;
+  recommendation: string;
+  /** Null when usage was not measured, or when no built-in role is smaller. */
+  best_fit_role: string | null;
+  evidence: Record<string, unknown>;
+  /**
+   * False when no usage data backed this finding. Usage-dependent kinds are
+   * suppressed entirely in that case, so a false here marks the weaker
+   * non-usage findings for what they are.
+   */
+  usage_measured: boolean;
+  acknowledged_at: string | null;
+  acknowledged_by: string | null;
+  acknowledged_note: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+}
+
+export interface AccessReviewProviderState {
+  provider: string;
+  run_state: "nothing_reviewed" | "no_findings" | "findings" | "failed";
+  reviewed_principals: number;
+  usage_measured_for: number;
+  finding_count: number;
+  window_start: string | null;
+  window_end: string | null;
+  note: string | null;
+  last_run_at: string | null;
+}
+
+export interface AccessReviewSummary {
+  /**
+   * `never_run` is a distinct state from a run that found nothing, and the
+   * page renders them differently on purpose: an estate nobody looked at
+   * must not read as an estate with nothing wrong.
+   */
+  state: "never_run" | "reviewed";
+  open_findings: number;
+  providers: AccessReviewProviderState[];
+  note?: string;
+}
+
+export interface AccessReviewKind {
+  kind: string;
+  title: string;
+  severity: string;
+  object_hint: string;
+  recommendation: string;
+  needs_usage: boolean;
+}
+
+export const accessReviewApi = {
+  async kinds(): Promise<{ kinds: AccessReviewKind[] }> {
+    return request<{ kinds: AccessReviewKind[] }>("/api/v1/access-review/kinds");
+  },
+
+  async summary(provider?: string): Promise<AccessReviewSummary> {
+    const query = provider ? `?provider=${encodeURIComponent(provider)}` : "";
+    return request<AccessReviewSummary>(`/api/v1/access-review/summary${query}`);
+  },
+
+  async findings(params: {
+    provider?: string;
+    kind?: string;
+    includeAcknowledged?: boolean;
+  } = {}): Promise<{ items: AccessReviewFinding[]; count: number }> {
+    const search = new URLSearchParams();
+    if (params.provider) search.set("provider", params.provider);
+    if (params.kind) search.set("kind", params.kind);
+    if (params.includeAcknowledged) search.set("include_acknowledged", "true");
+    const query = search.toString();
+    return request<{ items: AccessReviewFinding[]; count: number }>(
+      `/api/v1/access-review/findings${query ? `?${query}` : ""}`,
+    );
+  },
+
+  async run(provider: string): Promise<AccessReviewSummary & { run_id: string }> {
+    return request<AccessReviewSummary & { run_id: string }>(
+      `/api/v1/access-review/run?provider=${encodeURIComponent(provider)}`,
+      { method: "POST" },
+    );
+  },
+
+  async acknowledge(findingId: string, note: string): Promise<AccessReviewFinding> {
+    return request<AccessReviewFinding>(
+      `/api/v1/access-review/findings/${encodeURIComponent(findingId)}/acknowledge`,
+      { method: "POST", body: JSON.stringify({ note }) },
+    );
+  },
 };

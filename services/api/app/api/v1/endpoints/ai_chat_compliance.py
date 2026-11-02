@@ -49,6 +49,7 @@ from app.models.ai_chat_compliance import (
     AiChatUser,
 )
 from app.security.credential_vault import CredentialVaultError, get_vault
+from app.services.ai_estate_collectors import collect_chat_compliance
 
 logger = structlog.get_logger()
 
@@ -308,3 +309,52 @@ async def list_content_labels(
         total=total,
         contentLabelsEnabled=bool(config and config.content_labels_enabled),
     )
+
+
+class CollectionResponse(BaseModel):
+    """What one collection pass did, per sink.
+
+    Per sink rather than one total: a single number presented as the
+    operation's result reads as total failure when one sink failed and the
+    others worked, which is how a threat-intel pass reported `indexed: 0`
+    beside a successful write of 1,739 rows.
+    """
+
+    users: int
+    projects: int
+    events: int
+    contentLabels: int
+    assets: int
+    #: Present and empty is different from absent. An empty list means the
+    #: pass ran cleanly; a non-empty one names what failed.
+    errors: list[str] = Field(default_factory=list)
+    #: Sinks deliberately not attempted, with the reason — an Admin API key
+    #: reaching only the activity feed, or content classification being off.
+    skipped: dict[str, str] = Field(default_factory=dict)
+
+
+@router.post("/collect", response_model=CollectionResponse)
+async def collect_now(
+    db: TenantDBSession,
+    current_user: Annotated[CurrentUser, Depends(require_permission("ai_estate:write"))],
+) -> CollectionResponse:
+    """Run one collection pass for this tenant.
+
+    Explicit rather than scheduled. Every read here reaches a third party
+    with the tenant's own credential, and the plan's rule for anything
+    that reaches out is off by default and enabled per tenant — so the
+    tenant decides when it runs, not a loop that started the moment a key
+    was saved.
+
+    A tenant with no configuration, or with collection disabled, gets a
+    zero-count response whose `skipped` says which it was. The two are
+    different states and a bare zero cannot tell them apart.
+    """
+    result = await collect_chat_compliance(db, current_user.tenant_id)
+    logger.info(
+        "ai_chat_compliance.collect_requested",
+        tenant_id=str(current_user.tenant_id),
+        actor=str(current_user.user_id),
+        **result.as_dict(),
+    )
+    return CollectionResponse(**result.as_dict())

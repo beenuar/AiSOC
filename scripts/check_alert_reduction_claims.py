@@ -347,6 +347,15 @@ def _dedup_violations(files: dict[Path, str]) -> list[str]:
                 f"{rel}: quotes {combined:g}%, the sum of {label}. They reduce different things "
                 "over overlapping inputs and must never be added."
             )
+    # The two reductions must stay separately labelled. A page that quoted
+    # their sum would be publishing a number no suite measures, over a
+    # denominator that counts some inputs twice.
+    combined = published_reduction_pct() + dedup_pct
+    if real_figure_pattern(combined).search(text):
+        found.append(
+            f"{rel}: quotes {combined:g}%, the sum of the correlation and repeat-folding figures. "
+            "They reduce different things over overlapping inputs and must never be added."
+        )
     return found
 
 
