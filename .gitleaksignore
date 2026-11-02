@@ -37,22 +37,47 @@
 # the line numbers were corrected rather than the entries dropped. One entry
 # is genuinely new: `llm-copilot-bulk-resource-access` trips the heuristic on
 # the word "access", for the same reason as its neighbours.
+#
+# Wave-2 2.1 did the same at a larger scale: 338 new detections took the lock
+# from 865 slugs to 1293, moving every line and taking the fingerprint count
+# 16 -> 28. Every addition was read before it was pinned and all are the same
+# heuristic-on-the-slug match as their neighbours — GitLab deploy keys and
+# personal access tokens, GitHub secrets, Entra conditional access, a
+# Salesforce password change. The values are still rule ids.
+#
+# Re-derive this block with the allow-list moved aside, never from the
+# findings a run with it in place still reports: the latter is only the
+# entries that have rotted, so pinning it drops every pin that was still
+# landing. That mistake was made here and caught by the scan going red on
+# five findings that had been suppressed correctly a moment earlier.
 detections/rule-ids.lock.json:generic-api-key:5
 detections/rule-ids.lock.json:generic-api-key:7
 detections/rule-ids.lock.json:generic-api-key:8
-detections/rule-ids.lock.json:generic-api-key:14
-detections/rule-ids.lock.json:generic-api-key:19
-detections/rule-ids.lock.json:generic-api-key:23
+detections/rule-ids.lock.json:generic-api-key:15
+detections/rule-ids.lock.json:generic-api-key:22
 detections/rule-ids.lock.json:generic-api-key:26
-detections/rule-ids.lock.json:generic-api-key:43
-detections/rule-ids.lock.json:generic-api-key:57
-detections/rule-ids.lock.json:generic-api-key:58
-detections/rule-ids.lock.json:generic-api-key:69
-detections/rule-ids.lock.json:generic-api-key:72
-detections/rule-ids.lock.json:generic-api-key:74
+detections/rule-ids.lock.json:generic-api-key:29
+detections/rule-ids.lock.json:generic-api-key:46
+detections/rule-ids.lock.json:generic-api-key:60
+detections/rule-ids.lock.json:generic-api-key:79
+detections/rule-ids.lock.json:generic-api-key:80
 detections/rule-ids.lock.json:generic-api-key:90
-detections/rule-ids.lock.json:generic-api-key:849
-detections/rule-ids.lock.json:generic-api-key:862
+detections/rule-ids.lock.json:generic-api-key:107
+detections/rule-ids.lock.json:generic-api-key:108
+detections/rule-ids.lock.json:generic-api-key:114
+detections/rule-ids.lock.json:generic-api-key:115
+detections/rule-ids.lock.json:generic-api-key:120
+detections/rule-ids.lock.json:generic-api-key:121
+detections/rule-ids.lock.json:generic-api-key:123
+detections/rule-ids.lock.json:generic-api-key:126
+detections/rule-ids.lock.json:generic-api-key:133
+detections/rule-ids.lock.json:generic-api-key:136
+detections/rule-ids.lock.json:generic-api-key:138
+detections/rule-ids.lock.json:generic-api-key:153
+detections/rule-ids.lock.json:generic-api-key:178
+detections/rule-ids.lock.json:generic-api-key:202
+detections/rule-ids.lock.json:generic-api-key:1277
+detections/rule-ids.lock.json:generic-api-key:1290
 
 # Positive test fixture for the `jwt-none-alg` detection rule. This file is
 # *expected* to contain a JWT with `alg: none` because the detection engine
