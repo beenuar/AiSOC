@@ -59,8 +59,13 @@ const savedHuntsApi = vi.hoisted(() => ({
 
 const nlQueryApi = vi.hoisted(() => ({ translate: vi.fn() }));
 
-vi.mock('@/lib/api', () => ({
-  __esModule: true,
+// The real module is kept behind the stubbed clients so `normalizeHuntResponse`
+// below is the one the console actually runs. A double that answers in a shape
+// the boundary never produces can only confirm the client agrees with itself,
+// which is how the `took`/`took_ms` mismatch in #1648 survived a case called
+// "renders the real results the backend returned".
+vi.mock('@/lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api')>()),
   huntApi,
   savedHuntsApi,
   nlQueryApi,
@@ -74,6 +79,7 @@ vi.mock('next/dynamic', () => ({
   },
 }));
 
+import { normalizeHuntResponse } from '@/lib/api';
 import { HuntView } from './HuntView';
 
 const SAVED_SEARCHES_KEY = 'hunt.saved';
@@ -188,19 +194,26 @@ describe('a failed hunt does not invent results', () => {
   });
 
   it('renders the real results the backend returned', async () => {
-    huntApi.search.mockResolvedValue({
-      total: 1,
-      took: 7,
-      hits: [
-        {
-          id: 'real-1',
-          timestamp: '2026-05-06T11:48:00Z',
-          source: 'lake',
-          severity: 'low',
-          fields: { host: 'build-agent-3' },
-        },
-      ],
-    });
+    // Put the handler's own payload through the real boundary, so this
+    // double is exactly as capable as `huntApi.search` and no more.
+    huntApi.search.mockResolvedValue(
+      normalizeHuntResponse({
+        query: 'host:build-agent-3',
+        total: 1,
+        took_ms: 7,
+        hits: [
+          {
+            id: 'real-1',
+            timestamp: '2026-05-06T11:48:00Z',
+            source: 'lake',
+            event_type: 'ProcessCreation',
+            raw: { host: 'build-agent-3' },
+            highlights: [],
+          },
+        ],
+        source: 'live',
+      }),
+    );
 
     render(<HuntView />);
     await runAHunt();
