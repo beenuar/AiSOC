@@ -59,6 +59,7 @@ from app.graph.runner import default_budget, run_escalation
 from app.investigator import ledger as ledger_module
 from app.investigator.bundle_prompt import prefetch_context_bundle_dict
 from app.llm.factory import llm_override
+from app.memory import precedent
 from app.memory.outcomes import AI, suppression_refusal
 from app.models.state import AgentStatus, InvestigationState
 from app.playbook import alert_trigger
@@ -114,6 +115,9 @@ _METRICS = {
     "outcome_suppressed": 0,
     "ungrounded_demoted": 0,
     "llm_failed_held_for_review": 0,
+    # Phase 4.4(a). Counted so a deployment can tell "nothing resembled this
+    # alert" from "precedent never ran".
+    "precedent_cited": 0,
     # Phase 4.5. Counted rather than inferred from the ledger, so a
     # deployment that turned the pre-fetch on can tell "no vendor answered"
     # from "the pre-fetch never ran".
@@ -775,6 +779,7 @@ class FusedAlertTriageWorker:
                     # with the resource. Same cutoff-frozen shape as the two
                     # above, so it takes no point in time from here either.
                     await self._attach_cloud_posture(state)
+                    await self._attach_precedent(state, fingerprint)
                     await self._attach_vendor_evidence(state)
                     # Depth 2 wave 2, 1.1. Unlike the three above, this one
                     # *does* take a point in time, and it is the alert's own:
@@ -921,6 +926,7 @@ class FusedAlertTriageWorker:
                     # stops a disposition derived from attacker-reachable
                     # text from auto-closing the next one.
                     injection_suspected=bool(getattr(state, "injection_suspected", False)),
+                    alert=state.raw_alert,
                 )
                 _METRICS["outcome_written"] += 1
 
@@ -1200,6 +1206,34 @@ class FusedAlertTriageWorker:
         state.recent_dispositions = found.as_state()
         _METRICS["recent_dispositions_read"] += len(found.decisions)
 
+    async def _attach_precedent(self, state: InvestigationState, signature: str) -> None:
+        """Decisions this organisation made on alerts *like* this one (4.4a).
+
+        Distinct from `_maybe_suppress_from_memory`, which has already run
+        and matched on identity. This is similarity, it produces **context
+        only**, and it closes nothing: a similar alert is not the same
+        alert, and closing one on a neighbour's verdict is the false
+        negative `canonical_evidence` calls "much worse" than a missed
+        repeat.
+
+        The exact-match prior is excluded, or it would appear as precedent
+        for itself.
+        """
+        try:
+            found = await precedent.find_similar(
+                str(state.tenant_id),
+                state.raw_alert,
+                exclude_signature=signature,
+            )
+        except Exception as exc:  # noqa: BLE001 — precedent is advisory
+            logger.debug("auto_triage_worker.precedent_failed", error=str(exc)[:200])
+            return
+        if not found:
+            return
+        state.precedent = [p.as_dict() for p in found]
+        state.confidence_basis.extend(precedent.basis(found))
+        _METRICS["precedent_cited"] += len(found)
+
     async def _attach_vendor_evidence(self, state: InvestigationState) -> None:
         """Ask the vendors that raised this alert what they know (Phase 4.5).
 
@@ -1380,6 +1414,7 @@ class FusedAlertTriageWorker:
                 confidence=confidence,
                 author=author,
                 alert_id=(state.raw_alert or {}).get("id"),
+                alert=state.raw_alert,
             )
         with contextlib.suppress(Exception):
             await writer.record_suppression(

@@ -187,6 +187,12 @@ class TriageWriter(Protocol):
         author: str,
         alert_id: Any = None,
         injection_suspected: bool = False,
+        # Phase 4.4(a). Accepted by every writer because
+        # `test_outcome_writer_signature_parity` requires the canonical
+        # keyword set to be identical across them — a writer that silently
+        # dropped it would store a prior with no evidence, invisible to
+        # similarity forever.
+        alert: dict[str, Any] | None = None,
     ) -> None:
         """Write the per-signature outcome prior that lets a repeat alert suppress."""
 
@@ -349,6 +355,7 @@ class LiveTriageWriter:
         author: str,
         alert_id: Any = None,
         injection_suspected: bool = False,
+        alert: dict[str, Any] | None = None,
     ) -> None:
         await outcomes_module.record_outcome(
             tenant_id,
@@ -358,6 +365,10 @@ class LiveTriageWriter:
             author=author,
             alert_id=alert_id,
             injection_suspected=injection_suspected,
+            # Phase 4.4(a). The prior carries the canonical evidence it was
+            # derived from, because a signature is a hash and similarity
+            # needs something comparable.
+            alert=alert,
         )
 
     async def record_suppression(
