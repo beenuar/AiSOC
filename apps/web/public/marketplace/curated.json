@@ -1,31 +1,31 @@
 {
   "$schema": "https://aisoc.example.com/schemas/curated/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-01T23:27:59Z",
+  "generated": "2026-11-02T00:28:56Z",
   "stats": {
-    "considered": 2510,
-    "eligible": 2499,
-    "selected": 487,
+    "considered": 2514,
+    "eligible": 2503,
+    "selected": 489,
     "min_per_family": 25,
     "min_total": 300,
     "quality_floor": 0.55,
     "unique_techniques": 137,
     "selected_by_tier": {
       "imported": 163,
-      "native": 324
+      "native": 326
     },
     "selected_by_severity": {
       "critical": 100,
       "high": 261,
       "low": 16,
-      "medium": 110
+      "medium": 112
     },
     "selected_by_category": {
-      "application": 30,
+      "application": 33,
       "cloud": 152,
       "data-exfil": 12,
       "endpoint": 219,
-      "identity": 65,
+      "identity": 64,
       "network": 9
     }
   },
@@ -458,6 +458,7 @@
         "det-application-075",
         "det-application-080",
         "det-application-089",
+        "det-application-092",
         "det-cloud-001",
         "det-cloud-007",
         "det-cloud-014",
@@ -527,7 +528,6 @@
         "det-identity-020",
         "det-identity-021",
         "det-identity-022",
-        "det-identity-023",
         "det-identity-027",
         "det-identity-031",
         "det-identity-034",
@@ -599,12 +599,14 @@
     },
     "k8s": {
       "label": "Kubernetes / Containers",
-      "count": 69,
+      "count": 71,
       "rule_ids": [
         "det-application-018",
         "det-application-023",
         "det-application-049",
         "det-application-056",
+        "det-application-093",
+        "det-application-094",
         "det-cloud-037",
         "det-cloud-080",
         "det-cloud-082",
@@ -712,7 +714,7 @@
     "T1070": 2,
     "T1070.004": 1,
     "T1071.001": 1,
-    "T1078": 14,
+    "T1078": 15,
     "T1078.001": 3,
     "T1078.004": 25,
     "T1082": 2,
@@ -720,7 +722,7 @@
     "T1090": 2,
     "T1090.002": 1,
     "T1098": 17,
-    "T1098.001": 11,
+    "T1098.001": 10,
     "T1098.003": 5,
     "T1098.004": 4,
     "T1098.007": 1,
@@ -757,7 +759,7 @@
     "T1486": 7,
     "T1489": 10,
     "T1490": 19,
-    "T1496": 4,
+    "T1496": 6,
     "T1499.004": 1,
     "T1505.003": 8,
     "T1518": 2,
@@ -1573,6 +1575,83 @@
         "executable(+0.15)"
       ],
       "log_source_product": "entra_consent",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-092",
+      "name": "Guardrail Violations Rose Sharply for One AI Agent",
+      "path": "detections/application/ai-agent-guardrail-violation-rate.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "high",
+      "mitre_techniques": [
+        "T1078"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "identity"
+      ],
+      "quality_score": 0.977,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:high(+0.128)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "ai_guardrail",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-093",
+      "name": "AI Agent Spend Far Above Its Own Baseline",
+      "path": "detections/application/ai-agent-token-spend-anomaly.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1496"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "k8s"
+      ],
+      "quality_score": 0.955,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "ai_runtime",
+      "has_executable_body": true
+    },
+    {
+      "id": "det-application-094",
+      "name": "AI Gateway Key Spend Far Above Its Own Baseline",
+      "path": "detections/application/ai-gateway-key-spend-anomaly.yaml",
+      "tier": "native",
+      "source": "core",
+      "category": "application",
+      "severity": "medium",
+      "mitre_techniques": [
+        "T1496"
+      ],
+      "mitre_tactics": [],
+      "families": [
+        "cloud",
+        "k8s"
+      ],
+      "quality_score": 0.955,
+      "quality_notes": [
+        "tier:native(+0.5)",
+        "mitre_techniques:1(+0.2)",
+        "severity:medium(+0.105)",
+        "executable(+0.15)"
+      ],
+      "log_source_product": "ai_runtime",
       "has_executable_body": true
     },
     {
@@ -7580,32 +7659,6 @@
         "executable(+0.15)"
       ],
       "log_source_product": "windows",
-      "has_executable_body": true
-    },
-    {
-      "id": "det-identity-023",
-      "name": "OAuth App Granted Broad Scopes by User",
-      "path": "detections/identity/oauth-broad-scope-grant.yaml",
-      "tier": "native",
-      "source": "core",
-      "category": "identity",
-      "severity": "high",
-      "mitre_techniques": [
-        "T1098.001"
-      ],
-      "mitre_tactics": [],
-      "families": [
-        "cloud",
-        "identity"
-      ],
-      "quality_score": 0.977,
-      "quality_notes": [
-        "tier:native(+0.5)",
-        "mitre_techniques:1(+0.2)",
-        "severity:high(+0.128)",
-        "executable(+0.15)"
-      ],
-      "log_source_product": "google-workspace",
       "has_executable_body": true
     },
     {
