@@ -25,6 +25,22 @@ from app.connectors.base import (
 
 logger = structlog.get_logger()
 
+# Auth0 documents the offset ceiling in two places and they disagree. The
+# /logs endpoint page caps ``per_page`` at 100; the API-wide pagination
+# section says "For Public Cloud tenants, the maximum is 50; for Private
+# Cloud, the maximum is 100". So a tenant may serve 50 for a requested 100,
+# and a reader that stops on a *short* page stops on page 0 — recovering
+# nothing on whichever of the two a given tenant turns out to be.
+#
+# The terminator is therefore the one Auth0 states outright: "If page *
+# per_page exceeds the total number of results, an empty array is returned."
+# Both bounds below are documented numbers rather than round ones: a search
+# pages through at most 1,000 results, and 20 pages is that ceiling at the
+# smaller of the two page sizes.
+_PER_PAGE = 100
+_MAX_RESULTS = 1000
+_MAX_PAGES = _MAX_RESULTS // 50
+
 
 class Auth0Connector(BaseConnector):
     """Auth0 tenant logs."""
@@ -113,32 +129,48 @@ class Auth0Connector(BaseConnector):
         if not token:
             return []
         since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        items: list[dict[str, Any]] = []
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self._base}/api/v2/logs",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Accept": "application/json",
-                    },
-                    params={
-                        "q": f"date:[{since} TO *]",
-                        "per_page": 100,
-                        "sort": "date:-1",
-                    },
-                )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "auth0.fetch_failed",
-                        status=resp.status_code,
-                        body=resp.text[:300],
+                # Reading only page 0 kept the newest 100 entries of the window
+                # and dropped the rest; the next poll's window starts later, so
+                # those entries were never read.
+                for page in range(_MAX_PAGES):
+                    resp = await client.get(
+                        f"{self._base}/api/v2/logs",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": "application/json",
+                        },
+                        params={
+                            "q": f"date:[{since} TO *]",
+                            "per_page": _PER_PAGE,
+                            "page": page,
+                            "sort": "date:-1",
+                        },
                     )
-                    return []
-                items = resp.json() or []
-                return [self.normalize(i) for i in items]
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "auth0.fetch_failed",
+                            status=resp.status_code,
+                            body=resp.text[:300],
+                        )
+                        if not items:
+                            return []
+                        break
+                    batch = resp.json() or []
+                    items.extend(batch)
+                    # An empty page is the end of the result set. A short one
+                    # is not: a tenant capped at 50 serves a short page for
+                    # every page, so stopping there would stop on page 0.
+                    if not batch or len(items) >= _MAX_RESULTS:
+                        break
+                else:
+                    logger.warning("auth0.fetch_page_cap_reached", pages=_MAX_PAGES, logs=len(items))
         except Exception as exc:
             logger.warning("auth0.fetch_exception", error=str(exc))
             return []
+        return [self.normalize(i) for i in items]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         type_code = (raw.get("type") or "").lower()

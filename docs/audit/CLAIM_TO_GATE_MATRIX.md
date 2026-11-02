@@ -380,6 +380,9 @@ Statuses: `GATED` (a CI job fails when the claim stops being true) · `PARTIAL` 
 - Total: 366
 - GATED: 358
 - PARTIAL: 8
+- Total: 366
+- GATED: 358
+- PARTIAL: 8
 - NO GATE: 0
 
 Counts come from `scripts/check_claim_gate_matrix.py`, which is also the gate. Recompute
