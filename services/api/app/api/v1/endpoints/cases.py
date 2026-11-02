@@ -1789,6 +1789,161 @@ async def list_case_investigations(
     }
 
 
+async def _ledger_investigation_run(
+    db, tenant_id: uuid.UUID, cid: Any, run_id: str
+) -> dict[str, Any] | None:
+    """The investigation-run envelope from the Postgres ledger.
+
+    Agents' `_runs` is process-local and empties on restart; every run is
+    persisted to `investigation_runs` regardless, so this reconstructs the
+    detail shape the case workspace expects when agents can no longer answer.
+    Tenant-scoped and case-bound: a run id from another tenant, or one that
+    belongs to a different case, returns None so the caller keeps its 404.
+    """
+    from app.models.investigation import InvestigationRun
+
+    if not _looks_like_uuid(run_id):
+        # The ledger keys runs by UUID id; a non-UUID run_id cannot match one.
+        return None
+    stmt = (
+        select(InvestigationRun)
+        .where(InvestigationRun.tenant_id == tenant_id)
+        .where(InvestigationRun.id == uuid.UUID(run_id))
+        .where(InvestigationRun.case_id.in_([str(cid), run_id]))
+    )
+    row = (await db.execute(stmt)).scalars().first()
+    if row is None:
+        return None
+    recon, forensic, responder, audit_log = await _ledger_phase_blocks(db, tenant_id, uuid.UUID(run_id))
+    return {
+        "run_id": str(row.id),
+        "case_id": row.case_id,
+        "status": row.status,
+        "model": row.model_used,
+        "iterations": row.iterations,
+        "total_tokens": row.total_tokens,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "completed_at": row.completed_at.isoformat() if row.completed_at else None,
+        "error": row.error,
+        # The recon/forensic/responder blocks + audit trail live only in
+        # agents' volatile `_runs`; rebuild them from the append-only event
+        # ledger so the case workspace's three phase tabs render after a
+        # restart instead of showing bare headers with no explanation.
+        "recon": recon,
+        "forensic": forensic,
+        "responder": responder,
+        "audit_log": audit_log,
+    }
+
+
+def _parse_llm_json(payload: Any) -> dict[str, Any]:
+    """The JSON an agent emitted in its `llm_response` event payload.
+
+    Agents return a JSON string in `payload["response"]`; the API's jsonb
+    column already deserialises the envelope, so we only parse the inner
+    string. Anything that isn't a JSON object yields {} (tabs then show just
+    the event summary rather than crashing on a malformed body).
+    """
+    if not isinstance(payload, dict):
+        return {}
+    raw = payload.get("response")
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str) or not raw.strip():
+        return {}
+    try:
+        obj = json.loads(raw)
+    except (ValueError, TypeError):
+        return {}
+    return obj if isinstance(obj, dict) else {}
+
+
+def _audit_from_events(events: list[Any]) -> list[dict[str, Any]]:
+    """Map ledger rows to the workspace's audit-log step shape."""
+    return [
+        {
+            "kind": ev.kind,
+            "agent": ev.agent,
+            "summary": ev.summary or "",
+            "timestamp": ev.ts.isoformat() if getattr(ev, "ts", None) else None,
+        }
+        for ev in events
+    ]
+
+
+async def _ledger_phase_blocks(
+    db, tenant_id: uuid.UUID, run_uuid: uuid.UUID
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]]:
+    """Reconstruct recon / forensic / responder + audit_log from the ledger.
+
+    The investigator pipeline persists every agent step to `investigation_events`
+    (kind='llm_response' carries each agent's structured JSON output). The live
+    detail blocks themselves are never persisted, so we reassemble them from
+    those events: recon/forensic/responder come from the matching agent's
+    llm_response body, with a fallback to the phase-event summary so the tab is
+    never blank when *some* record exists.
+    """
+    from app.models.investigation import InvestigationEvent
+
+    rows = (
+        await db.execute(
+            select(InvestigationEvent)
+            .where(InvestigationEvent.tenant_id == tenant_id)
+            .where(InvestigationEvent.run_id == run_uuid)
+            .order_by(InvestigationEvent.seq.asc())
+        )
+    ).scalars().all()
+
+    audit_log = _audit_from_events(rows)
+
+    def phase(agent_prefix: str, fallback_kind: str) -> dict[str, Any]:
+        # latest llm_response from the matching agent wins (agents may retry)
+        body: dict[str, Any] = {}
+        for ev in rows:
+            if ev.kind == "llm_response" and ev.agent.lower().startswith(agent_prefix):
+                body = _parse_llm_json(ev.payload)
+        summary = next(
+            (ev.summary for ev in reversed(rows) if ev.kind == fallback_kind and ev.summary),
+            None,
+        )
+        block = dict(body)
+        if not block.get("summary") and summary:
+            block["summary"] = summary
+        return block
+
+    recon = phase("recon", "recon")
+    forensic = phase("forensic", "forensic")
+    responder = phase("responder", "responder")
+    return recon, forensic, responder, audit_log
+
+
+async def _ledger_report_md(db, tenant_id: uuid.UUID, run_id: str) -> str | None:
+    """The persisted Markdown report body for a run, from investigation_artifacts."""
+    from app.models.investigation import InvestigationArtifact
+
+    if not _looks_like_uuid(run_id):
+        return None
+    row = (
+        await db.execute(
+            select(InvestigationArtifact)
+            .where(InvestigationArtifact.tenant_id == tenant_id)
+            .where(InvestigationArtifact.run_id == uuid.UUID(run_id))
+            .where(InvestigationArtifact.kind == "report_md")
+            .order_by(InvestigationArtifact.created_at.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    return row.content if row and row.content else None
+
+
+def _looks_like_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(str(value))
+        return True
+    except (ValueError, AttributeError, TypeError):
+        return False
+
+
 @router.get("/{case_id}/investigations/{run_id}", summary="Get investigation run")
 async def case_investigation_run(
     case_id: str,
@@ -1815,16 +1970,26 @@ async def case_investigation_run(
     # CR/LF, or other URL syntax into the proxied path.
     safe_run_id = quote(run_id, safe="")
     resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    run = resp.json()
+    if resp.status_code < 400:
+        run = resp.json()
+        # A run that names a different case is not this case's run. Compared as
+        # strings because the agents service echoes whatever case id it was given.
+        run_case_id = run.get("case_id")
+        if run_case_id is not None and str(run_case_id) != str(cid):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation run not found for this case")
+        return run
 
-    # A run that names a different case is not this case's run. Compared as
-    # strings because the agents service echoes whatever case id it was given.
-    run_case_id = run.get("case_id")
-    if run_case_id is not None and str(run_case_id) != str(cid):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Investigation run not found for this case")
-    return run
+    # Agents keeps runs in a process-local dict (`_runs`, "swap for Redis in
+    # production") — every run is persisted to the Postgres ledger anyway, so an
+    # agents restart empties `_runs` and every historical run 404s here while the
+    # sibling list route (which falls back to the ledger) still shows it. Mirror
+    # that fallback so case detail — and the recon/forensic/responder tabs rebuilt
+    # from the event ledger — survive an agents restart; the 404 only stands when
+    # the run genuinely isn't this tenant's.
+    ledger_run = await _ledger_investigation_run(db, user.tenant_id, cid, run_id)
+    if ledger_run is None:
+        raise HTTPException(status_code=resp.status_code, detail=resp.text)
+    return ledger_run
 
 
 @router.get(
@@ -1854,19 +2019,24 @@ async def case_investigation_report_md(
     safe_run_id = quote(run_id, safe="")
 
     meta = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
-    if meta.status_code >= 400:
-        raise HTTPException(status_code=meta.status_code, detail=meta.text)
-    run_case_id = meta.json().get("case_id")
-    if run_case_id is not None and str(run_case_id) != str(cid):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Investigation run not found for this case",
-        )
+    if meta.status_code < 400:
+        run_case_id = meta.json().get("case_id")
+        if run_case_id is not None and str(run_case_id) != str(cid):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Investigation run not found for this case",
+            )
+        resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.md", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
+        if resp.status_code >= 400:
+            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        return PlainTextResponse(content=resp.text, media_type="text/markdown; charset=utf-8")
 
-    resp = await _agents_proxy("GET", f"/api/v1/investigations/{safe_run_id}/report.md", headers={"X-AiSOC-Tenant-ID": str(user.tenant_id)})
-    if resp.status_code >= 400:
-        raise HTTPException(status_code=resp.status_code, detail=resp.text)
-    return PlainTextResponse(content=resp.text, media_type="text/markdown; charset=utf-8")
+    # Agents cold (`_runs` empty after restart): serve the report body persisted
+    # to investigation_artifacts at run close, scoped to this tenant + case.
+    body = await _ledger_report_md(db, user.tenant_id, run_id)
+    if body is None:
+        raise HTTPException(status_code=meta.status_code, detail=meta.text)
+    return PlainTextResponse(content=body, media_type="text/markdown; charset=utf-8")
 
 
 # Filename sanitiser for Content-Disposition: keep only safe ASCII so the
