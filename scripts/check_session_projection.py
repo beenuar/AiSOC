@@ -132,6 +132,14 @@ ALLOWED: dict[str, str] = {
         "builds Okta fixtures that carry externalSessionId to prove the identity rules fire; "
         "names the vendor field to construct the event, not to derive a projection key"
     ),
+    "scripts/detection_specs_part6_coverage.py": (
+        "`okta_entry()` builds a System Log event in Okta's own envelope for the "
+        "scenario-family proofs, exactly as the fixture test above does. The field is "
+        "written, never read: the module contains one occurrence and it is inside the "
+        "dict literal, so there is no second derivation here to disagree with "
+        "session.go. Dropping it to satisfy the pattern would make the proof payload "
+        "less like the event it stands for, which is the worse trade."
+    ),
 }
 
 #: A consumer that falls back to building a key when the block is absent.
