@@ -8,47 +8,28 @@ from __future__ import annotations
 import structlog
 
 from app.confidence import score_triage
+from app.keywords import CRITICAL_KEYWORDS, HIGH_KEYWORDS, alert_text, any_matched
 from app.models.state import ActionRisk, AgentStatus, InvestigationState, ProposedAction
 from app.tools.mitre import map_techniques_to_kill_chain
 
 logger = structlog.get_logger()
 
-_CRITICAL_KEYWORDS = {
-    "ransomware",
-    "lateral movement",
-    "credential dump",
-    "domain admin",
-    "exfiltration",
-    "mimikatz",
-    "cobalt strike",
-    "c2",
-    "beacon",
-    "rootkit",
-    "supply chain",
-    "zero-day",
-    "data breach",
-}
-
-_HIGH_KEYWORDS = {
-    "phishing",
-    "malware",
-    "exploit",
-    "privilege escalation",
-    "brute force",
-    "suspicious login",
-    "anomaly",
-    "backdoor",
-}
-
 
 def _score_alert(state: InvestigationState) -> tuple[str, float]:
-    """Return (severity, risk_score) based on alert content heuristics."""
-    text = (state.alert_summary + " " + str(state.raw_alert)).lower()
+    """Return (severity, risk_score) based on alert content heuristics.
+
+    Keywords are matched at token boundaries, not as substrings. The scorer
+    reads the raw payload as well as the summary, so a substring test let
+    ``c2`` fire on every AWS private hostname and score the alert critical
+    (#1607) — see :mod:`app.keywords`.
+    """
+
+    text = alert_text(state.alert_summary, state.raw_alert)
     risk = state.raw_alert.get("risk_score", 0.0)
 
-    if any(kw in text for kw in _CRITICAL_KEYWORDS):
+    if any_matched(text, CRITICAL_KEYWORDS):
         return "critical", max(risk, 0.9)
-    if any(kw in text for kw in _HIGH_KEYWORDS):
+    if any_matched(text, HIGH_KEYWORDS):
         return "high", max(risk, 0.7)
     return "medium", max(risk, 0.4)
 

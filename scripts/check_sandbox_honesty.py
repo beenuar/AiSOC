@@ -448,9 +448,181 @@ def _verdict_table(node: ast.Dict) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# The vocabulary arm — a payload in someone else's dialect must still compute.
+#
+# The sandbox is used by running it against your own alert file, so the set
+# of field spellings it reads is load-bearing. It shipped reading exactly
+# two timestamp spellings while reading four actor spellings and four
+# address spellings, and a reader who wrote `ts` got `not_computable` on
+# every time-based signal. Measured over eleven ordinary spellings, one
+# worked.
+#
+# No replay of the bundled corpus could have found that, because every
+# bundled fixture says `published`: a corpus written in its parser's own
+# dialect cannot reveal a dialect gap. So this arm derives its fixtures
+# from the module's own declared `FIELD_VOCABULARY` instead, which also
+# makes declaring a spelling without making it work inexpressible.
+# ---------------------------------------------------------------------------
+
+#: Driven in the package's own interpreter so it reads the tree under test
+#: rather than anything installed. One process for the whole sweep: sixty
+#: CLI invocations would make a fast gate slow for no extra coverage.
+_VOCAB_PROBE = """
+import copy, json, sys
+from aisoc_sandbox.signals import CONTAINER_ONLY_SPELLINGS, FIELD_VOCABULARY, compute_signals
+from aisoc_sandbox.scenarios import available_scenarios, load_scenario
+
+BASE = [
+    {"uuid": "a", "published": "2026-05-14T09:00:00Z", "actor": "alice@example.com",
+     "client_ip": "203.0.113.42", "geo": {"city": "New York", "country": "US"}},
+    {"uuid": "b", "published": "2026-05-15T17:00:00Z", "actor": "alice@example.com",
+     "client_ip": "203.0.113.42", "geo": {"city": "New York", "country": "US"}},
+]
+problems = []
+
+def rename(events, old, new, date_only=False):
+    out = copy.deepcopy(events)
+    for ev in out:
+        v = ev.pop(old)
+        ev[new] = v[:10] if date_only else v
+    return out
+
+def sig(events, name):
+    return next(s for s in compute_signals(events) if s.name == name)
+
+for spelling in FIELD_VOCABULARY["timestamp"]:
+    events = rename(BASE, "published", spelling, spelling == "date")
+    if sig(events, "geo_velocity").status == "not_computable":
+        problems.append("declared timestamp spelling %r does not feed geo_velocity" % spelling)
+    if spelling != "date" and sig(events, "event_burst").status == "not_computable":
+        problems.append("declared timestamp spelling %r does not feed event_burst" % spelling)
+
+for spelling in FIELD_VOCABULARY["actor"]:
+    if sig(rename(BASE, "actor", spelling), "geo_velocity").status == "not_computable":
+        problems.append("declared actor spelling %r is not read" % spelling)
+
+for spelling in FIELD_VOCABULARY["address"]:
+    got = sig(rename(BASE, "client_ip", spelling), "source_diversity").inputs.get("source_addresses")
+    if got != ["203.0.113.42"]:
+        problems.append("declared address spelling %r is not read" % spelling)
+
+for spelling in FIELD_VOCABULARY["city"]:
+    ev = copy.deepcopy(BASE)
+    for e in ev:
+        e["geo"] = {spelling: "New York", "country": "US"}
+    if sig(ev, "geo_velocity").status == "not_computable":
+        problems.append("declared city spelling %r does not resolve" % spelling)
+
+for spelling in FIELD_VOCABULARY["country"]:
+    ev = copy.deepcopy(BASE)
+    for e, cc in zip(ev, ("US", "RU")):
+        e["geo"] = {"city": "New York", spelling: cc}
+    if sig(ev, "source_diversity").inputs.get("countries") != ["RU", "US"]:
+        problems.append("declared country spelling %r is not counted" % spelling)
+
+for lat in FIELD_VOCABULARY["latitude"]:
+    for lon in FIELD_VOCABULARY["longitude"]:
+        ev = copy.deepcopy(BASE)
+        for e in ev:
+            e["geo"] = {lat: 40.7128, lon: -74.0060}
+        if sig(ev, "geo_velocity").status == "not_computable":
+            problems.append("declared coordinate spelling %r/%r does not resolve" % (lat, lon))
+
+for spelling in FIELD_VOCABULARY["domain_age_days"]:
+    ev = copy.deepcopy(BASE)
+    ev[0][spelling] = 9
+    if sig(ev, "recorded_domain_age").status != "holds":
+        problems.append("declared domain-age spelling %r is not read" % spelling)
+
+# Container-only spellings: honoured nested, refused at the top level.
+for spelling in CONTAINER_ONLY_SPELLINGS.get("actor", ()):
+    nested = copy.deepcopy(BASE)
+    for e in nested:
+        e.pop("actor"); e["user"] = {spelling: "alice@example.com"}
+    if sig(nested, "geo_velocity").status == "not_computable":
+        problems.append("container-only actor spelling %r is not read when nested" % spelling)
+    flat = copy.deepcopy(BASE)
+    for e in flat:
+        e.pop("actor"); e[spelling] = "user.session.start"
+    if sig(flat, "geo_velocity").status != "not_computable":
+        problems.append(
+            "container-only actor spelling %r was honoured at the top level, where it is far more "
+            "likely to name the event than the person" % spelling
+        )
+
+# An undeclared spelling must refuse, naming the field, and must not score.
+unknown = sig(rename(BASE, "published", "zzz_when"), "geo_velocity")
+if unknown.status != "not_computable":
+    problems.append("an undeclared timestamp spelling produced %r rather than a refusal" % unknown.status)
+elif "timestamp" not in unknown.summary:
+    problems.append("the refusal for an undeclared timestamp spelling does not name the missing field")
+if "implied_speed_kmh" in unknown.inputs:
+    problems.append("an undeclared spelling still produced a speed")
+
+# A nested account-creation date is not the event time.
+acct = copy.deepcopy(BASE)
+for e in acct:
+    e.pop("published"); e["user"] = {"name": "alice@example.com", "created_at": "2019-01-01T00:00:00Z"}
+if sig(acct, "geo_velocity").status != "not_computable":
+    problems.append("an account creation date under `user` was read as the time of the event")
+
+# Precision: two events timed only to the day share midnight, so the elapsed
+# time is zero. Reporting that as impossible travel is the original defect
+# reached by a different road.
+same_day = copy.deepcopy(BASE)
+same_day[1]["geo"] = {"city": "Saint Petersburg", "country": "RU"}
+for e in same_day:
+    e["date"] = e.pop("published")[:10]
+same_day[1]["date"] = same_day[0]["date"]
+guard = sig(same_day, "geo_velocity")
+if guard.status != "not_computable" or "physically impossible" in guard.summary:
+    problems.append(
+        "two events carrying only a date were scored (%s) instead of refused; the elapsed time is "
+        "zero only because the payload never carried an hour" % guard.status
+    )
+
+# Null island and out-of-range coordinates are refusals, not positions.
+for name, geo in (("null-island", {"lat": 0.0, "lon": 0.0}), ("out-of-range", {"lat": 999.0, "lon": -74.0})):
+    ev = copy.deepcopy(BASE)
+    for e in ev:
+        e["geo"] = geo
+    if sig(ev, "geo_velocity").status != "not_computable":
+        problems.append("%s coordinates were plotted rather than refused" % name)
+
+# The bundled corpus must not be the only dialect that works.
+def shape(events):
+    return json.dumps([(s.name, s.status, s.summary) for s in compute_signals(events)], sort_keys=True)
+
+for sid in available_scenarios():
+    original = load_scenario(sid).events
+    for spelling in ("ts", "_time", "@timestamp"):
+        if shape(rename(original, "published", spelling)) != shape(original):
+            problems.append("bundled scenario %r behaves differently when timed with %r" % (sid, spelling))
+
+print(json.dumps(problems))
+"""
+
+
+def _check_vocabulary(root: Path, workdir: Path) -> list[str]:
+    src = root / PACKAGE_REL / "src"
+    probe = workdir / "vocabulary_probe.py"
+    probe.write_text(_VOCAB_PROBE, encoding="utf-8")
+    env = {**os.environ, "PYTHONPATH": str(src), "PYTHONDONTWRITEBYTECODE": "1"}
+    done = subprocess.run(  # noqa: S603
+        [sys.executable, str(probe)], capture_output=True, text=True, env=env, timeout=180, check=False
+    )
+    if done.returncode != 0:
+        # Fail loudly rather than skipping: a probe that cannot import the
+        # package has not checked the vocabulary, and "no findings" would
+        # be indistinguishable from "no run".
+        raise RuntimeError(f"vocabulary probe exited {done.returncode}: {done.stderr.strip()[:500]}")
+    return [str(problem) for problem in json.loads(done.stdout)]
+
+
 def check(root: Path) -> list[str]:
     with tempfile.TemporaryDirectory(prefix="aisoc-sandbox-gate-") as tmp:
-        return _check_shape(root) + _check_behaviour(root, Path(tmp))
+        return _check_shape(root) + _check_behaviour(root, Path(tmp)) + _check_vocabulary(root, Path(tmp))
 
 
 def _with_patch(root: Path, relative: str, old: str, new: str) -> tuple[bool, str]:
@@ -515,6 +687,26 @@ def _self_test(root: Path) -> int:
             "src/aisoc_sandbox/investigation.py",
             '{"name": "rules.match", "args": {"technique_set": s.mitre_techniques}, "executed": False},',
             '{"name": "rules.match", "args": {"rule_count": "800+", "technique_set": s.mitre_techniques}, "executed": False},',
+        ),
+        (
+            "narrowing the timestamp vocabulary back to what shipped is refused",
+            "src/aisoc_sandbox/signals.py",
+            '    "timestamp": (\n        "published",',
+            '    "timestamp": (\n        "ONLY_THE_TWO_THAT_SHIPPED",\n        "published",\n    ),\n'
+            '    "_retired_timestamp": (\n        "published",',
+        ),
+        (
+            "removing the date-only precision guard is refused",
+            "src/aisoc_sandbox/signals.py",
+            "            if hours == 0.0 and (i0.date_only or i1.date_only):\n"
+            "                precision_skipped += 1\n                continue\n",
+            "",
+        ),
+        (
+            "honouring a container-only spelling at the top level is refused",
+            "src/aisoc_sandbox/signals.py",
+            "        spellings = top_level if depth == 0 else nested",
+            "        spellings = nested",
         ),
     ]
     for description, relative, old, new in injections:

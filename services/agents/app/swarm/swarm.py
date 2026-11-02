@@ -12,6 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 
+from app.keywords import matched, normalise
 from app.swarm.hypotheses import HYPOTHESES, Hypothesis
 
 # A per-agent budget (tokens). Deterministic agents don't spend, but the budget
@@ -34,15 +35,17 @@ class HypothesisResult:
 
 def _signal_text(signal: dict) -> str:
     parts = [str(signal.get("alert_summary", "")), str(signal.get("title", "")), str(signal.get("raw", ""))]
-    return " ".join(parts).lower()
+    return normalise(" ".join(parts))
 
 
 def _evaluate(hypothesis: Hypothesis, signal: dict, budget: int) -> HypothesisResult:
     text = _signal_text(signal)
     techniques = {t.upper() for t in (signal.get("techniques") or signal.get("mitre_techniques") or [])}
 
-    evidence = sorted(kw for kw in hypothesis.supports_keywords if kw in text)
-    contradictions = sorted(kw for kw in hypothesis.contradicts_keywords if kw in text)
+    # Token-boundary matching: as substrings, ``c2`` credited the C2-beacon
+    # hypothesis on any alert naming an EC2 host (#1607).
+    evidence = matched(text, hypothesis.supports_keywords)
+    contradictions = matched(text, hypothesis.contradicts_keywords)
     tech_hits = sorted(techniques & {t.upper() for t in hypothesis.techniques})
 
     # Deterministic support score: keyword coverage + technique corroboration,
