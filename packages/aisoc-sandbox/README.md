@@ -26,6 +26,30 @@ It did not always work this way, and the history is the best explanation of the 
 
 A CI gate (`scripts/check_sandbox_honesty.py`) now refuses output that asserts a finding the package did not compute, and refuses the *shape* too: a table mapping a technique id or a severity name to a sentence or a score cannot be reintroduced, in this module or a new one.
 
+## Bring your own alert file
+
+`aisoc-sandbox demo --file ./my-alert.json` is the point of the package, so it reads the field spellings an ordinary payload actually uses rather than the one the bundled fixtures happen to use. The accepted set is declared in one table, [`FIELD_VOCABULARY`](./src/aisoc_sandbox/signals.py), and every spelling in it is exercised by CI:
+
+| What | Spellings read (preference order, first match wins) |
+|---|---|
+| Event time | `published`, `@timestamp`, `_time`, `timestamp`, `eventTime`, `event_time`, `eventTimestamp`, `observedTimestamp`, `occurred_at`, `occurredAt`, `time`, `ts`, `datetime`, `created_at`, `createdAt`, `date` — ISO-8601 or epoch seconds/milliseconds |
+| Actor | `actor`, `user`, `username`, `user_name`, `userName`, `userPrincipalName`, `principal`, `subject`, `account`, `accountName`, `src_user`, `srcUser`, `alternateId`, `email` — plus `name`, `displayName`, `emailAddress`, `upn` when nested |
+| Source address | `client_ip`, `clientIp`, `ipAddress`, `ip_address`, `source_ip`, `sourceIp`, `src_ip`, `srcIp`, `srcip`, `remote_ip`, `remoteIp`, `client_address`, `ip` |
+| Position | `lat`/`latitude` with `lon`/`long`/`lng`/`longitude`; otherwise `city`/`city_name`/`cityName`/`locality` with `country`/`country_code`/`countryCode`/`country_iso_code`/`countryOrRegion`/… |
+| Domain age | `domain_age_days`, `domainAgeDays`, `domain_age`, labelled by `domain`, `destination_domain`, `dest_domain`, `url`, `uri` |
+
+Actor, address and position are also read one to three levels down through declared container objects, so the shapes Okta (`client.geographicalContext.geolocation`), Entra (`location.geoCoordinates`) and Elastic Common Schema (`source.geo.location`, `user.name`) ship all resolve without reshaping anything.
+
+**Position prefers coordinates your payload carries** over the built-in city table — a `lat`/`lon` is not a weaker input than a centroid but a strictly better one. The table stays deliberately small, and a city it does not hold is *named* rather than replaced with a country centroid, because manufacturing a position would invent the precision the measurement rests on.
+
+Three things it will not do, each because the alternative is a confident wrong answer:
+
+- **An unrecognised spelling is reported, not guessed at.** You get `not computed` naming the field it could not find, never a score derived from something else.
+- **An event time is read from the top of the event only.** Descending into arbitrary objects would let `user.created_at` — the age of the *account* — stand in for the time of the event.
+- **Two events timed only to a calendar date are refused, not scored.** They both land on midnight, so the elapsed time is zero and the implied speed infinite; reporting that as impossible travel would be a finding manufactured out of precision the payload never carried.
+
+Nothing here is a fallback to a default. If your file uses a spelling that is missing and ought to be there, that is a bug worth reporting.
+
 ## Install
 
 ```bash
