@@ -13,10 +13,12 @@ fixture you can walk through the AiSOC agent funnel two ways:
 
 2. **Offline simulator** — `aisoc-sandbox demo --scenario <name>` runs
    the same scenario through a zero-dependency in-memory simulator.
-   No Docker, no API key, completes in < 5 s. Install path:
-   `pip install -e packages/aisoc-sandbox` from the repo root. The PyPI
-   package is built on every tag but not published — the upload is blocked
-   on registry credentials — so `pip install aisoc-sandbox` will not resolve.
+   No Docker, no API key, completes in < 5 s. `pip install aisoc-sandbox`
+   resolves on PyPI today; `pip install -e packages/aisoc-sandbox` from the
+   repo root runs it against your own changes. It reaches no verdict and
+   emits no confidence score — it computes what arithmetic over the events
+   allows and says so where it cannot, which is a narrower claim than the
+   walkthroughs below describe for the full stack.
 
 The five scenarios cover the most common attack patterns in modern
 SOC alert queues; collectively they exercise eleven MITRE ATT&CK

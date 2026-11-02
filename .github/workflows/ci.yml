@@ -589,6 +589,32 @@ jobs:
         run: python3 scripts/generate_corpus_stats.py --self-test
       - name: Verify detection / marketplace counts are in sync
         run: python3 scripts/generate_corpus_stats.py --check
+      # `aisoc-sandbox` is a zero-dependency wheel installed from PyPI with
+      # no checkout, so it cannot read the artefact above at runtime. Its
+      # copy of the figure is generated at commit time instead, and this is
+      # the half that stops it going stale — which it had, by a factor of
+      # three, while the ledger printed `rule_count: "800+"`.
+      - name: Sandbox ruleset figure — self-test
+        run: python3 scripts/sync_sandbox_corpus_figures.py --self-test
+      - name: Sandbox ruleset figure matches the corpus artefact
+        run: python3 scripts/sync_sandbox_corpus_figures.py --check
+      # The offline sandbox may not assert a finding it did not compute.
+      # Reported by a community reviewer who fed it a harmless login —
+      # same user, same address, same city, eight hours apart — and got
+      # "physically impossible" travel at 83/100, then relabelled genuine
+      # impossible travel `info` and got "L4 — fully autonomous closure".
+      # All three decision functions were keyed on strings the input file
+      # declared and none could see the events.
+      #
+      # The package's own suite pins the behaviour, but it runs in a job
+      # filtered on `packages/aisoc-sandbox/**`; this job has no path
+      # filter. The gate also refuses the *shape* statically — a table
+      # mapping a technique or a severity to a sentence or a score — which
+      # catches a reintroduction in a new module before anything calls it.
+      - name: Sandbox honesty — self-test
+        run: python3 scripts/check_sandbox_honesty.py --self-test
+      - name: Sandbox asserts nothing it did not compute
+        run: python3 scripts/check_sandbox_honesty.py
       # Prose cannot be generated the way a count can, so the retraction of
       # the 75.3% alert-reduction figure is gated instead. `benchmark.md`
       # withdrew the claim; `BenchmarkResults.tsx` went on rendering a "Real
