@@ -129,7 +129,7 @@ OPAQUE: tuple[str, ...] = (
     "sg-0ab1c2d3e4f5a6b78",
     "eni-0c2a4e6b8d0f2a4c6",
     "AKIAIOSFODNN7EXAMPLE",
-    "ASIAY34FZKBOKMUTVV7A",
+    "ASIAIOSFODNN7EXAMPLE",
     "EC2AMAZ-1A2B3C4",
     # --- Azure / GCP generated names --------------------------------------
     "aks-syspool-c2f4a1b6-vmss000003",
