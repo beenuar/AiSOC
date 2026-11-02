@@ -66,6 +66,11 @@ claimed the same migration number simultaneously and one had to renumber.
 | Number | Kind | Lane / item | Claimed | File |
 |---|---|---|---|---|
 | 0015 | ADR | Wave 0 / Phase 0.4 | 2026-11-01 | `docs/decisions/0015-siem-replacement-scope.md` |
+| 151–158 | migration | Lane F (analyst: 3.2, 3.3, 4.x, 5.x, 9.x) | 2026-11-01 | reserved block, see below |
+| 0022 | ADR | Lane F | 2026-11-01 | reserved |
+
+Highest at kickoff: migration `123`, ADR `0014`. Next free: migration `124`,
+ADR `0016`.
 | 142 | migration | Lane D / Phase 6.3 | 2026-11-01 | tenant response schedule (business hours, on-call) |
 | 143 | migration | Lane D / Phase 6.3 | 2026-11-01 | approval timeout outcomes on the durable pause |
 | 144 | migration | Lane D / Phase 6.4 | 2026-11-01 | reserved — ticket-sync state, if 6.4 reproduces a gap |
@@ -85,8 +90,6 @@ claimed the same migration number simultaneously and one had to renumber.
 | 149 | migration | Lane E / 7.3 | 2026-11-01 | reserved: agent baseline observations |
 | 150 | migration | Lane E / 7.4 | 2026-11-01 | reserved: AI rule-pack supporting state |
 | 0021 | ADR | Lane E / 7.1 | 2026-11-01 | AI-chat compliance-log minimisation |
-| 151–158 | migration | Lane F (analyst: 3.2, 3.3, 4.x, 5.x, 9.x) | 2026-11-01 | reserved block, see below |
-| 0022 | ADR | Lane F | 2026-11-01 | reserved |
 
 Highest at kickoff: migration `123`, ADR `0014`. Lane E holds the exclusive
 block migrations `146`–`150` and ADR `0021`.
