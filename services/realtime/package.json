@@ -14,7 +14,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^5.3.0",
-    "express-rate-limit": "^8.7.1",
+    "express-rate-limit": "^8.7.2",
     "ioredis": "^6.0.0",
     "kafkajs": "^2.2.4",
     "pino": "^10.4.0",
