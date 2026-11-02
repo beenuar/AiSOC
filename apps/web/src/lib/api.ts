@@ -4280,6 +4280,11 @@ export function normalizeHuntResponse(raw: unknown): HuntResponse {
   };
 }
 
+/**
+ * A saved hunt search, as `POST /api/v1/hunt/saved` returns it.
+ *
+ * @wire agents POST /api/v1/hunt/saved
+ */
 export interface SavedSearch {
   id: string;
   name: string;
