@@ -42,10 +42,14 @@ from __future__ import annotations
 import json
 import os
 import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Any
 
 import structlog
+
+from app.models.alert import AlertSeverity, RawAlert
+from app.services.provenance import extract_provenance
 
 logger = structlog.get_logger()
 
@@ -335,3 +339,57 @@ class WeakSignalAggregator:
             if finding is not None:
                 out.append(finding)
         return out
+
+
+_SEVERITY_MAP = {
+    "critical": AlertSeverity.CRITICAL,
+    "high": AlertSeverity.HIGH,
+    "medium": AlertSeverity.MEDIUM,
+    "low": AlertSeverity.LOW,
+    "info": AlertSeverity.INFO,
+}
+
+
+def build_alert(message: dict[str, Any], fields: dict[str, Any], finding: WeakFinding) -> RawAlert | None:
+    """One finding as one alert, carrying every contributing signal.
+
+    The description names each contributor and its weight rather than
+    summarising, because the whole claim of this item is that no single
+    signal could have fired: an analyst has to be able to see which several
+    did, and in what order they arrived.
+
+    Returns None on a message with no usable tenant, matching the windowed
+    engine — an alert that cannot be scoped to a tenant must not be written.
+    """
+    ocsf = message.get("ocsf_event") or {}
+    tenant_raw = message.get("tenant_id") or ocsf.get("tenant_uid")
+    try:
+        tenant_id = uuid.UUID(str(tenant_raw))
+    except (ValueError, TypeError):
+        return None
+    connector_id, connector_type, class_uid = extract_provenance(message, ocsf)
+    contributors = ", ".join(f"{s.kind} ({s.weight:g})" for s in finding.signals)
+    return RawAlert(
+        tenant_id=tenant_id,
+        source="detection:weak-signal-aggregation",
+        title=f"Several weak signals on one {finding.subject_kind}: {finding.subject}",
+        description=(
+            f"{len(finding.signals)} signals accumulated to {finding.strength:.2f} "
+            f"within {WINDOW_SECONDS}s, past the {STRENGTH_THRESHOLD} threshold no single "
+            f"signal can reach. In arrival order: {contributors}. "
+            f"Aggregation confidence {finding.confidence}."
+        ),
+        severity=_SEVERITY_MAP.get(finding.severity, AlertSeverity.MEDIUM),
+        # `RawAlert` carries no confidence field -- fusion's ConfidenceScorer
+        # owns that number downstream -- so the aggregator's own figure goes
+        # in the description, where it is read rather than silently dropped.
+        src_ip=fields.get("src_ip"),
+        hostname=fields.get("hostname") or fields.get("host"),
+        username=fields.get("user") or fields.get("actor_email"),
+        raw_event=ocsf,
+        connector_id=connector_id,
+        connector_type=connector_type,
+        ocsf_class_uid=class_uid,
+        rule_id="weak-signal-aggregation",
+        rule_name="Several individually unalarming signals on one subject",
+    )
