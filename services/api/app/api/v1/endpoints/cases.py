@@ -1914,6 +1914,76 @@ async def _ledger_phase_blocks(
     recon = phase("recon", "recon")
     forensic = phase("forensic", "forensic")
     responder = phase("responder", "responder")
+
+    # Router-path runs (kafka auto-triage) persist no per-agent llm_response
+    # events, so the blocks above come back empty even though the run completed.
+    # The router now persists its structured InvestigationState as a
+    # `router_state` artifact at run close; fall back to it so those runs' tabs
+    # render too. Investigator-path runs have events, so this never fires there.
+    if not any((recon, forensic, responder)) and audit_log == []:
+        blocks = await _router_state_blocks(db, tenant_id, run_uuid)
+        if blocks is not None:
+            recon, forensic, responder, audit_log = blocks
+
+    return recon, forensic, responder, audit_log
+
+
+async def _router_state_blocks(
+    db, tenant_id: uuid.UUID, run_uuid: uuid.UUID
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], list[dict[str, Any]]] | None:
+    """Rebuild recon/forensic/responder + audit from a persisted router_state artifact.
+
+    The router's flat InvestigationState has no per-agent phase blocks, so we
+    map its fields onto the workspace's tab shape: findings/MITRE/threat-intel
+    -> recon, verdict/confidence -> forensic, proposed_actions -> responder. The
+    audit trail is synthesised from the same fields so the timeline tab is not
+    blank. Returns None when no artifact exists (caller keeps its empty blocks).
+    """
+    from app.models.investigation import InvestigationArtifact
+
+    row = (
+        await db.execute(
+            select(InvestigationArtifact)
+            .where(InvestigationArtifact.tenant_id == tenant_id)
+            .where(InvestigationArtifact.run_id == run_uuid)
+            .where(InvestigationArtifact.kind == "router_state")
+            .order_by(InvestigationArtifact.created_at.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    if row is None or not row.content:
+        return None
+    try:
+        st = json.loads(row.content)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(st, dict):
+        return None
+
+    ts = row.created_at.isoformat() if getattr(row, "created_at", None) else None
+    actions = [a.get("description") or a.get("action_type", "") for a in st.get("proposed_actions", []) if isinstance(a, dict)]
+    recon = {
+        "summary": st.get("alert_summary", ""),
+        "iocs": list(st.get("ioc_enrichments", {}).keys()) if isinstance(st.get("ioc_enrichments"), dict) else [],
+        "mitre_techniques": list(st.get("mitre_mappings", [])),
+    }
+    forensic = {
+        "summary": st.get("verdict", "") or "",
+        "root_cause_hypothesis": "; ".join(st.get("confidence_basis", [])) or st.get("verdict") or "",
+        "confidence": st.get("confidence"),
+    }
+    responder = {
+        "summary": "; ".join(actions) if actions else "",
+        "recommended_actions": actions,
+    }
+    audit_log: list[dict[str, Any]] = []
+    if st.get("verdict"):
+        audit_log.append({"kind": "verdict", "agent": "router", "summary": f"verdict={st.get('verdict')} confidence={st.get('confidence')}", "timestamp": ts})
+    for f in st.get("findings", []):
+        audit_log.append({"kind": "finding", "agent": "router", "summary": str(f), "timestamp": ts})
+    for a in st.get("proposed_actions", []):
+        if isinstance(a, dict):
+            audit_log.append({"kind": "action", "agent": "router", "summary": a.get("description") or a.get("action_type", ""), "timestamp": ts})
     return recon, forensic, responder, audit_log
 
 
