@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-__all__ = ["Signal", "compute_signals", "technique_support"]
+__all__ = ["CONTAINER_ONLY_SPELLINGS", "FIELD_CONTAINERS", "FIELD_VOCABULARY", "Signal", "compute_signals", "technique_support"]
 
 
 #: Fastest sustained ground speed a human being can plausibly achieve
@@ -165,20 +165,262 @@ class Signal:
 
 
 # ---------------------------------------------------------------------------
+# What a field may be called.
+#
+# Each reader used to carry its own inline list, and they drifted apart in
+# the direction that matters: timestamps accepted exactly two spellings
+# (`published`, `timestamp`) while actors and addresses accepted four each.
+# That is backwards — a timestamp has *more* ordinary spellings than an
+# actor, not fewer — and the cost was not cosmetic. A reader who wrote
+# `ts`, `_time` or `@timestamp` got `not_computable` on geo-velocity *and*
+# on event-burst, concluded the sandbox computes nothing, and would have
+# been right to.
+#
+# It survived review because the bundled corpus is written in the parser's
+# own dialect: every fixture says `published`, so replaying the fixtures
+# could only ever confirm that `published` works. The vocabulary is
+# declared here as data so `scripts/check_sandbox_honesty.py` can enumerate
+# it, rewrite a scenario into each spelling, and require every one to
+# compute — a test the corpus cannot supply from inside its own dialect.
+#
+# Order is preference, most event-specific first, because a payload can
+# carry several: an Elastic document with both `@timestamp` and
+# `created_at` means the first.
+# ---------------------------------------------------------------------------
+
+FIELD_VOCABULARY: dict[str, tuple[str, ...]] = {
+    "timestamp": (
+        "published",
+        "@timestamp",
+        "_time",
+        "timestamp",
+        "eventTime",
+        "event_time",
+        "eventTimestamp",
+        "observedTimestamp",
+        "occurred_at",
+        "occurredAt",
+        "time",
+        "ts",
+        "datetime",
+        "created_at",
+        "createdAt",
+        "date",
+    ),
+    "actor": (
+        "actor",
+        "user",
+        "username",
+        "user_name",
+        "userName",
+        "userPrincipalName",
+        "principal",
+        "subject",
+        "account",
+        "accountName",
+        "src_user",
+        "srcUser",
+        "alternateId",
+        "email",
+    ),
+    "address": (
+        "client_ip",
+        "clientIp",
+        "ipAddress",
+        "ip_address",
+        "source_ip",
+        "sourceIp",
+        "src_ip",
+        "srcIp",
+        "srcip",
+        "remote_ip",
+        "remoteIp",
+        "client_address",
+        "ip",
+    ),
+    "city": ("city", "city_name", "cityName", "locality"),
+    "country": (
+        "country",
+        "country_code",
+        "countryCode",
+        "country_iso_code",
+        "countryOrRegion",
+        "country_or_region",
+        "country_name",
+        "countryName",
+    ),
+    "latitude": ("lat", "latitude"),
+    "longitude": ("lon", "long", "lng", "longitude"),
+    "domain_age_days": ("domain_age_days", "domainAgeDays", "domain_age"),
+    "destination": ("domain", "destination_domain", "destinationDomain", "dest_domain", "url", "uri"),
+}
+
+#: Spellings honoured **only** inside a container, never at the top level
+#: of an event. ``user.name`` is how Elastic Common Schema names the actor
+#: and reading it is necessary; a bare top-level ``name`` is far more
+#: likely to be the name of the *event* than of the person, and guessing
+#: wrong there puts an event type in the actor column. The distinction
+#: costs one table and removes the need to choose between missing ECS and
+#: mislabelling everything else.
+CONTAINER_ONLY_SPELLINGS: dict[str, tuple[str, ...]] = {
+    "actor": ("name", "displayName", "emailAddress", "upn"),
+    "address": ("address",),
+}
+
+#: Nested objects a position may be found inside. Okta ships
+#: ``client.geographicalContext.geolocation.{lat,lon}``, Entra ships
+#: ``location.geoCoordinates.{latitude,longitude}`` and Elastic ships
+#: ``source.geo.location.{lat,lon}``, so a flat read finds none of them.
+_GEO_CONTAINERS = (
+    "geo",
+    "geoip",
+    "geo_location",
+    "geoLocation",
+    "geolocation",
+    "geographicalContext",
+    "geoCoordinates",
+    "coordinates",
+    "location",
+    "client",
+    "source",
+    "src",
+    "clientGeo",
+    "client_geo",
+    "source_geo",
+)
+
+#: Which nested objects each concept may also be read from, searched after
+#: the top level and in this order.
+#:
+#: ``timestamp`` is deliberately **empty**, and that is the one entry worth
+#: explaining. Descending into arbitrary objects for a time would let
+#: ``user.created_at`` — the age of the *account* — be read as the time of
+#: the event, which is not a near-miss but a wrong answer that looks right.
+#: An event's own time belongs at the top of the event.
+FIELD_CONTAINERS: dict[str, tuple[str, ...]] = {
+    "timestamp": (),
+    "actor": ("actor", "user", "account", "identity", "subject", "principal", "client"),
+    "address": ("client", "source", "src", "network", "request", "http", "connection"),
+    "city": _GEO_CONTAINERS,
+    "country": _GEO_CONTAINERS,
+    "latitude": _GEO_CONTAINERS,
+    "longitude": _GEO_CONTAINERS,
+    "domain_age_days": ("destination", "dest", "url", "dns", "http"),
+    "destination": ("destination", "dest", "http", "url", "request"),
+}
+
+#: How far the nested search descends. Three levels reaches Okta's
+#: ``client.geographicalContext.geolocation``; the bound exists so a
+#: pathological payload cannot make a 30-second demo walk a deep tree.
+_MAX_CONTAINER_DEPTH = 3
+
+#: Epoch bounds, so a numeric timestamp can be read without guessing its
+#: unit. 1e8 s is 1973 and 1e11 s is the year 5138; the millisecond window
+#: is the same two dates. The ranges do not overlap for any date a log
+#: could plausibly carry, which is what makes this a rule rather than a
+#: guess — a value outside both is refused rather than coerced.
+_EPOCH_SECONDS_RANGE = (1e8, 1e11)
+_EPOCH_MILLIS_RANGE = (1e11, 1e14)
+
+
+def _read(event: dict[str, Any], concept: str) -> tuple[Any, str | None]:
+    """The first value ``event`` carries for ``concept``, and where it was.
+
+    Breadth-first: every spelling at the top level before any container,
+    then containers in declared order. Returns ``(None, None)`` when the
+    payload says nothing about the concept — which callers must report as
+    "not computed", never fill in.
+    """
+
+    top_level = FIELD_VOCABULARY[concept]
+    nested = top_level + CONTAINER_ONLY_SPELLINGS.get(concept, ())
+    containers = FIELD_CONTAINERS.get(concept, ())
+    level: list[tuple[dict[str, Any], str]] = [(event, "")]
+    visited: set[int] = {id(event)}
+
+    for depth in range(_MAX_CONTAINER_DEPTH + 1):
+        spellings = top_level if depth == 0 else nested
+        for node, prefix in level:
+            for spelling in spellings:
+                value = node.get(spelling)
+                # A dict under an actor-shaped key is a container to
+                # descend, not a value to return.
+                if value is not None and not isinstance(value, (dict, list)):
+                    return value, f"{prefix}{spelling}"
+        deeper: list[tuple[dict[str, Any], str]] = []
+        for node, prefix in level:
+            for name in containers:
+                child = node.get(name)
+                if isinstance(child, dict) and id(child) not in visited:
+                    visited.add(id(child))
+                    deeper.append((child, f"{prefix}{name}."))
+        if not deeper:
+            break
+        level = deeper
+    return None, None
+
+
+def _read_str(event: dict[str, Any], concept: str) -> tuple[str | None, str | None]:
+    value, where = _read(event, concept)
+    if isinstance(value, str) and value.strip():
+        return value.strip(), where
+    return None, None
+
+
+def _read_number(event: dict[str, Any], concept: str) -> tuple[float | None, str | None]:
+    value, where = _read(event, concept)
+    # `bool` is an `int` in Python and `True` is not a latitude.
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value), where
+    if isinstance(value, str):
+        try:
+            return float(value.strip()), where
+        except ValueError:
+            return None, None
+    return None, None
+
+
+# ---------------------------------------------------------------------------
 # Parsing helpers. Each returns None rather than a default: a default here
 # would be a fabricated input to a real measurement.
 # ---------------------------------------------------------------------------
 
 
-def _parse_timestamp(value: Any) -> datetime | None:
-    """ISO-8601 to an aware UTC datetime, or None.
+@dataclass(frozen=True)
+class _Instant:
+    """A parsed event time, and how much of one it actually was.
 
-    ``datetime.fromisoformat`` only learned to accept a trailing ``Z`` in
-    3.11 and the package supports 3.10, so the suffix is normalised here
-    rather than relied on.
+    ``date_only`` carries the thing a bare ``datetime`` would lose. Two
+    events whose payload gives only ``2026-05-14`` both parse to midnight,
+    so their elapsed time is zero — and a distance over a zero time is an
+    infinite speed, which the velocity signal would otherwise report as
+    physically impossible travel. The finding would be an artefact of
+    precision the payload never had, which is the same defect as reading a
+    verdict off a label, arriving by a different road.
     """
 
-    if not isinstance(value, str) or not value:
+    when: datetime
+    key: str
+    date_only: bool
+
+
+def _parse_timestamp(value: Any) -> tuple[datetime, bool] | None:
+    """A value to an aware UTC datetime plus whether it carried a time.
+
+    Accepts ISO-8601 and epoch seconds / milliseconds. ``fromisoformat``
+    only learned to accept a trailing ``Z`` in 3.11 and the package
+    supports 3.10, so the suffix is normalised here rather than relied on.
+    """
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        number = float(value)
+        if _EPOCH_SECONDS_RANGE[0] <= number < _EPOCH_SECONDS_RANGE[1]:
+            return datetime.fromtimestamp(number, tz=timezone.utc), False
+        if _EPOCH_MILLIS_RANGE[0] <= number < _EPOCH_MILLIS_RANGE[1]:
+            return datetime.fromtimestamp(number / 1000.0, tz=timezone.utc), False
+        return None
+
+    if not isinstance(value, str) or not value.strip():
         return None
     text = value.strip()
     if text.endswith(("Z", "z")):
@@ -187,7 +429,18 @@ def _parse_timestamp(value: Any) -> datetime | None:
         parsed = datetime.fromisoformat(text)
     except ValueError:
         return None
-    return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+    aware = parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed.astimezone(timezone.utc)
+    return aware, len(text) == 10 and text.count("-") == 2
+
+
+def _instant_of(event: dict[str, Any]) -> _Instant | None:
+    """The event's own time, read through the declared vocabulary."""
+
+    value, where = _read(event, "timestamp")
+    if value is None or where is None:
+        return None
+    parsed = _parse_timestamp(value)
+    return None if parsed is None else _Instant(when=parsed[0], key=where, date_only=parsed[1])
 
 
 def _normalise_city(name: str) -> str:
@@ -196,19 +449,11 @@ def _normalise_city(name: str) -> str:
 
 
 def _actor_of(event: dict[str, Any]) -> str | None:
-    for key in ("actor", "user", "username", "principal"):
-        value = event.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
+    return _read_str(event, "actor")[0]
 
 
 def _address_of(event: dict[str, Any]) -> str | None:
-    for key in ("client_ip", "source_ip", "src_ip", "ip"):
-        value = event.get(key)
-        if isinstance(value, str) and value.strip():
-            return value.strip()
-    return None
+    return _read_str(event, "address")[0]
 
 
 @dataclass(frozen=True)
@@ -216,48 +461,83 @@ class _Point:
     lat: float
     lon: float
     label: str
+    #: How the position was resolved — "coordinates (`client.geo.lat`)" or
+    #: "the built-in city table". Carried so the ledger can say which,
+    #: since a centroid and a real fix are different kinds of input to the
+    #: same arithmetic and a reader is entitled to know which they got.
+    source: str
+
+
+def _coordinates(event: dict[str, Any]) -> tuple[_Point | None, str | None]:
+    """Explicit coordinates from the payload, or why they were refused.
+
+    ``(None, None)`` means the payload carries none and the caller should
+    fall through to the city table. A non-empty reason means it carried
+    something coordinate-shaped that could not be trusted.
+    """
+
+    lat, lat_at = _read_number(event, "latitude")
+    lon, lon_at = _read_number(event, "longitude")
+    if lat is None and lon is None:
+        return None, None
+    if lat is None or lon is None:
+        half = f"a longitude at `{lon_at}`" if lat is None else f"a latitude at `{lat_at}`"
+        return None, f"carries {half} without its pair"
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+        return None, f"carries out-of-range coordinates ({lat}, {lon})"
+    if lat == 0.0 and lon == 0.0:
+        return None, "carries the 0,0 null-island sentinel, which is how several sources spell 'unknown'"
+
+    city, _ = _read_str(event, "city")
+    country, _ = _read_str(event, "country")
+    label = ", ".join(part for part in (city, country) if part) or f"{lat:.4f},{lon:.4f}"
+    return _Point(lat, lon, label, f"coordinates at `{lat_at}`/`{lon_at}`"), None
 
 
 def _locate(event: dict[str, Any]) -> tuple[_Point | None, str | None]:
-    """Resolve an event to coordinates, or explain why it could not be.
+    """Resolve an event to a position, or explain why it could not be.
+
+    Precedence is explicit coordinates, then the built-in city table.
+    Coordinates win because they are not a weaker input than a centroid
+    but a strictly better one: the table answers "somewhere in this city",
+    a payload's own ``lat``/``lon`` answers where. The reasoning that keeps
+    the table narrow — that deriving a country centroid for an unknown
+    city would invent the precision the whole measurement rests on — is
+    about *manufacturing* a position, and reading one the payload already
+    carries is the opposite of that.
 
     Returns ``(point, None)`` on success and ``(None, reason)`` otherwise.
-    Explicit coordinates on the event win over the table, so a user
-    scenario can carry any location on earth without the gazetteer
-    needing to know about it.
     """
 
-    geo = event.get("geo")
-    if not isinstance(geo, dict):
-        return None, "carries no `geo` object"
+    point, coordinate_problem = _coordinates(event)
+    if point is not None:
+        return point, None
 
-    lat, lon = geo.get("lat", geo.get("latitude")), geo.get("lon", geo.get("longitude"))
-    if isinstance(lat, (int, float)) and isinstance(lon, (int, float)) and not isinstance(lat, bool) and not isinstance(lon, bool):
-        label = str(geo.get("city") or geo.get("country") or f"{float(lat):.4f},{float(lon):.4f}")
-        return _Point(float(lat), float(lon), label), None
+    city, city_at = _read_str(event, "city")
+    if city is None:
+        if coordinate_problem is not None:
+            return None, f"{coordinate_problem}, and carries no city to fall back to"
+        return None, "carries neither coordinates nor a city"
 
-    city = geo.get("city")
-    if not isinstance(city, str) or not city.strip():
-        return None, "`geo` carries neither coordinates nor a city"
-
+    trailer = f" (it {coordinate_problem})" if coordinate_problem is not None else ""
     key = _normalise_city(city)
-    country = geo.get("country")
-    country_key = country.strip().lower() if isinstance(country, str) else ""
+    country, _ = _read_str(event, "country")
+    country_key = country.lower() if country else ""
 
     if country_key:
-        point = _GAZETTEER.get((key, country_key))
-        if point is None:
-            return None, f"{city!r} in {country} is not in the sandbox's built-in city table"
-        return _Point(point[0], point[1], f"{city}, {country}"), None
+        coords = _GAZETTEER.get((key, country_key))
+        if coords is None:
+            return None, f"{city!r} in {country} is not in the sandbox's built-in city table{trailer}"
+        return _Point(coords[0], coords[1], f"{city}, {country}", f"the built-in city table, via `{city_at}`"), None
 
     matches = [(k, v) for k, v in _GAZETTEER.items() if k[0] == key]
     if not matches:
-        return None, f"{city!r} is not in the sandbox's built-in city table"
+        return None, f"{city!r} is not in the sandbox's built-in city table{trailer}"
     if len(matches) > 1:
         countries = ", ".join(sorted(k[1].upper() for k, _ in matches))
-        return None, f"{city!r} is ambiguous without a country ({countries}) and was not guessed"
+        return None, f"{city!r} is ambiguous without a country ({countries}) and was not guessed{trailer}"
     (_, _), coords = matches[0]
-    return _Point(coords[0], coords[1], city), None
+    return _Point(coords[0], coords[1], city, f"the built-in city table, via `{city_at}`"), None
 
 
 def _plural(count: int, singular: str, plural: str | None = None) -> str:
@@ -286,56 +566,95 @@ def _geo_velocity(events: list[dict[str, Any]]) -> Signal:
     """
 
     bears_on = ("T1078", "T1078.004", "T1021", "T1133")
-    by_actor: dict[str, list[tuple[datetime, _Point]]] = {}
+    by_actor: dict[str, list[tuple[_Instant, _Point]]] = {}
     unresolved: list[str] = []
+    untimed = 0
 
     for event in events:
-        actor, when = _actor_of(event), _parse_timestamp(event.get("published") or event.get("timestamp"))
-        if actor is None or when is None:
+        actor, instant = _actor_of(event), _instant_of(event)
+        if actor is None:
+            continue
+        if instant is None:
+            untimed += 1
             continue
         point, reason = _locate(event)
         if point is None:
-            if reason is not None and "carries no `geo` object" not in reason:
+            if reason is not None and "carries neither coordinates nor a city" not in reason:
                 unresolved.append(reason)
             continue
-        by_actor.setdefault(actor, []).append((when, point))
+        by_actor.setdefault(actor, []).append((instant, point))
 
-    usable = {actor: sorted(points, key=lambda pair: pair[0]) for actor, points in by_actor.items() if len(points) >= 2}
-    if not usable:
-        detail = "; ".join(sorted(set(unresolved))) if unresolved else "no actor has two timestamped, geolocated events"
+    usable = {actor: sorted(points, key=lambda pair: pair[0].when) for actor, points in by_actor.items() if len(points) >= 2}
+
+    # Legs the payload's own precision cannot support. Two events whose time
+    # is a bare date both land at midnight, so the elapsed time is zero and
+    # the implied speed infinite — which would be published as impossible
+    # travel on the strength of precision the payload never carried. That is
+    # the same defect as reading a verdict off a label, arriving by a
+    # different road, so the pair is excluded and counted rather than measured.
+    legs: list[tuple[float, str, str, str, float, float, str, str]] = []
+    precision_skipped = 0
+    for actor, points in sorted(usable.items()):
+        for (i0, p0), (i1, p1) in zip(points, points[1:], strict=False):
+            hours = (i1.when - i0.when).total_seconds() / 3600.0
+            if hours == 0.0 and (i0.date_only or i1.date_only):
+                precision_skipped += 1
+                continue
+            km = _haversine_km(p0, p1)
+            legs.append((km / hours if hours > 0 else math.inf, actor, p0.label, p1.label, km, hours, p0.source, p1.source))
+
+    if not legs:
+        if precision_skipped:
+            detail = (
+                f"{_plural(precision_skipped, 'event pair')} carried a date with no time of day, so the"
+                " elapsed time between them is zero and there is no speed to compute"
+            )
+        elif unresolved:
+            detail = "; ".join(sorted(set(unresolved)))
+        elif untimed:
+            detail = f"{_plural(untimed, 'event')} carried no timestamp the sandbox could read"
+        else:
+            detail = "no actor has two timestamped, geolocated events"
         return Signal(
             name="geo_velocity",
             status="not_computable",
             summary=(
                 f"Travel speed could not be computed: {detail}. The live stack resolves coordinates"
-                " through a geo-IP provider; the sandbox ships a small built-in city table and"
-                " refuses to substitute a coordinate it does not have."
+                " through a geo-IP provider; the sandbox prefers coordinates the payload carries, falls"
+                " back to a small built-in city table, and refuses to substitute one it does not have."
             ),
-            inputs={"located_event_pairs": 0, "unresolved": sorted(set(unresolved))},
+            inputs={
+                "located_event_pairs": 0,
+                "unresolved": sorted(set(unresolved)),
+                "events_without_a_readable_timestamp": untimed,
+                "pairs_skipped_for_date_only_precision": precision_skipped,
+            },
             bears_on=bears_on,
         )
 
-    legs: list[tuple[float, str, str, str, float, float]] = []
-    for actor, points in sorted(usable.items()):
-        for (t0, p0), (t1, p1) in zip(points, points[1:], strict=False):
-            hours = (t1 - t0).total_seconds() / 3600.0
-            km = _haversine_km(p0, p1)
-            legs.append((km / hours if hours > 0 else math.inf, actor, p0.label, p1.label, km, hours))
-
-    speed, actor, origin, destination, km, hours = max(legs, key=lambda leg: leg[0])
-    speed_text = f"{speed:,.1f}" if math.isfinite(speed) else "unbounded (the two events share a timestamp)"
+    speed, actor, origin, destination, km, hours, from_source, to_source = max(legs, key=lambda leg: leg[0])
     inputs: dict[str, Any] = {
         "actor": actor,
         "from": origin,
         "to": destination,
+        # A centroid and a real fix are different inputs to the same
+        # arithmetic, and a reader is entitled to know which they got.
+        "position_source": from_source if from_source == to_source else f"{from_source}; {to_source}",
         "distance_km": round(km, 1),
         "elapsed_hours": round(hours, 3),
         "implied_speed_kmh": round(speed, 1) if math.isfinite(speed) else "unbounded",
         "threshold_kmh": MAX_PLAUSIBLE_KMH,
         "minimum_significant_km": MIN_SIGNIFICANT_KM,
         "unresolved": sorted(set(unresolved)),
+        "pairs_skipped_for_date_only_precision": precision_skipped,
     }
-    movement = f"{actor} appears at {destination} {hours:.2f} h after {origin} — {km:,.1f} km apart, implied speed {speed_text} km/h"
+    if math.isfinite(speed):
+        movement = f"{actor} appears at {destination} {hours:.2f} h after {origin} — {km:,.1f} km apart, implied speed {speed:,.1f} km/h"
+    else:
+        movement = (
+            f"{actor} appears at {origin} and at {destination} on one timestamp — {km:,.1f} km apart with no"
+            " time between them, so one actor was in two places at once"
+        )
 
     if km >= MIN_SIGNIFICANT_KM and speed > MAX_PLAUSIBLE_KMH:
         return Signal(
@@ -366,13 +685,25 @@ def _event_burst(events: list[dict[str, Any]]) -> Signal:
     """How tightly the events cluster in time."""
 
     bears_on = ("T1110", "T1110.003", "T1567", "T1552", "T1486", "T1496")
-    stamps = sorted(t for t in (_parse_timestamp(e.get("published") or e.get("timestamp")) for e in events) if t is not None)
+    instants = [i for i in (_instant_of(e) for e in events) if i is not None]
+    # A bare date cannot answer a question about a 60-second window. Events
+    # timed only to the day all land on midnight, which would read as the
+    # tightest possible burst from a payload that said nothing about the
+    # hour. Dropped and counted rather than folded in.
+    dated_only = sum(1 for i in instants if i.date_only)
+    stamps = sorted(i.when for i in instants if not i.date_only)
     if len(stamps) < 2:
+        if dated_only:
+            detail = (
+                f"{_plural(dated_only, 'event')} carried a date with no time of day, and a 60-second window cannot be assessed from that"
+            )
+        else:
+            detail = f"{len(stamps)} of {_plural(len(events), 'event')} carried a timestamp the sandbox could read"
         return Signal(
             name="event_burst",
             status="not_computable",
-            summary=f"Event rate needs two parsable timestamps; {len(stamps)} of {_plural(len(events), 'event')} carried one.",
-            inputs={"timestamped_events": len(stamps), "total_events": len(events)},
+            summary=f"Event rate needs two timestamps resolved to at least the second: {detail}.",
+            inputs={"timestamped_events": len(stamps), "date_only_events": dated_only, "total_events": len(events)},
             bears_on=bears_on,
         )
 
@@ -381,6 +712,7 @@ def _event_burst(events: list[dict[str, Any]]) -> Signal:
     densest = max(sum(1 for other in stamps if 0 <= (other - start).total_seconds() <= window) for start in stamps)
     inputs = {
         "events": len(stamps),
+        "date_only_events_excluded": dated_only,
         "span_seconds": round(span, 3),
         "densest_60s_window_events": densest,
         "threshold_events_per_60s": 3,
@@ -412,13 +744,11 @@ def _source_diversity(events: list[dict[str, Any]]) -> Signal:
     bears_on = ("T1078", "T1078.004", "T1133", "T1021")
     actors = sorted({a for a in (_actor_of(e) for e in events) if a})
     addresses = sorted({a for a in (_address_of(e) for e in events) if a})
-    countries = sorted(
-        {
-            str(e["geo"]["country"]).strip().upper()
-            for e in events
-            if isinstance(e.get("geo"), dict) and isinstance(e["geo"].get("country"), str) and e["geo"]["country"].strip()
-        }
-    )
+    # Read through the shared vocabulary rather than a literal `geo.country`
+    # path: that path is one dialect of several, and an Okta payload putting
+    # the country under `client.geographicalContext` scored zero countries
+    # while plainly carrying two.
+    countries = sorted({c.upper() for c in (_read_str(e, "country")[0] for e in events) if c})
     inputs = {"actors": actors, "source_addresses": addresses, "countries": countries, "events": len(events)}
     counted = (
         f"{_plural(len(actors), 'actor')}, {_plural(len(addresses), 'source address', 'source addresses')}"
@@ -456,17 +786,22 @@ def _recorded_domain_age(events: list[dict[str, Any]]) -> Signal:
     """
 
     bears_on = ("T1566", "T1566.001", "T1566.002", "T1071")
-    ages = [
-        (e.get("domain") or e.get("url") or "(unnamed destination)", int(e["domain_age_days"]))
-        for e in events
-        if isinstance(e.get("domain_age_days"), int) and not isinstance(e.get("domain_age_days"), bool)
-    ]
+    ages: list[tuple[str, int]] = []
+    for event in events:
+        days, _ = _read_number(event, "domain_age_days")
+        if days is None or days != int(days):
+            continue
+        destination, _ = _read_str(event, "destination")
+        ages.append((destination or "(unnamed destination)", int(days)))
     if not ages:
         return Signal(
             name="recorded_domain_age",
             status="not_computable",
-            summary="No event records a `domain_age_days` field, and the sandbox has no network to look one up.",
-            inputs={"events_with_domain_age": 0},
+            summary=(
+                "No event records a domain age under any spelling the sandbox reads"
+                f" ({', '.join(FIELD_VOCABULARY['domain_age_days'])}), and it has no network to look one up."
+            ),
+            inputs={"events_with_domain_age": 0, "spellings_read": list(FIELD_VOCABULARY["domain_age_days"])},
             bears_on=bears_on,
         )
     where, youngest = min(ages, key=lambda pair: pair[1])
