@@ -76,8 +76,7 @@ def check_summary_block(text: str, counts: dict[str, int]) -> list[str]:
         written = int(match.group(1))
         if written != counts[field]:
             problems.append(
-                f"summary says {field} = {written}, the table parses {counts[field]} — "
-                "recompute rather than editing the number"
+                f"summary says {field} = {written}, the table parses {counts[field]} — recompute rather than editing the number"
             )
     return problems
 

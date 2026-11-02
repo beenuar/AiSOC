@@ -181,6 +181,13 @@ def _fused(index: int):  # noqa: ANN202
         hostname=None,
         username=None,
         process_name=None,
+        # Depth plan wave 2, 1.6. Same reason again: a double missing a
+        # field the sink reads raises inside the sink's own except clause
+        # and every row comes back FAILED, which looks like a database
+        # problem. None is also the right value here, because these rows
+        # carry no source address to classify.
+        src_ip_class=None,
+        src_ip_class_dataset_version=None,
     )
     return SimpleNamespace(
         id=uuid4(),

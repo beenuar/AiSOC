@@ -173,6 +173,12 @@ class InvestigationState(BaseModel):
     # similarity rather than by the exact evidence fingerprint. Context only
     # — nothing here closes an alert; suppression stays exact-match.
     precedent: list[dict[str, Any]] = Field(default_factory=list)
+    # What those principals could do *at the alert's event time*, as
+    # `app.context.privilege.PrivilegeContext.as_state()` renders it (depth
+    # plan wave 2, 1.1). Distinct from `identity_context`, which says who
+    # holds the account: a service account no directory knows about still
+    # has effective permissions, and that is usually the interesting case.
+    privilege_context: dict[str, Any] | None = None
 
     # Findings accumulated during investigation
     findings: list[str] = Field(default_factory=list)

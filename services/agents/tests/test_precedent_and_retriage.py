@@ -265,12 +265,8 @@ def test_the_same_trigger_twice_is_one_run() -> None:
     from app.workers.fused_alert_consumer import _NAMESPACE, WORKFLOW_VERSION
 
     trigger = retriage.RetriageTrigger(kind="story_escalation", evidence={"chain_id": "c-1", "member_count": 3})
-    first = retriage.retriage_run_id(
-        _NAMESPACE, alert_row_id="a-1", workflow_version=WORKFLOW_VERSION, trigger=trigger
-    )
-    second = retriage.retriage_run_id(
-        _NAMESPACE, alert_row_id="a-1", workflow_version=WORKFLOW_VERSION, trigger=trigger
-    )
+    first = retriage.retriage_run_id(_NAMESPACE, alert_row_id="a-1", workflow_version=WORKFLOW_VERSION, trigger=trigger)
+    second = retriage.retriage_run_id(_NAMESPACE, alert_row_id="a-1", workflow_version=WORKFLOW_VERSION, trigger=trigger)
     assert first == second
 
 

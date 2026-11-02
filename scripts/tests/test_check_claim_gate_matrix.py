@@ -123,9 +123,7 @@ def test_a_file_with_no_summary_block_is_a_failure_not_a_pass() -> None:
 
 def test_a_heading_that_merely_mentions_summary_is_not_a_block() -> None:
     """`## Summary of deferrals` is a different section and must not match."""
-    assert _problems("## Summary of deferrals\n\n- Total: 99\n") == [
-        "no '## Summary' block found"
-    ]
+    assert _problems("## Summary of deferrals\n\n- Total: 99\n") == ["no '## Summary' block found"]
 
 
 def test_prose_after_the_block_cannot_satisfy_a_missing_figure() -> None:
