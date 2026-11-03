@@ -28,6 +28,8 @@ interface KpiBarPayload {
     total_alerts: number;
     false_positives: number;
     false_positive_rate_pct: number;
+    /** Alerts with a decided verdict — the rate's own denominator. */
+    false_positive_rate_denominator?: number;
     distinct_cases: number;
     alert_to_incident_ratio: number;
     mitre_technique_tagging_pct: number;
@@ -46,7 +48,12 @@ interface SLAMetrics {
   period_days: number;
   computed_at: string;
   overall: {
+    /** Alerts with at least one SLA lifecycle event — *not* the alert count. */
     total_alerts: number;
+    /** Every alert in the window, whether or not it is SLA-measurable. */
+    alerts_in_window?: number;
+    /** False when nothing in the window is SLA-measurable. */
+    measured?: boolean;
     total_breaches: number;
     breach_rate: number;
     mttd_avg: number | null;
@@ -292,6 +299,77 @@ function EditKpiBarModal({
   );
 }
 
+/**
+ * The four headline SLA cards.
+ *
+ * `alert_sla_events` has no writer in the pipeline -- only analyst actions
+ * put a row in it -- so on a deployment where nobody has acknowledged or
+ * dispositioned anything the table is empty. These cards rendered
+ * **Total Alerts 0 / SLA Breaches 0 / Breach Rate 0%** for a tenant with
+ * nine alerts, which reads as flawless compliance, directly above a panel
+ * that correctly counted nine.
+ *
+ * Both counts are now shown and named for what they count, and when nothing
+ * is measurable the breach figures say so instead of claiming zero.
+ */
+function SlaSummaryCards({
+  overall,
+  days,
+}: {
+  overall: SLAMetrics['overall'];
+  days: number;
+}) {
+  // `=== false` rather than falsiness: an older API sends no flag, and
+  // blanking the cards on an upgrade path would be worse than the defect.
+  const unmeasured = overall.measured === false;
+  const alertsInWindow = overall.alerts_in_window;
+
+  const cards: { label: string; value: string; hint?: string }[] = [
+    {
+      label: 'Alerts in window',
+      value: String(alertsInWindow ?? overall.total_alerts),
+      hint:
+        alertsInWindow === undefined
+          ? undefined
+          : `${overall.total_alerts} with SLA lifecycle events`,
+    },
+    {
+      label: 'SLA Breaches',
+      value: unmeasured ? '—' : String(overall.total_breaches),
+      hint: unmeasured ? `not measured · no SLA events in ${days} days` : undefined,
+    },
+    {
+      label: 'Breach Rate',
+      value: unmeasured ? '—' : `${overall.breach_rate}%`,
+      hint: unmeasured ? 'nothing to compute a rate over' : undefined,
+    },
+    { label: 'Avg MTTR', value: fmtMinutes(overall.mttr_avg) },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      {cards.map(({ label, value, hint }) => (
+        <div
+          key={label}
+          className="bg-gray-800 border border-gray-700 rounded-lg p-4"
+        >
+          <p className="text-gray-400 text-xs">{label}</p>
+          <p
+            className={
+              value === '—'
+                ? 'text-gray-500 text-2xl font-semibold mt-1'
+                : 'text-white text-2xl font-semibold mt-1'
+            }
+          >
+            {value}
+          </p>
+          {hint && <p className="text-[10px] text-gray-500 mt-1">{hint}</p>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function KpiBarSection({
   kpi,
   days,
@@ -313,7 +391,14 @@ function KpiBarSection({
     {
       key: 'fp',
       label: 'False positive rate',
-      observed: `${observed.false_positive_rate_pct}% (${observed.false_positives} / ${observed.total_alerts})`,
+      // The denominator is alerts with a *decided* verdict, not every alert
+      // in the window. It read "(0 / 9)" while the rate divided by something
+      // else entirely, which invited the reader to check the arithmetic and
+      // conclude the page was fine.
+      observed:
+        (observed.false_positive_rate_denominator ?? 0) > 0
+          ? `${observed.false_positive_rate_pct}% (${observed.false_positives} / ${observed.false_positive_rate_denominator} decided)`
+          : `not measured · no decided verdicts in ${days} days`,
       target: `≤ ${targets.false_positive_rate_max_pct}%`,
       breach: breaches.false_positive_rate,
     },
@@ -329,14 +414,19 @@ function KpiBarSection({
     },
     {
       key: 'mitre',
-      label: 'MITRE technique coverage',
+      // Not "coverage". This is the share of *alerts* carrying a technique
+      // tag; it says nothing about how much of ATT&CK the tenant can detect,
+      // and the target is written against tagging. The API field has always
+      // been named `mitre_technique_tagging_pct`; the console renamed it on
+      // the way to the screen and then graded it as a coverage breach.
+      label: 'Alerts tagged with a technique',
       observed: `${observed.mitre_technique_tagging_pct}%`,
       target: `≥ ${targets.mitre_technique_tagging_min_pct}%`,
       breach: breaches.mitre_technique_tagging,
     },
     {
       key: 'sub',
-      label: 'MITRE sub-technique coverage',
+      label: 'Alerts tagged with a sub-technique',
       observed: `${observed.mitre_subtechnique_tagging_pct}%`,
       target: `≥ ${targets.mitre_subtechnique_tagging_min_pct}%`,
       breach: breaches.mitre_subtechnique_tagging,
@@ -518,25 +608,7 @@ export function SLADashboard() {
 
       {/* Overall summary cards */}
       {metrics && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { label: 'Total Alerts', value: metrics.overall.total_alerts },
-            { label: 'SLA Breaches', value: metrics.overall.total_breaches },
-            { label: 'Breach Rate', value: `${metrics.overall.breach_rate}%` },
-            {
-              label: 'Avg MTTR',
-              value: fmtMinutes(metrics.overall.mttr_avg),
-            },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="bg-gray-800 border border-gray-700 rounded-lg p-4"
-            >
-              <p className="text-gray-400 text-xs">{label}</p>
-              <p className="text-white text-2xl font-semibold mt-1">{value}</p>
-            </div>
-          ))}
-        </div>
+        <SlaSummaryCards overall={metrics.overall} days={days} />
       )}
 
       {metrics?.kpi_bar && (
