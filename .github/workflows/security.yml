@@ -73,6 +73,19 @@ jobs:
       - name: Enforce no new NO GATE rows
         run: python3 scripts/check_claim_gate_matrix.py
 
+      # The ratchet above tallies statuses and never reads the Source column,
+      # and `check_comment_paths.py` reads code comments, which a markdown
+      # table cell is not. Nine rows therefore cited documentation that does
+      # not exist — several of them near misses for real pages, which is the
+      # shape that survives review. The audit backbone pointing at pages a
+      # reader cannot open is worse than a missing row, because a row that
+      # cites a document reads as evidence.
+      - name: Source-citation self-test (header lookup, three bases, refusals)
+        run: python3 scripts/check_claim_matrix_sources.py --self-test
+
+      - name: Every path the matrix cites in its Source column exists
+        run: python3 scripts/check_claim_matrix_sources.py
+
   # ── HARD: secret scan ─────────────────────────────────────────────────────
   secret-scan:
     name: Secret scan (gitleaks)

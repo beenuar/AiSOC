@@ -119,7 +119,7 @@ jobs:
           # *else* in the surviving list changed. This is the union of all
           # three lists; the next lane extends it rather than re-assigning.
           migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py tests/isolation/test_root_cause_findings_live.py .github/workflows/integration.yml'
-          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py services/api/tests/test_identity_resolution_live.py services/api/app/services/identity_resolution.py services/api/app/services/identity_resolution_store.py services/api/app/services/change_timeline.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py services/connectors/app/vuln_promotion_sql.py services/connectors/app/scheduler.py services/connectors/tests/test_vuln_promotion_live.py .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py services/api/tests/test_identity_resolution_live.py services/api/app/services/identity_resolution.py services/api/app/services/identity_resolution_store.py services/api/app/services/change_timeline.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py services/connectors/app/vuln_promotion_sql.py services/connectors/app/scheduler.py services/connectors/tests/test_vuln_promotion_live.py services/api/app/api/v1/endpoints/triage_questions.py services/agents/app/context/triage_questions_store.py services/agents/app/hunt/source_report_store.py services/agents/app/api/router.py services/agents/tests/integration/ .github/workflows/integration.yml'
           # backup_crypt.py was missing from the old filter, and it is where
           # every byte of the AES-256-GCM implementation lives — so a change
           # to the encryption itself did not run the gate that proves the
@@ -824,6 +824,42 @@ jobs:
           $RUNNER_TEMP/.venv-connectors/bin/python -m pytest tests/test_vuln_promotion_live.py -q -p no:cacheprovider 2>&1 | tee /tmp/vuln-promo.log
           grep -Eq "[1-9][0-9]* passed" /tmp/vuln-promo.log \
             || { echo "::error::the promotion statements never executed — the Postgres leg is misconfigured"; exit 1; }
+
+      # Two tables that had a migration, a schema and no path that writes
+      # them. `triage_questions` is read on the triage hot path of every alert
+      # and had no writer anywhere; `hunt_source_reports` was a pure orphan
+      # whose `approved_at` enforced the property its own migration states.
+      # Both halves run against one database here, because a unit test of
+      # either half passes whether or not the other one exists — which is
+      # exactly how both shipped under GATED claim rows.
+      - name: The write surface for triage questions (live Postgres)
+        working-directory: services/api
+        env:
+          # The runtime role, not the owner: a superuser ignores every RLS
+          # policy even under FORCE ROW LEVEL SECURITY.
+          AISOC_TEST_POSTGRES: postgresql+asyncpg://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
+        run: |
+          set -euo pipefail
+          python -m pytest tests/test_triage_question_write_surface.py -q -p no:cacheprovider 2>&1 | tee /tmp/tq-write.log
+          grep -Eq "[1-9][0-9]* passed" /tmp/tq-write.log \
+            || { echo "::error::the triage-question write surface never ran — the Postgres leg is misconfigured"; exit 1; }
+
+      - name: Orphan-table round trips, read side (live Postgres)
+        working-directory: services/agents
+        env:
+          AISOC_TEST_POSTGRES: postgresql://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
+          AISOC_DEV_MODE: '1'
+        run: |
+          set -euo pipefail
+          python3 -m venv $RUNNER_TEMP/.venv-agents-db
+          python3 ../../scripts/service_requirements.py agents --locked > /tmp/agents.db.lock.txt
+          $RUNNER_TEMP/.venv-agents-db/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/agents.db.lock.txt
+          $RUNNER_TEMP/.venv-agents-db/bin/python -m pytest \
+            tests/integration/test_triage_questions_round_trip.py \
+            tests/integration/test_hunt_source_report_store_live.py \
+            -q -p no:cacheprovider 2>&1 | tee /tmp/agents-db.log
+          grep -Eq "[1-9][0-9]* passed" /tmp/agents-db.log \
+            || { echo "::error::no orphan-table round trip actually ran — the Postgres leg is misconfigured"; exit 1; }
 
       # Fusion's fuse-time asset-context resolver: the name/FQDN/IP match,
       # the highest-criticality tie-break and the tenant predicate are schema
