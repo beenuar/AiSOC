@@ -396,6 +396,12 @@ def build_detection_item(
     if isinstance(provenance, dict):
         item["provenance"] = {
             "source": provenance.get("source"),
+            # DRL-1.1 requires author identification to travel with a shared
+            # copy. This projection dropped it, and the item-level `author`
+            # below defaulted to "AiSOC" — so the console did not merely omit
+            # the upstream author on 3,132 imported Sigma rules, it named this
+            # project in their place. Reported as #1680 by Florian Roth.
+            "author": provenance.get("author"),
             "source_id": provenance.get("source_id"),
             "source_commit": provenance.get("source_commit"),
             "license": provenance.get("license"),
@@ -403,6 +409,12 @@ def build_detection_item(
             "imported_at": provenance.get("imported_at"),
             "upstream_path": provenance.get("upstream_path"),
         }
+        # The person who wrote the rule outranks the default. `author` is what
+        # every catalogue surface renders and what a reader takes to be the
+        # credit, so an imported rule carries its upstream author there too.
+        upstream_author = str(provenance.get("author") or "").strip()
+        if upstream_author:
+            item["author"] = upstream_author
     return item
 
 

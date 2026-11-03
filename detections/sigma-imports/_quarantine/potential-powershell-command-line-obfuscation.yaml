@@ -36,6 +36,7 @@ detection:
   condition: all of selection_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov (idea), Vasiliy Burov (rule), oscd.community, Tim Shelton (fp)'
   source_id: d7bcd677-645d-4691-a8d4-7a5602b780d1
   source_commit: df5c6a6
   license: DRL-1.1

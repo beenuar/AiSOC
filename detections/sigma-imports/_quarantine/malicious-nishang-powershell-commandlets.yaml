@@ -93,6 +93,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alec Costello'
   source_id: f772cee9-b7c2-4cb2-8f07-49870adc02e0
   source_commit: df5c6a6
   license: DRL-1.1

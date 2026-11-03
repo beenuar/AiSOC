@@ -38,6 +38,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sagie Dulce, Dekel Paz'
   source_id: 35c55673-84ca-4e99-8d09-e334f3c29539
   source_commit: df5c6a6
   license: DRL-1.1

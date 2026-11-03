@@ -78,6 +78,7 @@ detection:
   condition: all of selection_cmd_* and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Vladan Sekulic, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 5a6b7c8d-9e0f-1a2b-3c4d-5e6f7a8b9c0d
   source_commit: df5c6a6
   license: DRL-1.1

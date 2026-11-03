@@ -39,6 +39,7 @@ detection:
   condition: 1 of selection_opt_* and all of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior (Nextron Systems), Florian Roth (Nextron Systems)'
   source_id: afe52666-401e-4a02-b4ff-5d128990b8cb
   source_commit: df5c6a6
   license: DRL-1.1

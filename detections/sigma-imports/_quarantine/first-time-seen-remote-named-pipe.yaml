@@ -46,6 +46,7 @@ detection:
   condition: selection1 and not false_positives
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden'
   source_id: 52d8b0c6-53d6-439a-9e41-52ad442ad9ad
   source_commit: df5c6a6
   license: DRL-1.1

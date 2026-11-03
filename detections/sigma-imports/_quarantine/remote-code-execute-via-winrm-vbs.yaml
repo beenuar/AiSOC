@@ -28,6 +28,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Julia Fomina, oscd.community'
   source_id: 9df0dd3a-1a5c-47e3-a2bc-30ed177646a0
   source_commit: df5c6a6
   license: DRL-1.1

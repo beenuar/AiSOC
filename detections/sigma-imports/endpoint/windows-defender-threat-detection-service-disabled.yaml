@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ján Trenčanský, frack113'
   source_id: 6c0a7755-6d31-44fa-80e1-133e57752680
   source_commit: df5c6a6
   license: DRL-1.1

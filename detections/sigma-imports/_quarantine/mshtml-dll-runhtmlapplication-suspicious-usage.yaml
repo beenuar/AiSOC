@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems),  Florian Roth (Nextron Systems), Josh Nickels, frack113, Zaw Min Htun (ZETA)'
   source_id: 4782eb5a-a513-4523-a0ac-f3082b26ac5c
   source_commit: df5c6a6
   license: DRL-1.1

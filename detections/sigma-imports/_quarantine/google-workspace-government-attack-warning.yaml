@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tom Kluter'
   source_id: eafe6f2b-cfec-4612-aec2-49563c33a087
   source_commit: df5c6a6
   license: DRL-1.1

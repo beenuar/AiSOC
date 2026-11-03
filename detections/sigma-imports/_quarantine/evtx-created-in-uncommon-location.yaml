@@ -34,6 +34,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'D3F7A5105'
   source_id: 65236ec7-ace0-4f0c-82fd-737b04fd4dcb
   source_commit: df5c6a6
   license: DRL-1.1

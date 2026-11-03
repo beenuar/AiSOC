@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'TuanLe (GTSC)'
   source_id: 6a50f16c-3b7b-42d1-b081-0fdd3ba70a73
   source_commit: df5c6a6
   license: DRL-1.1

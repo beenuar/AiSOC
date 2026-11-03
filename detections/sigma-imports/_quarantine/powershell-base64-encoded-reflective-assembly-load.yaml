@@ -34,6 +34,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christian Burkard (Nextron Systems), pH-T (Nextron Systems)'
   source_id: 62b7ccc9-23b4-471e-aa15-6da3663c4d59
   source_commit: df5c6a6
   license: DRL-1.1

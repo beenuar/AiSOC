@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), oscd.community, Natalia Shornikova'
   source_id: a0459f02-ac51-4c09-b511-b8c9203fc429
   source_commit: df5c6a6
   license: DRL-1.1

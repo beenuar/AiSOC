@@ -31,6 +31,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Joseliyo Sanchez, @Joseliyo_Jstnk'
   source_id: d27ab432-2199-483f-a297-03633c05bae6
   source_commit: df5c6a6
   license: DRL-1.1

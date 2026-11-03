@@ -28,6 +28,7 @@ detection:
   condition: selection1 and 1 of selection_cli*
 provenance:
   source: SigmaHQ/sigma
+  author: 'remotephone, oscd.community'
   source_id: acf61bd8-d814-4272-81f0-a7a269aa69aa
   source_commit: df5c6a6
   license: DRL-1.1

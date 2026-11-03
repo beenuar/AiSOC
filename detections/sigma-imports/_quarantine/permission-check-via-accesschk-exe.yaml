@@ -35,6 +35,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov (idea), Mangatas Tondang, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: c625d754-6a3d-4f65-9c9a-536aea960d37
   source_commit: df5c6a6
   license: DRL-1.1

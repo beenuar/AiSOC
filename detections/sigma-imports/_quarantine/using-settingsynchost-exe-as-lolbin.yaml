@@ -26,6 +26,7 @@ detection:
   condition: not system_utility and parent_is_settingsynchost
 provenance:
   source: SigmaHQ/sigma
+  author: 'Anton Kutepov, oscd.community'
   source_id: b2ddd389-f676-4ac4-845a-e00781a48e5f
   source_commit: df5c6a6
   license: DRL-1.1

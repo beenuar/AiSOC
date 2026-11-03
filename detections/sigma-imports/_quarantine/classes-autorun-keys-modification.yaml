@@ -59,6 +59,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: 9df5f547-c86a-433e-b533-f2794357e242
   source_commit: df5c6a6
   license: DRL-1.1

@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Aaron Greetham (@beardofbinary) - NCC Group'
   source_id: 613c03ba-0779-4a53-8a1f-47f914a4ded3
   source_commit: df5c6a6
   license: DRL-1.1

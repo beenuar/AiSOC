@@ -62,6 +62,7 @@ detection:
     or exclude_query_types or exclude_responses or exclude_netbios)
 provenance:
   source: SigmaHQ/sigma
+  author: '@neu5ron, SOC Prime Team, Corelight'
   source_id: ede05abc-2c9e-4624-9944-9ff17fdc0bf5
   source_commit: df5c6a6
   license: DRL-1.1

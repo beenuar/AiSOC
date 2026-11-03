@@ -46,6 +46,7 @@ detection:
   condition: selection and 1 of selection_allow*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alexandr Yampolskyi, SOC Prime, Tim Shelton'
   source_id: d7fb8f0e-bd5f-45c2-b467-19571c490d7e
   source_commit: df5c6a6
   license: DRL-1.1

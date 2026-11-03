@@ -41,6 +41,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'IAI'
   source_id: 323ff3f5-0013-4847-bbd4-250b5edb62cc
   source_commit: df5c6a6
   license: DRL-1.1

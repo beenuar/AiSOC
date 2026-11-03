@@ -35,6 +35,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Florian Roth (Nextron Systems)'
   source_id: 992a6cae-db6a-43c8-9cec-76d7195c96fc
   source_commit: df5c6a6
   license: DRL-1.1

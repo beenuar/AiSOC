@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Andreas Hunkeler (@Karneades)'
   source_id: 44a22d59-b175-4f13-8c16-cbaef5b581ff
   source_commit: df5c6a6
   license: DRL-1.1

@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'omkar72'
   source_id: 730fc21b-eaff-474b-ad23-90fd265d4988
   source_commit: df5c6a6
   license: DRL-1.1

@@ -40,6 +40,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden, Roberto Rodriguez @Cyb3rWard0g, oscd.community, Tim Shelton, Maxence Fossat'
   source_id: 2c99737c-585d-4431-b61a-c911d86ff32f
   source_commit: df5c6a6
   license: DRL-1.1

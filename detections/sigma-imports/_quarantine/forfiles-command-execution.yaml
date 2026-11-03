@@ -28,6 +28,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch, Elastic, E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community'
   source_id: 9aa5106d-bce3-4b13-86df-3a20f1d5cf0b
   source_commit: df5c6a6
   license: DRL-1.1

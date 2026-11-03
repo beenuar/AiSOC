@@ -35,6 +35,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'TropChaud'
   source_id: dcff7e85-d01f-4eb5-badd-84e2e6be8294
   source_commit: df5c6a6
   license: DRL-1.1

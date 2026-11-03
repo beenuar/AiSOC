@@ -30,6 +30,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sander Wiebing'
   source_id: 01aeb693-138d-49d2-9403-c4f52d7d3d62
   source_commit: df5c6a6
   license: DRL-1.1

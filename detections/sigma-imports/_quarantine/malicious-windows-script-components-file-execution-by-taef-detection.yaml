@@ -28,6 +28,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Agro (@agro_sev) oscd.community'
   source_id: 634b00d5-ccc3-4a06-ae3b-0ec8444dd51b
   source_commit: df5c6a6
   license: DRL-1.1

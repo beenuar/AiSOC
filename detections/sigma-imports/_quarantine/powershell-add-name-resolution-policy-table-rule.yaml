@@ -28,6 +28,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Borna Talebi'
   source_id: 4368354e-1797-463c-bc39-a309effbe8d7
   source_commit: df5c6a6
   license: DRL-1.1

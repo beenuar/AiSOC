@@ -32,6 +32,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Christopher Peacock ''@securepeacock'', SCYTHE ''@scythe_io'''
   source_id: 0e4164da-94bc-450d-a7be-a4b176179f1f
   source_commit: df5c6a6
   license: DRL-1.1

@@ -26,6 +26,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@SerkinValery'
   source_id: 65744385-8541-44a6-8630-ffc824d7d4cc
   source_commit: df5c6a6
   license: DRL-1.1

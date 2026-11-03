@@ -71,6 +71,7 @@ detection:
   condition: 1 of selection_* or all of part_localauth*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: 42a993dd-bb3e-48c8-b372-4d6684c4106c
   source_commit: df5c6a6
   license: DRL-1.1

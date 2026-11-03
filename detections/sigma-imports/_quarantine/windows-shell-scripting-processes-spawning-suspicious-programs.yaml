@@ -58,6 +58,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Tim Shelton'
   source_id: 3a6586ad-127a-4d3b-a677-1e6eacdf8fde
   source_commit: df5c6a6
   license: DRL-1.1

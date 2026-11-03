@@ -29,6 +29,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'wagga, Jonhnathan Ribeiro, oscd.community'
   source_id: 5cddf373-ef00-4112-ad72-960ac29bac34
   source_commit: df5c6a6
   license: DRL-1.1

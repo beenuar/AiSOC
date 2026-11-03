@@ -50,6 +50,7 @@ detection:
   condition: 1 of selection_webserver_* and selection_recon
 provenance:
   source: SigmaHQ/sigma
+  author: 'Cian Heasley, Florian Roth (Nextron Systems)'
   source_id: f64e5c19-879c-4bae-b471-6d84c8339677
   source_commit: df5c6a6
   license: DRL-1.1

@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Shelton (HAWK.IO)'
   source_id: 35bc7e28-ee6b-492f-ab04-da58fcf6402e
   source_commit: df5c6a6
   license: DRL-1.1

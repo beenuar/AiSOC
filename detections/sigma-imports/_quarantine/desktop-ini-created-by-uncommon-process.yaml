@@ -35,6 +35,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Maxime Thiebaut (@0xThiebaut), Tim Shelton (HAWK.IO)'
   source_id: 81315b50-6b60-4d8f-9928-3466e1022515
   source_commit: df5c6a6
   license: DRL-1.1

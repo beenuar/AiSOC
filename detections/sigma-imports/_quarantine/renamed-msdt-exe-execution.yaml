@@ -21,6 +21,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'pH-T (Nextron Systems)'
   source_id: bd1c6866-65fc-44b2-be51-5588fcff82b9
   source_commit: df5c6a6
   license: DRL-1.1

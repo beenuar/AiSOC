@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Security Onion Solutions'
   source_id: e30de276-68ec-435c-ab99-ef3befec6c61
   source_commit: df5c6a6
   license: DRL-1.1

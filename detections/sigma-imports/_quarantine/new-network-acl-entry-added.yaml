@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'jamesc-grafana'
   source_id: e1f7febb-7b94-4234-b5c6-00fb8500f5dd
   source_commit: df5c6a6
   license: DRL-1.1

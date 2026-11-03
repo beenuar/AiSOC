@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Hai Vaknin @LuxNoBulIshit, Avihay eldad  @aloneliassaf, Austin Songer @austinsonger'
   source_id: a2ea3ae7-d3d0-40a0-a55c-25a45c87cac1
   source_commit: df5c6a6
   license: DRL-1.1

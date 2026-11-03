@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@pbssubhash'
   source_id: 33efc23c-6ea2-4503-8cfe-bdf82ce8f719
   source_commit: df5c6a6
   license: DRL-1.1

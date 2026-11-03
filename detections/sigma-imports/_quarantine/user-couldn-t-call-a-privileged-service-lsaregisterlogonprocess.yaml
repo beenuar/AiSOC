@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez (source), Ilyas Ochkov (rule), oscd.community'
   source_id: 6daac7fc-77d1-449a-a71a-e6b4d59a0e54
   source_commit: df5c6a6
   license: DRL-1.1

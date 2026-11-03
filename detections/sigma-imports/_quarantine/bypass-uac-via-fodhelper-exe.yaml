@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'E.M. Anhaus (originally from Atomic Blue Detections, Tony Lambert), oscd.community'
   source_id: 7f741dcf-fc22-4759-87b4-9ae8376676a2
   source_commit: df5c6a6
   license: DRL-1.1

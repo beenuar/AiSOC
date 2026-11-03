@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Hieu Tran'
   source_id: 0f0450f3-8b47-441e-a31b-15a91dc243e2
   source_commit: df5c6a6
   license: DRL-1.1

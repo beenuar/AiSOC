@@ -29,6 +29,7 @@ detection:
   condition: winsock_parameters_base and winsock_parameters and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: d6c2ce7e-afb5-4337-9ca4-4b5254ed0565
   source_commit: df5c6a6
   license: DRL-1.1

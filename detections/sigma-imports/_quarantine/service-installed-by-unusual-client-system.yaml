@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch (Nextron Systems), Elastic (idea)'
   source_id: 71c276aa-49cd-43d2-b920-2dcd3e6962d5
   source_commit: df5c6a6
   license: DRL-1.1

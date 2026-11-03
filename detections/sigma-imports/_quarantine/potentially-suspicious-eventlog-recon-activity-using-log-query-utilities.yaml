@@ -102,6 +102,7 @@ detection:
     or all of selection_wmic_* or selection_cmdlet)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), X__Junior (Nextron Systems)'
   source_id: beaa66d6-aa1b-4e3c-80f5-e0145369bfaf
   source_commit: df5c6a6
   license: DRL-1.1

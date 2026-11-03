@@ -53,6 +53,7 @@ detection:
     or all of selection_accounts_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), omkar72, @svch0st, Nasreddine Bencherchali (Nextron Systems)'
   source_id: d95de845-b83c-4a9a-8a6a-4fc802ebf6c0
   source_commit: df5c6a6
   license: DRL-1.1

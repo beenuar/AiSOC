@@ -43,6 +43,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tom Ueltschi (@c_APT_ure), Tim Shelton'
   source_id: 0a98a10c-685d-4ab0-bddc-b6bdd1d48458
   source_commit: df5c6a6
   license: DRL-1.1

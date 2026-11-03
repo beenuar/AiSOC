@@ -28,6 +28,7 @@ detection:
   condition: lolbin and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: d3bf399f-b0cf-4250-8bb4-dfc192ab81dc
   source_commit: df5c6a6
   license: DRL-1.1

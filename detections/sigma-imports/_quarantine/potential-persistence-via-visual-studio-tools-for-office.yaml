@@ -72,6 +72,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bhabesh Raj'
   source_id: 9d15044a-7cfe-4d23-8085-6ebc11df7685
   source_commit: df5c6a6
   license: DRL-1.1

@@ -45,6 +45,7 @@ detection:
   condition: 1 of selection_img_* or all of selection_kali_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 6f1a11aa-4b8a-4b7f-9e13-4d3e4ff0e0d4
   source_commit: df5c6a6
   license: DRL-1.1

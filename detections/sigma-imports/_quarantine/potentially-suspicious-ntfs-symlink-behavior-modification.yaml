@@ -42,6 +42,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, The DFIR Report'
   source_id: c0b2768a-dd06-4671-8339-b16ca8d1f27f
   source_commit: df5c6a6
   license: DRL-1.1

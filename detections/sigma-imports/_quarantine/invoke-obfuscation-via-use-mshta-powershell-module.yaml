@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nikita Nazarov, oscd.community'
   source_id: 07ad2ea8-6a55-4ac6-bf3e-91b8e59676eb
   source_commit: df5c6a6
   license: DRL-1.1

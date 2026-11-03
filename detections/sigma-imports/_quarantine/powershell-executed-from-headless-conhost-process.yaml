@@ -28,6 +28,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Matt Anderson (Huntress)'
   source_id: 056c7317-9a09-4bd4-9067-d051312752ea
   source_commit: df5c6a6
   license: DRL-1.1

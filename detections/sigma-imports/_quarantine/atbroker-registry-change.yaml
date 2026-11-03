@@ -31,6 +31,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mateusz Wydra, oscd.community'
   source_id: 9577edbb-851f-4243-8c91-1d5b50c1a39b
   source_commit: df5c6a6
   license: DRL-1.1

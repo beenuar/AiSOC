@@ -32,6 +32,7 @@ detection:
     and ishidden_option_confirmation)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniil Yugoslavskiy, oscd.community'
   source_id: b22a5b36-2431-493a-8be1-0bae56c28ef3
   source_commit: df5c6a6
   license: DRL-1.1

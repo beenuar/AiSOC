@@ -70,6 +70,7 @@ detection:
   condition: selection_exec_parent and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: '0xFustang, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: b5b29e4e-31fa-4fdf-b058-296e7a1aa0c2
   source_commit: df5c6a6
   license: DRL-1.1

@@ -47,6 +47,7 @@ detection:
   condition: 1 of selection* and not falsepositives
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: 7195a772-4b3f-43a4-a210-6a003d65caa1
   source_commit: df5c6a6
   license: DRL-1.1

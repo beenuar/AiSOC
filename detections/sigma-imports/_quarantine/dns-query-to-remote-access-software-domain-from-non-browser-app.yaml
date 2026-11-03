@@ -169,6 +169,7 @@ detection:
   condition: 1 of selection_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Connor Martin'
   source_id: 4d07b1f4-cb00-4470-b9f8-b0191d48ff52
   source_commit: df5c6a6
   license: DRL-1.1

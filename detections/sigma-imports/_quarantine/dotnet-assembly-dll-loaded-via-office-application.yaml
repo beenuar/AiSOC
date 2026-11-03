@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Antonlovesdnb'
   source_id: ff0f2b05-09db-4095-b96d-1b75ca24894a
   source_commit: df5c6a6
   license: DRL-1.1

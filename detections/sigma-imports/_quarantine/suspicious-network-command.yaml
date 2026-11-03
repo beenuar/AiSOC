@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Christopher Peacock ''@securepeacock'', SCYTHE ''@scythe_io'''
   source_id: a29c1813-ab1f-4dde-b489-330b952e91ae
   source_commit: df5c6a6
   license: DRL-1.1

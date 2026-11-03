@@ -23,6 +23,7 @@ detection:
   condition: selection and argument
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 9292293b-8496-4715-9db6-37028dcda4b3
   source_commit: df5c6a6
   license: DRL-1.1

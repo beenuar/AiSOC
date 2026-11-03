@@ -33,6 +33,7 @@ detection:
   condition: selection_findstr and all of selection_cli_search_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Furkan CALISKAN, @caliskanfurkan_, @oscd_initiative, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 04936b66-3915-43ad-a8e5-809eadfd1141
   source_commit: df5c6a6
   license: DRL-1.1

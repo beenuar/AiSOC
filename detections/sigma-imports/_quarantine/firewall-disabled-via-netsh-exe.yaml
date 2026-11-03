@@ -34,6 +34,7 @@ detection:
   condition: selection_img and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Fatih Sirin'
   source_id: 57c4bf16-227f-4394-8ec7-1b745ee061c3
   source_commit: df5c6a6
   license: DRL-1.1

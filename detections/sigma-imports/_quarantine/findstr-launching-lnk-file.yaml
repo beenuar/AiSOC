@@ -32,6 +32,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Trent Liffick'
   source_id: 33339be3-148b-4e16-af56-ad16ec6c7e7b
   source_commit: df5c6a6
   license: DRL-1.1

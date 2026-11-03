@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Kamran Saifullah, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 7cd1dcdc-6edf-4896-86dc-d1f19ad64903
   source_commit: df5c6a6
   license: DRL-1.1

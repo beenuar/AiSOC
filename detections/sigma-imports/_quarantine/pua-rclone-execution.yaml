@@ -48,6 +48,7 @@ detection:
   condition: selection_specific_options or all of selection_rclone_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bhabesh Raj, Sittikorn S, Aaron Greetham (@beardofbinary) - NCC Group'
   source_id: e37db05d-d1f9-49c8-b464-cee1a4b11638
   source_commit: df5c6a6
   license: DRL-1.1

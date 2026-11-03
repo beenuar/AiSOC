@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timon Hackenjos'
   source_id: 77564cc2-7382-438b-a7f6-395c2ae53b9a
   source_commit: df5c6a6
   license: DRL-1.1

@@ -86,6 +86,7 @@ detection:
     filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Thomas Patzke, Florian Roth (Nextron Systems), Zach Stanford @svch0st, Tim Shelton, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 8202070f-edeb-4d31-a010-a26c72ac5600
   source_commit: df5c6a6
   license: DRL-1.1

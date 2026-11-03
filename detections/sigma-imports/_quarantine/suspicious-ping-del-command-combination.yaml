@@ -34,6 +34,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ilya Krestinichev'
   source_id: 54786ddc-5b8a-11ed-9b6a-0242ac120002
   source_commit: df5c6a6
   license: DRL-1.1

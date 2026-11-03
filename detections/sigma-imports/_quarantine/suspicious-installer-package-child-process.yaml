@@ -43,6 +43,7 @@ detection:
   condition: selection_installer
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sohan G (D4rkCiph3r)'
   source_id: e0cfaecd-602d-41af-988d-f6ccebb2af26
   source_commit: df5c6a6
   license: DRL-1.1

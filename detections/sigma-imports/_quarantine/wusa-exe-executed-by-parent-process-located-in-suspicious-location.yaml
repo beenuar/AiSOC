@@ -45,6 +45,7 @@ detection:
   condition: selection_img and 1 of selection_paths_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior (Nextron Systems)'
   source_id: ef64fc9c-a45e-43cc-8fd8-7d75d73b4c99
   source_commit: df5c6a6
   license: DRL-1.1

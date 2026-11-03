@@ -1013,6 +1013,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@Kostastsale, TheDFIRReport'
   source_id: c98f2a0d-e1b8-4f76-90d3-359caf88d6b9
   source_commit: df5c6a6
   license: DRL-1.1

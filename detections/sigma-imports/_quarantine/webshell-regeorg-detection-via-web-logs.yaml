@@ -29,6 +29,7 @@ detection:
   condition: selection and filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Cian Heasley'
   source_id: 2ea44a60-cfda-11ea-87d0-0242ac130003
   source_commit: df5c6a6
   license: DRL-1.1

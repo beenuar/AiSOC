@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'B.Talebi'
   source_id: 4916a35e-bfc4-47d0-8e25-a003d7067061
   source_commit: df5c6a6
   license: DRL-1.1

@@ -41,6 +41,7 @@ detection:
   condition: selection_parent or all of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Nasreddine Bencherchali'
   source_id: 7d6d30b8-5b91-4b90-a891-46cccaf29598
   source_commit: df5c6a6
   license: DRL-1.1

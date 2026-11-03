@@ -59,6 +59,7 @@ detection:
     or all of selection_pwsh_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), oscd.community, Teymur Kheirkhabarov @HeirhabarovT, Zach Stanford @svch0st, Nasreddine Bencherchali'
   source_id: 855bc8b5-2ae8-402e-a9ed-b889e6df1900
   source_commit: df5c6a6
   license: DRL-1.1

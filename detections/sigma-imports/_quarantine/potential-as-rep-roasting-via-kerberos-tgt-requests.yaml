@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'ANosir'
   source_id: 3e2f1b2c-4d5e-11ee-be56-0242ac120002
   source_commit: df5c6a6
   license: DRL-1.1

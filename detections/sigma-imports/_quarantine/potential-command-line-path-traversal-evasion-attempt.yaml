@@ -31,6 +31,7 @@ detection:
   condition: 1 of selection_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christian Burkard (Nextron Systems)'
   source_id: 1327381e-6ab0-4f38-b583-4c1b8346a56b
   source_commit: df5c6a6
   license: DRL-1.1

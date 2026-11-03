@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sagie Dulce, Dekel Paz'
   source_id: 2053961f-44c7-4a64-b62d-f6e72800af0d
   source_commit: df5c6a6
   license: DRL-1.1

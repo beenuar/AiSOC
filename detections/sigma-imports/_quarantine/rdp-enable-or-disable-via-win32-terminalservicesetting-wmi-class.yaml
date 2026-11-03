@@ -42,6 +42,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniel Koifman (KoifSec), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 4b8f6d3a-9c5e-4f2a-a7d8-6b9c3e5f2a8d
   source_commit: df5c6a6
   license: DRL-1.1

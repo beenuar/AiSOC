@@ -59,6 +59,7 @@ detection:
   condition: selection_status and 1 of selection_request_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'uniqu3-us3r'
   source_id: 597a7e84-187d-458b-9e4f-2f5a0e676711
   source_commit: df5c6a6
   license: DRL-1.1

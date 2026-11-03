@@ -32,6 +32,7 @@ detection:
   condition: session_manager_base and session_manager and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: 046218bd-e0d8-4113-a3c3-895a12b2b298
   source_commit: df5c6a6
   license: DRL-1.1

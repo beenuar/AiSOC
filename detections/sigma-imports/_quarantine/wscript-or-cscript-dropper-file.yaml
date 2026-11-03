@@ -42,6 +42,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Shelton'
   source_id: 002bdb95-0cf1-46a6-9e08-d38c128a6127
   source_commit: df5c6a6
   license: DRL-1.1

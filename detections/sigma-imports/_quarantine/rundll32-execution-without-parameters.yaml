@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bartlomiej Czyz, Relativity'
   source_id: 5bb68627-3198-40ca-b458-49f973db8752
   source_commit: df5c6a6
   license: DRL-1.1

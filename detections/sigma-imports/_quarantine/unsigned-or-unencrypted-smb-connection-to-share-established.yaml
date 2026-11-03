@@ -42,6 +42,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mohamed Abdelghani'
   source_id: 8d91f6e4-9f3b-4c21-ae41-2c5b7d9f7a12
   source_commit: df5c6a6
   license: DRL-1.1

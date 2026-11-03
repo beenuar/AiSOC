@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tom Ueltschi (@c_APT_ure)'
   source_id: 9ace0707-b560-49b8-b6ca-5148b42f39fb
   source_commit: df5c6a6
   license: DRL-1.1

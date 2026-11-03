@@ -43,6 +43,7 @@ detection:
     filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Beyu Denis, oscd.community, Tim Shelton, Thurein Oo'
   source_id: 39f1f9f2-9636-45de-98f6-a4046aa8e4b9
   source_commit: df5c6a6
   license: DRL-1.1

@@ -76,6 +76,7 @@ detection:
   condition: all of selection_target_* and 1 of selection_susp_location_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 790317c0-0a36-4a6a-a105-6e576bf99a14
   source_commit: df5c6a6
   license: DRL-1.1

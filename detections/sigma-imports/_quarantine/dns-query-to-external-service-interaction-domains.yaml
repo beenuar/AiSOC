@@ -51,6 +51,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Matt Kelly (list of domains)'
   source_id: aff715fa-4dd5-497a-8db3-910bea555566
   source_commit: df5c6a6
   license: DRL-1.1

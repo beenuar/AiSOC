@@ -30,6 +30,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bhabesh Raj'
   source_id: 418dc89a-9808-4b87-b1d7-e5ae0cb6effc
   source_commit: df5c6a6
   license: DRL-1.1

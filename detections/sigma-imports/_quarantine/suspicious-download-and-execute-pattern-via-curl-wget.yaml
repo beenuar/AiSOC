@@ -38,6 +38,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Aayush Gupta'
   source_id: a2d9e2f3-0f43-4c7a-bcd9-9acfc0d723aa
   source_commit: df5c6a6
   license: DRL-1.1

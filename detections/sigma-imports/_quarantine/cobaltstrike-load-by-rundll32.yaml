@@ -31,6 +31,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Wojciech Lesicki'
   source_id: ae9c6a7c-9521-42a6-915e-5aaa8689d529
   source_commit: df5c6a6
   license: DRL-1.1

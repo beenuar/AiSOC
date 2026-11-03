@@ -43,6 +43,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Micah Babinski'
   source_id: e890acee-d488-420e-8f20-d9b19b3c3d43
   source_commit: df5c6a6
   license: DRL-1.1

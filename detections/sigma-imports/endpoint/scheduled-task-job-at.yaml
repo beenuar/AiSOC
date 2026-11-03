@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ömer Günal, oscd.community'
   source_id: d2d642d7-b393-43fe-bae4-e81ed5915c4b
   source_commit: df5c6a6
   license: DRL-1.1

@@ -137,6 +137,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sander Wiebing, Tim Shelton, Nasreddine Bencherchali (Nextron Systems)'
   source_id: d5866ddf-ce8f-4aea-b28e-d96485a20d3d
   source_commit: df5c6a6
   license: DRL-1.1

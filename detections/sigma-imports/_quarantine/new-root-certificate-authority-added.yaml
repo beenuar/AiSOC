@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Harjot Shah Singh, ''@cyb3rjy0t'''
   source_id: 4bb80281-3756-4ec8-a88e-523c5a6fda9e
   source_commit: df5c6a6
   license: DRL-1.1

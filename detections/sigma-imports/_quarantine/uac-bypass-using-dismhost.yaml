@@ -28,6 +28,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christian Burkard (Nextron Systems)'
   source_id: 853e74f9-9392-4935-ad3b-2e8c040dae86
   source_commit: df5c6a6
   license: DRL-1.1

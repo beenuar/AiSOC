@@ -27,6 +27,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, Daniil Yugoslavskiy, oscd.community'
   source_id: 85ff530b-261d-48c6-a441-facaa2e81e48
   source_commit: df5c6a6
   license: DRL-1.1

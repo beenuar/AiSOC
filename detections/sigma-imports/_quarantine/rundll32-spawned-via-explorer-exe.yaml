@@ -27,6 +27,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'CD_ROM_'
   source_id: 1723e720-616d-4ddc-ab02-f7e3685a4713
   source_commit: df5c6a6
   license: DRL-1.1

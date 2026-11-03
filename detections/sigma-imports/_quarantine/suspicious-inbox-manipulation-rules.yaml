@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mark Morowczynski ''@markmorow'', Gloria Lee, ''@gleeiamglo'''
   source_id: ceb55fd0-726e-4656-bf4e-b585b7f7d572
   source_commit: df5c6a6
   license: DRL-1.1

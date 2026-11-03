@@ -25,6 +25,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bjoern Kimminich'
   source_id: 8a670c6d-7189-4b1c-8017-a417ca84a086
   source_commit: df5c6a6
   license: DRL-1.1

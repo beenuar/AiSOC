@@ -51,6 +51,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Meroujan Antonyan (vx3r)'
   source_id: 222720a7-047f-4054-baa5-bab9be757db0
   source_commit: df5c6a6
   license: DRL-1.1

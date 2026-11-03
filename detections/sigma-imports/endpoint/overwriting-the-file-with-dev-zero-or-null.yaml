@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jakob Weinzettl, oscd.community'
   source_id: 37222991-11e9-4b6d-8bdf-60fbe48f753e
   source_commit: df5c6a6
   license: DRL-1.1

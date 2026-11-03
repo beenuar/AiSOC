@@ -23,6 +23,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'bohops'
   source_id: 43103702-5886-11ed-9b6a-0242ac120002
   source_commit: df5c6a6
   license: DRL-1.1

@@ -33,6 +33,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Harish Segar, frack113'
   source_id: 30a8cb77-8eb3-4cfb-8e79-ad457c5a4592
   source_commit: df5c6a6
   license: DRL-1.1

@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'A. Sungurov , oscd.community'
   source_id: b97cd4b1-30b8-4a9d-bd72-6293928d52bc
   source_commit: df5c6a6
   license: DRL-1.1

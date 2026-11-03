@@ -107,6 +107,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Janantha Marasinghe, Nasreddine Bencherchali (Nextron Systems)'
   source_id: edf3485d-dac4-4d50-90e4-b0e5813f7e60
   source_commit: df5c6a6
   license: DRL-1.1

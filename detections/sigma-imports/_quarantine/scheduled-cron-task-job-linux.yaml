@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alejandro Ortuno, oscd.community'
   source_id: 6b14bac8-3e3a-4324-8109-42f0546a347f
   source_commit: df5c6a6
   license: DRL-1.1

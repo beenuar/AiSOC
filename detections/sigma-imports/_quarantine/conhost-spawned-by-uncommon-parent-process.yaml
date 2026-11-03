@@ -50,6 +50,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch, Elastic (idea)'
   source_id: cbb9e3d1-2386-4e59-912e-62f1484f7a89
   source_commit: df5c6a6
   license: DRL-1.1

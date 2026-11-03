@@ -61,6 +61,7 @@ detection:
   condition: (all of selection1*) or (all of selection2*) or (all of selection3*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Michael Haag, Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community, Andreas Hunkeler (@Karneades)'
   source_id: c947b146-0abc-4c87-9c64-b17e9d7274a2
   source_commit: df5c6a6
   license: DRL-1.1

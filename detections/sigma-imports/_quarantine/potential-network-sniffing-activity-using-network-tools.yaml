@@ -30,6 +30,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: ba1f7802-adc7-48b4-9ecb-81e227fddfd5
   source_commit: df5c6a6
   license: DRL-1.1

@@ -34,6 +34,7 @@ detection:
   condition: all of selection_wscript_* or (selection_parent and not selection_filter_cmd)
 provenance:
   source: SigmaHQ/sigma
+  author: 'oscd.community, Natalia Shornikova, Nasreddine Bencherchali (Nextron Systems)'
   source_id: c363385c-f75d-4753-a108-c1a8e28bdbda
   source_commit: df5c6a6
   license: DRL-1.1

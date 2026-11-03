@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 3eb8c339-a765-48cc-a150-4364c04652bf
   source_commit: df5c6a6
   license: DRL-1.1

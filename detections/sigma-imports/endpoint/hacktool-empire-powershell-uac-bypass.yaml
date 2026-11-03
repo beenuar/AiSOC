@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ecco'
   source_id: 3268b746-88d8-4cd3-bffc-30077d02c787
   source_commit: df5c6a6
   license: DRL-1.1

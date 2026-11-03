@@ -59,6 +59,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: e3f673b3-65d1-4d80-9146-466f8b63fa99
   source_commit: df5c6a6
   license: DRL-1.1

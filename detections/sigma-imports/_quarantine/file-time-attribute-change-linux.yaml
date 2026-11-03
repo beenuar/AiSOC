@@ -27,6 +27,7 @@ detection:
   condition: execve and touch and selection2
 provenance:
   source: SigmaHQ/sigma
+  author: 'Igor Fits, oscd.community'
   source_id: b3cec4e7-6901-4b0d-a02d-8ab2d8eb818b
   source_commit: df5c6a6
   license: DRL-1.1

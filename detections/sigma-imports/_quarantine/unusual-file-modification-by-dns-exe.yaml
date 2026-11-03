@@ -23,6 +23,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch (Nextron Systems), Elastic (idea)'
   source_id: 9f383dc0-fdeb-4d56-acbc-9f9f4f8f20f3
   source_commit: df5c6a6
   license: DRL-1.1

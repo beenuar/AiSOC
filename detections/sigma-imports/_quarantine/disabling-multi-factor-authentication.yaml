@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Splunk Threat Research Team (original rule), Harjot Singh @cyb3rjy0t (sigma rule)'
   source_id: 60de9b57-dc4d-48b9-a6a0-b39e0469f876
   source_commit: df5c6a6
   license: DRL-1.1

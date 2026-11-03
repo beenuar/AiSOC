@@ -31,6 +31,7 @@ detection:
   condition: (export_command and export_params) or role_assignment
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Rich Warren, Christian Burkard (Nextron Systems)'
   source_id: 516376b4-05cd-4122-bae0-ad7641c38d48
   source_commit: df5c6a6
   license: DRL-1.1

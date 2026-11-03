@@ -121,6 +121,7 @@ detection:
   condition: selection_parent and 1 of selection_child_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Markus Neis, FPT.EagleEye Team, Vadim Khrykov, Cyb3rEng, Michael Haag, Christopher Peacock @securepeacock, @scythe_io'
   source_id: 438025f9-5856-4663-83f7-52f878a70a50
   source_commit: df5c6a6
   license: DRL-1.1

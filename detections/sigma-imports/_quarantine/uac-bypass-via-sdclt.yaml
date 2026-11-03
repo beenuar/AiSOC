@@ -24,6 +24,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Omer Yampel, Christian Burkard (Nextron Systems)'
   source_id: 5b872a46-3b90-45c1-8419-f675db8053aa
   source_commit: df5c6a6
   license: DRL-1.1

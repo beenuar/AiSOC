@@ -37,6 +37,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden'
   source_id: a8f29a7b-b137-4446-80a0-b804272f3da2
   source_commit: df5c6a6
   license: DRL-1.1

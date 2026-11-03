@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sai Prashanth Pulisetti @pulisettis, Aishwarya Singam'
   source_id: 999bff6d-dc15-44c9-9f5c-e1051bfc86e1
   source_commit: df5c6a6
   license: DRL-1.1

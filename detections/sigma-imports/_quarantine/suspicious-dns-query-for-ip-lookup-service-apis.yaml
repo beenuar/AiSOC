@@ -105,6 +105,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Brandon George (blog post), Thomas Patzke'
   source_id: ec82e2a5-81ea-4211-a1f8-37a0286df2c2
   source_commit: df5c6a6
   license: DRL-1.1

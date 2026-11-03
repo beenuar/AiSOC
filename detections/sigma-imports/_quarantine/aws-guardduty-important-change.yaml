@@ -21,6 +21,7 @@ detection:
   condition: selection_source
 provenance:
   source: SigmaHQ/sigma
+  author: 'faloker'
   source_id: 6e61ee20-ce00-4f8d-8aee-bedd8216f7e3
   source_commit: df5c6a6
   license: DRL-1.1

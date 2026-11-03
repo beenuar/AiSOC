@@ -35,6 +35,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'yxinmiracle'
   source_id: c443012c-7928-43bf-ac20-7eda5efe61ad
   source_commit: df5c6a6
   license: DRL-1.1

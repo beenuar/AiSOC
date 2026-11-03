@@ -34,6 +34,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ayush Anand (Securityinbits)'
   source_id: 2fcda7e2-8c57-4904-86ac-37fc3157e09d
   source_commit: df5c6a6
   license: DRL-1.1

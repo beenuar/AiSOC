@@ -28,6 +28,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'omkar72'
   source_id: 7dc2dedd-7603-461a-bc13-15803d132355
   source_commit: df5c6a6
   license: DRL-1.1

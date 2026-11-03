@@ -34,6 +34,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jonhnathan Ribeiro, oscd.community'
   source_id: 99cf1e02-00fb-4c0d-8375-563f978dfd37
   source_commit: df5c6a6
   license: DRL-1.1

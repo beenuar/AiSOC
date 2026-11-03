@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, Jonhnathan Ribeiro, oscd.community'
   source_id: 05f3c945-dcc8-4393-9f3d-af65077a8f86
   source_commit: df5c6a6
   license: DRL-1.1

@@ -34,6 +34,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sreeman'
   source_id: cc4e02ba-9c06-48e2-b09e-2500cace9ae0
   source_commit: df5c6a6
   license: DRL-1.1

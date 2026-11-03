@@ -20,6 +20,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'James Ahearn'
   source_id: 953d460b-f810-420a-97a2-cfca4c98e602
   source_commit: df5c6a6
   license: DRL-1.1

@@ -37,6 +37,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Joseliyo Sanchez, @Joseliyo_Jstnk, Nasreddine Bencherchali (Nextron Systems)'
   source_id: b2b048b0-7857-4380-b0fb-d3f0ab820b71
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Andreas Hunkeler (@Karneades), Markus Neis'
   source_id: 5cc2cda8-f261-4d88-a2de-e9e193c86716
   source_commit: df5c6a6
   license: DRL-1.1

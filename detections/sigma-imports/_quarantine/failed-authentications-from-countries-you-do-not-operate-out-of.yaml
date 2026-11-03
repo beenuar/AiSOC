@@ -22,6 +22,7 @@ detection:
   condition: not selection and not selection1
 provenance:
   source: SigmaHQ/sigma
+  author: 'MikeDuddington, ''@dudders1'''
   source_id: 28870ae4-6a13-4616-bd1a-235a7fad7458
   source_commit: df5c6a6
   license: DRL-1.1

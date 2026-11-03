@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bailey Bercik ''@baileybercik'', Mark Morowczynski ''@markmorow'''
   source_id: c1d147ae-a951-48e5-8b41-dcd0170c7213
   source_commit: df5c6a6
   license: DRL-1.1

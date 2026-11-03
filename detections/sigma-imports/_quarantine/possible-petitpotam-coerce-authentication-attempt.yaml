@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mauricio Velazco, Michael Haag'
   source_id: 1ce8c8a3-2723-48ed-8246-906ac91061a6
   source_commit: df5c6a6
   license: DRL-1.1

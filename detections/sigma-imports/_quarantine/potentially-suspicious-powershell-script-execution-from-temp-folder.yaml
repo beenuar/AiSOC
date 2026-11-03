@@ -48,6 +48,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Max Altgelt (Nextron Systems), Tim Shelton'
   source_id: a6a39bdb-935c-4f0a-ab77-35f4bbf44d33
   source_commit: df5c6a6
   license: DRL-1.1

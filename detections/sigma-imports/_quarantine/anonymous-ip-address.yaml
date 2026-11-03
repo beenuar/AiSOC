@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Gloria Lee, ''@gleeiamglo'''
   source_id: 53acd925-2003-440d-a1f3-71a5253fe237
   source_commit: df5c6a6
   license: DRL-1.1

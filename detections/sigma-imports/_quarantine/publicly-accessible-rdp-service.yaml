@@ -28,6 +28,7 @@ detection:
   condition: not selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Josh Brower @DefensiveDepth'
   source_id: 1fc0809e-06bf-4de3-ad52-25e5263b7623
   source_commit: df5c6a6
   license: DRL-1.1

@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'omkar72'
   source_id: 3d27f6dd-1c74-4687-b4fa-ca849d128d1c
   source_commit: df5c6a6
   license: DRL-1.1

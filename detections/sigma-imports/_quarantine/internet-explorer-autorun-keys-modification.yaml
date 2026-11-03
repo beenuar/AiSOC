@@ -41,6 +41,7 @@ detection:
   condition: ie and ie_details and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: a80f662f-022f-4429-9b8c-b1a41aaa6688
   source_commit: df5c6a6
   license: DRL-1.1

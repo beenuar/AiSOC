@@ -89,6 +89,7 @@ detection:
   condition: (generic_search and not narrow_down_filter) or suspicious_flag or distinguished_name_enumeration
 provenance:
   source: SigmaHQ/sigma
+  author: 'Adeem Mawani'
   source_id: 31d68132-4038-47c7-8f8e-635a39a7c174
   source_commit: df5c6a6
   license: DRL-1.1

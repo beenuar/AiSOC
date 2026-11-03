@@ -40,6 +40,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Liran Ravich'
   source_id: f17211f1-1f24-4d0c-829f-31e28dc93cdd
   source_commit: df5c6a6
   license: DRL-1.1

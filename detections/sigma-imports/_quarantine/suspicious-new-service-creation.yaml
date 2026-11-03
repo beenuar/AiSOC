@@ -47,6 +47,7 @@ detection:
   condition: 1 of selection* and susp_binpath
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 17a1be64-8d88-40bf-b5ff-a4f7a50ebcc8
   source_commit: df5c6a6
   license: DRL-1.1

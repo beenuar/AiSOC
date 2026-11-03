@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Omkar Gudhate'
   source_id: 07743f65-7ec9-404a-a519-913db7118a8d
   source_commit: df5c6a6
   license: DRL-1.1

@@ -47,6 +47,7 @@ detection:
   condition: 1 of selection_set_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Nasreddine Bencherchali (Nextron Systems), CrimpSec'
   source_id: e2482f8d-3443-4237-b906-cc145d87a076
   source_commit: df5c6a6
   license: DRL-1.1

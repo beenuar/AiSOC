@@ -32,6 +32,7 @@ detection:
   condition: all of selection_commandline_* or selection_hash
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sai Prashanth Pulisetti @pulisettis'
   source_id: cf0c254b-22f1-4b2b-8221-e137b3c0af94
   source_commit: df5c6a6
   license: DRL-1.1

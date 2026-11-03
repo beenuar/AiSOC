@@ -48,6 +48,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Maxim Pavlunin, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 52cad028-0ff0-4854-8f67-d25dfcbc78b4
   source_commit: df5c6a6
   license: DRL-1.1

@@ -23,6 +23,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'MikeDuddington, ''@dudders1'''
   source_id: 5f521e4b-0105-4b72-845b-2198a54487b9
   source_commit: df5c6a6
   license: DRL-1.1

@@ -130,6 +130,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Daniel Bohannon (idea), Roberto Rodriguez (Fix)'
   source_id: 36210e0d-5b19-485d-a087-c096088885f0
   source_commit: df5c6a6
   license: DRL-1.1

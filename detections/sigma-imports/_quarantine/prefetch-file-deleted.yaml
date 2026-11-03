@@ -27,6 +27,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Cedric MAURUGEON'
   source_id: 0a1f9d29-6465-4776-b091-7f43b26e4c89
   source_commit: df5c6a6
   license: DRL-1.1

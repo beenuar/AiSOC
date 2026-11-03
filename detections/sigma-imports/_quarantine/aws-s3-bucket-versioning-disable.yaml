@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sean Johnstone | Unit 42'
   source_id: a136ac98-b2bc-4189-a14d-f0d0388e57a7
   source_commit: df5c6a6
   license: DRL-1.1

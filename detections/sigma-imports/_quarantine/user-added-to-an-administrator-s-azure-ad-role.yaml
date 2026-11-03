@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Raphaël CALVET, @MetallicHack'
   source_id: ebbeb024-5b1d-4e16-9c0c-917f86c708a7
   source_commit: df5c6a6
   license: DRL-1.1

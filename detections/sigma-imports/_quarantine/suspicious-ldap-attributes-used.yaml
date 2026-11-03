@@ -35,6 +35,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'xknow @xknow_infosec'
   source_id: d00a9a72-2c09-4459-ad03-5e0a23351e36
   source_commit: df5c6a6
   license: DRL-1.1

@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Furkan Caliskan (@caliskanfurkan_)'
   source_id: d3b70aad-097e-409c-9df2-450f80dc476b
   source_commit: df5c6a6
   license: DRL-1.1

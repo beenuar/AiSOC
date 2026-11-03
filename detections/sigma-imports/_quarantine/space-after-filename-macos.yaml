@@ -22,6 +22,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'remotephone'
   source_id: b6e2a2e3-2d30-43b1-a4ea-071e36595690
   source_commit: df5c6a6
   license: DRL-1.1

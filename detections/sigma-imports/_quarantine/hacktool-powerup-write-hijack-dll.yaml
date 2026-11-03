@@ -28,6 +28,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Subhash Popuri (@pbssubhash)'
   source_id: 602a1f13-c640-4d73-b053-be9a2fa58b96
   source_commit: df5c6a6
   license: DRL-1.1

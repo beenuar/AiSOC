@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mikhail Larin, oscd.community'
   source_id: 508a9374-ad52-4789-b568-fc358def2c65
   source_commit: df5c6a6
   license: DRL-1.1

@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ivan Saakov, Sergey Zelenskiy'
   source_id: a5ffb6ea-c784-4e01-b30a-deb6e58ca2ab
   source_commit: df5c6a6
   license: DRL-1.1

@@ -74,6 +74,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sohan G (D4rkCiph3r)'
   source_id: 0250638a-2b28-4541-86fc-ea4c558fa0c6
   source_commit: df5c6a6
   license: DRL-1.1

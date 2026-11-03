@@ -72,6 +72,7 @@ detection:
     1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Christian Burkard (Nextron Systems)'
   source_id: 85adeb13-4fc9-4e68-8a4a-c7cb2c336eb7
   source_commit: df5c6a6
   license: DRL-1.1

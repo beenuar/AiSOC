@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Splunk Threat Research Team (original rule), ''@ionsor (rule)'''
   source_id: 42127bdd-9133-474f-a6f1-97b6c08a4339
   source_commit: df5c6a6
   license: DRL-1.1

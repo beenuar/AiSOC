@@ -64,6 +64,7 @@ detection:
   condition: selection_1 and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'xknow (@xknow_infosec), xorxes (@xor_xes)'
   source_id: f63508a0-c809-4435-b3be-ed819394d612
   source_commit: df5c6a6
   license: DRL-1.1

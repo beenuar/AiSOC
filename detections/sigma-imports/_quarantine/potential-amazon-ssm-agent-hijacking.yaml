@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Muhammad Faisal'
   source_id: d20ee2f4-822c-4827-9e15-41500b1fff10
   source_commit: df5c6a6
   license: DRL-1.1

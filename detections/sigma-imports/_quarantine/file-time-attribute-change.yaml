@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Igor Fits, Mikhail Larin, oscd.community'
   source_id: 88c0f9d8-30a8-4120-bb6b-ebb54abcf2a0
   source_commit: df5c6a6
   license: DRL-1.1

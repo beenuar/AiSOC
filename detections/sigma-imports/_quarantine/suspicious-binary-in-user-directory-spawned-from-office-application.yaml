@@ -32,6 +32,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jason Lynch'
   source_id: aa3a6f94-890e-4e22-b634-ffdfd54792cc
   source_commit: df5c6a6
   license: DRL-1.1

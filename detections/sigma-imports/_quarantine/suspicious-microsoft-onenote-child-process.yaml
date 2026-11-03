@@ -120,6 +120,7 @@ detection:
   condition: selection_parent and 1 of selection_opt_* and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch (Nextron Systems), Nasreddine Bencherchali (Nextron Systems), Elastic (idea)'
   source_id: c27515df-97a9-4162-8a60-dc0eeb51b775
   source_commit: df5c6a6
   license: DRL-1.1

@@ -41,6 +41,7 @@ detection:
   condition: selection_dll and 1 of selection_folders_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior'
   source_id: fb4e2211-6d08-426b-8e6f-0d4a161e3b1d
   source_commit: df5c6a6
   license: DRL-1.1

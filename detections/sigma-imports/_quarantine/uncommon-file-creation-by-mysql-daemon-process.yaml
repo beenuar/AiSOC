@@ -33,6 +33,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Joseph Kamau'
   source_id: c61daa90-3c1e-4f18-af62-8f288b5c9aaf
   source_commit: df5c6a6
   license: DRL-1.1

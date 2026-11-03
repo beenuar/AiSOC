@@ -59,6 +59,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alfie Champion (delivr.to), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 4fee3d51-8069-4a4c-a0f7-924fcaff2c70
   source_commit: df5c6a6
   license: DRL-1.1

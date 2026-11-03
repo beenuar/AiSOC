@@ -22,6 +22,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Maxime Thiebaut (@0xThiebaut)'
   source_id: 0bbc6369-43e3-453d-9944-cae58821c173
   source_commit: df5c6a6
   license: DRL-1.1

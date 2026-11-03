@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ali Alwashali'
   source_id: 0afecb6e-6223-4a82-99fb-bf5b981e92a5
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Teymur Kheirkhabarov'
   source_id: 79ce34ca-af29-4d0e-b832-fc1b377020db
   source_commit: df5c6a6
   license: DRL-1.1

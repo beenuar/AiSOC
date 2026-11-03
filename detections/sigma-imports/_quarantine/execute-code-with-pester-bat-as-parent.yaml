@@ -29,6 +29,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Nasreddine Bencherchali'
   source_id: 18988e1b-9087-4f8a-82fe-0414dce49878
   source_commit: df5c6a6
   license: DRL-1.1

@@ -47,6 +47,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Anish Bogati, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 904e8e61-8edf-4350-b59c-b905fc8e810c
   source_commit: df5c6a6
   license: DRL-1.1

@@ -24,6 +24,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'elhoim'
   source_id: 39698b3f-da92-4bc6-bfb5-645a98386e45
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bryan Lim'
   source_id: 32438676-1dba-4ac7-bf69-b86cba995e05
   source_commit: df5c6a6
   license: DRL-1.1

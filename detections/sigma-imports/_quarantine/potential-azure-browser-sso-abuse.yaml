@@ -55,6 +55,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Den Iuzvyk'
   source_id: 50f852e6-af22-4c78-9ede-42ef36aa3453
   source_commit: df5c6a6
   license: DRL-1.1

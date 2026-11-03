@@ -241,6 +241,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christopher Peacock ''@securepeacock'', SCYTHE ''@scythe_io'', Florian Roth (Nextron Systems), Tim Shelton, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 75e33ce3-ae32-4dcc-9aa8-a2a3029d6f84
   source_commit: df5c6a6
   license: DRL-1.1

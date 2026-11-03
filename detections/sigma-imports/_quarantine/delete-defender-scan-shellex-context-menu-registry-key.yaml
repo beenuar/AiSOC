@@ -29,6 +29,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Matt Anderson (Huntress)'
   source_id: 72a0369a-2576-4aaf-bfc9-6bb24a574ac6
   source_commit: df5c6a6
   license: DRL-1.1

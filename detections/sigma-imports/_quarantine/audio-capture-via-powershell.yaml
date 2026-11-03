@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 932fb0d8-692b-4b0f-a26e-5643a50fe7d6
   source_commit: df5c6a6
   license: DRL-1.1

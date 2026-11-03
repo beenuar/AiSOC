@@ -40,6 +40,7 @@ detection:
   condition: selection_img and selection_value and 1 of selection_action_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sajid Nawaz Khan'
   source_id: 817f252c-5143-4dae-b418-48c3e9f63728
   source_commit: df5c6a6
   license: DRL-1.1

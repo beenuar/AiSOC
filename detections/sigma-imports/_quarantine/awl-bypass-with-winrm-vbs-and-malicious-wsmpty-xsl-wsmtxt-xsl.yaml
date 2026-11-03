@@ -30,6 +30,7 @@ detection:
   condition: contains_winrm and (contains_format_pretty_arg and not image_from_system_folder)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Julia Fomina, oscd.community'
   source_id: 074e0ded-6ced-4ebd-8b4d-53f55908119d
   source_commit: df5c6a6
   license: DRL-1.1

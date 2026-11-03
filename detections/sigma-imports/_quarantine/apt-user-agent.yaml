@@ -72,6 +72,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Markus Neis'
   source_id: 6ec820f2-e963-4801-9127-d8b2dce4d31b
   source_commit: df5c6a6
   license: DRL-1.1

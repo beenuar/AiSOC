@@ -22,6 +22,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jakob Weinzettl, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 81bcb81b-5b1f-474b-b373-52c871aaa7b1
   source_commit: df5c6a6
   license: DRL-1.1

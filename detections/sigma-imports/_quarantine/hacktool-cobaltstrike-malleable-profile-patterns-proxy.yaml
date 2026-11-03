@@ -50,6 +50,7 @@ detection:
   condition: 1 of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, Florian Roth (Nextron Systems)'
   source_id: f3f21ce1-cdef-4bfc-8328-ed2e826f5fac
   source_commit: df5c6a6
   license: DRL-1.1

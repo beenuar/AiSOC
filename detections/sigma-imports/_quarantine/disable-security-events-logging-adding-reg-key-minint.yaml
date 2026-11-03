@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ilyas Ochkov, oscd.community'
   source_id: 919f2ef0-be2d-4a7a-b635-eb2b41fde044
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Harjot Singh, "@cyb3rjy0t" (update)'
   source_id: 583aa0a2-30b1-4d62-8bf3-ab73689efe6c
   source_commit: df5c6a6
   license: DRL-1.1

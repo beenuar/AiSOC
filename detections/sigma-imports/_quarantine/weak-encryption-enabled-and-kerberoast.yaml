@@ -86,6 +86,7 @@ detection:
     not olduac_preauth) or (newuac_encrypted and not olduac_encrypted))
 provenance:
   source: SigmaHQ/sigma
+  author: '@neu5ron'
   source_id: f6de9536-0441-4b3f-a646-f4e00f300ffd
   source_commit: df5c6a6
   license: DRL-1.1

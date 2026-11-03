@@ -108,6 +108,7 @@ detection:
   condition: 1 of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez, Teymur Kheirkhabarov, Dimitrios Slamaris, Mark Russinovich, Aleksey Potapov, oscd.community (update)'
   source_id: 4a1b6da0-d94f-4fc3-98fc-2d9cb9e5ee76
   source_commit: df5c6a6
   license: DRL-1.1

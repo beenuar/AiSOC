@@ -76,6 +76,7 @@ detection:
   condition: selection_set_mppreference and 1 of selection_options_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Nasreddine Bencherchali (Nextron Systems)'
   source_id: ec19ebab-72dc-40e1-9728-4c0b805d722c
   source_commit: df5c6a6
   license: DRL-1.1

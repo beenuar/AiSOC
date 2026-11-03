@@ -43,6 +43,7 @@ detection:
     and not filter_cmd_misses_flags ) )
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: eb1c4225-1c23-4241-8dd4-051389fde4ce
   source_commit: df5c6a6
   license: DRL-1.1

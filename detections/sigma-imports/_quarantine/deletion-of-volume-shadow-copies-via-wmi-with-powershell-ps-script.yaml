@@ -35,6 +35,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch, frack113'
   source_id: c1337eb8-921a-4b59-855b-4ba188ddcc42
   source_commit: df5c6a6
   license: DRL-1.1

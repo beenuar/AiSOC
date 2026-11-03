@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Red Canary (idea), Nasreddine Bencherchali'
   source_id: 0fadd880-6af3-4610-b1e5-008dc3a11b8a
   source_commit: df5c6a6
   license: DRL-1.1

@@ -44,6 +44,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Rafal Piasecki'
   source_id: 808146b2-9332-4d78-9416-d7e47012d83d
   source_commit: df5c6a6
   license: DRL-1.1

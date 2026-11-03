@@ -30,6 +30,7 @@ detection:
   condition: 1 of selection_img_* and selection_integrity
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christian Burkard (Nextron Systems)'
   source_id: 0058b9e5-bcd7-40d4-9205-95ca5a16d7b2
   source_commit: df5c6a6
   license: DRL-1.1

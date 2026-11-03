@@ -40,6 +40,7 @@ detection:
   condition: selection_wsm and 1 of selection_payload_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 9fe55ea2-4cd6-4491-8a54-dd6871651b51
   source_commit: df5c6a6
   license: DRL-1.1

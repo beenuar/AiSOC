@@ -21,6 +21,7 @@ detection:
   condition: selection_4103
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jonathan Cheong, oscd.community'
   source_id: 9ac8b09b-45de-4a07-9da1-0de8c09304a3
   source_commit: df5c6a6
   license: DRL-1.1

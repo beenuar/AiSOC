@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jakob Weinzettl, oscd.community'
   source_id: a5b977d6-8a81-4475-91b9-49dbfcd941f7
   source_commit: df5c6a6
   license: DRL-1.1

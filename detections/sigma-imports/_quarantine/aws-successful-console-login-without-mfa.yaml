@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Thuya@Hacktilizer, Ivan Saakov'
   source_id: 77caf516-34e5-4df9-b4db-20744fea0a60
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nikita Nazarov, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: d36f87ea-c403-44d2-aa79-1a0ac7c24456
   source_commit: df5c6a6
   license: DRL-1.1

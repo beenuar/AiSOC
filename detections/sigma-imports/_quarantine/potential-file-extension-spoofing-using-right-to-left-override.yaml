@@ -47,6 +47,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jonathan Peters (Nextron Systems), Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 979baf41-ca44-4540-9d0c-4fcef3b5a3a4
   source_commit: df5c6a6
   license: DRL-1.1

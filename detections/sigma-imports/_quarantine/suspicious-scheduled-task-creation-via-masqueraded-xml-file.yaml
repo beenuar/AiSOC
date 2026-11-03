@@ -50,6 +50,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel, Elastic (idea)'
   source_id: dd2a821e-3b07-4d3b-a9ac-929fe4c6ca0c
   source_commit: df5c6a6
   license: DRL-1.1

@@ -29,6 +29,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sami Ruohonen'
   source_id: 4281cb20-2994-4580-aa63-c8b86d019934
   source_commit: df5c6a6
   license: DRL-1.1

@@ -59,6 +59,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sander Wiebing, Jonhnathan Ribeiro, Daniil Yugoslavskiy, oscd.community'
   source_id: a35f5a72-f347-4e36-8895-9869b0d5fc6d
   source_commit: df5c6a6
   license: DRL-1.1

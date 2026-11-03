@@ -106,6 +106,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'juju4, Jonhnathan Ribeiro, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: e593cf51-88db-4ee1-b920-37e89012a3c9
   source_commit: df5c6a6
   license: DRL-1.1

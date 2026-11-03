@@ -52,6 +52,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Florian Roth (Nextron Systems), Josh Nickels'
   source_id: 584bca0f-3608-4402-80fd-4075ff6072e3
   source_commit: df5c6a6
   license: DRL-1.1

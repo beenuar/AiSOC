@@ -50,6 +50,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nounou Mbeiri, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 6ddff2e8-ea1a-45d0-8938-93dfc1d67ae7
   source_commit: df5c6a6
   license: DRL-1.1

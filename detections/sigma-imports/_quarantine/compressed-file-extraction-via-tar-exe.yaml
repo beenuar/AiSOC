@@ -27,6 +27,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'AdmU3'
   source_id: bf361876-6620-407a-812f-bfe11e51e924
   source_commit: df5c6a6
   license: DRL-1.1

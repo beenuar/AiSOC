@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael R. (@nahamike01)'
   source_id: a9e416a8-e613-4f8b-88b8-a7d1d1af2f61
   source_commit: df5c6a6
   license: DRL-1.1

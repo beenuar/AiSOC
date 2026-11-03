@@ -31,6 +31,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: '_pete_0, TheDFIRReport'
   source_id: 4f154fb6-27d1-4813-a759-78b93e0b9c48
   source_commit: df5c6a6
   license: DRL-1.1
