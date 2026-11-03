@@ -174,6 +174,55 @@ describe('FunnelKpiBar', () => {
     expect(screen.queryByText('+100%')).not.toBeInTheDocument();
   });
 
+  it('renders a ratio over an empty denominator as not measured, not 0%', () => {
+    // The live reproduction: nine alerts, every one abstained on, nobody
+    // acknowledged anything. The strip published "Signal / Noise 0%" and
+    // "MTTD 0s" on the same screen as a SOC card reading "MTTD — not
+    // measured · no closures in 7d".
+    //
+    // Asserted on first paint with data present, not on an error branch:
+    // the error branch runs before the tiles do, so a check there cannot
+    // see what a populated response renders.
+    swrData.set(FUNNEL_KEY, {
+      ...SAMPLE_FUNNEL,
+      signal_to_noise: 0.0,
+      signal_to_noise_sample_count: 0,
+      mttd_seconds: 0.0,
+      mttd_sample_count: 0,
+    });
+    render(<FunnelKpiBar period="24h" />);
+
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    expect(screen.queryByText('0s')).not.toBeInTheDocument();
+    expect(screen.getByText(/no decided verdicts/)).toBeInTheDocument();
+    expect(screen.getByText(/no acknowledged alerts/)).toBeInTheDocument();
+  });
+
+  it('still renders a measured figure when the denominator is real', () => {
+    // The positive control. A tile that said "not measured" whatever
+    // arrived would pass the test above and publish nothing.
+    swrData.set(FUNNEL_KEY, {
+      ...SAMPLE_FUNNEL,
+      signal_to_noise_sample_count: 12,
+      mttd_sample_count: 7,
+    });
+    render(<FunnelKpiBar period="24h" />);
+
+    expect(screen.getByText('83%')).toBeInTheDocument();
+    expect(screen.getByText('8m')).toBeInTheDocument();
+    expect(screen.queryByText(/not measured/)).not.toBeInTheDocument();
+  });
+
+  it('leaves the tile alone when the server sends no denominator at all', () => {
+    // An older API sends neither count. Blanking every tile on an upgrade
+    // path would be a worse failure than the one being fixed.
+    swrData.set(FUNNEL_KEY, SAMPLE_FUNNEL);
+    render(<FunnelKpiBar period="24h" />);
+
+    expect(screen.getByText('83%')).toBeInTheDocument();
+    expect(screen.queryByText(/not measured/)).not.toBeInTheDocument();
+  });
+
   it('shows skeleton tiles while loading', () => {
     swrLoading.add(FUNNEL_KEY);
     render(<FunnelKpiBar period="24h" />);
