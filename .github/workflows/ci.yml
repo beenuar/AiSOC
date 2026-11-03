@@ -1249,6 +1249,17 @@ jobs:
         run: |
           python3 scripts/sync_packaged_detection_rulesets.py --self-test
           python3 scripts/sync_packaged_detection_rulesets.py --check
+      # And the third instance of it. `hunts/` is at the repository root while
+      # the agents image is built from `services/agents`, so the 68-hunt
+      # library the README calls Stable reached no container: `ls /app/hunts`
+      # answered "No such file or directory" and the scheduler logged
+      # `corpus_loaded count=0`. Nothing caught it because the loader fell
+      # back to "the conventional host layout" — a source checkout, which is
+      # what every test runs in.
+      - name: The agents image ships the hunt library
+        run: |
+          python3 scripts/sync_packaged_hunt_corpus.py --self-test
+          python3 scripts/sync_packaged_hunt_corpus.py --check
       - name: Every Stable capability has earned the label
         run: |
           python3 scripts/check_maturity_table.py --self-test

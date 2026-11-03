@@ -112,13 +112,28 @@ _tactic_map: dict[str, str] = {}  # tactic shortname → display name
 _loaded = False
 _load_time: float = 0.0
 
+#: Which corpus the counts above describe. ``/health`` published
+#: ``total_techniques: 14`` with nothing saying that 14 is the built-in stub
+#: rather than ATT&CK's ~670 — so the one surface a machine reads reported a
+#: fraction of the framework as if it were the framework, while the log beside
+#: it said "ATT&CK stub corpus loaded (limited techniques)" correctly.
+#:
+#: ``None`` means nothing has been loaded yet, which is a third state and not
+#: the same as either of the other two.
+_source: str | None = None
+
+#: The two names this can take, so the health schema and the loader cannot
+#: drift apart over a spelling.
+SOURCE_FULL = "mitre-enterprise-attack"
+SOURCE_STUB = "builtin-stub"
+
 
 # ─── Loader ───────────────────────────────────────────────────────────────────
 
 
 def _parse_stix_bundle(bundle: dict[str, Any]) -> None:
     """Parse a STIX 2.1 ATT&CK bundle and populate in-memory indexes."""
-    global _loaded, _load_time
+    global _loaded, _load_time, _source
 
     objects: list[dict] = bundle.get("objects", [])
 
@@ -237,8 +252,10 @@ def _parse_stix_bundle(bundle: dict[str, Any]) -> None:
 
     _loaded = True
     _load_time = time.time()
+    _source = SOURCE_FULL
     logger.info(
         "MITRE ATT&CK corpus loaded",
+        source=_source,
         techniques=len(_techniques),
         actors=len(_actors),
         tactics=len(_tactic_map),
@@ -326,7 +343,7 @@ async def load_attck_corpus(force_reload: bool = False) -> None:
 
 def _load_stub_corpus() -> None:
     """Populate a minimal stub corpus when the full bundle is unavailable."""
-    global _loaded, _load_time
+    global _loaded, _load_time, _source
     from app.tools.mitre import (
         _MITRE_MITIGATIONS as MITS,
     )
@@ -357,7 +374,12 @@ def _load_stub_corpus() -> None:
         )
     _loaded = True
     _load_time = time.time()
-    logger.warning("ATT&CK stub corpus loaded (limited techniques)")
+    _source = SOURCE_STUB
+    logger.warning(
+        "ATT&CK stub corpus loaded (limited techniques)",
+        source=_source,
+        techniques=len(_techniques),
+    )
 
 
 # ─── Qdrant Embedding ─────────────────────────────────────────────────────────
@@ -548,17 +570,43 @@ def get_techniques_by_tactic(tactic_name: str) -> list[dict[str, Any]]:
 
 
 def get_coverage_summary() -> dict[str, Any]:
-    """Return a summary of loaded ATT&CK data."""
+    """Return a summary of loaded ATT&CK data, saying *which* data.
+
+    The counts travel with their provenance. A default install runs the
+    built-in stub — fourteen techniques against ATT&CK Enterprise's ~670 — and
+    this used to publish ``total_techniques: 14`` with no marker at all, so the
+    machine-readable surface reported 2% of the framework in the same shape it
+    would report all of it. The log line next to it has always been correct
+    ("ATT&CK stub corpus loaded (limited techniques)"); the published figure
+    was not.
+    """
     tactic_counts: dict[str, int] = {}
     for tech in _techniques.values():
         for tname in tech.tactic_names or []:
             tactic_counts[tname] = tactic_counts.get(tname, 0) + 1
+
+    is_stub = _source == SOURCE_STUB
+    if _source is None:
+        detail = "No ATT&CK corpus has been loaded yet; these counts describe nothing."
+    elif is_stub:
+        detail = (
+            f"Built-in stub corpus: {len(_techniques)} techniques, not the full ATT&CK Enterprise matrix. "
+            f"Mapping and coverage answers are limited to these. Put the STIX bundle at {ATTCK_DATA_PATH}, "
+            "or set AISOC_ATTCK_CDN_FETCH=1 to let this deployment fetch it once from MITRE."
+        )
+    else:
+        detail = f"Full ATT&CK Enterprise corpus: {len(_techniques)} techniques."
+
     return {
         "total_techniques": len(_techniques),
         "total_actors": len(_actors),
         "total_tactics": len(_tactic_map),
         "techniques_by_tactic": tactic_counts,
         "corpus_loaded": _loaded,
+        # The marker, beside the number rather than in a log nobody parses.
+        "source": _source,
+        "is_stub": is_stub,
+        "detail": detail,
         "load_age_hours": round((time.time() - _load_time) / 3600, 1) if _load_time else None,
     }
 

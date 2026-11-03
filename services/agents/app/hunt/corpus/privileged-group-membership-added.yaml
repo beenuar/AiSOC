@@ -1,0 +1,41 @@
+id: hunt-privileged-group-membership-added
+name: Account added to a privileged directory group
+description: |
+  Privileged groups do gain members legitimately through joiner-mover-leaver processes. Membership added outside that path is the thing worth catching.
+version: 1.0.0
+severity: high
+category: identity
+tags:
+  - mitre.attack.t1098
+  - hunt.identity
+log_sources:
+  - windows_security
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Was an account added to a privileged group outside the approved provisioning path?
+  indicators:
+    - field: "source"
+      equals: "windows_security"
+    - field: "EventID"
+      in: [4728, 4732, 4756]
+    - field: "groupIsPrivileged"
+      equals: true
+    - field: "viaApprovedProvisioning"
+      equals: false
+expected:
+  positive_incident_id: INC-HUNT-049
+  positive_template_id: hunt-privileged-group-membership-added
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-049-NEG
+  # The negative inverts viaApprovedProvisioning, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1098/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'
