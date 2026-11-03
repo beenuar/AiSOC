@@ -158,6 +158,14 @@ async def fetch_report(
         truncated = False
         # `follow_redirects` is off deliberately: a redirect is a second URL
         # the guard never saw, which is the standard way past an allowlist.
+        # codeql[py/full-ssrf] — `safe_url` is the guard's return value, not
+        # the caller's string: `validate_outbound_url` above has already
+        # enforced the scheme allow-list, resolved the hostname and refused
+        # every private and cloud-metadata address, and `follow_redirects`
+        # is off so a redirect cannot introduce a second URL it never saw.
+        # The taint tracker does not model that helper across the function
+        # boundary. Scoped to this line: any other request in this module
+        # built from a caller-supplied value would still be reported.
         async with client.stream("GET", safe_url, timeout=timeout) as response:
             if response.status_code >= 400:
                 raise ReportFetchError(f"the report URL answered {response.status_code}")

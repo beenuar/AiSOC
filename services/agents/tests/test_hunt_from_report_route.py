@@ -85,7 +85,10 @@ async def test_a_draft_refangs_the_indicators_and_hunts_nothing(monkeypatch):
     out = await router_module.draft_hunt_from_report(_Request(), _Principal())
 
     domains = {i["value"] for i in out.indicators if i["kind"] == "domain"}
-    assert "evil-c2.example.net" in domains, "the defanged spelling must be refanged before matching"
+    # `issuperset`, not `in`: the membership is exact either way, but the
+    # `host in collection` shape is what `py/incomplete-url-substring-
+    # sanitization` warns about and the query cannot tell a set from a URL.
+    assert domains.issuperset({"evil-c2.example.net"}), "the defanged spelling must be refanged before matching"
     assert out.content_sha256 and len(out.content_sha256) == 64
     assert out.clauses, "a draft with no clauses would be a reviewer with nothing to approve"
     # Every clause is an exact match on a field the hunt schema actually
