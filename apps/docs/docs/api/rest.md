@@ -282,17 +282,25 @@ and a model can still land on the CPU for want of VRAM or a usable driver.
 }
 ```
 
-`placement` has five values and **`unknown` is one of them**: Ollama unloads a
-model after a few minutes idle, so an empty answer means nobody has asked it
-anything yet — which is not the same as CPU, and answering CPU there would be
-a guess about the exact thing you are deciding on.
+**`unknown` is one of the values**: Ollama unloads a model after a few minutes
+idle, so an empty answer means nobody has asked it anything yet — which is not
+the same as CPU, and answering CPU there would be a guess about the exact thing
+you are deciding on.
+
+`no_model` is a separate value for a reason. "Nothing is loaded" has two
+causes, and `/api/ps` reports both as an empty list: a model that is on disk
+and idle, and a model that was never downloaded because the one-time pull
+failed. The advice for the first ("run a triage and check again") is useless
+for the second. So `/llm/runtime` also reads `/api/tags`, which lists what is
+on disk, and distinguishes them.
 
 | `placement` | Means |
 |---|---|
 | `gpu` | the whole model is in VRAM |
 | `partial` | split between VRAM and CPU; `detail` says what fraction |
 | `cpu` | entirely on the CPU |
-| `unknown` | no model loaded right now, so it cannot say |
+| `no_model` | Ollama is running and holds no model at all — the download never completed |
+| `unknown` | a model exists but none is loaded right now, so it cannot say where one would run |
 | `unreachable` | nothing answered — expected on a deployment using a hosted provider |
 
 `vram_bytes` and `total_bytes` are **absent**, not zero, when nothing was

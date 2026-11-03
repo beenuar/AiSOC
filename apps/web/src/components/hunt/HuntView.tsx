@@ -641,17 +641,22 @@ export function HuntView() {
   const [activeSavedHuntId, setActiveSavedHuntId] = useState<string | null>(null);
   const editorRef = useRef<unknown>(null);
   /**
-   * Whether the *backend* said these results are illustrative.
+   * What the backend said these results are: a lake read (`live`), a read
+   * that could not run (`unavailable`), or the console's own demo-gated
+   * fallback (`sample`).
    *
    * Deliberately not a demo flag. This used to be `demoMode`, a local
    * `useState(false)` flipped to `true` by a fetch failure, which made the
    * page substitute invented telemetry precisely when the backend was
    * unhealthy — the moment a reader is least able to tell. Whether sample
-   * data may render at all is now `canUseDemoData()`, a property of the
-   * build; this only records that a successful response was self-declared
-   * `source: "sample"`.
+   * data may render at all is `canUseDemoData()`, a property of the build.
+   *
+   * Three states rather than two because the backend stopped fabricating:
+   * `unavailable` with zero hits is not the same screen as `live` with zero
+   * hits, and badging the first "Sample data" would claim events exist that
+   * nothing produced.
    */
-  const [sampleSource, setSampleSource] = useState(false);
+  const [resultSource, setResultSource] = useState<'live' | 'sample' | 'unavailable'>('live');
   // Reason the results are not live, surfaced verbatim from the backend so
   // the console never has to guess why it is showing sample data.
   const [sampleNotice, setSampleNotice] = useState<string | null>(null);
@@ -817,7 +822,11 @@ export function HuntView() {
       //
       // These used to be inline `(res as { source?: string })` casts, because
       // the declared type carried neither field. The cast was the tell.
-      setSampleSource(res.source === 'sample' || Boolean(res.notice));
+      // Keyed on the declared source alone. `|| Boolean(res.notice)` was
+      // safe while every response was synthetic, and is wrong now that a
+      // real lake answer can carry a caveat about the query language: it
+      // would badge genuine telemetry "Sample data".
+      setResultSource(res.source);
       setSampleNotice(res.notice);
     } catch (err) {
       setRunError(err);
@@ -838,7 +847,7 @@ export function HuntView() {
           source: 'sample',
           notice,
         });
-        setSampleSource(true);
+        setResultSource('sample');
         setSampleNotice(notice);
         return;
       }
@@ -847,7 +856,7 @@ export function HuntView() {
       // latency for a query that never ran, rendered in the same line as a
       // real measurement.
       setResults(null);
-      setSampleSource(false);
+      setResultSource('live');
       setSampleNotice(null);
       toast.error('Hunt failed — no results to show');
     } finally {
@@ -1009,20 +1018,24 @@ export function HuntView() {
             <span
               className={clsx(
                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 ring-1',
-                sampleSource
-                  ? 'bg-amber-500/10 text-amber-300 ring-amber-500/30'
-                  : 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30',
+                resultSource === 'live'
+                  ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30'
+                  : 'bg-amber-500/10 text-amber-300 ring-amber-500/30',
               )}
             >
               <span
                 className={clsx(
                   'h-1.5 w-1.5 rounded-full',
-                  sampleSource ? 'bg-amber-400' : 'bg-emerald-400 animate-ping-slow',
+                  resultSource === 'live' ? 'bg-emerald-400 animate-ping-slow' : 'bg-amber-400',
                 )}
               />
-              {sampleSource ? 'Sample data' : 'Live backend'}
+              {resultSource === 'live'
+                ? 'Live backend'
+                : resultSource === 'sample'
+                  ? 'Sample data'
+                  : 'No query ran'}
             </span>
-            {sampleSource && sampleNotice && (
+            {sampleNotice && (
               <p className="mt-1 text-[11px] leading-snug text-amber-300/80">{sampleNotice}</p>
             )}
           </div>
@@ -1228,7 +1241,7 @@ export function HuntView() {
                 straight away showed generated events with no disclosure at
                 all, which is the one path the search endpoint always takes
                 today. The marker belongs with the results it describes. */}
-            {results && sampleSource && sampleNotice && (
+            {results && sampleNotice && (
               <p className="border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-[11px] leading-snug text-amber-300/90">
                 {sampleNotice}
               </p>

@@ -28,6 +28,21 @@ an operator is deciding on.
 A missing `size_vram` key is treated the same way, so a future Ollama that
 renames or drops it degrades to "unknown" rather than silently reporting every
 deployment as CPU.
+
+Why `/api/tags` is asked as well
+--------------------------------
+"Nothing is loaded" has two causes and the panel used to give one answer to
+both: *"Ollama unloads after a few minutes idle; run a triage and check
+again."* On a first run where the model download failed -- a registry
+outage, a proxy, TLS interception, a full disk -- nothing has ever been
+pulled, running a triage changes nothing, and checking again changes nothing.
+The advice was not merely unhelpful, it pointed away from the actual problem.
+
+`/api/ps` cannot tell the two apart, because both answer with an empty list.
+`/api/tags` can: it lists what is on disk. So an empty `ps` with an empty
+`tags` is `no_model` -- a real state with a real remedy -- and an empty `ps`
+with something in `tags` is the idle case, which now names the model it
+found rather than asserting idleness it has not checked.
 """
 
 from __future__ import annotations
@@ -41,7 +56,7 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-Placement = Literal["gpu", "partial", "cpu", "unknown", "unreachable", "not_local"]
+Placement = Literal["gpu", "partial", "cpu", "no_model", "unknown", "unreachable", "not_local"]
 
 #: Where the bundled Ollama lives on the compose network. `make up-host-llm`
 #: overrides this to the host's own Ollama, which is the configuration where
@@ -93,21 +108,50 @@ class RuntimeReport:
         return out
 
 
-def classify(models: list[dict[str, Any]]) -> RuntimeReport:
+def classify(models: list[dict[str, Any]], installed: list[str] | None = None) -> RuntimeReport:
     """Turn Ollama's `/api/ps` payload into a verdict.
+
+    `installed` is what `/api/tags` reported is on disk, or `None` when that
+    could not be read. It only matters when nothing is loaded, and there it
+    decides between two states that look identical from `/api/ps` alone:
+    a model that has been unloaded, and a model that was never downloaded.
 
     Pure, so the states can be tested without a container.
     """
     base = ollama_url()
 
     if not models:
+        if installed is None:
+            # Asked and not answered. Say that, rather than picking whichever
+            # of the two explanations sounds better.
+            return RuntimeReport(
+                placement="unknown",
+                detail=(
+                    "No model is loaded right now, and Ollama did not say which models it holds, "
+                    "so this cannot tell an idle model from one that was never downloaded."
+                ),
+                base_url=base,
+            )
+        if not installed:
+            return RuntimeReport(
+                placement="no_model",
+                detail=(
+                    "Ollama is running and has no model at all, so AI triage cannot use it. The download "
+                    "happens once, in the ollama-pull container; it is the usual casualty of a proxy, TLS "
+                    "interception, a registry rate limit or a full Docker disk. Nothing else is affected — "
+                    "ingest, detection and alerting are unchanged, and triage falls back to the "
+                    "deterministic path until a model is available."
+                ),
+                base_url=base,
+            )
         return RuntimeReport(
             placement="unknown",
             detail=(
-                "No model is loaded right now, so Ollama cannot say where one would run. "
-                "Ollama unloads after a few minutes idle; run a triage and check again."
+                f"No model is loaded right now, so Ollama cannot say where one would run. It does hold "
+                f"{installed[0]}, and unloads a model after a few minutes idle; run a triage and check again."
             ),
             base_url=base,
+            model=installed[0],
         )
 
     # The largest resident model is the one that matters: it is what a triage
@@ -178,6 +222,7 @@ async def probe() -> RuntimeReport:
     try:
         async with httpx.AsyncClient(timeout=PROBE_TIMEOUT_SECONDS) as client:
             resp = await client.get(f"{base}/api/ps")
+            installed = await _installed(client, base)
     except Exception as exc:  # noqa: BLE001 - every failure is a state, not a crash
         logger.info("llm_runtime.unreachable", base_url=base, error=type(exc).__name__)
         return RuntimeReport(
@@ -203,7 +248,29 @@ async def probe() -> RuntimeReport:
         )
 
     models = payload.get("models")
-    return classify(models if isinstance(models, list) else [])
+    return classify(models if isinstance(models, list) else [], installed)
+
+
+async def _installed(client: httpx.AsyncClient, base: str) -> list[str] | None:
+    """Model names on disk, or `None` when Ollama would not say.
+
+    `None` and `[]` mean different things here and must not be collapsed:
+    `[]` is "this deployment has no model", which is a finding with a remedy,
+    and `None` is "we could not check", which is not. Returning `[]` on an
+    error would report every transient blip as a missing model and send an
+    operator to re-pull something they already have.
+    """
+    try:
+        resp = await client.get(f"{base}/api/tags")
+        if resp.status_code != 200:
+            return None
+        models = resp.json().get("models")
+    except Exception as exc:  # noqa: BLE001 - an unreadable list is a state
+        logger.info("llm_runtime.tags_unreadable", base_url=base, error=type(exc).__name__)
+        return None
+    if not isinstance(models, list):
+        return None
+    return [str(m.get("name") or m.get("model") or "") for m in models if isinstance(m, dict)]
 
 
 __all__ = ["Placement", "RuntimeReport", "classify", "ollama_url", "probe"]

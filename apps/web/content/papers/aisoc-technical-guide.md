@@ -134,17 +134,20 @@ curl -s localhost:8000/api/v1/llm/runtime -H "Authorization: Bearer $TOKEN"
 docker compose exec ollama ollama ps     # SIZE and the GPU/CPU split
 ```
 
-Five answers, and **not loaded right now** is one of them: Ollama unloads after
-a few minutes idle, so an empty answer means nobody has asked it anything yet.
-That is not the same as CPU, and reporting CPU there would be a guess about the
-exact thing you are deciding on.
+**Not loaded right now** is one of the answers: Ollama unloads after a few
+minutes idle, so an empty answer means nobody has asked it anything yet. That
+is not the same as CPU, and reporting CPU there would be a guess about the
+exact thing you are deciding on. It is also not the same as having no model at
+all, which is why `no_model` is its own answer — a first run whose one-time
+download failed needs `docker compose run --rm ollama-pull`, not a triage.
 
 | `placement` | Means |
 |---|---|
 | `gpu` | the whole model is in VRAM |
 | `partial` | split; `detail` says what fraction, which explains the latency |
 | `cpu` | entirely on the CPU |
-| `unknown` | nothing loaded, so it cannot say |
+| `no_model` | Ollama holds no model at all — the one-time download never completed |
+| `unknown` | a model exists but none is loaded, so it cannot say where one would run |
 | `unreachable` | nothing answered — expected on a hosted-provider deployment |
 
 ---

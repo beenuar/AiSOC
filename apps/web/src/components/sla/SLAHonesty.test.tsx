@@ -162,6 +162,96 @@ describe('SLADashboard — real data', () => {
   });
 });
 
+describe('SLADashboard — an empty lifecycle table', () => {
+  /**
+   * The live reproduction. Nine alerts in the tenant, zero rows in
+   * `alert_sla_events` (its only writers are analyst actions), and the page
+   * rendered "Total Alerts 0 / SLA Breaches 0 / Breach Rate 0%" directly
+   * above a panel correctly counting nine.
+   *
+   * Asserted on first paint with data present -- the error branch runs
+   * before these cards do, so a check there cannot see what a populated
+   * response renders.
+   */
+  const NINE_ALERTS_NO_EVENTS = {
+    period_days: 30,
+    computed_at: '2026-11-02T12:00:00Z',
+    overall: {
+      total_alerts: 0,
+      alerts_in_window: 9,
+      measured: false,
+      total_breaches: 0,
+      breach_rate: 0,
+      mttd_avg: null,
+      mttr_avg: null,
+      mttc_avg: null,
+    },
+    per_severity: {},
+    kpi_bar: null,
+  };
+
+  it('does not report zero breaches when nothing is SLA-measurable', () => {
+    swrData.set(METRICS_KEY, NINE_ALERTS_NO_EVENTS);
+
+    render(<SLADashboard />);
+
+    expect(screen.getByText(/not measured · no SLA events in 30 days/i)).toBeTruthy();
+    expect(screen.queryByText('0%')).toBeNull();
+  });
+
+  it('agrees with the panel below it about how many alerts exist', () => {
+    swrData.set(METRICS_KEY, NINE_ALERTS_NO_EVENTS);
+
+    render(<SLADashboard />);
+
+    expect(screen.getByText('9')).toBeTruthy();
+    expect(screen.getByText(/0 with SLA lifecycle events/i)).toBeTruthy();
+  });
+
+  it('still shows a real breach rate once there is one', () => {
+    // The positive control. Cards that said "not measured" whatever arrived
+    // would pass both tests above and report nothing, ever.
+    swrData.set(METRICS_KEY, {
+      ...NINE_ALERTS_NO_EVENTS,
+      overall: {
+        total_alerts: 4,
+        alerts_in_window: 9,
+        measured: true,
+        total_breaches: 1,
+        breach_rate: 25.0,
+        mttd_avg: 3.0,
+        mttr_avg: 9.0,
+        mttc_avg: 12.0,
+      },
+    });
+
+    render(<SLADashboard />);
+
+    expect(screen.getByText('25%')).toBeTruthy();
+    expect(screen.queryByText(/not measured/i)).toBeNull();
+  });
+
+  it('leaves the cards alone when the server sends no flag at all', () => {
+    // An older API sends neither `measured` nor `alerts_in_window`.
+    swrData.set(METRICS_KEY, {
+      ...NINE_ALERTS_NO_EVENTS,
+      overall: {
+        total_alerts: 6,
+        total_breaches: 1,
+        breach_rate: 16.7,
+        mttd_avg: 3.0,
+        mttr_avg: 9.0,
+        mttc_avg: 12.0,
+      },
+    });
+
+    render(<SLADashboard />);
+
+    expect(screen.getByText('6')).toBeTruthy();
+    expect(screen.getByText('16.7%')).toBeTruthy();
+  });
+});
+
 describe('SLADashboard — accessibility', () => {
   // The unavailable/not-measured block is new and sits between the page `h1`
   // and the per-severity `h2`s, which is exactly where a heading-order

@@ -1213,6 +1213,17 @@ jobs:
         run: |
           python3 scripts/check_profile_service_counts.py --self-test
           python3 scripts/check_profile_service_counts.py
+      # `make up` exited 2 after 62 seconds with 10 of the 16 CORE services
+      # still in `Created`, because litellm waited on the model-pull one-shot
+      # with `service_completed_successfully` and the download failed. Compose
+      # aborts the whole `up` on that and collects every service it has not
+      # started yet — api, web, fusion, ingest, agents, none of which has any
+      # relationship to a model. The local model is a convenience; nothing
+      # about it may stop the product starting.
+      - name: A failed model download cannot stop the stack
+        run: |
+          python3 scripts/check_llm_optional_at_boot.py --self-test
+          python3 scripts/check_llm_optional_at_boot.py
       # The Project maturity table published a status for fifteen
       # capabilities and nothing checked any of them: no definition of
       # Stable existed anywhere, no gate parsed the table, and the labels

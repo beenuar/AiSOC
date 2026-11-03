@@ -19,6 +19,7 @@ from app.core.config import get_settings
 from app.models.alert import Alert
 from app.models.sla import AlertSLAEvent, TenantSLAConfig
 from app.models.tenant import Tenant
+from app.services.alert_disposition import decided_filter
 
 # 2026 published KPI bar defaults (tenants can override via ``settings.kpi_bar``).
 DEFAULT_KPI_BAR_TARGETS: dict[str, float] = {
@@ -195,8 +196,20 @@ async def _compute_kpi_bar(
     total_r = await db.execute(select(func.count()).select_from(Alert).where(*base))
     total = int(total_r.scalar_one() or 0)
 
-    fp_r = await db.execute(select(func.count()).select_from(Alert).where(*base, Alert.status == "fp"))
+    # False positives come from the **disposition**, not from a status.
+    # This read `Alert.status == "fp"`, and no writer in the repository
+    # writes that value -- the bulk-close endpoint writes `false_positive`,
+    # and `fp` survives only in reader filters and in the normalisation
+    # table's alias map. The count was therefore structurally zero, so the
+    # KPI always read as comfortably meeting its target.
+    fp_r = await db.execute(select(func.count()).select_from(Alert).where(*base, Alert.disposition == "false_positive"))
     fp = int(fp_r.scalar_one() or 0)
+
+    # The denominator is alerts somebody reached a conclusion about. Over
+    # *every* alert it is not a false-positive rate, it is a dilution of one:
+    # a tenant with a large untriaged backlog scores well by not looking.
+    decided_r = await db.execute(select(func.count()).select_from(Alert).where(*base, decided_filter(Alert.disposition)))
+    decided = int(decided_r.scalar_one() or 0)
 
     cases_r = await db.execute(select(func.count(func.distinct(Alert.case_id))).select_from(Alert).where(*base, Alert.case_id.is_not(None)))
     distinct_cases = int(cases_r.scalar_one() or 0)
@@ -222,7 +235,7 @@ async def _compute_kpi_bar(
     )
     sub_tagged = int(sub_r.scalar_one() or 0)
 
-    fp_rate_pct = round(fp / total * 100, 2) if total else 0.0
+    fp_rate_pct = round(fp / decided * 100, 2) if decided else 0.0
     if distinct_cases > 0:
         alert_to_incident = round(total / distinct_cases, 2)
     else:
@@ -234,7 +247,10 @@ async def _compute_kpi_bar(
     # Alert-to-incident: only evaluate when there is at least one incident;
     # alerts with zero linked cases are treated as meeting the ratio bar.
     breaches = {
-        "false_positive_rate": fp_rate_pct > targets["false_positive_rate_max_pct"],
+        # Only a rate that was computed over something can breach. Over an
+        # empty denominator `fp_rate_pct` is 0.0, which passes every target
+        # -- the KPI panel awarded "All KPIs met" for having decided nothing.
+        "false_positive_rate": decided > 0 and fp_rate_pct > targets["false_positive_rate_max_pct"],
         "alert_to_incident_ratio": distinct_cases > 0 and alert_to_incident < targets["alert_to_incident_ratio_min"],
         "mitre_technique_tagging": mitre_tag_pct < targets["mitre_technique_tagging_min_pct"],
         "mitre_subtechnique_tagging": mitre_sub_pct < targets["mitre_subtechnique_tagging_min_pct"],
@@ -246,6 +262,10 @@ async def _compute_kpi_bar(
             "total_alerts": total,
             "false_positives": fp,
             "false_positive_rate_pct": fp_rate_pct,
+            # The rate's own denominator, so the panel can say "0 / 0 decided"
+            # rather than "(0 / 9)", which invited the reader to divide by the
+            # wrong number.
+            "false_positive_rate_denominator": decided,
             "distinct_cases": distinct_cases,
             "alert_to_incident_ratio": alert_to_incident,
             "mitre_technique_tagging_pct": mitre_tag_pct,
@@ -327,8 +347,28 @@ async def compute_sla_metrics(
     total_breaches = sum(s["breaches"] for s in per_severity.values())
     total_alerts = sum(s["total"] for s in per_severity.values())
 
+    # How many alerts exist in the window at all, independent of whether any
+    # of them has a lifecycle event. The page rendered "Total Alerts 0"
+    # directly above a panel reading "(0 / 9)" -- two counts of the same
+    # tenant over the same window, disagreeing, because one counts alerts
+    # and the other counts alerts *with SLA data*. Both are now reported,
+    # named for what they count.
+    alerts_in_window = int(
+        await db.scalar(select(func.count()).select_from(Alert).where(Alert.tenant_id == tenant_id, Alert.created_at >= since)) or 0
+    )
+
     overall = {
+        #: Alerts with at least one `alert_sla_events` row. Not the tenant's
+        #: alert count -- see `alerts_in_window`.
         "total_alerts": total_alerts,
+        "alerts_in_window": alerts_in_window,
+        #: False when no alert in the window is SLA-measurable. Every figure
+        #: below is then undefined rather than good: a breach rate of 0%
+        #: over zero measurable alerts reads as perfect compliance, and
+        #: `alert_sla_events` is empty on any deployment where no analyst
+        #: has acknowledged or dispositioned anything. `sla_events.py`
+        #: explains why the pipeline does not write these itself.
+        "measured": total_alerts > 0,
         "total_breaches": total_breaches,
         "breach_rate": round(total_breaches / total_alerts * 100, 1) if total_alerts else 0.0,
         "mttd_avg": round(sum(all_mttd) / len(all_mttd), 1) if all_mttd else None,

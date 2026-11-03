@@ -51,10 +51,35 @@ have() { command -v "$1" >/dev/null 2>&1; }
 
 # Resolve the compose command once. Everything below runs through it so the
 # checks apply to whatever project the caller actually started.
+#
+# The `-f` flags are the point, and leaving them off did real damage.
+# `scripts/resolve_port_conflicts.py` writes `docker-compose.ports.yml` when a
+# host port AiSOC publishes is already taken, and the Makefile passes it as a
+# second `-f` for every compose invocation. This script printed remediations
+# as a bare `docker compose up -d <svc>`, so an operator who followed the
+# advice recreated the container *without* the remap: on a host with its own
+# Postgres, `docker compose up -d postgres` failed with "Bind for
+# 0.0.0.0:5432 failed: port is already allocated" and left a healthy
+# aisoc-postgres in `Created`. The stack was worse after following the
+# doctor's advice than before it.
+#
+# So there is one definition, it includes the overlay, and every printed
+# command goes through `$COMPOSE_HINT`.
+# `tests/test_doctor_remediations_carry_compose_flags.py` fails on a literal
+# `docker compose` written anywhere else in this file.
+# doctor:compose-command — the only place this file may name compose. {
 COMPOSE=""
+COMPOSE_HINT=""
 if have docker && docker compose version >/dev/null 2>&1; then
   COMPOSE="docker compose"
+  # Relative to this script rather than to `$PWD`: `make doctor` runs from the
+  # repository root, and a human running `./scripts/doctor.sh` may not.
+  if [ -f "$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)/docker-compose.ports.yml" ]; then
+    COMPOSE="docker compose -f docker-compose.yml -f docker-compose.ports.yml"
+  fi
+  COMPOSE_HINT="$COMPOSE"
 fi
+# }
 
 # `docker compose exec` needs -T when stdin is not a TTY (CI).
 dc_exec() { $COMPOSE exec -T "$@" 2>/dev/null; }
@@ -338,13 +363,13 @@ if svc_running postgres; then
     if [ "${tables:-0}" -gt 0 ] 2>/dev/null; then
       pass "postgres schema present (${tables} tables)"
     else
-      fail "postgres has no tables — migrations did not run" "docker compose logs api | grep -i migrat"
+      fail "postgres has no tables — migrations did not run" "$COMPOSE_HINT logs api | grep -i migrat"
     fi
   else
-    fail "postgres container is up but not accepting connections" "docker compose logs postgres | tail -40"
+    fail "postgres container is up but not accepting connections" "$COMPOSE_HINT logs postgres | tail -40"
   fi
 else
-  fail "postgres is not running" "docker compose up -d postgres"
+  fail "postgres is not running" "$COMPOSE_HINT up -d postgres"
 fi
 
 if svc_running redis; then
@@ -358,10 +383,10 @@ if svc_running redis; then
   elif printf '%s' "$redis_reply" | grep -qi 'NOAUTH\|WRONGPASS'; then
     pass "redis responding (authentication required, as configured)"
   else
-    fail "redis is up but not responding to PING" "docker compose logs redis | tail -20"
+    fail "redis is up but not responding to PING" "$COMPOSE_HINT logs redis | tail -20"
   fi
 else
-  fail "redis is not running" "docker compose up -d redis"
+  fail "redis is not running" "$COMPOSE_HINT up -d redis"
 fi
 
 if svc_running kafka; then
@@ -377,10 +402,10 @@ if svc_running kafka; then
       warn "topic aisoc.raw_events does not exist yet" "it is auto-created on the first ingested event; send one with: make smoke"
     fi
   else
-    fail "kafka is up but not answering admin requests" "docker compose logs kafka | grep -iE 'no space|error' | tail -20"
+    fail "kafka is up but not answering admin requests" "$COMPOSE_HINT logs kafka | grep -iE 'no space|error' | tail -20"
   fi
 else
-  fail "kafka is not running" "docker compose up -d kafka"
+  fail "kafka is not running" "$COMPOSE_HINT up -d kafka"
 fi
 
 if [ "$PROFILE_FULL" = "1" ]; then
@@ -419,12 +444,12 @@ if [ "$PROFILE_FULL" = "1" ]; then
         200) pass "$name responding on $port" ;;
         noclient)
           warn "$name could not be probed: no host port published and the image has no curl or wget" \
-               "publish the port, or check it by hand: docker compose logs $name | tail -20" ;;
+               "publish the port, or check it by hand: $COMPOSE_HINT logs $name | tail -20" ;;
         *)   warn "$name is running but did not answer http://localhost:${port}${path}" \
-                  "docker compose logs $name | tail -20" ;;
+                  "$COMPOSE_HINT logs $name | tail -20" ;;
       esac
     else
-      warn "$name is not running (full profile)" "docker compose --profile full up -d $name"
+      warn "$name is not running (full profile)" "$COMPOSE_HINT --profile full up -d $name"
     fi
   done
 fi
@@ -435,7 +460,7 @@ head2 "Services"
 check_http_service() {
   local name="$1" url="$2" hint="$3"
   if ! svc_running "$name"; then
-    fail "$name is not running" "docker compose up -d $name"
+    fail "$name is not running" "$COMPOSE_HINT up -d $name"
     return
   fi
   local code; code="$(http_ok "$url" 6)"
@@ -449,8 +474,8 @@ check_http_service() {
 API_BASE="${AISOC_API_URL:-$(svc_base_url api 8000 http://localhost:8000)}"
 INGEST_BASE="${AISOC_INGEST_URL:-$(svc_base_url ingest-worker 8080 http://localhost:8081)}"
 
-check_http_service api           "${API_BASE}/health"    "docker compose logs api | tail -40"
-check_http_service ingest-worker "${INGEST_BASE}/health" "docker compose logs ingest-worker | tail -40"
+check_http_service api           "${API_BASE}/health"    "$COMPOSE_HINT logs api | tail -40"
+check_http_service ingest-worker "${INGEST_BASE}/health" "$COMPOSE_HINT logs ingest-worker | tail -40"
 
 # Liveness says the process is up. Readiness says it can do its job. For
 # ingest the difference is Kafka: without it every accepted event is dropped
@@ -460,8 +485,8 @@ if svc_running ingest-worker; then
   case "$ready_code" in
     200) pass "ingest-worker ready (kafka reachable)" ;;
     503) fail "ingest-worker is alive but NOT ready — it cannot reach Kafka, so ingested events are dropped" "curl -s ${INGEST_BASE}/readyz   # prints the reason" ;;
-    404) warn "ingest-worker has no /readyz — running an image older than v8.2" "docker compose build ingest-worker && docker compose up -d ingest-worker" ;;
-    *)   warn "ingest-worker /readyz returned $ready_code" "docker compose logs ingest-worker | tail -30" ;;
+    404) warn "ingest-worker has no /readyz — running an image older than v8.2" "$COMPOSE_HINT build ingest-worker && $COMPOSE_HINT up -d ingest-worker" ;;
+    *)   warn "ingest-worker /readyz returned $ready_code" "$COMPOSE_HINT logs ingest-worker | tail -30" ;;
   esac
 fi
 
@@ -475,33 +500,128 @@ if svc_running fusion; then
   if [ "$fusion_code" = "200" ]; then
     pass "fusion healthy"
   elif $COMPOSE logs fusion 2>/dev/null | grep -q 'Fusion worker started'; then
-    warn "fusion started but its HTTP health route did not answer" "docker compose logs fusion | tail -40"
+    warn "fusion started but its HTTP health route did not answer" "$COMPOSE_HINT logs fusion | tail -40"
   else
-    fail "fusion is running but neither healthy nor started" "docker compose logs fusion | tail -60"
+    fail "fusion is running but neither healthy nor started" "$COMPOSE_HINT logs fusion | tail -60"
   fi
   if $COMPOSE logs fusion 2>/dev/null | grep -qi 'GroupCoordinatorNotAvailable\|Unable to update metadata'; then
-    warn "fusion reported Kafka metadata errors (may be transient at boot)" "docker compose logs fusion | grep -i kafka | tail -20"
+    warn "fusion reported Kafka metadata errors (may be transient at boot)" "$COMPOSE_HINT logs fusion | grep -i kafka | tail -20"
   fi
 else
-  fail "fusion is not running — events will never become alerts" "docker compose up -d fusion"
+  fail "fusion is not running — events will never become alerts" "$COMPOSE_HINT up -d fusion"
 fi
 
 # host-port service container-port path. The container port is what
 # `docker compose port` is keyed on, and it differs from the host port for
 # realtime (4000) and agents (8084) — reading the host port for both is how
 # these three ended up probing another project's containers.
-for spec in "3000 web 3000 /" "8086 realtime 4000 /health" "8001 agents 8084 /health"; do
+#
+# This list held three entries and CORE runs sixteen services, so a stack with
+# `connectors`, `actions`, `threatintel`, `litellm` or `ollama` dead reported
+# clean here. `tests/test_doctor_service_coverage.py` compares it against the
+# CORE profile in both directions, so the next service added to CORE cannot
+# quietly skip the check.
+#
+# Two of these paths are not `/health`, and both were verified against a
+# running stack rather than assumed. The connectors service mounts its health
+# route under `/api/v1`, so `/health` there is a 404 — a probe that reports a
+# working service as broken is worse than no probe, because it teaches the
+# operator to skim this output.
+for spec in "3000 web 3000 /" "8086 realtime 4000 /health" "8001 agents 8084 /health" \
+            "8088 connectors 8003 /api/v1/health" "8002 actions 8085 /health" \
+            "8005 threatintel 8005 /health" "6333 qdrant 6333 /readyz" \
+            "4000 litellm 4000 /health/liveliness" "11434 ollama 11434 /api/tags"; do
   # shellcheck disable=SC2086 # deliberate word splitting of a fixed 4-field spec
   set -- $spec; port="$1"; name="$2"; cport="$3"; path="$4"
   if svc_running "$name"; then
     base="$(svc_base_url "$name" "$cport" "http://localhost:${port}")"
     code="$(http_ok "${base}${path}" 6)"
-    if [ "$code" = "200" ] || [ "$code" = "204" ]; then pass "$name healthy"
-    else warn "$name is running but ${base}${path} returned $code" "docker compose logs $name | tail -30"; fi
+    # 3xx counts. The console's `/` redirects an unauthenticated visitor to
+    # `/login`, which is the console working — reporting that as a fault was
+    # a false alarm on every healthy deployment.
+    case "$code" in
+      200|204|30[1278]) pass "$name healthy" ;;
+      *) warn "$name is running but ${base}${path} returned $code" "$COMPOSE_HINT logs $name | tail -30" ;;
+    esac
   else
-    warn "$name is not running" "docker compose up -d $name"
+    warn "$name is not running" "$COMPOSE_HINT up -d $name"
   fi
 done
+
+# Zookeeper publishes no host port and speaks no HTTP, so it is checked the
+# way its own healthcheck does. Left out entirely before, which mattered:
+# kafka depends on it with `condition: service_healthy`, so a zookeeper that
+# will not start is reported here as "kafka is not running".
+if svc_running zookeeper; then
+  if dc_exec zookeeper nc -z localhost 2181 >/dev/null; then
+    pass "zookeeper answering on 2181"
+  else
+    fail "zookeeper is running but not answering on 2181 — kafka will not start" "$COMPOSE_HINT logs zookeeper | tail -30"
+  fi
+else
+  fail "zookeeper is not running — kafka depends on it, so nothing is ingested" "$COMPOSE_HINT up -d zookeeper"
+fi
+
+# ── 5b. Containers that died ────────────────────────────────────────────────
+#
+# There was no check for this at all, and the gap is what made the doctor
+# misdiagnose the reported outage: with `ollama-pull` dead, it reported
+# "api is not running" and "fusion is not running — events will never become
+# alerts" and never mentioned the container that had actually failed. Those
+# two lines are true and they send an operator to debug two services that
+# were fine.
+#
+# `ps -a` rather than `ps`: a container that exited is not in the default
+# listing, which is exactly why it was invisible.
+head2 "Containers that exited"
+dead=""
+if [ -n "$COMPOSE" ]; then
+  dead="$($COMPOSE ps -a --format '{{.Service}}|{{.State}}|{{.ExitCode}}' 2>/dev/null \
+          | awk -F'|' '$2=="exited" && $3!="0" {print $1" (exit "$3")"}')"
+fi
+if [ -n "${dead:-}" ]; then
+  # A here-string rather than a pipe: a piped `while` runs in a subshell, so
+  # every `fail` inside it would print and then lose its increment, and the
+  # summary would report zero failures underneath a list of dead containers.
+  while IFS= read -r corpse; do
+    [ -n "$corpse" ] || continue
+    fail "container ${corpse} — it ran and failed" "$COMPOSE_HINT logs ${corpse%% *} | tail -40"
+  done <<< "$dead"
+else
+  pass "no container exited with an error"
+fi
+
+# ── 5c. The local model ─────────────────────────────────────────────────────
+#
+# The one-shot `ollama-pull` fetches the model AI triage runs on. It exits 0
+# whether or not that works — deliberately, because a missing model is a
+# degraded capability and not a broken stack, and representing it as a dead
+# container is what used to abort the entire `up` — so its exit code says
+# nothing and the state has to be probed where it is used.
+#
+# The check is therefore "does Ollama have the model", not "did the pull
+# container succeed".
+head2 "Local model"
+MODEL_NAME="${AISOC_LLM_LOCAL_MODEL:-$(sed -n 's/^AISOC_LLM_LOCAL_MODEL=//p' .env 2>/dev/null | tail -n1 | tr -d '\r')}"
+MODEL_NAME="${MODEL_NAME:-llama3.2:3b-instruct-q4_K_M}"
+if ! svc_running ollama; then
+  warn "ollama is not running, so there is no local model — AI triage falls back to the deterministic path" \
+       "$COMPOSE_HINT up -d ollama ollama-pull"
+elif tags="$(curl -s -m 8 "$(svc_base_url ollama 11434 http://localhost:11434)/api/tags" 2>/dev/null)" \
+     && printf '%s' "$tags" | grep -q '"models"'; then
+  if printf '%s' "$tags" | grep -qF "\"$MODEL_NAME\""; then
+    pass "local model present: $MODEL_NAME"
+  else
+    # Named, with the remedy, and bounded: everything else is working.
+    warn "ollama is up but does not have $MODEL_NAME — the ollama-pull container could not fetch it" \
+         "$COMPOSE_HINT logs ollama-pull | tail -30   (then: $COMPOSE_HINT run --rm ollama-pull to retry, or 'make up-host-llm' to use an Ollama you already run)"
+    printf '  %sAI triage runs deterministically until a model is available. Ingest, fusion,%s\n' "$D" "$X"
+    printf '  %sdetection, alerting and the console are unaffected.%s\n' "$D" "$X"
+  fi
+else
+  warn "ollama is running but did not answer /api/tags, so the model cannot be confirmed" \
+       "$COMPOSE_HINT logs ollama | tail -30"
+fi
 
 # ── 6. Pipeline ─────────────────────────────────────────────────────────────
 head2 "Pipeline"
@@ -534,7 +654,7 @@ printf '%s%d check(s) failed%s, %d warning(s).\n' "$R$B" "$FAILURES" "$X" "$WARN
 #
 # Keyed on no containers at all rather than on a count: a stack with some
 # services down genuinely is broken and should still read as broken.
-if [ -z "$(docker compose ps -q 2>/dev/null)" ]; then
+if [ -z "$($COMPOSE ps -q 2>/dev/null)" ]; then
   printf '\n%sNothing is running yet%s — that is why the service checks above failed.\n' "$B" "$X"
   printf 'If you have not started AiSOC on this host, the next step is:\n\n'
   printf '    %smake up%s\n\n' "$B" "$X"

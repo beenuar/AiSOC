@@ -886,20 +886,104 @@ services:
 
   ollama-pull:
     # One-shot: pull the pinned model, then exit. A cache hit is a no-op, so
-    # this costs one `ollama list` on every `up` after the first.
+    # this costs one `ollama show` on every `up` after the first.
     #
-    # litellm waits on `service_completed_successfully` here rather than on
-    # ollama's health: a gateway that is up before the weights exist answers the
-    # first triage request with "model not found", and the first request is the
-    # one a new user makes.
+    # aisoc: model-pull-is-not-fatal
+    #
+    # This container exits 0 whether or not the model arrives, and that is the
+    # whole point of the block below. It used to be `entrypoint: ["ollama",
+    # "pull", "<model>"]` with litellm waiting on
+    # `service_completed_successfully`, and the consequence was measured on a
+    # clean worktree: a host with TLS interception made the pull fail, compose
+    # aborted the entire `up` after 62 seconds, and **10 of 16 CORE services
+    # were left in `Created` and never started** — api, web, fusion, ingest,
+    # agents, connectors, actions, realtime, threatintel. No console, no API,
+    # no pipeline, no administrator account, because a 2 GB model did not
+    # download.
+    #
+    # Every environmental cause lands here, not just that one: no outbound
+    # network, a proxy, a registry rate limit, a full Docker disk, or an
+    # upstream tag deletion — which has happened to this stack before and is
+    # recorded in the litellm comment below.
+    #
+    # A missing model is a degraded capability. AI triage falls back to the
+    # deterministic path and everything else is untouched, so representing it
+    # as a dead container was wrong twice over: it stopped the stack, and
+    # `_wait` in the Makefile treats `exited` with a non-zero code as broken,
+    # so even with the dependency gone a non-zero exit here would still fail
+    # `make up` over something that is working as designed.
+    #
+    # The state is therefore reported where it is *used* rather than inferred
+    # from this container's exit code: `make doctor` asks Ollama whether the
+    # model is present, which is the thing it names.
     image: ollama/ollama:0.6.7
     container_name: aisoc-ollama-pull
     depends_on:
       ollama:
-        condition: service_healthy
-    entrypoint: ["ollama", "pull", "${AISOC_LLM_LOCAL_MODEL:-llama3.2:3b-instruct-q4_K_M}"]
+        # `service_started`, not `service_healthy`. A health condition that
+        # never passes aborts `up` for every service compose has not started
+        # yet — the same failure one layer up — so the wait is done inside the
+        # script below, where timing out is a message rather than an abort.
+        condition: service_started
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -u
+        model="$$AISOC_LLM_LOCAL_MODEL"
+
+        # Wait for the server rather than for compose to certify it healthy.
+        i=0
+        while [ "$$i" -lt 90 ]; do
+          ollama list >/dev/null 2>&1 && break
+          i=$$((i + 1))
+          sleep 2
+        done
+
+        if ollama show "$$model" >/dev/null 2>&1; then
+          echo "aisoc: $$model is already present; nothing to pull."
+          exit 0
+        fi
+
+        attempt=1
+        while [ "$$attempt" -le 3 ]; do
+          echo "aisoc: pulling $$model (attempt $$attempt/3)..."
+          if ollama pull "$$model"; then
+            echo "aisoc: $$model is ready. AI triage will use it."
+            exit 0
+          fi
+          attempt=$$((attempt + 1))
+          sleep 5
+        done
+
+        echo ""
+        echo "==================================================================="
+        echo "AiSOC: the local model could not be downloaded."
+        echo ""
+        echo "  model: $$model"
+        echo ""
+        echo "The rest of AiSOC is unaffected and is starting normally: ingest,"
+        echo "fusion, detection, alerting and the console all work. What is"
+        echo "degraded is AI triage, which falls back to the deterministic path."
+        echo ""
+        echo "Usual causes: no outbound network, a proxy or TLS interception on"
+        echo "this host, a registry rate limit, or a full Docker disk."
+        echo ""
+        echo "To retry later, with the stack still running:"
+        echo ""
+        echo "    docker compose run --rm ollama-pull"
+        echo ""
+        echo "Or use a model you already have, or a hosted provider:"
+        echo ""
+        echo "    make up-host-llm                          # your own Ollama"
+        echo "    Console -> Settings -> Deployment and AI  # a hosted provider"
+        echo ""
+        echo "'make doctor' reports this state and repeats these options."
+        echo "==================================================================="
+        echo ""
+        exit 0
     environment:
       OLLAMA_HOST: http://ollama:11434
+      AISOC_LLM_LOCAL_MODEL: ${AISOC_LLM_LOCAL_MODEL:-llama3.2:3b-instruct-q4_K_M}
     networks:
       - aisoc
     restart: "no"
@@ -936,9 +1020,27 @@ services:
     command: ["--config", "/etc/litellm/config.yaml", "--port", "4000"]
     volumes:
       - ./infra/litellm/config.yaml:/etc/litellm/config.yaml:ro
-    depends_on:
-      ollama-pull:
-        condition: service_completed_successfully
+    #
+    # Deliberately no `depends_on`. This used to read
+    #
+    #     depends_on:
+    #       ollama-pull:
+    #         condition: service_completed_successfully
+    #
+    # on the reasoning that a gateway up before the weights exist answers the
+    # first triage request with "model not found". That reasoning was about
+    # one request; the cost was the whole product. Compose aborts the entire
+    # `up` when a `service_completed_successfully` dependency exits non-zero,
+    # and it collects every service it has not started yet — so a failed model
+    # download left 10 of 16 CORE services in `Created`, none of which has any
+    # relationship to the model. There is no ordering edge that is worth that,
+    # which is why this is an absence with a comment rather than a weaker
+    # condition.
+    #
+    # The ordering concern is addressed where it belongs: `ollama-pull` waits
+    # for the server itself, and a model that is not there is reported by
+    # `make doctor` and by the console's model panel rather than discovered on
+    # the first triage.
     environment:
       # Clients authenticate to the gateway with this key (AiSOC sends it as its
       # OPENAI_API_KEY when OPENAI_BASE_URL points here). Override in .env.

@@ -77,7 +77,7 @@ CONSOLE_URL = $(shell sed -n 's/^AISOC_CONSOLE_URL=//p' .env 2>/dev/null | tail 
 CONSOLE_PORT = $(shell grep -m1 'web: 3000 was in use, published on' docker-compose.ports.yml 2>/dev/null | tr -cd '0-9 ' | tr ' ' '\n' | grep -v '^$$' | tail -n1)
 console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localhost:$(if $(strip $(CONSOLE_PORT)),$(strip $(CONSOLE_PORT)),3000))
 
-.PHONY: help install env up up-dev up-full up-gpu up-host-llm _gpu_preflight pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
+.PHONY: help install env up up-dev up-full up-gpu up-host-llm _gpu_preflight _llm_note pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
         bootstrap ingest-token api-token test test-unit test-integration test-e2e stats papers \
         papers-install demo-script replay-eval replay-eval-verify
 
@@ -148,6 +148,7 @@ up: env _ports _refresh
 	@echo "            docs are off in this production-class stack)"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
+	@$(MAKE) --no-print-directory _llm_note
 	@$(MAKE) --no-print-directory bootstrap
 
 # Creates the first administrator and prints the password once. Idempotent: a
@@ -211,6 +212,7 @@ up-full: env _ports _refresh
 	@echo "            docs are off in this production-class stack)"
 	@echo ""
 	@echo "Prove the pipeline works:  make smoke"
+	@$(MAKE) --no-print-directory _llm_note
 	@$(MAKE) --no-print-directory bootstrap
 
 # ── Where the model runs ─────────────────────────────────────────────────────
@@ -261,6 +263,45 @@ up-host-llm: env _ports _refresh
 	@echo "    OLLAMA_HOST=0.0.0.0 ollama serve"
 	@echo ""
 	@$(MAKE) --no-print-directory bootstrap
+
+# Says out loud whether AI triage has a model, after the stack is up.
+#
+# The compose file no longer lets a failed model download abort the `up` —
+# that cost 10 of 16 CORE services on a clean worktree — and the other half of
+# that change is this: coming up without a model has to be *stated*. A stack
+# that silently drops to deterministic triage is a stack whose operator finds
+# out from a verdict that reads oddly a week later.
+#
+# Three distinguishable answers, because two of them are fine and only one is
+# a problem. Still downloading is the ordinary first run (the model is ~2 GB);
+# present is the steady state and says nothing; absent is the one that needs
+# words. Reporting a download in progress as a missing model would be exactly
+# the wrong-subsystem diagnostic this work exists to remove.
+#
+# The match is on the full `name:tag`, not the family before the colon. A
+# deployment pinned to `llama3.2:3b-instruct-q4_K_M` that somehow has
+# `llama3.2:1b` instead does not have its model, and reporting that it does
+# would be the same shape of wrong answer as everything else here.
+#
+# Never fails. It is a report.
+_llm_note:
+	@model="$${AISOC_LLM_LOCAL_MODEL:-$$(sed -n 's/^AISOC_LLM_LOCAL_MODEL=//p' .env 2>/dev/null | tail -1)}"; \
+	model="$${model:-llama3.2:3b-instruct-q4_K_M}"; \
+	state=$$($(COMPOSE) ps -a --format '{{.Service}}|{{.State}}' 2>/dev/null | awk -F'|' '$$1=="ollama-pull"{print $$2}'); \
+	if [ "$$state" = "running" ]; then \
+	  echo "  The local model ($$model) is still downloading in the background."; \
+	  echo "  AI triage uses the deterministic path until it finishes."; \
+	  echo ""; \
+	elif ! $(COMPOSE) exec -T ollama ollama list 2>/dev/null | grep -qF "$$model"; then \
+	  echo "  AI triage is DEGRADED: the local model ($$model) is not available."; \
+	  echo "  Everything else is running — ingest, detection, alerting, the console."; \
+	  echo "  Triage falls back to the deterministic path, which needs no model."; \
+	  echo ""; \
+	  echo "    $(COMPOSE) logs ollama-pull     # why it failed"; \
+	  echo "    $(COMPOSE) run --rm ollama-pull # try again"; \
+	  echo "    make up-host-llm                  # use an Ollama you already run"; \
+	  echo ""; \
+	fi
 
 # Refreshes the images when the tag they name can move.
 #
@@ -348,11 +389,19 @@ _ports:
 # collapses the run of whitespace — so `ollama-pull exited  0` parsed as three
 # fields with the exit code in $$3 and nothing in $$4, and the new exit-code
 # test read an empty string on exactly the row it was written for.
+# The services AiSOC can run without. A missing local model degrades AI triage
+# to the deterministic path and changes nothing else, so none of these may
+# fail `make up` — the whole point of the compose change that stopped a failed
+# model download aborting the stack. `_llm_note` below states the degradation;
+# silently coming up without a model would be the other half of the same bug.
+OPTIONAL_SERVICES := ^(ollama|ollama-pull|litellm)$$
+
 _wait:
 	@for i in $$(seq 1 60); do \
 	  status=$$($(COMPOSE) $(PROFILE_ARG) ps -a --format '{{.Service}}|{{.State}}|{{.Health}}|{{.ExitCode}}' 2>/dev/null); \
 	  pending=$$(echo "$$status" | awk -F'|' '$$3=="starting"{print $$1}'); \
-	  broken=$$(echo "$$status" | awk -F'|' '($$2=="exited"&&$$4!="0")||$$2=="dead"||$$2=="restarting"||$$3=="unhealthy"{print $$1}'); \
+	  broken=$$(echo "$$status" | awk -F'|' '($$2=="exited"&&$$4!="0")||$$2=="dead"||$$2=="restarting"||$$3=="unhealthy"{print $$1}' \
+	            | grep -vE '$(OPTIONAL_SERVICES)' || true); \
 	  if [ -n "$$broken" ]; then \
 	    echo ""; \
 	    echo "These services are not running: $$broken"; \
