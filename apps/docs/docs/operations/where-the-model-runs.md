@@ -157,10 +157,18 @@ docker compose exec ollama ollama ps     # SIZE and the GPU/CPU split
 ```
 
 The wizard shows the same thing, and so does the
-[REST reference](../api/rest#ai-model--credentials). Five answers, and **not
-loaded right now** is one of them: Ollama unloads after a few minutes idle, so an empty answer means
-nobody has asked it anything yet — which is not the same as CPU, and reporting
-CPU there would be a guess about the exact thing you are deciding on.
+[REST reference](../api/rest#ai-model--credentials). **Not loaded right now**
+is one of the answers: Ollama unloads after a few minutes idle, so an empty
+answer means nobody has asked it anything yet — which is not the same as CPU,
+and reporting CPU there would be a guess about the exact thing you are
+deciding on.
+
+**No model downloaded** is a separate answer, because the remedy is the
+opposite one. An empty `/api/ps` looks identical whether the model is idle or
+was never fetched, so `/llm/runtime` also reads `/api/tags` to tell them
+apart. A first run behind a proxy, a registry rate limit or a full disk lands
+here, and the fix is `docker compose run --rm ollama-pull` rather than running
+a triage and checking again.
 
 ## Air-gapped deployments
 
