@@ -116,9 +116,9 @@ class TestSubscriptionProbes:
         response = TestClient(app).get("/readyz")
 
         assert response.status_code == 200
-        # Named on the way past, so a 200 says what it checked rather than
-        # only that nothing was wrong.
-        assert response.json()["subscriptions"] == ["aisoc.raw_events"]
+        # Named on the way past with its state, so a 200 says what it checked
+        # and how it was rather than only that nothing was wrong.
+        assert response.json()["subscriptions"] == {"aisoc.raw_events": {"attached": True}}
 
     def test_detached_subscription_makes_readiness_503(self) -> None:
         app, mark_ready, _ = _build_app()
