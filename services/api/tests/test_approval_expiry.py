@@ -123,9 +123,25 @@ class TestExpiringIsNotDeciding:
             assert forbidden not in update, f"the sweep must not write {forbidden}"
 
     def test_the_decide_endpoint_still_accepts_an_expired_row(self) -> None:
+        """An expired row stays resolvable -- by denial.
+
+        Narrowed from "still decides" by GHSA-q388-w896-9jr2 F82. The original
+        concern holds and is unchanged: if an `expired` row could not be
+        decided at all, this worker would silently become a way to close
+        approvals nobody answered, leaving rows for a human to clean up. What
+        changed is which half keeps it resolvable. Approving on evidence the
+        window has closed over is the act that had to stop; denying executes
+        nothing, and is the safe default this module already declares.
+
+        The behaviour itself is driven against the real app and a real
+        Postgres in `tests/isolation/test_approval_governance_live.py` --
+        `test_an_elapsed_approval_can_still_be_denied` is this assertion's
+        executable half. This one stays a source check only to pin the status
+        guard, which no live test can observe directly.
+        """
         source = (REPO_ROOT / "services" / "api" / "app" / "api" / "v1" / "endpoints" / "approvals.py").read_text(encoding="utf-8")
         assert 'row.status not in {"pending", "expired"}' in source, (
-            "the guard changed; if `expired` no longer decides, this worker silently becomes a way to close approvals"
+            "the guard changed; if `expired` no longer decides at all, this worker silently becomes a way to close approvals"
         )
 
     @pytest.mark.asyncio
@@ -136,7 +152,11 @@ class TestExpiringIsNotDeciding:
 
         note = next(p["note"] for p in session.params if "note" in p)
         assert "nothing was dispatched" in note
-        assert "can still be decided" in note
+        # Was "can still be decided", which `decide_approval` implemented
+        # literally and accepted an approval on an elapsed row. The note has to
+        # describe what the endpoint does, or it is an instruction to an
+        # operator that the code refuses.
+        assert "can still be denied" in note
 
 
 class TestTheSafeDefaultIsTheOneAlreadyDeclared:

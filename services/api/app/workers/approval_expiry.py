@@ -83,8 +83,16 @@ _SWEEP_SQL = text(
 
 _NOTE = (
     "Expired automatically: the approval window elapsed with no decision. "
-    f"Safe default is '{SAFE_DEFAULT}' — nothing was dispatched, and this request can still be decided."
+    f"Safe default is '{SAFE_DEFAULT}' — nothing was dispatched. This request can still be denied; "
+    "approving it needs a new approval raised against current evidence."
 )
+# The second sentence used to read "and this request can still be decided",
+# which `decide_approval` implemented literally: it accepted an *approval* on a
+# row whose window had closed, so a containment authorised at 02:00 was
+# dispatchable at 14:00 against an incident that had moved on
+# (GHSA-q388-w896-9jr2, F82). The intent behind the note is still honoured —
+# a forgotten approval must not become a row somebody has to clean up by
+# hand — but only through the half that executes nothing.
 
 
 @dataclass
