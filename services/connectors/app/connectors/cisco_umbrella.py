@@ -21,6 +21,11 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 
 logger = structlog.get_logger()
 
+_PER_PAGE = 100
+# Bound on pages per poll so an endpoint that never returns a short page
+# cannot loop forever.
+_MAX_PAGES = 50
+
 
 class CiscoUmbrellaConnector(BaseConnector):
     """Cisco Umbrella DNS + proxy reporting."""
@@ -115,32 +120,46 @@ class CiscoUmbrellaConnector(BaseConnector):
         params: dict[str, Any] = {
             "from": from_ts,
             "to": to_ts,
-            "limit": 100,
+            "limit": _PER_PAGE,
             "verdict": "blocked",
         }
+        items: list[dict[str, Any]] = []
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self.BASE_URL}/activity",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Accept": "application/json",
-                    },
-                    params=params,
-                )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "umbrella.fetch_failed",
-                        status=resp.status_code,
-                        body=resp.text[:300],
+                # /activity is offset-paginated. Reading only the first page
+                # dropped every blocked request past the 100th in a poll
+                # window, and the next poll's window starts later, so those
+                # requests were never read.
+                for page in range(_MAX_PAGES):
+                    params["offset"] = page * _PER_PAGE
+                    resp = await client.get(
+                        f"{self.BASE_URL}/activity",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": "application/json",
+                        },
+                        params=params,
                     )
-                    return []
-                data = resp.json() or {}
-                items = data.get("data") or data.get("activity") or []
-                return [self.normalize(i) for i in items]
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "umbrella.fetch_failed",
+                            status=resp.status_code,
+                            body=resp.text[:300],
+                        )
+                        if not items:
+                            return []
+                        break
+                    data = resp.json() or {}
+                    batch = data.get("data") or data.get("activity") or []
+                    items.extend(batch)
+                    if len(batch) < _PER_PAGE:
+                        break
+                else:
+                    logger.warning("umbrella.fetch_page_cap_reached", pages=_MAX_PAGES, events=len(items))
         except Exception as exc:
             logger.warning("umbrella.fetch_exception", error=str(exc))
             return []
+        return [self.normalize(i) for i in items]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         verdict = (raw.get("verdict") or "").lower()
