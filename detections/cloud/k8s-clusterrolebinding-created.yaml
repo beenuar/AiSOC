@@ -1,0 +1,24 @@
+id: det-cloud-277
+name: Kubernetes ClusterRoleBinding Created
+description: A cluster-wide binding grants its role in every namespace at once.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    k8s_verb == "create"
+    AND k8s_resource == "clusterrolebindings"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

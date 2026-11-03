@@ -1,0 +1,25 @@
+id: det-identity-248
+name: Entra Device Registered
+description: A device registered shortly after a risky sign-in is the broker-registration persistence
+  step.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098.005
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Add device"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

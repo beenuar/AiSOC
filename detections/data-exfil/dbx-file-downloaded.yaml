@@ -1,0 +1,23 @@
+id: det-data-exfil-060
+name: Dropbox File Downloaded
+description: One download is routine; the rule exists so volume can be counted.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1530
+- tlp.white
+category: data-exfil
+log_source:
+  product: dropbox
+  service: events
+detection:
+  condition: |
+    event_type == "dropbox.file_download"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Routine backup/disaster-recovery exercise
+playbook: tpl-exfiltration
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

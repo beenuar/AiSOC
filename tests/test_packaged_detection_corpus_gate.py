@@ -59,6 +59,20 @@ def _tree(tmp_path: pathlib.Path) -> pathlib.Path:
     return root
 
 
+def _expected_rule_total() -> int:
+    """The total the gate prints, counted the way the gate counts it.
+
+    This was the literal `2617`, which is a corpus size typed into a test —
+    the drift this repository spends most of its gates preventing. The first
+    lane to add rules read `2617 rules` against a corpus of 3045 and failed
+    a *positive control*, which says nothing about whether the gate works.
+    Summing the artefacts the control already copies cannot go stale, and
+    still asserts the real thing: that a clean run reports the whole corpus
+    rather than a subset.
+    """
+    return sum(len(json.loads((REPO / PACKAGED / name).read_text(encoding="utf-8"))["rules"]) for name in (*ARTEFACTS, GENERATED))
+
+
 def _check(root: pathlib.Path) -> subprocess.CompletedProcess[str]:
     env = {**os.environ, "AISOC_REPO_ROOT": str(root)}
     return subprocess.run(  # noqa: S603 - fixed argv, no shell
@@ -76,7 +90,9 @@ class TestThePositiveControl:
     def test_a_synced_tree_is_clean(self, tmp_path: pathlib.Path) -> None:
         result = _check(_tree(tmp_path))
         assert result.returncode == 0, result.stderr
-        assert "2617 rules" in result.stdout
+        total = _expected_rule_total()
+        assert total > 0, "the artefacts carry no rules; the control would assert nothing"
+        assert f"{total} rules" in result.stdout
 
 
 class TestTheGateCatchesItsOwnAbsence:

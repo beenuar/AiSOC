@@ -1,0 +1,24 @@
+id: det-cloud-295
+name: Kubernetes Admission Webhook Created
+description: A mutating webhook rewrites every object admitted to the cluster, which is cluster-wide persistence.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1554
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    k8s_verb == "create"
+    AND k8s_resource == "mutatingwebhookconfigurations"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

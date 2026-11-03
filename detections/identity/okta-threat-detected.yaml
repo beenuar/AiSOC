@@ -1,0 +1,23 @@
+id: det-identity-279
+name: Okta ThreatInsight Detection
+description: Okta's own verdict on the source, correlated across its whole customer base.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1110
+- tlp.white
+category: identity
+log_source:
+  product: okta
+  service: system-log
+detection:
+  condition: |
+    event_type == "security.threat.detected"
+false_positives:
+- Documented break-glass procedure
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

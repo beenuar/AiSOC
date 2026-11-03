@@ -1,0 +1,4 @@
+{
+  "k8s_resource": "networkpolicies",
+  "k8s_verb": "delete"
+}

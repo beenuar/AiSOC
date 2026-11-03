@@ -1,0 +1,24 @@
+id: det-identity-220
+name: Entra User Account Restored
+description: Restoring a deleted account returns it with its group memberships.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Restore user"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

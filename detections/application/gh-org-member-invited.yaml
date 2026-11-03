@@ -1,0 +1,23 @@
+id: det-application-116
+name: GitHub Organisation Invitation Sent
+description: An invitation to an address outside the company is how an outsider becomes an insider.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1136
+- tlp.white
+category: application
+log_source:
+  product: github
+  service: audit
+detection:
+  condition: |
+    event_type == "github.org.invite_member"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -1,0 +1,5 @@
+{
+  "client_type": "not-JDBC_DRIVER",
+  "event_type": "snowflake.login",
+  "is_success": true
+}

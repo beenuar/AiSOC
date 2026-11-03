@@ -1,0 +1,23 @@
+id: det-application-193
+name: Salesforce User Created
+description: A new user is persistence that survives a password reset on the compromised one.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1136
+- tlp.white
+category: application
+log_source:
+  product: salesforce
+  service: setup-audit
+detection:
+  condition: |
+    event_type == "salesforce.newUser"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

@@ -106,6 +106,167 @@ def _threat_anomaly_detections() -> int | None:
     return sum(1 for r in rules if isinstance(r, dict) and r.get("category") == "threat-anomaly")
 
 
+#: The four groups depth plan 3.6 counts, by the `product` each compiled rule
+#: declares. Membership is listed rather than pattern-matched for two
+#: reasons: the first depth plan re-derived this figure two ways and got 461
+#: and 395, which is what a grouping nobody pinned produces; and a regex over
+#: product names would silently absorb every new product into whichever group
+#: its spelling resembled.
+#:
+#: The lists start from that re-derivation's grouping. Additions since are
+#: deliberate and named here so a reader can see what moved the figure: `oci`
+#: and `digitalocean` are public clouds the tree gained connectors for, and
+#: the SaaS list is extended with the sources depth 3.6 names minimums for.
+#: Nothing is in two groups and nothing matches by prefix.
+SCENARIO_GROUPS: dict[str, frozenset[str]] = {
+    "cloud": frozenset({"aws", "azure", "gcp", "kubernetes", "docker", "cloud", "multi-cloud", "oci", "digitalocean"}),
+    "identity": frozenset({"identity", "okta", "active-directory", "auth0", "duo", "ping", "keycloak"}),
+    "saas": frozenset(
+        {
+            "google-workspace",
+            "m365",
+            "slack",
+            "email",
+            "salesforce",
+            "zoom",
+            "atlassian",
+            "confluence",
+            "notion",
+            "snowflake",
+            "workday",
+            "box",
+            "dropbox",
+            "onepassword",
+            "servicenow",
+        }
+    ),
+    "code": frozenset({"github", "gitlab"}),
+}
+
+#: Depth plan 3.6's target, and now an assertion rather than a report. The
+#: gate failed only the ratchet while the tree was short of 800, because a
+#: gate asserting a number the tree does not have is simply red; the figure
+#: reached 899 on 2026-11-01 and the target is enforced from here. The
+#: shortfall line still prints either way — that property is what made the
+#: PARTIAL honest, and removing it once the target is met would leave the
+#: next reader unable to see how much headroom there is.
+SCENARIO_TARGET = 800
+
+#: Measured on 2026-11-01 after the second authoring pass closed depth plan
+#: 3.6's target. 443 before the scenario families, 569 after the first pass,
+#: 907 after the second. The floor is the measurement, and the assertion
+#: below is the target: both are checked, because a ratchet alone would let
+#: the figure sit one rule above 800 forever and a target alone would not
+#: notice 50 rules being lost.
+SCENARIO_FLOOR = 907
+
+#: Windowed rules that declare a category and no product, so nothing can put
+#: them in one of the four groups. The windowed ruleset has no `product`
+#: field; a translated rule is attributed through the native rule it names in
+#: `translated_from`, and these are the natively authored ones that name
+#: none. Held so the unclassifiable set cannot grow silently — the honest
+#: close is to give the windowed schema a product, which is a change to how
+#: those rules are authored and is recorded as open rather than guessed at.
+MAX_WINDOWED_UNCLASSIFIED = 26
+
+
+def _scenario_conditions() -> dict[str, int | dict[str, int]]:
+    """Executable cloud, identity, SaaS and code conditions (depth plan 3.6).
+
+    Counts the rules the *engine* loads — both compiled native rulesets, the
+    imported Sigma corpus and the windowed ruleset — grouped by the product
+    each one declares. Anything outside the four groups (Windows, Linux,
+    macOS, EDR, network and so on) is not part of this claim and is reported
+    as `other` rather than dropped, so the four numbers and the total the
+    headline publishes stay reconcilable.
+
+    Windowed rules carry no `product` of their own: they are translations of
+    a native rule and name it in `translated_from`. Their group is resolved
+    through that link. One that cannot be resolved counts as `unclassified`
+    and is printed — an unknown bucket that quietly passes as zero is the
+    defect this repository keeps finding.
+    """
+    data_dir = ROOT / "services" / "fusion" / "app" / "data"
+    by_group = dict.fromkeys(SCENARIO_GROUPS, 0)
+    other = 0
+    unclassified = 0
+
+    def group_of(product: str | None) -> str | None:
+        for name, products in SCENARIO_GROUPS.items():
+            if product in products:
+                return name
+        return None
+
+    product_by_slug: dict[str, str] = {}
+    for name in ("detection_ruleset.json", "detection_ruleset_imported.json"):
+        path = data_dir / name
+        if not path.is_file():
+            continue
+        try:
+            rules = (json.loads(path.read_text(encoding="utf-8")) or {}).get("rules") or []
+        except ValueError:
+            return {"total": 0, "groups": {}, "other": 0, "unclassified": 0}
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            product = rule.get("product") or None
+            if isinstance(rule.get("slug"), str) and isinstance(product, str):
+                product_by_slug[rule["slug"]] = product
+            group = group_of(product)
+            if group is None:
+                other += 1
+            else:
+                by_group[group] += 1
+
+    # A translated windowed rule names the native rule it came from, and that
+    # rule is *absent* from the compiled artefact by design — translating it
+    # is what retired it. So the product is resolved from the specs, which
+    # still hold it, rather than from the artefact, which cannot.
+    try:
+        sys.path.insert(0, str(ROOT / "scripts"))
+        from detection_specs_index import all_specs  # noqa: PLC0415 — scripts/ sibling
+
+        for _category, spec in all_specs():
+            log_source = spec.get("log_source") or {}
+            if isinstance(spec.get("slug"), str) and log_source.get("product"):
+                product_by_slug.setdefault(spec["slug"], str(log_source["product"]))
+    except Exception:  # noqa: BLE001 — the artefact path above still works without it
+        pass
+
+    windowed = data_dir / "windowed_ruleset.json"
+    if windowed.is_file():
+        try:
+            rules = (json.loads(windowed.read_text(encoding="utf-8")) or {}).get("rules") or []
+        except ValueError:
+            rules = []
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            origin = rule.get("translated_from")
+            product = product_by_slug.get(str(origin)) if origin else None
+            if product is None:
+                # Natively authored windowed rules declare a category and no
+                # product, so there is nothing to group them by. They are
+                # counted here and held by a ratchet rather than folded into
+                # a group they have not earned — but the number is printed
+                # every run, because a bucket nobody can classify must not
+                # pass quietly.
+                unclassified += 1
+                continue
+            group = group_of(product)
+            if group is None:
+                other += 1
+            else:
+                by_group[group] += 1
+
+    return {
+        "total": sum(by_group.values()),
+        "groups": by_group,
+        "other": other,
+        "unclassified": unclassified,
+    }
+
+
 #: Directories under `detections/` holding YAML that is not a detection rule.
 #: Kept equal to `detection_truth_table.py`'s `SKIP_DIRS`, because a rule
 #: count and a file count published under the same words is how two surfaces
@@ -240,6 +401,7 @@ def collect() -> dict:
         "executor_arms": _executor_arms(),
         "detections_executable": _executable_detections(),
         "detections_threat_anomaly": _threat_anomaly_detections(),
+        "scenario_conditions": _scenario_conditions(),
         "detections_files_on_disk": _detection_files_on_disk(),
         "detections_yaml_files": _detection_yaml_files(),
         "services_in_repo": _python_services(),
@@ -254,7 +416,9 @@ def collect() -> dict:
 
 def _render(stats: dict) -> str:
     c = stats["compose"]
-    g = stats["claim_gate"]
+    g_claim = stats["claim_gate"]
+    sc = stats["scenario_conditions"]
+    g = sc["groups"]
     playbook_yaml = stats["detections_yaml_files"] - stats["detections_files_on_disk"]
     lines = [
         "",
@@ -265,6 +429,14 @@ def _render(stats: dict) -> str:
         f"  … threat-and-anomaly family    {stats['detections_threat_anomaly']}"
         "  (a subset: each also needs a warmed baseline for the principal)",
         f"  Detection rules on disk        {stats['detections_files_on_disk']}  (includes quarantined imports the engine never evaluates)",
+        f"  Cloud/identity/SaaS/code       {sc['total']}  "
+        f"(cloud {g['cloud']}, identity {g['identity']}, saas {g['saas']}, code {g['code']}"
+        f"; {sc['other']} rules are none of the four, {sc['unclassified']} windowed rules carry no product)"
+        + (
+            f"  [{SCENARIO_TARGET - sc['total']} short of the {SCENARIO_TARGET} target]"
+            if sc["total"] < SCENARIO_TARGET
+            else "  [target met]"
+        ),
         f"  YAML files under detections/   {stats['detections_yaml_files']}  (the extra {playbook_yaml} are response playbooks, not rules)",
         f"  Services in repo               {stats['services_in_repo']}",
     ]
@@ -273,9 +445,10 @@ def _render(stats: dict) -> str:
         lines.append(f"  Response arms (executors)      {arms['arms']} over {arms['verbs']} verbs across {arms['vendors']} vendors")
     if c:
         lines.append(f"  Compose services               {c['core']} core + {c['optional']} optional = {c['total']}")
-    if g:
+    if g_claim:
         lines.append(
-            f"  Claim-to-gate matrix           {g['total']} rows — {g['GATED']} gated, {g['PARTIAL']} partial, {g['NO GATE']} ungated"
+            f"  Claim-to-gate matrix           {g_claim['total']} rows — {g_claim['GATED']} gated, "
+            f"{g_claim['PARTIAL']} partial, {g_claim['NO GATE']} ungated"
         )
     lines.append("")
     return "\n".join(lines)
@@ -314,13 +487,42 @@ def check(stats: dict) -> int:
             claimed = int(match.group(1))
             if claimed != expected:
                 failures.append(f"README claims {claimed} for {'.'.join(path)}; the tree has {expected} (pattern: {pattern})")
+    scenario = stats["scenario_conditions"]
+    measured = int(scenario["total"])
+    if measured < SCENARIO_TARGET:
+        failures.append(
+            f"cloud/identity/SaaS/code conditions are {measured}, below depth plan 3.6's target of "
+            f"{SCENARIO_TARGET}. The target was reached on 2026-11-01 and is asserted from there; "
+            "it is not a figure to lower."
+        )
+    if measured < SCENARIO_FLOOR:
+        failures.append(
+            f"cloud/identity/SaaS/code conditions fell to {measured} against a floor of {SCENARIO_FLOOR}. "
+            "A rule stopped being executable, or its product left the groups in SCENARIO_GROUPS. "
+            "If the drop is a correction — a rule that could never fire being retired — lower SCENARIO_FLOOR "
+            "in the same commit and say why; never lower it to make a build green."
+        )
+    unclassified = int(scenario["unclassified"])
+    if unclassified > MAX_WINDOWED_UNCLASSIFIED:
+        failures.append(
+            f"{unclassified} windowed rules carry neither a product nor a resolvable `translated_from`, "
+            f"against a ceiling of {MAX_WINDOWED_UNCLASSIFIED}. They are counted in none of the four groups "
+            "and in no `other`, so the headline and the breakdown stop reconciling. Give the new windowed "
+            "rule a `translated_from` that resolves, or a product."
+        )
+
     if failures:
-        print("project-stats: README disagrees with the tree\n", file=sys.stderr)
+        print("project-stats: the tree disagrees with what is published\n", file=sys.stderr)
         for f in failures:
             print(f"  {f}", file=sys.stderr)
         print("\nRe-run `make stats` and correct the README.\n", file=sys.stderr)
         return 1
     print("project-stats: OK — every checked README figure matches the tree")
+    print(
+        f"project-stats: cloud/identity/SaaS/code conditions {measured} "
+        f"(floor {SCENARIO_FLOOR}, depth plan 3.6 target {SCENARIO_TARGET}"
+        + (f", {SCENARIO_TARGET - measured} short)" if measured < SCENARIO_TARGET else ", met)")
+    )
     return 0
 
 

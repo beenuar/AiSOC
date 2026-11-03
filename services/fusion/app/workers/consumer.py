@@ -30,6 +30,7 @@ from app.services.scale_hint import compute as compute_scale_hint
 from app.services.sessions import DERIVED_IDLE_SECONDS, SessionRef, SessionStore
 from app.services.tenant_overlay import OverlayCache
 from app.services.ueba_signal import UebaSignalCache
+from app.services.weak_signals import build_alert as weak_signal_alert
 from app.services.windowed_detection import WindowedDetectionEngine
 
 logger = structlog.get_logger()
@@ -148,6 +149,9 @@ class FusionWorker:
         windowed_detector: WindowedDetectionEngine | None = None,
         first_seen: Any | None = None,
         baselines: Any | None = None,
+        long_horizon: Any | None = None,
+        api_behaviour: Any | None = None,
+        weak_signals: Any | None = None,
         ueba_cache: UebaSignalCache | None = None,
         overlays: OverlayCache | None = None,
         sessions: SessionStore | None = None,
@@ -173,6 +177,18 @@ class FusionWorker:
         self._first_seen = first_seen
         #: Depth plan 3.4 behavioural baselines, computed in CORE.
         self._baselines = baselines
+        #: Wave 2 item 2.2 — distinct source networks per account over weeks.
+        #: A fourth store beside the three above because a day is the windowed
+        #: engine's longest window, and an attack spread deliberately below an
+        #: hourly threshold is invisible to every one of the others.
+        self._long_horizon = long_horizon
+        #: Wave 2 item 2.4 — access-log shape per endpoint. Off per tenant, so
+        #: a deployment that ingests no access logs pays one membership test.
+        self._api_behaviour = api_behaviour
+        #: Wave 2 item 2.3 — several unalarming signals becoming one finding.
+        #: Unlike the four above this does not publish derived fields; it
+        #: returns findings the worker promotes, like the windowed engine.
+        self._weak_signals = weak_signals
         self._ueba_cache = ueba_cache
         #: Depth 6.1 — the observed AI estate. Optional in the same sense the
         #: lake writer is: a deployment that passes nothing behaves exactly
@@ -859,11 +875,35 @@ class FusionWorker:
             # {tenant}:{entity}:{tactic} for the console, which is where the
             # N-into-1 view belongs.
             if self._detector is not None:
-                for hit in await self._detector.evaluate_async(payload, overlay, self._first_seen, self._baselines):
+                # Wave 2 items 2.2 and 2.4 join first-seen and baselines as
+                # stores whose derived fields enter the namespace before the
+                # corpus runs. Each is independent: a deployment passing none
+                # of them evaluates exactly the corpus it did before.
+                context = await self._detector.context_fields(
+                    payload,
+                    first_seen=self._first_seen,
+                    baselines=self._baselines,
+                    long_horizon=self._long_horizon,
+                    api_behaviour=self._api_behaviour,
+                )
+                for hit in self._detector.evaluate(payload, overlay, _extra_fields=context):
                     det_alert = self._detector.build_alert(payload, hit)
                     if det_alert is not None:
                         _METRICS["detected"] += 1
                         await self._fuse_and_persist(det_alert, source_event_id=validation.source_event_id, session=session)
+
+                # Wave 2 item 2.3 — the signals that are each too weak to be a
+                # rule. Fed the *same* namespace the corpus just saw, because
+                # it reads the first-seen novelty booleans and the baseline
+                # deviation scores computed directly above; recomputing them
+                # here is how two readers of one event come to disagree.
+                if self._weak_signals is not None:
+                    await self._aggregate_weak_signals(
+                        payload,
+                        context,
+                        source_event_id=validation.source_event_id,
+                        session=session,
+                    )
 
             # Wave 2 — stateful/windowed detections (brute force, spray, scans)
             # count this event into its sliding window and fire once on threshold.
@@ -937,6 +977,41 @@ class FusionWorker:
                 return
 
         await self._fuse_and_persist(alert, source_event_id=validation.source_event_id, session=session)
+
+    async def _aggregate_weak_signals(
+        self,
+        payload: dict[str, Any],
+        context: dict[str, Any],
+        *,
+        source_event_id: str | None = None,
+        session: SessionRef | None = None,
+    ) -> None:
+        """Accumulate item 2.3's weak signals and promote any finding.
+
+        Advisory, like the AI-estate recorder: an aggregator that cannot
+        reach Redis must not cost the event its detections, so a failure is
+        logged and the event continues. The alternative -- letting it raise
+        -- would make an optional enrichment able to stall the pipeline.
+        """
+        if self._detector is None or self._weak_signals is None:
+            return
+        tenant = str(payload.get("tenant_id") or (payload.get("ocsf_event") or {}).get("tenant_uid") or "")
+        if not tenant:
+            return
+        fields = self._detector.namespace(payload, context)
+        if not fields:
+            return
+        try:
+            findings = await self._weak_signals.observe(tenant, fields)
+        except Exception as exc:  # noqa: BLE001 - advisory enrichment, detections are not
+            logger.warning("fusion.weak_signals_failed", error=str(exc)[:200])
+            return
+        for finding in findings:
+            alert = weak_signal_alert(payload, fields, finding)
+            if alert is None:
+                continue
+            _METRICS["detected"] += 1
+            await self._fuse_and_persist(alert, source_event_id=source_event_id, session=session)
 
     async def _fuse_and_persist(self, alert: RawAlert, *, source_event_id: str | None = None, session: SessionRef | None = None) -> None:
         """Run one RawAlert through fusion, persist it, then publish it.

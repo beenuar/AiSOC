@@ -1,0 +1,24 @@
+id: det-cloud-195
+name: GCP Service Account Created
+description: A new non-human identity. Routine during provisioning, and the first step of persistence
+  when it is not.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1136
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: iam
+detection:
+  condition: |
+    method_name == "google.iam.admin.v1.CreateServiceAccount"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

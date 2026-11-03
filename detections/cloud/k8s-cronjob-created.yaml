@@ -1,0 +1,24 @@
+id: det-cloud-292
+name: Kubernetes CronJob Created
+description: A CronJob is scheduled execution that survives every pod restart.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1053.003
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    k8s_verb == "create"
+    AND k8s_resource == "cronjobs"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'
