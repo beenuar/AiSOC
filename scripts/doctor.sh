@@ -521,8 +521,14 @@ fi
 # clean here. `tests/test_doctor_service_coverage.py` compares it against the
 # CORE profile in both directions, so the next service added to CORE cannot
 # quietly skip the check.
+#
+# Two of these paths are not `/health`, and both were verified against a
+# running stack rather than assumed. The connectors service mounts its health
+# route under `/api/v1`, so `/health` there is a 404 — a probe that reports a
+# working service as broken is worse than no probe, because it teaches the
+# operator to skim this output.
 for spec in "3000 web 3000 /" "8086 realtime 4000 /health" "8001 agents 8084 /health" \
-            "8088 connectors 8003 /health" "8002 actions 8085 /health" \
+            "8088 connectors 8003 /api/v1/health" "8002 actions 8085 /health" \
             "8005 threatintel 8005 /health" "6333 qdrant 6333 /readyz" \
             "4000 litellm 4000 /health/liveliness" "11434 ollama 11434 /api/tags"; do
   # shellcheck disable=SC2086 # deliberate word splitting of a fixed 4-field spec
@@ -530,8 +536,13 @@ for spec in "3000 web 3000 /" "8086 realtime 4000 /health" "8001 agents 8084 /he
   if svc_running "$name"; then
     base="$(svc_base_url "$name" "$cport" "http://localhost:${port}")"
     code="$(http_ok "${base}${path}" 6)"
-    if [ "$code" = "200" ] || [ "$code" = "204" ]; then pass "$name healthy"
-    else warn "$name is running but ${base}${path} returned $code" "$COMPOSE_HINT logs $name | tail -30"; fi
+    # 3xx counts. The console's `/` redirects an unauthenticated visitor to
+    # `/login`, which is the console working — reporting that as a fault was
+    # a false alarm on every healthy deployment.
+    case "$code" in
+      200|204|30[1278]) pass "$name healthy" ;;
+      *) warn "$name is running but ${base}${path} returned $code" "$COMPOSE_HINT logs $name | tail -30" ;;
+    esac
   else
     warn "$name is not running" "$COMPOSE_HINT up -d $name"
   fi
