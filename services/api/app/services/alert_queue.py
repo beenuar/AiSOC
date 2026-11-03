@@ -42,6 +42,7 @@ from app.models.asset import Asset, AssetVulnerability
 from app.models.sla import TenantSLAConfig
 from app.services import sla_events
 from app.services.alert_priority import AssetContext, IdentityContext, score_alert_priority
+from app.services.alert_status import RESOLVED_STATUSES
 from app.services.sla import DEFAULT_SLA_TARGETS
 
 # Severities that show up in the *unassigned* bucket of the queue.
@@ -52,12 +53,12 @@ QUEUE_UNASSIGNED_SEVERITIES: tuple[str, ...] = ("critical", "high")
 # Alert statuses that *exit* the queue. Anything in this set is
 # considered done — claim/snooze/assign must not return it to the
 # queue, and the queue endpoint hides it.
-QUEUE_CLOSED_STATUSES: tuple[str, ...] = (
-    "resolved",
-    "closed",
-    "false_positive",
-    "fp",
-)
+#
+# Read from `alert_status` rather than retyped: a fourth copy of "which
+# states mean finished" is a fourth thing to forget to update, and the copy
+# here already omitted `dismissed`, so a dismissed case's alerts stayed in
+# the queue forever.
+QUEUE_CLOSED_STATUSES: tuple[str, ...] = RESOLVED_STATUSES
 
 # Maximum page size for the queue endpoint. The workbench paginates
 # locally; this cap exists to keep one bad client from yanking

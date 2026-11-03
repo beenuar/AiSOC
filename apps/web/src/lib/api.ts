@@ -4017,7 +4017,28 @@ export const oauthApi = {
 
 // ─── Threat Intel ─────────────────────────────────────────────────────────────
 
-export type IndicatorType = "ip" | "domain" | "hash" | "url" | "email";
+/**
+ * The indicator kinds the console renders a badge for.
+ *
+ * `vulnerability` is in this list because it is what the one real feed a
+ * default install ships — the CISA KEV catalogue — emits, and leaving it
+ * out badged all 1,766 of its CVEs as IPs.
+ *
+ * The union is deliberately open. `type` arrives from a feed payload and
+ * the threat-intel service does not constrain it, so a closed union would
+ * be a claim about other people's data: a loader added tomorrow emits
+ * whatever it emits, and the console's job is to render that honestly
+ * rather than to coerce it into the nearest known value.
+ */
+export type KnownIndicatorType =
+  | "ip"
+  | "domain"
+  | "hash"
+  | "url"
+  | "email"
+  | "vulnerability";
+
+export type IndicatorType = KnownIndicatorType | (string & {});
 
 /**
  * A canonical threat indicator surfaced by the threatintel service.

@@ -40,7 +40,7 @@ from app.models.alert import Alert
 from app.models.case import Case
 from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
-from app.services.alert_status import UNRESOLVED_STATUSES
+from app.services.alert_status import unresolved_filter
 from app.services.case_status import OPEN_STATUSES
 
 _AGENTS_URL = os.getenv("AGENTS_SERVICE_URL") or os.getenv("AGENTS_API_URL", "http://agents:8084")
@@ -424,7 +424,7 @@ class Query:
         # have no status predicate at all, so a GraphQL consumer saw the
         # tenant's entire historical intake labelled as current state.
         total_alerts = (
-            await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid, Alert.status.in_(UNRESOLVED_STATUSES)))
+            await db.execute(select(func.count()).select_from(Alert).where(Alert.tenant_id == tid, unresolved_filter(Alert.status)))
         ).scalar_one()
         # `["open", "in_progress"]` -- neither of which the case vocabulary
         # contains, and the `aisoc_cases` CHECK forbids both. This count was
@@ -441,7 +441,7 @@ class Query:
                 .where(
                     Alert.tenant_id == tid,
                     Alert.severity == "critical",
-                    Alert.status.in_(UNRESOLVED_STATUSES),
+                    unresolved_filter(Alert.status),
                 )
             )
         ).scalar_one()

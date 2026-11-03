@@ -27,6 +27,7 @@ on:
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
       - "scripts/check_one_case_table.py"
+      - "scripts/check_alert_status_vocabulary.py"
       - "scripts/check_orphan_tables.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
@@ -52,6 +53,7 @@ on:
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
       - "scripts/check_one_case_table.py"
+      - "scripts/check_alert_status_vocabulary.py"
       - "scripts/check_orphan_tables.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
@@ -217,6 +219,15 @@ jobs:
 
       - name: One case table, and one status vocabulary
         run: python scripts/check_one_case_table.py
+
+      # The alert half of the same defect, and the worse one: `triaged` was
+      # written by the auto-triage worker and classified by nobody, so every
+      # tile on the dashboard read 0 for a tenant with nine open alerts.
+      - name: Alert-status vocabulary gate self-test (the defect, and two near misses)
+        run: python scripts/check_alert_status_vocabulary.py --self-test
+
+      - name: No worker writes an alert status that no reader classifies
+        run: python scripts/check_alert_status_vocabulary.py
 
       # Module reachability answers "does anything import this file" and
       # cannot answer the question stored state turns on: which code path

@@ -38,7 +38,7 @@ from app.models.connector import Connector
 from app.models.detection_rule import DetectionRule
 from app.models.remediation import RemediationGateLog
 from app.services import case_status
-from app.services.alert_status import RESOLVED_STATUSES, UNRESOLVED_STATUSES
+from app.services.alert_status import resolved_filter, unresolved_filter
 from app.services.resolution_time import (
     MTTR_WINDOW,
     tenant_case_mttr_minutes,
@@ -281,11 +281,19 @@ async def _count_alerts_by_status(db, tenant_id) -> dict[str, int]:
     tile being the odd one out is exactly how one rule written five times
     drifts: each site looks locally correct.
 
+    Centralising it was necessary and not sufficient: the shared tuple was an
+    *inclusion* list of three states, so `triaged` -- written by the
+    auto-triage worker on every alert it looks at -- landed in neither bucket
+    and every tile here read 0 on a nine-alert queue. The predicate is now
+    `unresolved_filter`, i.e. "not terminal", which is the same rule
+    `is_unresolved()` applies and the reason a status nobody declared still
+    counts as work.
+
     `resolved` is returned alongside rather than dropped. Narrowing the active
     tile must not lose the number, because "how much did we close" is a real
     question.
     """
-    unresolved = Alert.status.in_(UNRESOLVED_STATUSES)
+    unresolved = unresolved_filter(Alert.status)
     scope = Alert.tenant_id == tenant_id
 
     async def _n(*predicates) -> int:
@@ -293,7 +301,7 @@ async def _count_alerts_by_status(db, tenant_id) -> dict[str, int]:
 
     return {
         "open": await _n(unresolved),
-        "resolved": await _n(Alert.status.in_(RESOLVED_STATUSES)),
+        "resolved": await _n(resolved_filter(Alert.status)),
         "new": await _n(Alert.status == "new"),
         "critical": await _n(unresolved, Alert.severity == "critical"),
         "high": await _n(unresolved, Alert.severity == "high"),
@@ -1155,14 +1163,17 @@ async def _funnel_window(db, tenant_id, start, end, *, mitre_total: int) -> dict
     mttd_seconds = round(float(mttd_seconds_raw or 0.0), 2)
 
     # Analyst queue depth = open alerts (snapshot, not window-bound) that an
-    # analyst would see in their queue right now: status in {new, triaging,
-    # in_progress} and no disposition.
+    # analyst would see in their queue right now: not in a terminal state and
+    # no disposition. The predicate is the shared one rather than a fourth
+    # hand-written copy -- this site named three states and missed `triaged`,
+    # which is what let the funnel and the dashboard tile disagree about the
+    # same rows on one screen.
     analyst_queue_depth = (
         await db.scalar(
             select(func.count()).where(
                 and_(
                     Alert.tenant_id == tenant_id,
-                    Alert.status.in_(("new", "triaging", "in_progress")),
+                    unresolved_filter(Alert.status),
                     Alert.disposition.is_(None),
                 )
             )
