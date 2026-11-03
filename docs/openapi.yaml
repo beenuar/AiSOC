@@ -12791,7 +12791,7 @@ paths:
       - responder
       - approvals
       summary: Create Approval
-      description: 'Create a new approval request.
+      description: 'Create a new approval request. Requires `approvals:write`.
 
 
         The agents service calls this when it hits a high-risk step that
@@ -12866,7 +12866,14 @@ paths:
 
         approved request returns the row unchanged; trying to flip an
 
-        approved row to denied (or vice versa) is a 409.'
+        approved row to denied (or vice versa) is a 409.
+
+
+        Separation of duties, the named approver and the approval window are each
+
+        enforced; a requester cannot approve their own request, and an elapsed
+
+        approval can be denied but not approved.'
       operationId: decide_approval_api_v1_approvals__approval_id__decide_post
       security:
       - HTTPBearer: []
@@ -16440,6 +16447,95 @@ paths:
           description: Successful Response
       security:
       - HTTPBearer: []
+  /api/v1/triage-questions:
+    get:
+      tags:
+      - triage-questions
+      summary: List Triage Questions
+      description: Every question this tenant has declared, enabled or not.
+      operationId: list_triage_questions_api_v1_triage_questions_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/QuestionOut'
+                type: array
+                title: Response List Triage Questions Api V1 Triage Questions Get
+      security:
+      - HTTPBearer: []
+    post:
+      tags:
+      - triage-questions
+      summary: Upsert Triage Question
+      description: 'Declare a question, or update the one with the same lookup.
+
+
+        Upsert rather than insert, because the table''s own uniqueness is
+
+        ``(tenant_id, alert_type, field, op)``: two identical lookups under
+
+        different labels would both be answered and both rendered, which reads to
+
+        an analyst as corroboration from one fact. Re-posting a lookup therefore
+
+        edits its label rather than raising.'
+      operationId: upsert_triage_question_api_v1_triage_questions_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuestionIn'
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuestionOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/triage-questions/{question_id}:
+    delete:
+      tags:
+      - triage-questions
+      summary: Delete Triage Question
+      description: 'Remove a question.
+
+
+        404 and not 403 on another tenant''s id: a 403 would make this route an
+
+        existence oracle over every tenant''s question ids, byte-identical to a
+
+        genuine miss.'
+      operationId: delete_triage_question_api_v1_triage_questions__question_id__delete
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: question_id
+        in: path
+        required: true
+        schema:
+          type: string
+          title: Question Id
+      responses:
+        '204':
+          description: Successful Response
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/business-context/rules:
     get:
       tags:
@@ -31611,6 +31707,14 @@ components:
         mttd_seconds:
           type: number
           title: Mttd Seconds
+        signal_to_noise_sample_count:
+          type: integer
+          title: Signal To Noise Sample Count
+          default: 0
+        mttd_sample_count:
+          type: integer
+          title: Mttd Sample Count
+          default: 0
         analyst_queue_depth:
           type: integer
           title: Analyst Queue Depth
@@ -31681,15 +31785,23 @@ components:
 
         All counts are absolute for ``period``. ``signal_to_noise`` is the
 
-        fraction of *resolved* alerts that ended in disposition ``true_positive``
+        fraction of *decided* verdicts that ended in disposition
 
-        (i.e. signal / (signal + noise)). ``mttd_seconds`` mirrors /metrics/soc''s
+        ``true_positive`` (i.e. signal / (signal + noise)); alerts the agent
 
-        MTTD definition (Alert.created_at → Alert.first_seen_at) but expressed in
+        abstained on with ``needs_review`` are in neither half, because scoring
 
-        seconds for funnel-level precision. ``deltas`` compares this period to the
+        an agent on questions it refused to answer is not an accuracy figure.
 
-        immediately preceding period of the same length.'
+        ``mttd_seconds`` mirrors /metrics/soc''s MTTD definition
+
+        (Alert.created_at → Alert.first_seen_at) but expressed in seconds for
+
+        funnel-level precision. Each of those two travels with the count of rows
+
+        it was computed over -- read them as a pair. ``deltas`` compares this
+
+        period to the immediately preceding period of the same length.'
     GateLogOut:
       properties:
         id:
@@ -37839,6 +37951,86 @@ components:
       - rows
       - total_rows
       title: QueryResult
+    QuestionIn:
+      properties:
+        alert_type:
+          type: string
+          maxLength: 200
+          title: Alert Type
+          description: '''*'' matches every alert type'
+          default: '*'
+        label:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Label
+          description: Free text for the analyst. Never interpreted.
+        field:
+          type: string
+          maxLength: 200
+          title: Field
+        op:
+          type: string
+          title: Op
+        value:
+          title: Value
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+      type: object
+      required:
+      - label
+      - field
+      - op
+      title: QuestionIn
+    QuestionOut:
+      properties:
+        alert_type:
+          type: string
+          maxLength: 200
+          title: Alert Type
+          description: '''*'' matches every alert type'
+          default: '*'
+        label:
+          type: string
+          maxLength: 200
+          minLength: 1
+          title: Label
+          description: Free text for the analyst. Never interpreted.
+        field:
+          type: string
+          maxLength: 200
+          title: Field
+        op:
+          type: string
+          title: Op
+        value:
+          title: Value
+        enabled:
+          type: boolean
+          title: Enabled
+          default: true
+        id:
+          type: string
+          title: Id
+        created_at:
+          type: string
+          format: date-time
+          title: Created At
+        updated_at:
+          type: string
+          format: date-time
+          title: Updated At
+      type: object
+      required:
+      - label
+      - field
+      - op
+      - id
+      - created_at
+      - updated_at
+      title: QuestionOut
     QueueAction:
       properties:
         priority:
@@ -39703,6 +39895,10 @@ components:
         analyst_overrides_7d:
           type: integer
           title: Analyst Overrides 7D
+        ai_dispositions_7d:
+          type: integer
+          title: Ai Dispositions 7D
+          default: 0
         mttd_sample_count:
           type: integer
           title: Mttd Sample Count

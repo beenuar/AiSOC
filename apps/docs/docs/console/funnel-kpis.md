@@ -113,7 +113,9 @@ Returns:
   "correlation_instances": 73515,
   "alerts_generated": 153,
   "signal_to_noise": 0.864,
+  "signal_to_noise_sample_count": 118,
   "mttd_seconds": 252,
+  "mttd_sample_count": 96,
   "analyst_queue_depth": 27,
   "correlation_efficiency": 0.777,
   "alert_yield": 0.00208,
@@ -137,6 +139,24 @@ Returns:
   "generated_at": "2026-05-13T10:00:00Z"
 }
 ```
+
+#### Denominators
+
+A ratio over an empty denominator and a mean over no rows are both
+*undefined*, and both used to publish `0.0` here. The console rendered
+"Signal / Noise 0%" and "MTTD 0s" on a tenant where nobody had dispositioned
+or acknowledged anything — directly above a SOC Performance card correctly
+reading "MTTD — not measured · no closures in 7d".
+
+The two values stay `0.0` on the wire, because making them nullable is a
+breaking change for every generated client. The denominator travels beside
+each one instead, which is the same decision `/metrics/soc` took with
+`mttd_sample_count`. **Read them as a pair.**
+
+| Field | Meaning | What a bad value looks like |
+|-------|---------|------------------------------|
+| `signal_to_noise_sample_count` | Alerts in the window with a *decided* verdict — the denominator `signal_to_noise` divided by. Abstentions (`needs_review`) are excluded: scoring an agent on questions it refused to answer is not an accuracy figure. | Zero. The ratio above it is then not 0%, it is unmeasured, and the console renders "not measured". A count far below `triaged_alerts` means most verdicts were abstentions. |
+| `mttd_sample_count` | Alerts in the window that have been acknowledged, i.e. that have a `first_seen_at` — the rows `mttd_seconds` averaged. | Zero, which is the ordinary state on a fresh deployment: nothing in the pipeline writes `first_seen_at`, and its only writers are analyst actions. A zero here means nobody has opened an alert, not that detection is instantaneous. |
 
 #### Suppression and triage-quality fields
 
@@ -165,7 +185,7 @@ Key implementation notes (`services/api/app/api/v1/endpoints/metrics.py`):
 - Tenant-scoped via `AuthUser`; every query joins on `tenant_id` or — for ClickHouse — passes through `services/api/app/services/lake_sql.py:rewrite_for_tenant` which uses `sqlglot` to enforce the tenant clause before the query reaches the lake.
 - `events_of_interest` reads from ClickHouse `aisoc.raw_events` when the lake is enabled, with a Postgres-only fallback (alerts table count) for air-gapped deployments where `AISOC_DISABLE_CLICKHOUSE=1`.
 - `mttd_seconds` reuses the exact same `AVG(EXTRACT EPOCH FROM (created_at - first_seen_at))` expression as the existing SOC metrics endpoint so the two never disagree.
-- `signal_to_noise` is `1 − (FP count / total dispositioned)` — alerts with `disposition` in `false_positive` divided by alerts with any disposition. Returns `0.0` when there is no dispositioned alert (no work done yet).
+- `signal_to_noise` is true positives over alerts with a **decided** verdict (`true_positive`, `benign_true_positive`, `false_positive`, `benign`, `duplicate`). `needs_review` is the agent declining to decide and is in neither half. The predicate is `app/services/alert_disposition.py`'s, shared with `/metrics/soc` and `/dashboards/soc-insights`, which each used to ask this question with a different filter and get a different answer. Returns `0.0` with a `signal_to_noise_sample_count` of 0 when nothing has been decided — that pair means unmeasured, not zero.
 - **Deltas are signed percentages, not fractions: `5.0` means +5%.** `_pct_delta` multiplies by 100 and rounds to two decimals before returning, so a run that fell from 160 events to 10 sends `-93.75`. This page said the opposite for several releases and the console believed it, multiplying by 100 a second time and rendering `-9375%` on the first tile of the dashboard. Scale comes from the contract, never the magnitude — a real +1% delta and a fraction of `1.0` are the same number, so "it looks small, it must be a fraction" is a guess that is right until it is catastrophically not.
 - A delta of exactly `0.0` means **no meaningful baseline** (the previous window was empty), not "no change". The previous-period window is the same duration immediately before the current one.
 - `deltas` covers the six tiles only. The suppression and triage-quality fields have no delta, because a period-over-period change in, say, `mean_groundedness` reads as a trend when it is usually a change in which alerts happened to arrive.

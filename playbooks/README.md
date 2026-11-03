@@ -128,6 +128,26 @@ the "wait" was a single false evaluation, and no endpoint ever existed to flip
 the flag. A playbook written that way ran straight through its gate into
 whatever it was gating.
 
+Documenting that was not enough. Three packs — `ato-impossible-travel-block`,
+`ato-mfa-fatigue-response` and `bec-vendor-payment-redirect` — shipped with a
+`condition` named "Wait for human approval" anyway, because they were all
+generated from one helper in `scripts/generate_playbooks.py` that nobody
+re-read after the rule changed. A live run of the first reached
+`status: completed` with that step producing no result and `Force password
+reset` running immediately after it. `scripts/check_playbook_approval_gates.py`
+now compares the promise in a step's *name* against its type, over the pack
+and the copy vendored into the agents image.
+
+Two details the gate also enforces, because each is a way past the gate:
+
+* **`on_failure` must be `abort`.** When the pause cannot be written the
+  engine deliberately falls through and fails the step; `continue` then runs
+  the action the gate exists to hold. A preview is unaffected — a dry run
+  answers SUCCESS for an approval step.
+* **The gated action comes immediately next.** An approval step takes no
+  `next_true`: the pause stores its position and a resumed run continues at
+  the following step.
+
 ### Rollback
 
 Rollback is modelled by pairing every containment action with a

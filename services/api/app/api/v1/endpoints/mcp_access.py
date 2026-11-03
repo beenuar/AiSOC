@@ -55,7 +55,7 @@ from typing import Annotated, Any
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.api.v1.deps import AuthUser, require_permission
 from app.db.rls import TenantDBSession
@@ -190,6 +190,11 @@ async def authorize_tool_call(
         arguments=body.arguments,
         has_permission=permits,
         requested_by=current_user.api_key_prefix or current_user.email,
+        # The person, beside the label. `user_id` is the key's *owning* user
+        # on the API-key path, so one human is one id whichever credential
+        # they present -- which is what separation of duties needs and what
+        # the label could never give it (GHSA-xhmc-69rh-h3rr, F10).
+        requested_by_user_id=current_user.user_id,
     )
 
     await emit_audit(
@@ -395,6 +400,42 @@ async def list_approvals(
     ]
 
 
+async def claim_decision(
+    db: Any,
+    *,
+    approval_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    state: str,
+    actor: str,
+    note: str,
+) -> uuid.UUID | None:
+    """Write a decision onto a still-pending approval. ``None`` if it moved.
+
+    One conditional ``UPDATE``, not a read-then-write (GHSA-xhmc-69rh-h3rr,
+    F11). The decision used to be a ``SELECT``, a ``row.state != "pending"``
+    test in Python, and an ORM write. The read took no lock, so two concurrent
+    decisions both passed the guard and both committed -- an approve and a
+    deny were each accepted on one request, and the row kept whichever landed
+    last. Narrowing the statement by the state it expects means the loser
+    matches no row and is told so.
+
+    ``rowcount`` rather than ``RETURNING``: this is the same statement on
+    SQLite, which the offline suite runs on, and the count is the portable
+    answer to the only question here -- did this caller take the decision.
+    """
+    result = await db.execute(
+        update(McpToolApproval)
+        .where(
+            McpToolApproval.id == approval_id,
+            McpToolApproval.tenant_id == tenant_id,
+            McpToolApproval.state == "pending",
+        )
+        .values(state=state, decided_by=actor, decided_at=datetime.now(UTC), decision_note=note)
+        .execution_options(synchronize_session=False)
+    )
+    return approval_id if result.rowcount == 1 else None
+
+
 @router.post("/approvals/{approval_id}/decide", response_model=McpApprovalModel)
 async def decide_approval(
     approval_id: uuid.UUID,
@@ -419,21 +460,63 @@ async def decide_approval(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Approval {approval_id} is already {row.state}.",
         )
+
     # Separation of duties, the same rule the response-action queue follows:
-    # the caller who asked cannot be the caller who agrees. `requested_by` is
-    # the key prefix or the email, whichever authenticated the request.
-    requester = row.requested_by
+    # the caller who asked cannot be the caller who agrees.
+    #
+    # Compared on the **person**, not on `requested_by`. That column holds
+    # `api_key_prefix or email` -- whichever credential authenticated the
+    # request -- so a single human who requested a call through their own API
+    # key and then opened the console appeared as two different strings and
+    # the check passed (GHSA-xhmc-69rh-h3rr, F10). `user_id` is the key's
+    # owning user on the key path and the signed-in user on the session path,
+    # so it is one id for one human either way.
     actor = current_user.api_key_prefix or current_user.email
-    if requester and requester == actor:
+    if row.requested_by_user_id is not None:
+        if row.requested_by_user_id == current_user.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "The principal that requested this call cannot approve it, whichever credential they present (separation of duties)."
+                ),
+            )
+    elif row.requested_by and row.requested_by == actor:
+        # Pre-158 rows carry no requester id. The label comparison is all
+        # there is, and it is kept rather than dropped: it catches the
+        # same-credential case, which is better than nothing. Recorded as
+        # unevaluated below so the row does not read as a check that passed.
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="The principal that requested this call cannot approve it.",
         )
 
-    row.state = "approved" if body.approve else "denied"
-    row.decided_by = actor
-    row.decided_at = datetime.now(UTC)
-    row.decision_note = body.note
+    decided_state = "approved" if body.approve else "denied"
+    claimed = await claim_decision(
+        db,
+        approval_id=approval_id,
+        tenant_id=current_user.tenant_id,
+        state=decided_state,
+        actor=actor,
+        note=body.note or "",
+    )
+    if claimed is None:
+        # Somebody decided it between the read above and this statement.
+        # Re-read so the conflict names the decision that won rather than the
+        # one this caller tried to take.
+        await db.rollback()
+        current = (
+            await db.execute(
+                select(McpToolApproval).where(
+                    McpToolApproval.id == approval_id,
+                    McpToolApproval.tenant_id == current_user.tenant_id,
+                )
+            )
+        ).scalar_one_or_none()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"Approval {approval_id} was decided concurrently and is now {current.state if current else 'gone'}."),
+        )
+    await db.refresh(row)
 
     await emit_audit(
         db=db,

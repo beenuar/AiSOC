@@ -341,7 +341,12 @@ describe('a mean over no samples is unmeasured, not zero', () => {
     // Exactly the two rate tiles; the three means have samples here, so a
     // count of two also proves the change did not blank anything else.
     expect(screen.getAllByText(/not measured/i).length).toBe(2);
-    expect(screen.getByText(/no resolved alerts in 7d/i)).toBeTruthy();
+    // "decided verdicts", not "resolved alerts": the denominator counts
+    // alerts somebody reached a conclusion about. It read `disposition IS
+    // NOT NULL`, which the auto-triage worker sets on everything it looks
+    // at, so the card said "over 5 resolved alerts" on a tenant that had
+    // resolved nothing and whose five dispositions were all `needs_review`.
+    expect(screen.getByText(/no decided verdicts in 7d/i)).toBeTruthy();
     expect(screen.getByText(/no gate decisions in 7d/i)).toBeTruthy();
     expect(screen.queryByText('0.0%')).toBeNull();
   });
@@ -362,7 +367,7 @@ describe('a mean over no samples is unmeasured, not zero', () => {
     render(<SOCMetricsDashboard />);
 
     expect(screen.getByText('25.0%')).toBeTruthy();
-    expect(screen.getByText(/over 8 resolved alerts in 7d/i)).toBeTruthy();
+    expect(screen.getByText(/over 8 decided verdicts in 7d/i)).toBeTruthy();
     expect(screen.getByText('50.0%')).toBeTruthy();
     expect(screen.getByText(/over 4 gate decisions in 7d/i)).toBeTruthy();
   });

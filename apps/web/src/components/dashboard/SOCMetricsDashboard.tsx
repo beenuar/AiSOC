@@ -377,7 +377,7 @@ export function SOCMetricsDashboard() {
             label="False Positive Rate"
             rate={kpis?.false_positive_rate}
             sampleCount={kpis?.false_positive_rate_sample_count}
-            denominatorLabel="resolved alerts"
+            denominatorLabel="decided verdicts"
             warnAbove={0.3}
             cautionAbove={0.15}
             window="7d"
@@ -399,6 +399,17 @@ export function SOCMetricsDashboard() {
             label="Analyst Overrides (7d)"
             value={kpis?.analyst_overrides_7d ?? "—"}
             color="text-blue-400"
+            // An override is a human disagreeing with the agent. This
+            // counted every alert carrying a disposition, which the
+            // auto-triage worker writes on everything it looks at, so a
+            // deployment where nobody had clicked anything reported nine.
+            // The hint names the other number so a zero here does not read
+            // as "nothing happened".
+            hint={
+              kpis?.ai_dispositions_7d === undefined
+                ? undefined
+                : `${kpis.ai_dispositions_7d} AI disposition${kpis.ai_dispositions_7d === 1 ? "" : "s"} not overridden`
+            }
           />
         </div>
       )}

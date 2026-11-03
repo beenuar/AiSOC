@@ -107,7 +107,7 @@
         "auto_approve_severity": ["critical"]
       },
       "condition": "inputs.destination_ip != null",
-      "on_failure": "continue",
+      "on_failure": "abort",
       "retry_max": 0,
       "timeout_seconds": 320
     },
@@ -135,7 +135,7 @@
         "timeout_seconds": 600,
         "auto_approve_severity": ["critical"]
       },
-      "on_failure": "continue",
+      "on_failure": "abort",
       "retry_max": 0,
       "timeout_seconds": 620
     },

@@ -11,6 +11,11 @@
  *   3. Alerts Generated            (24h delta)
  *   4. Signal / Noise              (24h delta — higher is better)
  *   5. MTTD                        (24h delta — lower is better)
+ *
+ * Tiles 4 and 5 are a ratio and a mean, so each is read together with the
+ * denominator the server sends beside it. Both used to publish an undefined
+ * value as a confident zero -- "Signal / Noise 0%" and "MTTD 0s" -- on the
+ * same screen as a SOC card correctly saying "MTTD — not measured".
  *   6. Analyst Queue Depth         (24h delta — lower is better)
  *
  * Data source: `GET /api/v1/metrics/funnel?period=…` ({@link metricsApi.getFunnel}).
@@ -34,6 +39,16 @@ interface TileProps {
   label: string;
   value: string;
   delta: number | null;
+  /**
+   * Rows behind `value`. `0` renders the tile as "not measured" instead of
+   * the figure, because a ratio over an empty denominator and a mean over
+   * no rows are both undefined, and this strip published them as 0% and 0s
+   * directly above a SOC card correctly reading "MTTD — not measured".
+   *
+   * `undefined` means the server did not send a count — an older API — and
+   * leaves the tile exactly as it was.
+   */
+  sampleCount?: number;
   /**
    * When `true`, a *negative* delta is rendered green (good) and positive is red
    * (worse). When `false`, positive is green. Mirrors the reference console's
@@ -91,7 +106,8 @@ function formatDelta(deltaPercent: number | null): string {
   return `${sign}${Math.abs(Number(rounded))}%`;
 }
 
-function Tile({ label, value, delta, lowerIsBetter = false, unit }: TileProps) {
+function Tile({ label, value, delta, lowerIsBetter = false, unit, sampleCount }: TileProps) {
+  const unmeasured = sampleCount === 0;
   const isGood =
     delta === null || delta === 0
       ? null
@@ -110,14 +126,29 @@ function Tile({ label, value, delta, lowerIsBetter = false, unit }: TileProps) {
       <p className="text-[11px] text-gray-500 font-medium uppercase tracking-wider truncate">
         {label}
       </p>
-      <p className="text-2xl font-bold text-gray-100 mt-1 tabular-nums truncate">
-        {value}
+      <p
+        className={clsx(
+          'mt-1 tabular-nums truncate',
+          unmeasured
+            ? 'text-2xl font-bold text-gray-500'
+            : 'text-2xl font-bold text-gray-100',
+        )}
+      >
+        {unmeasured ? '—' : value}
       </p>
       <div className="flex items-baseline gap-2 mt-1">
-        <span className={clsx('text-xs font-medium tabular-nums', deltaColor)}>
-          {formatDelta(delta)}
-        </span>
-        {unit && <span className="text-[11px] text-gray-600 truncate">{unit}</span>}
+        {unmeasured ? (
+          <span className="text-[11px] text-gray-500 truncate">
+            not measured{unit ? ` · no ${unit}` : ''}
+          </span>
+        ) : (
+          <>
+            <span className={clsx('text-xs font-medium tabular-nums', deltaColor)}>
+              {formatDelta(delta)}
+            </span>
+            {unit && <span className="text-[11px] text-gray-600 truncate">{unit}</span>}
+          </>
+        )}
       </div>
     </div>
   );
@@ -249,14 +280,16 @@ export function FunnelKpiBar({
           label="Signal / Noise"
           value={formatPercent(data.signal_to_noise)}
           delta={deltas.signal_to_noise}
-          unit="of dispositioned"
+          sampleCount={data.signal_to_noise_sample_count}
+          unit="decided verdicts"
         />
         <Tile
           label="MTTD"
           value={formatDurationSeconds(data.mttd_seconds)}
           delta={deltas.mttd_seconds}
+          sampleCount={data.mttd_sample_count}
           lowerIsBetter
-          unit="to first-seen"
+          unit="acknowledged alerts"
         />
         <Tile
           label="Analyst Queue"

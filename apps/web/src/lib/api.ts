@@ -3063,11 +3063,21 @@ export interface FunnelMetrics {
   events_of_interest: number;
   correlation_instances: number;
   alerts_generated: number;
-  /** 0..1 ratio: 1 − (FP / total dispositioned alerts). */
+  /** 0..1 ratio: true positives / alerts with a *decided* verdict. */
   signal_to_noise: number;
   /** Mean time-to-detect in seconds (Alert.created_at → first_seen_at). */
   mttd_seconds: number;
-  /** Active alerts owned by analysts (`status in new/triaging/in_progress`). */
+  /**
+   * The denominator behind each figure above. Zero means unmeasured, not
+   * zero: the server sends `0.0` for both rather than `null` (a breaking
+   * change for every existing client), so the pair *is* the measurement.
+   * Read them together or the tile claims a perfect signal/noise ratio and
+   * instant detection for a tenant where nobody has looked at anything.
+   * Optional so the console still works against an API that predates them.
+   */
+  signal_to_noise_sample_count?: number;
+  mttd_sample_count?: number;
+  /** Alerts that are neither terminal nor dispositioned. */
   analyst_queue_depth: number;
   /** Alerts produced per correlation instance, clamped to [0, 1]. */
   correlation_efficiency: number;
@@ -3140,7 +3150,10 @@ export interface SOCKpis {
   alert_volume_7d: number;
   cases_opened_7d: number;
   cases_closed_7d: number;
+  /** Alerts a **human** dispositioned, from the lifecycle events carrying an actor. */
   analyst_overrides_7d: number;
+  /** The agent's own dispositions over the same window. */
+  ai_dispositions_7d?: number;
   /**
    * How many rows each mean above was averaged over. Zero means the figure is
    * unmeasured rather than zero — render "not measured", not "0.0 hrs".
@@ -3153,7 +3166,9 @@ export interface SOCKpis {
    * The denominator each rate above was computed over. Zero means the rate is
    * undefined rather than 0% — a tenant that has resolved nothing has not
    * achieved a 0% false-positive rate. Optional for the same reason as the
-   * sample counts.
+   * sample counts. The false-positive denominator counts *decided* verdicts
+   * only: `needs_review` is the agent declining to decide, and a rate that
+   * counts abstentions scores it on questions it refused to answer.
    */
   false_positive_rate_sample_count?: number;
   escalation_rate_sample_count?: number;

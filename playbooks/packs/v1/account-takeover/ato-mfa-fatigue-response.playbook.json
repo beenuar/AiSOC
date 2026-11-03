@@ -75,17 +75,13 @@
     {
       "id": "approve",
       "name": "Wait for human approval",
-      "type": "condition",
-      "params": {},
-      "on_failure": "continue",
-      "retry_max": 0,
-      "timeout_seconds": 5,
-      "condition": {
-        "field": "context.approved_by_oncall",
-        "operator": "eq",
-        "value": true
+      "type": "approval",
+      "params": {
+        "prompt": "Reset every enrolled MFA factor for {{alert.user}}? They will have to re-enrol before signing in."
       },
-      "next_true": "reset-mfa"
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 920
     },
     {
       "id": "reset-mfa",

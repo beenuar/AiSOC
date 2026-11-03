@@ -2580,6 +2580,14 @@ jobs:
         run: python3 scripts/lint_playbooks.py
       - name: Schema/engine parity (both directions, with self-test)
         run: python3 scripts/check_playbook_schema_parity.py --self-test
+      - name: A step promising approval is an approval step (with self-test)
+        # Three packs modelled their gate as a `condition`, which the engine
+        # evaluates once and walks past, so a live run reached `completed`
+        # with the password reset the gate exists to hold already done.
+        # Nothing compared the promise in a step's name against its type.
+        run: |
+          python3 scripts/check_playbook_approval_gates.py --self-test
+          python3 scripts/check_playbook_approval_gates.py
       - name: Parity gate tests
         run: python3 -m pytest tests/test_playbook_schema_parity_gate.py -q
       - name: The documented upgrade command runs, and its output validates

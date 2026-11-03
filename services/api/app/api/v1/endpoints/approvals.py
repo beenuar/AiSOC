@@ -130,6 +130,15 @@ _REQUESTER_KEY = "requester_principal"
 _DISPATCH_IN_FLIGHT = "dispatching"
 #: The actions service was reached and answered.
 _DISPATCH_EXECUTED = "executed"
+#: Where the separation-of-duties verdict is recorded on the row.
+#:
+#: Mirrors ``services/actions/app/security/authz.py``, including its reasoning:
+#: a control that cannot evaluate a request must say so in the record rather
+#: than leave an omission, because afterwards "checked and passed" and "never
+#: checked" are indistinguishable.
+_SOD_KEY = "separation_of_duties"
+_SOD_ENFORCED = "enforced"
+_SOD_UNEVALUATED = "unevaluated"
 _DISPATCH_DECLINED = "declined"
 #: The actions service refused, with a reason.
 _DISPATCH_FAILED = "failed"
@@ -166,6 +175,97 @@ def _requester_principal(user: AuthUser) -> dict[str, Any]:
 def _dispatch_state(row: AgentApproval) -> str | None:
     dispatch = (row.action or {}).get("dispatch")
     return dispatch.get("state") if isinstance(dispatch, dict) else None
+
+
+def _stamped_requester_id(row: AgentApproval) -> str | None:
+    """The identity that raised this approval, or ``None`` for a legacy row.
+
+    Read from ``action.requester_principal``, which :func:`create_approval`
+    writes from authenticated context. Never from ``requested_by``, which is a
+    free-text label the caller picks -- a separation-of-duties comparison
+    against that would be forgeable from the request body, which is the exact
+    defect the actions service was fixed for.
+    """
+    requester = (row.action or {}).get(_REQUESTER_KEY)
+    if not isinstance(requester, dict):
+        return None
+    user_id = requester.get("user_id")
+    return str(user_id) if user_id else None
+
+
+def _authorize_decision(row: AgentApproval, user: AuthUser, *, approving: bool, enforce_window: bool) -> str:
+    """Decide whether this principal may take this decision, now.
+
+    ``require_permission("cases:write")`` on the route answers "may this
+    person decide approvals at all". It cannot answer the three questions
+    below, each of which is about *this* approval, and none of which was
+    asked: GHSA-q388-w896-9jr2.
+
+    One principle governs all three: **approving is the governed act, and
+    denying executes nothing.** A denial dispatches a rejection, leaves the
+    estate untouched, and is the safe default `approval_expiry` already names
+    -- so every rule here narrows who may *approve*, and leaves denial open.
+    The alternative was tried on paper and is worse: a requester who cannot
+    withdraw their own mistaken request, and an approval routed to somebody on
+    leave that nobody can clear, are both pressure to hand out wider
+    permissions than the job needs.
+
+    Returns the separation-of-duties state, for the caller to record.
+    """
+    requester_id = _stamped_requester_id(row)
+
+    # F08. The requester may not approve their own request.
+    if approving and requester_id is not None and requester_id == str(user.user_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "The principal that requested this approval cannot approve it "
+                "(separation of duties). Another holder of cases:write must decide it; "
+                "you can still deny it."
+            ),
+        )
+
+    # F09. An approval addressed to one person is answered by that person.
+    #
+    # `required_user_id` is written at create time and `list_approvals(mine=true)`
+    # filters on it, so the console already presents these as routed. Reading the
+    # column only in the list and never in the decision made the routing cosmetic.
+    if approving and row.required_user_id is not None and row.required_user_id != user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This approval is routed to a specific approver and only they can approve it. "
+                "You can deny it, or have it re-raised to a different approver."
+            ),
+        )
+
+    # F82. The window closes over approval.
+    #
+    # `enforce_window` is False when re-entering an already-decided row whose
+    # dispatch never resolved: that decision *was* taken in time, and the
+    # re-entry exists so an approval whose dispatch died is not stranded.
+    if approving and enforce_window and row.expires_at is not None:
+        deadline = row.expires_at if row.expires_at.tzinfo is not None else row.expires_at.replace(tzinfo=UTC)
+        if deadline <= datetime.now(UTC):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"This approval expired at {deadline.isoformat()} and can no longer be approved. "
+                    "Nothing was dispatched. Deny it, or raise a new approval against current evidence."
+                ),
+            )
+
+    if requester_id is None:
+        # Pre-v9 rows carry no stamp. Refusing them would strand every approval
+        # raised before the identity was recorded, during exactly the incident
+        # somebody needs to clear them in -- so this is a recorded fact, not a
+        # denial, and the row says afterwards which it was.
+        logger.warning(
+            "Approval decision: separation of duties could not be evaluated",
+            extra={"approval_id": str(row.id), "reason": "the row carries no requester principal"},
+        )
+        return _SOD_UNEVALUATED
+    return _SOD_ENFORCED
 
 
 @router.get("", response_model=ApprovalListResponse)
@@ -237,13 +337,26 @@ async def get_approval(
     return ApprovalResponse.model_validate(row)
 
 
+# `approvals:write` rather than `cases:write`, and the difference is the whole
+# reason it exists. The agents service's playbook engine must open an approval
+# when a step needs human sign-off, and it reaches this route on the shared
+# service token — whose permission set is a deliberately short read-only list,
+# because that one credential is valid on every route for every tenant. Adding
+# `cases:write` to it to unblock one POST would also have handed it case
+# authoring, case deletion and every other write on the case surface.
+#
+# Every role that held `cases:write` was granted `approvals:write` in the same
+# commit, so no operator lost access; the only principal that gains anything is
+# the service, and only this one verb. `/{id}/decide` deliberately still
+# requires `cases:write`: a service that can raise an approval must not be able
+# to answer it.
 @router.post("", response_model=ApprovalResponse, status_code=status.HTTP_201_CREATED)
 async def create_approval(
     body: ApprovalCreateRequest,
-    user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+    user: Annotated[AuthUser, Depends(require_permission("approvals:write"))],
     db: TenantDBSession,
 ) -> ApprovalResponse:
-    """Create a new approval request.
+    """Create a new approval request. Requires `approvals:write`.
 
     The agents service calls this when it hits a high-risk step that
     requires human sign-off. We persist it, then fan-out a Web Push
@@ -304,7 +417,17 @@ async def decide_approval(
     Idempotent only on the same decision: re-approving an already
     approved request returns the row unchanged; trying to flip an
     approved row to denied (or vice versa) is a 409.
+
+    Separation of duties, the named approver and the approval window are each
+    enforced; a requester cannot approve their own request, and an elapsed
+    approval can be denied but not approved.
     """
+    # The paragraph above is a *published* description -- this docstring is
+    # exported into `docs/openapi.yaml`, so it says what a caller must know
+    # and does not name internals. The mechanism is `_authorize_decision`:
+    # `cases:write` on the dependency answers "may this person decide
+    # approvals at all" and nothing more, and the three questions about
+    # *this* approval are asked there.
     row = (
         await db.execute(
             select(AgentApproval).where(
@@ -326,6 +449,19 @@ async def decide_approval(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Approval already {row.status}; cannot change to {new_status}",
         )
+
+    # Everything from here writes a decision, so this is where it is authorized.
+    # Placed after the idempotent return above and before the first mutation,
+    # so re-entering a stalled dispatch is governed too -- re-driving a
+    # containment is an act, even when the row already records the verdict.
+    sod = _authorize_decision(
+        row,
+        user,
+        approving=body.decision == "approve",
+        # The window governs a *new* decision. A row already carrying a verdict
+        # had that verdict taken in time; re-entry is finishing the dispatch.
+        enforce_window=row.status not in {"approved", "denied"},
+    )
 
     row.status = new_status
     row.decided_by_id = user.user_id
@@ -350,6 +486,7 @@ async def decide_approval(
     # twice.
     row.action = {
         **(row.action or {}),
+        _SOD_KEY: sod,
         "dispatch": {"state": _DISPATCH_IN_FLIGHT, "started_at": datetime.now(UTC).isoformat()},
     }
     await db.commit()
