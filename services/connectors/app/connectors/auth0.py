@@ -25,10 +25,14 @@ from app.connectors.base import (
 
 logger = structlog.get_logger()
 
-# /api/v2/logs returns at most 100 entries per page, and a search query can
-# page through at most 1,000 results in total.
+# /api/v2/logs documents per_page up to 100, but Auth0's API-wide rule caps
+# Public Cloud tenants at 50, so a page shorter than _PER_PAGE is routine and
+# must not be read as the end of the window. A search reaches 1,000 results at
+# most; budget the page count at the smaller size so the cap is still reachable.
 _PER_PAGE = 100
-_MAX_PAGES = 10
+_SMALLEST_SERVED_PAGE = 50
+_MAX_RESULTS = 1000
+_MAX_PAGES = _MAX_RESULTS // _SMALLEST_SERVED_PAGE
 
 
 class Auth0Connector(BaseConnector):
@@ -119,6 +123,7 @@ class Auth0Connector(BaseConnector):
             return []
         since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
         items: list[dict[str, Any]] = []
+        served_per_page: int | None = None
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 # Reading only page 0 kept the newest 100 entries of the window
@@ -149,7 +154,12 @@ class Auth0Connector(BaseConnector):
                         break
                     batch = resp.json() or []
                     items.extend(batch)
-                    if len(batch) < _PER_PAGE:
+                    # The first page tells us what this tenant actually serves,
+                    # which is 50 on Public Cloud however many we asked for.
+                    # Only a page shorter than that ends the window.
+                    if served_per_page is None:
+                        served_per_page = len(batch)
+                    if not batch or len(batch) < served_per_page or len(items) >= _MAX_RESULTS:
                         break
                 else:
                     logger.warning("auth0.fetch_page_cap_reached", pages=_MAX_PAGES, logs=len(items))
