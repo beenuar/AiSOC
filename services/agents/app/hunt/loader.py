@@ -115,26 +115,62 @@ class HuntDefinition(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-def _resolve_corpus_dir() -> Path:
-    """Find the ``hunts/`` directory.
+#: The copy that ships. ``hunts/`` lives at the repository root, outside the
+#: agents build context (``context: ./services/agents``), so no ``COPY`` could
+#: ever reach it and every container loaded zero hunts while every test —
+#: all of which run in a source checkout — found the corpus and passed.
+#: ``scripts/sync_packaged_hunt_corpus.py`` holds this directory byte-identical
+#: to ``hunts/`` in both directions and reads this name, so renaming it here
+#: without renaming it there is a failed gate rather than a silent fallback.
+PACKAGED_CORPUS_DIRNAME = "corpus"
 
-    Honours ``AISOC_HUNTS_DIR`` first, then walks parents of this file looking
-    for a sibling ``hunts/`` (matches the playbook ``_resolve_repo_root`` trick
-    so this works both on the host and inside the agents Docker image).
+#: Where that copy sits relative to this module: ``app/hunt/corpus``. The
+#: parent walk below cannot find it — ``corpus`` is not a *sibling* named
+#: ``hunts`` — which is exactly why it is named rather than discovered.
+_PACKAGED_CORPUS_DIR = Path(__file__).resolve().parent / PACKAGED_CORPUS_DIRNAME
+
+
+def _candidate_corpus_dirs() -> list[Path]:
+    """Every place the corpus could be, in the order they are preferred.
+
+    Source checkout first, packaged copy second, and both are real: a
+    developer editing ``hunts/`` keeps hot reload, and a container — where the
+    repository root does not exist — gets the packaged copy. The sync gate
+    holds the two identical, so the order changes which file is read and never
+    what it says.
+
+    Returned as a list rather than resolved inline so ``reload()`` can name
+    everything it looked at when it finds nothing. The fallback this replaced
+    returned ``parents[4]/hunts``, "the conventional host layout", which on a
+    deployment is a path that has never existed — so a corpus of zero hunts
+    was reported against a directory nobody could go and look at.
     """
     env_dir = os.getenv("AISOC_HUNTS_DIR", "").strip()
     if env_dir:
-        return Path(env_dir).expanduser().resolve()
-    here = Path(__file__).resolve()
-    for candidate in here.parents:
-        d = candidate / "hunts"
-        if d.is_dir():
-            return d
-    # Fall back to the conventional host layout (parents[4]/hunts).
-    parents = list(here.parents)
-    if len(parents) > 4:
-        return parents[4] / "hunts"
-    return Path("hunts").resolve()
+        return [Path(env_dir).expanduser().resolve()]
+
+    candidates: list[Path] = []
+    for parent in Path(__file__).resolve().parents:
+        candidates.append(parent / "hunts")
+    candidates.append(_PACKAGED_CORPUS_DIR)
+    return candidates
+
+
+def _resolve_corpus_dir() -> Path:
+    """Find the hunt corpus, preferring a directory that actually has hunts.
+
+    ``AISOC_HUNTS_DIR`` wins outright, including when it is wrong: an operator
+    who names a directory gets that directory, and an empty one is reported as
+    empty rather than quietly swapped for another.
+    """
+    candidates = _candidate_corpus_dirs()
+    for candidate in candidates:
+        if candidate.is_dir() and any(candidate.glob("*.yaml")):
+            return candidate
+    # Nothing holds hunts. Return the packaged location rather than a host path
+    # that does not exist on a deployment, so the "missing" log names somewhere
+    # the operator can actually look.
+    return candidates[0] if len(candidates) == 1 else _PACKAGED_CORPUS_DIR
 
 
 class HuntCorpus:
@@ -172,9 +208,23 @@ class HuntCorpus:
         return self._hunts.get(hunt_id)
 
     def reload(self) -> int:
-        """Re-read every YAML file under ``hunts/``. Returns the number loaded."""
+        """Re-read every YAML file under the corpus directory. Returns the count."""
         if not self._dir.exists():
-            logger.warning("hunt.corpus.missing", extra={"dir": str(self._dir)})
+            # Name every place that was looked at. "hunt.corpus.missing dir=…"
+            # pointed at one path and said nothing about why that path, which
+            # left an operator with a directory that does not exist on their
+            # deployment and no next step.
+            logger.error(
+                "hunt.corpus.missing",
+                extra={
+                    "dir": str(self._dir),
+                    "searched": [str(p) for p in _candidate_corpus_dirs()],
+                    "hint": (
+                        "the agents image ships the corpus at app/hunt/corpus; "
+                        "run scripts/sync_packaged_hunt_corpus.py if it is absent from this tree"
+                    ),
+                },
+            )
             self._hunts = {}
             return 0
         loaded: dict[str, HuntDefinition] = {}
