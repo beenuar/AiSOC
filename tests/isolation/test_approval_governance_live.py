@@ -154,9 +154,7 @@ async def env():
     transport = httpx.ASGITransport(app=application)
 
     def headers(key: str) -> dict[str, str]:
-        token = create_access_token(
-            {"sub": str(people[key]), "tenant_id": str(tenant), "email": emails[key], "role": "admin"}
-        )
+        token = create_access_token({"sub": str(people[key]), "tenant_id": str(tenant), "email": emails[key], "role": "admin"})
         return {"Authorization": f"Bearer {token}"}
 
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -202,9 +200,7 @@ async def test_an_uncredentialed_decision_is_refused(env):
     Without this, every refusal this suite asserts would be satisfied by an
     application that refuses everybody — including the legitimate approver.
     """
-    response = await env["client"].post(
-        f"/api/v1/approvals/{uuid.uuid4()}/decide", json={"decision": "approve"}
-    )
+    response = await env["client"].post(f"/api/v1/approvals/{uuid.uuid4()}/decide", json={"decision": "approve"})
     assert response.status_code in (401, 403), response.text
 
 
@@ -216,14 +212,12 @@ async def test_the_requester_cannot_decide_their_own_approval(env):
 
     stamped = (approval.get("action") or {}).get("requester_principal") or {}
     assert stamped.get("user_id") == str(env["ids"]["requester"]), (
-        "the originating identity must be on the row for separation of duties to have "
-        f"anything to compare; got {stamped!r}"
+        f"the originating identity must be on the row for separation of duties to have anything to compare; got {stamped!r}"
     )
 
     response = await _decide(env, approval["id"], by="requester")
     assert response.status_code == 403, (
-        f"the requester approved their own {approval['risk_level']} approval: "
-        f"{response.status_code} {response.text}"
+        f"the requester approved their own {approval['risk_level']} approval: {response.status_code} {response.text}"
     )
 
     detail = response.json().get("detail", "").lower()
@@ -261,9 +255,7 @@ async def test_a_bystander_cannot_answer_an_approval_routed_to_someone_else(env)
     assert approval["required_user_id"] == str(env["ids"]["approver"])
 
     response = await _decide(env, approval["id"], by="bystander")
-    assert response.status_code == 403, (
-        f"a user who is not the named approver decided: {response.status_code} {response.text}"
-    )
+    assert response.status_code == 403, f"a user who is not the named approver decided: {response.status_code} {response.text}"
 
     read_back = await env["client"].get(f"/api/v1/approvals/{approval['id']}", headers=env["headers"]("approver"))
     assert read_back.json()["status"] == "pending"
@@ -301,9 +293,7 @@ async def test_an_elapsed_approval_cannot_be_approved(env):
         title="Containment window closed six hours ago",
     )
     response = await _decide(env, approval["id"], by="approver")
-    assert response.status_code == 409, (
-        f"an approval that elapsed six hours ago was approved: {response.status_code} {response.text}"
-    )
+    assert response.status_code == 409, f"an approval that elapsed six hours ago was approved: {response.status_code} {response.text}"
     assert "expire" in response.json().get("detail", "").lower()
 
 
@@ -315,9 +305,7 @@ async def test_an_elapsed_approval_can_still_be_denied(env):
     row somebody has to clean up by hand. Denying is the safe default it names
     and executes nothing, so the window closes over approval only.
     """
-    approval = await _raise(
-        env, by="requester", expires_at=(datetime.now(UTC) - timedelta(hours=6)).isoformat()
-    )
+    approval = await _raise(env, by="requester", expires_at=(datetime.now(UTC) - timedelta(hours=6)).isoformat())
     response = await _decide(env, approval["id"], by="approver", decision="deny")
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "denied"
@@ -325,9 +313,7 @@ async def test_an_elapsed_approval_can_still_be_denied(env):
 
 async def test_an_approval_inside_its_window_is_unaffected(env):
     """Positive control for F82."""
-    approval = await _raise(
-        env, by="requester", expires_at=(datetime.now(UTC) + timedelta(hours=2)).isoformat()
-    )
+    approval = await _raise(env, by="requester", expires_at=(datetime.now(UTC) + timedelta(hours=2)).isoformat())
     response = await _decide(env, approval["id"], by="approver")
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "approved"
@@ -360,6 +346,4 @@ async def test_a_body_supplied_requester_cannot_defeat_separation_of_duties(env)
     """
     approval = await _raise(env, by="requester", requested_by=str(env["ids"]["approver"]))
     response = await _decide(env, approval["id"], by="requester")
-    assert response.status_code == 403, (
-        f"a body-supplied `requested_by` defeated separation of duties: {response.text}"
-    )
+    assert response.status_code == 403, f"a body-supplied `requested_by` defeated separation of duties: {response.text}"
