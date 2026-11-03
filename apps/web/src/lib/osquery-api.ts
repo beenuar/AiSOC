@@ -13,7 +13,7 @@
  * "the caller did not name a tenant".
  */
 
-import { AUTH_TOKEN_KEY } from '@/lib/api';
+import { ApiError, AUTH_TOKEN_KEY } from '@/lib/api';
 
 const OSQUERY_BASE =
   (process.env.NEXT_PUBLIC_OSQUERY_TLS_URL ?? '') + '/api/v1/osquery';
@@ -102,7 +102,12 @@ async function get<T>(path: string, params?: Record<string, string | number | un
   const res = await fetch(url.toString(), { headers });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`osquery-api ${res.status}: ${text}`);
+    // `ApiError`, not a bare `Error`: the status is the only thing that
+    // separates "osqueryd is a `full`-profile component this deployment
+    // does not run" (503) from a fault worth retrying, and a message
+    // string throws that distinction away. `/fim` rendered "Could not load
+    // FIM summary" for both.
+    throw new ApiError(`osquery-api ${res.status}: ${text}`, res.status, text);
   }
   return res.json() as Promise<T>;
 }

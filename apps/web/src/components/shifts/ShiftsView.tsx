@@ -80,7 +80,7 @@ export function ShiftsView() {
     return (
       <NotYetWired
         title="Shift handoff"
-        description="Shift handoff is not backed by a live service in this build, so there is nothing to hand over for your tenant. The sample board is available in the hosted demo."
+        description="Shift handoff is not backed by a live service in this build, so there is nothing to hand over for your tenant."
       />
     );
   }
