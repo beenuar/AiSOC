@@ -51,6 +51,23 @@ MAX_THROUGHPUT_MARGIN = 8.0
 MAX_LATENCY_MARGIN = 20.0
 """The ceiling may sit at most 20x above the published p95."""
 
+MAX_HOT_PATH_MARGIN = 25.0
+"""The in-process floor may sit at most 25x below the published promote rate.
+
+Wider than the end-to-end margin on purpose, and the reason is a property of
+what is being measured rather than a preference: the hot-path harness is a
+single-threaded Python microbenchmark, and a shared, throttled runner is
+further from an 18-core laptop on that than on a container pipeline whose
+ceiling is a broker.
+
+This arm exists because the gate it guards was the one that mattered and the
+one nobody had bound. `perf.yml` asserted `--assert-floor 1000` against a
+published 140,692 events/s -- 140x -- under a comment claiming a ">200x margin
+below the measured number", where that number appeared on no page. And the
+end-to-end job the original arm checks is nightly, so on a pull request this
+was the *only* throughput gate running at all.
+"""
+
 
 def _harness_args() -> str:
     """The `run:` block that invokes the harness with its assertions.
@@ -80,6 +97,42 @@ def _flag(name: str) -> float:
     if match is None:
         raise AssertionError(f"perf.yml no longer passes --{name} to the harness")
     return float(match.group(1))
+
+
+def _hot_path_floor() -> float:
+    """The `--assert-floor` the in-process harness is invoked with."""
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    for job in workflow["jobs"].values():
+        for step in job.get("steps") or []:
+            run = step.get("run") or ""
+            if "throughput_harness.py" in run:
+                match = re.search(r"--assert-floor\s+([\d.]+)", run)
+                if match is None:
+                    raise AssertionError("perf.yml runs the hot-path harness with no floor at all")
+                return float(match.group(1))
+    raise AssertionError("perf.yml no longer runs throughput_harness.py")
+
+
+def _published_hot_path() -> float:
+    """The promote rate out of the page's in-process section.
+
+    Parsed from the page for the same reason as everything else here: a copy
+    would agree with itself while the published number moved.
+    """
+    text = PAGE.read_text(encoding="utf-8")
+    try:
+        section = text[text.index("## Fusion hot path, in process") :]
+    except ValueError:
+        raise AssertionError(
+            "apps/docs/docs/operations/performance.md no longer publishes a figure for the in-process "
+            "hot-path harness, so the floor perf.yml asserts against it is derived from nothing"
+        ) from None
+    row = re.search(r"^\|\s*Promote rate\s*\|([^|]+)\|", section, flags=re.M)
+    if row is None:
+        raise AssertionError("no `Promote rate` row in the hot-path section")
+    numbers = re.findall(r"[\d.]+", row.group(1).replace(",", ""))
+    assert numbers, "no number in the promote-rate cell"
+    return float(numbers[0])
 
 
 def _published(label: str) -> float:
@@ -129,6 +182,39 @@ class TestTheThresholdsRelateToWhatIsPublished:
 
         assert floor < _published("Pipeline drain rate"), "the floor is at or above the published rate"
         assert ceiling > _published("Event-to-alert p95"), "the ceiling is at or below the published p95"
+
+
+class TestTheHotPathFloorRelatesToWhatIsPublished:
+    """The gate that runs on every pull request, which the class above does not.
+
+    `end-to-end` is `if: schedule || workflow_dispatch`, so on a pull request
+    the in-process harness is the only throughput assertion that executes. It
+    was also the only one whose floor was bound to nothing.
+    """
+
+    def test_the_hot_path_floor_is_within_a_stated_factor(self) -> None:
+        published = _published_hot_path()
+        floor = _hot_path_floor()
+
+        margin = published / floor
+        assert margin <= MAX_HOT_PATH_MARGIN, (
+            f"the in-process floor is {floor} against a published {published} events/s -- {margin:.0f}x below. "
+            f"A regression has to be {margin:.0f}x before the only throughput gate on a pull request notices."
+        )
+
+    def test_the_hot_path_margin_is_still_generous(self) -> None:
+        """The negative control, matching the one above: a floor tuned to the
+        measurement would flap on a shared runner and be switched off."""
+        assert _hot_path_floor() < _published_hot_path(), "the floor is at or above the published rate"
+
+    def test_the_two_figures_are_not_confused_for_each_other(self) -> None:
+        """The in-process rate is two to three orders of magnitude above the
+        pipeline's, because it measures one function rather than ingest, a
+        broker, a consumer and a database. Quoting one as the other is the
+        mistake the page's own caveat warns about, and it is the mistake that
+        would let somebody 'fix' a drifting gate by pointing it at the wrong
+        row."""
+        assert _published_hot_path() > _published("Pipeline drain rate") * 100
 
 
 class TestTheResultsGateCoversBothDeploymentsAndIsTimeBound:

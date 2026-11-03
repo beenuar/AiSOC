@@ -28,6 +28,17 @@ class PostureFinding(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     severity: Mapped[str] = mapped_column(String(20), default="medium")
     status: Mapped[str] = mapped_column(String(20), default="open")
+    #: Migration 133. Which collector wrote the row; `manual` is every row that
+    #: predates a collector existing, because the hand-called REST route was
+    #: the only writer this table had.
+    source: Mapped[str] = mapped_column(String(50), default="manual")
+    finding_class: Mapped[str] = mapped_column(String(32), default="misconfiguration")
+    external_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    #: Every shape the resource is named by, lowercased, so an alert that knows
+    #: a resource only by its ARN still matches a finding that knows it by the
+    #: CNAPP's own graph id.
+    resource_keys: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     frameworks: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
     control_ids: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
     evidence: Mapped[dict] = mapped_column(JSONB, default=dict)
@@ -62,6 +73,11 @@ class PostureScanRun(Base):
     findings_closed: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     scan_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict)
+    #: Migration 133. A run row is what tells "nobody has collected" apart from
+    #: "collected, and the estate is clean" — the distinction the summary needs
+    #: before it is allowed to report a count.
+    source: Mapped[str] = mapped_column(String(50), default="manual")
+    finding_classes: Mapped[list[str]] = mapped_column(ARRAY(Text), default=list)
 
 
 class PostureDriftEvent(Base):
