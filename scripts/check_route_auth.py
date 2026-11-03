@@ -324,6 +324,13 @@ IN_BAND_CREDENTIAL_ROUTES: dict[str, tuple[str, str]] = {
         "X-AiSOC-Service-Token is compared in constant time and fails closed when unset. An analyst reaches the same data through "
         "GET /graph/incident-context/{alert_id}, which authenticates by session and traverses from the alert",
     ),
+    "services/api/app/api/v1/endpoints/posture.py::resource_findings_for_triage": (
+        "service_token_valid",
+        "the agents service asks what a CNAPP already knows is wrong with the resources an alert names here, on the path of a "
+        "triage, and holds no session; the shared X-AiSOC-Service-Token is compared in constant time and fails closed when "
+        "unset. An analyst reaches the same rows through GET /posture/findings, which authenticates by session and lists them "
+        "tenant-wide rather than keyed on one alert's resources",
+    ),
     "services/api/app/api/v1/endpoints/war_rooms.py::channel_decision": (
         "service_token_valid",
         "the chat bot delivers a decision taken in the channel here and holds no session; the shared X-AiSOC-Service-Token is "

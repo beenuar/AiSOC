@@ -159,6 +159,10 @@ class InvestigationState(BaseModel):
     # rather than the dataclasses for the same import-cycle reason as above.
     recent_dispositions: dict[str, Any] | None = None
     identity_context: dict[str, Any] | None = None
+    #: Depth-2 8.1. Open cloud-security findings on the resources this
+    #: alert names, with the `collected` flag that tells an absent CNAPP
+    #: apart from a clean estate.
+    cloud_posture_context: dict[str, Any] | None = None
 
     # Phase 4.5. What the vendors that raised or observe this alert said when
     # asked, just before triage reasoned over it. Carried as the

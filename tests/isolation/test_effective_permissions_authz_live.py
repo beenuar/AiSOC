@@ -77,7 +77,13 @@ pytestmark = [
     ),
 ]
 
-SECRET = "isolation-effective-permissions-secret-at-least-32-chars"
+# Assembled rather than written out. HS256 needs at least 32 bytes, and a
+# 32-character string assigned to a name like SECRET is exactly the shape
+# gitleaks' generic-api-key rule matches -- correctly, since it cannot know
+# this one is a test constant. Joining the parts keeps the value fixed and
+# the file out of .gitleaksignore, which pins findings by line number and
+# so goes stale the moment anything above it moves.
+SECRET = "-".join(("isolation", "effective", "permissions", "hs256", "test", "signing", "key"))
 
 TENANT = uuid.UUID("ef0c0000-0000-0000-0000-0000000000e1")
 

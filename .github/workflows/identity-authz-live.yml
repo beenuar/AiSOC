@@ -133,12 +133,12 @@ jobs:
           import pathlib, sys
           p = pathlib.Path("app/api/v1/endpoints/effective_permissions.py")
           s = p.read_text()
-          needle = 'current_user: CurrentUser = Depends(require_permission("identity:read")),'
+          needle = 'IdentityReader = Annotated[CurrentUser, Depends(require_permission("identity:read"))]'
           if needle not in s:
               print("FAIL: the permission this control removes is not there to remove.")
               print("      The dependency has been reshaped and this control proves nothing.")
               sys.exit(1)
-          p.write_text(s.replace(needle, "current_user: CurrentUser = Depends(get_current_user),", 1))
+          p.write_text(s.replace(needle, "IdentityReader = Annotated[CurrentUser, Depends(get_current_user)]", 1))
           PY
           if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
             echo "FAIL: the suite passed with the permission removed."
