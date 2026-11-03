@@ -2,10 +2,20 @@
 
 Wave 2, Phase 4.3. The compiler and the answerer live in
 :mod:`app.context.triage_questions`; this is the half that puts them on the
-triage hot path, and without it the console writes questions to
-`triage_questions` that no triage decision ever reads — the shape this
-repository has shipped before with business-context rules, where authored
-rules applied to nothing and the page showed them enabled.
+triage hot path.
+
+The paragraph that used to be here described the console as already writing
+the rows this reads. It did not, and that sentence is what made the gap
+invisible: `triage_questions` had a reader on the hot path of every alert and
+**no writer anywhere** — no route, no ORM model, no console page, no seed —
+so `for_tenant()` returned empty for every tenant forever and the prompt
+block was always absent. A reader auditing this file concluded the write half
+had shipped, which is the more damaging direction for a stale claim. The
+writer now exists, at `POST /api/v1/triage-questions` in the API service
+(`app/api/v1/endpoints/triage_questions.py`), and
+`tests/integration/test_triage_questions_round_trip.py` drives a write through it and
+reads the row back through this store against real Postgres — because a unit
+test of either half passes whether or not the other one exists.
 
 Fail-soft, deliberately. A question that cannot be loaded must not stop an
 alert being triaged: the worst case here is an analyst not seeing an answer
