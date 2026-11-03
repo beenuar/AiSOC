@@ -477,8 +477,7 @@ async def decide_approval(
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
-                    "The principal that requested this call cannot approve it, whichever "
-                    "credential they present (separation of duties)."
+                    "The principal that requested this call cannot approve it, whichever credential they present (separation of duties)."
                 ),
             )
     elif row.requested_by and row.requested_by == actor:
@@ -515,10 +514,7 @@ async def decide_approval(
         ).scalar_one_or_none()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                f"Approval {approval_id} was decided concurrently and is now "
-                f"{current.state if current else 'gone'}."
-            ),
+            detail=(f"Approval {approval_id} was decided concurrently and is now {current.state if current else 'gone'}."),
         )
     await db.refresh(row)
 

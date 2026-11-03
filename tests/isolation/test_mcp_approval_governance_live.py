@@ -113,9 +113,7 @@ async def env():
     transport = httpx.ASGITransport(app=application)
 
     def headers(key: str) -> dict[str, str]:
-        token = create_access_token(
-            {"sub": str(people[key]), "tenant_id": str(tenant), "email": emails[key], "role": "admin"}
-        )
+        token = create_access_token({"sub": str(people[key]), "tenant_id": str(tenant), "email": emails[key], "role": "admin"})
         return {"Authorization": f"Bearer {token}"}
 
     async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
@@ -198,8 +196,7 @@ async def test_one_person_cannot_approve_their_own_key_s_request(env):
         f"/api/v1/mcp/approvals/{approval_id}/decide", headers=env["headers"]("owner"), json={"approve": True}
     )
     assert response.status_code == 403, (
-        "a human approved a tool call they had requested through their own API key: "
-        f"{response.status_code} {response.text}"
+        f"a human approved a tool call they had requested through their own API key: {response.status_code} {response.text}"
     )
     assert await _state(env, approval_id) == "pending", "a refused decision must not have been written"
 
@@ -210,9 +207,7 @@ async def test_a_different_person_can_still_decide(env):
     A check that refuses everybody would satisfy the test above and make every
     gated MCP tool permanently unusable.
     """
-    approval_id = await _insert_approval(
-        env, requested_by="ak_ownerkey", requested_by_user_id=str(env["ids"]["owner"])
-    )
+    approval_id = await _insert_approval(env, requested_by="ak_ownerkey", requested_by_user_id=str(env["ids"]["owner"]))
     response = await env["client"].post(
         f"/api/v1/mcp/approvals/{approval_id}/decide", headers=env["headers"]("approver"), json={"approve": True}
     )
@@ -227,9 +222,7 @@ async def test_a_legacy_row_still_refuses_the_same_credential(env):
     under the very credential that asked. Dropping it on the way to the better
     check would have *removed* protection from exactly the oldest rows.
     """
-    approval_id = await _insert_approval(
-        env, requested_by=env["emails"]["owner"], requested_by_user_id=None
-    )
+    approval_id = await _insert_approval(env, requested_by=env["emails"]["owner"], requested_by_user_id=None)
     response = await env["client"].post(
         f"/api/v1/mcp/approvals/{approval_id}/decide", headers=env["headers"]("owner"), json={"approve": True}
     )
@@ -269,14 +262,10 @@ async def test_an_approve_and_a_deny_cannot_both_land(env):
         await _bind(two, env)
 
         async def approve():
-            return await claim_decision(
-                one, approval_id=approval_id, tenant_id=env["tenant"], state="approved", actor="a", note=""
-            )
+            return await claim_decision(one, approval_id=approval_id, tenant_id=env["tenant"], state="approved", actor="a", note="")
 
         async def deny():
-            return await claim_decision(
-                two, approval_id=approval_id, tenant_id=env["tenant"], state="denied", actor="b", note=""
-            )
+            return await claim_decision(two, approval_id=approval_id, tenant_id=env["tenant"], state="denied", actor="b", note="")
 
         won_first = await approve()
         task = asyncio.create_task(deny())
@@ -286,9 +275,7 @@ async def test_an_approve_and_a_deny_cannot_both_land(env):
         await two.commit()
 
     winners = [w for w in (won_first, won_second) if w is not None]
-    assert len(winners) == 1, (
-        f"both an approve and a deny were accepted on one pending request: {won_first=} {won_second=}"
-    )
+    assert len(winners) == 1, f"both an approve and a deny were accepted on one pending request: {won_first=} {won_second=}"
     assert await _state(env, approval_id) == "approved"
 
 
@@ -303,9 +290,7 @@ async def test_a_single_decision_still_lands(env):
     approval_id = await _insert_approval(env)
     async with env["sessions"]() as session:
         await _bind(session, env)
-        claimed = await claim_decision(
-            session, approval_id=approval_id, tenant_id=env["tenant"], state="approved", actor="a", note=""
-        )
+        claimed = await claim_decision(session, approval_id=approval_id, tenant_id=env["tenant"], state="approved", actor="a", note="")
         await session.commit()
     assert claimed is not None, "an uncontested decision on a pending approval was refused"
     assert await _state(env, approval_id) == "approved"
@@ -374,8 +359,12 @@ async def test_one_approval_cannot_be_spent_twice(env):
         def claim(session):
             async def _run():
                 return await mcp_access._claim_approval(
-                    session, args["tenant_id"], args["tool_name"], args["fingerprint"],
-                    requester_id=args["requester_id"], requested_by=args["requested_by"],
+                    session,
+                    args["tenant_id"],
+                    args["tool_name"],
+                    args["fingerprint"],
+                    requester_id=args["requester_id"],
+                    requested_by=args["requested_by"],
                 )
 
             return _run
@@ -410,15 +399,23 @@ async def test_the_approval_is_spent_so_a_later_call_is_refused(env):
     async with env["sessions"]() as session:
         await _bind(session, env)
         first = await mcp_access._claim_approval(
-            session, args["tenant_id"], args["tool_name"], args["fingerprint"],
-            requester_id=args["requester_id"], requested_by=args["requested_by"],
+            session,
+            args["tenant_id"],
+            args["tool_name"],
+            args["fingerprint"],
+            requester_id=args["requester_id"],
+            requested_by=args["requested_by"],
         )
         await session.commit()
         assert first is not None, "an approved, unexpired, correctly-scoped approval was not claimable"
 
         second = await mcp_access._claim_approval(
-            session, args["tenant_id"], args["tool_name"], args["fingerprint"],
-            requester_id=args["requester_id"], requested_by=args["requested_by"],
+            session,
+            args["tenant_id"],
+            args["tool_name"],
+            args["fingerprint"],
+            requester_id=args["requester_id"],
+            requested_by=args["requested_by"],
         )
         await session.commit()
         assert second is None, "the approval was spent and must not be claimable again"
@@ -436,7 +433,10 @@ async def test_another_principal_cannot_spend_an_approval_granted_to_someone_els
     async with env["sessions"]() as session:
         await _bind(session, env)
         stolen = await mcp_access._claim_approval(
-            session, args["tenant_id"], args["tool_name"], args["fingerprint"],
+            session,
+            args["tenant_id"],
+            args["tool_name"],
+            args["fingerprint"],
             requester_id=env["ids"]["approver"],
             requested_by=env["emails"]["approver"],
         )
@@ -465,8 +465,12 @@ async def test_a_legacy_approval_is_still_claimable_by_its_label(env):
     async with env["sessions"]() as session:
         await _bind(session, env)
         claimed = await mcp_access._claim_approval(
-            session, env["tenant"], TOOL, fingerprint,
-            requester_id=env["ids"]["owner"], requested_by="ak_legacykey",
+            session,
+            env["tenant"],
+            TOOL,
+            fingerprint,
+            requester_id=env["ids"]["owner"],
+            requested_by="ak_legacykey",
         )
         await session.commit()
     assert claimed is not None, "a pre-158 approval became unclaimable"
