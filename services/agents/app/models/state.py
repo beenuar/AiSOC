@@ -118,6 +118,14 @@ class InvestigationState(BaseModel):
     # `{"matched_rule_ids": [...], "severity_before": ..., "severity_after": ...}`.
     business_context: dict[str, Any] | None = None
 
+    # The tenant's standing questions, answered from collected evidence
+    # before the prompt was built (app/context/triage_questions.py). Carried
+    # as the rendered block rather than as structure because the renderer is
+    # what wraps every tenant string in the untrusted envelope — a caller
+    # re-rendering it from parts is a caller that can forget to.
+    # `{"block": str, "answered": int, "unanswerable": int, "skipped": [...]}`.
+    triage_questions: dict[str, Any] | None = None
+
     # The verdict's business-impact element, kept only when every citation it
     # carries resolves to supplied context (rule ids, identity accounts). An
     # uncited impact statement is dropped, not rendered — same discipline as

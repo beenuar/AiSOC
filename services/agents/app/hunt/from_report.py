@@ -310,11 +310,24 @@ def fence_report(text: str, *, nonce: str, max_chars: int = 20_000) -> str:
 #: whose kind has no field is **not** hunted on a guessed one, because a
 #: hash searched as a hostname matches nothing and reads as "clean".
 INDICATOR_FIELDS: dict[str, str] = {
-    "ipv4": "destination_ip",
-    "domain": "destination_domain",
-    "sha256": "file_hash",
-    "sha1": "file_hash",
-    "md5": "file_hash",
+    # The names here must be names `app.hunt.plan.HUNT_FIELDS` actually
+    # carries, and until this lane wired the route they were not: the map
+    # read `destination_ip` / `destination_domain` / `file_hash`, none of
+    # which the schema has, so `draft_clauses` refused **every** indicator
+    # and a draft came back with zero clauses and three refusals. The
+    # module's own test could not see it because it supplies its own
+    # `allowed_fields`, which is the test double being more capable than
+    # the real thing. `test_indicator_fields_exist_in_the_hunt_schema`
+    # compares the two for real.
+    "ipv4": "dest_ip",
+    # The schema's own description for `dst_hostname` says to use it for a
+    # domain or a destination.
+    "domain": "dst_hostname",
+    # One column holds whichever digest the source reported first, which its
+    # own description says despite the name, so all three kinds map to it.
+    "sha256": "hash_sha256",
+    "sha1": "hash_sha256",
+    "md5": "hash_sha256",
 }
 
 

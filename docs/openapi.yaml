@@ -11057,6 +11057,178 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/software-inventory/ecosystems:
+    get:
+      tags:
+      - software-inventory
+      summary: The osquery tables this inventory reads
+      description: 'Published so a console filter is not a second copy of this list.
+
+
+        A vocabulary declared twice is how a value ends up filterable on one
+
+        surface and invisible on the other.'
+      operationId: list_ecosystems_api_v1_software_inventory_ecosystems_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Ecosystems Api V1 Software Inventory Ecosystems
+                  Get
+      security:
+      - HTTPBearer: []
+  /api/v1/software-inventory/osquery:
+    post:
+      tags:
+      - software-inventory
+      summary: Record packages an endpoint agent reported
+      operationId: ingest_osquery_api_v1_software_inventory_osquery_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: table
+        in: query
+        required: true
+        schema:
+          type: string
+          description: The osquery table these rows came from
+          title: Table
+        description: The osquery table these rows came from
+      - name: host
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          description: The host that reported them
+          title: Host
+        description: The host that reported them
+      - name: asset_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Asset Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+              title: Rows
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ingest Osquery Api V1 Software Inventory Osquery Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/software-inventory/sbom:
+    post:
+      tags:
+      - software-inventory
+      summary: Record packages a repository's SBOM declares
+      operationId: ingest_sbom_api_v1_software_inventory_sbom_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: repository
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          title: Repository
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Document
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ingest Sbom Api V1 Software Inventory Sbom Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/software-inventory:
+    get:
+      tags:
+      - software-inventory
+      summary: Where a package runs, and whether its runtime is still supported
+      operationId: list_packages_api_v1_software_inventory_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(osquery|sbom)$
+          - type: 'null'
+          title: Source
+      - name: name
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 200
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Packages Api V1 Software Inventory Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/investigations:
     get:
       tags:

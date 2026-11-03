@@ -357,6 +357,21 @@ def _build_alert_context(state: InvestigationState, *, nonce: str) -> str:
     if biz:
         preamble.append(sanitize_text(biz, max_len=_MAX_CONTEXT_BLOCK_CHARS))
 
+    # Phase 4.3. The tenant's standing questions and the verdicts computed
+    # for them, which is what puts `app/context/triage_questions.py` on the
+    # path the console already writes questions for.
+    #
+    # Not re-sanitised: the renderer already put every tenant-authored label
+    # through `sanitize_text` and wrapped the block in an `<UNTRUSTED_DATA>`
+    # envelope, and running the sanitiser over the rendered block would
+    # rewrite the markers holding that envelope together — the same rule the
+    # runbook and vendor-evidence blocks below follow, and for the same
+    # reason. The verdicts beside each label were computed deterministically
+    # before this prompt existed, so the free text decides nothing.
+    questions = (state.triage_questions or {}).get("block")
+    if questions:
+        preamble.append(str(questions))
+
     # Not sanitised again on the way in: the retrieval already capped and
     # sanitised each chunk, and `render_runbooks` fences the result. Running
     # `sanitize_text` over the rendered block would rewrite the nonce markers

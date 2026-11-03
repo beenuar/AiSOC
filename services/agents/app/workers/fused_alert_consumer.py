@@ -50,7 +50,9 @@ from app.context import dispositions as dispositions_module
 from app.context import identity as identity_module
 from app.context import knowledge_base, vendor_evidence
 from app.context import privilege as privilege_module
+from app.context import triage_questions as triage_questions_module
 from app.context.tenant_skills import select_skill
+from app.context.triage_questions_store import TriageQuestionStore
 from app.core.cost_governor import Decision, get_governor
 from app.core.cost_telemetry import CostSummary, CostTracker
 from app.core.kafka_security import kafka_client_kwargs
@@ -424,6 +426,10 @@ class FusedAlertTriageWorker:
         # Phase B4 — environment-specific noise reduction applied post-fusion →
         # pre-triage. None = disabled (no rules file / flag off).
         self._business_context = business_context
+        # Phase 4.3. One store for the worker's lifetime so the per-tenant
+        # cache survives between alerts; with one per alert it would read
+        # Postgres on every message and the cache would buy nothing.
+        self._triage_questions = TriageQuestionStore()
         # Parity 6.9. Concurrency across entities, order within one.
         # Declared here rather than created in `start` so a test that
         # builds this worker without a broker still has lanes — the same
@@ -694,6 +700,27 @@ class FusedAlertTriageWorker:
                 "severity_before": bc.severity_before,
                 "severity_after": bc.severity_after,
             }
+
+        # Phase 4.3 — the tenant's standing questions, answered from the
+        # evidence already collected. Deterministic: the model is never asked
+        # anything here, and the free-text label decides nothing. After the
+        # business-context block above, because a rule may have changed the
+        # alert the questions are asked of.
+        with timer.measure("triage_questions"):
+            answers, skipped = await self._answer_triage_questions(state)
+        if answers or skipped:
+            block = triage_questions_module.render_for_prompt(answers, skipped)
+            if block:
+                state.triage_questions = {
+                    "block": block,
+                    "answered": sum(1 for a in answers if not a.unanswerable),
+                    # Counted separately because "we looked and the answer is
+                    # no" and "we had no evidence" are different facts, and an
+                    # operator deciding whether their questions are earning
+                    # their keep needs the second number.
+                    "unanswerable": sum(1 for a in answers if a.unanswerable),
+                    "skipped": list(skipped),
+                }
 
         governor = get_governor()
         fingerprint = governor.evidence_fingerprint(str(state.tenant_id), state.raw_alert)
@@ -1005,6 +1032,30 @@ class FusedAlertTriageWorker:
             "stage_timings_ms": stage_timings,
             "decision_contract": contract,
         }
+
+    async def _answer_triage_questions(self, state: InvestigationState) -> tuple[list[triage_questions_module.QuestionAnswer], list[str]]:
+        """Answer this tenant's standing questions from the collected evidence.
+
+        Never raises. A question channel that cannot answer must not stop an
+        alert being triaged: the cost of failing soft is an analyst missing an
+        answer, and the cost of failing hard is an untriaged alert.
+
+        The evidence bundle is the alert the agent is about to reason over,
+        *after* business-context rules have had their turn — a question about
+        a severity should see the severity triage will.
+        """
+        try:
+            questions = await self._triage_questions.for_tenant(str(state.tenant_id) if state.tenant_id else None)
+            if not questions:
+                return [], []
+            return triage_questions_module.answer_all(
+                questions,
+                state.raw_alert,
+                alert_type=(state.raw_alert or {}).get("alert_type") or (state.raw_alert or {}).get("rule_id"),
+            )
+        except Exception as exc:  # noqa: BLE001 — never break triage
+            logger.warning("triage_questions.answer_failed", error=str(exc))
+            return [], []
 
     async def _sink_for(self, state: InvestigationState, fingerprint: str) -> TriageWriter:
         """The sink this alert's writes go to: the tenant's live one, or a shadow wrapper.

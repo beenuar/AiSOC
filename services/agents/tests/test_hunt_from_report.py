@@ -36,6 +36,7 @@ from app.hunt.from_report import (
     extract_indicators,
     fetch_report,
 )
+from app.hunt.plan import HUNT_FIELDS
 
 REPORT = """\
 # ACME Loader campaign
@@ -222,7 +223,14 @@ def test_indicators_over_the_bound_are_counted_rather_than_dropped():
 
 # ── Drafting ────────────────────────────────────────────────────────────────
 
-ALLOWED = frozenset({"destination_ip", "destination_domain", "file_hash"})
+#: The deployment's real hunt schema, not a set written here.
+#:
+#: It was `{"destination_ip", "destination_domain", "file_hash"}` —
+#: three names the schema has never carried — so these cases passed
+#: while the route they describe refused every indicator a report
+#: contained. A double more capable than the real thing is the one
+#: defect a unit test cannot report on itself.
+ALLOWED = frozenset(HUNT_FIELDS)
 
 
 def test_indicators_become_closed_schema_clauses_with_values_as_values():
@@ -249,6 +257,6 @@ def test_an_indicator_kind_with_no_field_is_refused_not_guessed():
 def test_a_field_the_deployment_lacks_is_refused_rather_than_emitted():
     """Otherwise a human approves a plan that fails validation afterwards."""
     indicators, _, _ = extract_indicators(REPORT)
-    clauses, refusals = draft_clauses(indicators, allowed_fields=frozenset({"destination_ip"}))
-    assert any("file_hash" in r for r in refusals)
-    assert {c["field"] for c in clauses} == {"destination_ip"}
+    clauses, refusals = draft_clauses(indicators, allowed_fields=frozenset({"dest_ip"}))
+    assert any("hash_sha256" in r for r in refusals)
+    assert {c["field"] for c in clauses} == {"dest_ip"}

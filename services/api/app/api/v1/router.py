@@ -95,6 +95,7 @@ from app.api.v1.endpoints import (
     scim_tokens,
     semantic_memory,
     sla,
+    software_inventory,
     sso_connections,
     stix_taxii,
     taxii,
@@ -226,6 +227,7 @@ api_router.include_router(health.router)
 # preceding window) so the dashboard can render in one round trip.
 api_router.include_router(insights.router)
 api_router.include_router(sla.router)
+api_router.include_router(software_inventory.router)
 api_router.include_router(investigations.router)
 api_router.include_router(kill_switch.router)
 
