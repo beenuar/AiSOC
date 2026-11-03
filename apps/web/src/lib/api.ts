@@ -4428,9 +4428,22 @@ export interface HuntHitWire {
 export interface HuntSearchWire {
   query: string;
   total: number;
-  took_ms: number;
+  /** `null` when no query ran. Never 0 for an unmeasured read. */
+  took_ms: number | null;
   hits: HuntHitWire[];
-  source?: "sample" | "live";
+  /**
+   * `live` — the tenant's event lake answered. `unavailable` — no query ran.
+   *
+   * The backend no longer emits `sample`: it used to return five fabricated
+   * CrowdStrike events unconditionally, and that generator is deleted.
+   * `sample` survives on {@link HuntResponse} because the console's own
+   * demo-gated fallback still constructs it client-side.
+   *
+   * Not optional. The handler sets it on every path — it used to carry a
+   * default, which is why this was `source?:` — and declaring it optional
+   * makes a caller guard a case the service cannot produce.
+   */
+  source: "live" | "unavailable";
   notice?: string | null;
 }
 
@@ -4460,8 +4473,13 @@ export interface HuntResponse {
    */
   tookMs: number | null;
   hits: HuntResult[];
-  /** `sample` means the backend generated illustrative events. */
-  source: "sample" | "live";
+  /**
+   * `live` — these hits came from the tenant's lake; zero of them is a
+   * result. `unavailable` — no query ran, and `notice` says why; zero hits
+   * is not a result and must not read as one. `sample` — the console's own
+   * demo-gated fallback, never the backend.
+   */
+  source: "sample" | "live" | "unavailable";
   notice: string | null;
 }
 
@@ -4499,8 +4517,10 @@ export function normalizeHuntResponse(raw: unknown): HuntResponse {
     hits,
     // A backend that did not say is not a backend that said "live". The
     // honesty marker defaults to the claim that costs nothing to be wrong
-    // about.
-    source: r.source === "live" ? "live" : "sample",
+    // about — and `unavailable` is carried through rather than collapsed
+    // into `sample`, because "we could not look" and "here are invented
+    // events" are different things to put in front of an analyst.
+    source: r.source === "live" ? "live" : r.source === "unavailable" ? "unavailable" : "sample",
     notice: typeof r.notice === "string" ? r.notice : null,
   };
 }
@@ -5983,6 +6003,12 @@ export interface ContextualStreamFrame {
   confidence?: number;
   /** Error frame. */
   error?: string;
+  /**
+   * Whether asking again could succeed. `false` means the deployment has no
+   * model configured, which no retry reaches — the frame used to say
+   * "Streaming failed. Please try again." for that case too.
+   */
+  retryable?: boolean;
 }
 
 export const contextualApi = {
