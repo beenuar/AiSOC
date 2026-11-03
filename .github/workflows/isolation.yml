@@ -27,6 +27,7 @@ on:
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
       - "scripts/check_one_case_table.py"
+      - "scripts/check_orphan_tables.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -51,6 +52,7 @@ on:
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
       - "scripts/check_one_case_table.py"
+      - "scripts/check_orphan_tables.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -215,6 +217,20 @@ jobs:
 
       - name: One case table, and one status vocabulary
         run: python scripts/check_one_case_table.py
+
+      # Module reachability answers "does anything import this file" and
+      # cannot answer the question stored state turns on: which code path
+      # writes this table. Three tables shipped with a migration that applied
+      # cleanly, a reader that ran perfectly or no reader at all, and every
+      # gate here green — `triage_questions` read on the hot path of every
+      # alert with no writer anywhere, `hunt_source_reports` a pure orphan
+      # whose approval column enforced the property its own migration states,
+      # and migration 142's two tables named in exactly one file repo-wide.
+      - name: Orphan-table self-test (the shape, and the near misses)
+        run: python scripts/check_orphan_tables.py --self-test
+
+      - name: Every table a migration creates is named outside it
+        run: python scripts/check_orphan_tables.py
 
       # The second layer, which was decoration until 061_runtime_app_role.sql:
       # every service connected as a superuser, and a superuser ignores RLS

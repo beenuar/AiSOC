@@ -104,6 +104,7 @@ from app.api.v1.endpoints import (
     tenants,
     threat_intel,
     translation,
+    triage_questions,
     usage,
     verification_policies,
     waitlist,
@@ -297,6 +298,7 @@ api_router.include_router(feedback.router)
 
 # Configurable autonomy guardrails — three-tier per-action confidence (Tier 1.3)
 api_router.include_router(autonomy_policy.router)
+api_router.include_router(triage_questions.router)
 
 # Business Context Rules — Track 3, T3.5 (v8.0 parallel team plan).
 # YAML rule engine that mutates fused alerts (severity bump, route, suppress,
