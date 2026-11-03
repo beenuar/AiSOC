@@ -31611,6 +31611,14 @@ components:
         mttd_seconds:
           type: number
           title: Mttd Seconds
+        signal_to_noise_sample_count:
+          type: integer
+          title: Signal To Noise Sample Count
+          default: 0
+        mttd_sample_count:
+          type: integer
+          title: Mttd Sample Count
+          default: 0
         analyst_queue_depth:
           type: integer
           title: Analyst Queue Depth
@@ -31681,15 +31689,23 @@ components:
 
         All counts are absolute for ``period``. ``signal_to_noise`` is the
 
-        fraction of *resolved* alerts that ended in disposition ``true_positive``
+        fraction of *decided* verdicts that ended in disposition
 
-        (i.e. signal / (signal + noise)). ``mttd_seconds`` mirrors /metrics/soc''s
+        ``true_positive`` (i.e. signal / (signal + noise)); alerts the agent
 
-        MTTD definition (Alert.created_at → Alert.first_seen_at) but expressed in
+        abstained on with ``needs_review`` are in neither half, because scoring
 
-        seconds for funnel-level precision. ``deltas`` compares this period to the
+        an agent on questions it refused to answer is not an accuracy figure.
 
-        immediately preceding period of the same length.'
+        ``mttd_seconds`` mirrors /metrics/soc''s MTTD definition
+
+        (Alert.created_at → Alert.first_seen_at) but expressed in seconds for
+
+        funnel-level precision. Each of those two travels with the count of rows
+
+        it was computed over -- read them as a pair. ``deltas`` compares this
+
+        period to the immediately preceding period of the same length.'
     GateLogOut:
       properties:
         id:
@@ -39703,6 +39719,10 @@ components:
         analyst_overrides_7d:
           type: integer
           title: Analyst Overrides 7D
+        ai_dispositions_7d:
+          type: integer
+          title: Ai Dispositions 7D
+          default: 0
         mttd_sample_count:
           type: integer
           title: Mttd Sample Count
