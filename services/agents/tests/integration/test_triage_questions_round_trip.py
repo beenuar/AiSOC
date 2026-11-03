@@ -50,7 +50,9 @@ async def _connect(tenant_id: str):  # noqa: ANN202
     import asyncpg
 
     conn = await asyncpg.connect(DSN, timeout=5.0)
-    await conn.execute("SELECT set_config('aisoc.tenant_id', $1, true)", tenant_id)
+    # `app.current_tenant_id` is what `current_tenant_id()` reads, so RLS
+    # genuinely applies to these statements as the DML-only runtime role.
+    await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", tenant_id)
     return conn
 
 

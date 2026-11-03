@@ -81,7 +81,12 @@ async def _connect(dsn: str, tenant_id: str):  # noqa: ANN202
     # policy carries an `OR current_tenant_id() IS NULL` arm for the hunting
     # worker, which means an unbound session reads tenant-wide — the
     # fail-open shape this repository has shipped before.
-    await conn.execute("SELECT set_config('aisoc.tenant_id', $1, true)", tenant_id)
+    #
+    # The setting is `app.current_tenant_id`, which is what
+    # `current_tenant_id()` reads. `aisoc.tenant_id` is a name no policy
+    # consults, and binding it would leave every statement here passing on
+    # that permissive arm while looking scoped.
+    await conn.execute("SELECT set_config('app.current_tenant_id', $1, true)", tenant_id)
     return conn
 
 
