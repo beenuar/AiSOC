@@ -12866,7 +12866,14 @@ paths:
 
         approved request returns the row unchanged; trying to flip an
 
-        approved row to denied (or vice versa) is a 409.'
+        approved row to denied (or vice versa) is a 409.
+
+
+        Separation of duties, the named approver and the approval window are each
+
+        enforced; a requester cannot approve their own request, and an elapsed
+
+        approval can be denied but not approved.'
       operationId: decide_approval_api_v1_approvals__approval_id__decide_post
       security:
       - HTTPBearer: []
