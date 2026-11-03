@@ -13,6 +13,7 @@ HTTP routing uses ``respx`` exactly like ``test_wazuh_connector.py``.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, date, datetime
 
 import httpx
@@ -211,14 +212,51 @@ class TestThePromotionContract:
         assert "ON CONFLICT (tenant_id, idempotency_key)" in UPSERT_ALERT_SQL
         assert "GROUP BY v.cve_id" in PROMOTE_CANDIDATES_SQL
 
-    def test_scheduler_registers_the_promotion_job(self):
-        import inspect
+    def test_no_statement_uses_the_colon_cast_spelling(self):
+        """``:name::type`` is never substituted and reaches the driver verbatim.
+
+        The assertions above are substring checks on the SQL text, and that is
+        the whole reason ``UPSERT_ALERT_SQL`` could carry
+        ``:affected_hosts::jsonb`` for its entire life while every test passed:
+        the substring was present and correct, and the statement answered
+        ``syntax error at or near ":"`` on every execution. This is the one
+        property a text assertion *can* decide, so it is asserted here, and
+        ``tests/test_vuln_promotion_live.py`` runs the statements for real.
+        """
+        from app import vuln_promotion_sql
+
+        for name in vuln_promotion_sql.__all__:
+            sql = getattr(vuln_promotion_sql, name)
+            offenders = re.findall(r"(?<![:\w\\]):(\w+)::", sql)
+            assert not offenders, f"{name}: {offenders} are written `:name::type`; use CAST(:name AS type)"
+
+    @pytest.mark.asyncio
+    async def test_the_scheduler_actually_registers_the_promotion_job(self):
+        """Read off a real APScheduler after a real ``start()``.
+
+        This asserted ``"_vuln_promotion_loop" in inspect.getsource(...)``,
+        which proves the identifier appears in the file and nothing about
+        whether a job exists. Driving ``start()`` is what makes the six-hour
+        interval and the bound coroutine assertable.
+        """
+        import os
 
         from app.scheduler import ConnectorScheduler
 
-        src = inspect.getsource(ConnectorScheduler)
-        assert "_vuln_promotion_loop" in src
-        assert "_promote_overdue_findings" in src
+        os.environ.pop("AISOC_CONNECTORS_LEADER_ELECTION", None)
+        scheduler = ConnectorScheduler(
+            engine=_NoRowsEngine(),
+            ingest_client=_ClosableClient(),
+            vault=object(),
+        )
+        await scheduler.start()
+        try:
+            job = scheduler._scheduler.get_job("_vuln_promotion_loop")  # noqa: SLF001
+            assert job is not None, "the promotion sweep is not scheduled at all"
+            assert job.func == scheduler._promote_overdue_findings  # noqa: SLF001
+            assert job.trigger.interval.total_seconds() == 6 * 3600.0
+        finally:
+            await scheduler.stop()
 
     def test_inventory_insert_mints_the_window_once(self):
         from app.vulnerabilities import _INSERT_VULN, _TOUCH_VULN
@@ -229,3 +267,47 @@ class TestThePromotionContract:
         # A re-poll must never move the promised date or un-overdue a row.
         assert "patch_due_date" not in touch
         assert "patch_status" not in touch
+
+
+class _NoRowsEngine:
+    """An engine whose reads return nothing, so ``start()`` can run with no DB.
+
+    Only the reload loop reads through it during startup; the promotion job
+    this test is about is registered unconditionally.
+    """
+
+    def connect(self):  # noqa: ANN201
+        return _NoRowsCtx()
+
+    def begin(self):  # noqa: ANN201
+        return _NoRowsCtx()
+
+
+class _NoRowsCtx:
+    async def __aenter__(self):  # noqa: ANN204
+        return self
+
+    async def __aexit__(self, *exc) -> bool:  # noqa: ANN002
+        return False
+
+    async def execute(self, *_args, **_kwargs):  # noqa: ANN202
+        return self
+
+    def scalars(self):  # noqa: ANN202
+        return self
+
+    def fetchall(self):  # noqa: ANN202
+        return []
+
+    def all(self):  # noqa: ANN202
+        return []
+
+    def mappings(self):  # noqa: ANN202
+        return self
+
+
+class _ClosableClient:
+    """Enough of IngestClient for ``stop()`` to drain cleanly."""
+
+    async def aclose(self) -> None:
+        return None
