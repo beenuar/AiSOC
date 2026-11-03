@@ -52,6 +52,17 @@ ORCHESTRATOR = ROOT / "tools" / "detection_import" / "import_orchestrator.py"
 #: Where a fetched upstream snapshot is cached, so --check does not re-download.
 CACHE = ROOT / ".import-cache" / "sigma-authors"
 
+#: The only host this tool reads from. The URL is assembled from this literal
+#: prefix plus a 40-character hex commit validated below, and the fetch refuses
+#: anything that does not start with it — so the `file://` read semgrep's
+#: `dynamic-urllib-use-detected` warns about is not reachable here. The rule
+#: still fires on any non-literal argument to `urlopen`; it is counted in
+#: `.security/allowlist.yml` rather than suppressed, matching how the other
+#: five instances in this repository are handled.
+CODELOAD_ROOT = "https://codeload.github.com/SigmaHQ/sigma/tar.gz/"
+
+_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+
 ABSENT = "(no author recorded upstream)"
 
 _PIN_RE = re.compile(r'^SIGMA_COMMIT\s*=\s*"([0-9a-f]{40})"', re.MULTILINE)
@@ -91,10 +102,14 @@ def upstream_authors(commit: str) -> dict[str, str]:
     side is read with the parser; only the write-back is line-based, so the
     vendored files keep their formatting.
     """
+    if not _SHA_RE.match(commit):
+        raise SystemExit(f"refusing to fetch: {commit!r} is not a 40-character commit sha")
     archive = CACHE / f"{commit}.tar.gz"
     if not archive.exists():
         CACHE.mkdir(parents=True, exist_ok=True)
-        url = f"https://codeload.github.com/SigmaHQ/sigma/tar.gz/{commit}"
+        url = CODELOAD_ROOT + commit
+        if not url.startswith(CODELOAD_ROOT):
+            raise SystemExit(f"refusing to fetch outside {CODELOAD_ROOT}: {url}")
         print(f"fetching {url}")
         with urllib.request.urlopen(url, timeout=180) as response:  # noqa: S310 — fixed host, pinned commit
             archive.write_bytes(response.read())

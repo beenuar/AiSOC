@@ -280,7 +280,25 @@ ceilings:
     # numbers; the new line was also located in the diff before the ceiling
     # was touched, so this is the ratchet's documented path for an understood
     # finding and not a ceiling raised to make a scan pass.
-    total: 113
+    #
+    # 113 -> 114 (error unchanged at 44). A sixth
+    # `dynamic-urllib-use-detected`, in scripts/sync_sigma_authors.py, which
+    # fetches SigmaHQ/sigma at the commit the importer pins so every imported
+    # rule can carry the author DRL-1.1 requires (#1680). Identical shape to
+    # the five already counted: `CODELOAD_ROOT` is a module-level literal, the
+    # commit is refused unless it matches `^[0-9a-f]{40}$`, and the fetch
+    # refuses any URL not starting with that root — so the `file://` read the
+    # rule warns about is unreachable, while the rule still fires on any
+    # non-literal argument to `urlopen`.
+    #
+    # Attributed before the ceiling moved, which is the condition this file
+    # places on raising one. CI measured 114/44 against the ceiling of 113 and
+    # named the delta as 1; the branch adds exactly one `urlopen` call site,
+    # and `error` is unchanged, which is what distinguishes a new WARNING of a
+    # known shape from the +/-1 the long note above describes (that drift
+    # moves `error` and `total` together). Counted rather than suppressed: a
+    # ceiling counts a finding, a suppression hides it.
+    total: 114
     error: 44
     measured_with: "1.86.0"
     rules_sha256: "5af76658e7e28b96b1099d2c995d7c85b3b9a4f96795a39df3d02aa7d295cb99"
