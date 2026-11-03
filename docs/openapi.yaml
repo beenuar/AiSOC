@@ -11113,6 +11113,178 @@ paths:
                 $ref: '#/components/schemas/HTTPValidationError'
       security:
       - HTTPBearer: []
+  /api/v1/software-inventory/ecosystems:
+    get:
+      tags:
+      - software-inventory
+      summary: The osquery tables this inventory reads
+      description: 'Published so a console filter is not a second copy of this list.
+
+
+        A vocabulary declared twice is how a value ends up filterable on one
+
+        surface and invisible on the other.'
+      operationId: list_ecosystems_api_v1_software_inventory_ecosystems_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties: true
+                type: object
+                title: Response List Ecosystems Api V1 Software Inventory Ecosystems
+                  Get
+      security:
+      - HTTPBearer: []
+  /api/v1/software-inventory/osquery:
+    post:
+      tags:
+      - software-inventory
+      summary: Record packages an endpoint agent reported
+      operationId: ingest_osquery_api_v1_software_inventory_osquery_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: table
+        in: query
+        required: true
+        schema:
+          type: string
+          description: The osquery table these rows came from
+          title: Table
+        description: The osquery table these rows came from
+      - name: host
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          description: The host that reported them
+          title: Host
+        description: The host that reported them
+      - name: asset_id
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Asset Id
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                additionalProperties: true
+              title: Rows
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ingest Osquery Api V1 Software Inventory Osquery Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/software-inventory/sbom:
+    post:
+      tags:
+      - software-inventory
+      summary: Record packages a repository's SBOM declares
+      operationId: ingest_sbom_api_v1_software_inventory_sbom_post
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: repository
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          title: Repository
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              title: Document
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response Ingest Sbom Api V1 Software Inventory Sbom Post
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/software-inventory:
+    get:
+      tags:
+      - software-inventory
+      summary: Where a package runs, and whether its runtime is still supported
+      operationId: list_packages_api_v1_software_inventory_get
+      security:
+      - HTTPBearer: []
+      parameters:
+      - name: source
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+            pattern: ^(osquery|sbom)$
+          - type: 'null'
+          title: Source
+      - name: name
+        in: query
+        required: false
+        schema:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Name
+      - name: limit
+        in: query
+        required: false
+        schema:
+          type: integer
+          maximum: 1000
+          minimum: 1
+          default: 200
+          title: Limit
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+                title: Response List Packages Api V1 Software Inventory Get
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
   /api/v1/investigations:
     get:
       tags:
@@ -16349,6 +16521,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreviewResponse'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+  /api/v1/business-context/rules/compile:
+    post:
+      tags:
+      - business-context
+      summary: Compile Rule
+      description: 'Compile one plain-language sentence into the structured rule schema.
+
+
+        Saves nothing. The returned ``rule`` is the exact mapping a save would
+
+        write, so the preview and the save cannot drift — they are one dict.'
+      operationId: compile_rule_api_v1_business_context_rules_compile_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompileRequest'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompileResponse'
         '422':
           description: Validation Error
           content:
@@ -26752,6 +26957,53 @@ components:
       - author
       - submitted_at
       title: CommunityPluginOut
+    CompileRequest:
+      properties:
+        sentence:
+          type: string
+          maxLength: 2000
+          title: Sentence
+        rule_id:
+          type: string
+          maxLength: 63
+          minLength: 3
+          title: Rule Id
+        description:
+          type: string
+          maxLength: 300
+          title: Description
+          default: ''
+      type: object
+      required:
+      - sentence
+      - rule_id
+      title: CompileRequest
+    CompileResponse:
+      properties:
+        rule:
+          additionalProperties: true
+          type: object
+          title: Rule
+        yaml:
+          type: string
+          title: Yaml
+        fields:
+          items:
+            $ref: '#/components/schemas/FieldCoverage'
+          type: array
+          title: Fields
+        warnings:
+          items:
+            type: string
+          type: array
+          title: Warnings
+      type: object
+      required:
+      - rule
+      - yaml
+      - fields
+      - warnings
+      title: CompileResponse
     CompliancePosture:
       properties:
         framework:
@@ -30752,6 +31004,23 @@ components:
       - is_enabled
       - created_at
       title: FeedOut
+    FieldCoverage:
+      properties:
+        field:
+          type: string
+          title: Field
+        present_in:
+          type: integer
+          title: Present In
+        sample_size:
+          type: integer
+          title: Sample Size
+      type: object
+      required:
+      - field
+      - present_in
+      - sample_size
+      title: FieldCoverage
     FindingCreate:
       properties:
         cloud_provider:
@@ -35304,6 +35573,23 @@ components:
             type: string
           type: array
           title: Unsupported Filters
+        executed_query:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Executed Query
+        executed_query_language:
+          anyOf:
+          - type: string
+            enum:
+            - sql
+            - esql
+          - type: 'null'
+          title: Executed Query Language
+        executed_query_params:
+          additionalProperties: true
+          type: object
+          title: Executed Query Params
       type: object
       required:
       - request_id

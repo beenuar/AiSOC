@@ -4,6 +4,8 @@ Agent service REST API.
 
 from __future__ import annotations
 
+import hashlib
+import os
 from datetime import datetime
 from typing import Annotated, Any
 from uuid import UUID, uuid4
@@ -13,7 +15,9 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.graph.runner import run_full_investigation
+from app.hunt import from_report
 from app.hunt.agent import run_hunt
+from app.hunt.plan import HUNT_FIELDS
 from app.investigator import ledger as ledger_module
 from app.llm import safe_ainvoke
 from app.llm.factory import make_chat_model
@@ -200,6 +204,94 @@ async def run_nl_hunt(request: HuntRequest, principal: ScopedPrincipal) -> HuntR
         refusals=list(result.refusals or []),
         unavailable_reason=result.unavailable_reason,
     )
+
+
+class ReportDraftRequest(BaseModel):
+    """A published write-up to read indicators out of, for review."""
+
+    tenant_id: UUID
+    url: str
+
+
+class ReportDraftResponse(BaseModel):
+    """What a reviewer is shown. Deliberately not a hunt.
+
+    This route drafts and stops. The indicators came out of a document
+    somebody else published, so turning them straight into a query would
+    let the author of a write-up choose what this tenant searches for.
+    `clauses` is what *would* run if a human approves it, and `refusals`
+    names every indicator that would not, because "the draft dropped
+    something" is information a reviewer needs before approving the rest.
+    """
+
+    url: str
+    byte_size: int
+    content_sha256: str
+    truncated: bool
+    indicators: list[dict[str, Any]] = []
+    techniques: list[str] = []
+    skipped_indicators: int = 0
+    clauses: list[dict[str, str]] = []
+    refusals: list[str] = []
+
+
+@router.post("/hunt/from-report", response_model=ReportDraftResponse)
+async def draft_hunt_from_report(request: ReportDraftRequest, principal: ScopedPrincipal) -> ReportDraftResponse:
+    """Read a published report and draft the hunt it implies.
+
+    This route is what takes `app/hunt/from_report.py` off the unreachable
+    list, for the same reason `/hunt` above took `app/hunt/agent.py` off it:
+    the module was complete and tested and its only importer repo-wide was
+    its own test, which proves the code compiles rather than that it runs.
+
+    Three properties the module owns and this route must not undo:
+
+    * **Outbound fetching is off unless a tenant turned it on.** `enabled`
+      is a required keyword on `fetch_report`, so a caller cannot acquire
+      it by forgetting an argument. Here it comes from
+      `AISOC_HUNT_REPORT_FETCH_ENABLED`, default off, because it is
+      outbound traffic to a URL a caller chose.
+    * **The URL goes through the SSRF guard and a hard size bound** inside
+      `fetch_report`; the body is abandoned past the bound rather than
+      trusted to a `Content-Length` the fetched server supplies.
+    * **Nothing is hunted.** The draft is returned for a human to approve.
+    """
+    tenant_id = scoped_tenant_or_403(principal, request.tenant_id)
+    url = request.url.strip()
+    if not url:
+        raise HTTPException(status_code=422, detail="url must not be empty")
+
+    enabled = os.environ.get("AISOC_HUNT_REPORT_FETCH_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        text, truncated = await from_report.fetch_report(url, enabled=enabled)
+    except from_report.ReportDisabled as exc:
+        # 403, not 503: the deployment answered, and the answer is "no".
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except from_report.ReportFetchError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    indicators, techniques, skipped = from_report.extract_indicators(text)
+    clauses, refusals = from_report.draft_clauses(indicators, allowed_fields=frozenset(HUNT_FIELDS))
+    draft = from_report.ReportDraft(
+        url=url,
+        byte_size=len(text.encode("utf-8")),
+        content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        indicators=indicators,
+        techniques=techniques,
+        truncated=truncated,
+        skipped_indicators=skipped,
+    )
+    logger.info(
+        "hunt.report_drafted",
+        extra={
+            "tenant_id": str(tenant_id),
+            "indicators": len(indicators),
+            "refusals": len(refusals),
+            "truncated": truncated,
+        },
+    )
+    payload = draft.as_dict()
+    return ReportDraftResponse(**payload, clauses=clauses, refusals=refusals)
 
 
 @router.get("/health")

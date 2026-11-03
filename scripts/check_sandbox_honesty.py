@@ -153,6 +153,14 @@ _TECHNIQUE_KEY = re.compile(r"^T\d{4}(\.\d{3})?$")
 _SCORE = re.compile(r"\b\d{1,3}\s*/\s*100\b")
 #: "800+", "2,500+", "1200 +" — the shape of a corpus size written by hand.
 _HAND_TYPED_COUNT = re.compile(r"^\s*\d[\d,]{1,}\s*\+\s*$")
+#: The specific retired figure, searched across a whole JSON blob rather than
+#: against one field. A plain `"800+" in blob` also matches the middle of an
+#: ISO-8601 timestamp — `...:56.456800+00:00` contains it — so the check fired
+#: on roughly one run in twenty for a reason no author could act on. In a
+#: timestamp the digits are surrounded by digits on both sides; in the figure
+#: this guards they are not, so requiring a non-digit on each side separates
+#: them without loosening what it catches.
+_RETIRED_RULE_FIGURE = re.compile(r"(?<!\d)800\s*\+(?!\d)")
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +289,7 @@ def _check_behaviour(root: Path, workdir: Path) -> list[str]:
 
         if _SCORE.search(blob):
             problems.append(f"{name}: publishes an N/100 confidence score; the package computes none")
-        if "800+" in blob:
+        if _RETIRED_RULE_FIGURE.search(blob):
             problems.append(f"{name}: carries the hand-typed '800+' rule count")
         if expected_rules and expected_rules not in blob:
             problems.append(
@@ -647,6 +655,28 @@ def _with_patch(root: Path, relative: str, old: str, new: str) -> tuple[bool, st
 def _self_test(root: Path) -> int:
     clean = check(root)
     extra = [(f"the tree as committed passes ({len(clean)} problem(s))", not clean)]
+
+    # The retired-figure pattern needs its own control. The injection below
+    # that puts the figure back exercises the `rule_count`-argument detector,
+    # not this one, so tightening this pattern against the timestamp false
+    # positive would otherwise be unobserved. Both directions, because the
+    # tightening is only correct if it still catches every shape the figure
+    # was actually found in.
+    extra.append(
+        (
+            "the retired rule figure is still caught in every shape it was found in",
+            all(
+                _RETIRED_RULE_FIGURE.search(blob)
+                for blob in ('{"rule_count": "800+"}', '"rule_count": "800 +"', "matched against 800+ rules")
+            ),
+        )
+    )
+    extra.append(
+        (
+            "a timestamp whose microseconds end in 800 is not the retired figure",
+            not _RETIRED_RULE_FIGURE.search('"at": "2026-11-02T22:45:56.456800+00:00"'),
+        )
+    )
 
     # Each injection restores one half of the reported defect. A gate that
     # has only ever seen a clean tree has not been shown to fail.
