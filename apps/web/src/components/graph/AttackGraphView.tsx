@@ -32,6 +32,7 @@ import {
 } from '@/lib/api';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { CapabilityUnavailable, isCapabilityAbsent } from '@/components/ui/CapabilityUnavailable';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { canUseDemoData } from '@/lib/demoFallback';
 
@@ -522,6 +523,10 @@ export function AttackGraphView() {
     { revalidateOnFocus: false, refreshInterval: 30_000 },
   );
 
+  /** Any failure, so the "auto-refreshes every 30s" line is not promised
+   *  while nothing is in fact being refreshed. */
+  const graphUnavailable = Boolean(graphState.error);
+
   const mitreState = useSWR<MitreCoverage>(
     'mitre-coverage',
     async () => {
@@ -591,6 +596,18 @@ export function AttackGraphView() {
               <div className="p-6 space-y-3">
                 <Skeleton className="h-4 w-40" />
                 <Skeleton className="h-[480px] w-full rounded-lg" />
+              </div>
+            ) : isCapabilityAbsent(graphState.error) ? (
+              // Neo4j is a `full`-profile service. A CORE deployment gets a
+              // 503 here, and the generic error offered "Try again" — the
+              // one action guaranteed not to work — over a condition that
+              // is a deployment choice rather than a fault.
+              <div className="p-6">
+                <CapabilityUnavailable
+                  capability="The entity graph"
+                  service="Neo4j"
+                  detail={graphState.error}
+                />
               </div>
             ) : graphState.error ? (
               <div className="p-6">
@@ -681,10 +698,20 @@ export function AttackGraphView() {
                   Edges show how identities, assets, processes and ATT&amp;CK
                   techniques relate.
                 </li>
-                <li>
-                  The graph auto-refreshes every 30s as new events arrive
-                  through the ingest service.
-                </li>
+                {/* Only while it can. Promising a 30-second refresh on a
+                    deployment with no Neo4j is a promise the page cannot
+                    keep, and it sat directly under the failure notice. */}
+                {graphUnavailable ? (
+                  <li>
+                    Live refresh is paused: the graph service is not answering,
+                    so nothing on this panel is being updated.
+                  </li>
+                ) : (
+                  <li>
+                    The graph auto-refreshes every 30s as new events arrive
+                    through the ingest service.
+                  </li>
+                )}
               </ul>
             )}
           </aside>
@@ -712,6 +739,12 @@ export function AttackGraphView() {
 
         {mitreState.isLoading ? (
           <Skeleton className="h-64 w-full rounded-lg" />
+        ) : isCapabilityAbsent(mitreState.error) ? (
+          <CapabilityUnavailable
+            capability="ATT&CK coverage from the graph"
+            service="Neo4j"
+            detail={mitreState.error}
+          />
         ) : mitreState.error ? (
           <ErrorState
             title="Couldn't load MITRE coverage"

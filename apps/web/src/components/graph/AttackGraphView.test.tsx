@@ -94,7 +94,11 @@ describe('AttackGraphView, demo mode off', () => {
     expect(screen.queryByText(GENERATED)).toBeNull();
   });
 
-  it('names the endpoint and the status rather than inventing a graph', async () => {
+  it('reads a 503 as Neo4j not being in this deployment, and offers no retry', async () => {
+    // Neo4j is a `full`-profile service, so on CORE this is a deployment
+    // choice rather than a fault. The generic error offered "Try again" —
+    // the one action guaranteed not to work — and the panel underneath
+    // promised a 30-second auto-refresh it could not perform.
     getOverview.mockRejectedValue(
       new ApiError('API 503 Service Unavailable — /api/v1/graph', 503),
     );
@@ -103,12 +107,32 @@ describe('AttackGraphView, demo mode off', () => {
     expect(screen.queryByText(GENERATED)).toBeNull();
 
     await waitFor(() => {
+      expect(
+        screen.getByText(/The entity graph is not part of this deployment/),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Couldn't load graph")).toBeNull();
+    expect(screen.queryByText(/Try again/i)).toBeNull();
+    expect(screen.queryByText(/auto-refreshes every 30s/)).toBeNull();
+    expect(screen.getByText(/Live refresh is paused/)).toBeInTheDocument();
+    // Still nothing fabricated standing in for the estate.
+    expect(screen.queryByText(GENERATED)).toBeNull();
+  });
+
+  it('still names the endpoint and the status for a fault that is worth retrying', async () => {
+    // A 500 is a service that is present and threw. Reading that as "not
+    // deployed" would tell an operator to stop looking at something broken.
+    getOverview.mockRejectedValue(
+      new ApiError('API 500 Internal Server Error — /api/v1/graph', 500),
+    );
+    renderView();
+
+    await waitFor(() => {
       expect(screen.getByText("Couldn't load graph")).toBeInTheDocument();
     });
     expect(
-      screen.getByText('API 503 Service Unavailable — /api/v1/graph'),
+      screen.getByText('API 500 Internal Server Error — /api/v1/graph'),
     ).toBeInTheDocument();
-    // Still nothing fabricated standing in for the estate.
     expect(screen.queryByText(GENERATED)).toBeNull();
   });
 
@@ -268,7 +292,9 @@ describe('AttackGraphView, truncated response', () => {
     renderView();
 
     await waitFor(() => {
-      expect(screen.getByText("Couldn't load graph")).toBeInTheDocument();
+      expect(
+        screen.getByText(/The entity graph is not part of this deployment/),
+      ).toBeInTheDocument();
     });
     expect(queryNotice()).toBeNull();
   });

@@ -118,7 +118,7 @@ export function EASMView() {
     return (
       <NotYetWired
         title="External Attack Surface Management"
-        description="External asset discovery is not wired to a live scanner in this build, so there is nothing to show for your tenant. The sample inventory is available in the hosted demo."
+        description="External asset discovery is not wired to a live scanner in this build, so there is nothing to show for your tenant."
       />
     );
   }

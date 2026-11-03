@@ -455,7 +455,13 @@ async def get_graph_overview(
         )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"graph backend unavailable: {type(exc).__name__}",
+            # Name the likeliest cause rather than only the exception type.
+            # The console rendered "API 503 — /api/v1/graph" next to a Try
+            # again button, and on CORE the answer is not a fault: Neo4j is
+            # a `full`-profile service. `services/agents/app/tools/graph.py`
+            # has answered this condition in one sentence for a while; the
+            # route it fronts did not.
+            detail=(f"the entity graph runs in the `full` profile and is not part of this deployment ({type(exc).__name__})"),
         ) from exc
 
     nodes = [n for n in (_to_overview_node(r) for r in data["nodes"]) if n is not None]
