@@ -328,6 +328,19 @@ class GitLabConnector(BaseConnector):
             "actor_email": details.get("author_email"),
             "src_ip": details.get("ip_address"),
             "event_type": f"gitlab.{action_lower or 'audit'}",
+            # `details` is a dict and the engine flattens `raw_event` one
+            # level, so the object an audit event acted on -- the key that
+            # was added, the member whose access changed -- was invisible.
+            # `event_type` is built from GitLab's free-text `custom_message`
+            # and therefore carries spaces ("gitlab.added deploy key"), so a
+            # stable underscored key is lifted beside it for rules to clause
+            # on; the original stays for anyone reading an alert.
+            "action_key": (action_lower or "audit").replace(" ", "_"),
+            "target_type": details.get("target_type"),
+            "target_details": details.get("target_details"),
+            "target_id": details.get("target_id"),
+            "entity_type": raw.get("entity_type"),
+            "entity_path": raw.get("entity_path"),
             "raw_event": raw,
             "created_at": raw.get("created_at"),
         }

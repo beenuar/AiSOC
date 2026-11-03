@@ -1,0 +1,23 @@
+id: det-application-184
+name: Atlassian Content Restrictions Updated
+description: Restrictions are what keep a page from the rest of the space.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: atlassian
+  service: audit
+detection:
+  condition: |
+    summary_key == "restrictions_updated"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

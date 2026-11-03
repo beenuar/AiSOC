@@ -1,0 +1,4 @@
+{
+  "k8s_resource": "daemonsets",
+  "k8s_verb": "delete"
+}

@@ -119,6 +119,28 @@ class Settings(BaseSettings):
     # sliding-window thresholds evaluated alongside the stateless corpus.
     windowed_detection_enabled: bool = Field(default=True, alias="AISOC_WINDOWED_DETECTION_ENABLED")
 
+    # Wave 2 item 2.2 — distinct source networks per account accumulated over
+    # weeks, on the Redis the windowed engine already uses. On by default
+    # because the rules that read its derived fields ship enabled, and a rule
+    # whose inputs nothing publishes is a rule that cannot fire.
+    long_horizon_identity_enabled: bool = Field(default=True, alias="AISOC_LONG_HORIZON_IDENTITY_ENABLED")
+    # Wave 2 item 2.3 — several individually unalarming signals becoming one
+    # finding. On by default: every signal it reads is already computed by
+    # first-seen, the baselines or ingest, so the marginal cost is the
+    # accumulation itself, and the threshold is calibrated so no single
+    # signal can reach it.
+    weak_signal_aggregation_enabled: bool = Field(default=True, alias="AISOC_WEAK_SIGNAL_AGGREGATION_ENABLED")
+    # Wave 2 item 2.4 — API behaviour from access logs. Off unless a tenant
+    # opts in, which the plan requires and the cost justifies: templating
+    # every access-log line is hot-path work, and most deployments ingest no
+    # access logs at all. Comma-separated tenant ids.
+    api_behaviour_tenants: str = Field(default="", alias="AISOC_API_BEHAVIOUR_TENANTS")
+
+    @property
+    def api_behaviour_tenant_set(self) -> frozenset[str]:
+        """The opted-in tenants, as the profiler's `enabled_for` wants them."""
+        return frozenset(part.strip() for part in self.api_behaviour_tenants.split(",") if part.strip())
+
     # Phase A4 — consume the UEBA behavioral-anomaly stream and fold each
     # entity's latest anomaly into alert confidence + anomaly score at fuse
     # time (app/services/ueba_signal.py). Completes the three-model story.

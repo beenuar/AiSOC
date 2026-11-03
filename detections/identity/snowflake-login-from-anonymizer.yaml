@@ -1,0 +1,26 @@
+id: det-identity-179
+name: Snowflake Sign-In From An Anonymizing Or Hosting Network
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Snowflake Sign-In
+  From An Anonymizing Or Hosting Network'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1078.004
+- mitre.attack.t1090.003
+- tlp.white
+category: identity
+log_source:
+  product: snowflake
+  service: login-history
+detection:
+  condition: |
+    event_type == "snowflake.login"
+    AND is_success == true
+    AND ip_class IN ["vpn", "tor_exit", "public_proxy", "hosting_provider"]
+false_positives:
+- Warehouse reached through a cloud-hosted transformation job
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

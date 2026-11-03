@@ -239,6 +239,8 @@ class DetectionEngine:
         overlay: Any | None = None,
         first_seen: Any | None = None,
         baselines: Any | None = None,
+        long_horizon: Any | None = None,
+        api_behaviour: Any | None = None,
     ) -> list[DetectionHit]:
         """`evaluate`, plus the enrichments that need Redis.
 
@@ -253,18 +255,80 @@ class DetectionEngine:
         different questions about the same event — "have we seen this value
         before" and "how usual is it for this principal" — and a rule may
         read one, the other or both.
+
+        `long_horizon` is depth 2 wave 2 item 2.2: how many distinct source
+        networks have failed and succeeded against one account over weeks.
+        It is a third store for the same reason — a day is the windowed
+        engine's longest window, and an attack deliberately spread below an
+        hourly threshold is invisible to every one of these but this one.
+
+        `api_behaviour` is item 2.4, and it is a fourth: an access log's
+        shape — a parameter nobody has sent on this endpoint before, a
+        known one whose type changed — is not a count, a novelty or a
+        deviation, and it is off per tenant so a deployment that ingests no
+        access logs pays one set membership test.
+        """
+        extra = await self.context_fields(
+            message,
+            first_seen=first_seen,
+            baselines=baselines,
+            long_horizon=long_horizon,
+            api_behaviour=api_behaviour,
+        )
+        return self.evaluate(message, overlay, _extra_fields=extra)
+
+    async def context_fields(
+        self,
+        message: dict[str, Any],
+        *,
+        first_seen: Any | None = None,
+        baselines: Any | None = None,
+        long_horizon: Any | None = None,
+        api_behaviour: Any | None = None,
+    ) -> dict[str, Any]:
+        """The store-derived fields `evaluate_async` folds into the namespace.
+
+        Public because weak-signal aggregation (item 2.3) reads exactly
+        these — `first_seen_*_for_principal`, `baseline_*_z` — and a second
+        caller computing them its own way is how two readers of one event
+        end up disagreeing about it. One definition, two consumers.
+
+        Each store is independent: the guard used to require first-seen or
+        baselines to be present, so passing only one of the later stores
+        silently skipped the whole pass.
         """
         extra: dict[str, Any] = {}
         ocsf = message.get("ocsf_event")
-        if (first_seen is not None or baselines is not None) and isinstance(ocsf, dict):
-            tenant = str(message.get("tenant_id") or ocsf.get("tenant_uid") or "")
-            if tenant:
-                fields = self._raw_fields(ocsf)
-                if first_seen is not None:
-                    extra.update(await first_seen.derived_fields(tenant, fields))
-                if baselines is not None:
-                    extra.update(await baselines.derived_fields(tenant, fields))
-        return self.evaluate(message, overlay, _extra_fields=extra)
+        stores = (first_seen, baselines, long_horizon, api_behaviour)
+        if not any(store is not None for store in stores) or not isinstance(ocsf, dict):
+            return extra
+        tenant = str(message.get("tenant_id") or ocsf.get("tenant_uid") or "")
+        if not tenant:
+            return extra
+        fields = self._raw_fields(ocsf)
+        for store in stores:
+            if store is not None:
+                extra.update(await store.derived_fields(tenant, fields))
+        return extra
+
+    def namespace(self, message: dict[str, Any], extra: dict[str, Any] | None = None) -> dict[str, Any]:
+        """The flat field namespace a rule is matched against.
+
+        Exposed for item 2.3's weak-signal aggregation, which reads the same
+        `ip_class`, `first_seen_*` and `baseline_*` keys the corpus does. It
+        asks for `ip_class` explicitly rather than relying on
+        `_derived_wanted`, because that set is derived from the rules and a
+        corpus where no rule happens to name `ip_class` would silently stop
+        publishing the anonymizer-egress signal.
+        """
+        ocsf = message.get("ocsf_event")
+        if not isinstance(ocsf, dict):
+            return {}
+        fields = self._raw_fields(ocsf)
+        fields = enrich(fields, self._derived_wanted | {"ip_class"})
+        if extra:
+            fields.update(extra)
+        return fields
 
     def evaluate(
         self, message: dict[str, Any], overlay: Any | None = None, *, _extra_fields: dict[str, Any] | None = None

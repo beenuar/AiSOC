@@ -50,6 +50,10 @@ import { AutonomyPolicyPanel } from '@/components/settings/AutonomyPolicy';
 import { AssignRoleModal } from '@/components/settings/AssignRoleModal';
 import { RetroHuntSettingsPanel } from './RetroHuntSettings';
 import { ScimTokensPanel } from './ScimTokensPanel';
+import { BrandingPanel } from './BrandingPanel';
+import { RetentionPanel } from './RetentionPanel';
+import { RulePacksPanel } from './RulePacksPanel';
+import { DelegationsPanel } from './DelegationsPanel';
 import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
 import { canUseDemoData } from '@/lib/demoFallback';
 import { rbacApi, authApi } from '@/lib/api';
@@ -63,6 +67,10 @@ type TabId =
   | 'autonomy'
   | 'api-keys'
   | 'scim'
+  | 'branding'
+  | 'retention'
+  | 'rule-packs'
+  | 'delegations'
   | 'notifications'
   | 'appearance'
   | 'deployment'
@@ -325,6 +333,26 @@ const TABS: { id: TabId; label: string; description: string }[] = [
       'Bearer credentials your identity provider uses to create and deprovision principals.',
   },
   {
+    id: 'branding',
+    label: 'Branding',
+    description: 'Product name, colours and support details for this organisation.',
+  },
+  {
+    id: 'retention',
+    label: 'Retention',
+    description: 'How long this tenant keeps raw events, alerts and audit history.',
+  },
+  {
+    id: 'rule-packs',
+    label: 'Rule packs',
+    description: 'Detection content you curate and assign to the tenants you manage.',
+  },
+  {
+    id: 'delegations',
+    label: 'Delegations',
+    description: 'Standing grants your organisation holds into managed tenants.',
+  },
+  {
     id: 'notifications',
     label: 'Notifications',
     description: 'How and when AiSOC should ping you.',
@@ -422,6 +450,10 @@ export function SettingsView() {
               )}
               {tab === 'api-keys' && <ApiKeysPanel />}
               {tab === 'scim' && <ScimTokensPanel />}
+              {tab === 'branding' && <BrandingPanel />}
+              {tab === 'retention' && <RetentionPanel />}
+              {tab === 'rule-packs' && <RulePacksPanel />}
+              {tab === 'delegations' && <DelegationsPanel />}
               {tab === 'notifications' && <NotificationsPanel />}
               {tab === 'appearance' && <AppearancePanel />}
               {tab === 'deployment' && <DeploymentAIPanel />}

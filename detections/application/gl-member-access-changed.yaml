@@ -1,0 +1,23 @@
+id: det-application-147
+name: GitLab Member Access Level Changed
+description: Maintainer and owner both reach protected branches and CI variables.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: gitlab
+  service: audit
+detection:
+  condition: |
+    action_key == "changed_access_level"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

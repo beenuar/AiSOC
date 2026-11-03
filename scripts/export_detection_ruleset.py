@@ -81,19 +81,27 @@ def _build() -> list[dict]:
                 "allocates ids for new slugs and writes the lock."
             )
         log_source = spec.get("log_source") or {}
-        rules.append(
-            {
-                "id": rule_id,
-                "slug": slug,
-                "name": spec["name"],
-                "severity": spec["severity"],
-                "category": category,
-                "product": log_source.get("product", ""),
-                "service": log_source.get("service", ""),
-                "mitre": [str(m).upper() for m in spec.get("mitre", [])],
-                "match_when": match_when,
-            }
-        )
+        rule: dict = {
+            "id": rule_id,
+            "slug": slug,
+            "name": spec["name"],
+            "severity": spec["severity"],
+            "category": category,
+            "product": log_source.get("product", ""),
+            "service": log_source.get("service", ""),
+            "mitre": [str(m).upper() for m in spec.get("mitre", [])],
+            "match_when": match_when,
+        }
+        # Depth 2 wave 2 item 2.1 asks for the corpus to be organised into
+        # named scenario families. The name travels with the rule into the
+        # artefact the engine loads, so the console and `make stats` read
+        # the same string the spec declared rather than re-deriving a family
+        # from the slug — which is how two surfaces come to disagree about
+        # what a rule covers. Rules predating the families carry none.
+        family = spec.get("family")
+        if family:
+            rule["family"] = str(family)
+        rules.append(rule)
     return rules
 
 

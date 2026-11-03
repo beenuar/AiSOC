@@ -16,6 +16,7 @@ from app.services.ai_asset_recorder import AiAssetRecorder
 from app.services.alert_enricher import AlertEnricher
 from app.services.alert_outbox import AlertNotificationOutbox
 from app.services.alert_sink import AlertSink
+from app.services.api_behaviour import ApiBehaviourProfiler
 from app.services.asset_context import AssetContextResolver
 from app.services.attack_chain_grouper import AttackChainGrouper
 from app.services.baselines import BaselineStore
@@ -30,9 +31,11 @@ from app.services.fusion_engine import FusionEngine
 from app.services.identity_privilege_context import IdentityPrivilegeResolver
 from app.services.ioc_match import TenantIocMatcher
 from app.services.lake_writer import LakeWriter
+from app.services.long_horizon_identity import LongHorizonIdentityStore
 from app.services.sessions import SessionStore
 from app.services.tenant_overlay import OverlayCache
 from app.services.ueba_signal import UebaSignalCache
+from app.services.weak_signals import WeakSignalAggregator
 from app.services.windowed_detection import WindowedDetectionEngine
 from app.workers.consumer import FusionWorker
 
@@ -157,6 +160,16 @@ async def lifespan(app: FastAPI):
     # same Redis. ADR-0011 records why this is a fusion module rather than
     # the `full`-profile UEBA service.
     baselines = BaselineStore(redis_client)
+    # Wave 2 items 2.2, 2.3 and 2.4 — three more stores on the same Redis.
+    # Each was built, tested and reachable from nothing, which is the defect
+    # `scripts/check_module_reachability.py` exists to name: a passing test
+    # on an uncalled module is indistinguishable from a working feature.
+    long_horizon = LongHorizonIdentityStore(redis_client) if settings.long_horizon_identity_enabled else None
+    weak_signals = WeakSignalAggregator(redis_client) if settings.weak_signal_aggregation_enabled else None
+    # Opt-in per tenant rather than a global switch: `enabled` is consulted
+    # before any Redis call, so an unconfigured deployment pays one set
+    # membership test per event and nothing else.
+    api_behaviour = ApiBehaviourProfiler(redis_client, enabled_for=settings.api_behaviour_tenant_set)
     # Dead letters go to Postgres so they can be read back. Until now the
     # worker defaulted to LoggingDLQ, so a dropped event produced a log
     # line and nothing else — and an invisible drop is indistinguishable
@@ -221,6 +234,9 @@ async def lifespan(app: FastAPI):
         windowed_detector=windowed_detector,
         first_seen=first_seen,
         baselines=baselines,
+        long_horizon=long_horizon,
+        api_behaviour=api_behaviour,
+        weak_signals=weak_signals,
         # Parity 5.4. Per-tenant detection tuning as a versioned overlay
         # with hot reload. Without it the engine evaluated the shared
         # corpus and nothing else, so a tenant who disabled a noisy rule

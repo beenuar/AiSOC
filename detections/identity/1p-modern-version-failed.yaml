@@ -1,0 +1,23 @@
+id: det-identity-185
+name: 1Password Sign-In Refused For An Outdated Client
+description: AiSOC v1 curated detection. Triggers on the identity signal described by '1Password Sign-In
+  Refused For An Outdated Client'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    event_type == "onepassword.signin.modern_version_failed"
+false_positives:
+- Staff member on an unmanaged device that has not updated
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

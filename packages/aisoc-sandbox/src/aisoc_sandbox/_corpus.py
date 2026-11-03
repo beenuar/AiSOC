@@ -18,7 +18,7 @@ this wheel, which is why the rendered text says so.
 from __future__ import annotations
 
 #: Rules the live fusion engine loads and can fire on a single event.
-LIVE_ENGINE_EXECUTABLE_RULES = 2538
+LIVE_ENGINE_EXECUTABLE_RULES = 2966
 
 #: Sliding-window rules the same worker loads; they need several events, so
 #: they are published as their own figure rather than folded into the above.

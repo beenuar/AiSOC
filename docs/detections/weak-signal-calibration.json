@@ -1,0 +1,7 @@
+{
+  "benign_items": 36,
+  "malicious_items": 36,
+  "measured": false,
+  "reason": "UNMEASURED \u2014 the verdict corpus carries vendor alert *evidence* (eventName, mfaAuthenticated, sourceIPAddress), not the enriched event the aggregator reads. Every weak signal it scores is produced by fusion at evaluate time \u2014 the first-seen novelty booleans, the item 1.6 ip_class, the baseline deviation scores, the IdP risk verdict \u2014 and none of them exists in a static corpus. All 36 malicious and 36 benign items scored 0.0, so there is no distribution to pick a threshold from and the shipped value is the module default.",
+  "return_to_measured": "A corpus of events replayed through fusion's enrichment \u2014 first-seen, baselines and ip_class \u2014 so the signals exist to be counted. The replay harness under services/fusion/tests can produce one; re-run scripts/calibrate_weak_signals.py."
+}

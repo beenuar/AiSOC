@@ -1,0 +1,23 @@
+id: det-application-159
+name: M365 Transport Rule Created
+description: A transport rule acts on every message in the organisation, not one mailbox.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1114.002
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: exchange
+detection:
+  condition: |
+    operation == "New-TransportRule"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

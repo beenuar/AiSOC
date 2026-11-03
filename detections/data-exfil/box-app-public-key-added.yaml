@@ -1,0 +1,24 @@
+id: det-data-exfil-032
+name: Box Application Public Key Added
+description: A public key added to a Box application authorises a new JWT signer, which is server-to-server
+  persistence that no user sign-in reveals.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1098.001
+- mitre.attack.t1528
+- tlp.white
+category: data-exfil
+log_source:
+  product: box
+  service: events
+detection:
+  condition: |
+    event_type == "box.APPLICATION_PUBLIC_KEY_ADDED"
+false_positives:
+- Scheduled key rotation for a sanctioned integration
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

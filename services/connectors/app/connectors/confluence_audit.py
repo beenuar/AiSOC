@@ -41,6 +41,24 @@ _MAX_PAGES = 20
 _PAGE_SIZE = 100
 
 
+def _affected_fields(affected: Any, changed: Any) -> dict[str, Any]:
+    """The first affected object and the first changed value, flattened.
+
+    Only the first of each, for the reason the Entra lift records: almost
+    every audit record has exactly one, and a `target_2` field a rule could
+    not rely on would pass its fixture and miss the real shape.
+    """
+    out: dict[str, Any] = {}
+    if isinstance(affected, list) and affected and isinstance(affected[0], dict):
+        out["target_name"] = affected[0].get("name")
+        out["target_type"] = affected[0].get("objectType")
+    if isinstance(changed, list) and changed and isinstance(changed[0], dict):
+        out["changed_property"] = changed[0].get("name")
+        out["old_value"] = changed[0].get("oldValue")
+        out["new_value"] = changed[0].get("newValue")
+    return out
+
+
 class ConfluenceAuditConnector(BaseConnector):
     """Atlassian Confluence audit events."""
 
@@ -274,6 +292,17 @@ class ConfluenceAuditConnector(BaseConnector):
             "actor_email": actor_email,
             "src_ip": raw.get("remoteAddress"),
             "event_type": f"confluence.{category.lower().replace(' ', '_')}" if category else "confluence.audit",
+            # `event_type` carries the audit *category*, which groups every
+            # permission change in the site under one value. The summary is
+            # the activity, so a normalised key is lifted for rules to
+            # clause on. `affectedObjects` and `changedValues` are lists and
+            # the engine flattens `raw_event` one level, so the account that
+            # was granted admin, and the permission it moved to, were both
+            # invisible.
+            "summary": summary,
+            "summary_key": str(summary or "").strip().lower().replace(" ", "_"),
+            "audit_category": category,
+            **_affected_fields(raw.get("affectedObjects"), raw.get("changedValues")),
             "raw_event": raw,
             "created_at": created_iso,
         }

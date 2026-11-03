@@ -1,0 +1,4 @@
+{
+  "event_type": "azure.entra.signin.risky",
+  "ip_class": "__benign__"
+}
