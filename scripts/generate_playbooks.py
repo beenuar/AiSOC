@@ -185,19 +185,44 @@ def condition(
     )
 
 
-def gate_human_approval(
-    sid: str, on_oncall_field: str = "context.approved_by_oncall", next_true: str | None = None, next_false: str | None = None
-) -> dict[str, Any]:
-    """A condition step that gates downstream work on out-of-band approval."""
-    return condition(
+def gate_human_approval(sid: str, prompt: str, *, gated_step: str) -> dict[str, Any]:
+    """An approval step that suspends the run until an analyst decides.
+
+    This emitted a ``condition`` reading ``context.approved_by_oncall`` —
+    exactly the shape ``playbooks/README.md`` tells authors not to write. The
+    engine evaluates a condition once against the run context and moves on,
+    nothing anywhere set that flag, and ``next_true`` pointed at the action
+    being gated, so all three packs built on this helper ran straight through
+    their gate into a password reset, an MFA reset and a payment release. A
+    live run reached ``status: completed`` with the step named "Wait for
+    human approval" producing no result at all.
+
+    ``approval`` is the type that suspends to Postgres and resumes on the
+    decision. It needs no branch target: the pause stores the position and
+    resume continues at the *following* step, which is what every caller's
+    ``next_true`` already pointed at. ``gated_step`` names that step so
+    :func:`make_playbook` can assert it, rather than the conversion resting
+    on three call sites having happened to be ordered correctly.
+
+    ``on_failure: abort`` is load-bearing, not tidiness. When the pause
+    cannot be written the engine deliberately falls through and fails the
+    step, and only ``abort`` stops the run there; ``continue`` would fail the
+    gate and then run the very action it exists to hold. A preview is
+    unaffected — a dry run answers SUCCESS for an approval step.
+    """
+    s = step(
         sid,
         "Wait for human approval",
-        field=on_oncall_field,
-        op="eq",
-        value=True,
-        next_true=next_true,
-        next_false=next_false,
+        "approval",
+        params={"prompt": prompt},
+        on_failure="abort",
+        # 900s wait + 20s buffer, the same budget `phishing-investigation`
+        # declares. Under the Pydantic field cap of 3600s, which exists for
+        # approval steps precisely because they wait on a person.
+        timeout=920,
     )
+    s["_gates"] = gated_step  # consumed by make_playbook; never serialised
+    return s
 
 
 def make_playbook(
@@ -213,6 +238,22 @@ def make_playbook(
     trigger_tags: list[str] | None = None,
     version: str = "1.0.0",
 ) -> dict[str, Any]:
+    # An approval step has no branch target: a resumed run continues at the
+    # step *after* the pause. That is only the step the author meant to gate
+    # if it is literally the next one, so the claim is checked here instead
+    # of being left to whoever edits the step list next. Raising at
+    # generation beats a gate that holds nothing in production.
+    for index, s in enumerate(steps):
+        gated = s.pop("_gates", None)
+        if gated is None:
+            continue
+        following = steps[index + 1]["id"] if index + 1 < len(steps) else None
+        if following != gated:
+            raise SystemExit(
+                f"{pid}: approval step {s['id']!r} gates {gated!r}, but the step after it is {following!r}. "
+                "A resumed run continues at the following step, so the gated action must come immediately next."
+            )
+
     return {
         "id": pid,
         "name": name,
@@ -288,7 +329,11 @@ def build_account_takeover() -> list[dict[str, Any]]:
                     message="Suspicious sign-in from {{alert.source_ip}} blocked. Reset your password.",
                     webhook_env="EMAIL_WEBHOOK",
                 ),
-                gate_human_approval("approve", next_true="reset"),
+                gate_human_approval(
+                    "approve",
+                    "Force a password reset for {{alert.user}}? Their sessions are already revoked and the source IP is blocked.",
+                    gated_step="reset",
+                ),
                 http(
                     "reset",
                     "Force password reset",
@@ -325,7 +370,11 @@ def build_account_takeover() -> list[dict[str, Any]]:
                     message="We've challenged your sign-in due to repeated MFA prompts. Approve only if you initiated.",
                     webhook_env="SLACK_USER_WEBHOOK",
                 ),
-                gate_human_approval("approve", next_true="reset-mfa"),
+                gate_human_approval(
+                    "approve",
+                    "Reset every enrolled MFA factor for {{alert.user}}? They will have to re-enrol before signing in.",
+                    gated_step="reset-mfa",
+                ),
                 http("reset-mfa", "Reset enrolled MFA factors", url="${IDP_BASE_URL}/users/{{alert.user}}/factors", method="DELETE"),
                 ticket("t1", "Open MFA-fatigue case", "P3", "MFA fatigue investigation: {{alert.user}}"),
             ],
@@ -603,7 +652,12 @@ def build_bec() -> list[dict[str, Any]]:
                     message="Vendor payment {{alert.payment_id}} frozen pending review.",
                     service_env="PD_CFO_KEY",
                 ),
-                gate_human_approval("approve", next_true="release"),
+                gate_human_approval(
+                    "approve",
+                    "Release frozen vendor payment {{alert.payment_id}} to {{alert.vendor}}? "
+                    "The banking detail change that triggered this has not been confirmed out of band.",
+                    gated_step="release",
+                ),
                 http("release", "Release payment after approval", url="${ERP_URL}/payments/{{alert.payment_id}}/release", method="POST"),
                 ticket("t1", "Open BEC payment ticket", "P1", "BEC payment redirect: {{alert.vendor}}"),
             ],

@@ -62,17 +62,13 @@
     {
       "id": "approve",
       "name": "Wait for human approval",
-      "type": "condition",
-      "params": {},
-      "on_failure": "continue",
-      "retry_max": 0,
-      "timeout_seconds": 5,
-      "condition": {
-        "field": "context.approved_by_oncall",
-        "operator": "eq",
-        "value": true
+      "type": "approval",
+      "params": {
+        "prompt": "Release frozen vendor payment {{alert.payment_id}} to {{alert.vendor}}? The banking detail change that triggered this has not been confirmed out of band."
       },
-      "next_true": "release"
+      "on_failure": "abort",
+      "retry_max": 0,
+      "timeout_seconds": 920
     },
     {
       "id": "release",
