@@ -8,7 +8,7 @@ that one line puts the defect back and the suite notices.
 In `test_readyz_broker_live.py::_readyz`, the dependency probe was changed
 back to the flag the service used to register:
 
-```python
+```diff
 -    register_dependency(app, "kafka", worker.broker_reachable)
 +    register_dependency(app, "kafka", lambda: worker.attached)
 ```

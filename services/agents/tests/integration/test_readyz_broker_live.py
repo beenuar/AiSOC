@@ -117,6 +117,23 @@ class _BrokerProxy:
         self._pipes.clear()
 
 
+async def _drain(worker: FusedAlertTriageWorker, consume: asyncio.Task, proxy: _BrokerProxy) -> None:
+    """Tear the probe down without leaving a task holding an exception.
+
+    ``gather(..., return_exceptions=True)`` rather than a bare ``await`` on
+    the cancelled task: the outcome is expected and discarded, and a bare
+    await of a value nobody reads is an ineffectual statement.
+    """
+    consume.cancel()
+    # `CancelledError` derives from `BaseException`, not `Exception`, so
+    # suppressing only `Exception` lets the cancellation this teardown
+    # *caused* fail the test it is tearing down.
+    with contextlib.suppress(Exception, asyncio.CancelledError):
+        await worker.stop()
+    await asyncio.gather(consume, return_exceptions=True)
+    await proxy.stop()
+
+
 async def _readyz(worker: FusedAlertTriageWorker) -> tuple[int, dict]:
     """Drive the real health plumbing the service wires in ``app/main.py``.
 
@@ -182,12 +199,7 @@ async def test_readyz_degrades_when_the_broker_goes_away() -> None:
         # operator needs to tell a quiet topic from a dead one.
         assert body["subscriptions"] == {worker.topic: {"attached": True}}
     finally:
-        consume.cancel()
-        with contextlib.suppress(Exception, asyncio.CancelledError):
-            await worker.stop()
-        with contextlib.suppress(Exception, asyncio.CancelledError):
-            await consume
-        await proxy.stop()
+        await _drain(worker, consume, proxy)
 
 
 @pytest.mark.asyncio
@@ -218,9 +230,4 @@ async def test_readyz_reports_the_subscription_state_not_just_its_name() -> None
         # spelling: a map from the subscription's name to its state.
         assert body["subscriptions"] == {worker.topic: {"attached": True}}
     finally:
-        consume.cancel()
-        with contextlib.suppress(Exception, asyncio.CancelledError):
-            await worker.stop()
-        with contextlib.suppress(Exception, asyncio.CancelledError):
-            await consume
-        await proxy.stop()
+        await _drain(worker, consume, proxy)
