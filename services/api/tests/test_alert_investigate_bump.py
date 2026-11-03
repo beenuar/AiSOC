@@ -28,15 +28,21 @@ def _bump_sql() -> str:
 
 
 def _open_statuses() -> set[str]:
+    """The set the guard expands, resolved by importing it.
+
+    This used to re-parse the tuple out of `cases.py` with a regex, which
+    is only possible while the vocabulary is written out by hand there --
+    i.e. while the second copy that disagreed with the canonical one still
+    existed. Reading the value the module actually uses is both simpler and
+    the only form that keeps working once the copy is gone.
+    """
     m = re.search(r"AND status IN \(([^)]*)\)", _bump_sql())
     assert m, "status IN clause missing from bump SQL"
     raw = m.group(1)
     if "{" in raw:
-        # The guard expands from the pinned tuple via .format() — resolve it
-        # from the source rather than parsing the placeholder text.
-        t = re.search(r"_ALERT_OPEN_STATUSES[^=]*=\s*\(([^)]*)\)", SOURCE)
-        assert t, "_ALERT_OPEN_STATUSES tuple missing from cases.py"
-        raw = t.group(1)
+        from app.api.v1.endpoints.cases import _ALERT_OPEN_STATUSES
+
+        return set(_ALERT_OPEN_STATUSES)
     return {s.strip().strip("'\"") for s in raw.split(",") if s.strip()}
 
 
