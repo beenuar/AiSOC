@@ -45,6 +45,7 @@ from typing import Any
 import httpx
 import pytest
 from app.context.bundle import ContextBundleBuilder
+from app.security import peer_tokens
 
 #: Three independent secrets, exactly as ``scripts/ensure_env.py`` writes them.
 API_SECRET = "api-accepts-this-one-0000000000000000000000"
@@ -185,3 +186,32 @@ async def test_a_token_the_api_does_not_hold_is_still_refused(api_stub: type[_Ap
         await builder._fetch_incident_context(TENANT, {"id": "alert-1"})
 
     assert refusal.value.response.status_code == 401
+
+
+def test_a_missing_credential_is_its_own_exception_type(monkeypatch: pytest.MonkeyPatch) -> None:
+    """So the caller can log it as a misconfiguration without reading the message.
+
+    ``_safe`` escalates a credential problem to ``error`` and names the
+    operator action. Matching on a bare ``RuntimeError`` would also catch
+    anything else that raises one and send an operator to check a credential
+    that is fine — a diagnostic naming the wrong subsystem is worse than a
+    vague one.
+    """
+    monkeypatch.delenv("AISOC_API_SERVICE_TOKEN", raising=False)
+    monkeypatch.delenv("AISOC_SERVICE_TOKEN", raising=False)
+
+    with pytest.raises(peer_tokens.MissingPeerCredential):
+        peer_tokens.api_bearer_headers(TENANT)
+
+
+def test_a_placeholder_token_reads_as_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Mirrors the API's own ``_INSECURE_SERVICE_TOKENS``.
+
+    Presenting a literal the repository publishes is a guaranteed 401, and the
+    accepting side already refuses it; resolving it here would turn a clear
+    "nothing configured" into a confusing rejection.
+    """
+    monkeypatch.setenv("AISOC_API_SERVICE_TOKEN", "changeme")
+    monkeypatch.delenv("AISOC_SERVICE_TOKEN", raising=False)
+
+    assert peer_tokens.api_token() == ""

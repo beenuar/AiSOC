@@ -855,9 +855,12 @@ class ContextBundleBuilder:
         life of the deployment, and it was logged here at ``debug`` — so the
         graph's identity, asset, cloud and business dimensions were missing
         from every triage prompt and the only record was a line nobody reads.
-        It is an ``error`` naming the operator action. Everything else is a
-        ``warning``, because a source that answered nothing is a gap in what
-        the model was told either way.
+        It is an ``error`` naming the operator action — matched on the status
+        the peer returned or on the one exception type that means "nothing was
+        configured", never on a bare ``RuntimeError``, because a diagnostic
+        that names the wrong subsystem sends an operator to debug something
+        that is not broken. Everything else is a ``warning``: a source that
+        answered nothing is a gap in what the model was told either way.
         """
         try:
             return await asyncio.wait_for(coro, timeout=self.per_source_timeout)
@@ -868,7 +871,7 @@ class ContextBundleBuilder:
         except Exception as exc:  # noqa: BLE001
             bundle.errors.append(f"{name}:{type(exc).__name__}")
             status = getattr(getattr(exc, "response", None), "status_code", None)
-            if status in (401, 403) or isinstance(exc, RuntimeError):
+            if status in (401, 403) or isinstance(exc, peer_tokens.MissingPeerCredential):
                 logger.error(
                     "context.source.refused",
                     source=name,

@@ -58,6 +58,16 @@ SERVICE_TENANT_HEADER = "X-AiSOC-Tenant-ID"
 _INSECURE = frozenset({"", "changeme", "change-me", "secret", "aisoc_dev_secret"})
 
 
+class MissingPeerCredential(RuntimeError):
+    """No credential is configured for the peer this call was about to dial.
+
+    A distinct type rather than a bare ``RuntimeError`` so a caller can log it
+    as the misconfiguration it is without having to guess from the message.
+    A diagnostic that names the wrong subsystem sends an operator to debug
+    something that is not broken, which is worse than a vague one.
+    """
+
+
 def _clean(value: str | None) -> str:
     token = (value or "").strip()
     return "" if token.lower() in _INSECURE else token
@@ -96,13 +106,13 @@ def api_bearer_headers(tenant_id: str) -> dict[str, str]:
     header with this service's own token is a 401. Neither half is useful
     without the other, so neither is offered on its own.
 
-    Raises ``RuntimeError`` when no credential is configured, rather than
-    dialling anyway: a request with no token is a guaranteed 401 that reads as
-    the API rejecting us when the truth is that nothing was ever set.
+    Raises :class:`MissingPeerCredential` when none is configured, rather
+    than dialling anyway: a request with no token is a guaranteed 401 that
+    reads as the API rejecting us when the truth is that nothing was ever set.
     """
     token = api_token()
     if not token:
-        raise RuntimeError(
+        raise MissingPeerCredential(
             "no credential for the API service: set AISOC_API_SERVICE_TOKEN (the token the API accepts) or the shared AISOC_SERVICE_TOKEN"
         )
     return {"Authorization": f"Bearer {token}", SERVICE_TENANT_HEADER: tenant_id}
