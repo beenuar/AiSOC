@@ -31,6 +31,21 @@ _SEVERITY_MAP = {
     "Critical": "critical",
 }
 
+# ``threatInfo.confidenceLevel`` is the agent's verdict, not a severity
+# ladder: the API reports ``malicious`` or ``suspicious``. None of the keys
+# above can match it, so without this map every threat landed on the
+# ``medium`` default and a malicious detection ranked level with a
+# suspicious one.
+_CONFIDENCE_SEVERITY = {
+    "malicious": "high",
+    "suspicious": "medium",
+}
+
+
+def _severity(confidence: Any) -> str:
+    value = str(confidence or "")
+    return _CONFIDENCE_SEVERITY.get(value.lower()) or _SEVERITY_MAP.get(value, "medium")
+
 
 class SentinelOneConnector(BaseConnector):
     connector_id = "sentinelone"
@@ -145,7 +160,7 @@ class SentinelOneConnector(BaseConnector):
                 f"{threat_info.get('threatName', 'unknown')} on "
                 f"{agent_info.get('agentComputerName', 'unknown')}"
             ),
-            "severity": _SEVERITY_MAP.get(threat_info.get("confidenceLevel", "Medium"), "medium"),
+            "severity": _severity(threat_info.get("confidenceLevel")),
             "src_ip": agent_info.get("agentIpV4", agent_info.get("externalIp")),
             "hostname": agent_info.get("agentComputerName"),
             "actor": threat_info.get("processUser"),

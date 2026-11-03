@@ -1,0 +1,23 @@
+id: det-application-149
+name: GitLab Project Visibility Changed
+description: A private project made public is an exposure with no file transfer to detect.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1537
+- tlp.white
+category: application
+log_source:
+  product: gitlab
+  service: audit
+detection:
+  condition: |
+    action_key == "changed_visibility"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

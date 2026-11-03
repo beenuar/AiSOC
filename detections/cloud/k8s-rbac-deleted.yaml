@@ -1,0 +1,24 @@
+id: det-cloud-280
+name: Kubernetes RBAC Binding Deleted
+description: Deleting a binding revokes it from everyone it covered.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1531
+- tlp.white
+category: cloud
+log_source:
+  product: kubernetes
+  service: audit
+detection:
+  condition: |
+    k8s_verb == "delete"
+    AND k8s_resource == "clusterrolebindings"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Approved patch / maintenance window activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

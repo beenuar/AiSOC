@@ -1,0 +1,23 @@
+id: det-application-197
+name: Salesforce Transaction Security Policy Updated
+description: A policy relaxed stops blocking what it was written for.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1562
+- tlp.white
+category: application
+log_source:
+  product: salesforce
+  service: setup-audit
+detection:
+  condition: |
+    event_type == "salesforce.updatedPolicy"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

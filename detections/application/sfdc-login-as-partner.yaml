@@ -1,0 +1,23 @@
+id: det-application-199
+name: Salesforce Login-As Granted To A Partner
+description: A partner acting as a user is third-party access to that user's data.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: application
+log_source:
+  product: salesforce
+  service: setup-audit
+detection:
+  condition: |
+    event_type == "salesforce.loginAsGrantedToPartnerBT"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

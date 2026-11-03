@@ -170,14 +170,78 @@ class SalesforceConnector(BaseConnector):
             logger.warning("salesforce.fetch_exception", error=str(exc))
             return []
 
+    #: SetupAuditTrail actions that grant access, weaken a control or move
+    #: data out. Transcribed from Salesforce's Setup Audit Trail reference;
+    #: `scripts/vendor_event_vocabulary.py` holds the full action list and a
+    #: gate refuses a rule naming an action that is not in it.
+    _HIGH_RISK_ACTIONS = frozenset(
+        {
+            "PermSetAssign",
+            "PermSetCreate",
+            "changedProfile",
+            "changedUserEmailVerifiedStatusVerified",
+            "deactivateUser",
+            "frozeUser",
+            "insertConnectedApplication",
+            "loginAsGrantedToPartnerBT",
+            "suOrgAdminLogin",
+            "updatedConnectedApplication",
+        }
+    )
+    _MEDIUM_RISK_ACTIONS = frozenset(
+        {
+            "PermSetGroupCreate",
+            "changedInterfaceUrl",
+            "changedPassword",
+            "createdPolicy",
+            "dataExport",
+            "insertCertificate",
+            "loginPolicyChanged",
+            "newUser",
+            "updatedPolicy",
+        }
+    )
+
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
+        """Lift the SetupAuditTrail fields a rule needs out of the record.
+
+        The engine flattens `raw_event` one level, so `Action`, `Section`
+        and `Display` were already visible — but the record carried no
+        `event_type`, no `actor` and no `created_at`, which are the three
+        fields every cross-source rule and the correlator read. A Salesforce
+        rule therefore had to clause on a Salesforce-only spelling and could
+        not take part in an identity-keyed story at all.
+
+        `DelegateUser` is the field that distinguishes an administrator
+        acting as a user from the user acting themselves, which is the whole
+        content of the login-as detections, so it is lifted under its own
+        name rather than folded into `actor`.
+        """
+        action = raw.get("Action") or ""
+        delegate = raw.get("DelegateUser")
+
+        severity = "info"
+        if action in self._HIGH_RISK_ACTIONS:
+            severity = "high"
+        elif action in self._MEDIUM_RISK_ACTIONS:
+            severity = "medium"
+
         return {
             "source": "salesforce",
             "category": "saas",
-            "severity": "info",
-            "title": f"Salesforce: {raw.get('Action') or 'setup audit event'}",
+            "severity": severity,
+            "title": f"Salesforce: {action or 'setup audit event'}",
             "description": raw.get("Display"),
             "alert_id": raw.get("Id"),
+            "external_id": raw.get("Id"),
             "host": None,
+            "event_type": f"salesforce.{action}" if action else "salesforce.audit",
+            "action": action,
+            "section": raw.get("Section"),
+            "display": raw.get("Display"),
+            "actor": delegate or raw.get("CreatedById"),
+            "delegate_user": delegate,
+            "created_by_id": raw.get("CreatedById"),
             "raw_event": raw,
+            "created_at": raw.get("CreatedDate"),
         }

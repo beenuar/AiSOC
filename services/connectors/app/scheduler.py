@@ -747,11 +747,20 @@ class ConnectorScheduler:
                 connector_id,
                 len(kept),
             )
-            # Nothing reached Kafka, so nothing may be acknowledged. Dropping
-            # the staged handles leaves the messages on the source to be
-            # redelivered; discarding explicitly rather than letting the
-            # connector fall out of scope so the intent is legible here, at
-            # the one place that knows ingest refused.
+            # Nothing may be acknowledged. Dropping the staged handles leaves
+            # the messages on the source to be redelivered; discarding
+            # explicitly rather than letting the connector fall out of scope
+            # so the intent is legible here, at the one place that knows
+            # ingest refused.
+            #
+            # Note this no longer means "nothing reached Kafka": a poll larger
+            # than the ingest cap is pushed as several chunks, so a refusal on
+            # a later chunk leaves the earlier ones accepted. Withholding the
+            # acks and the checkpoint anyway is still right, because the
+            # alternative is a gap — the accepted chunks are simply redelivered
+            # and deduplicated downstream, which is the same duplicates-over-
+            # gaps trade this function already makes between its checkpoint
+            # write and its acks.
             self._discard_acknowledgements(connector, connector_id, reason="ingest_failed", staged=len(kept))
             await self._record_failure(target.id)
             return

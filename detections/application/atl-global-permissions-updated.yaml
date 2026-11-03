@@ -1,0 +1,23 @@
+id: det-application-185
+name: Atlassian Global Permissions Updated
+description: Global permissions decide who may do anything at all.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098
+- tlp.white
+category: application
+log_source:
+  product: atlassian
+  service: audit
+detection:
+  condition: |
+    summary_key == "global_permissions_updated"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

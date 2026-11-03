@@ -1,0 +1,23 @@
+id: det-identity-174
+name: Workspace Delegated Admin Privileges Assigned
+description: AiSOC v1 curated detection. Triggers on the identity signal described by 'Workspace Delegated
+  Admin Privileges Assigned'. Watch the 1 documented false-positive case before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1098.003
+- tlp.white
+category: identity
+log_source:
+  product: google-workspace
+  service: admin
+detection:
+  condition: |
+    event_type == "workspace.admin.delegate_admin_privileges"
+false_positives:
+- Delegation to a help-desk role as designed
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

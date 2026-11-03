@@ -1,0 +1,24 @@
+id: det-identity-187
+name: Account Failed Authentication From Many Networks Over Weeks
+description: Eight or more distinct autonomous systems have failed against this one account inside the
+  30-day horizon. Spread this thin the attempt crosses no hourly threshold, which is why the windowed
+  engine cannot see it. The threshold is a recorded rationale and not a measurement; see docs/detections/long-horizon-thresholds.json.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1110.003
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: authentication
+detection:
+  condition: |
+    lh_distinct_failed_asn >= 8
+false_positives:
+- Shared service account authenticated by a fleet of workers across many networks
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

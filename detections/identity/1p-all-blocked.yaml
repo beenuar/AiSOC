@@ -1,0 +1,23 @@
+id: det-identity-292
+name: 1Password Sign-In Blocked By A Deny-All Rule
+description: A deny-all rule means the account is meant to be unreachable from anywhere not explicitly
+  allowed.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    signin_type == "all_blocked"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

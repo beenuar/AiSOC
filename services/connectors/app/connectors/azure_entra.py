@@ -39,6 +39,44 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 _PAGE_SIZE = 200
 
 
+def _target_fields(targets: Any) -> dict[str, Any]:
+    """The first target resource of a directory-audit event, flattened.
+
+    Graph puts the object an administrator acted on inside
+    `targetResources`, a list, with the property that changed nested one
+    level deeper again under `modifiedProperties`. The engine flattens
+    `raw_event` exactly one level, so a rule asking "which role was granted,
+    and to whom" had nothing to read.
+
+    Only the first target is lifted. Almost every audit event has exactly
+    one, and inventing `target_user_2` for the rare multi-target event would
+    give rules a field they cannot rely on being present — worse than an
+    honest single value, because a rule written against it would pass its
+    fixture and miss the real shape.
+    """
+    if not isinstance(targets, list) or not targets:
+        return {}
+    first = targets[0]
+    if not isinstance(first, dict):
+        return {}
+    out: dict[str, Any] = {
+        "target_type": first.get("type"),
+        "target_user": first.get("userPrincipalName"),
+        "target_name": first.get("displayName"),
+        "target_id": first.get("id"),
+    }
+    modified = first.get("modifiedProperties")
+    if isinstance(modified, list) and modified and isinstance(modified[0], dict):
+        change = modified[0]
+        out["modified_property"] = change.get("displayName")
+        # Graph JSON-encodes these, so `"Global Administrator"` arrives with
+        # its quotes. Stripping them is what lets a rule compare against the
+        # role name a reader would write.
+        out["old_value"] = str(change.get("oldValue") or "").strip('"')
+        out["new_value"] = str(change.get("newValue") or "").strip('"')
+    return out
+
+
 class AzureEntraConnector(BaseConnector):
     """Microsoft Entra ID directory audits + risky sign-ins."""
 
@@ -313,9 +351,26 @@ class AzureEntraConnector(BaseConnector):
             "title": raw.get("activityDisplayName", "Entra Directory Audit"),
             "description": (f"category={category}; result={raw.get('result')}; resultReason={raw.get('resultReason', '')}"),
             "severity": severity,
-            "actor": user_part.get("displayName") or app_part.get("displayName"),
+            "actor": user_part.get("displayName") or app_part.get("displayName") or user_part.get("userPrincipalName"),
             "actor_email": user_part.get("userPrincipalName"),
+            "src_ip": user_part.get("ipAddress"),
             "event_type": f"azure.entra.audit.{category.lower() or 'unknown'}",
+            # `event_type` carries the *category*, which is far too coarse to
+            # clause on: every role grant, removal and eligibility change in
+            # the tenant shares `azure.entra.audit.rolemanagement`. The
+            # activity is the thing a detection is about, so it is lifted
+            # under its own name alongside a normalised form that survives
+            # Graph's capitalisation.
+            "activity": raw.get("activityDisplayName"),
+            "activity_key": str(raw.get("activityDisplayName") or "").strip().lower().replace(" ", "_"),
+            "operation_type": raw.get("operationType"),
+            "audit_category": category,
+            "audit_result": result,
+            # `targetResources` is a list, and the engine flattens
+            # `raw_event` one level — so the account a role was granted to,
+            # and the role itself, were both invisible. A role-grant rule
+            # could name the category and nothing about what was granted.
+            **_target_fields(raw.get("targetResources")),
             "raw_event": raw,
             "created_at": raw.get("activityDateTime"),
         }
