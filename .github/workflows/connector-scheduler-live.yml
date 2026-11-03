@@ -116,6 +116,51 @@ jobs:
           ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
         run: python -m pytest ../../tests/isolation/test_queue_acknowledgement_live.py -v --tb=short
 
+      # Depth-2 item 8.1. `posture_findings` had one writer in the whole tree:
+      # a route a human calls by hand. Four of the properties the collector
+      # now has to hold are properties of Postgres rather than of the Python —
+      # a `text[]` round-tripping through asyncpg, a GIN overlap actually
+      # matching, four CHECK constraints, and a partial unique index making a
+      # re-poll idempotent — and a fake engine that records the dict it was
+      # handed can show none of them.
+      - name: A CNAPP poll writes posture findings a verdict can find
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: python -m pytest ../../tests/isolation/test_cloud_security_findings_live.py -v --tb=short
+
+      # The negative control. `first_detected_at` is deliberately untouched by
+      # a re-poll, because "how long has this been wrong" is the question an
+      # exposure window is asked and a five-minute schedule that resets the
+      # clock answers it with the age of the last poll. The defect is one line
+      # in an UPDATE and nothing else in the suite can see it.
+      - name: The gate fails when a re-poll restarts the exposure clock
+        working-directory: services/connectors
+        env:
+          ISOLATION_CONNECTOR_DSN: ${{ env.CONNECTOR_DSN }}
+        run: |
+          cp app/cloud_security.py /tmp/cloud_security.bak
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/cloud_security.py")
+          s = p.read_text()
+          anchor = "       SET last_seen_at      = :now,\n           last_evaluated_at = :now,"
+          if anchor not in s:
+              print("negative control could not find the touch statement; the writer has "
+                    "been reshaped and this control proves nothing")
+              sys.exit(1)
+          p.write_text(s.replace(anchor, anchor + "\n           first_detected_at = :now,", 1))
+          PY
+          if python -m pytest ../../tests/isolation/test_cloud_security_findings_live.py -q >/dev/null 2>&1; then
+            cp /tmp/cloud_security.bak app/cloud_security.py
+            echo "FAIL: the suite passed with a re-poll resetting first_detected_at."
+            echo "      It is not observing the exposure clock."
+            exit 1
+          fi
+          cp /tmp/cloud_security.bak app/cloud_security.py
+          echo "OK: resetting the exposure clock on a re-poll makes the suite fail, as it must."
+          python -m pytest ../../tests/isolation/test_cloud_security_findings_live.py -q
+
       # The negative control for it, re-injecting the pre-fix acknowledgement
       # placement: acking inside the pull loop, once the entries are in a
       # local list and before the scheduler has pushed anything anywhere.
