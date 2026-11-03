@@ -145,7 +145,11 @@ def client(session_factory) -> TestClient:
         tenant_id=TENANT,
         role="admin",
         email="analyst@acme.example",
-        resolved_permissions=frozenset({"cases:write"}),
+        # `approvals:write` is what `POST /approvals` demands, separately from
+        # `cases:write` so the shared service token can raise an approval
+        # without gaining the whole case write surface. Every role that held
+        # `cases:write` was granted it, which is what this pair stands in for.
+        resolved_permissions=frozenset({"cases:write", "approvals:write"}),
     )
     return TestClient(app, raise_server_exceptions=False)
 

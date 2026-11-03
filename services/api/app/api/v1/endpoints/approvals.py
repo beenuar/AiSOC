@@ -237,13 +237,26 @@ async def get_approval(
     return ApprovalResponse.model_validate(row)
 
 
+# `approvals:write` rather than `cases:write`, and the difference is the whole
+# reason it exists. The agents service's playbook engine must open an approval
+# when a step needs human sign-off, and it reaches this route on the shared
+# service token — whose permission set is a deliberately short read-only list,
+# because that one credential is valid on every route for every tenant. Adding
+# `cases:write` to it to unblock one POST would also have handed it case
+# authoring, case deletion and every other write on the case surface.
+#
+# Every role that held `cases:write` was granted `approvals:write` in the same
+# commit, so no operator lost access; the only principal that gains anything is
+# the service, and only this one verb. `/{id}/decide` deliberately still
+# requires `cases:write`: a service that can raise an approval must not be able
+# to answer it.
 @router.post("", response_model=ApprovalResponse, status_code=status.HTTP_201_CREATED)
 async def create_approval(
     body: ApprovalCreateRequest,
-    user: Annotated[AuthUser, Depends(require_permission("cases:write"))],
+    user: Annotated[AuthUser, Depends(require_permission("approvals:write"))],
     db: TenantDBSession,
 ) -> ApprovalResponse:
-    """Create a new approval request.
+    """Create a new approval request. Requires `approvals:write`.
 
     The agents service calls this when it hits a high-risk step that
     requires human sign-off. We persist it, then fan-out a Web Push

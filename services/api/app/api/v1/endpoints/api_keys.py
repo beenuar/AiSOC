@@ -9,7 +9,7 @@ PATCH  /api-keys/{key_id} – update name / scopes / expiry
 
 VALID SCOPES
   alerts:read  alerts:write  alerts:delete
-  cases:read   cases:write   cases:delete
+  cases:read   cases:write   cases:delete   approvals:write
   playbooks:read playbooks:write playbooks:execute
   connectors:read connectors:write connectors:delete
   plugins:read plugins:execute plugins:admin
@@ -49,6 +49,7 @@ VALID_SCOPES: frozenset[str] = frozenset(
         "cases:read",
         "cases:write",
         "cases:delete",
+        "approvals:write",
         "playbooks:read",
         "playbooks:write",
         "playbooks:execute",

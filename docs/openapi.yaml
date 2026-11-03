@@ -12791,7 +12791,7 @@ paths:
       - responder
       - approvals
       summary: Create Approval
-      description: 'Create a new approval request.
+      description: 'Create a new approval request. Requires `approvals:write`.
 
 
         The agents service calls this when it hits a high-risk step that
