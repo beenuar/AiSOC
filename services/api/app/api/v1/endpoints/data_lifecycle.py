@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.api.v1.deps import AuthUser, DBSession, require_permission
+from app.core.config import settings
 from app.models.data_lifecycle import CustomParserRow, RetentionPolicyRow
 from app.services.pipeline_transforms import TransformError, apply_transforms, validate_transforms
 from app.services.retention import resolve_policy
@@ -25,11 +26,36 @@ class RetentionOut(BaseModel):
     alerts_days: int
     audit_days: int
 
+    #: Whether anything on this deployment actually deletes on these windows.
+    #:
+    #: `RETENTION_WORKER_ENABLED` defaults to false and the worker additionally
+    #: has a dry-run mode, so a console that rendered the three numbers alone
+    #: would tell an operator their data is deleted after N days when, on a
+    #: default deployment, nothing deletes at all. The windows are also read by
+    #: compliance evidence, so they are not meaningless when the worker is
+    #: off — they are a stated policy rather than an enforced one, and the
+    #: console has to be able to say which.
+    purge_worker_enabled: bool = False
+    purge_worker_dry_run: bool = True
+
 
 class RetentionUpdate(BaseModel):
     raw_events_days: int | None = Field(None, ge=1, le=3650)
     alerts_days: int | None = Field(None, ge=1, le=3650)
     audit_days: int | None = Field(None, ge=1, le=3650)
+
+
+def _worker_state() -> dict[str, bool]:
+    """Whether this deployment deletes on the configured windows.
+
+    Read from settings rather than stored per tenant: it is a property of
+    the pod the operator is talking to, and reporting a tenant-level value
+    would be a second number that can disagree with the one that runs.
+    """
+    return {
+        "purge_worker_enabled": bool(settings.RETENTION_WORKER_ENABLED),
+        "purge_worker_dry_run": bool(settings.RETENTION_WORKER_DRY_RUN),
+    }
 
 
 @router.get("/retention", response_model=RetentionOut)
@@ -39,7 +65,7 @@ async def get_retention(
 ) -> RetentionOut:
     row = (await db.execute(select(RetentionPolicyRow).where(RetentionPolicyRow.tenant_id == current_user.tenant_id))).scalar_one_or_none()
     cfg = {} if row is None else {"raw_events_days": row.raw_events_days, "alerts_days": row.alerts_days, "audit_days": row.audit_days}
-    return RetentionOut(**resolve_policy(cfg).as_dict())
+    return RetentionOut(**resolve_policy(cfg).as_dict(), **_worker_state())
 
 
 @router.put("/retention", response_model=RetentionOut)
@@ -64,7 +90,7 @@ async def put_retention(
     row.audit_days = merged.audit_days
     row.updated_by = current_user.user_id
     await db.commit()
-    return RetentionOut(**merged.as_dict())
+    return RetentionOut(**merged.as_dict(), **_worker_state())
 
 
 # ── Custom parsers (W5.2, built on the W5.3 DSL) ───────────────────────────

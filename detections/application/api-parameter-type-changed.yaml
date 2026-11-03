@@ -1,0 +1,23 @@
+id: det-application-112
+name: Known API Parameter Changed Type
+description: A parameter the endpoint has always received as an integer arrived as a string. Injection
+  and type-confusion probes change the type; ordinary traffic does not.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1190
+- tlp.white
+category: application
+log_source:
+  product: api-gateway
+  service: access-log
+detection:
+  condition: |
+    api_parameter_type_change == true
+false_positives:
+- A client that began sending an identifier as a string
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

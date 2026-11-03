@@ -170,6 +170,44 @@ jobs:
       - name: Prove the GitHub-alignment gate is not vacuous
         run: python3 scripts/check_github_rule_alignment.py --self-test
 
+      # Depth 2 wave 2 item 2.1. The same proof generalised across the SaaS
+      # and cloud products the scenario families cover: a real-shaped vendor
+      # payload through the real connector and the real engine, plus a
+      # vocabulary arm that refuses an event name the vendor does not
+      # publish — the `deploy_key.create` defect class.
+      - name: Verify scenario-family rules fire on real connector output
+        run: python3 scripts/check_scenario_family_alignment.py
+
+      # The engine flattens raw_event exactly one level, so a value a vendor
+      # nests deeper is invisible and a rule naming it can never fire. This
+      # runs the real connector over a real-shaped payload and asserts the
+      # lifted names reach the namespace.
+      - name: Verify connectors lift the fields rules read
+        run: python3 scripts/check_connector_field_lift.py
+
+      # `detections/*.yaml` is generated output and the generator has never
+      # deleted a file whose spec went away. An orphan is quiet until the id
+      # lock reissues its number, and then the truth table counts one rule
+      # twice: it published 2,617 against an engine loading 2,613.
+      - name: Verify no orphan or duplicated detection rule ids
+        run: python3 scripts/check_detection_yaml_orphans.py
+
+      # The cloud/identity/SaaS/code condition count depth plan 3.6 holds,
+      # recomputed from the engine's own artefacts.
+      - name: Verify the published condition count
+        run: python3 scripts/project_stats.py --check
+
+      # Both of these publish a threshold, and both currently publish it as
+      # `measured: false` with the reason. `--check` is what stops the
+      # artefact drifting from the survey behind it — in particular it would
+      # fail the moment a corpus arrives that *can* support a derivation and
+      # the published refusal becomes untrue.
+      - name: Verify the long-horizon thresholds match their corpus survey
+        run: python3 scripts/derive_long_horizon_thresholds.py --check
+
+      - name: Verify the weak-signal calibration matches its corpus
+        run: python3 scripts/calibrate_weak_signals.py --check
+
       - name: Count rules by severity
         if: always()
         run: |

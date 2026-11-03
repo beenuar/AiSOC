@@ -1,0 +1,24 @@
+id: det-identity-240
+name: Entra Partner Added To The Tenant
+description: A delegated administration partner can administer the tenant.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1199
+- tlp.white
+category: identity
+log_source:
+  product: azure
+  service: entra-audit
+detection:
+  condition: |
+    activity == "Add partner to company"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Sanctioned automation/IaC pipeline
+- Documented break-glass procedure
+playbook: tpl-privilege-escalation
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

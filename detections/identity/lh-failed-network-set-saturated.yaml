@@ -1,0 +1,24 @@
+id: det-identity-190
+name: Account Failure Sources Exceeded The Daily Enumeration Cap
+description: 'The store stops admitting new sources for an account''s day at a cap, so the day is reported
+  as saturated rather than silently truncated. Saturation is itself the finding: the account is being
+  reached from more networks than it is worth enumerating.'
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1110.003
+- tlp.white
+category: identity
+log_source:
+  product: identity
+  service: authentication
+detection:
+  condition: |
+    lh_failed_asn_saturated == true
+false_positives:
+- Load generator or authentication test harness pointed at a real account
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

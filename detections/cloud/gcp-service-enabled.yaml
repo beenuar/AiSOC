@@ -1,0 +1,23 @@
+id: det-cloud-267
+name: GCP Service API Enabled
+description: Enabling an API is the first step to using a service the estate does not normally run.
+version: 1.0.0
+severity: medium
+tags:
+- mitre.attack.t1578
+- tlp.white
+category: cloud
+log_source:
+  product: gcp
+  service: serviceusage
+detection:
+  condition: |
+    method_name == "google.api.serviceusage.v1.ServiceUsage.EnableService"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- Confirmed test/tuning activity
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'
