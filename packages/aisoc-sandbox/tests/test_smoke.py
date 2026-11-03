@@ -117,6 +117,18 @@ def test_ledger_human_render_is_plain_text_when_not_tty() -> None:
         assert label in text
 
 
+def test_ledger_human_render_handles_windows_legacy_console_encoding() -> None:
+    raw = io.BytesIO()
+    stream = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+    run_investigation(load_scenario("lateral-movement")).render_human(out=stream)
+    stream.flush()
+    rendered = raw.getvalue().decode("cp1252")
+    assert "Investigation Ledger" in rendered
+    assert "RESPOND" in rendered
+    assert "would-call" in rendered
+    assert "[not executed]" in rendered
+
+
 # ---------------------------------------------------------------------------
 # CLI surface.
 # ---------------------------------------------------------------------------
