@@ -27,6 +27,7 @@ from typing import Any
 import httpx
 
 from app.playbook import pause as playbook_pause
+from app.security import peer_tokens
 
 from . import action_bridge, ask_model, idempotency, references, timeout_outcome, verification
 from .bounds import (
@@ -835,6 +836,17 @@ async def _suspend_for_approval(pr: PlaybookRun, step: PlaybookStep, step_idx: i
         return None
 
     approval_id = await _create_approval(pr, step, tenant_id, http)
+    if not approval_id:
+        # The docstring above has always claimed this and the code did not do
+        # it: a pause written with `approval_id=None` is a run halted forever
+        # with nothing for any human to decide against, and no amount of
+        # waiting produces one. Failing the step closed at least surfaces.
+        logger.error(
+            "Approval step %s could not open an approval; not suspending run %s",
+            step.name,
+            pr.run_id,
+        )
+        return None
 
     return await playbook_pause.suspend(
         tenant_id=tenant_id,
@@ -932,18 +944,22 @@ async def _create_approval(pr: PlaybookRun, step: PlaybookStep, tenant_id: str, 
     tenant session, and a second writer to `agent_approvals` would be a
     second place the responder app's decision has to be kept in step with.
     """
-    token = os.getenv("AISOC_AGENTS_SERVICE_TOKEN", "").strip() or os.getenv("AISOC_SERVICE_TOKEN", "").strip()
-    if not token:
-        logger.warning(
-            "Approval step %s cannot open an approval: AISOC_AGENTS_SERVICE_TOKEN is unset",
-            step.name,
-        )
+    try:
+        # Token and tenant header together: both were wrong here, one at a
+        # time. This presented `AISOC_AGENTS_SERVICE_TOKEN` — the token the
+        # *agents* service accepts — to an API that validates
+        # `AISOC_API_SERVICE_TOKEN` (401), on `X-Tenant-ID`, which the API's
+        # service auth never reads, so a service caller named no tenant and
+        # resolved to an empty scope (403).
+        headers = peer_tokens.api_bearer_headers(tenant_id)
+    except RuntimeError as exc:
+        logger.warning("Approval step %s cannot open an approval: %s", step.name, exc)
         return None
     api_url = os.getenv("AISOC_API_URL", "http://api:8000")
     try:
         response = await http.post(
             f"{api_url}/api/v1/approvals",
-            headers={"Authorization": f"Bearer {token}", "X-Tenant-ID": tenant_id},
+            headers=headers,
             json={
                 "title": step.name or f"Approval for {pr.playbook_name}",
                 "description": str(step.params.get("prompt") or step.params.get("reason") or ""),

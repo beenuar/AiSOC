@@ -202,6 +202,25 @@ def _capture_dispatch(monkeypatch: pytest.MonkeyPatch, sent: list[dict[str, Any]
     monkeypatch.setattr(engine_module.action_bridge, "dispatch_step", _dispatch)
 
 
+@pytest.fixture(autouse=True)
+def _approval_opens(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The approval the containment branch pauses on is created.
+
+    Same reasoning as ``_capture_dispatch``: the question in this file is the
+    verification workflow, not whether the agents service can reach the API.
+    It matters that this is stubbed rather than absent, though — an approval
+    step whose approval cannot be created now **fails closed** instead of
+    suspending with ``approval_id=None``, so without this the branch under
+    test would stop for a reason that has nothing to do with verification.
+    The creation path itself is covered by ``test_playbook_approval_creation.py``.
+    """
+
+    async def _create(*_args: Any, **_kwargs: Any) -> str:
+        return "approval-for-the-verification-branch"
+
+    monkeypatch.setattr(engine_module, "_create_approval", _create)
+
+
 # ---------------------------------------------------------------------------
 # The signature
 # ---------------------------------------------------------------------------

@@ -114,15 +114,15 @@ def _reset_calls() -> None:
 
 @pytest.fixture(autouse=True)
 def _service_token(monkeypatch: pytest.MonkeyPatch) -> None:
-    """The credential compose actually delivers to this service.
+    """The credential the **API** accepts, which is what this fetch presents.
 
-    Every fetch test runs with it present, because the production defect this
-    file now pins was the *absence* of a delivered credential: the fetch sent
-    `X-Tenant-ID` (a header the API's auth never reads) plus an optional
-    `AISOC_AGENTS_API_KEY` bearer that no compose file, `.env.example` or Helm
-    value delivers — so the business dimension answered 401 on every default
-    deployment and the prompt said "unavailable" forever.
+    Three distinct values, because two of the assertions below used to pass
+    while the call 401'd on every deployment: this fixture set only the agents
+    service's own token, so "a token was sent" and "the right token was sent"
+    were indistinguishable. `AISOC_<SERVICE>_SERVICE_TOKEN` means "the token
+    that service accepts", and the API validates `AISOC_API_SERVICE_TOKEN`.
     """
+    monkeypatch.setenv("AISOC_API_SERVICE_TOKEN", "svc-tok-api")
     monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "svc-tok-agents")
     monkeypatch.setenv("AISOC_SERVICE_TOKEN", "svc-tok-shared")
 
@@ -144,13 +144,16 @@ class TestFetch:
         assert not result.partial
 
     async def test_the_request_carries_the_service_credential_shape(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """The exact header shape the API's service auth reads, nothing else.
+        """The exact credential the API's service auth reads, nothing else.
 
         `get_current_user` resolves a trusted peer from `Authorization: Bearer
-        <service token>` plus `X-AiSOC-Tenant-ID`. The legacy shape this fetch
-        used — `X-Tenant-ID` plus an `AISOC_AGENTS_API_KEY` nothing delivers —
-        authenticated nothing, so the graph's business dimension 401'd on every
-        default deployment. This test failed on that tree.
+        <the token the API accepts>` plus `X-AiSOC-Tenant-ID`. Two shapes have
+        been wrong here: first `X-Tenant-ID` plus an `AISOC_AGENTS_API_KEY`
+        nothing delivers, then the right header carrying
+        `AISOC_AGENTS_SERVICE_TOKEN` — the token the *agents* service accepts,
+        which the API has never validated. Both were a 401 on every default
+        deployment; the second is asserted against explicitly below because
+        this test passed throughout it.
         """
         _patch_client(monkeypatch, FakeClient(FULL_PAYLOAD))
         await ContextBundleBuilder()._fetch_incident_context("tenant-a", {"id": "alert-1"})
@@ -158,21 +161,24 @@ class TestFetch:
         url, kwargs = FakeClient.calls[0]
         assert "alert-1" in url
         headers = kwargs["headers"]
-        assert headers["Authorization"] == "Bearer svc-tok-agents"
+        assert headers["Authorization"] == "Bearer svc-tok-api"
+        assert headers["Authorization"] != "Bearer svc-tok-agents", (
+            "AISOC_AGENTS_SERVICE_TOKEN is the token this service accepts, not one the API validates"
+        )
         assert headers["X-AiSOC-Tenant-ID"] == "tenant-a"
         assert "X-Tenant-ID" not in headers, "the header the API's auth never reads must be gone"
 
-    async def test_the_agents_specific_token_outranks_the_shared_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Same resolution order as `context/identity.py`, which is the one
-        path of this shape proven live end-to-end."""
+    async def test_the_api_specific_token_outranks_the_shared_one(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The order `resolve_service_token()` in the API's `deps.py` validates in:
+        the callee's own name first, then the shared platform token."""
         _patch_client(monkeypatch, FakeClient(FULL_PAYLOAD))
-        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "specific")
+        monkeypatch.setenv("AISOC_API_SERVICE_TOKEN", "specific")
         monkeypatch.setenv("AISOC_SERVICE_TOKEN", "shared")
         await ContextBundleBuilder()._fetch_incident_context("t", {"id": "a"})
         assert FakeClient.calls[0][1]["headers"]["Authorization"] == "Bearer specific"
 
         FakeClient.calls = []
-        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "")
+        monkeypatch.setenv("AISOC_API_SERVICE_TOKEN", "")
         await ContextBundleBuilder()._fetch_incident_context("t", {"id": "a"})
         assert FakeClient.calls[0][1]["headers"]["Authorization"] == "Bearer shared"
 
@@ -187,9 +193,9 @@ class TestFetch:
         a guaranteed 401, which reads as the API rejecting us.
         """
         _patch_client(monkeypatch, FakeClient(FULL_PAYLOAD))
-        monkeypatch.setenv("AISOC_AGENTS_SERVICE_TOKEN", "")
+        monkeypatch.setenv("AISOC_API_SERVICE_TOKEN", "")
         monkeypatch.setenv("AISOC_SERVICE_TOKEN", "")
-        with pytest.raises(RuntimeError, match="AISOC_AGENTS_SERVICE_TOKEN"):
+        with pytest.raises(RuntimeError, match="AISOC_API_SERVICE_TOKEN"):
             await ContextBundleBuilder()._fetch_incident_context("t", {"id": "a"})
         assert FakeClient.calls == [], "no credential, no dial"
 
