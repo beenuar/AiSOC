@@ -24,7 +24,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app._health import install_health_routes
+from app._health import install_health_routes, register_dependency
 from app.api.router import health_router, router
 from app.db.engine import dispose_engine
 from app.scheduler import ConnectorScheduler, scheduler_disabled
@@ -44,6 +44,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             scheduler = ConnectorScheduler()
             await scheduler.start()
             app.state.scheduler = scheduler
+            # The patch-window promotion sweep is the only path from
+            # `asset_vulnerabilities` back into the alert queue, it runs every
+            # six hours, and its per-tenant `except Exception` means a total
+            # failure's only symptom is a log line — which is how its upsert
+            # came to raise on every tenant on every deployment unnoticed.
+            # Non-required: a failing background sweep reports
+            # `ready_degraded` with the reason rather than taking the
+            # connector API out of the load balancer.
+            register_dependency(app, "vuln_promotion", scheduler.promotion_sweep_healthy, required=False)
         except Exception:
             # We deliberately let the HTTP server come up even if the
             # scheduler can't start (e.g. DATABASE_URL unset). Operators

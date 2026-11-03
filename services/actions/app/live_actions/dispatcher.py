@@ -61,11 +61,12 @@ from app.services.autonomy_safety import (
 from app.services.credential_resolver import ProtectedParameterOverride, resolve_params
 from app.services.kill_switch import KillSwitchState, kill_switch_state
 from app.services.maturity import _AUTO_ALLOWED_AT_TIER, MaturityTier
+from app.services.response_schedule_store import resolve_response_schedule
 from app.services.tenant_policy import TenantPolicy, resolve_tenant_policy
 from app.services.verification import PostActionVerifier, VerificationOutcome
 
 from . import registry
-from .approval_rules import EARNED_TIER_CEILING_LABEL, TIER_ORDER, tier_from_env_value
+from .approval_rules import EARNED_TIER_CEILING_LABEL, TIER_ORDER, ResponseSchedule, tier_from_env_value
 from .capability_contracts import CAPABILITY_CONTRACTS
 from .contract import ActionImpact, ApprovalRequirement, Reversal
 from .models import LiveActionRequest, LiveActionResult, LiveActionStatus
@@ -142,6 +143,13 @@ async def _govern(request: LiveActionRequest, action_type: ActionType) -> Autono
     # tenant's own inventory; None (no CMDB, no match, outage) grades exactly
     # as before. Tighten-only by construction in evaluate_contract.
     target_criticality = await asset_criticality_for_target(request.tenant_id, request.target)
+    # Wave-2 Phase 6.3. The tenant's declared time gates: a change freeze, an
+    # out-of-hours condition, a nobody-on-call condition. Raise-only by
+    # construction (see `apply_schedule`), and `None` for the overwhelming
+    # majority of tenants, who have declared no schedule. Resolved here
+    # because this is the door that has a database — the same reasoning as
+    # `asset_criticality` directly above.
+    schedule = await resolve_response_schedule(request.tenant_id)
 
     # A tenant override is a deliberate, explicit instruction for one action
     # type, so it outranks the tier ladder in both directions.
@@ -171,6 +179,7 @@ async def _govern(request: LiveActionRequest, action_type: ActionType) -> Autono
             ),
             tier_label="L4",
             asset_criticality=target_criticality,
+            schedule=schedule,
         )
 
     # Gap-closure Phase 2.3. A tenant that has run this verb's alert classes in
@@ -218,6 +227,7 @@ async def _govern(request: LiveActionRequest, action_type: ActionType) -> Autono
         decision,
         tier_label=_tier_label(effective_tier),
         asset_criticality=target_criticality,
+        schedule=schedule,
     )
 
 
@@ -275,6 +285,7 @@ async def _govern_by_contract_alone(request: LiveActionRequest) -> AutonomyDecis
         baseline,
         tier_label=_tier_label(policy.tier),
         asset_criticality=await asset_criticality_for_target(request.tenant_id, request.target),
+        schedule=await resolve_response_schedule(request.tenant_id),
     )
 
 
@@ -284,6 +295,7 @@ def _apply_capability_contract(
     *,
     tier_label: str,
     asset_criticality: str | None = None,
+    schedule: ResponseSchedule | None = None,
 ) -> AutonomyDecision:
     """Raise the autonomy verdict to whatever the capability contract demands.
 
@@ -328,6 +340,7 @@ def _apply_capability_contract(
         confidence=request.confidence,
         tier=tier_label,
         asset_criticality=asset_criticality,
+        schedule=schedule,
     )
 
     if verdict.is_blocked:

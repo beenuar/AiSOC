@@ -1,0 +1,46 @@
+id: hunt-svc-account-after-hours
+name: Service account interactive logon outside business hours
+description: |
+  Service accounts (svc-*) should authenticate non-interactively. An interactive
+  logon by a svc-* account, especially outside business hours, is a strong
+  indicator of credential theft or insider abuse. This hunt looks for
+  Windows Security 4624 (logon success) where TargetUserName matches ^svc-.*$
+  and LogonType is 2 (Interactive) or 10 (RemoteInteractive).
+version: 1.0.0
+severity: high
+category: identity
+tags:
+  - mitre.attack.t1078.002
+  - mitre.attack.t1078.003
+  - hunt.identity
+  - threat.insider
+log_sources:
+  - windows_security
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did any svc-* service account perform an interactive (LogonType 2/10)
+    logon, especially outside 08:00–18:00 local time?
+  indicators:
+    - field: source
+      equals: windows_security
+    - field: EventID
+      in: [4624]
+    - field: TargetUserName
+      regex: "^svc-.*"
+    - field: LogonType
+      in: [2, 10]
+expected:
+  positive_incident_id: INC-HUNT-001
+  positive_template_id: hunt-svc-account-after-hours
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-001-NEG
+references:
+  - https://attack.mitre.org/techniques/T1078/002/
+  - https://attack.mitre.org/techniques/T1078/003/
+author: AiSOC
+created: '2026-05-05'
+modified: '2026-05-05'

@@ -115,7 +115,16 @@ async def test_an_unreachable_graph_is_503_and_never_an_empty_graph(monkeypatch:
     with pytest.raises(HTTPException) as exc_info:
         await graph_endpoint.get_graph_overview(depth=3, entity=None, current_user=_User())
     assert exc_info.value.status_code == 503
-    assert "unavailable" in exc_info.value.detail
+    # The detail names the likeliest cause, not only the exception type.
+    # The console rendered "API 503 — /api/v1/graph" beside a Try again
+    # button, and on CORE this is a deployment choice rather than a fault:
+    # Neo4j runs in the `full` profile. The agents graph tool has answered
+    # the same condition in this sentence for a while; the route did not.
+    assert "`full` profile" in exc_info.value.detail
+    assert "not part of this deployment" in exc_info.value.detail
+    # The exception type is still carried, for whoever is debugging a
+    # deployment that *does* run Neo4j.
+    assert "RuntimeError" in exc_info.value.detail
 
 
 # ── the shape the console consumes ────────────────────────────────────────

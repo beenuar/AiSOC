@@ -136,6 +136,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             task.add_done_callback(_log_triage_worker_exit)
             app.state.triage_worker_task = task
             register_subscription(app, triage_worker.topic, lambda: triage_worker.attached)
+            # Two questions, which is why they are two probes and not one flag
+            # read twice. The subscription above is "am I consuming"; this is
+            # "can I reach the broker", and only the second can describe an
+            # outage — `attached` stays true across one because aiokafka's
+            # reconnect lives inside `__anext__`. Same probe fusion registers,
+            # for the same reason. See `FusedAlertTriageWorker.broker_reachable`.
+            register_dependency(app, "kafka", triage_worker.broker_reachable)
             logger.info("auto_triage_worker.enabled")
         except Exception as exc:  # noqa: BLE001 — never block API startup
             logger.warning("auto_triage_worker.start_failed", error=str(exc))

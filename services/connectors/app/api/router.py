@@ -30,7 +30,7 @@ import uuid
 from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from pydantic import Field as PydField
 
@@ -735,5 +735,18 @@ async def push_status_change(connector_id: str, payload: PushStatusChangeRequest
 
 
 @health_router.get("/health")
-async def health():
-    return {"status": "healthy", "service": "aisoc-connectors"}
+async def health(request: Request):
+    """Liveness, plus the state of the background sweeps this service owns.
+
+    The patch-window promotion sweep gets named here because a per-tenant
+    ``except Exception`` is the right call for a six-hourly job — one
+    tenant's failure must not stop the others — and leaves the failure
+    visible nowhere. Its upsert raised on every tenant on every deployment
+    for the life of the statement and the only trace was a log line.
+    ``/readyz`` carries the boolean; this carries the reason.
+    """
+    body: dict[str, Any] = {"status": "healthy", "service": "aisoc-connectors"}
+    scheduler = getattr(request.app.state, "scheduler", None)
+    if scheduler is not None:
+        body["vuln_promotion"] = scheduler.promotion_sweep_detail()
+    return body

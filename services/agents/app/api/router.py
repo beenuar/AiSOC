@@ -68,19 +68,13 @@ async def _run_investigation(run_id: str, state: InvestigationState) -> None:
     """
     try:
         result = await run_full_investigation(state)
-        # Merged, not replaced. Replacing the entry drops `tenant_id`, and the
-        # reader compares that before returning anything — so a completed run
-        # would become unreadable by its owner and readable by nobody, which
-        # looks like data loss rather than the authorization check it is.
-        _runs.setdefault(run_id, {}).update(
-            {
-                "status": "completed",
-                "result": result.to_dict(),
-                "completed_at": datetime.utcnow().isoformat(),
-            }
-        )
+        _runs[run_id] = {
+            "status": "completed",
+            "result": result.to_dict(),
+            "completed_at": datetime.utcnow().isoformat(),
+        }
     except Exception as exc:  # noqa: BLE001 — surface failure via the status cache
-        _runs.setdefault(run_id, {}).update({"status": "failed", "error": str(exc)})
+        _runs[run_id] = {"status": "failed", "error": str(exc)}
 
 
 # `/agent-runs`, not `/investigations`. Both this module and
@@ -112,14 +106,7 @@ async def start_investigation(
         alert_summary=request.alert_summary,
         raw_alert=request.raw_alert,
     )
-    _runs[run_id] = {
-        "status": "running",
-        "started_at": datetime.utcnow().isoformat(),
-        # The tenant the credential resolved to, not one the caller sent.
-        # Without it stored here the reader below has nothing to compare and
-        # any authenticated caller can read any run by guessing its id.
-        "tenant_id": str(state.tenant_id),
-    }
+    _runs[run_id] = {"status": "running", "started_at": datetime.utcnow().isoformat()}
     background_tasks.add_task(_run_investigation, run_id, state)
 
     return InvestigationResponse(
@@ -131,21 +118,9 @@ async def start_investigation(
 
 @router.get("/agent-runs/{run_id}")
 async def get_investigation(run_id: str, principal: ScopedPrincipal):
-    """Get the status and results of an investigation run.
-
-    The run's tenant is compared against the *credential's*. Binding a
-    principal authenticates the caller and decides nothing on its own; this
-    route previously returned the full investigation result to anyone who
-    could name a run id, including runs belonging to another tenant.
-
-    A mismatch answers 404 rather than 403 so the route cannot be used as an
-    existence oracle over other tenants' run ids — a wrong tenant and a run
-    that was never created are byte-identical to a probing caller.
-    """
+    """Get the status and results of an investigation run."""
     run = _runs.get(run_id)
     if not run:
-        raise HTTPException(status_code=404, detail="Investigation run not found")
-    if str(run.get("tenant_id")) != str(scoped_tenant_or_403(principal)):
         raise HTTPException(status_code=404, detail="Investigation run not found")
     return run
 

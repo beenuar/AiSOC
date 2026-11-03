@@ -1,0 +1,39 @@
+id: hunt-vpn-login-from-hosting-provider
+name: Remote access session from a hosting provider address range
+description: |
+  Staff connect from home and from offices. A session from a cloud hosting range usually means the credential is being used from infrastructure rather than by a person at a desk.
+version: 1.0.0
+severity: medium
+category: network
+tags:
+  - mitre.attack.t1133
+  - hunt.network
+log_sources:
+  - vpn
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did any remote access session originate from a datacentre rather than a residential or corporate network?
+  indicators:
+    - field: "source"
+      equals: "vpn"
+    - field: "status"
+      equals: "connected"
+    - field: "sourceAsnClass"
+      equals: "hosting"
+expected:
+  positive_incident_id: INC-HUNT-056
+  positive_template_id: hunt-vpn-login-from-hosting-provider
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-056-NEG
+  # The negative inverts sourceAsnClass, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1133/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'
