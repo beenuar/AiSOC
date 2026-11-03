@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-03T01:56:32Z",
+  "generated": "2026-11-03T07:51:03Z",
   "categories": [
     {
       "id": "playbooks",
@@ -245589,7 +245589,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/anomalous-data/anomalous-data-transfer-response.playbook.json",
-      "sha256": "57786d6aa217afe9730b411286c5a42557994cc9744d450f970b7d8cabaa6d34"
+      "sha256": "c987426141650d5592efe16765bcafde9a058edc0fe3f01dbbd830955bdead17"
     },
     {
       "id": "ato-credential-stuffing-v1",
@@ -245643,7 +245643,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/account-takeover/ato-impossible-travel-block.playbook.json",
-      "sha256": "0ebce55ac23441eac89e0ff71ea6dca491c01bbb89c64c9d8583e442cd840a06"
+      "sha256": "2fa0374281ec76cc6709fb58ee8ed4e3e90dbfe26677686264d74cfa87b1aed9"
     },
     {
       "id": "ato-mfa-fatigue-response-v1",
@@ -245671,7 +245671,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/account-takeover/ato-mfa-fatigue-response.playbook.json",
-      "sha256": "5e446d4bdd9cf15a67252965cbe9dfdd673d87013e37b6335a75b16be2976c0c"
+      "sha256": "480b88f1fcbec9220fd9de09bc2cc28fe4a62b2de769b4a6223908fae40caf7e"
     },
     {
       "id": "ato-session-token-theft-v1",
@@ -245884,7 +245884,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/bec/bec-vendor-payment-redirect.playbook.json",
-      "sha256": "9d6fce62d18a9b6164acba552a3b5556214179d875efc061186ec11a64253b21"
+      "sha256": "2464d8d73c44d2aef9260dd7014df14ecf0a6be5c398d9668e4369077a15cfff"
     },
     {
       "id": "brute-force-lockout-v1",
@@ -245914,7 +245914,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/brute-force/brute-force-lockout.playbook.json",
-      "sha256": "9791fbf7bd7c4f87ee28321262ac5cbe470b2b8fd6a447f42468a71166c861dd"
+      "sha256": "6eb89ea286ce767fdc579a6d883630252d59e88f1102e41e050c315cf9992378"
     },
     {
       "id": "brute-force-response-v1",
@@ -246767,7 +246767,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/ids-critical/ids-critical-response.playbook.json",
-      "sha256": "3955317fd96f822294ba968813273c7e4f07e8dd0694b4309048f9dd5d05c94b"
+      "sha256": "bad059e434be1a42ec41f1ab9d5f745819af1502d5d1341c70cabc1e205752fb"
     },
     {
       "id": "insider-after-hours-access-v1",
@@ -247284,7 +247284,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/phishing/phishing-investigation.playbook.json",
-      "sha256": "09377aedb0296894ec461caad295b3596a8ea9cdf90151463df094698ca85a27"
+      "sha256": "491d6fbb087ab0cab96e81ee4ef410261964483a683e995861c76e8fd1feb8ce"
     },
     {
       "id": "phishing-response-v1",
@@ -247789,7 +247789,7 @@
       "pack": true,
       "enabled": true,
       "path": "playbooks/packs/v1/suspicious-signin/suspicious-signin-response.playbook.json",
-      "sha256": "f9475a1dcf7a0f93cb06a35bf567a08147b329fbc971cacd1e19ebeaac4a0e51"
+      "sha256": "188e11305d79793a5bac6e08e7f85fa9af87693ca652b4f184c01762198b2238"
     },
     {
       "id": "token-theft-response-v1",

@@ -148,7 +148,7 @@
         "condition_skip": "context.click_detected == false"
       },
       "condition": "context.click_detected == true",
-      "on_failure": "continue",
+      "on_failure": "abort",
       "retry_max": 0,
       "timeout_seconds": 620
     },
