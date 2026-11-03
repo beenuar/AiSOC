@@ -1,0 +1,4 @@
+{
+  "client_app": "Other clients",
+  "event_type": "azure.entra.signin.risky"
+}

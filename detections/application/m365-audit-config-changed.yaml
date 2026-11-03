@@ -1,0 +1,23 @@
+id: det-application-165
+name: M365 Admin Audit Log Configuration Changed
+description: The setting that decides what the audit log records.
+version: 1.0.0
+severity: critical
+tags:
+- mitre.attack.t1562.008
+- tlp.white
+category: application
+log_source:
+  product: m365
+  service: exchange
+detection:
+  condition: |
+    operation == "Set-AdminAuditLogConfig"
+false_positives:
+- Sanctioned automation/IaC pipeline
+- First-time provisioning / new-user onboarding
+playbook: tpl-triage
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

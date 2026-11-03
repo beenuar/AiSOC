@@ -1,0 +1,22 @@
+id: det-identity-290
+name: 1Password Sign-In Blocked By Continent
+description: The broadest of the geographic rules.
+version: 1.0.0
+severity: low
+tags:
+- mitre.attack.t1078
+- tlp.white
+category: identity
+log_source:
+  product: onepassword
+  service: signin-attempts
+detection:
+  condition: |
+    signin_type == "continent_blocked"
+false_positives:
+- Confirmed test/tuning activity
+playbook: tpl-account-takeover
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

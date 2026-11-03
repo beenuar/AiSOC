@@ -1,0 +1,5 @@
+{
+  "k8s_resource": "pods",
+  "k8s_subresource": "attach",
+  "k8s_verb": "create"
+}

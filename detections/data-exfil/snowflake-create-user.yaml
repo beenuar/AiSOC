@@ -1,0 +1,24 @@
+id: det-data-exfil-049
+name: Snowflake User Created
+description: AiSOC v1 curated detection. Triggers on the data-exfil signal described by 'Snowflake User
+  Created'. Watch the 2 documented false-positive cases before tuning.
+version: 1.0.0
+severity: high
+tags:
+- mitre.attack.t1136
+- tlp.white
+category: data-exfil
+log_source:
+  product: snowflake
+  service: query-history
+detection:
+  condition: |
+    query_type == "CREATE_USER"
+false_positives:
+- First-time provisioning / new-user onboarding
+- Provisioning pipeline creating a service user
+playbook: tpl-persistence
+enabled: true
+author: AiSOC
+created: '2026-05-03'
+modified: '2026-05-03'

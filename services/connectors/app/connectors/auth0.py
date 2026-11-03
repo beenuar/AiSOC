@@ -25,6 +25,15 @@ from app.connectors.base import (
 
 logger = structlog.get_logger()
 
+# /api/v2/logs documents per_page up to 100, but Auth0's API-wide rule caps
+# Public Cloud tenants at 50, so a page shorter than _PER_PAGE is routine and
+# must not be read as the end of the window. A search reaches 1,000 results at
+# most; budget the page count at the smaller size so the cap is still reachable.
+_PER_PAGE = 100
+_SMALLEST_SERVED_PAGE = 50
+_MAX_RESULTS = 1000
+_MAX_PAGES = _MAX_RESULTS // _SMALLEST_SERVED_PAGE
+
 
 class Auth0Connector(BaseConnector):
     """Auth0 tenant logs."""
@@ -113,32 +122,51 @@ class Auth0Connector(BaseConnector):
         if not token:
             return []
         since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        items: list[dict[str, Any]] = []
+        served_per_page: int | None = None
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self._base}/api/v2/logs",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "Accept": "application/json",
-                    },
-                    params={
-                        "q": f"date:[{since} TO *]",
-                        "per_page": 100,
-                        "sort": "date:-1",
-                    },
-                )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "auth0.fetch_failed",
-                        status=resp.status_code,
-                        body=resp.text[:300],
+                # Reading only page 0 kept the newest 100 entries of the window
+                # and dropped the rest; the next poll's window starts later, so
+                # those entries were never read.
+                for page in range(_MAX_PAGES):
+                    resp = await client.get(
+                        f"{self._base}/api/v2/logs",
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Accept": "application/json",
+                        },
+                        params={
+                            "q": f"date:[{since} TO *]",
+                            "per_page": _PER_PAGE,
+                            "page": page,
+                            "sort": "date:-1",
+                        },
                     )
-                    return []
-                items = resp.json() or []
-                return [self.normalize(i) for i in items]
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "auth0.fetch_failed",
+                            status=resp.status_code,
+                            body=resp.text[:300],
+                        )
+                        if not items:
+                            return []
+                        break
+                    batch = resp.json() or []
+                    items.extend(batch)
+                    # The first page tells us what this tenant actually serves,
+                    # which is 50 on Public Cloud however many we asked for.
+                    # Only a page shorter than that ends the window.
+                    if served_per_page is None:
+                        served_per_page = len(batch)
+                    if not batch or len(batch) < served_per_page or len(items) >= _MAX_RESULTS:
+                        break
+                else:
+                    logger.warning("auth0.fetch_page_cap_reached", pages=_MAX_PAGES, logs=len(items))
         except Exception as exc:
             logger.warning("auth0.fetch_exception", error=str(exc))
             return []
+        return [self.normalize(i) for i in items]
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         type_code = (raw.get("type") or "").lower()
