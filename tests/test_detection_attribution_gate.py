@@ -88,6 +88,7 @@ def test_his_reported_example_credits_tim_shelton() -> None:
         assert match, f"the rule reported in #1680 is not in {path}"
         assert match[0]["provenance"]["author"] == HIS_EXAMPLE_AUTHOR
 
+
 #: Drives the real fusion engine and prints the alert description.
 #:
 #: Run out of process on purpose. `services/api`, `services/connectors` and
