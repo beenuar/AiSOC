@@ -60,13 +60,70 @@ class TestTheFourStates:
         """The state that must never be guessed."""
         from app.services.llm_runtime import classify
 
-        report = classify([])
+        report = classify([], installed=["qwen2.5:0.5b"])
 
         assert report.placement == "unknown"
         assert "unloads" in report.detail or "not loaded" in report.detail.lower()
         # No fabricated measurement travels with a non-answer.
         assert report.vram_bytes is None
         assert "vram_bytes" not in report.as_dict()
+
+
+class TestNeverPulledIsNotIdle:
+    """An empty `/api/ps` has two causes and they need opposite advice.
+
+    The panel answered both with "Ollama unloads after a few minutes idle; run
+    a triage and check again." On a first run where the download failed —
+    a proxy, TLS interception, a rate limit, a full disk — nothing was ever
+    pulled, so running a triage changes nothing and the advice points away
+    from the problem. `/api/ps` cannot tell them apart; `/api/tags` can.
+    """
+
+    def test_an_empty_disk_is_no_model(self) -> None:
+        from app.services.llm_runtime import classify
+
+        report = classify([], installed=[])
+
+        assert report.placement == "no_model"
+        assert "ollama-pull" in report.detail, "the state must name the container that was supposed to fetch it"
+        assert "unloads" not in report.detail, "a model that was never downloaded cannot have been unloaded"
+        # Bounded. The reason this is not an outage is the part an operator
+        # most needs, and the reason the stack is allowed to come up without it.
+        assert "deterministic" in report.detail
+        assert report.vram_bytes is None
+
+    def test_an_idle_model_names_the_model_it_found(self) -> None:
+        from app.services.llm_runtime import classify
+
+        report = classify([], installed=["llama3.2:3b-instruct-q4_K_M"])
+
+        assert report.placement == "unknown"
+        assert "unloads" in report.detail
+        assert report.model == "llama3.2:3b-instruct-q4_K_M", "the idle message asserts a model exists, so it must say which one it saw"
+
+    def test_an_unreadable_tag_list_is_not_an_empty_one(self) -> None:
+        """`None` and `[]` must not collapse.
+
+        Reporting a transient failure as `no_model` would send an operator to
+        re-pull a model they already have, which is the same class of mistake
+        as the message this replaces.
+        """
+        from app.services.llm_runtime import classify
+
+        report = classify([], installed=None)
+
+        assert report.placement == "unknown"
+        assert "did not say" in report.detail
+        assert "ollama-pull" not in report.detail, "an unchecked state must not accuse the pull container"
+
+    def test_the_remedies_match_the_state(self) -> None:
+        """`no_model` gets download advice, not GPU advice."""
+        from app.api.v1.endpoints.llm_status import _placement_options
+
+        joined = " ".join(_placement_options("no_model"))
+
+        assert "ollama-pull" in joined
+        assert "make up-gpu" not in joined, "where it would run is not the question when there is no model"
 
     def test_a_containerised_model_on_a_mac_is_cpu(self) -> None:
         from app.services.llm_runtime import classify

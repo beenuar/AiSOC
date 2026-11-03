@@ -24,6 +24,11 @@ const TONE: Record<string, { label: string; className: string }> = {
   gpu: { label: 'On a GPU', className: 'border-emerald-700/60 bg-emerald-950/30 text-emerald-200' },
   partial: { label: 'Partly on a GPU', className: 'border-amber-700/60 bg-amber-950/30 text-amber-200' },
   cpu: { label: 'On the CPU', className: 'border-slate-600 bg-slate-800/40 text-slate-200' },
+  // Distinct from `unknown`, because the remedies are opposites. `unknown`
+  // means a model exists and is not resident, and the advice is to wait or
+  // run a triage; `no_model` means the download never happened, where that
+  // advice is useless and the operator needs to go and look at ollama-pull.
+  no_model: { label: 'No model downloaded', className: 'border-amber-700/60 bg-amber-950/30 text-amber-200' },
   unknown: { label: 'Not loaded right now', className: 'border-slate-600 bg-slate-800/40 text-slate-300' },
   unreachable: { label: 'No local model', className: 'border-slate-600 bg-slate-800/40 text-slate-300' },
 };

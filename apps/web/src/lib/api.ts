@@ -6832,7 +6832,7 @@ export interface LlmCredentialView {
  * VRAM or a usable driver, so this is the outcome rather than the intent.
  */
 export interface LlmRuntime {
-  placement: "gpu" | "partial" | "cpu" | "unknown" | "unreachable" | "not_local";
+  placement: "gpu" | "partial" | "cpu" | "no_model" | "unknown" | "unreachable" | "not_local";
   detail: string;
   base_url: string;
   /** What an operator can do about the answer. Never empty for a CPU verdict. */
