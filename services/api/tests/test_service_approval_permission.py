@@ -21,6 +21,7 @@ permission), and the service still cannot *decide* an approval it raised.
 from __future__ import annotations
 
 import uuid
+from pathlib import Path
 
 import pytest
 from app.api.v1.deps import SERVICE_PRINCIPAL_PERMISSIONS, CurrentUser
@@ -82,3 +83,38 @@ def test_the_wildcard_roles_are_unaffected() -> None:
     """Control: a role holding ``*`` needs no explicit grant, and must not read as regressed."""
     for role in ("platform_admin", "admin"):
         assert ROLE_PERMISSIONS[role] == ["*"]
+
+
+def test_the_permission_is_grantable_on_a_database_backed_deployment() -> None:
+    """A permission the static map grants is not necessarily one a tenant can grant.
+
+    `ROLE_PERMISSIONS` is the fallback; a deployment on database-backed RBAC
+    resolves from `permissions` / `role_permissions`, and a name absent from
+    the catalog cannot be granted through the console at all — which is how
+    `hunts:read` came to be held by no role. So the vocabulary row has to move
+    with the route, not after it.
+    """
+    migrations = Path(__file__).resolve().parents[1] / "migrations"
+    seeding = [
+        p.name
+        for p in sorted(migrations.glob("*.sql"))
+        if "INSERT INTO permissions" in p.read_text(encoding="utf-8") and f"'{APPROVAL_WRITE}'" in p.read_text(encoding="utf-8")
+    ]
+    assert seeding, f"no migration adds {APPROVAL_WRITE} to the permission catalog"
+
+
+def test_the_grant_is_derived_from_cases_write_rather_than_named() -> None:
+    """So a deployment's own roles keep the access they had a moment earlier.
+
+    Naming `infosec` would cover the seeded catalog and silently drop any role
+    an operator created and granted `cases:write` to.
+    """
+    migration = next(
+        p
+        for p in sorted((Path(__file__).resolve().parents[1] / "migrations").glob("*.sql"))
+        if f"'{APPROVAL_WRITE}'" in p.read_text(encoding="utf-8")
+    )
+    sql = migration.read_text(encoding="utf-8")
+    grant = sql.split("INSERT INTO role_permissions", 1)[1]
+    assert f"'{CASES_WRITE}'" in grant, "the grant must select the roles that already hold cases:write"
+    assert "ON CONFLICT DO NOTHING" in grant, "a migration runner may replay this"
