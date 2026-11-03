@@ -4357,21 +4357,123 @@ export interface HuntQuery {
   limit?: number;
 }
 
+/**
+ * The wire shape of one hit from `POST /api/v1/hunt/search`.
+ *
+ * @wire agents POST /api/v1/hunt/search#hits[]
+ */
+export interface HuntHitWire {
+  id: string;
+  timestamp: string;
+  source: string;
+  event_type: string;
+  raw: Record<string, unknown>;
+  highlights: string[];
+}
+
+/**
+ * The wire shape of `POST /api/v1/hunt/search`.
+ *
+ * Field for field what `services/agents/app/api/hunt_search.py` serialises —
+ * note *agents*, not `services/api`, which is why no spec gate covered it.
+ * `scripts/check_console_wire_contract.py` holds this interface against that
+ * service's own OpenAPI document in both directions, so a rename on either
+ * side fails CI instead of resolving to `undefined` in a browser.
+ *
+ * It had drifted on seven names at once (#1648): the handler sends `took_ms`,
+ * `query`, `source` and `notice` where the client declared `took` and nothing
+ * else, and sends `raw`, `highlights` and `event_type` per hit where the
+ * client declared `fields`, `highlight` and a `severity` no response has ever
+ * carried. `request<T>` asserts the shape rather than validating it, so the
+ * type checker believed every one of them.
+ *
+ * @wire agents POST /api/v1/hunt/search
+ */
+export interface HuntSearchWire {
+  query: string;
+  total: number;
+  took_ms: number;
+  hits: HuntHitWire[];
+  source?: "sample" | "live";
+  notice?: string | null;
+}
+
+/** One hunt hit as the console uses it — see {@link normalizeHuntResponse}. */
 export interface HuntResult {
   id: string;
   timestamp: string;
   source: string;
+  eventType: string | null;
+  /**
+   * Client-side only. The search endpoint does not classify, so this is
+   * absent on every real hit and the row renders a neutral "event" badge.
+   * Sample hits carry one.
+   */
   severity?: AlertSeverity;
   fields: Record<string, unknown>;
-  highlight?: string;
+  highlights: string[];
 }
 
 export interface HuntResponse {
+  query: string;
   total: number;
-  took: number;
+  /**
+   * Latency the backend measured, in milliseconds, or `null` when it
+   * reported none. Absent is not zero: `?? 0` here would print "0ms" beside
+   * a hit count for something nobody timed.
+   */
+  tookMs: number | null;
   hits: HuntResult[];
+  /** `sample` means the backend generated illustrative events. */
+  source: "sample" | "live";
+  notice: string | null;
 }
 
+function normalizeHuntHit(raw: unknown): HuntResult {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const fields = r.raw;
+  return {
+    id: typeof r.id === "string" ? r.id : "",
+    timestamp: typeof r.timestamp === "string" ? r.timestamp : "",
+    source: typeof r.source === "string" ? r.source : "unknown",
+    eventType: typeof r.event_type === "string" ? r.event_type : null,
+    fields:
+      fields !== null && typeof fields === "object" && !Array.isArray(fields)
+        ? (fields as Record<string, unknown>)
+        : {},
+    highlights: Array.isArray(r.highlights) ? r.highlights.map(String) : [],
+  };
+}
+
+/**
+ * The one place the hunt wire shape becomes the shape the console reads.
+ *
+ * Same remedy as {@link normalizeAlert}: one canonical name per value,
+ * resolved once at the boundary. Adding `took` beside `took_ms` and `fields`
+ * beside `raw` would have left two live declarations of each value, which is
+ * the condition that drifted in the first place.
+ */
+export function normalizeHuntResponse(raw: unknown): HuntResponse {
+  const r = (raw ?? {}) as Record<string, unknown>;
+  const hits = Array.isArray(r.hits) ? r.hits.map(normalizeHuntHit) : [];
+  return {
+    query: typeof r.query === "string" ? r.query : "",
+    total: typeof r.total === "number" ? r.total : hits.length,
+    tookMs: typeof r.took_ms === "number" ? r.took_ms : null,
+    hits,
+    // A backend that did not say is not a backend that said "live". The
+    // honesty marker defaults to the claim that costs nothing to be wrong
+    // about.
+    source: r.source === "live" ? "live" : "sample",
+    notice: typeof r.notice === "string" ? r.notice : null,
+  };
+}
+
+/**
+ * A saved hunt search, as `POST /api/v1/hunt/saved` returns it.
+ *
+ * @wire agents POST /api/v1/hunt/saved
+ */
 export interface SavedSearch {
   id: string;
   name: string;
@@ -4412,11 +4514,11 @@ export const huntApi = {
       body: JSON.stringify({ hypothesis }),
     }),
 
-  search: (query: HuntQuery) =>
-    request<HuntResponse>("/api/v1/hunt/search", {
+  search: (query: HuntQuery): Promise<HuntResponse> =>
+    request<HuntSearchWire>("/api/v1/hunt/search", {
       method: "POST",
       body: JSON.stringify(query),
-    }),
+    }).then(normalizeHuntResponse),
 
   listSaved: () => request<{ searches: SavedSearch[] }>("/api/v1/hunt/saved"),
 
