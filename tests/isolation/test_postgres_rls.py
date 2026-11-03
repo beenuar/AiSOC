@@ -126,6 +126,20 @@ _CHECK_LITERAL = re.compile(r"'([^']+)'")
 #: schema and will not be the last.
 _PATTERN_OPERATORS = re.compile(r"\s(?:~\*?|!~\*?|LIKE|ILIKE|SIMILAR TO)\s", re.IGNORECASE)
 
+#: An anchored regex CHECK that pins a character class and an exact length,
+#: e.g. ``CHECK (content_sha256 ~ '^[a-f0-9]{64}$')``.
+#:
+#: ``_EXACT_LEN`` below reads ``char_length(col) = n``, which is the other way
+#: a schema says "this is a digest". A regex says both the length and the
+#: alphabet at once, and `_PATTERN_OPERATORS` correctly stops the pattern
+#: source becoming a permitted value — which left the column on the short
+#: text filler, so the row was refused and the table dropped out of the
+#: isolation replay reporting a constraint violation rather than a leak.
+#: `hunt_source_reports.content_sha256` is the first of these; it will not be
+#: the last, because a sha256 column is how every content-addressed table
+#: here spells its key.
+_PATTERN_SHAPE = re.compile(r"~\s*'\^\[([^\]]+)\]\{(\d+)\}\$'")
+
 
 def _literal_for(
     data_type: str,
@@ -136,6 +150,7 @@ def _literal_for(
     allowed: list[str] | None = None,
     max_len: int | None = None,
     exact_len: int | None = None,
+    shape: tuple[str, int] | None = None,
     ordinal: int = 0,
 ) -> str:
     """A syntactically valid value for a NOT NULL column with no default.
@@ -173,6 +188,12 @@ def _literal_for(
     """
     if allowed:
         return f"'{allowed[0]}'"
+    if shape is not None and data_type in ("character varying", "text", "character"):
+        # A regex CHECK that pins an alphabet and a length. Same reasoning as
+        # `exact_len`: the seeder is taught the constraint rather than the
+        # constraint being relaxed so a prober can insert.
+        char, length = shape
+        return "'" + (char * length) + "'"
     if exact_len is not None and data_type in ("character varying", "text", "character"):
         # A column whose CHECK pins an exact length -- a hex digest, a
         # country code -- cannot be seeded with the short filler below. The
@@ -264,6 +285,62 @@ async def _check_exact_lengths(conn, table: str) -> dict[str, int]:
     return out
 
 
+async def _check_pattern_shapes(conn, table: str) -> dict[str, tuple[str, int]]:
+    """column → (a character its regex CHECK permits, the length it demands)."""
+    rows = await conn.fetch(
+        """
+        SELECT a.attname AS col, pg_get_constraintdef(c.oid) AS def
+          FROM pg_constraint c
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
+         WHERE c.contype = 'c'
+           AND c.conrelid = to_regclass('public.' || quote_ident($1))
+           AND array_length(c.conkey, 1) = 1
+        """,
+        table,
+    )
+    out: dict[str, tuple[str, int]] = {}
+    for row in rows:
+        match = _PATTERN_SHAPE.search(row["def"])
+        if match:
+            # The first character of the class is a member of it whether the
+            # class opens with a literal or with a range: `[a-f0-9]` -> 'a'.
+            out[row["col"]] = (match.group(1)[0], int(match.group(2)))
+    return out
+
+
+async def _cross_column_check_columns(conn, table: str) -> set[str]:
+    """Columns named by a CHECK that spans more than one column.
+
+    `_check_vocabularies` reads single-column CHECKs only, so a constraint
+    *relating* two columns is invisible to the value generator — and one of
+    them can require a **nullable** column to be populated, which the seeder
+    never does because it fills only what `NOT NULL` demands.
+    `triage_questions` declares
+
+        (op IN ('exists','not_exists') AND value IS NULL)
+        OR (op NOT IN ('exists','not_exists') AND value IS NOT NULL)
+
+    so seeding `op` from its own vocabulary and leaving `value` NULL is
+    refused, and the table drops out of the replay. These columns are offered
+    to a second insert attempt rather than always filled: the other arm of
+    that same constraint *requires* the NULL, and which arm applies depends
+    on a value the generator picked.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT a.attname AS col
+          FROM pg_constraint c
+          JOIN unnest(c.conkey) AS k(attnum) ON TRUE
+          JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.attnum
+         WHERE c.contype = 'c'
+           AND c.conrelid = to_regclass('public.' || quote_ident($1))
+           AND array_length(c.conkey, 1) > 1
+        """,
+        table,
+    )
+    return {row["col"] for row in rows}
+
+
 async def _check_vocabularies(conn, table: str) -> dict[str, list[str]]:
     """column → literals its CHECK constraint permits.
 
@@ -306,8 +383,21 @@ async def _seed_row(conn, table: str, tenant: uuid.UUID, enum_labels: dict[str, 
         """,
         table,
     )
+    optional = await conn.fetch(
+        """
+        SELECT column_name, data_type, udt_name, character_maximum_length
+          FROM information_schema.columns
+         WHERE table_schema = 'public' AND table_name = $1
+           AND is_nullable = 'YES' AND column_default IS NULL
+           AND column_name <> 'tenant_id'
+         ORDER BY ordinal_position
+        """,
+        table,
+    )
     vocab = await _check_vocabularies(conn, table)
     exact = await _check_exact_lengths(conn, table)
+    shapes = await _check_pattern_shapes(conn, table)
+    cross = await _cross_column_check_columns(conn, table)
     tenant_type = await conn.fetchval(
         """
         SELECT format_type(a.atttypid, a.atttypmod)
@@ -319,27 +409,56 @@ async def _seed_row(conn, table: str, tenant: uuid.UUID, enum_labels: dict[str, 
     )
     tenant_literal = f"'{tenant}'::uuid" if tenant_type == "uuid" else f"'{tenant}'"
 
-    names = ["tenant_id"]
-    values = [tenant_literal]
-    for ordinal, col in enumerate(cols, start=1):
-        literal = _literal_for(
-            col["data_type"],
-            col["udt_name"],
-            enum_labels,
-            nonce=nonce,
-            allowed=vocab.get(col["column_name"]),
-            max_len=col["character_maximum_length"],
-            exact_len=exact.get(col["column_name"]),
-            ordinal=ordinal,
-        )
-        if literal == "DEFAULT":
-            continue
-        names.append(f'"{col["column_name"]}"')
-        values.append(literal)
+    def _render(extra: list) -> tuple[list[str], list[str]]:
+        names = ["tenant_id"]
+        values = [tenant_literal]
+        for ordinal, col in enumerate([*cols, *extra], start=1):
+            literal = _literal_for(
+                col["data_type"],
+                col["udt_name"],
+                enum_labels,
+                nonce=nonce,
+                allowed=vocab.get(col["column_name"]),
+                max_len=col["character_maximum_length"],
+                exact_len=exact.get(col["column_name"]),
+                shape=shapes.get(col["column_name"]),
+                ordinal=ordinal,
+            )
+            if literal == "DEFAULT":
+                continue
+            names.append(f'"{col["column_name"]}"')
+            values.append(literal)
+        return names, values
 
-    # Every literal above is generated here from the column's own type; none
+    # Every literal below is generated here from the column's own type; none
     # of it comes from outside this process.
-    await conn.execute(f'INSERT INTO public."{table}" ({", ".join(names)}) VALUES ({", ".join(values)})')  # noqa: S608
+    names, values = _render([])
+    try:
+        # A savepoint, because the caller seeds both tenants inside one
+        # transaction: without it the refused insert aborts that transaction
+        # and the retry below dies on "current transaction is aborted"
+        # rather than on anything about the row.
+        async with conn.transaction():
+            await conn.execute(f'INSERT INTO public."{table}" ({", ".join(names)}) VALUES ({", ".join(values)})')  # noqa: S608
+        return
+    except Exception as minimal_error:
+        # A conditional cross-column CHECK can require a *nullable* column to
+        # be populated, which the minimal insert never does. Retry filling
+        # only the nullable columns such a constraint actually names — never
+        # every nullable column, because a nullable FK filled with a fresh
+        # UUID is a foreign-key violation and would turn one unseedable table
+        # into several.
+        extra = [c for c in optional if c["column_name"] in cross]
+        if not extra:
+            raise
+        names, values = _render(extra)
+        try:
+            await conn.execute(f'INSERT INTO public."{table}" ({", ".join(names)}) VALUES ({", ".join(values)})')  # noqa: S608
+        except Exception:
+            # Report the minimal insert's reason: it is the one that names
+            # what the schema demands, and a table that genuinely cannot be
+            # seeded must still be reported rather than silently skipped.
+            raise minimal_error from None
 
 
 async def _connect_admin():
