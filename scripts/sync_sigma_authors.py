@@ -272,9 +272,7 @@ def _self_test() -> int:
 
     # The divergence that cost ten rules: upstream writes a trailing YAML
     # comment after the id, which an end-of-line-anchored regex does not match.
-    commented = yaml.safe_load(
-        "title: t\nid: 9f50fe98-fe5c-4a2d-86c7-fad7f63ed622 # Susp Paths\nauthor: N B # note\n"
-    )
+    commented = yaml.safe_load("title: t\nid: 9f50fe98-fe5c-4a2d-86c7-fad7f63ed622 # Susp Paths\nauthor: N B # note\n")
     case(
         "reads an id and author carrying trailing YAML comments",
         str(commented["id"]) == "9f50fe98-fe5c-4a2d-86c7-fad7f63ed622" and _author_of(commented) == "N B",

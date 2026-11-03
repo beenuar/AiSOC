@@ -29,8 +29,8 @@ each is checked separately rather than one standing in for the rest:
 The author is checked, deliberately, for *presence* rather than against a
 list of expected names. A gate holding its own copy of 749 author strings
 would be a second source of truth that drifts from upstream on the next
-import; ``scripts/backfill_sigma_authors.py --check`` is what proves the
-names match the pinned commit.
+import; ``scripts/sync_sigma_authors.py --check`` is what proves the names
+match the pinned commit.
 
 A rule whose upstream genuinely carries no ``author:`` is a real case the
 licence does not require us to invent a name for. None exist in the corpus at
