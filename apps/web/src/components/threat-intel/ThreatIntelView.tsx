@@ -5,7 +5,7 @@ import useSWR from 'swr';
 import {
   threatIntelApi,
   type AlertSeverity,
-  type IndicatorType,
+  type KnownIndicatorType,
   type IOCLookupOutcome,
   type ThreatIndicator,
 } from '@/lib/api';
@@ -90,13 +90,40 @@ const MOCK_INDICATORS: ThreatIndicator[] = [
 
 // ─── Type badges ──────────────────────────────────────────────────────────────
 
-const TYPE_CONFIG: Record<IndicatorType, { label: string; color: string }> = {
+const TYPE_CONFIG: Record<KnownIndicatorType, { label: string; color: string }> = {
   ip: { label: 'IP', color: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
   domain: { label: 'Domain', color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
   hash: { label: 'Hash', color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20' },
   url: { label: 'URL', color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
   email: { label: 'Email', color: 'text-green-400 bg-green-500/10 border-green-500/20' },
+  // The CISA KEV catalogue is the one real feed a default install ships,
+  // and every row it writes is this type. Its absence here is why 1,766
+  // CVEs rendered badged "IP".
+  vulnerability: { label: 'CVE', color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
 };
+
+const UNKNOWN_TYPE = { label: 'Unknown', color: 'text-gray-400 bg-gray-500/10 border-gray-500/20' };
+
+/** Chip order when there are no rows to derive one from. */
+const KNOWN_TYPE_ORDER: KnownIndicatorType[] = ['ip', 'domain', 'hash', 'url', 'vulnerability'];
+
+/**
+ * The badge for one indicator type.
+ *
+ * An unrecognised type renders as **Unknown**, not as the first entry in
+ * the table. `TYPE_CONFIG[ioc.type] || TYPE_CONFIG.ip` silently asserted
+ * that every indicator the console had no badge for was an IP address, so
+ * the page made a confident wrong claim about data it did not understand
+ * rather than admitting it did not understand it.
+ */
+function badgeFor(type: string): { label: string; color: string } {
+  return TYPE_CONFIG[type as KnownIndicatorType] ?? UNKNOWN_TYPE;
+}
+
+/** The label a filter chip shows, so the chip and the badge cannot drift. */
+function chipLabelFor(type: string): string {
+  return badgeFor(type).label;
+}
 
 const SEVERITY_CONFIG: Record<AlertSeverity, string> = {
   critical: 'text-red-400 bg-red-500/10 border-red-500/20',
@@ -198,7 +225,7 @@ function LookupForm() {
 // ─── IOC Row ──────────────────────────────────────────────────────────────────
 
 function IOCRow({ ioc }: { ioc: ThreatIndicator }) {
-  const typeCfg = TYPE_CONFIG[ioc.type] || TYPE_CONFIG.ip;
+  const typeCfg = badgeFor(ioc.type);
 
   return (
     <div className="flex items-center gap-4 py-3 border-b border-gray-800/60 last:border-0 hover:bg-gray-800/20 px-4 -mx-4 transition-colors rounded-lg">
@@ -302,13 +329,32 @@ export function ThreatIntelView() {
     return true;
   });
 
-  const typeCounts = {
-    all: allIndicators.length,
-    ip: allIndicators.filter(i => i.type === 'ip').length,
-    domain: allIndicators.filter(i => i.type === 'domain').length,
-    hash: allIndicators.filter(i => i.type === 'hash').length,
-    url: allIndicators.filter(i => i.type === 'url').length,
-  };
+  // Derived from the rows, not from a list written here.
+  //
+  // The hardcoded `ip | domain | hash | url` set published four measured
+  // zeros beside a populated table on every default install, because the
+  // only feed a fresh deployment ships emits `vulnerability` and none of
+  // the four matched a single row. Four chips that each empty the table
+  // when clicked, summing to less than the total above them.
+  //
+  // Counting what is there means a feed added later is filterable with no
+  // second edit, and a chip can never read `(0)` — a filter that is
+  // guaranteed to show nothing is not a filter worth offering.
+  const typeCounts = new Map<string, number>();
+  for (const ioc of allIndicators) {
+    typeCounts.set(ioc.type, (typeCounts.get(ioc.type) ?? 0) + 1);
+  }
+  const presentTypes = [...typeCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([type]) => type);
+
+  // With no rows to derive chips from, offering none would quietly remove
+  // a control rather than explain it, so the known set is shown instead.
+  // The two reasons for having no rows stay distinguishable in the number:
+  // a store that could not be read gets an em-dash apiece — the same thing
+  // the panel header beside them does — and a store that answered and holds
+  // nothing gets real zeros, because that is a measurement.
+  const chipTypes: string[] = presentTypes.length > 0 ? presentTypes : [...KNOWN_TYPE_ORDER];
 
   return (
     <div className="space-y-5">
@@ -365,7 +411,7 @@ export function ThreatIntelView() {
         </div>
 
         <div className="flex gap-1">
-          {(['all', 'ip', 'domain', 'hash', 'url'] as const).map((t) => (
+          {['all', ...chipTypes].map((t) => (
             <button
               key={t}
               onClick={() => setTypeFilter(t)}
@@ -376,9 +422,10 @@ export function ThreatIntelView() {
                   : 'text-gray-400 bg-gray-800/60 hover:bg-gray-800'
               )}
             >
-              {/* Five chips reading `(0)` is five measured claims about a
-                  store the page could not reach. */}
-              {t === 'all' ? 'All' : t.toUpperCase()} ({storeUnknown ? '—' : typeCounts[t] ?? 0})
+              {/* A chip reading `(0)` is a measured claim about a store the
+                  page could not reach; an em-dash says it was not measured. */}
+              {t === 'all' ? 'All' : chipLabelFor(t).toUpperCase()} (
+              {storeUnknown ? '—' : t === 'all' ? allIndicators.length : (typeCounts.get(t) ?? 0)})
             </button>
           ))}
         </div>

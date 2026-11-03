@@ -134,22 +134,29 @@ def register_dependency(app: FastAPI, name: str, probe: Callable[[], Any], *, re
     dependencies[name] = (probe, required)
 
 
-def _probe_detached(probes: dict[str, Callable[[], bool]]) -> list[str]:
-    """Names of the subscriptions currently reporting not-attached.
+def _probe_states(probes: dict[str, Callable[[], bool]]) -> dict[str, dict[str, Any]]:
+    """Each subscription's state, keyed by name.
 
     A probe that raises counts as detached. It is asking a live object
     whether it is still working; if that question itself fails, the honest
     answer is not "yes".
+
+    The shape is ``{"<name>": {"attached": bool}}`` because that is what
+    ``services/ingest`` already publishes on its own ``/readyz``; the Python
+    services reported a bare list of names, which answers *which*
+    subscriptions were checked and never *how* they are. A live pass read
+    ``{"status": "ready", "subscriptions": ["aisoc.alerts.fused"]}`` out of a
+    service whose broker was gone, and nothing in that body could have told
+    an operator so.
     """
-    detached: list[str] = []
+    states: dict[str, dict[str, Any]] = {}
     for name, probe in sorted(probes.items()):
         try:
             attached = bool(probe())
         except Exception:  # noqa: BLE001 — an unanswerable probe is not a healthy one
             attached = False
-        if not attached:
-            detached.append(name)
-    return detached
+        states[name] = {"attached": attached}
+    return states
 
 
 def register_subscription(app: FastAPI, name: str, probe: Callable[[], bool]) -> None:
@@ -159,6 +166,16 @@ def register_subscription(app: FastAPI, name: str, probe: Callable[[], bool]) ->
     :func:`install_health_routes`. *probe* must be cheap and non-blocking —
     it runs on every ``/readyz`` request — so it should read a flag the
     consumer maintains or check ``task.done()``, not round-trip to a broker.
+
+    That last clause is a statement about *this* probe and not about the
+    readiness body as a whole, and reading it as the latter is what left two
+    services green through a broker outage. "Am I consuming" and "can I reach
+    the broker" are different facts: under aiokafka the reconnect lives inside
+    ``__anext__``, so the ``async for`` never exits and the flag stays true
+    for the whole outage. The broker question belongs in
+    :func:`register_dependency`, which is bounded at 1.5 s precisely so a
+    service *can* round-trip to it — see ``FusionWorker.broker_reachable`` and
+    ``FusedAlertTriageWorker.broker_reachable``.
     """
     probes = getattr(app.state, _STATE_ATTR, None)
     if probes is None:  # pragma: no cover — install_health_routes was not called
@@ -203,7 +220,12 @@ def install_health_routes(app: FastAPI, *, service_name: str) -> tuple[Callable[
         body: dict[str, Any] = {"status": "ready", "service": service_name}
         status_code = 200
 
-        detached = _probe_detached(probes) if state["ready"] else []
+        # Before startup finishes the probes are not consulted at all, so
+        # `attached` is reported as null — unknown, which is what it is.
+        # `status` is already "starting" with a 503 in that case, so the
+        # unknown bucket is not a pass anywhere.
+        subscriptions = _probe_states(probes) if state["ready"] else {name: {"attached": None} for name in sorted(probes)}
+        detached = [name for name, probe_state in subscriptions.items() if probe_state["attached"] is False]
         results = await asyncio.gather(*(_run_dependency(probe) for probe, _required in dependencies.values()))
         dependency_errors: dict[str, str] = {}
         degraded = False
@@ -228,11 +250,11 @@ def install_health_routes(app: FastAPI, *, service_name: str) -> tuple[Callable[
             body["status"] = "ready_degraded"
 
         # Named subscriptions are reported either way, so a 200 says which
-        # ones were checked rather than only that nothing was wrong. A probe
-        # list that is unexpectedly empty is then visible in the same place
-        # the verdict is.
+        # ones were checked and in what state rather than only that nothing
+        # was wrong. A probe map that is unexpectedly empty is then visible in
+        # the same place the verdict is.
         if probes:
-            body["subscriptions"] = sorted(probes)
+            body["subscriptions"] = subscriptions
 
         return Response(
             content=json.dumps(body),

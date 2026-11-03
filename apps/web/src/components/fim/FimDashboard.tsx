@@ -7,6 +7,7 @@ import type { FimEventsPage, FimSummary } from '@/lib/osquery-api';
 import { getFimEvents, getFimSummary } from '@/lib/osquery-api';
 import { FimSummaryCards } from './FimSummaryCards';
 import { FimEventsTable } from './FimEventsTable';
+import { CapabilityUnavailable, isCapabilityAbsent } from '@/components/ui/CapabilityUnavailable';
 
 // This page used to pin `const TENANT_ID = 'default'` with a comment saying
 // osquery-tls had a different tenancy model and the two needed reconciling.
@@ -186,7 +187,16 @@ export function FimDashboard() {
       </div>
 
       {/* Summary cards */}
-      {summaryError ? (
+      {isCapabilityAbsent(summaryError) ? (
+        // osqueryd is a `full`-profile component. "Could not load FIM
+        // summary" sent a CORE operator looking for a fault that is a
+        // deployment choice.
+        <CapabilityUnavailable
+          capability="File integrity monitoring"
+          service="the osquery fleet service"
+          detail={summaryError}
+        />
+      ) : summaryError ? (
         <ErrorBanner message="Could not load FIM summary." />
       ) : summaryLoading ? (
         <SkeletonCards />

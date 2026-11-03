@@ -363,6 +363,7 @@ def evaluate_contract(
     confidence: float | None,
     tier: str,
     asset_criticality: str | None = None,
+    schedule: ResponseSchedule | None = None,
 ) -> ApprovalDecision:
     """Grade a capability contract. **The one place a door may decide.**
 
@@ -402,6 +403,18 @@ def evaluate_contract(
     doors-agree work exists to prevent; and ``SEVERE`` stays ``SEVERE``,
     because ``IRREVERSIBLE`` is a factual property of the verb — context can
     demand a human, it cannot make an undoable action undoable.
+
+    ``schedule`` is the tenant's declared response schedule, resolved from
+    migration 142's tables by the door that has a database. It is applied
+    **here** rather than in each door for the reason this function exists at
+    all: ``apply_schedule`` was written, unit-tested and called by nothing
+    outside its own test, so a tenant who declared a change freeze got
+    automatic execution right through it. Passing it to the one place a door
+    may decide means a third door gets the time gates by calling this and
+    cannot get a different answer without reimplementing the function. Like
+    ``asset_criticality`` it is **raise-only** — ``apply_schedule`` refuses to
+    touch anything that already requires a human and only ever moves
+    AUTOMATIC to ANALYST — and ``None`` grades exactly as before.
     """
     graded_impact = contract.impact
     criticality = (asset_criticality or "").strip().lower()
@@ -417,7 +430,7 @@ def evaluate_contract(
         tier=tier,
     )
     if graded_impact is not contract.impact:
-        return ApprovalDecision(
+        decision = ApprovalDecision(
             requirement=decision.requirement,
             reason=(
                 f"{decision.reason} Impact graded {graded_impact.value} rather than the declared "
@@ -428,7 +441,11 @@ def evaluate_contract(
             confidence=decision.confidence,
             tier=decision.tier,
         )
-    return decision
+    # Last, because it is the only input that can change between two
+    # identical requests: the clock. Composing it here keeps the rule
+    # "each input may raise, none may lower" intact — `apply_schedule`
+    # returns its input untouched unless the requirement is AUTOMATIC.
+    return apply_schedule(decision, schedule)
 
 
 # ---------------------------------------------------------------------------

@@ -50,7 +50,7 @@ Per-stage definitions
   doesn't emit per-correlation-job timing yet).
 
 * **alert** — alert visible to analyst. ``backlog`` is the open queue
-  depth (``status in ('new','triaging','in_progress')`` AND
+  depth (``app.services.alert_status.unresolved_filter`` AND
   ``first_seen_at IS NULL``). ``p95_latency_ms`` is
   ``percentile_cont(0.95) WITHIN GROUP (first_seen_at - created_at)``
   — i.e. MTTD p95. ``error_rate`` is 0.
@@ -90,6 +90,7 @@ from app.db.database import engine
 from app.db.rls import TenantDBSession
 from app.models.alert import Alert
 from app.models.connector import Connector
+from app.services.alert_status import unresolved_filter
 from app.services.audit_hash import verify_chain_breaks, verify_chain_tail
 from app.services.connector_freshness import compute_freshness
 from app.services.dlq_replay_gateway import DlqReplayRequest, DlqReplayResponse, run_replay
@@ -417,7 +418,7 @@ async def _alert_stage(
             select(func.count()).where(
                 and_(
                     Alert.tenant_id == tenant_id,
-                    Alert.status.in_(("new", "triaging", "in_progress")),
+                    unresolved_filter(Alert.status),
                     Alert.first_seen_at.is_(None),
                 )
             )

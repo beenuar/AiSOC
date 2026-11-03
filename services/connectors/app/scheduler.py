@@ -181,6 +181,14 @@ class ConnectorScheduler:
         # can detect when an instance's poll interval / config changed and
         # need its job rescheduled, vs leaving an unchanged job alone.
         self._known_signatures: dict[str, str] = {}
+        # Last patch-window promotion sweep's outcome, so a failing sweep is
+        # visible somewhere an operator looks rather than only in a log line.
+        # The upsert in that sweep raised on every tenant on every deployment
+        # for its whole life and the only symptom was `logger.exception` —
+        # nothing on /readyz, no counter, no metric. ``None`` means the sweep
+        # has not run yet, which is not the same as having run cleanly.
+        self._promotion_failures: dict[str, str] = {}
+        self._promotion_last_error: str | None = None
 
     # ------------------------------------------------------------------ lifecycle
 
@@ -1278,18 +1286,33 @@ class ConnectorScheduler:
         try:
             async with self._engine.connect() as conn:
                 tenants = (await conn.execute(text("SELECT DISTINCT tenant_id FROM connectors WHERE is_enabled"))).scalars().all()
-        except Exception:  # pragma: no cover
+        except Exception as exc:
+            # Recorded under its own key rather than against a tenant, because
+            # this handler returns *before* the per-tenant loop: a sweep that
+            # cannot even list tenants would otherwise leave the failure map
+            # empty and read as a clean sweep.
+            self._promotion_failures["<tenant enumeration>"] = f"{type(exc).__name__}: {exc}"[:300]
+            self._promotion_last_error = f"{type(exc).__name__}: {exc}"[:300]
             logger.exception("connector.scheduler.promotion_tenant_enum_failed")
             return
+        else:
+            self._promotion_failures.pop("<tenant enumeration>", None)
 
         for tenant_id in tenants:
             try:
                 async with self._engine.begin() as conn:
-                    # The connector role reads with current_tenant_id() NULL;
-                    # bind it per statement so the RLS policies on
-                    # asset_vulnerabilities / alerts apply to this tenant.
+                    # Bind the tenant so the RLS policies on
+                    # asset_vulnerabilities / alerts apply to this sweep.
+                    #
+                    # The setting is `app.current_tenant_id`, which is what
+                    # `current_tenant_id()` reads. This said `aisoc.tenant_id`,
+                    # a name no policy consults, so the bind did nothing and
+                    # every statement here passed on the policies' permissive
+                    # `OR current_tenant_id() IS NULL` arm instead — a comment
+                    # asserting a property the code did not have, over a sweep
+                    # that writes to `alerts`.
                     await conn.execute(
-                        text("SELECT set_config('aisoc.tenant_id', :tid, true)"),
+                        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
                         {"tid": str(tenant_id)},
                     )
                     overdue = (await conn.execute(text(MARK_OVERDUE_SQL), {"tenant_id": tenant_id})).rowcount
@@ -1350,9 +1373,45 @@ class ConnectorScheduler:
                         promoted,
                         resolved,
                     )
-            except Exception:
-                # One tenant's failure must not stop the others' sweep.
+            except Exception as exc:
+                # One tenant's failure must not stop the others' sweep — but
+                # it must not vanish into the log either. This sweep is the
+                # only path from `asset_vulnerabilities` back into the alert
+                # queue, it runs every six hours, and when its upsert raised
+                # on every tenant the sole observable was this line. Record it
+                # so `/readyz` reports a degraded sweep with the reason.
+                self._promotion_failures[str(tenant_id)] = f"{type(exc).__name__}: {exc}"[:300]
+                self._promotion_last_error = f"{type(exc).__name__}: {exc}"[:300]
                 logger.exception("connector.scheduler.vuln_promotion_failed tenant=%s", tenant_id)
+            else:
+                self._promotion_failures.pop(str(tenant_id), None)
+
+        if not self._promotion_failures:
+            self._promotion_last_error = None
+
+    def promotion_sweep_healthy(self) -> bool:
+        """Whether the last patch-window sweep got through every tenant.
+
+        Registered on ``/readyz`` as a **non-required** dependency, so a
+        failing six-hourly background sweep reports ``ready_degraded`` with
+        the reason instead of pulling the connector API's front door out of
+        the load balancer. The same reasoning ingest applies to its opt-in
+        WebSocket: failing readiness over an auxiliary job drops the traffic
+        that still works in order to flag the job that does not.
+
+        True before the first sweep. That is the one dishonest-looking answer
+        here and it is deliberate: the alternative is a brand-new deployment
+        reporting degraded for up to six hours for no reason. "Has not run
+        yet" is reported as the empty failure map rather than as a verdict.
+        """
+        return not self._promotion_failures
+
+    def promotion_sweep_detail(self) -> dict[str, Any]:
+        """The sweep's last outcome, for an operator reading the body."""
+        return {
+            "tenants_failing": sorted(self._promotion_failures),
+            "last_error": self._promotion_last_error,
+        }
 
     async def _record_failure(self, connector_id: uuid.UUID) -> None:
         if self._engine is None:  # pragma: no cover

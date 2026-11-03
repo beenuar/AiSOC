@@ -63,13 +63,14 @@ def test_a_detached_subscription_is_named_in_the_503() -> None:
     register_subscription(app, "aisoc.alerts.fused", lambda: attached["value"])
     mark_ready()
     client = TestClient(app)
-    assert client.get("/readyz").json()["subscriptions"] == ["aisoc.alerts.fused"]
+    assert client.get("/readyz").json()["subscriptions"] == {"aisoc.alerts.fused": {"attached": True}}
 
     attached["value"] = False
 
     response = client.get("/readyz")
     assert response.status_code == 503
     assert response.json()["detached"] == ["aisoc.alerts.fused"]
+    assert response.json()["subscriptions"] == {"aisoc.alerts.fused": {"attached": False}}
 
 
 def test_a_probe_that_raises_is_not_a_healthy_answer() -> None:
