@@ -23,10 +23,13 @@ on:
       - "scripts/check_route_tenant_scope.py"
       - "scripts/check_route_auth.py"
       - "scripts/check_route_authz.py"
+      - "scripts/check_router_principal_binding.py"
+      - "scripts/check_peer_service_token_names.py"
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
       - "scripts/check_one_case_table.py"
+      - "scripts/check_alert_status_vocabulary.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -47,10 +50,13 @@ on:
       - "scripts/check_route_tenant_scope.py"
       - "scripts/check_route_auth.py"
       - "scripts/check_route_authz.py"
+      - "scripts/check_router_principal_binding.py"
+      - "scripts/check_peer_service_token_names.py"
       - "scripts/check_route_shadowing.py"
       - "scripts/check_tenant_query_predicates.py"
       - "scripts/check_text_bind_casts.py"
       - "scripts/check_one_case_table.py"
+      - "scripts/check_alert_status_vocabulary.py"
       - "scripts/sync_vendored_tenant_scope.py"
       # The runtime-DB-role gate reads these, so a change to any of them has
       # to re-run it. A gate whose inputs are outside its own path filter is
@@ -172,6 +178,36 @@ jobs:
       - name: State-changing routes that authorize do not decrease
         run: python scripts/check_route_authz.py
 
+      # And authorization is not binding. `services/agents/app/api/playbooks.py`
+      # declared its auth at the router level, which resolves a TenantPrincipal
+      # on every request and discards it because no handler declared one, so the
+      # run store was deployment-global and `GET /runs` returned every tenant's
+      # runs with their alert context (GHSA-27wx-pcv5-pr7q).
+      #
+      # The gate that was supposed to cover this imported the *API* service's
+      # `playbooks` module, which genuinely does bind principals: two modules
+      # share a name and a route list, and it measured the safe one. It had to
+      # — both services name their package `app`, so importing one shadows the
+      # other — hence a path-based AST walk rather than a test in either suite.
+      - name: Router-binding gate self-test (and the pre-fix tree)
+        run: python scripts/check_router_principal_binding.py --self-test
+
+      - name: Unbound-route inventory
+        run: python scripts/check_router_principal_binding.py --report
+
+      - name: A route on an authenticated router binds the principal
+        run: python scripts/check_router_principal_binding.py
+
+      # Carrying a credential is not carrying the right one. The agents service
+      # presented `AISOC_AGENTS_SERVICE_TOKEN` — the token it *accepts* — to an
+      # API that validates `AISOC_API_SERVICE_TOKEN`, so the graph context and
+      # every playbook approval 401'd on every deployment, logged at `debug`.
+      - name: Peer-token gate self-test (both directions)
+        run: python scripts/check_peer_service_token_names.py --self-test
+
+      - name: The credential presented is the one the peer accepts
+        run: python scripts/check_peer_service_token_names.py
+
       # A route can authenticate perfectly and still never run. `DELETE
       # /autonomy-policy/grants` sat behind `DELETE /{action}` from the day it
       # shipped, so an operator could earn an autonomy grant and had no
@@ -215,6 +251,15 @@ jobs:
 
       - name: One case table, and one status vocabulary
         run: python scripts/check_one_case_table.py
+
+      # The alert half of the same defect, and the worse one: `triaged` was
+      # written by the auto-triage worker and classified by nobody, so every
+      # tile on the dashboard read 0 for a tenant with nine open alerts.
+      - name: Alert-status vocabulary gate self-test (the defect, and two near misses)
+        run: python scripts/check_alert_status_vocabulary.py --self-test
+
+      - name: No worker writes an alert status that no reader classifies
+        run: python scripts/check_alert_status_vocabulary.py
 
       # The second layer, which was decoration until 061_runtime_app_role.sql:
       # every service connected as a superuser, and a superuser ignores RLS

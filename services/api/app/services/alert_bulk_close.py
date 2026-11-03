@@ -36,6 +36,7 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.alert import Alert
+from app.services.alert_status import BULK_CLOSE_STATUSES, UNRESOLVED_STATUSES
 
 logger = logging.getLogger(__name__)
 
@@ -71,12 +72,17 @@ def _safe_log_text(value: str | None, *, limit: int = 120) -> str:
 
 #: Statuses an alert may be bulk-closed *to*. ``new``/``investigating`` are
 #: excluded: those are queue states, and bulk-moving work into the queue is
-#: not what this endpoint is for.
-CLOSE_STATUSES = frozenset({"resolved", "false_positive", "closed"})
+#: not what this endpoint is for. Read from `alert_status` so this and the
+#: endpoint's `Literal[...]` cannot name different sets.
+CLOSE_STATUSES = frozenset(BULK_CLOSE_STATUSES)
 
 #: Alert statuses that count as still-open for the preflight count (an
 #: already-closed row must not consume a caller's max_count budget).
-OPEN_STATUSES = ("new", "triaging", "investigating", "in_progress", "escalated", "snoozed")
+#:
+#: Read from `alert_status` rather than retyped. This copy omitted
+#: `triaged`, so an auto-triaged alert was invisible to the preflight count
+#: and a bulk close under-reported what it was about to touch.
+OPEN_STATUSES = UNRESOLVED_STATUSES
 
 
 class BulkCloseOverMatch(Exception):

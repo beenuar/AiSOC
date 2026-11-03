@@ -400,6 +400,15 @@ SERVICE_TENANT_HEADER = "X-AiSOC-Tenant-ID"
 #: Anything that changes state at a vendor or in the database is absent on
 #: purpose: those go through the live-action contract with its approval
 #: matrix, not through a service token.
+#:
+#: ``approvals:write`` is the one exception, and it is narrow by construction.
+#: A playbook ``approval`` step has to open an approval for a human to decide,
+#: and the engine runs in the agents service, so without it the step 403'd and
+#: the run suspended against an approval that was never created. It is a
+#: dedicated permission rather than the ``cases:write`` the route used to
+#: demand precisely so this list does not acquire the whole case write surface
+#: to unblock one POST — and ``POST /approvals/{id}/decide`` still requires
+#: ``cases:write``, so a service may raise an approval and may not answer it.
 SERVICE_PRINCIPAL_PERMISSIONS: frozenset[str] = frozenset(
     {
         "alerts:read",
@@ -409,6 +418,7 @@ SERVICE_PRINCIPAL_PERMISSIONS: frozenset[str] = frozenset(
         "lake:query",
         "hunts:read",
         "threat_intel:read",
+        "approvals:write",
     }
 )
 

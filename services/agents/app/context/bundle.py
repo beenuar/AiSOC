@@ -39,6 +39,8 @@ import httpx
 import structlog
 from pydantic import BaseModel, Field
 
+from app.security import peer_tokens
+
 logger = structlog.get_logger()
 
 
@@ -769,26 +771,16 @@ class ContextBundleBuilder:
             return IncidentContextDimensions()
 
         api_url = os.getenv("AISOC_API_URL", "http://api:8000")
-        # The service-credential shape `get_current_user` actually resolves:
-        # `Authorization: Bearer <service token>` plus `X-AiSOC-Tenant-ID`.
-        # This fetch used to send `X-Tenant-ID` (a header the API's auth never
-        # reads) with an optional `AISOC_AGENTS_API_KEY` bearer that no compose
-        # file, `.env.example` or Helm value delivers — so the graph's business
-        # dimension answered 401 on every default deployment and the prompt
-        # rendered "unavailable" forever. Same fix class as
-        # `tools/investigation.py`; same token resolution order as
-        # `context/identity.py`, the one path of this shape proven live.
-        token = os.getenv("AISOC_AGENTS_SERVICE_TOKEN", "").strip() or os.getenv("AISOC_SERVICE_TOKEN", "").strip()
-        if not token:
-            # Raise rather than return empty dimensions: the caller's safe-wrap
-            # marks the source unavailable, which keeps "no credential" from
-            # reading as "no business context". Dialing anyway would be a
-            # guaranteed 401 that reads as the API rejecting us.
-            raise RuntimeError("incident context needs a service credential: set AISOC_AGENTS_SERVICE_TOKEN (or AISOC_SERVICE_TOKEN)")
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "X-AiSOC-Tenant-ID": tenant_id,
-        }
+        # The credential and the tenant header come from one place, because
+        # they fail together and had been wrong one at a time: this fetch sent
+        # `X-Tenant-ID` (a header the API's auth never reads), then the right
+        # header with `AISOC_AGENTS_SERVICE_TOKEN` — the token the *agents*
+        # service accepts — against an API that validates
+        # `AISOC_API_SERVICE_TOKEN`. Both are 401/403 on every deployment.
+        # `peer_tokens` names the callee rather than the caller so there is
+        # nothing left to get backwards; raising when nothing is configured
+        # keeps "no credential" from reading as "no business context".
+        headers = peer_tokens.api_bearer_headers(tenant_id)
         async with httpx.AsyncClient(timeout=self.per_source_timeout) as client:
             response = await client.get(
                 f"{api_url}/api/v1/graph/incident-context/{alert_id}",
@@ -855,15 +847,40 @@ class ContextBundleBuilder:
     # ------------------------------------------------------------------
 
     async def _safe(self, name: str, coro: Any, bundle: ContextBundle) -> Any:
-        """Run ``coro`` with a per-source timeout; record errors instead of raising."""
+        """Run ``coro`` with a per-source timeout; record errors instead of raising.
+
+        Three outcomes, not two, because they need three different responses.
+        A timeout may clear on the next alert. A **credential** refusal never
+        will: it is a misconfiguration that silences one context source for the
+        life of the deployment, and it was logged here at ``debug`` — so the
+        graph's identity, asset, cloud and business dimensions were missing
+        from every triage prompt and the only record was a line nobody reads.
+        It is an ``error`` naming the operator action — matched on the status
+        the peer returned or on the one exception type that means "nothing was
+        configured", never on a bare ``RuntimeError``, because a diagnostic
+        that names the wrong subsystem sends an operator to debug something
+        that is not broken. Everything else is a ``warning``: a source that
+        answered nothing is a gap in what the model was told either way.
+        """
         try:
             return await asyncio.wait_for(coro, timeout=self.per_source_timeout)
         except TimeoutError:
             bundle.errors.append(f"{name}:timeout")
+            logger.warning("context.source.timeout", source=name, timeout_s=self.per_source_timeout)
             return None
         except Exception as exc:  # noqa: BLE001
             bundle.errors.append(f"{name}:{type(exc).__name__}")
-            logger.debug("context.source.failed", source=name, error=str(exc))
+            status = getattr(getattr(exc, "response", None), "status_code", None)
+            if status in (401, 403) or isinstance(exc, peer_tokens.MissingPeerCredential):
+                logger.error(
+                    "context.source.refused",
+                    source=name,
+                    status_code=status,
+                    error=str(exc)[:300],
+                    action="check the credential this service presents to the peer (see app/security/peer_tokens.py)",
+                )
+            else:
+                logger.warning("context.source.failed", source=name, error=str(exc)[:300])
             return None
 
     def _record_source(self, name: str) -> None:
