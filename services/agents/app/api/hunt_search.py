@@ -59,7 +59,12 @@ class HuntHit(BaseModel):
     source: str
     event_type: str
     raw: dict[str, Any]
-    highlights: list[str] | None = None
+    #: Always present. This was ``list[str] | None = None`` while every code
+    #: path set it, so ``null`` and ``[]`` were two spellings of "nothing
+    #: matched" and a caller had to handle both for a case the handler has
+    #: never produced. One representation per value, decided here rather
+    #: than in each consumer.
+    highlights: list[str]
 
 
 class HuntResponse(BaseModel):

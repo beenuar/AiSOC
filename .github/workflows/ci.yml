@@ -1865,6 +1865,26 @@ jobs:
         run: python scripts/check_console_route_contract.py --self-test
       - name: Verify every console API path resolves to a route or a rewrite
         run: python scripts/check_console_route_contract.py
+      # The other half of the same contract. The route check proves a console
+      # path reaches a route; it says nothing about what comes back, and that
+      # is the half that drifted. #1648: POST /api/v1/hunt/search sends
+      # `took_ms`, `raw`, `highlights`, `event_type`, `source`, `query` and
+      # `notice` while the hand-written client type declared `took`, `fields`,
+      # `highlight` and a `severity` no response has ever carried — and
+      # `request<T>` asserts T rather than validating it, so the type checker
+      # believed all of them right up to a TypeError in the browser.
+      #
+      # It had no spec coverage of any kind either: docs/openapi.yaml is
+      # exported from services/api alone and this route is served by
+      # services/agents, so every gate keyed on the published document
+      # covered nothing here.
+      #
+      # Both directions, and nothing is skipped: an unresolvable service,
+      # path, schema, $ref or interface is an error rather than a pass.
+      - name: Console wire contract — self-test
+        run: python scripts/check_console_wire_contract.py --self-test
+      - name: Verify every declared wire type matches its service's schema
+        run: python scripts/check_console_wire_contract.py --list
       # Two call sites named a provider model directly, so on CORE they
       # reached LiteLLM, which knows the `aisoc-*` aliases and not that id,
       # and both degraded silently to a deterministic answer. Neither broke

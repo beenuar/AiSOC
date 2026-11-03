@@ -1246,7 +1246,11 @@ function evaluateDemo(
         ? (sample['@timestamp'] as string)
         : new Date().toISOString(),
     source: 'sample-event',
+    // A local preview of the sample event the author pasted, not a hit from
+    // any backend: there is no event class to report and nothing highlighted.
+    eventType: null,
     fields: flat,
+    highlights: [],
   };
   return { matches: 1, preview: [previewRow] };
 }
