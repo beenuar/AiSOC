@@ -278,6 +278,11 @@ up-host-llm: env _ports _refresh
 # words. Reporting a download in progress as a missing model would be exactly
 # the wrong-subsystem diagnostic this work exists to remove.
 #
+# The match is on the full `name:tag`, not the family before the colon. A
+# deployment pinned to `llama3.2:3b-instruct-q4_K_M` that somehow has
+# `llama3.2:1b` instead does not have its model, and reporting that it does
+# would be the same shape of wrong answer as everything else here.
+#
 # Never fails. It is a report.
 _llm_note:
 	@model="$${AISOC_LLM_LOCAL_MODEL:-$$(sed -n 's/^AISOC_LLM_LOCAL_MODEL=//p' .env 2>/dev/null | tail -1)}"; \
@@ -287,7 +292,7 @@ _llm_note:
 	  echo "  The local model ($$model) is still downloading in the background."; \
 	  echo "  AI triage uses the deterministic path until it finishes."; \
 	  echo ""; \
-	elif ! $(COMPOSE) exec -T ollama ollama list 2>/dev/null | grep -qF "$$(echo "$$model" | cut -d: -f1)"; then \
+	elif ! $(COMPOSE) exec -T ollama ollama list 2>/dev/null | grep -qF "$$model"; then \
 	  echo "  AI triage is DEGRADED: the local model ($$model) is not available."; \
 	  echo "  Everything else is running — ingest, detection, alerting, the console."; \
 	  echo "  Triage falls back to the deterministic path, which needs no model."; \
