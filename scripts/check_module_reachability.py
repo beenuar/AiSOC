@@ -103,6 +103,37 @@ DYNAMIC_LOADERS: dict[str, tuple[str, ...]] = {
     "services/connectors/app/connectors/__init__.py": ("services/connectors/app/connectors",),
 }
 
+#: Modules whose **public symbols** must each have a production caller, not
+#: merely a module with a production importer.
+#:
+#: Module granularity has a blind spot and it cost a safety control. A tenant's
+#: response schedule — the change-freeze / out-of-hours / nobody-on-call gate —
+#: lives in `approval_rules.py`, which `dispatcher.py` imports, so this gate
+#: reported the module reachable and said nothing. But `apply_schedule` had
+#: thirteen call sites and every one was in its own test, `ResponseSchedule` was
+#: never constructed outside its definition, and the dispatcher imported three
+#: other names from that file. The tables migration 142 created for it appeared
+#: in exactly one file repo-wide — their own migration. A tenant who declared a
+#: change freeze got automatic execution right through it, under a claim-matrix
+#: row marked GATED on a test of pure functions.
+#:
+#: Deliberately a named list rather than every module. Measured over
+#: `services/*/app/**`, "public symbol referenced only by tests" reports **634**
+#: names, almost all of them FastAPI response models and request bodies that a
+#: decorator argument references in their own file. A gate at that noise level
+#: is a gate somebody switches off, and the mirror of a floor set too low is a
+#: pattern set too broad. These are the modules where "declared and never
+#: called" is a *safety* outcome rather than dead code: a verb that should have
+#: been held executes, and nothing says so.
+SYMBOL_REACHABILITY_MODULES: tuple[str, ...] = (
+    "services/actions/app/live_actions/approval_rules.py",
+    "services/actions/app/live_actions/capability_contracts.py",
+)
+
+#: Public symbols in the modules above with no production caller, each with a
+#: reason. Same discipline as `ALLOWED_UNREACHABLE`: may only shrink.
+ALLOWED_UNCALLED_SYMBOLS: dict[str, str] = {}
+
 #: Modules with no production importer, each with the reason. May only
 #: shrink: an entry whose module has gone, or which has since become
 #: reachable, fails the gate rather than lingering as an excuse.
@@ -203,6 +234,10 @@ class Report:
     unreachable: list[str] = field(default_factory=list)
     stale_allowlist: list[str] = field(default_factory=list)
     broken_cli_entries: list[str] = field(default_factory=list)
+    symbols_checked: int = 0
+    uncalled_symbols: list[str] = field(default_factory=list)
+    stale_symbol_allowlist: list[str] = field(default_factory=list)
+    missing_symbol_modules: list[str] = field(default_factory=list)
 
 
 def _service_dirs(root: pathlib.Path) -> list[pathlib.Path]:
@@ -260,6 +295,130 @@ def _imports(path: pathlib.Path, module: str) -> set[str]:
                 for alias in node.names:
                     out.add(f"{target}.{alias.name}")
     return out
+
+
+def _public_symbols(path: pathlib.Path) -> list[tuple[str, int]]:
+    """Top-level public functions and classes declared in *path*."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return []
+    out: list[tuple[str, int]] = []
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) and not node.name.startswith("_"):
+            out.append((node.name, node.lineno))
+    return out
+
+
+def _referenced_names(path: pathlib.Path) -> set[str]:
+    """Every identifier *path* mentions, however it mentions it.
+
+    Attribute access, a bare name, an import alias and a string in ``__all__``
+    all count. The question this answers is "does any production file name
+    this symbol", and a gate that only understood one of those spellings would
+    be the one-directional kind this repository keeps rediscovering.
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return set()
+    names: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name):
+            names.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            names.add(node.attr)
+        elif isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                names.add(alias.asname or alias.name)
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+            # `__all__` entries and `getattr(mod, "Name")` both land here.
+            names.add(node.value)
+    return names
+
+
+def _symbol_body_references(path: pathlib.Path, symbol: str) -> set[str]:
+    """Identifiers mentioned inside *symbol*'s own definition in *path*."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (OSError, SyntaxError):
+        return set()
+    for node in tree.body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef) and node.name == symbol:
+            names: set[str] = set()
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Name):
+                    names.add(inner.id)
+                elif isinstance(inner, ast.Attribute):
+                    names.add(inner.attr)
+            return names
+    return set()
+
+
+def _inspect_symbols(root: pathlib.Path, report: Report) -> None:
+    """The symbol-level arm. See ``SYMBOL_REACHABILITY_MODULES``."""
+    declared: dict[str, tuple[str, int]] = {}
+    for rel in SYMBOL_REACHABILITY_MODULES:
+        path = root / rel
+        if not path.is_file():
+            # A stale entry roots nothing and silently stops checking the very
+            # symbols it was added for, so it fails rather than lingering.
+            report.missing_symbol_modules.append(rel)
+            continue
+        for name, lineno in _public_symbols(path):
+            declared[name] = (rel, lineno)
+    if not declared:
+        return
+    report.symbols_checked = len(declared)
+
+    subject_paths = {(root / rel).resolve() for rel in SYMBOL_REACHABILITY_MODULES}
+    called: set[str] = set()
+    for path in sorted(root.rglob("*.py")):
+        if "__pycache__" in path.parts or _is_test(path):
+            continue
+        parts = path.relative_to(root).parts
+        if parts and parts[0] == "plans":
+            continue
+        # A contributor's virtualenv or tool cache inside the tree is not
+        # production code, and a dependency that happens to define a name of
+        # ours would vouch for it.
+        if any(part.startswith(".") for part in parts) or "site-packages" in parts or "node_modules" in parts:
+            continue
+        resolved = path.resolve()
+        if resolved in subject_paths:
+            # The defining file does not vouch for its own symbols; nor does
+            # the vendored byte-identical copy of it, which is a mirror and
+            # not a caller.
+            continue
+        if "_vendor" in parts and path.name in {pathlib.Path(rel).name for rel in SYMBOL_REACHABILITY_MODULES}:
+            continue
+        called |= _referenced_names(path) & declared.keys()
+
+    # A symbol a *reachable* sibling calls is reachable too. Without this step
+    # `recipient_count_from` reads as uncalled: its only caller is
+    # `scaled_impact`, in the same file, which production reaches through the
+    # vendored copy. The transitive walk is what separates that from the real
+    # shape — `apply_schedule` was referenced by nothing outside its own test
+    # anywhere, including by its own module.
+    frontier = deque(sorted(called))
+    while frontier:
+        name = frontier.popleft()
+        rel, _lineno = declared[name]
+        for reached in _symbol_body_references(root / rel, name) & declared.keys():
+            if reached not in called:
+                called.add(reached)
+                frontier.append(reached)
+
+    for name, (rel, lineno) in sorted(declared.items()):
+        if name in called:
+            continue
+        if name in ALLOWED_UNCALLED_SYMBOLS:
+            continue
+        report.uncalled_symbols.append(f"{rel}:{lineno}: {name}")
+
+    for name in sorted(ALLOWED_UNCALLED_SYMBOLS):
+        if name not in declared or name in called:
+            report.stale_symbol_allowlist.append(name)
 
 
 def inspect(root: pathlib.Path) -> Report:
@@ -366,6 +525,7 @@ def inspect(root: pathlib.Path) -> Report:
             report.unreachable.append(rel)
 
     report.stale_allowlist = [r for r in ALLOWED_UNREACHABLE if r not in used_allowlist]
+    _inspect_symbols(root, report)
     return report
 
 
@@ -416,10 +576,44 @@ def _verdict(report: Report) -> int:
             print(f"  {rel}", file=sys.stderr)
         return 1
 
+    if report.missing_symbol_modules:
+        print(
+            "check_module_reachability: SYMBOL_REACHABILITY_MODULES names files that do not exist, "
+            "so their symbols are checked by nothing:",
+            file=sys.stderr,
+        )
+        for rel in report.missing_symbol_modules:
+            print(f"  {rel}", file=sys.stderr)
+        return 1
+
+    if report.stale_symbol_allowlist:
+        print(
+            "check_module_reachability: ALLOWED_UNCALLED_SYMBOLS entries that no longer describe an uncalled symbol:",
+            file=sys.stderr,
+        )
+        for name in report.stale_symbol_allowlist:
+            print(f"  {name}", file=sys.stderr)
+        print("Remove them; the allowlist may only shrink.", file=sys.stderr)
+        return 1
+
+    if report.uncalled_symbols:
+        print(
+            f"check_module_reachability: {len(report.uncalled_symbols)} public symbol(s) in the "
+            "governance layer have no production caller. A module with a production importer is not "
+            "the same claim: `apply_schedule` lived in a module `dispatcher.py` imports and had "
+            "thirteen call sites, all in its own test, so a tenant's declared change freeze was "
+            "enforced by nobody:",
+            file=sys.stderr,
+        )
+        for entry in report.uncalled_symbols:
+            print(f"  {entry}", file=sys.stderr)
+        return 1
+
     print(
         f"check_module_reachability: OK — {report.reachable} of {report.modules} module(s) "
         f"reachable from {report.entry_points} entry point(s); "
-        f"{len(ALLOWED_UNREACHABLE)} allowlisted with a reason."
+        f"{len(ALLOWED_UNREACHABLE)} allowlisted with a reason. "
+        f"{report.symbols_checked} governance symbol(s) each have a production caller."
     )
     return 0
 
@@ -498,11 +692,61 @@ def self_test() -> int:
         finally:
             CLI_ENTRY_POINTS.pop("scripts/run_probe.py", None)
 
+    # ── The symbol arm ───────────────────────────────────────────────────
+    # Probed against a tree of its own, because the real corpus is clean by
+    # construction once the fix lands and a gate proven only on a clean tree
+    # is a gate nobody has watched fail.
+    with tempfile.TemporaryDirectory(prefix="aisoc-symbol-") as tmp:
+        base = pathlib.Path(tmp) / "services" / "probe" / "app"
+        base.mkdir(parents=True)
+        rules = base / "rules.py"
+        rules.write_text(
+            "def called_by_a_door():\n    return 1\n\n\n"
+            "def helper():\n    return 2\n\n\n"
+            "def uses_helper():\n    return helper()\n\n\n"
+            "def apply_schedule():\n    return 3\n",
+            encoding="utf-8",
+        )
+        (base / "main.py").write_text(
+            "from app.rules import called_by_a_door, uses_helper\n\ncalled_by_a_door()\nuses_helper()\n",
+            encoding="utf-8",
+        )
+        tests = pathlib.Path(tmp) / "services" / "probe" / "tests"
+        tests.mkdir(parents=True)
+        (tests / "test_rules.py").write_text("from app.rules import apply_schedule\n\napply_schedule()\n", encoding="utf-8")
+
+        original = tuple(SYMBOL_REACHABILITY_MODULES)
+        globals()["SYMBOL_REACHABILITY_MODULES"] = ("services/probe/app/rules.py",)
+        try:
+            report = inspect(pathlib.Path(tmp))
+            uncalled = {entry.rsplit(": ", 1)[-1] for entry in report.uncalled_symbols}
+            extra += [
+                ("a governance symbol only its own test calls is reported", "apply_schedule" in uncalled),
+                ("and that is a failure, not a pass", _verdict(report) == 1),
+                ("a symbol a door calls is not reported", "called_by_a_door" not in uncalled),
+                ("a symbol a reachable sibling calls is not reported", "helper" not in uncalled),
+            ]
+
+            globals()["SYMBOL_REACHABILITY_MODULES"] = ("services/probe/app/gone.py",)
+            report = inspect(pathlib.Path(tmp))
+            extra.append(("a listed module that does not exist is reported", bool(report.missing_symbol_modules)))
+
+            globals()["SYMBOL_REACHABILITY_MODULES"] = ("services/probe/app/rules.py",)
+            ALLOWED_UNCALLED_SYMBOLS["called_by_a_door"] = "probe"
+            try:
+                report = inspect(pathlib.Path(tmp))
+                extra.append(("an allowlist entry for a symbol that IS called is reported", bool(report.stale_symbol_allowlist)))
+            finally:
+                ALLOWED_UNCALLED_SYMBOLS.pop("called_by_a_door", None)
+        finally:
+            globals()["SYMBOL_REACHABILITY_MODULES"] = original
+
     report = inspect(repo_root())
     extra.append(
         (
-            f"it read a real corpus ({report.modules} modules, {report.entry_points} entry points)",
-            report.modules > 200 and report.entry_points > 5,
+            f"it read a real corpus ({report.modules} modules, {report.entry_points} entry points, "
+            f"{report.symbols_checked} governance symbols)",
+            report.modules > 200 and report.entry_points > 5 and report.symbols_checked > 5,
         )
     )
     return self_test_main(pathlib.Path(__file__).name, ["--check"], extra)
