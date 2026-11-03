@@ -196,11 +196,7 @@ def test_every_mapped_field_is_classified() -> None:
     hand-maintained list with an exhaustiveness gate cannot.
     """
     every_field = {field for mapping in VENDOR_CREDENTIAL_MAP.values() for field in mapping}
-    unclassified = {
-        field
-        for field in every_field
-        if field not in OPERATIONAL_FIELDS and field not in CONNECTION_OR_CREDENTIAL_FIELDS
-    }
+    unclassified = {field for field in every_field if field not in OPERATIONAL_FIELDS and field not in CONNECTION_OR_CREDENTIAL_FIELDS}
 
     assert unclassified == set(), (
         f"these connector fields are in neither classification: {sorted(unclassified)}. "

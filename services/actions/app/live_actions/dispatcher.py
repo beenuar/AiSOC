@@ -45,6 +45,7 @@ from uuid import uuid4
 import structlog
 
 from app.models.action import ActionRequest, ActionType
+from app.security.ssrf_guard import SSRFError, validate_outbound_url
 from app.services.approval_matrix import evaluate_contract
 from app.services.asset_lookup import asset_criticality_for_target
 from app.services.autonomy_safety import (
@@ -57,7 +58,6 @@ from app.services.autonomy_safety import (
     decide,
     rollback_capability,
 )
-from app.security.ssrf_guard import SSRFError, validate_outbound_url
 from app.services.credential_resolver import ProtectedParameterOverride, resolve_params
 from app.services.kill_switch import KillSwitchState, kill_switch_state
 from app.services.maturity import _AUTO_ALLOWED_AT_TIER, MaturityTier

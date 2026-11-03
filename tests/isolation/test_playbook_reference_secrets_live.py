@@ -188,8 +188,7 @@ async def seeded(_env):  # noqa: ANN001
     async with AsyncSessionLocal() as session:
         await session.execute(
             sqlalchemy.text(
-                "INSERT INTO tenants (id, name, slug, is_active) VALUES (CAST(:i AS uuid), :n, :s, true) "
-                "ON CONFLICT (id) DO NOTHING"
+                "INSERT INTO tenants (id, name, slug, is_active) VALUES (CAST(:i AS uuid), :n, :s, true) ON CONFLICT (id) DO NOTHING"
             ),
             {"i": str(TENANT), "n": "playbook-ref-isolation", "s": f"pbref-{TENANT}"},
         )
@@ -274,9 +273,7 @@ async def test_a_session_token_cannot_read_back_decrypted_vendor_secrets(client,
         headers={"Authorization": f"Bearer {session_token(seeded[role], role=role)}"},
     )
 
-    assert response.status_code == 403, (
-        f"a {role} session reached the reference resolver: {response.status_code} {response.text[:400]}"
-    )
+    assert response.status_code == 403, f"a {role} session reached the reference resolver: {response.status_code} {response.text[:400]}"
 
 
 @pytest.mark.parametrize("role", ["soc_analyst", "soc_lead", "tenant_admin"])

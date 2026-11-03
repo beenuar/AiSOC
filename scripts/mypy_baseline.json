@@ -232,6 +232,10 @@
     "app/live_actions/capability_contracts.py": {
       "attr-defined": 7
     },
+    "app/security/ssrf_guard.py": {
+      "attr-defined": 6,
+      "union-attr": 1
+    },
     "app/services/approval_gate.py": {
       "arg-type": 1
     },

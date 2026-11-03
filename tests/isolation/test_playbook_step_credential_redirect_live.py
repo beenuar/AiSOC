@@ -50,8 +50,7 @@ import pytest_asyncio
 pytestmark = [
     pytest.mark.asyncio(loop_scope="module"),
     pytest.mark.skipif(
-        not os.environ.get("ISOLATION_STEP_DISPATCH_DSN", "").strip()
-        or not os.environ.get("ISOLATION_ACTIONS_PYTHON", "").strip(),
+        not os.environ.get("ISOLATION_STEP_DISPATCH_DSN", "").strip() or not os.environ.get("ISOLATION_ACTIONS_PYTHON", "").strip(),
         reason="ISOLATION_STEP_DISPATCH_DSN and ISOLATION_ACTIONS_PYTHON are not both set; this suite needs live infrastructure",
     ),
 ]
@@ -216,8 +215,7 @@ async def connector(_env, vendor):  # noqa: ANN001
     async with AsyncSessionLocal() as session:
         await session.execute(
             sqlalchemy.text(
-                "INSERT INTO tenants (id, name, slug, is_active) VALUES (CAST(:i AS uuid), :n, :s, true) "
-                "ON CONFLICT (id) DO NOTHING"
+                "INSERT INTO tenants (id, name, slug, is_active) VALUES (CAST(:i AS uuid), :n, :s, true) ON CONFLICT (id) DO NOTHING"
             ),
             {"i": str(TENANT), "n": "step-dispatch-isolation", "s": f"stepdisp-{TENANT}"},
         )
@@ -229,12 +227,8 @@ async def connector(_env, vendor):  # noqa: ANN001
             ),
             {"i": str(ANALYST), "t": str(TENANT), "e": f"analyst-{ANALYST}@example.com", "u": f"analyst-{ANALYST}"},
         )
-        await session.execute(
-            sqlalchemy.text("DELETE FROM connectors WHERE tenant_id = CAST(:t AS uuid)"), {"t": str(TENANT)}
-        )
-        await session.execute(
-            sqlalchemy.text("SELECT set_config('app.current_tenant_id', :t, TRUE)"), {"t": str(TENANT)}
-        )
+        await session.execute(sqlalchemy.text("DELETE FROM connectors WHERE tenant_id = CAST(:t AS uuid)"), {"t": str(TENANT)})
+        await session.execute(sqlalchemy.text("SELECT set_config('app.current_tenant_id', :t, TRUE)"), {"t": str(TENANT)})
         await session.execute(
             sqlalchemy.text(
                 "INSERT INTO connectors (id, tenant_id, name, connector_type, category, is_enabled, auth_config, "
@@ -249,9 +243,7 @@ async def connector(_env, vendor):  # noqa: ANN001
     yield
 
     async with AsyncSessionLocal() as session:
-        await session.execute(
-            sqlalchemy.text("DELETE FROM connectors WHERE tenant_id = CAST(:t AS uuid)"), {"t": str(TENANT)}
-        )
+        await session.execute(sqlalchemy.text("DELETE FROM connectors WHERE tenant_id = CAST(:t AS uuid)"), {"t": str(TENANT)})
         await session.execute(sqlalchemy.text("DELETE FROM users WHERE id = CAST(:i AS uuid)"), {"i": str(ANALYST)})
         await session.commit()
 
@@ -339,7 +331,5 @@ async def test_a_step_with_no_override_still_reaches_the_tenants_own_vendor(clie
     response = await _dispatch(client, {})
 
     bodies = " ".join(call["body"] for call in _Vendor.seen)
-    assert f"client_secret={CLIENT_SECRET}" in bodies, (
-        f"the tenant's own CrowdStrike integration stopped working: {_Vendor.seen}"
-    )
+    assert f"client_secret={CLIENT_SECRET}" in bodies, f"the tenant's own CrowdStrike integration stopped working: {_Vendor.seen}"
     assert response.json()["status"] != "failed", response.text[:400]
