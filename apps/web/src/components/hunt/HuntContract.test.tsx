@@ -65,8 +65,12 @@ const WIRE: HuntSearchWire = {
       highlights: ['process.name:powershell.exe'],
     },
   ],
-  source: 'sample',
-  notice: 'These are illustrative sample events, not results from your telemetry.',
+  // The backend no longer has a `sample` path: the handler reads the lake
+  // or says no query ran. The notice is the one a `live` answer carries when
+  // the selected query language was not executed.
+  source: 'live',
+  notice:
+    "Matched 'process.name:powershell.exe' as free text against your recorded events. SPL is not executed by this endpoint.",
 };
 
 function jsonResponse(body: unknown) {
@@ -138,14 +142,14 @@ describe('running a hunt against the real backend response', () => {
   );
 
   it(
-    'reads the sample-source marker as a declared field',
+    'reads the source marker and the notice as declared fields',
     async () => {
       render(<HuntView />);
       await runHunt();
 
       await waitFor(
         () => {
-          expect(screen.getByText(/illustrative sample events/i)).toBeTruthy();
+          expect(screen.getByText(/is not executed by this endpoint/i)).toBeTruthy();
         },
         { timeout: 4000 },
       );

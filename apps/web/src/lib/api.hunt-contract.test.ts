@@ -58,8 +58,9 @@ const WIRE: HuntSearchWire = {
       highlights: [],
     },
   ],
-  source: 'sample',
-  notice: 'These are illustrative sample events, not results from your telemetry.',
+  source: 'live',
+  notice:
+    "Matched 'process.name:powershell.exe' as free text against your recorded events. SPL is not executed by this endpoint.",
 };
 
 function jsonResponse(body: unknown) {
@@ -106,8 +107,23 @@ describe('huntApi.search normalises the backend response at the boundary', () =>
   it('keeps the honesty marker as a declared field, not an inline cast', async () => {
     const result = await huntApi.search({ query: WIRE.query });
 
-    expect(result.source).toBe('sample');
+    expect(result.source).toBe('live');
     expect(result.notice).toBe(WIRE.notice);
+  });
+
+  it('carries `unavailable` through rather than collapsing it to `sample`', async () => {
+    // "We could not look" and "here are invented events" are different
+    // things to put in front of an analyst, and the normaliser used to map
+    // everything that was not `live` to `sample`.
+    fetchMock.mockResolvedValue(
+      jsonResponse({ ...WIRE, hits: [], total: 0, took_ms: null, source: 'unavailable', notice: 'No query ran: …' }),
+    );
+
+    const result = await huntApi.search({ query: WIRE.query });
+
+    expect(result.source).toBe('unavailable');
+    expect(result.tookMs).toBeNull();
+    expect(result.hits).toEqual([]);
   });
 
   it('carries the plural `highlights` the backend sends, as a list', async () => {
