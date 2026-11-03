@@ -42,6 +42,7 @@ from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
+import httpx
 import pytest
 from app.context.bundle import ContextBundleBuilder
 
@@ -69,9 +70,15 @@ class _ApiStub(BaseHTTPRequestHandler):
 
     received: list[dict[str, str]] = []
 
+    #: Set by the control below to a secret that is in no environment variable,
+    #: so the caller cannot resolve it by any route.
+    accepts_instead: str | None = None
+
     def do_GET(self) -> None:  # noqa: N802 — BaseHTTPRequestHandler's spelling
         type(self).received.append({k.lower(): v for k, v in self.headers.items()})
-        accepted = os.environ.get("AISOC_API_SERVICE_TOKEN", "") or os.environ.get("AISOC_SERVICE_TOKEN", "")
+        accepted = type(self).accepts_instead or (
+            os.environ.get("AISOC_API_SERVICE_TOKEN", "") or os.environ.get("AISOC_SERVICE_TOKEN", "")
+        )
         presented = self.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         if not accepted or presented != accepted:
             self._json(401, {"detail": "Not authenticated"})
@@ -96,6 +103,7 @@ class _ApiStub(BaseHTTPRequestHandler):
 @pytest.fixture()
 def api_stub(monkeypatch: pytest.MonkeyPatch) -> Iterator[type[_ApiStub]]:
     _ApiStub.received = []
+    _ApiStub.accepts_instead = None
     server = ThreadingHTTPServer(("127.0.0.1", 0), _ApiStub)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -161,14 +169,19 @@ async def test_incident_context_declares_the_tenant_on_the_header_the_api_reads(
 
 
 @pytest.mark.asyncio
-async def test_a_token_the_api_does_not_hold_is_still_refused(api_stub: type[_ApiStub], monkeypatch: pytest.MonkeyPatch) -> None:
-    """Positive control for the stand-in itself.
+async def test_a_token_the_api_does_not_hold_is_still_refused(api_stub: type[_ApiStub]) -> None:
+    """Control for the stand-in itself.
 
-    A harness that accepts everything would pass the three assertions above
-    with the defect fully present, so the peer is shown refusing a credential
-    it does not hold before any of them is believed.
+    A peer that accepts everything would pass the three assertions above with
+    the defect fully present, so it is shown refusing a credential it does not
+    hold before any of them is believed. The secret is set on the handler
+    rather than in the environment precisely so the caller cannot resolve it:
+    pointing ``AISOC_API_SERVICE_TOKEN`` at a new value moves *both* sides and
+    proves nothing.
     """
-    monkeypatch.setenv("AISOC_API_SERVICE_TOKEN", "a-secret-the-caller-does-not-have-000000000")
+    api_stub.accepts_instead = "a-secret-that-is-in-no-environment-variable"
     builder = ContextBundleBuilder()
-    with pytest.raises(Exception):  # noqa: B017 — any refusal; the status is asserted below
+    with pytest.raises(httpx.HTTPStatusError) as refusal:
         await builder._fetch_incident_context(TENANT, {"id": "alert-1"})
+
+    assert refusal.value.response.status_code == 401
