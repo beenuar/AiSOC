@@ -138,6 +138,26 @@ def _env():
             os.environ[key] = value
 
 
+@pytest_asyncio.fixture(scope="module", loop_scope="module", autouse=True)
+async def _release_engine(_env):  # noqa: ANN001
+    """Hand the shared engine's pool back when this module's loop ends.
+
+    ``app.db.database.engine`` is a module global whose pool binds to whichever
+    event loop first used it. Two module-scoped live suites in one pytest
+    process therefore leave the second holding connections from a loop that has
+    closed, which surfaces as ``RuntimeError: Event loop is closed`` and reads
+    like a database fault rather than the harness artefact it is.
+    """
+    yield
+    # Imported here, not at module scope: the engine is constructed from
+    # ``settings.DATABASE_URL`` at import time, and ``_env`` above is what sets
+    # it. A top-level import would bind the engine to whatever DSN the
+    # environment happened to carry.
+    from app.db.database import engine
+
+    await engine.dispose()
+
+
 @pytest_asyncio.fixture(scope="module", loop_scope="module")
 async def seeded(_env):  # noqa: ANN001
     """One tenant, one user per role under test, and all four secret kinds.

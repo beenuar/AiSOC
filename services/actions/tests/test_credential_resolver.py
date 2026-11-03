@@ -8,9 +8,11 @@ mode) fails CI.
 
 from __future__ import annotations
 
+import pytest
 from app.services.credential_resolver import (
     CONNECTOR_TO_VENDOR,
     VENDOR_CREDENTIAL_MAP,
+    ProtectedParameterOverride,
     canonical_vendor,
     resolve_params,
 )
@@ -73,9 +75,22 @@ def test_already_prefixed_keys_pass_through():
     assert out == {"okta_domain": "d", "okta_api_token": "t"}
 
 
-def test_extra_overrides_translated_value():
-    out = resolve_params("okta", {"domain": "old"}, extra={"okta_domain": "new"})
-    assert out["okta_domain"] == "new"
+def test_extra_cannot_override_a_translated_connection_value():
+    """Inverted from ``test_extra_overrides_translated_value``, which pinned a defect.
+
+    That test asserted the behaviour GHSA-78jg-x2ch-638f turned out to be:
+    ``extra`` reaches ``resolve_params`` from ``POST
+    /playbook-steps/dispatch``, whose ``params`` dict any session holding
+    ``actions:execute`` can fill, so a caller could replace the tenant's
+    stored Okta domain — or CrowdStrike base URL — and have the platform
+    present the tenant's credential to a host of their choosing.
+
+    ``okta_domain`` is where that vendor's requests go, so it is the stored
+    value's to decide. ``test_param_override_credential_redirect.py`` holds
+    the rest of the contract, including that operational params still merge.
+    """
+    with pytest.raises(ProtectedParameterOverride):
+        resolve_params("okta", {"domain": "old"}, extra={"okta_domain": "new"})
 
 
 def test_none_values_skipped():

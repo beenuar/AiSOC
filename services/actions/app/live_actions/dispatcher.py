@@ -35,7 +35,9 @@ so individual executors never have to think about them:
 
 from __future__ import annotations
 
+import asyncio
 import os
+import socket
 from dataclasses import replace
 from typing import Any
 from uuid import uuid4
@@ -55,7 +57,8 @@ from app.services.autonomy_safety import (
     decide,
     rollback_capability,
 )
-from app.services.credential_resolver import resolve_params
+from app.security.ssrf_guard import SSRFError, validate_outbound_url
+from app.services.credential_resolver import ProtectedParameterOverride, resolve_params
 from app.services.kill_switch import KillSwitchState, kill_switch_state
 from app.services.maturity import _AUTO_ALLOWED_AT_TIER, MaturityTier
 from app.services.tenant_policy import TenantPolicy, resolve_tenant_policy
@@ -486,6 +489,36 @@ def _not_executed(request: LiveActionRequest, status: LiveActionStatus, decision
     )
 
 
+def _first_blocked_destination(params: dict[str, Any]) -> tuple[str, str] | None:
+    """``(param_name, reason)`` for the first caller-named address we refuse.
+
+    Matches on the *value's* shape, not the key's name: a connection URL
+    arrives as ``base_url``, ``cs_base_url``, ``snow_instance_url``,
+    ``webhook_url`` and half a dozen other spellings, and a key-name list
+    would have to be kept level with every one of them. The same reasoning,
+    and the same carve-out, as ``_refuse_internal_destinations`` in the API.
+
+    A hostname that simply fails to resolve is **allowed through**. The vendor
+    client's own connection error says more than a guard's would, and refusing
+    on a failed lookup would put every dispatch behind a working DNS server —
+    turning a transient resolver fault into a refusal to contain a host.
+
+    Blocking ``getaddrinfo`` is why the caller runs this in a thread.
+    """
+    for key, value in (params or {}).items():
+        candidates = value if isinstance(value, list) else [value]
+        for item in candidates:
+            if not isinstance(item, str) or not item.startswith(("http://", "https://")):
+                continue
+            try:
+                validate_outbound_url(item)
+            except SSRFError as exc:
+                if isinstance(exc.__cause__, socket.gaierror):
+                    continue
+                return key, str(exc)
+    return None
+
+
 async def dispatch(request: LiveActionRequest) -> LiveActionResult:
     """Run ``request`` through the registered executor and return a result.
 
@@ -527,9 +560,56 @@ async def dispatch(request: LiveActionRequest) -> LiveActionResult:
         )
         return _stopped_by_kill_switch(request, switch)
 
-    # Phase B2 — translate connector-style credentials into executor params.
+    # ── Where the caller may point this service ──────────────────────────
+    #
+    # Two separate controls, because the reported defect had two halves
+    # (GHSA-78jg-x2ch-638f) and closing either alone leaves the other open.
+    #
+    # First: a destination the caller named at all. The vendors with no entry
+    # in VENDOR_CREDENTIAL_MAP — osctrl, fleetdm, aisoc_direct — take their
+    # whole connection from `params`, so the protected-key rule below has
+    # nothing to compare against and the caller is the only source. That is a
+    # request this container makes to an address a user chose, with the reply
+    # reflected into the dispatch report, which is the shape the connectors
+    # service already adopted the platform guard for (GHSA-cq4g-g6wp-4m2w).
+    #
+    # Matched on the value's shape rather than the key's name, like the API's
+    # `_refuse_internal_destinations`, because `base_url` is one of a dozen
+    # spellings. A host that merely fails to resolve passes: the vendor
+    # client's own connection error is the better diagnostic, and refusing
+    # here would make every dispatch depend on DNS.
+    refused_destination = await asyncio.to_thread(_first_blocked_destination, request.params)
+    if refused_destination is not None:
+        key, reason = refused_destination
+        log.warning("live_action.blocked_destination", param=key, reason=reason)
+        return LiveActionResult(
+            request_id=request.request_id,
+            status=LiveActionStatus.FAILED,
+            capability=request.capability,
+            vendor_id=request.vendor_id,
+            summary=f"'{request.capability}' was refused before any request left this service.",
+            error=f"{key}: destination refused: {reason}",
+        )
+
+    # Second: Phase B2 translation of connector-style credentials into
+    # executor params. `request.params` may choose *what* an action does and
+    # never *where* it goes or *whose* credential it spends, so a key naming a
+    # stored connection or credential field is refused here rather than
+    # overriding one. Refused, not dropped: dropping would send the call to
+    # the vendor's default endpoint and report success.
     if request.auth_config:
-        resolved = resolve_params(request.vendor_id, request.auth_config, extra=request.params)
+        try:
+            resolved = resolve_params(request.vendor_id, request.auth_config, extra=request.params)
+        except ProtectedParameterOverride as exc:
+            log.warning("live_action.protected_param_override", detail=str(exc))
+            return LiveActionResult(
+                request_id=request.request_id,
+                status=LiveActionStatus.FAILED,
+                capability=request.capability,
+                vendor_id=request.vendor_id,
+                summary=f"'{request.capability}' was refused before any credential was used.",
+                error=str(exc),
+            )
         request = request.model_copy(update={"params": resolved, "auth_config": None})
 
     executor = registry.get_executor(request.vendor_id, request.capability)

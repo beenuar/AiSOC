@@ -52,7 +52,14 @@ import pytest
 from app.live_actions import register_builtin_executors
 from app.live_actions.dispatcher import dispatch
 from app.live_actions.models import LiveActionRequest, LiveActionStatus
-from app.services.credential_resolver import resolve_params
+from app.services.credential_resolver import (
+    CONNECTION_OR_CREDENTIAL_FIELDS,
+    OPERATIONAL_FIELDS,
+    VENDOR_CREDENTIAL_MAP,
+    ProtectedParameterOverride,
+    protected_param_keys,
+    resolve_params,
+)
 
 CLIENT_ID = "MARKER_CLIENT_ID_78jg"
 CLIENT_SECRET = "MARKER_SECRET_78jg_xyz789"
@@ -179,6 +186,66 @@ async def test_a_credential_field_cannot_be_substituted_either(vendor):  # noqa:
     assert "cs_client_secret" in json.dumps(result.model_dump(mode="json"))
 
 
+def test_every_mapped_field_is_classified() -> None:
+    """A new vendor field must be decided about, not default into either bucket.
+
+    This is the half that stops the protected set going stale. ``_SPLUNK_KEYS``
+    once listed ``splunk_host``/``token``/``index`` while the client factory
+    read ``splunk_url`` plus basic-auth credentials, and the "dry run" called
+    the customer's production Splunk. A hand-maintained list drifts; a
+    hand-maintained list with an exhaustiveness gate cannot.
+    """
+    every_field = {field for mapping in VENDOR_CREDENTIAL_MAP.values() for field in mapping}
+    unclassified = {
+        field
+        for field in every_field
+        if field not in OPERATIONAL_FIELDS and field not in CONNECTION_OR_CREDENTIAL_FIELDS
+    }
+
+    assert unclassified == set(), (
+        f"these connector fields are in neither classification: {sorted(unclassified)}. "
+        "Decide which they are — a field that locates an endpoint, authenticates to one, or chooses "
+        "whose estate a credential acts on is protected; a field that chooses what an action does is operational."
+    )
+    assert not (OPERATIONAL_FIELDS & CONNECTION_OR_CREDENTIAL_FIELDS), "a field cannot be in both classifications"
+
+
+def test_the_protected_set_covers_every_vendors_endpoint_and_secret() -> None:
+    """Spot-checked against the keys the client factories actually read."""
+    for vendor_id, expected in (
+        ("crowdstrike", {"cs_base_url", "cs_client_id", "cs_client_secret"}),
+        ("splunk", {"splunk_url", "splunk_token", "splunk_username", "splunk_password", "splunk_verify_ssl"}),
+        ("okta", {"okta_domain", "okta_api_token"}),
+        ("servicenow", {"snow_instance_url", "snow_username", "snow_password"}),
+        ("pagerduty", {"pd_routing_key"}),
+    ):
+        assert protected_param_keys(vendor_id) == expected, f"{vendor_id}: {sorted(protected_param_keys(vendor_id))}"
+
+
+def test_a_connector_id_alias_resolves_to_the_same_protection() -> None:
+    """``splunk_enterprise`` is the connector id for the ``splunk`` vendor.
+
+    A caller naming the alias must not slip past the set, which is why this
+    goes through ``canonical_vendor`` rather than a raw dict lookup.
+    """
+    assert protected_param_keys("splunk_enterprise") == protected_param_keys("splunk")
+    assert protected_param_keys("azure_defender") == protected_param_keys("defender")
+
+
+def test_resolve_params_refuses_rather_than_dropping() -> None:
+    """Silently dropping would send the request to the vendor default and succeed.
+
+    That is the quieter failure and the worse one: the caller is told the
+    action ran, the operator sees a green step, and nothing records that a
+    parameter was ignored.
+    """
+    with pytest.raises(ProtectedParameterOverride) as caught:
+        resolve_params("crowdstrike", {"client_id": "a", "client_secret": "b"}, extra={"cs_base_url": "http://evil"})
+
+    assert "cs_base_url" in str(caught.value)
+    assert "evil" not in str(caught.value), "the refusal echoed the caller's value"
+
+
 def test_operational_params_are_still_the_callers_to_choose() -> None:
     """The merge exists for these, and refusing them would be stuck-closed.
 
@@ -186,6 +253,14 @@ def test_operational_params_are_still_the_callers_to_choose() -> None:
     per-action parameter; a playbook step choosing which project to file in is
     the feature, not the bug. Asserted here so the fix is held to keeping it.
     """
+    for vendor_id, key in (
+        ("jira", "jira_project_key"),
+        ("panos", "panos_tag"),
+        ("fortigate", "fgt_address_group"),
+        ("qradar", "qradar_closing_reason_id"),
+    ):
+        assert key not in protected_param_keys(vendor_id), f"{key} became protected and is operational"
+
     out = resolve_params(
         "jira",
         {"base_url": "https://jira.example.com", "api_token": "t", "project_key": "DEFAULT"},
@@ -193,6 +268,101 @@ def test_operational_params_are_still_the_callers_to_choose() -> None:
     )
     assert out["jira_project_key"] == "SOC"
     assert out["jira_base_url"] == "https://jira.example.com"
+
+
+# ---------------------------------------------------------------------------
+# The other half: vendors whose whole connection comes from the caller
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_caller_named_internal_destination_is_refused(vendor):  # noqa: ANN001
+    """osctrl, fleetdm and aisoc_direct have no entry in VENDOR_CREDENTIAL_MAP.
+
+    So ``resolve_params`` translates nothing for them, the stored
+    ``auth_config`` is dropped, and ``params`` is the *only* source of the
+    connection — which leaves the protected-key rule with nothing to compare
+    against. Before the guard, a dispatch could name any address and this
+    container would request it and reflect the reply into the dispatch report:
+    a read-SSRF with response disclosure, which is the second half of what was
+    reported.
+
+    Loopback is the sharpest case because ``AISOC_SSRF_ALLOW_PRIVATE``
+    deliberately cannot re-admit it, so this assertion does not depend on how
+    an operator has set that knob.
+    """
+    _Vendor.seen.clear()
+
+    result = await dispatch(
+        LiveActionRequest(
+            capability="osquery_live_query",
+            vendor_id="osctrl",
+            target="h",
+            tenant_id=TENANT,
+            params={
+                "base_url": vendor,
+                "api_token": "caller-supplied",
+                "template": "active_connections",
+                "target_hosts": ["h1"],
+            },
+            auth_config=None,
+            dry_run=False,
+            requested_by="user:analyst@example.com",
+        )
+    )
+
+    assert _Vendor.seen == [], f"the caller's internal destination was contacted: {_Vendor.seen}"
+    assert result.status is LiveActionStatus.FAILED
+    assert "base_url" in (result.error or ""), f"the refusal does not name the parameter: {result.error}"
+
+
+@pytest.mark.asyncio
+async def test_the_cloud_metadata_endpoint_is_refused_by_name() -> None:
+    """169.254.169.254 is blocked even where private addresses are allowed.
+
+    The link-local range is how an SSRF becomes cloud credentials, so this is
+    asserted directly rather than inferred from the private-address rule.
+    """
+    result = await dispatch(
+        LiveActionRequest(
+            capability="osquery_live_query",
+            vendor_id="osctrl",
+            target="h",
+            tenant_id=TENANT,
+            params={
+                "base_url": "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+                "api_token": "x",
+                "template": "active_connections",
+                "target_hosts": ["h1"],
+            },
+            auth_config=None,
+            dry_run=False,
+            requested_by="user:analyst@example.com",
+        )
+    )
+
+    assert result.status is LiveActionStatus.FAILED
+    assert "base_url" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_a_host_that_merely_fails_to_resolve_is_not_the_guards_business() -> None:
+    """A failed DNS lookup must not become a refusal.
+
+    Otherwise every dispatch sits behind a working resolver, and a transient
+    DNS fault turns into a refusal to contain a host. The vendor client's own
+    connection error is the better diagnostic, and this mirrors the carve-out
+    the API's registration-time guard already makes.
+    """
+    result = await dispatch(
+        _request(
+            auth_config={"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "base_url": "https://api.crowdstrike.invalid"},
+            params={"hostname": "web-01"},
+        )
+    )
+
+    # It fails, but as a vendor connection error rather than a refusal.
+    assert "destination refused" not in (result.error or ""), result.error
 
 
 # ---------------------------------------------------------------------------
