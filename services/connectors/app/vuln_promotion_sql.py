@@ -96,6 +96,16 @@ RESOLVE_REMEDIATED_SQL = """
 #: meaningful changed (more hosts, new exploit status), keeping ``status``
 #: sticky: a promoted alert that an analyst moved to ``investigating`` must
 #: not snap back to ``new`` on the next sweep.
+#:
+#: The JSONB columns are ``CAST(:name AS jsonb)`` and not ``:name::jsonb``.
+#: This statement shipped with the second spelling and had therefore **never
+#: run**: SQLAlchemy declares bind parameters with one regex and renders them
+#: with a stricter one, so the three names were never substituted and the
+#: literal text ``:affected_hosts::jsonb`` reached the driver, which answers
+#: ``syntax error at or near ":"``. Each tenant's sweep raised, the
+#: scheduler's per-tenant ``except Exception`` logged it, and no overdue-CVE
+#: alert was ever created on any deployment. Every other statement in this
+#: module used ``CAST()`` and worked, which is what made it invisible.
 UPSERT_ALERT_SQL = """
     INSERT INTO alerts (
         tenant_id, connector_type, category, title, description,
@@ -105,8 +115,8 @@ UPSERT_ALERT_SQL = """
     ) VALUES (
         CAST(:tenant_id AS uuid), 'inventory', 'vulnerability',
         :title, :description, :severity, 'new', NOW(), NOW(), NOW(),
-        :affected_hosts::jsonb, :tags::jsonb, 2001, :idempotency_key,
-        :connector_id, :raw_event::jsonb
+        CAST(:affected_hosts AS jsonb), CAST(:tags AS jsonb), 2001, :idempotency_key,
+        :connector_id, CAST(:raw_event AS jsonb)
     )
     ON CONFLICT (tenant_id, idempotency_key) WHERE idempotency_key IS NOT NULL
     DO UPDATE SET

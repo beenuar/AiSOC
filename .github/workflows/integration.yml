@@ -113,7 +113,7 @@ jobs:
           # *else* in the surviving list changed. This is the union of all
           # three lists; the next lane extends it rather than re-assigning.
           migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py tests/isolation/test_root_cause_findings_live.py .github/workflows/integration.yml'
-          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py services/api/tests/test_identity_resolution_live.py services/api/app/services/identity_resolution.py services/api/app/services/identity_resolution_store.py services/api/app/services/change_timeline.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py services/api/tests/test_identity_resolution_live.py services/api/app/services/identity_resolution.py services/api/app/services/identity_resolution_store.py services/api/app/services/change_timeline.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py services/connectors/app/vuln_promotion_sql.py services/connectors/app/scheduler.py services/connectors/tests/test_vuln_promotion_live.py .github/workflows/integration.yml'
           # backup_crypt.py was missing from the old filter, and it is where
           # every byte of the AES-256-GCM implementation lives — so a change
           # to the encryption itself did not run the gate that proves the
@@ -787,6 +787,32 @@ jobs:
         env:
           MSSP_ISOLATION_REQUIRED: '1'
         run: pip install --quiet pytest pytest-asyncio && python -m pytest tests/test_mssp_portfolio_isolation.py -v --tb=short
+
+      # The patch-window promotion sweep is the only path from
+      # `asset_vulnerabilities` back into the alert queue, and its upsert
+      # carried `:affected_hosts::jsonb` — never substituted, so the literal
+      # text reached the driver and every sweep on every deployment answered
+      # `syntax error at or near ":"` into a per-tenant `except Exception`.
+      # The suite that covered it asserted substrings against the SQL string,
+      # which cannot fail on this: the substring is present and correct.
+      #
+      # Under the CONNECTORS service's own locked interpreter, deliberately.
+      # It resolves SQLAlchemy 2.1.6 where the migrations job above installs a
+      # different closure, and the two releases declare different parameter
+      # sets for this statement — so the version that grades the fix has to be
+      # the version services/connectors/Dockerfile installs.
+      - name: Patch-window promotion statements against real Postgres
+        working-directory: services/connectors
+        env:
+          AISOC_TEST_POSTGRES: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+        run: |
+          set -euo pipefail
+          python3 -m venv $RUNNER_TEMP/.venv-connectors
+          python3 ../../scripts/service_requirements.py connectors --locked > /tmp/connectors.lock.txt
+          $RUNNER_TEMP/.venv-connectors/bin/pip install --quiet --disable-pip-version-check --no-deps -r /tmp/connectors.lock.txt
+          $RUNNER_TEMP/.venv-connectors/bin/python -m pytest tests/test_vuln_promotion_live.py -q -p no:cacheprovider 2>&1 | tee /tmp/vuln-promo.log
+          grep -Eq "[1-9][0-9]* passed" /tmp/vuln-promo.log \
+            || { echo "::error::the promotion statements never executed — the Postgres leg is misconfigured"; exit 1; }
 
       # Fusion's fuse-time asset-context resolver: the name/FQDN/IP match,
       # the highest-criticality tie-break and the tenant predicate are schema
