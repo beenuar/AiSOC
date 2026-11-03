@@ -144,15 +144,17 @@ class TestFunnelWindow:
         from app.api.v1.endpoints.metrics import MitreCoverage, _funnel_window
 
         db = MagicMock()
-        # 7 scalar() calls in order:
-        # 1. correlation_instances
-        # 2. alerts_generated
-        # 3. sig_total (disposition in the closed set)
-        # 4. sig_tp (disposition='true_positive')
-        # 5. mttd_seconds_raw
-        # 6. analyst_queue_depth
-        # _events_of_interest path uses _events_of_interest_from_alerts → 7. EOI sum
-        db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, 0, None, 0])
+        # 8 scalar() calls in order:
+        # 1. EOI fallback (_events_of_interest_from_alerts)
+        # 2. correlation_instances
+        # 3. alerts_generated
+        # 4. sig_total (disposition in the decided set)
+        # 5. sig_tp (disposition='true_positive')
+        # 6. mttd_seconds_raw
+        # 7. mttd_samples — the denominator that distinguishes a measured
+        #    0.0 from a mean over nothing
+        # 8. analyst_queue_depth
+        db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, 0, None, 0, 0])
         # _mitre_covered calls db.execute() twice (alert_techs, rule_techs)
         db.execute = AsyncMock(
             side_effect=[
@@ -197,8 +199,9 @@ class TestFunnelWindow:
         # 4. sig_total             → 4
         # 5. sig_tp                → 1
         # 6. mttd_seconds_raw      → 60.0
-        # 7. analyst_queue_depth   → 3
-        db.scalar = AsyncMock(side_effect=[50, 2, 10, 4, 1, 60.0, 3])
+        # 7. mttd_samples          → 2
+        # 8. analyst_queue_depth   → 3
+        db.scalar = AsyncMock(side_effect=[50, 2, 10, 4, 1, 60.0, 2, 3])
         db.execute = AsyncMock(
             side_effect=[
                 _scalars_all_result([]),
@@ -235,8 +238,8 @@ class TestFunnelWindow:
 
         db = MagicMock()
         # Order: EOI=3, correlation=5, alerts=12, sig_total=0, sig_tp=0,
-        # mttd=None, queue=0 → both ratios should clamp to 1.0.
-        db.scalar = AsyncMock(side_effect=[3, 5, 12, 0, 0, None, 0])
+        # mttd=None, mttd_samples=0, queue=0 → both ratios clamp to 1.0.
+        db.scalar = AsyncMock(side_effect=[3, 5, 12, 0, 0, None, 0, 0])
         db.execute = AsyncMock(
             side_effect=[
                 _scalars_all_result([]),
@@ -267,7 +270,7 @@ class TestFunnelWindow:
 
         db = MagicMock()
         # Minimum viable scalar fixtures.
-        db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, None, 0, 0])
+        db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, None, 0, 0, 0])
         # alert_techs: T1078, T1059
         # rule_techs:  T1059, T1110 → union = {T1078, T1059, T1110} = 3
         db.execute = AsyncMock(
@@ -301,7 +304,7 @@ class TestFunnelWindow:
         from app.api.v1.endpoints.metrics import _funnel_window
 
         db = MagicMock()
-        db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, None, 0, 0])
+        db.scalar = AsyncMock(side_effect=[0, 0, 0, 0, None, 0, 0, 0])
         db.execute = AsyncMock(
             side_effect=[
                 _scalars_all_result([f"T{i}" for i in range(50)]),
@@ -352,7 +355,9 @@ class TestGetFunnelMetrics:
             "correlation_instances": 30,
             "alerts_generated": 50,
             "signal_to_noise": 0.6,
+            "signal_to_noise_sample_count": 20,
             "mttd_seconds": 90.0,
+            "mttd_sample_count": 12,
             "analyst_queue_depth": 5,
             "correlation_efficiency": 0.15,
             "alert_yield": 0.25,
@@ -363,7 +368,9 @@ class TestGetFunnelMetrics:
             "correlation_instances": 10,
             "alerts_generated": 25,
             "signal_to_noise": 0.5,
+            "signal_to_noise_sample_count": 15,
             "mttd_seconds": 100.0,
+            "mttd_sample_count": 9,
             "analyst_queue_depth": 8,
             "correlation_efficiency": 0.1,
             "alert_yield": 0.25,
@@ -382,7 +389,9 @@ class TestGetFunnelMetrics:
         assert payload.correlation_instances == 30
         assert payload.alerts_generated == 50
         assert payload.signal_to_noise == 0.6
+        assert payload.signal_to_noise_sample_count == 20
         assert payload.mttd_seconds == 90.0
+        assert payload.mttd_sample_count == 12
         assert payload.analyst_queue_depth == 5
         assert payload.correlation_efficiency == 0.15
         assert payload.alert_yield == 0.25

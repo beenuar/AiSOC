@@ -42,7 +42,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.mcp_access import McpToolApproval, McpToolGrant
@@ -170,22 +170,70 @@ async def effective_tools(db: AsyncSession, tenant_id: uuid.UUID) -> list[dict[s
     return out
 
 
-async def _live_approval(db: AsyncSession, tenant_id: uuid.UUID, tool_name: str, fingerprint: str) -> McpToolApproval | None:
-    """An approved, unexpired, unspent approval for exactly this call."""
-    now = datetime.now(UTC)
-    stmt = (
-        select(McpToolApproval)
-        .where(
-            McpToolApproval.tenant_id == tenant_id,
-            McpToolApproval.tool_name == tool_name,
-            McpToolApproval.argument_fingerprint == fingerprint,
-            McpToolApproval.state == "approved",
-            McpToolApproval.expires_at > now,
+async def _claim_approval(
+    db: AsyncSession,
+    tenant_id: uuid.UUID,
+    tool_name: str,
+    fingerprint: str,
+    *,
+    requester_id: uuid.UUID | None,
+    requested_by: str,
+) -> tuple[uuid.UUID, str | None] | None:
+    """Spend one approved, unexpired approval for exactly this call, or None.
+
+    Spent rather than left standing: an approver is deciding about a call, and
+    a grant that outlives the call it was given for is a permission nobody
+    agreed to.
+
+    **The lock is the fix** (GHSA-xhmc-69rh-h3rr, F12). This was the same
+    select-then-write with no ``with_for_update``: two calls racing resolved
+    the *same* row and both were told ``allow``, so one approval authorised
+    more than one tool call. ``skip_locked`` rather than a plain row lock
+    because the loser should be refused, not queued -- waiting for the winner
+    to commit and then spending the row as well is the identical defect with a
+    delay in front of it, and that is what the live race asserts.
+
+    ``skip_locked`` is a no-op on SQLite, which the offline suite runs on and
+    where there is no concurrency to lose. The property is proved against real
+    Postgres in ``tests/isolation/test_mcp_approval_governance_live.py``.
+
+    The requester predicate is the second half. The old one was tenant + tool
+    + fingerprint, with no requester at all, so an approval granted for one
+    principal's call was spendable by *any* principal in the tenant holding
+    the permission. An approval is for a call, by a caller, once. Rows
+    predating migration 158 carry no requester id and fall back to the label,
+    which is what ``authorize`` has always written -- matching on the id alone
+    would have made every one of them unspendable.
+    """
+    owned = McpToolApproval.requested_by == requested_by
+    if requester_id is not None:
+        owned = or_(
+            McpToolApproval.requested_by_user_id == requester_id,
+            and_(McpToolApproval.requested_by_user_id.is_(None), McpToolApproval.requested_by == requested_by),
         )
-        .order_by(McpToolApproval.created_at.desc())
-        .limit(1)
-    )
-    return (await db.execute(stmt)).scalar_one_or_none()
+
+    approval = (
+        await db.execute(
+            select(McpToolApproval)
+            .where(
+                McpToolApproval.tenant_id == tenant_id,
+                McpToolApproval.tool_name == tool_name,
+                McpToolApproval.argument_fingerprint == fingerprint,
+                McpToolApproval.state == "approved",
+                McpToolApproval.expires_at > datetime.now(UTC),
+                owned,
+            )
+            .order_by(McpToolApproval.created_at.desc())
+            .limit(1)
+            .with_for_update(skip_locked=True)
+        )
+    ).scalar_one_or_none()
+    if approval is None:
+        return None
+
+    approval.state = "consumed"
+    await db.flush()
+    return (approval.id, approval.decided_by)
 
 
 async def authorize(
@@ -196,6 +244,7 @@ async def authorize(
     arguments: Mapping[str, Any] | None,
     has_permission: Any,
     requested_by: str,
+    requested_by_user_id: uuid.UUID | None = None,
 ) -> Decision:
     """Answer the three questions in the module docstring, in that order.
 
@@ -203,6 +252,11 @@ async def authorize(
     principal's own check, passed in rather than reached for, so this module
     stays testable without a request and cannot accidentally consult a
     different authorization path than the routes do.
+
+    ``requested_by`` is the credential label, for display. ``requested_by_user_id``
+    is the *person*, and is what separation of duties later compares -- an API
+    key resolves to its owning user, so one human is one id across both
+    credentials (GHSA-xhmc-69rh-h3rr, F10).
     """
     spec = tool_catalogue().get(tool_name)
     if spec is None:
@@ -248,17 +302,20 @@ async def authorize(
         return Decision(outcome="allow", reason="read-only tool", required_permission=permission)
 
     fingerprint = argument_fingerprint(arguments)
-    approval = await _live_approval(db, tenant_id, tool_name, fingerprint)
-    if approval is not None:
-        # Spent here rather than left standing: an approver is deciding about
-        # a call, and a grant that outlives the call it was given for is a
-        # permission nobody agreed to.
-        approval.state = "consumed"
-        await db.flush()
+    claimed = await _claim_approval(
+        db,
+        tenant_id,
+        tool_name,
+        fingerprint,
+        requester_id=requested_by_user_id,
+        requested_by=requested_by,
+    )
+    if claimed is not None:
+        approval_id, decided_by = claimed
         return Decision(
             outcome="allow",
-            reason=f"approved by {approval.decided_by or 'an approver'}",
-            approval_id=approval.id,
+            reason=f"approved by {decided_by or 'an approver'}",
+            approval_id=approval_id,
             required_permission=permission,
         )
 
@@ -282,6 +339,7 @@ async def authorize(
             tool_name=tool_name,
             argument_fingerprint=fingerprint,
             requested_by=requested_by,
+            requested_by_user_id=requested_by_user_id,
             state="pending",
             expires_at=datetime.now(UTC) + APPROVAL_TTL,
         )

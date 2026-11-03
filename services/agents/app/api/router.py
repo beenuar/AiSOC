@@ -15,7 +15,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 
 from app.graph.runner import run_full_investigation
-from app.hunt import from_report
+from app.hunt import from_report, source_report_store
 from app.hunt.agent import run_hunt
 from app.hunt.plan import HUNT_FIELDS
 from app.investigator import ledger as ledger_module
@@ -233,6 +233,22 @@ class ReportDraftResponse(BaseModel):
     skipped_indicators: int = 0
     clauses: list[dict[str, str]] = []
     refusals: list[str] = []
+    #: The `hunt_source_reports` row this draft was recorded as, or None when
+    #: it could not be. Reported rather than implied: a draft whose provenance
+    #: was not stored is still usable, and six weeks later the difference
+    #: between "no record" and "a record nobody told you about" is the whole
+    #: question an analyst is asking.
+    report_id: str | None = None
+    #: NULL `approved_at` must never render as approved — migration 155 says
+    #: so in the column's own comment — so a fresh draft says it outright.
+    approved: bool = False
+
+
+class ReportApprovalResponse(BaseModel):
+    report_id: str
+    approved: bool
+    approved_at: str | None = None
+    detail: str
 
 
 @router.post("/hunt/from-report", response_model=ReportDraftResponse)
@@ -290,8 +306,79 @@ async def draft_hunt_from_report(request: ReportDraftRequest, principal: ScopedP
             "truncated": truncated,
         },
     )
+    # Persist the provenance. This route used to compute exactly the columns
+    # of `hunt_source_reports` and return them without writing a row, leaving
+    # the table a pure orphan: `approved_at` had no writer and the migration's
+    # stated property — nothing is hunted from a report until it is set — was
+    # enforced by nobody. Fail-soft, because a provenance write must not cost
+    # an analyst their draft; `report_id: null` says so rather than implying a
+    # record exists.
+    report_id = await source_report_store.record_report(
+        tenant_id=str(tenant_id),
+        url=url,
+        fetched_by=str(getattr(principal, "user_id", "") or "") or None,
+        byte_size=draft.byte_size,
+        content_sha256=draft.content_sha256,
+        truncated=truncated,
+        indicator_count=len(indicators),
+        technique_count=len(techniques),
+    )
     payload = draft.as_dict()
-    return ReportDraftResponse(**payload, clauses=clauses, refusals=refusals)
+    return ReportDraftResponse(**payload, clauses=clauses, refusals=refusals, report_id=report_id, approved=False)
+
+
+@router.post("/hunt/from-report/{report_id}/approve", response_model=ReportApprovalResponse)
+async def approve_hunt_report(report_id: str, principal: ScopedPrincipal) -> ReportApprovalResponse:
+    """Record that a person reviewed this report's extracted indicators.
+
+    Migration 155 states the property this writes: *"Nothing is hunted from a
+    report until this is set, so NULL must never be rendered as approved."*
+    Until this endpoint existed the column had no writer at all, so the
+    sentence described an intention rather than a control.
+
+    404 rather than 403 on another tenant's id, so the route is not an
+    existence oracle over every tenant's report ids. A second approval is
+    reported as already-approved rather than moving the timestamp: the review
+    that counts is the one that happened.
+    """
+    tenant_id = scoped_tenant_or_403(principal, None)
+    try:
+        newly_approved = await source_report_store.approve_report(
+            tenant_id=str(tenant_id),
+            report_id=report_id,
+            approved_by=str(getattr(principal, "user_id", "") or "") or None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=f"{report_id!r} is not a report id") from exc
+    except Exception as exc:  # noqa: BLE001 — an unrecordable approval is not an approval
+        logger.error("hunt.report_approval_failed", extra={"report_id": report_id, "error": str(exc)})
+        raise HTTPException(status_code=503, detail="the approval could not be recorded, so nothing was approved") from exc
+
+    stored = await source_report_store.get_report(tenant_id=str(tenant_id), report_id=report_id)
+    if stored is None:
+        raise HTTPException(status_code=404, detail="no such hunt source report")
+    approved_at = stored.get("approved_at")
+    return ReportApprovalResponse(
+        report_id=report_id,
+        approved=approved_at is not None,
+        approved_at=approved_at.isoformat() if approved_at is not None else None,
+        detail=("approved" if newly_approved else "already approved; the recorded review is the first one"),
+    )
+
+
+@router.get("/hunt/from-report", response_model=list[dict])
+async def list_hunt_reports(principal: ScopedPrincipal) -> list[dict]:
+    """Reports this tenant has drafted from, newest first, with their review state."""
+    tenant_id = scoped_tenant_or_403(principal, None)
+    rows = await source_report_store.list_reports(tenant_id=str(tenant_id))
+    return [
+        {
+            **{k: (v.isoformat() if hasattr(v, "isoformat") else v) for k, v in row.items() if k != "approved_by"},
+            "approved": row.get("approved_at") is not None,
+            "approved_by": str(row["approved_by"]) if row.get("approved_by") else None,
+        }
+        for row in rows
+    ]
 
 
 @router.get("/health")
