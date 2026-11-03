@@ -88,35 +88,63 @@ def test_his_reported_example_credits_tim_shelton() -> None:
         assert match, f"the rule reported in #1680 is not in {path}"
         assert match[0]["provenance"]["author"] == HIS_EXAMPLE_AUTHOR
 
+#: Drives the real fusion engine and prints the alert description.
+#:
+#: Run out of process on purpose. `services/api`, `services/connectors` and
+#: `services/fusion` all name their top-level package `app`, so importing one
+#: inside the shared pytest session puts it in `sys.modules` for everything
+#: that follows -- and the next test to do `from app.playbook import ...` gets
+#: fusion's package and a ModuleNotFoundError. Importing fusion here
+#: in-process broke 21 tests in test_playbook_schema_parity_gate that have
+#: nothing to do with attribution. A subprocess keeps the real engine in the
+#: assertion and the collision out of the session.
+_ALERT_PROBE = """
+import json, sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+sys.path.insert(0, str(root / "services" / "fusion"))
+from app.services.detection_engine import DetectionEngine, DetectionHit, _attribution
+
+path = root / "services/fusion/app/data/detection_ruleset_imported.json"
+rules = json.loads(path.read_text())["rules"]
+rule = next(r for r in rules if (r.get("provenance") or {}).get("source_id") == sys.argv[2])
+hit = DetectionHit(
+    rule_id=rule["id"],
+    name=rule["name"],
+    severity=rule["severity"],
+    category=rule["category"],
+    mitre=list(rule.get("mitre") or []),
+    attribution=_attribution(rule),
+)
+alert = DetectionEngine().build_alert(
+    {"tenant_id": "00000000-0000-0000-0000-000000000001", "ocsf_event": {}}, hit
+)
+print("ALERT_DESCRIPTION:" + (alert.description or ""))
+"""
+
 
 def test_the_alert_a_match_produces_names_the_author() -> None:
     """DRL-1.1 is explicit that *messages produced by a match* identify the author.
 
-    Driven through the real engine rather than by asserting on the rendering
-    helper, because the clause is about what an operator reads.
+    Driven through the real engine and the real ``build_alert()`` rather than
+    by asserting on the rendering helper, because the clause is about what an
+    operator reads.
     """
-    sys.path.insert(0, str(ROOT / "services" / "fusion"))
-    from app.services.detection_engine import (  # noqa: PLC0415
-        DetectionEngine,
-        DetectionHit,
-        _attribution,
+    result = subprocess.run(
+        [sys.executable, "-c", _ALERT_PROBE, str(ROOT), HIS_EXAMPLE_ID],
+        capture_output=True,
+        text=True,
+        cwd=ROOT,
+        check=False,
     )
-
-    rules = _rules(COMPILED[0])
-    rule = next(r for r in rules if (r.get("provenance") or {}).get("source_id") == HIS_EXAMPLE_ID)
-
-    hit = DetectionHit(
-        rule_id=rule["id"],
-        name=rule["name"],
-        severity=rule["severity"],
-        category=rule["category"],
-        mitre=list(rule.get("mitre") or []),
-        attribution=_attribution(rule),
-    )
-    alert = DetectionEngine().build_alert({"tenant_id": "00000000-0000-0000-0000-000000000001", "ocsf_event": {}}, hit)
-    assert alert is not None
-    assert HIS_EXAMPLE_AUTHOR in alert.description
-    assert LICENCE in alert.description
+    assert result.returncode == 0, result.stdout + result.stderr
+    line = next((ln for ln in result.stdout.splitlines() if ln.startswith("ALERT_DESCRIPTION:")), "")
+    description = line.removeprefix("ALERT_DESCRIPTION:")
+    assert description, f"the probe produced no alert description:\n{result.stdout}"
+    assert HIS_EXAMPLE_AUTHOR in description
+    assert LICENCE in description
+    assert "Translated from SigmaHQ/sigma" in description
 
 
 def test_an_author_upstream_does_not_credit_is_recorded_not_invented() -> None:
