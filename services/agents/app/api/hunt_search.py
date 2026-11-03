@@ -65,11 +65,13 @@ class HuntHit(BaseModel):
     #: never produced. One representation per value, decided here rather
     #: than in each consumer.
     highlights: list[str]
+    fields: dict[str, Any] = {}
 
 
 class HuntResponse(BaseModel):
     query: str
     total: int
+    took: int = 0
     took_ms: int
     hits: list[HuntHit]
     #: Where the hits came from. ``sample`` means this handler generated
@@ -190,6 +192,7 @@ async def hunt_search(query: HuntQuery) -> HuntResponse:
     return HuntResponse(
         query=query.query,
         total=len(hits_raw),
+        took=took_ms,
         took_ms=took_ms,
         hits=[HuntHit(**h) for h in hits_raw],
         source="sample",
