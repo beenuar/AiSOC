@@ -1006,7 +1006,10 @@ async def resume_after_approval(
 
     from app.playbook.store import PlaybookStore
 
-    playbook = PlaybookStore.default().get(pause.playbook_id)
+    # Scoped to the pause's own tenant — the durable row records which
+    # tenant the run belongs to, so a resume cannot reach a playbook in
+    # another one.
+    playbook = PlaybookStore.default().get(pause.playbook_id, tenant_id=str(pause.tenant_id))
     if playbook is None:
         logger.warning(
             "Cannot resume run %s: playbook %s is no longer in the store",
@@ -1249,7 +1252,10 @@ async def _resume_pause(pause: Any, *, resolution: str, extra_context: dict[str,
 
     from app.playbook.store import PlaybookStore
 
-    playbook = PlaybookStore.default().get(pause.playbook_id)
+    # Scoped to the pause's own tenant — the durable row records which
+    # tenant the run belongs to, so a resume cannot reach a playbook in
+    # another one.
+    playbook = PlaybookStore.default().get(pause.playbook_id, tenant_id=str(pause.tenant_id))
     if playbook is None:
         logger.warning(
             "Cannot resume run %s: playbook %s is no longer in the store",

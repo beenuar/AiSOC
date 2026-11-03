@@ -679,5 +679,5 @@ class TestWaitsAreActuallyResumed:
 
 
 class _StoreStub:
-    def get(self, playbook_id: str) -> Playbook:
+    def get(self, playbook_id: str, *, tenant_id: str | None = None) -> Playbook:
         return _playbook(_child("a"), _child("b"))

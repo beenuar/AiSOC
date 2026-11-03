@@ -132,6 +132,25 @@ class Playbook(BaseModel):
     """A complete playbook definition."""
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    #: Which tenant owns this playbook, or ``None`` for shipped library content.
+    #:
+    #: There was no such field, and ``PlaybookStore`` is a process-global
+    #: singleton keyed by id alone, so every route on the playbooks router
+    #: reached every tenant's playbooks — read, rewrite, delete and run
+    #: (GHSA-27wx-pcv5-pr7q).
+    #:
+    #: ``None`` is not "unscoped": it is the 62 playbooks that ship in
+    #: ``playbooks/packs/v1/``, which are shared content in the same sense
+    #: detection rules are. The library stays readable by every tenant and
+    #: writable by none; everything a tenant creates carries that tenant's id
+    #: and is visible only to it. The store refuses to answer without a
+    #: tenant, so the distinction cannot be lost by a caller that forgets to
+    #: pass one.
+    #:
+    #: Set from the authenticated principal at create time and never from the
+    #: request body — a field a caller can send is a field a caller can forge,
+    #: which is the defect this closes.
+    tenant_id: str | None = None
     name: str
     description: str = ""
     version: str = "1.0.0"

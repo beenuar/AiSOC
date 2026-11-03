@@ -44,13 +44,13 @@ import base64
 import json
 import logging
 import os
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.v1.deps import CurrentUser
+from app.api.v1.deps import CurrentUser, require_permission
 from app.api.v1.endpoints.auth import get_current_user
 from app.core.config import settings
 from app.db.database import get_db
@@ -73,6 +73,15 @@ from app.services.posture_store import save_snapshot
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/identity", tags=["identity-effective-permissions"])
+
+#: A caller allowed to resolve an identity's authorization posture.
+#:
+#: Declared as a module-level alias rather than inline in the signature, which
+#: is the idiom the rest of the endpoint package uses and the only form ruff's
+#: B008 accepts — a ``Depends(require_permission(...))`` written as an argument
+#: default is evaluated once at import either way, and naming it here keeps the
+#: permission visible beside the router it guards.
+IdentityReader = Annotated[CurrentUser, Depends(require_permission("identity:read"))]
 
 # Sentinel for the "dry-run with inline snapshot" feature flag. Off by default.
 _INLINE_SNAPSHOT_FLAG = "AISOC_ALLOW_INLINE_SNAPSHOT"
@@ -192,6 +201,7 @@ async def list_providers(
 async def get_effective_permissions(
     principal_id: str,
     background_tasks: BackgroundTasks,
+    current_user: IdentityReader,
     provider: str = Query(
         ...,
         description="Provider to resolve against (aws|azure|gcp|okta|gws).",
@@ -202,14 +212,43 @@ async def get_effective_permissions(
             "Optional base64-encoded JSON snapshot for dry-run resolution. Only honoured when AISOC_ALLOW_INLINE_SNAPSHOT=1 is set."
         ),
     ),
-    current_user: CurrentUser = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Resolve and return the effective-permissions envelope.
 
-    Cache write is dispatched as a FastAPI ``BackgroundTask`` so the request
-    returns as soon as the resolver finishes — the UI never waits on Neo4j.
+    Requires ``identity:read``. Cache write is dispatched as a FastAPI
+    ``BackgroundTask`` so the request returns as soon as the resolver
+    finishes — the UI never waits on Neo4j.
     """
+    # Why the permission, and why not the check the report asked for.
+    #
+    # Kept out of the docstring because FastAPI publishes that verbatim into
+    # docs/openapi.yaml, and a reader of the API reference does not need an
+    # advisory's history — but the next reader of this function does.
+    #
+    # This bound `get_current_user` alone and made no authorization decision
+    # (GHSA-q23c-9pj3-cw75). The tenant was always derived correctly from the
+    # credential, so it was never a cross-tenant defect — but *every* role in
+    # the tenant reached it, `viewer` included, and so did an API key scoped
+    # to something unrelated, because a key's scopes are only ever read by
+    # `require_permission` and this route never called it. What comes back is
+    # an identity's allowed and denied actions, resource ids and ARNs, and the
+    # policy chain behind them; with `AISOC_EFFECTIVE_PERMISSIONS_LIVE=1` the
+    # server also spends the tenant's own stored connector credential to
+    # collect it.
+    #
+    # The reporter recommended an object-level check — may this caller inspect
+    # *that* `principal_id`. Deliberately not that: nothing in this product
+    # relates a console user to a provider principal (`users` has no such
+    # column, and `identity_links` relates two *provider* identifiers to each
+    # other), so there is no relation to consult and the check would reduce to
+    # "is this your own id", which no caller could satisfy. Inspecting any
+    # identity in the tenant is the job; the control is who may do it at all.
+    #
+    # A refusal here is 403, not 404: no id is being probed, the caller is
+    # authenticated inside the right tenant, and "you may not do this"
+    # discloses nothing they did not already know. The 404 convention belongs
+    # to the routes where the id itself is the secret.
 
     if provider not in SUPPORTED_PROVIDERS:
         raise HTTPException(

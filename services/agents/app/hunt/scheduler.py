@@ -155,16 +155,23 @@ class HuntScheduler:
     # Manual trigger (used by the API)
     # ------------------------------------------------------------------
 
-    async def run_one(self, hunt_id: str) -> dict[str, Any]:
-        """Run a single hunt on demand. Returns a summary dict."""
+    async def run_one(self, hunt_id: str, *, tenant_ref: str | None = None) -> dict[str, Any]:
+        """Run a single hunt on demand. Returns a summary dict.
+
+        ``tenant_ref`` overrides the scheduler's process-wide default so an
+        on-demand run searches the *caller's* telemetry and records against
+        the caller's tenant. The timer path passes nothing and keeps the
+        deployment default, which is what it is for.
+        """
         hunt = self._corpus.get(hunt_id)
         if hunt is None:
             return {"ok": False, "error": f"hunt {hunt_id} not found"}
-        result = self._engine.run(hunt, _load_telemetry(self._tenant_ref))
+        target = tenant_ref or self._tenant_ref
+        result = self._engine.run(hunt, _load_telemetry(target))
         await record_run(
             hunt,
             result,
-            tenant_ref=self._tenant_ref,
+            tenant_ref=target,
             trigger_source="manual",
         )
         self._last_run[hunt.id] = time.time()

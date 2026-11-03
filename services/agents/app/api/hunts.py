@@ -22,14 +22,18 @@ hunt during a DB outage.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.hunt import HuntCorpus
 from app.hunt import scheduler as hunt_scheduler
 from app.hunt import store as hunt_store
-from app.security.tenant_scope import require_console_or_service_auth
+from app.security.tenant_scope import (
+    TenantPrincipal,
+    require_console_or_service_auth,
+    scoped_tenant_or_403,
+)
 
 logger = logging.getLogger("aisoc.api.hunts")
 #: Default-deny. The console reaches this router directly through a Next
@@ -37,6 +41,17 @@ logger = logging.getLogger("aisoc.api.hunts")
 #: either that session or a trusted service declaring the tenant it acts
 #: for — a bearer-token-only scheme would lock the browser out.
 router = APIRouter(prefix="/api/v1/hunts", tags=["hunts"], dependencies=[Depends(require_console_or_service_auth)])
+
+#: The resolved caller, bound as a handler parameter.
+#:
+#: Same defect as the playbooks router next door (GHSA-27wx-pcv5-pr7q): the
+#: router-level dependency authenticated every request and bound nothing, so
+#: the DB-backed reads below fell through to ``tenant_ref="default"`` — the
+#: store's own default, which resolves to whichever tenant holds the slug
+#: ``default``, i.e. the canonical seed tenant. Every caller on every
+#: deployment therefore read *that* tenant's hunt runs and findings, which
+#: carry finding titles, summaries and the entities they name.
+ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
 
 
 def _hunt_summary(h: Any) -> dict[str, Any]:
@@ -77,18 +92,25 @@ async def list_hunts() -> list[dict[str, Any]]:
 
 @router.get("/runs", summary="Recent hunt runs")
 async def list_runs(
+    principal: ScopedPrincipal,
     limit: int = Query(default=50, ge=1, le=500),
 ) -> list[dict[str, Any]]:
-    return await hunt_store.list_recent_runs(limit=limit)
+    return await hunt_store.list_recent_runs(tenant_ref=str(scoped_tenant_or_403(principal)), limit=limit)
 
 
 @router.get("/findings", summary="Recent hunt findings")
 async def list_findings(
+    principal: ScopedPrincipal,
     hunt_id: str | None = Query(default=None),
     status: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[dict[str, Any]]:
-    return await hunt_store.list_recent_findings(hunt_id=hunt_id, status=status, limit=limit)
+    return await hunt_store.list_recent_findings(
+        tenant_ref=str(scoped_tenant_or_403(principal)),
+        hunt_id=hunt_id,
+        status=status,
+        limit=limit,
+    )
 
 
 @router.get("/{hunt_id}", summary="Get a single hunt definition")
@@ -101,10 +123,10 @@ async def get_hunt(hunt_id: str) -> dict[str, Any]:
 
 
 @router.post("/reload", summary="Reload corpus from disk + re-sync catalog")
-async def reload_hunts() -> dict[str, Any]:
+async def reload_hunts(principal: ScopedPrincipal) -> dict[str, Any]:
     corpus = HuntCorpus.default()
     count = corpus.reload()
-    synced = await hunt_store.sync_catalog(corpus.list())
+    synced = await hunt_store.sync_catalog(corpus.list(), tenant_ref=str(scoped_tenant_or_403(principal)))
     return {"loaded": count, "synced": synced}
 
 
@@ -114,9 +136,13 @@ async def reload_hunts() -> dict[str, Any]:
 
 
 @router.post("/{hunt_id}/run", summary="Run a hunt on demand")
-async def run_hunt(hunt_id: str) -> dict[str, Any]:
+async def run_hunt(hunt_id: str, principal: ScopedPrincipal) -> dict[str, Any]:
     sched = hunt_scheduler.get_scheduler()
-    out = await sched.run_one(hunt_id)
+    # The scheduler's own ``tenant_ref`` is a process-wide default chosen at
+    # boot, which is right for the timer and wrong for a person: an on-demand
+    # run must search the caller's telemetry and record against the caller's
+    # tenant, not whichever one the process was started for.
+    out = await sched.run_one(hunt_id, tenant_ref=str(scoped_tenant_or_403(principal)))
     if not out.get("ok"):
         raise HTTPException(status_code=404, detail=out.get("error", "hunt run failed"))
     return out

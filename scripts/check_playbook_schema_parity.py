@@ -89,6 +89,17 @@ from gate_toolkit import repo_root
 #: that the key is inert, and the schema text must say the same.
 INERT_AUTHORED_KEYS: frozenset[str] = frozenset({"inputs", "dry_run_support"})
 
+#: Playbook model fields the authored schema must *not* declare.
+#:
+#: ``tenant_id`` is set from the authenticated principal at create time. It is
+#: on the model because the engine carries it, and it is absent from the
+#: schema on purpose: an authored file that could declare its own tenant is a
+#: tenant a caller can forge, which is the defect GHSA-27wx-pcv5-pr7q closes.
+#: Adding it to the schema to settle the parity check would reinstate that at
+#: the file layer, so the exclusion is recorded here instead and enforced in
+#: both directions — the schema declaring it is a failure, not a pass.
+SERVER_ASSIGNED_FIELDS: frozenset[str] = frozenset({"tenant_id"})
+
 #: Execution classes usable in the schema's ``x-aisoc-execution`` map.
 #:
 #: ``governed`` means the step is handed to the action registry in
@@ -982,8 +993,16 @@ def compare(reg: Registries, *, recorded_subsets: dict[str, str] | None = None) 
             f"schema declares playbook key {missing!r} that the Playbook model drops on load — "
             f"add the field, remove the key, or list it in INERT_AUTHORED_KEYS and say so in its description"
         )
-    for missing in sorted(reg.model_playbook_keys - reg.schema_playbook_keys):
+    for missing in sorted(reg.model_playbook_keys - reg.schema_playbook_keys - SERVER_ASSIGNED_FIELDS):
         errors.append(f"Playbook model has field {missing!r} that the schema does not declare, so `additionalProperties: false` rejects it")
+    # The other direction of the same rule. A server-assigned field appearing
+    # in the authored schema is the failure this exclusion exists to prevent,
+    # so it must not be silently tolerated by having been listed above.
+    for leaked in sorted(reg.schema_playbook_keys & SERVER_ASSIGNED_FIELDS):
+        errors.append(
+            f"schema declares playbook key {leaked!r}, which is set from the authenticated "
+            f"principal — an authored file must not be able to supply it"
+        )
 
     # 7. exactly one schema file. Two is how the vocabularies diverged.
     if len(reg.schema_files) > 1:
