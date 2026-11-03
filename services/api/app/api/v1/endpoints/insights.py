@@ -60,6 +60,7 @@ from app.api.v1.deps import AuthUser, DBSession
 from app.models.alert import Alert
 from app.models.case import Case
 from app.services import case_status
+from app.services.alert_disposition import decided_filter
 
 logger = logging.getLogger(__name__)
 
@@ -240,20 +241,33 @@ async def _count(db, model, tenant_id: uuid.UUID, start: datetime, end: datetime
     return int(await db.scalar(select(func.count()).where(and_(*filters))) or 0)
 
 
-async def _fp_rate(db, tenant_id: uuid.UUID, start: datetime, end: datetime) -> float:
-    """False-positive rate over dispositioned alerts."""
+async def _fp_rate(db, tenant_id: uuid.UUID, start: datetime, end: datetime) -> tuple[float, int]:
+    """``(rate, denominator)`` over alerts somebody reached a conclusion about.
+
+    Returns the denominator because a ratio over nothing is not zero. This
+    tile rendered **FP Rate 0.0%** next to MTTA and MTTR correctly reading
+    "not measured" on the same row, and the card already knows how to say
+    so -- it renders "not measured" when ``sample_count`` is 0, and this
+    tile never set one.
+
+    The denominator is ``alert_disposition.DECIDED_DISPOSITIONS`` rather
+    than ``disposition IS NOT NULL``. The auto-triage worker writes
+    ``needs_review`` -- an abstention -- on every alert it cannot decide,
+    and counting those gave this surface a different denominator from
+    ``/metrics/funnel`` asking the identical question.
+    """
     total = await db.scalar(
         select(func.count()).where(
             and_(
                 Alert.tenant_id == tenant_id,
-                Alert.disposition.isnot(None),
+                decided_filter(Alert.disposition),
                 Alert.created_at >= start,
                 Alert.created_at < end,
             )
         )
     )
     if not total:
-        return 0.0
+        return 0.0, 0
     fp = await db.scalar(
         select(func.count()).where(
             and_(
@@ -264,7 +278,7 @@ async def _fp_rate(db, tenant_id: uuid.UUID, start: datetime, end: datetime) -> 
             )
         )
     )
-    return round((int(fp or 0) / int(total)), 4)
+    return round((int(fp or 0) / int(total)), 4), int(total)
 
 
 async def _alert_sparkline(
@@ -470,7 +484,7 @@ async def get_soc_insights(
         start_col=Alert.created_at,
         end_col=Alert.resolved_at,
     )
-    fp_rate = await _fp_rate(db, tenant_id, start, now)
+    fp_rate, fp_denominator = await _fp_rate(db, tenant_id, start, now)
     alert_count = await _count(db, Alert, tenant_id, start, now)
     case_count = await _count(db, Case, tenant_id, start, now)
     cost_total, run_count = await _llm_cost_aggregate(db, tenant_id, start, now)
@@ -502,7 +516,7 @@ async def get_soc_insights(
         start_col=Alert.created_at,
         end_col=Alert.resolved_at,
     )
-    prev_fp_rate = await _fp_rate(db, tenant_id, prev_start, start)
+    prev_fp_rate, prev_fp_denominator = await _fp_rate(db, tenant_id, prev_start, start)
     prev_alert_count = await _count(db, Alert, tenant_id, prev_start, start)
     prev_case_count = await _count(db, Case, tenant_id, prev_start, start)
     prev_cost_total, prev_run_count = await _llm_cost_aggregate(db, tenant_id, prev_start, start)
@@ -563,9 +577,13 @@ async def get_soc_insights(
             key="fp_rate",
             label="FP Rate",
             value=fp_rate,
+            sample_count=fp_denominator,
             unit="pct",
             previous_value=prev_fp_rate,
-            delta_pct=_delta_pct(fp_rate, prev_fp_rate),
+            delta_pct=_delta_pct(
+                fp_rate if fp_denominator else None,
+                prev_fp_rate if prev_fp_denominator else None,
+            ),
             sparkline=InsightSparkline(points=alert_spark),
         ),
         InsightTile(
@@ -590,18 +608,35 @@ async def get_soc_insights(
             key="agent_cost_per_investigation",
             label="Agent cost / investigation",
             value=cost_per_inv,
+            # A mean over zero investigations is unmeasured, not free. A
+            # deployment that placed no model call at all rendered "$0.000",
+            # which is the most flattering number this product can print and
+            # describes a measurement nobody took. `/costs` on the same
+            # stack already got this right.
+            sample_count=run_count,
             unit="usd",
             previous_value=prev_cost_per_inv,
-            delta_pct=_delta_pct(cost_per_inv, prev_cost_per_inv),
+            delta_pct=_delta_pct(
+                cost_per_inv if run_count else None,
+                prev_cost_per_inv if prev_run_count else None,
+            ),
             sparkline=InsightSparkline(points=cost_spark),
         ),
         InsightTile(
             key="analyst_hours_saved",
             label="Analyst hours saved",
             value=hours_saved,
+            # Modelled, not measured: `auto_closed * MANUAL_INVESTIGATION_MINUTES`.
+            # With no auto-closures the model has no input, and "0h" presents
+            # an estimate built on nothing as an observation. The count of
+            # closures the estimate rests on travels with it.
+            sample_count=auto_closed,
             unit="hours_saved",
             previous_value=prev_hours_saved,
-            delta_pct=_delta_pct(hours_saved, prev_hours_saved),
+            delta_pct=_delta_pct(
+                hours_saved if auto_closed else None,
+                prev_hours_saved if prev_auto_closed else None,
+            ),
             sparkline=InsightSparkline(points=case_spark),
         ),
     ]
