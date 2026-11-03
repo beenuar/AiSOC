@@ -63,7 +63,11 @@ TENANT = uuid.UUID("78a9a9a9-0000-0000-0000-000000000078")
 ANALYST = uuid.UUID("78a9a9a9-0000-0000-0000-0000000000b8")
 
 CLIENT_ID = "MARKER_CLIENT_ID_live78"
-CLIENT_SECRET = "MARKER_SECRET_live78_xyz789"
+#: A marker, not a credential: it authenticates to nothing and exists so the
+#: stub vendor's request log can be searched for it. The whole point of this
+#: suite is asserting where this string does and does not travel, so it has to
+#: be a literal.
+CLIENT_SECRET = "MARKER_SECRET_live78_xyz789"  # gitleaks:allow
 
 URL = "/api/v1/playbook-steps/dispatch"
 
@@ -131,6 +135,13 @@ def actions_service():
             if httpx.get(f"{base}/health", timeout=2).status_code < 500:
                 break
         except httpx.HTTPError:
+            # Expected while the server is still binding its socket: a
+            # connection refused here means "not up yet", which is what the
+            # loop is waiting for. A startup that genuinely failed is caught
+            # by the `proc.poll()` check above, which reports the child's
+            # output, and one that never comes up falls through to the
+            # `else:` below — so there is nothing to handle at this point
+            # beyond trying again.
             pass
         time.sleep(0.5)
     else:

@@ -62,7 +62,11 @@ from app.services.credential_resolver import (
 )
 
 CLIENT_ID = "MARKER_CLIENT_ID_78jg"
-CLIENT_SECRET = "MARKER_SECRET_78jg_xyz789"
+#: A marker, not a credential: it authenticates to nothing and exists so the
+#: stub vendor's request log can be searched for it. The whole point of this
+#: suite is asserting where this string does and does not travel, so it has to
+#: be a literal.
+CLIENT_SECRET = "MARKER_SECRET_78jg_xyz789"  # gitleaks:allow
 
 TENANT = uuid.uuid4()
 
