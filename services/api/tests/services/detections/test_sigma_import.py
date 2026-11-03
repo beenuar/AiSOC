@@ -216,12 +216,56 @@ class TestNormaliseRule:
         prov = normalised.provenance
         assert prov["source"] == "SigmaHQ/sigma"
         assert prov["source_id"] == rule["id"]
+        # DRL-1.1 requires author identification to travel with a shared copy
+        # and to appear in messages produced by a match. This field was never
+        # read at import, so 3,132 rules shipped crediting a repository and no
+        # person — #1680, reported by SigmaHQ.
+        assert prov["author"] == "Test Suite"
         assert prov["license"] == "DRL-1.1"
         assert prov["license_url"] == "https://example/license"
         assert prov["imported_by"] == "sigma_import_service"
         assert prov["upstream_status"] == "stable"
         assert prov["upstream_path"].startswith("rules/")
         assert prov["ocsf"]["class_uid"] == OcsfClassUid.PROCESS_ACTIVITY
+
+    def test_author_is_preserved_as_upstream_wrote_it(self) -> None:
+        """Several authors is the common case, and an absent one is real.
+
+        Upstream's comma-separated spelling is kept rather than normalised
+        into a shape this project invented; a co-author lost to tidying is the
+        same licence defect at smaller scale. A rule upstream credits to
+        nobody is recorded as absent — never an empty string, which is
+        indistinguishable from the field having been dropped, and never the
+        publisher's name, which is the substitution DRL-1.1 does not accept.
+        """
+        verbatim = "frack113, Nasreddine Bencherchali (Nextron Systems)"
+        rule = _stable_sigma_rule()
+        rule["author"] = verbatim
+        normalised = si._normalise_rule(
+            rule,
+            source="SigmaHQ/sigma",
+            source_commit="abc",
+            license_id="DRL-1.1",
+            license_url="https://example/license",
+            upstream_path="rules/windows/process_creation/x.yml",
+        )
+        assert normalised is not None
+        assert normalised.provenance["author"] == verbatim
+
+        rule_without = _stable_sigma_rule()
+        rule_without.pop("author")
+        absent = si._normalise_rule(
+            rule_without,
+            source="SigmaHQ/sigma",
+            source_commit="abc",
+            license_id="DRL-1.1",
+            license_url="https://example/license",
+            upstream_path="rules/windows/process_creation/x.yml",
+        )
+        assert absent is not None
+        assert absent.provenance["author"] == si.AUTHOR_ABSENT
+        assert absent.provenance["author"].strip() != ""
+        assert "SigmaHQ" not in absent.provenance["author"]
 
     def test_experimental_status_quarantines_rule(self) -> None:
         rule = _stable_sigma_rule(status="experimental")
