@@ -16360,6 +16360,86 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HTTPValidationError'
+  /api/v1/response-schedule:
+    get:
+      tags:
+      - response-schedule
+      summary: Get Response Schedule
+      description: 'The tenant''s schedule, or an all-off one when they have declared
+        none.
+
+
+        An all-off schedule and no row are different states and the difference is
+
+        load-bearing — the loader returns ``None`` for no row, which is the
+
+        byte-identical-to-before path — so ``declared`` says which this is.'
+      operationId: get_response_schedule_api_v1_response_schedule_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleOut'
+      security:
+      - HTTPBearer: []
+    put:
+      tags:
+      - response-schedule
+      summary: Set Response Schedule
+      description: 'Declare the schedule and replace its windows in one transaction.
+
+
+        Windows are replaced wholesale rather than patched, because a schedule
+
+        half-applied is a schedule nobody declared: a window list that is updated
+
+        in pieces has an instant where Tuesday is covered and Wednesday is not,
+
+        and an automatic containment that lands in that instant is governed by a
+
+        configuration no operator ever wrote down.'
+      operationId: set_response_schedule_api_v1_response_schedule_put
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleIn'
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScheduleOut'
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+      security:
+      - HTTPBearer: []
+    delete:
+      tags:
+      - response-schedule
+      summary: Clear Response Schedule
+      description: 'Remove the schedule entirely, returning to no-schedule behaviour.
+
+
+        Deleting the row is the real off switch. Setting every flag false leaves a
+
+        row the loader still reads and still has to grade; removing it is what
+
+        makes ``apply_schedule`` a no-op again.'
+      operationId: clear_response_schedule_api_v1_response_schedule_delete
+      responses:
+        '204':
+          description: Successful Response
+      security:
+      - HTTPBearer: []
   /api/v1/triage-questions:
     get:
       tags:
@@ -26302,6 +26382,67 @@ components:
       - items
       - total
       title: BundleListResponse
+    BusinessWindowIn:
+      properties:
+        weekday:
+          type: integer
+          maximum: 6.0
+          minimum: 0.0
+          title: Weekday
+          description: 'datetime.weekday(): Monday is 0'
+        start_minute:
+          type: integer
+          maximum: 1439.0
+          minimum: 0.0
+          title: Start Minute
+          description: minutes from local midnight
+        end_minute:
+          type: integer
+          maximum: 1440.0
+          minimum: 0.0
+          title: End Minute
+          description: 1440 means midnight at the end of the day
+      type: object
+      required:
+      - weekday
+      - start_minute
+      - end_minute
+      title: BusinessWindowIn
+      description: One recurring window in which automatic response is acceptable.
+    BusinessWindowOut:
+      properties:
+        weekday:
+          type: integer
+          maximum: 6.0
+          minimum: 0.0
+          title: Weekday
+          description: 'datetime.weekday(): Monday is 0'
+        start_minute:
+          type: integer
+          maximum: 1439.0
+          minimum: 0.0
+          title: Start Minute
+          description: minutes from local midnight
+        end_minute:
+          type: integer
+          maximum: 1440.0
+          minimum: 0.0
+          title: End Minute
+          description: 1440 means midnight at the end of the day
+        id:
+          type: string
+          title: Id
+        weekday_name:
+          type: string
+          title: Weekday Name
+      type: object
+      required:
+      - weekday
+      - start_minute
+      - end_minute
+      - id
+      - weekday_name
+      title: BusinessWindowOut
     ByokSavings:
       properties:
         is_byok_active:
@@ -40383,6 +40524,91 @@ components:
       - findings_closed
       - error_message
       title: ScanRunOut
+    ScheduleIn:
+      properties:
+        timezone_name:
+          type: string
+          maxLength: 64
+          title: Timezone Name
+          default: UTC
+        require_human_outside_business_hours:
+          type: boolean
+          title: Require Human Outside Business Hours
+          default: false
+        require_human_without_on_call:
+          type: boolean
+          title: Require Human Without On Call
+          default: false
+        freeze_active:
+          type: boolean
+          title: Freeze Active
+          default: false
+        freeze_reason:
+          type: string
+          maxLength: 500
+          title: Freeze Reason
+          default: ''
+        applies_from_impact:
+          type: string
+          title: Applies From Impact
+          default: moderate
+        windows:
+          items:
+            $ref: '#/components/schemas/BusinessWindowIn'
+          type: array
+          title: Windows
+      type: object
+      title: ScheduleIn
+    ScheduleOut:
+      properties:
+        timezone_name:
+          type: string
+          maxLength: 64
+          title: Timezone Name
+          default: UTC
+        require_human_outside_business_hours:
+          type: boolean
+          title: Require Human Outside Business Hours
+          default: false
+        require_human_without_on_call:
+          type: boolean
+          title: Require Human Without On Call
+          default: false
+        freeze_active:
+          type: boolean
+          title: Freeze Active
+          default: false
+        freeze_reason:
+          type: string
+          maxLength: 500
+          title: Freeze Reason
+          default: ''
+        applies_from_impact:
+          type: string
+          title: Applies From Impact
+          default: moderate
+        windows:
+          items:
+            $ref: '#/components/schemas/BusinessWindowOut'
+          type: array
+          title: Windows
+        updated_at:
+          anyOf:
+          - type: string
+            format: date-time
+          - type: 'null'
+          title: Updated At
+        updated_by:
+          type: string
+          title: Updated By
+          default: ''
+        effect:
+          items:
+            type: string
+          type: array
+          title: Effect
+      type: object
+      title: ScheduleOut
     ScimTokenOut:
       properties:
         id:

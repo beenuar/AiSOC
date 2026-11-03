@@ -13,7 +13,7 @@ block was always absent. A reader auditing this file concluded the write half
 had shipped, which is the more damaging direction for a stale claim. The
 writer now exists, at `POST /api/v1/triage-questions` in the API service
 (`app/api/v1/endpoints/triage_questions.py`), and
-`tests/test_triage_questions_round_trip.py` drives a write through it and
+`tests/integration/test_triage_questions_round_trip.py` drives a write through it and
 reads the row back through this store against real Postgres — because a unit
 test of either half passes whether or not the other one exists.
 

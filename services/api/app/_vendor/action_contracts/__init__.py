@@ -14,6 +14,13 @@ response verb would actually auto-execute under the deployment's autonomy
 tier. Answering that with a second rule is what the page used to do, and it
 announced an autopilot posture on a deployment that queues every containment
 verb for a human. See ``app/services/autonomy_effective.py``.
+
+The time gates (``ResponseSchedule``, ``BusinessWindow``, ``apply_schedule``)
+are exported for the same reason. They were absent from this list while the
+console's autonomy page answered "would this verb auto-execute" without them,
+so a tenant in a declared change freeze read a page saying their verbs run
+unattended — which was true of the page and, until the dispatcher was wired to
+the schedule, also true of the dispatcher.
 """
 
 from .approval_rules import (
@@ -24,6 +31,9 @@ from .approval_rules import (
     TIER_MAX_AUTOMATIC,
     TIER_ORDER,
     ApprovalDecision,
+    BusinessWindow,
+    ResponseSchedule,
+    apply_schedule,
     evaluate,
     evaluate_contract,
     tier_from_env_value,
@@ -43,8 +53,11 @@ __all__ = [
     "ActionImpact",
     "ApprovalDecision",
     "ApprovalRequirement",
+    "BusinessWindow",
     "CapabilityContract",
+    "ResponseSchedule",
     "Reversal",
+    "apply_schedule",
     "evaluate",
     "evaluate_contract",
     "tier_from_env_value",

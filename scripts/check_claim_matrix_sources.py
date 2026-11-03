@@ -29,7 +29,7 @@ column and every row then read `core`. The figure was invisible because
 nothing compared it to anything.
 
 **Resolve against the bases a writer actually uses.** Rows cite docs three
-ways — repo-root (`apps/docs/docs/console/x.md`), relative to the docs root
+ways — from the repository root, relative to the docs root
 (`concepts/playbooks.md`), and relative to this file's own directory
 (`../decisions/0007-....md`). All three are legitimate and a gate that only
 understood one would demand a rewrite of correct rows, which is how a gate

@@ -1,0 +1,39 @@
+id: hunt-container-exec-into-production-pod
+name: Interactive shell opened inside a production pod
+description: |
+  Developers shell into development pods all day. The same action in production bypasses every deployment control the cluster has.
+version: 1.0.0
+severity: medium
+category: cloud
+tags:
+  - mitre.attack.t1609
+  - hunt.cloud
+log_sources:
+  - kubernetes_audit
+schedule:
+  enabled: true
+  interval_minutes: 60
+  jitter_seconds: 60
+hypothesis:
+  question: |
+    Did anyone open an interactive session inside a production pod?
+  indicators:
+    - field: "source"
+      equals: "kubernetes_audit"
+    - field: "subresource"
+      equals: "exec"
+    - field: "namespaceClass"
+      equals: "production"
+expected:
+  positive_incident_id: INC-HUNT-027
+  positive_template_id: hunt-container-exec-into-production-pod
+  min_match_score: 0.8
+  negative_incident_id: INC-HUNT-027-NEG
+  # The negative inverts namespaceClass, the clause this hunt is about,
+  # and holds every other field constant. A negative that differed in the
+  # log source would pass without testing anything.
+references:
+  - https://attack.mitre.org/techniques/T1609/
+author: AiSOC
+created: '2026-09-27'
+modified: '2026-09-27'

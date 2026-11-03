@@ -77,6 +77,29 @@ COPY app/ ./app/
 # dependency. Keep this after COPY so the build validates the real import path.
 RUN python -c "from app.security.credential_vault import CredentialVault"
 
+# hunt.corpus.packaged-assert — the image must be able to load the hunt
+# library, and the only place that can be proved is here.
+#
+# `hunts/` lives at the repository root, outside this build context, so for
+# every release this image shipped with no corpus at all: `ls /app/hunts` was
+# "No such file or directory" and the scheduler logged
+# `hunt.scheduler.corpus_loaded count=0` while the README called the library
+# Stable. Every test found the corpus because every test runs in a source
+# checkout, which is the one layout this image is not.
+#
+# `scripts/sync_packaged_hunt_corpus.py --check` holds `app/hunt/corpus/`
+# identical to `hunts/`; this is the half that identical files cannot prove.
+# It runs the real loader against the real image layout, so a rename, a
+# changed COPY, or a `.dockerignore` entry that excludes the corpus fails the
+# build rather than shipping a container that hunts for nothing.
+RUN python -c "\
+import sys; \
+from app.hunt.loader import HuntCorpus; \
+c = HuntCorpus(); \
+n = c.reload(); \
+print(f'hunt corpus: {n} hunt(s) from {c.directory}'); \
+sys.exit(0 if n > 0 else 1)"
+
 EXPOSE 8084
 
 # Dual-stack entrypoint — see app/scripts/serve.py and the matching CMD in

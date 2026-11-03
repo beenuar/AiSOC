@@ -381,6 +381,11 @@ async def launch_investigation(
         "case_id": case_id,
         "status": "running",
         "started_at": datetime.utcnow().isoformat(),
+        # The tenant the credential resolved to, not one the caller sent.
+        # Every reader below compares it; without it stored here they have
+        # nothing to compare and a run id is enough to read someone else's
+        # investigation, including its full report.
+        "tenant_id": body.tenant_id,
     }
     background_tasks.add_task(_run_and_store, run_id, case_id, body)
     logger.info("investigation.launched", run_id=run_id, case_id=case_id)
@@ -392,12 +397,29 @@ async def launch_investigation(
     )
 
 
+def _owned_run(run_id: str, principal: ScopedPrincipal, *, detail: str) -> dict[str, Any]:
+    """Return the run only if the credential's tenant owns it.
+
+    Binding a principal authenticates the caller and decides nothing. These
+    routes previously served the status, the audit log and the full incident
+    report in three formats to anyone who could name a run id.
+
+    Not-found and wrong-tenant answer identically, by design: a distinct 403
+    would turn the route into an existence oracle over other tenants' run ids.
+    """
+
+    run = _runs.get(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail=detail)
+    if str(run.get("tenant_id")) != str(scoped_tenant_or_403(principal)):
+        raise HTTPException(status_code=404, detail=detail)
+    return run
+
+
 @router.get("/investigations/{run_id}")
 async def get_investigation(run_id: str, principal: ScopedPrincipal):
     """Poll investigation status and results."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Investigation run not found")
+    run = _owned_run(run_id, principal, detail="Investigation run not found")
     # Strip large fields from polling response — use dedicated endpoints instead
     slim = {k: v for k, v in run.items() if k not in ("report_md", "report_html")}
     return slim
@@ -406,9 +428,7 @@ async def get_investigation(run_id: str, principal: ScopedPrincipal):
 @router.get("/investigations/{run_id}/report.md", response_class=PlainTextResponse)
 async def get_report_md(run_id: str, principal: ScopedPrincipal):
     """Download the Markdown incident report."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _owned_run(run_id, principal, detail="Run not found")
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
     return run.get("report_md", "")
@@ -417,9 +437,7 @@ async def get_report_md(run_id: str, principal: ScopedPrincipal):
 @router.get("/investigations/{run_id}/report.html", response_class=HTMLResponse)
 async def get_report_html(run_id: str, principal: ScopedPrincipal):
     """Download the HTML incident report."""
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _owned_run(run_id, principal, detail="Run not found")
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
     return run.get("report_html", "<html><body>No report yet.</body></html>")
@@ -430,9 +448,7 @@ async def get_report_pdf(run_id: str, principal: ScopedPrincipal):
     """Download the PDF incident report (rendered from HTML via weasyprint)."""
     from fastapi.responses import Response as FastAPIResponse
 
-    run = _runs.get(run_id)
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    run = _owned_run(run_id, principal, detail="Run not found")
     if run["status"] != "completed":
         raise HTTPException(status_code=409, detail=f"Investigation is {run['status']}")
 
@@ -487,8 +503,17 @@ async def stream_investigation(ws: WebSocket, run_id: str):
 
     await ws.accept()
     try:
-        # If a background run exists, tail it via polling
-        if run_id in _runs:
+        # Tail an existing run only if this credential's tenant owns it. The
+        # tenant was resolved above and then not compared against the run, so
+        # naming another tenant's run id streamed their investigation steps
+        # live. An unowned run is treated exactly like one that does not
+        # exist: the socket falls through to starting a fresh investigation
+        # under the caller's own tenant, which is what a caller who genuinely
+        # has no such run should see.
+        existing = _runs.get(run_id)
+        if existing is not None and str(existing.get("tenant_id")) != tenant_id:
+            existing = None
+        if existing is not None:
             seen = 0
             while True:
                 run = _runs.get(run_id, {})
