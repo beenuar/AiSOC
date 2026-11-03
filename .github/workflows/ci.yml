@@ -699,6 +699,18 @@ jobs:
         run: python3 scripts/check_business_context_grammar.py --self-test
       - name: Both business-context engines agree on the operator grammar
         run: python3 scripts/check_business_context_grammar.py --check
+      # A translation catalogue rots in two directions and only one is
+      # visible. A key the base has and a locale lacks falls back to English
+      # — correct, and invisible, so the gap reaches a customer. A key a
+      # locale has and the base does not renders nowhere at all, so no
+      # amount of using the console finds it; that is the direction nobody
+      # checks, and it is fatal here. Untranslated keys are ratcheted
+      # instead, because a gate that reds the build on a partial locale gets
+      # the locale deleted rather than finished.
+      - name: 'i18n catalogue keys — self-test'
+        run: python3 scripts/check_i18n_keys.py --self-test
+      - name: Every locale is checked against the base catalogue, both ways
+        run: python3 scripts/check_i18n_keys.py
       # And the mirror: a caveat saying a console surface is "not built"
       # reads as modesty and works as an exemption, since an absent surface
       # needs no claim row and no gate. Three of the six the matrix called
@@ -714,10 +726,6 @@ jobs:
       # the direction that matters: the console accepts the rule, the worker
       # has no branch for the operator and falls through to False, and the
       # tenant gets a saved rule that never fires and no diagnostic.
-      - name: Business-context grammar — self-test
-        run: python3 scripts/check_business_context_grammar.py --self-test
-      - name: Both business-context engines agree on the operator grammar
-        run: python3 scripts/check_business_context_grammar.py --check
       # `llms.txt` is the machine-first summary crawlers and LLM-backed tools
       # read instead of the rendered docs nav, so a stale figure there is
       # consumed with no human in the loop to sanity-check it. It is generated
