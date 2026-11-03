@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import pathlib
+import re
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -304,6 +305,33 @@ def _carries_credential(options_text: str) -> bool:
     return any(marker in lowered for marker in CREDENTIAL_MARKERS)
 
 
+#: `headers` given as a name rather than an object literal: either the
+#: shorthand `{ ..., headers, ... }` or `headers: someName`.
+_HEADERS_BY_NAME = re.compile(r"\bheaders\s*(?::\s*(?P<named>[A-Za-z_$][\w$]*))?(?=\s*[,}]|$)")
+
+
+def _credential_through_a_variable(options_text: str, source: str) -> bool:
+    """Whether the options hand `fetch` a headers object built by `apiHeaders()`.
+
+    A multipart upload cannot use the JSON `Content-Type` `apiHeaders()`
+    sets by default, so it builds the object, deletes that one key and
+    passes it by name. That is a credentialed call, and reading only the
+    call site cannot tell it from an uncredentialed one — the branding
+    asset upload was reported as a bare fetch while carrying the bearer
+    token the whole time.
+
+    Deliberately narrow. The name has to be bound to `apiHeaders(` in this
+    file: a `headers` built any other way is still a finding, which is what
+    stops this from becoming "a variable called headers counts as auth".
+    """
+    for match in _HEADERS_BY_NAME.finditer(options_text):
+        name = match.group("named") or "headers"
+        definition = _definition_of(source, name)
+        if definition and _carries_credential(definition):
+            return True
+    return False
+
+
 def _definition_of(source: str, name: str) -> str | None:
     """The text of a `const name = ...` or `function name(...)` in this file.
 
@@ -403,7 +431,7 @@ def inspect(root: pathlib.Path) -> Report:
                 continue
             calls += 1
             options = ",".join(parts[1:])
-            if _carries_credential(options):
+            if _carries_credential(options) or _credential_through_a_variable(options, source):
                 continue
             reason = _allowlist_reason(rel, url)
             if reason is not None:
@@ -553,6 +581,26 @@ def self_test_cases() -> tuple[Case, ...]:
         Case(
             "credentials: 'include', which sends cookies the API never reads",
             "export async function go() {\n  await fetch('/api/v1/compliance/soc2/export', { credentials: 'include' });\n}\n",
+            "bare-fetch",
+        ),
+        # The two halves of reading `headers` as a name. A multipart upload
+        # has to build the object and drop the JSON Content-Type, so it
+        # cannot write `apiHeaders()` at the call site — and the exemption
+        # is only safe because the name has to be bound to `apiHeaders(`.
+        Case(
+            "headers passed by name, bound to apiHeaders() — credentialed",
+            "import { apiHeaders } from '@/lib/api';\n"
+            "export async function go(file: File) {\n"
+            "  const headers = apiHeaders();\n"
+            "  delete headers['Content-Type'];\n"
+            "  await fetch('/api/v1/branding/assets/logo', { method: 'POST', headers, body: f });\n}\n",
+            None,
+        ),
+        Case(
+            "headers passed by name, bound to anything else — still a finding",
+            "export async function go(file: File) {\n"
+            "  const headers = { 'X-Tenant-Id': t };\n"
+            "  await fetch('/api/v1/branding/assets/logo', { method: 'POST', headers, body: f });\n}\n",
             "bare-fetch",
         ),
         Case(

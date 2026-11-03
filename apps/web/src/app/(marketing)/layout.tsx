@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { velvetFontVariables } from '@/lib/marketing-fonts';
+import { velvetFontVariables, VELVET_FONT_PRELOADS } from '@/lib/marketing-fonts';
+import { FontPreloads } from '@/components/fonts/FontPreloads';
 import { StickyNav } from '@/components/landing/sections/StickyNav';
 import { Footer } from '@/components/landing/sections/Footer';
 
@@ -48,6 +49,7 @@ export default function MarketingLayout({ children }: { children: ReactNode }) {
       data-theme="dark"
       className={`velvet-root relative min-h-screen bg-velvet-surface-base font-velvet-body text-velvet-content-primary ${velvetFontVariables}`}
     >
+      <FontPreloads hrefs={VELVET_FONT_PRELOADS} />
       <StickyNav />
       {children}
       <Footer />
