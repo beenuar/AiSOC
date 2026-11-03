@@ -167,9 +167,11 @@ const config: Config = {
         sans: ['var(--font-inter)', 'system-ui', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
         // VelvetEdge marketing typography — opt-in only. Console chrome keeps
-        // Inter / JetBrains Mono. Loaded via `next/font/google` from the
-        // landing `page.tsx` and `(marketing)/layout.tsx` so console pages
-        // don't pay the network cost.
+        // Inter / JetBrains Mono. The `--font-velvet-*` variables are declared
+        // by the `font-velvet-vars` class, which only the landing `page.tsx`
+        // and `(marketing)/layout.tsx` apply, so console pages neither declare
+        // them nor preload the faces. All five families are self-hosted from
+        // `apps/web/public/fonts` — see `src/fonts/fonts.css`.
         'velvet-display': [
           'var(--font-velvet-display)',
           'ui-serif',

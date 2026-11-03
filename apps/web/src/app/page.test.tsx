@@ -30,10 +30,12 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }));
 
-// `next/font/google` executes only under the Next compiler, and the four
-// eagerly-imported sections are client components this test never renders
-// (the dynamic ones are already lazy). Same pattern as not-found.test.tsx.
-vi.mock('@/lib/marketing-fonts', () => ({ __esModule: true, velvetFontVariables: '' }));
+// The four eagerly-imported sections are client components this test never
+// renders (the dynamic ones are already lazy). Same pattern as
+// not-found.test.tsx. `@/lib/marketing-fonts` used to be mocked alongside
+// them because it called `next/font/google`, which only executes under the
+// Next compiler; the fonts are self-hosted now, so it is a plain module and
+// the test exercises the real one.
 vi.mock('@/components/landing/sections/StickyNav', () => ({ __esModule: true, StickyNav: () => null }));
 vi.mock('@/components/landing/sections/Hero', () => ({ __esModule: true, Hero: () => null }));
 vi.mock('@/components/landing/sections/ProofStrip', () => ({ __esModule: true, ProofStrip: () => null }));

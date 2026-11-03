@@ -141,6 +141,31 @@ const nextConfig = {
     ];
   },
 
+  // ─── Static asset caching ────────────────────────────────────────────────
+  //
+  // Self-hosted webfonts live in `public/fonts` rather than going through
+  // the bundler, because the `<link rel="preload">` tags need a stable URL
+  // to name. `public/` is served with `Cache-Control: public, max-age=0`,
+  // which would have browsers revalidate ~780 KB of fonts on every visit —
+  // whereas the `_next/static/media` path `next/font` used is immutable.
+  //
+  // Every filename carries a hash of its own bytes (see
+  // scripts/fetch_web_fonts.py), so a changed font is a changed URL and
+  // caching it forever cannot serve a stale face.
+  async headers() {
+    return [
+      {
+        source: '/fonts/:file*.woff2',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable',
+          },
+        ],
+      },
+    ];
+  },
+
   // ─── Same-origin proxy rules ─────────────────────────────────────────────
   //
   // Order matters: more specific paths (contextual, realtime healthz) must
