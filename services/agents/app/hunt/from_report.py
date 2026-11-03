@@ -161,11 +161,15 @@ async def fetch_report(
         # `safe_url` is the guard's return value, not the caller's string:
         # `validate_outbound_url` above has enforced the scheme allow-list,
         # resolved the hostname and refused every private and cloud-metadata
-        # address. The taint tracker does not follow that helper across the
-        # function boundary, so the suppression rides the reported line
-        # itself — scoped there, so any *other* request in this module built
-        # from a caller-supplied value is still reported.
-        async with client.stream("GET", safe_url, timeout=timeout) as response:  # codeql[py/full-ssrf]
+        # address, and the redirects that would introduce a URL it never saw
+        # are off. CodeQL's `py/full-ssrf` reports this anyway: the tracker
+        # does not follow that helper across the function boundary, which is
+        # the recorded behaviour of this query family here. An inline
+        # `codeql[...]` marker on this line had no effect, so the alert is
+        # dismissed as a false positive with the reasoning on the alert —
+        # the same disposition as the identical finding on
+        # `services/api/app/services/llm_model_discovery.py`.
+        async with client.stream("GET", safe_url, timeout=timeout) as response:
             if response.status_code >= 400:
                 raise ReportFetchError(f"the report URL answered {response.status_code}")
             async for chunk in response.aiter_bytes():
