@@ -45,7 +45,14 @@ import sys
 import tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root  # noqa: E402
+
+#: The tree git says we are in, not whatever sits two levels above this
+#: file. A gate run from a copied `scripts/` directory would otherwise
+#: judge a tree it never opened.
+ROOT = repo_root()
 
 AGENTS_APP = ROOT / "services" / "agents" / "app"
 PEER_TOKENS = AGENTS_APP / "security" / "peer_tokens.py"

@@ -56,7 +56,14 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import repo_root  # noqa: E402
+
+#: The tree git says we are in, not whatever sits two levels above this
+#: file. A gate run from a copied `scripts/` directory would otherwise
+#: judge a tree it never opened.
+ROOT = repo_root()
 
 #: A router-level dependency that looks like authentication.
 _AUTH_HINT = re.compile(r"require_|auth|principal|current_user", re.I)
@@ -122,11 +129,17 @@ def _binds_principal(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     return False
 
 
+def _parse(path: Path) -> ast.Module | None:
+    try:
+        return ast.parse(path.read_text(encoding="utf-8"))
+    except (SyntaxError, UnicodeDecodeError):
+        return None
+
+
 def unbound_routes(path: Path) -> list[Route]:
     """Routes on an authenticated router that declare no principal."""
-    try:
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-    except (SyntaxError, UnicodeDecodeError):
+    tree = _parse(path)
+    if tree is None:
         return []
 
     routers = _authenticated_routers(tree)
@@ -154,18 +167,47 @@ def unbound_routes(path: Path) -> list[Route]:
     return found
 
 
+class EmptyRead(RuntimeError):
+    """The corpus this gate judges was not there.
+
+    "Found nothing" and "scanned nothing" are the same word on a terminal and
+    opposite facts, which is how a gate comes to credit a tree it never
+    opened. Every mode raises this rather than reporting a clean bill over an
+    empty read.
+    """
+
+
 def scan(root: Path = ROOT) -> dict[str, list[Route]]:
+    """Unbound routes per module, raising when there was nothing to scan."""
     out: dict[str, list[Route]] = {}
+    scanned = 0
+    routed = 0
     for path in sorted(root.glob("services/*/app/**/*.py")):
+        scanned += 1
         rel = str(path.relative_to(root))
+        tree = _parse(path)
+        if tree is not None and _authenticated_routers(tree):
+            routed += 1
         routes = unbound_routes(path)
         if routes:
             out[rel] = routes
+
+    if scanned == 0:
+        raise EmptyRead(f"no Python file under {root}/services/*/app — nothing was judged")
+    if routed == 0:
+        raise EmptyRead(
+            f"{scanned} file(s) under {root}/services/*/app and not one declares an "
+            "authenticated router, so this gate had no corpus to measure"
+        )
     return out
 
 
 def run(root: Path = ROOT) -> tuple[list[str], int]:
-    """Problems, and the number of unbound routes outside the strict modules."""
+    """Problems, and the number of unbound routes outside the strict modules.
+
+    Raises :class:`EmptyRead` when there was no corpus; the caller turns that
+    into a refusal, never into a pass.
+    """
     found = scan(root)
     problems: list[str] = []
 
@@ -252,6 +294,20 @@ def _self_test() -> int:
         )
         expect("router with no auth dependency is out of scope", bool(unbound_routes(probe)), False)
 
+    # An empty tree must refuse, not pass. This is the defect the repository's
+    # own gate-coverage meta-check found in the first cut of this file:
+    # `--report` exited 0 inside a bare repository, so "found nothing" and
+    # "scanned nothing" were the same answer.
+    with tempfile.TemporaryDirectory() as tmp:
+        empty = Path(tmp)
+        (empty / "services" / "api" / "app").mkdir(parents=True)
+        try:
+            scan(empty)
+        except EmptyRead:
+            expect("an empty tree is refused", True, True)
+        else:
+            expect("an empty tree is refused", False, True)
+
     # The real tree, and the pre-fix shape re-created in it.
     problems, elsewhere = run()
     expect("current tree is clean", bool(problems), False)
@@ -276,14 +332,23 @@ def main() -> int:
         return _self_test()
 
     if args.report:
-        for module, routes in sorted(scan().items()):
+        try:
+            found = scan()
+        except EmptyRead as empty:
+            print(f"REFUSED — {empty}")
+            return 1
+        for module, routes in sorted(found.items()):
             tier = "STRICT" if module in STRICT else "ratchet"
             for r in routes:
                 exempt = " (exempt)" if r.function in STRICT.get(module, {}) else ""
                 print(f"{tier:8} {module}:{r.lineno} {r.function}(){exempt}")
         return 0
 
-    problems, elsewhere = run()
+    try:
+        problems, elsewhere = run()
+    except EmptyRead as empty:
+        print(f"REFUSED — {empty}")
+        return 1
     if problems:
         print("FAIL — a route authenticates its caller and never binds them:")
         for p in problems:
