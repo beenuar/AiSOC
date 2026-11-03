@@ -75,8 +75,7 @@ _VERBS = {"get", "post", "put", "patch", "delete"}
 STRICT: dict[str, dict[str, str]] = {
     "services/agents/app/api/playbooks.py": {
         "draft_playbook_from_nl": (
-            "turns a prompt into an unsaved draft; reads no stored state and writes none, "
-            "so there is no tenant to compare against"
+            "turns a prompt into an unsaved draft; reads no stored state and writes none, so there is no tenant to compare against"
         ),
     },
     "services/agents/app/api/hunts.py": {
@@ -194,10 +193,7 @@ def run(root: Path = ROOT) -> tuple[list[str], int]:
     elsewhere = sum(len(routes) for module, routes in found.items() if module not in STRICT)
     if elsewhere > MAX_UNBOUND_ELSEWHERE:
         offenders = "\n".join(
-            f"      {module}:{r.lineno} {r.function}()"
-            for module, routes in sorted(found.items())
-            if module not in STRICT
-            for r in routes
+            f"      {module}:{r.lineno} {r.function}()" for module, routes in sorted(found.items()) if module not in STRICT for r in routes
         )
         problems.append(
             f"{elsewhere} unbound routes outside the strict modules, ceiling {MAX_UNBOUND_ELSEWHERE}. "
@@ -252,11 +248,7 @@ def _self_test() -> int:
         expect("principal bound by annotation only", bool(unbound_routes(probe)), False)
 
         probe.write_text(
-            "from fastapi import APIRouter\n"
-            "router = APIRouter()\n"
-            "@router.get('/public')\n"
-            "async def public() -> dict:\n"
-            "    return {}\n"
+            "from fastapi import APIRouter\nrouter = APIRouter()\n@router.get('/public')\nasync def public() -> dict:\n    return {}\n"
         )
         expect("router with no auth dependency is out of scope", bool(unbound_routes(probe)), False)
 
