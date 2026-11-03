@@ -41,6 +41,16 @@ jobs:
     name: Governance permits, refuses, and never leaks a refusal to the vendor
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # This proof owns its loopback vendor fixture, and `services/actions`
+      # now refuses a caller-named internal destination before the executor
+      # runs (GHSA-78jg-x2ch-638f). Without the exception every dispatch here
+      # is refused at the guard, which keeps the suite green while making it
+      # vacuous: the positive control stops reaching a socket and the
+      # governance negative control below stops going red. Keep the exception
+      # exact — AISOC_SSRF_ALLOW_PRIVATE intentionally cannot admit loopback,
+      # and the metadata blocklist takes precedence over this allowlist.
+      AISOC_SSRF_ALLOW_HOSTS: 127.0.0.1
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 

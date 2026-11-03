@@ -195,14 +195,16 @@ async def resolve_playbook_references(
     service, which is an authenticated internal peer holding the service
     token, and are used for exactly one request. The engine records header
     *names* in the run result, never values — the run record is readable by
-    anyone with access to the case.
-
-    That sentence is now enforced rather than asserted: the resolver is
-    :func:`_resolve_reference_caller`, which serves the service peer and
-    nobody else. It used to be ``_resolve_caller``, which also admits a
-    session, so the claim above was false for every holder of
-    ``actions:execute`` (GHSA-c5qq-vhf5-wjqc).
+    anyone with access to the case. A session is never served here, whatever
+    permissions it holds.
     """
+    # That last sentence is enforced by `_resolve_reference_caller` rather
+    # than merely asserted here. It used to read `_resolve_caller`, which
+    # also admits a session holding `actions:execute` — so the paragraph
+    # above was false for every `soc_analyst` on the platform
+    # (GHSA-c5qq-vhf5-wjqc). The reasoning lives on that function; this
+    # docstring is published as the operation's description in
+    # `docs/openapi.yaml`, so it stays about what the route does.
     tenant_id = _resolve_reference_caller(body.tenant_id, user, x_aisoc_service_token)
     try:
         references = await playbook_references.resolve(db, tenant_id=tenant_id, names=list(body.names))

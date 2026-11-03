@@ -167,7 +167,29 @@ def _env(actions_service):  # noqa: ANN001
     os.environ["DATABASE_URL"] = os.environ["ISOLATION_STEP_DISPATCH_DSN"].strip()
     os.environ.pop("AISOC_DEV_MODE", None)
     os.environ.pop("AISOC_DEV_AUTH_BYPASS", None)
+
+    # The environment alone is not enough, and the failure it produces points
+    # at the wrong thing. `Settings` reads the environment once, at import of
+    # `app.core.config`, and another live module in the same pytest process
+    # may already have imported it — after which setting these variables here
+    # changes nothing. `actions_client` then presents an empty token, the
+    # actions service answers 401, and the dispatch report reads "Could not
+    # reach the action registry", which sends a reader to debug a service that
+    # is running perfectly. Both are read off the settings object per call, so
+    # assigning them is what actually takes effect.
+    from app.core.config import settings
+
+    settings_previous = {
+        "AISOC_ACTIONS_SERVICE_TOKEN": settings.AISOC_ACTIONS_SERVICE_TOKEN,
+        "AISOC_ACTIONS_BASE_URL": settings.AISOC_ACTIONS_BASE_URL,
+    }
+    settings.AISOC_ACTIONS_SERVICE_TOKEN = ACTIONS_TOKEN
+    settings.AISOC_ACTIONS_BASE_URL = actions_service
+
     yield
+
+    for name, value in settings_previous.items():
+        setattr(settings, name, value)
     for key, value in previous.items():
         if value is None:
             os.environ.pop(key, None)
