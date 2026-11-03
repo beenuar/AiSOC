@@ -65,7 +65,17 @@ pytestmark = [
 
 
 async def _seed(conn, tenant_id: uuid.UUID) -> None:
-    """One tenant, one asset, one CVE whose patch window closed yesterday."""
+    """One tenant, one asset, one CVE whose patch window closed yesterday.
+
+    Binds the tenant first. These tests run as the **runtime** role, not the
+    owner: a superuser ignores every RLS policy in the schema even under
+    FORCE ROW LEVEL SECURITY, so seeding as the owner is the exact workaround
+    that has hidden policy defects in this repository before.
+    """
+    await conn.execute(
+        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+        {"tid": str(tenant_id)},
+    )
     await conn.execute(
         text(
             """
@@ -113,7 +123,7 @@ async def test_the_promotion_sweep_creates_an_alert() -> None:
 
         async with engine.begin() as conn:
             await conn.execute(
-                text("SELECT set_config('aisoc.tenant_id', :tid, true)"),
+                text("SELECT set_config('app.current_tenant_id', :tid, true)"),
                 {"tid": str(tenant_id)},
             )
             await conn.execute(text(MARK_OVERDUE_SQL), {"tenant_id": tenant_id})
@@ -149,7 +159,7 @@ async def test_the_promotion_sweep_creates_an_alert() -> None:
 
         async with engine.begin() as conn:
             await conn.execute(
-                text("SELECT set_config('aisoc.tenant_id', :tid, true)"),
+                text("SELECT set_config('app.current_tenant_id', :tid, true)"),
                 {"tid": str(tenant_id)},
             )
             alert = (
@@ -173,6 +183,10 @@ async def test_the_promotion_sweep_creates_an_alert() -> None:
         assert "patch-window" in tags_json
     finally:
         async with engine.begin() as conn:
+            await conn.execute(
+                text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+                {"tid": str(tenant_id)},
+            )
             await conn.execute(text("DELETE FROM tenants WHERE id = CAST(:tid AS uuid)"), {"tid": str(tenant_id)})
         await engine.dispose()
 
@@ -194,7 +208,7 @@ async def test_the_cast_spelling_is_the_fault_not_the_connection() -> None:
 
         async with engine.begin() as conn:
             await conn.execute(
-                text("SELECT set_config('aisoc.tenant_id', :tid, true)"),
+                text("SELECT set_config('app.current_tenant_id', :tid, true)"),
                 {"tid": str(tenant_id)},
             )
             control = await conn.execute(
@@ -219,6 +233,10 @@ async def test_the_cast_spelling_is_the_fault_not_the_connection() -> None:
             )
     finally:
         async with engine.begin() as conn:
+            await conn.execute(
+                text("SELECT set_config('app.current_tenant_id', :tid, true)"),
+                {"tid": str(tenant_id)},
+            )
             await conn.execute(text("DELETE FROM tenants WHERE id = CAST(:tid AS uuid)"), {"tid": str(tenant_id)})
         await engine.dispose()
 

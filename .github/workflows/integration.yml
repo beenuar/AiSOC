@@ -804,7 +804,12 @@ jobs:
       - name: Patch-window promotion statements against real Postgres
         working-directory: services/connectors
         env:
-          AISOC_TEST_POSTGRES: postgresql+asyncpg://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+          # The RUNTIME role, not the owner. A superuser ignores every RLS
+          # policy in the schema even under FORCE ROW LEVEL SECURITY, and
+          # seeding as the owner is the exact workaround that has hidden
+          # policy defects here before — `check_runtime_db_role.py` fails a
+          # workflow that points a test DSN at the superuser.
+          AISOC_TEST_POSTGRES: postgresql+asyncpg://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
         run: |
           set -euo pipefail
           python3 -m venv $RUNNER_TEMP/.venv-connectors

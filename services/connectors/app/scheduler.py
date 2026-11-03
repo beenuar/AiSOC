@@ -1301,11 +1301,18 @@ class ConnectorScheduler:
         for tenant_id in tenants:
             try:
                 async with self._engine.begin() as conn:
-                    # The connector role reads with current_tenant_id() NULL;
-                    # bind it per statement so the RLS policies on
-                    # asset_vulnerabilities / alerts apply to this tenant.
+                    # Bind the tenant so the RLS policies on
+                    # asset_vulnerabilities / alerts apply to this sweep.
+                    #
+                    # The setting is `app.current_tenant_id`, which is what
+                    # `current_tenant_id()` reads. This said `aisoc.tenant_id`,
+                    # a name no policy consults, so the bind did nothing and
+                    # every statement here passed on the policies' permissive
+                    # `OR current_tenant_id() IS NULL` arm instead — a comment
+                    # asserting a property the code did not have, over a sweep
+                    # that writes to `alerts`.
                     await conn.execute(
-                        text("SELECT set_config('aisoc.tenant_id', :tid, true)"),
+                        text("SELECT set_config('app.current_tenant_id', :tid, true)"),
                         {"tid": str(tenant_id)},
                     )
                     overdue = (await conn.execute(text(MARK_OVERDUE_SQL), {"tenant_id": tenant_id})).rowcount
