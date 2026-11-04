@@ -186,6 +186,32 @@ startCommand = "python -m app.scripts.seed_demo"
 
 Or skip it for personal evaluation deploys.
 
+## Session signing key
+
+`railway.toml` sets `ENVIRONMENT = "demo"` and does not set `SECRET_KEY`,
+because a value written here would be one every reader of this repository
+could use to forge a session on your deployment. That is what used to happen:
+the published default was accepted on a `demo` boot, so any Railway deploy
+following this guide signed its tokens with a string anyone can read
+(GHSA-m57m-6p4p-cq6p).
+
+The API now generates a signing key per process when the environment is
+`demo` and no real `SECRET_KEY` is configured, and says so at boot. Two
+consequences worth knowing:
+
+- **Sessions end at every restart or redeploy.** Sign in again; nothing else
+  is affected, and the demo reseeds on deploy anyway.
+- **More than one replica needs a real key.** Each replica would generate its
+  own, so a token minted by one is rejected by the next. Set `SECRET_KEY` in
+  the Railway dashboard (any 32+ random characters, e.g.
+  `python -c "import secrets; print(secrets.token_urlsafe(48))"`) before
+  scaling the api service past one instance.
+
+Set `SECRET_KEY` for any deployment you intend to keep, and set
+`ENVIRONMENT=production` once it stops being a demo — production refuses to
+boot on a placeholder rather than generating one, which is the right answer
+when sessions have to survive a restart.
+
 ## Troubleshooting
 
 ### "Web service can't reach api"
