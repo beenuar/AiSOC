@@ -30,6 +30,7 @@ it cannot pass as one: the capacity case asserts back-pressure, not headroom.
 
 from __future__ import annotations
 
+import errno
 import json
 import uuid
 
@@ -241,6 +242,36 @@ async def test_an_extended_outage_drains_when_the_store_returns(tmp_path):
 
     assert len(up.inserted) == 12
     assert writer.metrics()["spool_rows"] == 0, "a drained backlog must leave the spool"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_number", [errno.EBADF, errno.ENOTCONN, errno.EPIPE])
+async def test_socket_errno_keeps_the_spool_replayable(tmp_path, error_number):
+    class BrokenSocket:
+        def execute(self, sql, rows=None, **kwargs):
+            raise OSError(error_number, "native transport failed")
+
+    down, up = BrokenSocket(), _UpClickHouse()
+    client = {"current": down}
+    writer = LakeWriter(
+        host="unused",
+        client_factory=lambda: client["current"],
+        spool_dir=str(tmp_path / "spool"),
+        batch_size=100,
+        max_data_failures=2,
+        reconnect_base_seconds=0,
+        reconnect_max_seconds=0,
+    )
+    await writer.start()
+    assert await writer.write_event(_event())
+    for _ in range(3):
+        await writer.flush()
+    assert writer.metrics()["quarantined_rows"] == 0
+    assert writer.metrics()["spool_rows"] == 1
+    client["current"] = up
+    await writer.flush()
+    assert len(up.inserted) == 1
+    assert writer.metrics()["spool_rows"] == 0
 
 
 @pytest.mark.asyncio

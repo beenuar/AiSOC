@@ -792,6 +792,7 @@ class FusedAlertTriageWorker:
         decision = governor.check(str(state.tenant_id), fingerprint)
 
         tier: str
+        verdict: str | None
         # None, not 0.0: a cached or deterministic verdict placed no LLM call,
         # and "no call was made" is a different fact from "the call was free".
         cost: CostSummary = CostSummary()
@@ -802,8 +803,18 @@ class FusedAlertTriageWorker:
         # happened.
         if decision.decision is Decision.DEDUPLICATED and decision.cached_verdict and writer.uses_dedup_cache:
             _METRICS["deduplicated"] += 1
-            verdict = decision.cached_verdict.get("verdict")
-            confidence = float(decision.cached_verdict.get("confidence", 0.0))
+            verdict = normalize_disposition(decision.cached_verdict.get("verdict"), default=NEEDS_REVIEW)
+            confidence = max(0.0, min(1.0, float(decision.cached_verdict.get("confidence") or 0.0)))
+            # Persistence and source writeback read the state, not these locals.
+            # A cached verdict never carries authorization to close this alert.
+            state.verdict = verdict
+            state.confidence = confidence
+            state.status = AgentStatus.RUNNING
+            state.confidence_basis = [
+                f"Cached prior assessment: {verdict}; confidence={confidence:.2f}. "
+                "The evidence fingerprint matched a previous assessment; no new model call was made. "
+                "This is not evidence of remediation or authorization to close the alert."
+            ]
             tier = "cached"
         else:
             cfg = await self._resolve_tenant_llm(state.tenant_id)
