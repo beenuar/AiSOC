@@ -13,12 +13,17 @@ work) and the live ``tenants`` table:
   triage view. Supports a couple of optional filters (``q=`` on slug or
   name, ``managed_only=`` to scope to managed-instance tenants).
 
-Both endpoints are admin-only. We reuse the same permission resolution
-the rest of the API uses (``has_permission_db``) and gate on a new
-``admin:tenants`` permission, falling back to ``settings:write`` for
-operators whose RBAC rows have not been migrated to the new permission
-yet. The fallback keeps existing admins unblocked while the seed-data
-migration that introduces ``admin:tenants`` lands separately.
+Both endpoints are deployment-wide rather than tenant-scoped, so they
+gate on ``admin:tenants`` and on nothing else, resolved through the same
+``has_permission_db`` the rest of the API uses. Only the wildcard roles
+hold that permission; no tenant-scoped role does.
+
+There was a ``settings:write`` fallback here "until the seed migration
+lands". It never landed, so ``admin:tenants`` did not exist, no role could
+resolve it, and the fallback was the only reachable branch -- handing every
+tenant administrator on the deployment a list of every tenant
+(GHSA-6cwm-cx8p-h7f5). Migration 159 seeds the permission and the fallback
+is gone.
 
 Everything in this file is endpoint glue: validation, auth, response
 shaping. The actual provisioning *logic* lives in
@@ -145,7 +150,7 @@ async def _require_admin(user: AuthUser, db: AsyncSession) -> None:
     provision new ones, neither of which is scoped to their own
     (GHSA-6cwm-cx8p-h7f5).
 
-    Migration 158 seeds the permission, so the fallback has nothing left to
+    Migration 159 seeds the permission, so the fallback has nothing left to
     cover. A deployment-wide route takes a deployment-wide permission; the
     wildcard roles hold it and no tenant-scoped role does.
     """
