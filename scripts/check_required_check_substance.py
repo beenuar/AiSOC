@@ -617,7 +617,30 @@ def index_workflows(root: Path, contexts: list[str], branch: str) -> tuple[dict[
 # ── Actions API ────────────────────────────────────────────────────────────
 
 
+#: Statuses GitHub returns when its own side is briefly unwell. They say
+#: nothing about the request, so they are retried; 401/403/404 are durable
+#: answers about this token or this resource and are raised immediately.
+_TRANSIENT_STATUS = frozenset({500, 502, 503, 504})
+_GET_ATTEMPTS = 4
+
+
 def _get(url: str, token: str) -> dict:
+    """One Actions API read, retried only while the failure is transient.
+
+    The Actions API intermittently answers **502** from inside a workflow,
+    and a single attempt turned that into `FAIL: could not read runs for
+    ci.yml`, reddening this gate on `main` for a reason no commit caused and
+    no author could act on. The same endpoint answered 200 three times in a
+    row from outside the runner at the same moment, which is what identified
+    it as GitHub's side rather than a bad query.
+
+    Retrying does not weaken the refusal. "Could not read" still fails after
+    the attempts are spent, and it still fails *immediately* on a durable
+    answer -- a 403 from a token without the scope must not be waited on, it
+    must be reported. The distinction is the point: an unknown that resolves
+    on a retry was never an unknown, and an unknown that persists is still
+    not a pass.
+    """
     if not url.startswith(API + "/"):
         raise GateError(f"refusing to call a non-GitHub URL: {url}")
     req = urllib.request.Request(  # noqa: S310 - refused above unless it is the GitHub API
@@ -629,8 +652,23 @@ def _get(url: str, token: str) -> dict:
             "User-Agent": "aisoc-grading-integrity/1.0",
         },
     )
-    with urllib.request.urlopen(req, timeout=45) as resp:  # noqa: S310
-        return json.loads(resp.read().decode("utf-8"))
+    last: Exception | None = None
+    for attempt in range(1, _GET_ATTEMPTS + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=45) as resp:  # noqa: S310
+                return json.loads(resp.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            if exc.code not in _TRANSIENT_STATUS:
+                raise
+            last = exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            last = exc
+        if attempt < _GET_ATTEMPTS:
+            # Short and bounded: this runs inside a job, and a gate that
+            # hangs on a sick API is its own outage.
+            time.sleep(2**attempt)
+    assert last is not None
+    raise last
 
 
 def fetch_protection_contexts(repo: str, token: str, branch: str) -> list[str] | None:
