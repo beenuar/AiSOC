@@ -47,9 +47,11 @@ from typing import Any
 # test loads it by path with importlib. gate_toolkit sits beside it either way.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from gate_toolkit import repo_root, self_test_if_requested
+from gate_toolkit import repo_root, self_test_main, verdict_args
 
-self_test_if_requested(__file__)
+# Not `self_test_if_requested` at import time: the detector below has to be
+# defined before the self-test can exercise it, and proving the empty-tree
+# refusal alone would say nothing about the arm that was missing.
 
 REPO_ROOT = repo_root()
 REGISTRY_FILE = REPO_ROOT / "services" / "connectors" / "app" / "connectors" / "__init__.py"
@@ -224,6 +226,72 @@ def reconcile_prose(count: int, *, check_only: bool) -> list[str]:
     return drift
 
 
+# ── Console/marketing surfaces that *render* the count ────────────────────────
+#
+# `COUNT_BEARING_FILES` above reconciles prose in markdown. It was written for
+# the README phrase and extended file by file, and it never looked at a `.tsx`
+# — which is how `landing/Hero.tsx` and `onboarding/StartHero.tsx` both came to
+# render a hardcoded `value="26"` against a registry of 91, the latter 35 lines
+# below a correct dynamic use of `CONNECTOR_COUNT` in the same file.
+#
+# A generated-count gate has to enumerate the surfaces that render the figure,
+# not just the one it was written for. This arm reads every component under
+# `apps/web/src` and refuses a numeric literal rendered as a connector count.
+
+WEB_SRC = REPO_ROOT / "apps" / "web" / "src"
+
+#: A JSX prop or text node holding a bare number, e.g. `value="26"` or `>26<`.
+_LITERAL_NUMBER = re.compile(r"""(?:value=\{?["']?(?P<attr>\d{1,4})["']?\}?|>\s*(?P<text>\d{1,4})\s*<)""")
+
+#: How far either side of the literal we look for the word that makes it a
+#: connector claim. One JSX element's worth, not a whole file.
+_CONNECTOR_CONTEXT = 160
+
+#: Files whose numeric literals near the word "connector" are something else.
+#: Deliberately tiny -- an allowlist is how a gate stops being a gate.
+_LITERAL_EXEMPT: dict[str, str] = {
+    # Test fixtures assert against fixed counts on purpose.
+}
+
+
+def _tsx_sources() -> list[Path]:
+    if not WEB_SRC.is_dir():
+        return []
+    return sorted(p for p in WEB_SRC.rglob("*.tsx") if ".test." not in p.name and "/node_modules/" not in p.as_posix())
+
+
+def check_rendered_counts() -> list[str]:
+    """Refuse a connector count typed into a component.
+
+    Returns one line per offending site. Fails loudly on an empty scan: a
+    gate that walks zero files finds zero violations, and that is
+    indistinguishable from a broken glob.
+    """
+    files = _tsx_sources()
+    if not files:
+        where = WEB_SRC.relative_to(REPO_ROOT) if WEB_SRC.is_relative_to(REPO_ROOT) else WEB_SRC
+        return [f"{where}: scanned no .tsx at all — wrong tree, or a broken glob"]
+
+    problems: list[str] = []
+    for path in files:
+        rel = path.relative_to(REPO_ROOT).as_posix() if path.is_relative_to(REPO_ROOT) else path.name
+        if rel in _LITERAL_EXEMPT:
+            continue
+        text = path.read_text(encoding="utf-8")
+        for match in _LITERAL_NUMBER.finditer(text):
+            literal = match.group("attr") or match.group("text")
+            start = max(0, match.start() - _CONNECTOR_CONTEXT)
+            window = text[start : match.end() + _CONNECTOR_CONTEXT].lower()
+            if "connector" not in window:
+                continue
+            line = text.count("\n", 0, match.start()) + 1
+            problems.append(
+                f"{rel}:{line}: renders a hardcoded connector count ({literal}); "
+                "import CONNECTOR_COUNT from '@/data/connectorCount' instead"
+            )
+    return problems
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -249,6 +317,8 @@ def main(argv: list[str]) -> int:
         write_outputs(payload)
 
     drift.extend(reconcile_prose(count, check_only=args.check))
+    # Components render the figure too, and nothing was checking them.
+    drift.extend(check_rendered_counts())
 
     if drift:
         print(f"connector-count drift detected (registry={count}):", file=sys.stderr)
@@ -256,9 +326,54 @@ def main(argv: list[str]) -> int:
             print(f"  - {line}", file=sys.stderr)
         return 1
 
-    print(f"connector-count OK — {count} registered, {len(payload['categories'])} categories")
+    print(
+        f"connector-count OK — {count} registered, {len(payload['categories'])} categories, "
+        f"{len(_tsx_sources())} component(s) carry no hardcoded count"
+    )
     return 0
 
 
+def _self_test() -> int:
+    """Prove the component arm catches the shape that shipped.
+
+    The probes are the real ones: a `<Stat label="Connectors" value="26">`
+    that `COUNT_BEARING_FILES` could never see, and the two things that must
+    keep passing -- a dynamic use of the constant, and a number that happens
+    to sit near a word with no connector in it.
+    """
+    import tempfile
+
+    global WEB_SRC
+    original = WEB_SRC
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            WEB_SRC = Path(tmp)
+            (WEB_SRC / "Bad.tsx").write_text('<Stat label="Connectors" value="26" caption="EDR, SIEM" />', encoding="utf-8")
+            caught = bool(check_rendered_counts())
+
+            (WEB_SRC / "Bad.tsx").unlink()
+            (WEB_SRC / "Good.tsx").write_text('<Stat label="Connectors" value={String(CONNECTOR_COUNT)} />', encoding="utf-8")
+            (WEB_SRC / "Unrelated.tsx").write_text('<Stat label="Eval harness" value="200" />', encoding="utf-8")
+            quiet = not check_rendered_counts()
+
+            for child in WEB_SRC.iterdir():
+                child.unlink()
+            refuses_empty = bool(check_rendered_counts())
+    finally:
+        WEB_SRC = original
+
+    return self_test_main(
+        Path(__file__).name,
+        verdict_args(Path(__file__)),
+        extra=[
+            ("detects a connector count typed into a component", caught),
+            ("leaves a dynamic use and an unrelated number alone", quiet),
+            ("refuses a scan that walked no components", refuses_empty),
+        ],
+    )
+
+
 if __name__ == "__main__":
+    if "--self-test" in sys.argv:
+        sys.exit(_self_test())
     sys.exit(main(sys.argv[1:]))

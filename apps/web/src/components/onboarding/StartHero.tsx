@@ -195,7 +195,11 @@ export function StartHero() {
           <DemoScreencast />
 
           <dl className="mt-12 grid grid-cols-4 gap-5 border-t border-white/5 pt-8">
-            <Stat label="Connectors" value="26" caption="EDR, SIEM, cloud, IAM, SaaS" />
+            <Stat
+              label="Connectors"
+              value={String(CONNECTOR_COUNT)}
+              caption="EDR, SIEM, cloud, IAM, SaaS"
+            />
             <Stat label="Agent decisions" value="Ledger" caption="prompt + tool + rationale per step" />
             <Stat label="Eval harness" value="200 cases" caption="runs in CI on every PR to main" />
             <Stat label="License" value="MIT" caption="audit, fork, self-host" />

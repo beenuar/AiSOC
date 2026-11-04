@@ -46,7 +46,9 @@ Per-stage definitions
 * **correlate** — multi-event correlation. ``backlog`` is the count of
   recent *single-event* alerts (``jsonb_array_length(source_event_ids)
   = 1``) in the window — alerts that haven't yet been merged into a
-  richer incident. ``p95_latency_ms`` is left at 0 (the fusion service
+  richer incident. That is a correlation *outcome* and not a queue depth,
+  so ``backlog`` is reported as unmeasured and the count travels in
+  ``detail``. ``p95_latency_ms`` is left at 0 (the fusion service
   doesn't emit per-correlation-job timing yet).
 
 * **alert** — alert visible to analyst. ``backlog`` is the open queue
@@ -384,13 +386,22 @@ async def _correlate_stage(
     else:
         status = "yellow"
 
+    # `backlog` is **not measured** here, and reporting the single-event
+    # count as one was the defect: the console rendered "Backlog 7" for a
+    # tenant whose queue was empty, because seven alerts had absorbed exactly
+    # one event each. That is a correlation outcome, not a queue depth, and
+    # fusion emits no per-correlation queue depth for this stage to read.
+    #
+    # The count still decides the status and is still worth showing, so it
+    # travels under `detail` where it says what it counts.
     return PipelineStage(
         stage="correlate",
-        backlog=int(single_event),
+        backlog=0,
         p95_latency_ms=0.0,
         error_rate=0.0,
         status=status,
-        unmeasured=["p95_latency_ms", "error_rate"],
+        unmeasured=["backlog", "p95_latency_ms", "error_rate"],
+        detail=(f"{int(single_event)} of {total} alert{'' if total == 1 else 's'} absorbed exactly one event" if total else None),
     )
 
 

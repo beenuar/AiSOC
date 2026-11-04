@@ -3124,6 +3124,12 @@ export interface PipelineStage {
    * full instrumentation.
    */
   unmeasured?: string[];
+  /**
+   * What the stage observed when the observation is not a backlog. The
+   * correlate stage reported its single-event alert count under `backlog`,
+   * so the strip read "Backlog 7" on a tenant with nothing queued.
+   */
+  detail?: string | null;
 }
 
 export interface PipelineHealth {

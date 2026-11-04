@@ -301,6 +301,29 @@ describe('PipelineHealth', () => {
   // `health.py`: "The SOC Console UI renders zeros as 'n/a' pills rather than
   // zero-bars so operators don't read absence as 'all good'." These are that
   // promise, asserted.
+  it('does not call the correlate observation a backlog', () => {
+    // "Backlog 7" told an operator seven items were queued; the seven were
+    // alerts that had each absorbed exactly one event. The count is still
+    // published — under a sentence that says what it counts.
+    swrData.set(PIPELINE_KEY, {
+      ...SAMPLE_PIPELINE,
+      stages: SAMPLE_PIPELINE.stages.map((s) =>
+        s.stage === 'correlate'
+          ? {
+              ...s,
+              backlog: 0,
+              unmeasured: ['backlog', 'p95_latency_ms', 'error_rate'],
+              detail: '7 of 9 alerts absorbed exactly one event',
+            }
+          : s,
+      ),
+    });
+
+    render(<PipelineHealth />);
+
+    expect(screen.getByText('7 of 9 alerts absorbed exactly one event')).toBeInTheDocument();
+  });
+
   it('renders a cell the endpoint could not measure as n/a, not as a number', () => {
     swrData.set(PIPELINE_KEY, SAMPLE_PIPELINE);
     render(<PipelineHealth />);

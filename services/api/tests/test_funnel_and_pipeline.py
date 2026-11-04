@@ -779,7 +779,15 @@ class TestFuseStage:
 
 
 class TestCorrelateStage:
-    """Correlation health: backlog = single-event alerts; status by mix."""
+    """Correlation health: status by mix, and `backlog` is **not** measured.
+
+    The single-event alert count used to be reported as `backlog`, so the
+    console rendered "Backlog 7" for a tenant with nothing queued -- seven
+    alerts had each absorbed exactly one event, which is a correlation
+    outcome and not a queue depth. Fusion emits no per-correlation queue
+    depth for this stage to read, so `backlog` is named in `unmeasured` and
+    the count travels in `detail` under its own description.
+    """
 
     @pytest.mark.asyncio
     async def test_no_alerts_returns_unknown(self) -> None:
@@ -798,6 +806,9 @@ class TestCorrelateStage:
         assert stage.stage == "correlate"
         assert stage.status == "unknown"
         assert stage.backlog == 0
+        # Nothing observed at all: no detail to publish, rather than a
+        # sentence about zero alerts.
+        assert stage.detail is None
 
     @pytest.mark.asyncio
     async def test_only_single_event_alerts_returns_yellow(self) -> None:
@@ -816,14 +827,16 @@ class TestCorrelateStage:
             window_end=now,
         )
         assert stage.status == "yellow"
-        assert stage.backlog == 7
+        assert stage.backlog == 0
+        assert "backlog" in stage.unmeasured, "the correlate stage does not declare its backlog unmeasured"
+        assert stage.detail == "7 of 7 alerts absorbed exactly one event"
 
     @pytest.mark.asyncio
     async def test_mixed_alerts_returns_green_with_backlog(self) -> None:
         from app.api.v1.endpoints.health import _correlate_stage
 
         db = MagicMock()
-        # 3 still-single + 2 already-correlated → green, backlog=3.
+        # 3 still-single + 2 already-correlated → green, detail "3 of 5".
         db.scalar = AsyncMock(side_effect=[3, 2])
         now = datetime.now(UTC)
         stage = await _correlate_stage(
@@ -833,7 +846,11 @@ class TestCorrelateStage:
             window_end=now,
         )
         assert stage.status == "green"
-        assert stage.backlog == 3
+        # The observation still reaches the console; it is simply no longer
+        # called a backlog. A fix that dropped the number would be worse than
+        # the label it replaced.
+        assert stage.backlog == 0
+        assert stage.detail == "3 of 5 alerts absorbed exactly one event"
 
 
 class TestAlertStage:
