@@ -95,15 +95,6 @@ ALLOWED_GLOBALS: dict[tuple[str, str], str] = {
         "Caches the parsed marketplace index, which is a file shipped in the image and "
         "identical for every tenant. Not state: a cold replica re-reads the same bytes."
     ),
-    (
-        "services/actions/app/api/router.py",
-        "_chatops_replied",
-    ): (
-        "Idempotency set for ChatOps replies, so a retried callback does not post twice. Per- "
-        "replica, which means a retry that lands on another replica can double-post; that is a "
-        "known weakness of the in-process form and belongs with the durable approval pause "
-        "(parity plan 5.2)."
-    ),
     # ── Real instances of the class, each named with where it closes ───────
     (
         "services/agents/app/api/router.py",

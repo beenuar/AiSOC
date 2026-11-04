@@ -98,11 +98,18 @@ def _build_bolt_app(api_client: AisocApiClient, actions_client: AisocActionsClie
         ignoring_self_events_enabled=True,
     )
 
+    # Refuse to build the app at all when signatures would not be verified on
+    # anything but an explicitly non-production environment. The warning below
+    # used to be the whole control, and a warning is a note about a
+    # deployment, not a thing that stops one (GHSA-vf98-8367-45mp, F02).
+    settings.require_signature_verification()
+
     if not settings.signature_verification_enabled:
         logger.warning(
             "slack_signing_secret_missing",
             note=(
-                "Bolt request-signature verification disabled — acceptable for local dev only. Set SLACK_SIGNING_SECRET before shipping."
+                "Bolt request-signature verification disabled — permitted only because ENVIRONMENT "
+                "names a development or test environment. Set SLACK_SIGNING_SECRET before shipping."
             ),
         )
     if not settings.SLACK_BOT_TOKEN:
