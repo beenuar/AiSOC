@@ -33,6 +33,7 @@ import Link from 'next/link';
 import useSWR from 'swr';
 import { clsx } from 'clsx';
 import { detectionApi, type DetectionCoverage, type DetectionCoverageCell } from '@/lib/api';
+import { displayTactic } from '@/lib/mitreTactics';
 import { EmptyState, EmptyStateIcons } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
@@ -260,7 +261,9 @@ function CoverageRow({ cell }: { cell: DetectionCoverageCell }) {
         </a>
         {cell.techniqueName && <span className="ml-2 text-gray-300">{cell.techniqueName}</span>}
       </td>
-      <td className="px-5 py-3 text-gray-300">{cell.tactic ?? 'unmapped'}</td>
+      <td className="px-5 py-3 text-gray-300">
+        {displayTactic(cell.tactic, cell.techniqueId) ?? 'unmapped'}
+      </td>
       <td className="px-5 py-3 text-center text-gray-200">{cell.activeRules}</td>
       <td className="px-5 py-3 text-center text-gray-200">{cell.inactiveRules}</td>
       <td className="px-5 py-3 text-center">

@@ -182,3 +182,30 @@ export function tacticsFor(techniqueId: string): string[] {
 export function parentTechnique(techniqueId: string): string {
   return techniqueId.split('.')[0];
 }
+
+/**
+ * The tactic to display for a coverage cell.
+ *
+ * `GET /api/v1/detection/coverage` reads its tactic from
+ * `rule.mitre_tactics[0]`, and the compiled built-in corpus carries no
+ * tactic key at all — so the Coverage Advisor rendered **every one of 392
+ * rows as "unmapped"** while the alert detail page resolved `T1059.001` to
+ * Execution correctly on the same deployment. The resolution existed and the
+ * advisor did not use it.
+ *
+ * The rule's own declaration wins when it has one: a rule author who placed
+ * a technique in a specific tactic knows something a parent-technique table
+ * does not. `null` is returned only when neither the rule nor the map can
+ * answer, so "unmapped" keeps meaning "genuinely unknown" rather than
+ * "nobody looked".
+ */
+export function displayTactic(
+  declared: string | null | undefined,
+  techniqueId: string,
+): string | null {
+  if (declared) return declared;
+  const resolved = tacticsFor(techniqueId).filter((id) => id !== OTHER_TACTIC_ID);
+  const first = resolved[0];
+  if (!first) return null;
+  return TACTIC_BY_ID.get(first)?.name ?? null;
+}

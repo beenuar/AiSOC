@@ -127,6 +127,96 @@ afterEach(() => {
   __setDemoModeForTests(null);
 });
 
+describe('the advisor resolves the tactic it can resolve', () => {
+  /**
+   * The live reproduction: every one of 392 rows rendered Tactic "unmapped"
+   * while the alert detail page resolved `T1059.001` to Execution on the
+   * same deployment. `GET /detection/coverage` reads its tactic from
+   * `rule.mitre_tactics[0]` and the compiled built-in corpus carries no
+   * tactic key at all, so the column could never be populated from the
+   * response alone -- and the technique→tactic map was already in the tree,
+   * used by the heatmap one directory away.
+   */
+  const UNDECLARED = () =>
+    coverage({
+      cells: [
+        {
+          techniqueId: 'T1059.001',
+          tactic: null,
+          techniqueName: null,
+          totalRules: 2,
+          activeRules: 2,
+          inactiveRules: 0,
+        },
+        {
+          techniqueId: 'T1078',
+          tactic: null,
+          techniqueName: null,
+          totalRules: 1,
+          activeRules: 0,
+          inactiveRules: 1,
+        },
+      ],
+    });
+
+  it('names the tactic for a technique the API did not declare one for', () => {
+    swrData.set(COVERAGE_KEY, UNDECLARED());
+
+    render(<CoverageAdvisorView />);
+
+    expect(screen.getByText('Execution')).toBeTruthy();
+    expect(screen.queryAllByText('unmapped')).toHaveLength(0);
+  });
+
+  it('still says unmapped for a technique nothing can place', () => {
+    // The negative half. A resolver that answered for everything would be
+    // inventing an attribution, which is the defect in the other direction.
+    swrData.set(
+      COVERAGE_KEY,
+      coverage({
+        cells: [
+          {
+            techniqueId: 'T9999',
+            tactic: null,
+            techniqueName: null,
+            totalRules: 1,
+            activeRules: 1,
+            inactiveRules: 0,
+          },
+        ],
+      }),
+    );
+
+    render(<CoverageAdvisorView />);
+
+    expect(screen.getByText('unmapped')).toBeTruthy();
+  });
+
+  it('prefers the tactic the rule itself declared', () => {
+    // A rule author who placed a technique in a specific tactic knows
+    // something a parent-technique table does not.
+    swrData.set(
+      COVERAGE_KEY,
+      coverage({
+        cells: [
+          {
+            techniqueId: 'T1059',
+            tactic: 'Initial Access',
+            techniqueName: null,
+            totalRules: 1,
+            activeRules: 1,
+            inactiveRules: 0,
+          },
+        ],
+      }),
+    );
+
+    render(<CoverageAdvisorView />);
+
+    expect(screen.getByText('Initial Access')).toBeTruthy();
+  });
+});
+
 describe('the coverage advisor reads the tenant corpus', () => {
   it('calls the coverage endpoint rather than rendering a baked-in table', () => {
     swrData.set(COVERAGE_KEY, coverage());

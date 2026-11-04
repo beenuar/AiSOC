@@ -19,6 +19,7 @@ import useSWR from 'swr';
 import Link from 'next/link';
 import { clsx } from 'clsx';
 import { detectionApi, type DetectionCoverage } from '@/lib/api';
+import { displayTactic } from '@/lib/mitreTactics';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 
@@ -30,15 +31,21 @@ export function thinnestTactics(
   const byTactic = new Map<string, { covered: number; total: number }>();
 
   for (const cell of coverage.cells) {
-    // Cells carry `tactic: string | null`. A technique with no tactic cannot
-    // be attributed to one, so it is counted in the summary above but not
-    // ranked here — inventing an "Unknown" bucket would imply a gap in a
-    // tactic that does not exist.
-    if (!cell.tactic) continue;
-    const entry = byTactic.get(cell.tactic) ?? { covered: 0, total: 0 };
+    // The API reads its tactic from `rule.mitre_tactics[0]`, and the compiled
+    // built-in corpus carries no tactic key — so on a real deployment every
+    // cell arrived `null` and this ranking was empty, while the alert detail
+    // page resolved the same technique IDs correctly. `displayTactic` falls
+    // back to the technique→tactic map rather than discarding the row.
+    //
+    // A technique neither the rule nor the map can place is still skipped:
+    // inventing an "Unknown" bucket would imply a gap in a tactic that does
+    // not exist.
+    const tactic = displayTactic(cell.tactic, cell.techniqueId);
+    if (!tactic) continue;
+    const entry = byTactic.get(tactic) ?? { covered: 0, total: 0 };
     entry.total += 1;
     if (cell.activeRules > 0) entry.covered += 1;
-    byTactic.set(cell.tactic, entry);
+    byTactic.set(tactic, entry);
   }
 
   return [...byTactic.entries()]
@@ -133,7 +140,7 @@ export function DetectionCoveragePanel() {
                 />
               </div>
               <p className="mt-1 text-[11px] text-gray-500">
-                {`${Math.round(ratio * 100)}% of known techniques have an enabled rule.`}
+                {`${Math.round(ratio * 100)}% of the ${summary.techniques} techniques your rules reference have an enabled rule — coverage of your own corpus, not of ATT&CK.`}
               </p>
             </div>
           )}

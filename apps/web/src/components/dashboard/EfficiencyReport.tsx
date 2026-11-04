@@ -7,7 +7,7 @@
  *
  *   • Correlation efficiency  = alerts / correlation_instances   (clamped 0..1)
  *   • Alert yield             = alerts / events_of_interest      (clamped 0..1)
- *   • MITRE coverage          = covered / total
+ *   • ATT&CK techniques in scope = covered / ATT&CK Enterprise total
  *
  * Backed by `GET /api/v1/metrics/funnel`. Designed to sit next to
  * {@link FunnelKpiBar} on the operations dashboard. The report intentionally
@@ -144,7 +144,7 @@ export function EfficiencyReport({
         <div className="space-y-4">
           <LoadingBar label="Correlation efficiency" />
           <LoadingBar label="Alert yield" />
-          <LoadingBar label="MITRE coverage" />
+          <LoadingBar label="ATT&CK techniques in scope" />
         </div>
       ) : (
         <div className="space-y-4">
@@ -161,13 +161,21 @@ export function EfficiencyReport({
             display={fmtPct(data.alert_yield)}
           />
           <BarRow
-            label="MITRE coverage"
+            // Not "MITRE coverage". Five figures carrying that name rendered
+            // on one deployment at one moment -- 392/392 here, 1/201 there,
+            // 22.22% on the SLA page -- each measuring something different
+            // and none saying which, so any two of them contradicted each
+            // other. This one is a fraction of the **ATT&CK Enterprise
+            // technique count**, and the Coverage Advisor's 392/392 is a
+            // fraction of the tenant's own corpus; the names now differ
+            // because the measurements do.
+            label="ATT&CK techniques in scope"
             // `_mitre_covered` counts distinct *techniques*, and unions the
             // tenant's alerts with every enabled detection rule. The old
             // text named tactics as well and credited alerts alone, so this
             // figure looked like it should agree with the tactics panel on
             // the overview — a different unit over a different population.
-            description="Distinct technique IDs on your alerts or enabled rules"
+            description="Distinct technique IDs on your alerts or stored rules, over the ATT&CK Enterprise total"
             value={
               data.mitre_coverage.total > 0
                 ? data.mitre_coverage.covered / data.mitre_coverage.total
