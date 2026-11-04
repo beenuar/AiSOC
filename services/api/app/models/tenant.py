@@ -22,7 +22,18 @@ class Tenant(Base):
     limits: Mapped[dict] = mapped_column(JSONB, default=dict)
     # MSSP hierarchy fields
     parent_tenant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=True, index=True)
-    mssp_role: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    # `NOT NULL DEFAULT 'standalone'` since migration 012. Declaring it
+    # nullable here did not make it nullable in Postgres -- it made every
+    # insert that omitted the field send an explicit NULL, and a column named
+    # in the INSERT does not get the column default. So `pnpm aisoc:demo`
+    # failed its seed step with NotNullViolationError on a brand-new
+    # database (issue #1693), as would any other caller constructing a
+    # Tenant without naming this field.
+    #
+    # `default=` covers the ORM path, `server_default=` covers inserts that
+    # bypass it; both are stated because either alone leaves one path to
+    # rediscover this.
+    mssp_role: Mapped[str] = mapped_column(String(50), nullable=False, default="standalone", server_default="standalone")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(UTC))
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

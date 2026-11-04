@@ -1584,6 +1584,35 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/service_requirements.py api agents | xargs pip install --quiet
+
+      # The sibling of `check_raw_sql_columns.py`, in the other direction:
+      # that one asks whether raw SQL names columns the migrations create,
+      # this one asks whether the ORM agrees with them about NULL.
+      #
+      # `tenants.mssp_role` was NOT NULL DEFAULT 'standalone' in the schema
+      # and `nullable=True` with no default in the model. Those read as
+      # compatible and are not: a column the ORM thinks is nullable is named
+      # in the INSERT with an explicit NULL, and a named column does not
+      # receive the column DEFAULT. So every insert that omitted the field
+      # failed, which is `pnpm aisoc:demo` dying at its seed step on a brand
+      # new database (#1693) -- the first environment to insert a tenant,
+      # not a seed bug.
+      #
+      # It lives in *this* job and not in Lint & Type-check for the same
+      # reason the injection-pattern check above does: reading the mapper
+      # imports `app.models`, which pulls SQLAlchemy in. The first attempt
+      # put it in the lint job and it died on `No module named 'sqlalchemy'`.
+      #
+      # The self-test runs first, and this parser has already been wrong
+      # twice in ways only a check caught -- it read a re-add of an existing
+      # column as a redefinition, and it saw only the first clause of a
+      # multi-column ALTER TABLE, which is exactly how `mssp_role` is
+      # declared. The gate missed the column it was written for until its
+      # negative control was run.
+      - name: Verify the ORM and the migrations agree about NULL
+        run: |
+          python3 scripts/check_orm_nullability.py --self-test
+          python3 scripts/check_orm_nullability.py
       # Boot-test: verify the FastAPI app can actually import without
       # NameError / ImportError before spending time on the full pytest
       # suite.  PR #152 fixed two import-time NameErrors (model_validator,
