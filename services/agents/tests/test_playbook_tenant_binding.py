@@ -87,7 +87,15 @@ def _b64(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
 
 
-def console_token(tenant: uuid.UUID, *, role: str = "soc_analyst") -> str:
+def console_token(tenant: uuid.UUID, *, role: str = "tenant_admin") -> str:
+    """A verified console session for one tenant.
+
+    `tenant_admin` rather than `soc_analyst`: this suite is about *which
+    tenant* a caller may reach, and it authors playbooks to set that up.
+    Authoring now needs `playbooks:write`, which an analyst does not hold
+    (GHSA-8cpf-mchw-jpf2, F15) -- so an analyst here would make every case
+    fail on authorization before it reached the tenant question.
+    """
     """A console access token, signed the way ``services/api`` signs one.
 
     Minted here rather than by importing the API, because both services name

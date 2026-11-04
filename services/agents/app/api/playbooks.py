@@ -18,7 +18,7 @@ import logging
 from dataclasses import dataclass
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -71,6 +71,47 @@ verifications_router = APIRouter(prefix="/api/v1/playbook-verifications", tags=[
 #: makes the tenant reachable from the handler — the dependency alone never
 #: was.
 ScopedPrincipal = Annotated[TenantPrincipal, Depends(require_console_or_service_auth)]
+
+#: Which console roles may author a playbook, and which may run one.
+#:
+#: GHSA-8cpf-mchw-jpf2, F15. These routes authenticated every caller and
+#: resolved their tenant, and then asked nothing else -- so a `viewer` could
+#: create a playbook whose steps dispatch containment and run it. Measured
+#: against the real router: 201 on create, 202 on run, for a playbook whose
+#: only step was `isolate_host`. The API gates the same step dispatch on
+#: `actions:execute` (`endpoints/playbook_steps.py`), so the two halves of one
+#: capability disagreed about who may use it.
+#:
+#: **These mirror `ROLE_PERMISSIONS` in `services/api/app/core/security.py`
+#: and must not drift from it.** They are a mirror rather than an import for
+#: the reason every vendored module here is: this service is built with its
+#: own directory as its Docker context and cannot import the API's package.
+#: `tests/test_playbook_authorization.py::test_the_role_table_matches_the_api`
+#: reads that file and fails if a role gains or loses either permission
+#: without this table moving -- because a second permission model that can
+#: silently disagree with the first is what this repository refuses, and an
+#: unpinned copy is exactly that.
+_MAY_AUTHOR: frozenset[str] = frozenset({"admin", "platform_admin", "tenant_admin"})
+_MAY_RUN: frozenset[str] = frozenset({"admin", "platform_admin", "tenant_admin", "soc_lead", "soc_analyst"})
+
+
+def _require_role(principal: TenantPrincipal, allowed: frozenset[str], *, verb: str, permission: str) -> None:
+    """Refuse a console caller whose role does not carry ``permission``.
+
+    A **service** principal passes. It authenticated with a shared secret and
+    carries no human role, so there is no role to check -- and the governed
+    half of what a playbook does still answers to the actions service, which
+    grades every step on the way past. Refusing it here would break the
+    engine's own dispatch while protecting nothing.
+    """
+    if principal.delegated:
+        return
+    if principal.role in allowed:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=(f"{verb} requires '{permission}'. Your role ({principal.role or 'unknown'}) does not carry it."),
+    )
 
 
 @dataclass(frozen=True)
@@ -186,6 +227,7 @@ async def list_playbooks(principal: ScopedPrincipal, enabled_only: bool = False)
 
 @router.post("", summary="Create a playbook", status_code=201)
 async def create_playbook(playbook: Playbook, principal: ScopedPrincipal) -> dict:
+    _require_role(principal, _MAY_AUTHOR, verb="Creating a playbook", permission="playbooks:write")
     store = PlaybookStore.default()
     tenant_id = str(scoped_tenant_or_403(principal))
     created = store.create(playbook, tenant_id=tenant_id)
@@ -232,6 +274,7 @@ async def get_playbook(playbook_id: str, principal: ScopedPrincipal) -> dict:
 
 @router.put("/{playbook_id}", summary="Update a playbook")
 async def update_playbook(playbook_id: str, data: dict[str, Any], principal: ScopedPrincipal) -> dict:
+    _require_role(principal, _MAY_AUTHOR, verb="Updating a playbook", permission="playbooks:write")
     store = PlaybookStore.default()
     tenant_id = str(scoped_tenant_or_403(principal))
     updated = store.update(playbook_id, data, tenant_id=tenant_id)
@@ -244,6 +287,7 @@ async def update_playbook(playbook_id: str, data: dict[str, Any], principal: Sco
 
 @router.delete("/{playbook_id}", summary="Delete a playbook", status_code=204, response_model=None)
 async def delete_playbook(playbook_id: str, principal: ScopedPrincipal) -> None:
+    _require_role(principal, _MAY_AUTHOR, verb="Deleting a playbook", permission="playbooks:write")
     store = PlaybookStore.default()
     tenant_id = str(scoped_tenant_or_403(principal))
     if not store.delete(playbook_id, tenant_id=tenant_id):
@@ -289,6 +333,7 @@ async def run_playbook(
     background_tasks: BackgroundTasks,
     principal: ScopedPrincipal,
 ) -> dict:
+    _require_role(principal, _MAY_RUN, verb="Running a playbook", permission="playbooks:execute")
     store = PlaybookStore.default()
     tenant_id = str(scoped_tenant_or_403(principal))
     pb = store.get(playbook_id, tenant_id=tenant_id)
