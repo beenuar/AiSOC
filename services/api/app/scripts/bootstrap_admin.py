@@ -46,6 +46,7 @@ import secrets
 import string
 import sys
 import uuid
+from datetime import UTC, datetime
 
 from email_validator import EmailNotValidError, validate_email
 from sqlalchemy import func, select
@@ -351,6 +352,17 @@ async def bootstrap(
             user.is_active = True
             user.is_verified = True
             user.role = "admin"
+            # Every token minted before this moment stops working
+            # (GHSA-6465-rp4f-ppj6). `--reset-password` is the one thing this
+            # product offers an operator who believes the password is in
+            # somebody else's hands, and without this it changed the password
+            # and left that person's session running — for up to
+            # REFRESH_TOKEN_EXPIRE_DAYS, since a refresh token re-mints
+            # access on its own. `deps.get_current_user` and `POST
+            # /auth/refresh` both read this column already; the reset was
+            # simply not a revocation site, while `admin_users.py` and SCIM
+            # deprovisioning were.
+            user.sessions_revoked_at = datetime.now(UTC)
             await _record(
                 session,
                 tenant_id=tenant.id,

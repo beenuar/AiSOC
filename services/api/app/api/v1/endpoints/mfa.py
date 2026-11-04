@@ -562,13 +562,36 @@ async def verify(body: VerifyRequest, db: DBSession, request: Request) -> Sessio
     await set_rls_context(db, row["tenant_id"])
     step = totp.verify_totp(_decrypt_secret(row["secret_encrypted"]), body.code, last_used_step=row["last_used_step"])
     if step is not None:
-        await db.execute(
-            text("UPDATE aisoc_user_mfa SET last_used_step = :s, updated_at = now() WHERE user_id = :u AND tenant_id = :t").bindparams(
-                s=step, u=user_id, t=row["tenant_id"]
-            )
+        # The step is *claimed*, not recorded (GHSA-6465-rp4f-ppj6).
+        #
+        # `verify_totp` enforces single use correctly, against the mark it was
+        # handed. The mark was read above, and the write below used to be
+        # unconditional — so ten requests carrying one code all read the same
+        # value before any of them wrote, all verified, and all ten were
+        # handed a session. A code read over a shoulder is worth one sign-in
+        # for its window; it was worth as many as the holder asked for.
+        #
+        # The predicate is the prior state the verification depended on, so
+        # under READ COMMITTED a concurrent writer blocks on the row, then
+        # re-evaluates against the committed value and matches nothing. The
+        # row count is the decision — the same claim pattern a dispatched
+        # action uses before it touches a vendor.
+        claimed = await db.execute(
+            text(
+                "UPDATE aisoc_user_mfa SET last_used_step = :s, updated_at = now() "
+                "WHERE user_id = :u AND tenant_id = :t "
+                "AND (last_used_step IS NULL OR last_used_step < :s)"
+            ).bindparams(s=step, u=user_id, t=row["tenant_id"])
         )
         await db.commit()
-        return SessionTokens(**await _issue_session(db, user_id, row["tenant_id"]))
+        if claimed.rowcount == 1:
+            return SessionTokens(**await _issue_session(db, user_id, row["tenant_id"]))
+        # Lost the race: another request spent this step. Answered as a bad
+        # code rather than a conflict, because to the caller that is what it
+        # is, and a distinct status would tell an attacker their replay
+        # arrived a moment too late rather than that it was wrong.
+        logger.warning("mfa.verify_step_already_spent user=%s step=%s", _sanitize(user_id), _sanitize(step))
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="That code is not valid.")
 
     if await _consume_recovery_code(db, user_id=user_id, tenant_id=row["tenant_id"], code=body.code, request=request):
         return SessionTokens(**await _issue_session(db, user_id, row["tenant_id"]))
