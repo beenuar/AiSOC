@@ -84,6 +84,10 @@ function describeApiError(err: unknown, fallback: string): string {
  * Defaults from the schema flow into ``connector_config`` so the operator
  * sees them already populated. Secrets always start empty — never seed a
  * default secret, even if the schema were to declare one.
+ *
+ * A required select with no default starts on its first option: it renders
+ * no blank placeholder, so the browser already shows that option as chosen,
+ * and the state has to match what the operator sees.
  */
 function buildInitialValues(
   fields: ConnectorSchemaField[],
@@ -104,6 +108,11 @@ function buildInitialValues(
     }
     if (f.type === 'number') {
       values[f.name] = 0;
+      continue;
+    }
+    const firstOption = f.options?.[0];
+    if (f.type === 'select' && f.required && firstOption) {
+      values[f.name] = firstOption.value;
       continue;
     }
     values[f.name] = '';
