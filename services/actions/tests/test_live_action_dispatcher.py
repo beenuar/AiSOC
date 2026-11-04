@@ -22,7 +22,7 @@ with the rest of the actions test suite (no pytest-asyncio decorator).
 from __future__ import annotations
 
 import asyncio
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from app.live_actions import (
@@ -36,6 +36,15 @@ from app.live_actions import (
 )
 
 # --- Test doubles ---------------------------------------------------------
+
+
+#: A dispatch that names no tenant can resolve neither the tenant's autonomy
+#: tier nor its kill switch, so it is refused rather than graded by the
+#: deployment default (GHSA-fm3f-p5jv-6hcg, F07). Every request below used to
+#: omit it -- so this suite was asserting governance against requests that
+#: escaped governance. A real caller sets it; `POST /live-actions/dispatch`
+#: takes it straight off the body.
+TENANT = UUID("11111111-1111-1111-1111-111111111111")
 
 
 class _OkExecutor(LiveActionExecutor):
@@ -136,7 +145,7 @@ def test_dispatch_routes_to_registered_executor():
     governed since Phase B2 — dry_run keeps this test about routing, not
     policy (the governance behaviour has its own suite)."""
     register_executor(_OkExecutor())
-    request = LiveActionRequest(capability="isolate_host", vendor_id="stubvendor", target="srv-12", dry_run=True)
+    request = LiveActionRequest(tenant_id=TENANT, capability="isolate_host", vendor_id="stubvendor", target="srv-12", dry_run=True)
 
     result = asyncio.run(dispatch(request))
 
@@ -150,7 +159,7 @@ def test_dispatch_unknown_pair_returns_failed_not_exception():
     """The agent loop relies on a uniform shape for "no executor"."""
     register_executor(_OkExecutor())  # different vendor
 
-    result = asyncio.run(dispatch(LiveActionRequest(capability="isolate_host", vendor_id="missing_vendor")))
+    result = asyncio.run(dispatch(LiveActionRequest(tenant_id=TENANT, capability="isolate_host", vendor_id="missing_vendor")))
 
     assert result.status == LiveActionStatus.FAILED
     assert result.error == "executor_not_found"
@@ -159,7 +168,7 @@ def test_dispatch_unknown_pair_returns_failed_not_exception():
 
 
 def test_dispatch_unknown_pair_lists_no_alternatives_when_none_exist():
-    result = asyncio.run(dispatch(LiveActionRequest(capability="never_registered_verb", vendor_id="ghost")))
+    result = asyncio.run(dispatch(LiveActionRequest(tenant_id=TENANT, capability="never_registered_verb", vendor_id="ghost")))
 
     assert result.status == LiveActionStatus.FAILED
     assert result.details["available_vendors_for_capability"] == []
@@ -171,6 +180,7 @@ def test_dispatch_dry_run_propagates_to_executor():
     result = asyncio.run(
         dispatch(
             LiveActionRequest(
+                tenant_id=TENANT,
                 capability="block_ip",
                 vendor_id="simvendor",
                 target="1.2.3.4",
@@ -187,7 +197,7 @@ def test_dispatch_crashing_executor_is_caught():
     """A buggy plugin must not crash the actions service."""
     register_executor(_CrashingExecutor())
 
-    result = asyncio.run(dispatch(LiveActionRequest(capability="kill_process", vendor_id="crashvendor")))
+    result = asyncio.run(dispatch(LiveActionRequest(tenant_id=TENANT, capability="kill_process", vendor_id="crashvendor")))
 
     assert result.status == LiveActionStatus.FAILED
     assert result.error is not None
@@ -206,7 +216,7 @@ def test_dispatch_patches_mismatched_request_id():
     test is about.
     """
     register_executor(_LyingExecutor())
-    request = LiveActionRequest(capability="disable_user", vendor_id="lyingvendor", dry_run=True)
+    request = LiveActionRequest(tenant_id=TENANT, capability="disable_user", vendor_id="lyingvendor", dry_run=True)
 
     result = asyncio.run(dispatch(request))
 

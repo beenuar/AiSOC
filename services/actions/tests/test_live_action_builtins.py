@@ -24,6 +24,7 @@ catches contract drift between the two layers.
 from __future__ import annotations
 
 import asyncio
+from uuid import UUID
 
 import pytest
 from app.live_actions import (
@@ -34,6 +35,14 @@ from app.live_actions import (
     register_builtin_executors,
     reset_for_tests,
 )
+
+#: A dispatch that names no tenant can resolve neither the tenant's autonomy
+#: tier nor its kill switch, so it is refused rather than graded by the
+#: deployment default (GHSA-fm3f-p5jv-6hcg, F07). Every request below used to
+#: omit it -- so this suite was asserting governance against requests that
+#: escaped governance. A real caller sets it; `POST /live-actions/dispatch`
+#: takes it straight off the body.
+TENANT = UUID("11111111-1111-1111-1111-111111111111")
 
 
 @pytest.fixture(autouse=True)
@@ -313,6 +322,7 @@ def test_builtin_dispatch_without_credentials_returns_simulated() -> None:
     """
     register_builtin_executors()
     request = LiveActionRequest(
+        tenant_id=TENANT,
         capability="isolate_host",
         vendor_id="crowdstrike",
         target="host-77",
@@ -338,6 +348,7 @@ def test_builtin_dispatch_with_dry_run_strips_credentials_and_simulates() -> Non
     """
     register_builtin_executors()
     request = LiveActionRequest(
+        tenant_id=TENANT,
         capability="isolate_host",
         vendor_id="crowdstrike",
         target="host-77",
@@ -364,6 +375,7 @@ def test_builtin_dispatch_for_block_domain_simulates_without_credentials() -> No
     """
     register_builtin_executors()
     request = LiveActionRequest(
+        tenant_id=TENANT,
         capability="block_domain",
         vendor_id="generic",
         target="evil.example.com",
@@ -416,6 +428,7 @@ def test_plugin_registered_executor_appears_in_descriptors() -> None:
     result = asyncio.run(
         dispatch(
             LiveActionRequest(
+                tenant_id=TENANT,
                 capability="isolate_host",
                 vendor_id="myplugin",
                 target="host-99",

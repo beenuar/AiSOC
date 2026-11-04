@@ -22,24 +22,52 @@ from app.models.action import ActionPrincipal, ActionStatus, ActionType, ChatOps
 from app.security import chatops_identity
 from fastapi import HTTPException
 
+#: The tenant every approver below is scoped to, and the one `_pending`
+#: actions belong to.
+#:
+#: Every entry in this map used to omit `tenant_id`, mirroring the example in
+#: `chatops_identity`'s own docstring -- and that is precisely the shape that
+#: skipped the tenant comparison in `authorize_approver` *and* left the record
+#: read unscoped (GHSA-fm3f-p5jv-6hcg, F06). So the whole of this suite was
+#: exercising the ungoverned path while asserting that approvals are
+#: authorized. `TestATenantlessApproverIsRefused` at the bottom is the case
+#: that was missing.
+TENANT = "11111111-1111-1111-1111-111111111111"
+OTHER_TENANT = "22222222-2222-2222-2222-222222222222"
+
 APPROVER_MAP = {
     "slack": {
         "U_LEAD": {
             "user_id": "dana@example.com",
             "permissions": ["actions:execute:high"],
             "roles": ["soc-lead"],
+            "tenant_id": TENANT,
         },
         "U_JUNIOR": {
             "user_id": "sam@example.com",
             "permissions": ["actions:execute:low"],
+            "tenant_id": TENANT,
         },
         "U_REQUESTER": {
             "user_id": "rory@example.com",
             "permissions": ["actions:execute:high"],
+            "tenant_id": TENANT,
+        },
+        # Deliberately tenantless, for the refusal case. This is the entry
+        # shape the documented example used to show.
+        "U_UNSCOPED": {
+            "user_id": "nolan@example.com",
+            "permissions": ["actions:execute:high"],
         },
     },
-    "teams": {"29:abc": {"user_id": "kit@example.com", "permissions": ["actions:execute:high"]}},
-    "email": {"dana@example.com": {"user_id": "dana@example.com", "permissions": ["actions:execute:high"]}},
+    "teams": {"29:abc": {"user_id": "kit@example.com", "permissions": ["actions:execute:high"], "tenant_id": TENANT}},
+    "email": {
+        "dana@example.com": {
+            "user_id": "dana@example.com",
+            "permissions": ["actions:execute:high"],
+            "tenant_id": TENANT,
+        }
+    },
 }
 
 
@@ -53,11 +81,16 @@ def _approver_map(monkeypatch: pytest.MonkeyPatch):
     chatops_identity.reset_cache()
 
 
-def _pending(action_type: ActionType = ActionType.ISOLATE_HOST, *, requested_by: str | None = None) -> dict:
+def _pending(
+    action_type: ActionType = ActionType.ISOLATE_HOST,
+    *,
+    requested_by: str | None = None,
+    tenant_id: str = TENANT,
+) -> dict:
     return {
         "id": str(uuid4()),
         "incident_id": str(uuid4()),
-        "tenant_id": str(uuid4()),
+        "tenant_id": tenant_id,
         "action_type": action_type.value,
         "target": "host-1",
         "rationale": "test",
@@ -161,13 +194,98 @@ def test_separation_of_duties_applies_to_a_chatops_approval() -> None:
     assert "separation of duties" in exc.value.detail
 
 
-def test_a_direct_principal_still_works_and_takes_precedence() -> None:
+def test_a_direct_principal_still_works() -> None:
     """The console path supplies a full principal from its authenticated user."""
     record = _pending()
-    principal = ActionPrincipal(user_id="console@example.com", permissions=["actions:*"])
-    assertion = ChatOpsApprover(platform="slack", platform_user_id="U_NOBODY")
-    bound = router_module._bind_approver(record, record["id"], principal, assertion, require=True)
+    principal = ActionPrincipal(user_id="console@example.com", permissions=["actions:*"], tenant_id=TENANT)
+    bound = router_module._bind_approver(record, record["id"], principal, None, require=True)
     assert bound is not None and bound.user_id == "console@example.com"
+
+
+def test_two_identities_for_one_decision_are_refused() -> None:
+    """Was `..._and_takes_precedence`, which pinned the defect as intended.
+
+    The old assertion was that a body `approver` wins over a ChatOps
+    assertion. Read as a security property that is: the *more forgeable* of
+    two identities silently overrides the one resolved through the operator's
+    approver map, and the map is never consulted
+    (GHSA-fm3f-p5jv-6hcg, F01). Measured against the real service, a body
+    principal the map had never heard of, declaring `permissions: ["*"]`, was
+    recorded as `approved_by_user_id` alongside a valid Slack assertion.
+
+    A caller presenting two identities for one decision is ambiguous whichever
+    one is correct. Refused rather than resolved by precedence, because a
+    precedence rule is something a future caller can be built around.
+    """
+    record = _pending()
+    principal = ActionPrincipal(user_id="console@example.com", permissions=["actions:*"], tenant_id=TENANT)
+    assertion = ChatOpsApprover(platform="slack", platform_user_id="U_LEAD")
+    with pytest.raises(HTTPException) as exc:
+        router_module._bind_approver(record, record["id"], principal, assertion, require=True)
+    assert exc.value.status_code == 400
+    assert "not both" in exc.value.detail
+
+
+class TestATenantlessApproverIsRefused:
+    """GHSA-fm3f-p5jv-6hcg, F06.
+
+    `authorize_approver` guarded its whole tenant comparison behind
+    `approver.tenant_id is not None`, so an approver carrying no tenant
+    skipped it -- and `_tenant_of` returns None for the same principal, which
+    leaves the record *read* unscoped too. One identity could approve any
+    tenant's containment.
+
+    Not hypothetical configuration: the Teams entry in `chatops_identity`'s
+    documented example omits `tenant_id`, and every entry in this file's own
+    approver map did until this change.
+    """
+
+    def test_an_approver_with_no_tenant_cannot_approve_a_tenanted_action(self) -> None:
+        record = _pending()
+        assertion = ChatOpsApprover(platform="slack", platform_user_id="U_UNSCOPED")
+        with pytest.raises(HTTPException) as exc:
+            router_module._bind_approver(record, record["id"], None, assertion, require=True)
+        assert exc.value.status_code == 403
+        assert "carries no tenant" in exc.value.detail
+        # The refusal names the configuration to fix. An operator seeing a
+        # bare 403 has several controls to choose between.
+        assert "AISOC_CHATOPS_APPROVERS" in exc.value.detail
+
+    def test_a_tenant_scoped_approver_is_still_accepted(self) -> None:
+        """Positive control.
+
+        A tenant check that refused everybody would satisfy the test above and
+        make every ChatOps approval impossible -- the fail-closed shape this
+        repository has shipped before and whose negative test passed
+        perfectly.
+        """
+        record = _pending()
+        assertion = ChatOpsApprover(platform="slack", platform_user_id="U_LEAD")
+        bound = router_module._bind_approver(record, record["id"], None, assertion, require=True)
+        assert bound is not None and bound.user_id == "dana@example.com"
+
+    def test_an_approver_scoped_to_another_tenant_is_still_refused(self) -> None:
+        """The arm that did work, kept working."""
+        record = _pending(tenant_id=OTHER_TENANT)
+        assertion = ChatOpsApprover(platform="slack", platform_user_id="U_LEAD")
+        with pytest.raises(HTTPException) as exc:
+            router_module._bind_approver(record, record["id"], None, assertion, require=True)
+        assert exc.value.status_code == 403
+        assert "does not match" in exc.value.detail
+
+    def test_an_action_with_no_tenant_does_not_require_one_of_the_approver(self) -> None:
+        """Second positive control.
+
+        The refusal is about an approver who cannot be compared to a tenant
+        the *action* names. An action carrying no tenant has nothing to
+        compare, and reading that as "refuse" would be the fail-closed
+        mistake in its other direction.
+        """
+        record = _pending()
+        record["tenant_id"] = ""
+        assertion = ChatOpsApprover(platform="slack", platform_user_id="U_UNSCOPED")
+        bound = router_module._bind_approver(record, record["id"], None, assertion, require=True)
+        assert bound is not None and bound.user_id == "nolan@example.com"
 
 
 def test_a_teams_identity_resolves_against_the_teams_half_of_the_map() -> None:
