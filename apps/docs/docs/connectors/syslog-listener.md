@@ -23,6 +23,11 @@ text intact. It is never reported as a structured record with invented
 fields — a mis-split line puts half the message in the hostname column, and
 an analyst reading that record sees a host that does not exist.
 
+In CEF and LEEF the `|` that separates header fields stays legal *inside* a
+value, so the header split stops at the last header field and everything
+after it is kept whole. `cmd=powershell -enc AAA | iex` arrives with its
+pipe, because the half a detection rule reads is usually the half past it.
+
 ## One listener, one tenant
 
 The tenant comes from a minted ingest token you put in the service's

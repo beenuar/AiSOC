@@ -107,6 +107,10 @@ func parseCEFExtension(ext string) map[string]string {
 	return out
 }
 
+// LEEF 1.0 carries five header fields before the attributes; 2.0 inserts a
+// delimiter field between the last of them and the attributes.
+const leefHeaderFields = 5
+
 // parseLEEF fills msg.Extension from a LEEF payload.
 //
 // LEEF:1.0|Vendor|Product|Version|EventID|key=value<TAB>key=value
@@ -115,14 +119,22 @@ func parseCEFExtension(ext string) map[string]string {
 // The 2.0 delimiter field is the part that catches people: it may be a
 // literal character, or `xHH` / `x09` naming one by hex code. Assuming tab
 // means every pair in a caret-delimited line lands in one key.
+//
+// `|` separates header fields but stays legal *inside* an attribute value,
+// which is the other half of the same trap: cutting more pipes than the
+// header has truncates the value at its first pipe and drops every attribute
+// after it. `cmd=powershell -enc AAA | iex` is the case that matters — the
+// half a detection reads is the half past the pipe. So the header split cuts
+// exactly the header's pipes, and 2.0's extra field is taken one cut at a
+// time from the remainder.
 func parseLEEF(msg *Message, payload string) {
 	idx := strings.Index(payload, "LEEF:")
 	if idx < 0 {
 		return
 	}
 	body := payload[idx+len("LEEF:"):]
-	fields := splitEscaped(body, '|', 7)
-	if len(fields) < 5 {
+	fields := splitEscaped(body, '|', leefHeaderFields)
+	if len(fields) < leefHeaderFields {
 		return
 	}
 	msg.Format = FormatLEEF
@@ -135,12 +147,23 @@ func parseLEEF(msg *Message, payload string) {
 
 	delimiter := "\t"
 	attrs := ""
-	switch {
-	case strings.HasPrefix(version, "2") && len(fields) >= 7:
-		delimiter = resolveLEEFDelimiter(fields[5])
-		attrs = fields[6]
-	case len(fields) >= 6:
-		attrs = fields[5]
+	if len(fields) > leefHeaderFields {
+		attrs = fields[leefHeaderFields]
+	}
+	if strings.HasPrefix(version, "2") {
+		parts := splitEscaped(attrs, '|', 1)
+		switch {
+		case len(parts) > 1:
+			delimiter = resolveLEEFDelimiter(parts[0])
+			attrs = parts[1]
+		case !strings.Contains(attrs, "="):
+			// A 2.0 line declaring a delimiter and carrying no attributes.
+			// A delimiter never contains `=`, so a field that does is a
+			// vendor sending 1.0-shaped attributes under a 2.0 banner, and
+			// reading those is better than discarding them.
+			delimiter = resolveLEEFDelimiter(attrs)
+			attrs = ""
+		}
 	}
 
 	for _, pair := range strings.Split(attrs, delimiter) {
@@ -172,8 +195,12 @@ func resolveLEEFDelimiter(field string) string {
 	return field[:1]
 }
 
-// splitEscaped splits on sep, honouring a backslash escape, into at most
-// `limit` fields with the remainder in the last.
+// splitEscaped splits on sep, honouring a backslash escape, cutting at most
+// `limit` separators — so it returns at most `limit`+1 fields, with
+// everything past the last cut left intact in the final one. Callers pass the
+// number of *separators* their format has, not the number of fields they
+// want; passing the field count cuts one pipe too many and truncates the
+// remainder at its first separator.
 func splitEscaped(s string, sep byte, limit int) []string {
 	var out []string
 	var current strings.Builder

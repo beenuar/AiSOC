@@ -30,6 +30,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   counts are absent and the correct render is "not scanned", not a zero.
 ### Fixed
 
+- **The syslog LEEF parser truncated every attribute value at its first `|`
+  and dropped every attribute after it.** `parseLEEF` cut the header with
+  `splitEscaped(body, '|', 7)`, but a LEEF header has five fields (1.0) or
+  six (2.0), so the extra cuts landed inside the attribute string — where
+  `|` is legal. `cmd=powershell -enc AAA | iex` reached detection as
+  `cmd=powershell -enc AAA`, and a `sev=5` following it was lost outright.
+  The half a rule reads is the half past the pipe, so this was silent
+  evidence loss on the syslog ingest path rather than a formatting nit.
+
+  The sibling CEF parser on the HTTP route already re-joined its extension
+  under a comment naming this exact hazard; the syslog LEEF path missed it.
+  `splitEscaped`'s own doc comment promised "at most `limit` fields" when it
+  returns at most `limit`+1, which is how the off-by-one came to be written,
+  and now states the separator semantics instead.
+
+  Found while resolving CodeQL `go/index-out-of-bounds` at `kv.go:125`, which
+  was itself a **false positive** — the flagged read was guarded by
+  `len(fields) >= 7` inside a tagless `switch` case the query does not model,
+  proven by walking every one-byte truncation of four real CEF/LEEF lines
+  through the parser without a panic. The alert is dismissed as such; the
+  truncation bug it led to is the real defect.
+
 - **The offline sandbox read two spellings of "timestamp" and silently
   computed nothing for the rest.** Found by writing a payload the way a
   stranger would: the same benign login as the previous report, timed with
