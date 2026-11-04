@@ -494,7 +494,49 @@ async def run_action_stream(req: ContextualActionRequest) -> StreamingResponse:
                 yield (json.dumps({"delta": chunk}) + "\n").encode()
         except Exception:  # noqa: BLE001
             logger.exception("contextual.stream.error")
-            yield (json.dumps({"error": "Streaming failed. Please try again."}) + "\n").encode()
+            # "Please try again" was the answer to every failure, including
+            # the most common one: this deployment has no model, so there is
+            # nothing a retry can reach. Advising a retry for a permanent
+            # condition is how a misconfiguration gets mistaken for
+            # flakiness — the reader clicks again instead of going and
+            # configuring a provider.
+            #
+            # `fallback` is the same question `_call_llm` asks, resolved
+            # before the stream opened, so the branch and the flag the
+            # header already published cannot disagree.
+            if fallback:
+                yield (
+                    json.dumps(
+                        {
+                            "error": (
+                                f"No language model is configured for this deployment, so {title} could not be "
+                                "generated. Set a provider key and bring up the `full` profile so the LiteLLM "
+                                "gateway runs. Retrying will not help until then."
+                            ),
+                            "retryable": False,
+                        }
+                    )
+                    + "\n"
+                ).encode()
+            else:
+                # Deliberately no exception text. `logger.exception` above
+                # has the stack, and this frame is rendered to whoever is
+                # looking at the console — an exception string from a model
+                # client carries gateway hostnames, request ids and
+                # sometimes the URL a key was presented to.
+                # (`py/stack-trace-exposure`, which an earlier draft of this
+                # branch tripped by interpolating `str(exc)` here.)
+                yield (
+                    json.dumps(
+                        {
+                            "error": (
+                                "The model stopped partway through this answer. Retrying may work; the agents service log has the reason."
+                            ),
+                            "retryable": True,
+                        }
+                    )
+                    + "\n"
+                ).encode()
 
         # Footer frame with metadata + suggested follow-ups.
         yield (

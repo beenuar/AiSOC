@@ -450,6 +450,16 @@ def _placement_options(placement: str) -> list[str]:
     and lets the reader pick.
     """
     hosted = "Use a hosted provider instead: Settings -> Deployment & AI, or the setup wizard."
+    if placement == "no_model":
+        # Where it runs is not the question here; whether it exists is. These
+        # options used to be the GPU list, which answered a question the
+        # operator had not reached yet.
+        return [
+            "Retry the download: `docker compose run --rm ollama-pull`.",
+            "See why it failed: `docker compose logs ollama-pull`.",
+            "Use an Ollama you already run, which needs no download: `make up-host-llm`.",
+            hosted,
+        ]
     if placement in {"cpu", "partial", "unknown"}:
         return [
             "NVIDIA GPU: `make up-gpu` (run `make doctor` to see whether this host has one).",

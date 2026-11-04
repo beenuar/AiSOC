@@ -93,7 +93,12 @@ STRICT: dict[str, dict[str, str]] = {
 
 #: The debt balance everywhere else. Not a target: lowering it is the work, and
 #: it is lowered as routes are bound, never raised to make a build pass.
-MAX_UNBOUND_ELSEWHERE = 26
+#:
+#: 26 -> 25: `hunt_search` in `services/agents/app/api/hunt_search.py` now
+#: binds a principal. It bound none at all, which was survivable only while
+#: the handler touched no store — it returned synthetic events. The moment it
+#: reads the tenant's event lake there is no tenant to scope by without one.
+MAX_UNBOUND_ELSEWHERE = 25
 
 
 @dataclass(frozen=True)

@@ -42,6 +42,11 @@ DEFAULT_LOOKBACK_HOURS = 24
 #: memory or stall every other tenant's hunt behind it.
 DEFAULT_ROW_CAP = 50_000
 
+#: A much tighter ceiling for interactive search. A person is waiting on this
+#: one, and a page renders a screenful; the scheduled hunt's budget exists to
+#: match rules across a whole window and is the wrong budget here.
+DEFAULT_SEARCH_CAP = 500
+
 _QUERY = """
 SELECT
     event_time,
@@ -65,6 +70,55 @@ SELECT
 FROM aisoc.raw_events
 WHERE tenant_id = %(tenant_id)s
   AND event_time >= now() - INTERVAL %(hours)s HOUR
+ORDER BY event_time DESC
+LIMIT %(cap)s
+"""
+
+
+#: Free-text search over one tenant's recorded events.
+#:
+#: Separate from `_QUERY` rather than a parameter on it because the two have
+#: different budgets: a scheduled hunt reads a whole window to match rules
+#: against, an analyst's search wants the newest few matches quickly.
+#:
+#: The needle is **bound, not formatted**, for the same reason the tenant
+#: predicate is. A search term is the one value on this path that comes
+#: straight from a text box, and a term spliced into SQL is a lake-wide read
+#: one quote away. `positionCaseInsensitive` over the concatenated searchable
+#: columns is a substring match and is described to the caller as exactly
+#: that — the endpoint does not claim to execute Lucene, EQL, Sigma or SPL.
+#:
+#: `raw_payload` is deliberately in the haystack: connectors nest the vendor
+#: document there, so excluding it would make a search for a field the
+#: console displays return nothing.
+_SEARCH_QUERY = """
+SELECT
+    event_time,
+    class_uid,
+    severity,
+    src_hostname,
+    dst_hostname,
+    user_name,
+    process_name,
+    file_path,
+    IPv6NumToString(source_ip) AS source_ip,
+    IPv6NumToString(dest_ip) AS dest_ip,
+    connector_type,
+    raw_payload
+FROM aisoc.raw_events
+WHERE tenant_id = %(tenant_id)s
+  AND event_time >= now() - INTERVAL %(hours)s HOUR
+  AND (
+    %(term)s = ''
+    OR positionCaseInsensitive(
+        concatWithSeparator(
+            ' ',
+            src_hostname, dst_hostname, user_name, process_name, file_path,
+            hash_sha256, connector_type, severity, raw_payload
+        ),
+        %(term)s
+    ) > 0
+  )
 ORDER BY event_time DESC
 LIMIT %(cap)s
 """
@@ -107,7 +161,39 @@ def fetch_recent_events(
         {"tenant_id": tenant_ref, "hours": int(hours), "cap": int(cap)},
         with_column_types=False,
     )
+    return _flatten(rows, tenant_ref=tenant_ref, hours=hours)
 
+
+def search_events(
+    tenant_ref: str,
+    term: str,
+    *,
+    hours: int = DEFAULT_LOOKBACK_HOURS,
+    cap: int = DEFAULT_SEARCH_CAP,
+) -> list[dict[str, Any]]:
+    """This tenant's events from the last ``hours`` matching ``term``.
+
+    The interactive half of the same read. The filter runs **in ClickHouse**
+    rather than over a 50,000-row window pulled into this process: an
+    analyst's search is a request a person is waiting on, and reading the
+    whole window to discard most of it would make the page's latency a
+    function of how busy the tenant's estate is.
+
+    Raises when the lake is unreachable, exactly like
+    :func:`fetch_recent_events`, so the caller can tell "we could not look"
+    from "nothing matched". Those two must never render as the same screen.
+    """
+    client = _client()
+    rows = client.execute(
+        _SEARCH_QUERY,
+        {"tenant_id": tenant_ref, "term": term.strip(), "hours": int(hours), "cap": int(cap)},
+        with_column_types=False,
+    )
+    return _flatten(rows, tenant_ref=tenant_ref, hours=hours)
+
+
+def _flatten(rows: Any, *, tenant_ref: str, hours: int) -> list[dict[str, Any]]:
+    """Shared row projection, so the two readers cannot disagree about shape."""
     events: list[dict[str, Any]] = []
     for row in rows:
         (

@@ -3,9 +3,12 @@
 Two endpoints returned generated content as an ordinary 200 with nothing on the
 wire to mark it:
 
-  * ``POST /api/v1/hunt/search`` always returns ``_synthetic_hits`` — it does
+  * ``POST /api/v1/hunt/search`` always returned ``_synthetic_hits`` — it did
     not query the lake at all — and the console read the 200 as success and
     rendered a green "Live backend" pill over fabricated CrowdStrike events.
+    That generator is now deleted and the handler reads the lake, so the
+    provenance question here changed from "is this labelled sample?" to
+    "does it say whether a query ran?"
   * ``POST /api/v1/copilot/chat`` falls back to a canned paragraph whenever
     ``OPENAI_API_KEY`` is unset or the call raises, so an analyst read generic
     claims as analysis of their own environment.
@@ -18,27 +21,70 @@ and "is this my data?" and get a truthful answer.
 
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from app.api import copilot as copilot_mod
 from app.api import hunt_search as hunt_mod
+from app.security.tenant_scope import TenantPrincipal
+
+#: The real principal. The handler now binds one, and a hand-rolled double
+#: would skip the scope resolution it depends on.
+_PRINCIPAL = TenantPrincipal(
+    tenant_ids=frozenset({uuid.UUID("00000000-0000-0000-0000-000000000001")}),
+    subject="analyst@example.com",
+)
 
 
 class TestHuntSearchProvenance:
-    @pytest.mark.asyncio
-    async def test_search_declares_itself_as_sample(self):
-        res = await hunt_mod.hunt_search(hunt_mod.HuntQuery(query="process_name:powershell"))
-        assert res.source == "sample", (
-            "the search handler generates events rather than querying telemetry; it must not present them as live"
-        )
-        assert res.notice, "a sample response must carry a human-readable reason"
-        assert "not results from your telemetry" in res.notice
+    """The provenance contract, now that the handler queries something.
+
+    The old pair of cases asserted ``source == "sample"`` and that hits came
+    back regardless — both of which described the fabricating path and would
+    pass again if anyone restored it. The contract that survives the change
+    is narrower and stronger: the response always says whether a query ran,
+    and nothing is ever invented when one did not.
+    """
 
     @pytest.mark.asyncio
-    async def test_hits_are_still_returned(self):
-        """Labelling the data must not empty the workbench."""
-        res = await hunt_mod.hunt_search(hunt_mod.HuntQuery(query="anything", limit=5))
-        assert res.hits, "sample mode should still populate the UI"
-        assert res.total == len(res.hits)
+    async def test_an_unreachable_lake_says_no_query_ran(self, monkeypatch: pytest.MonkeyPatch):
+        async def _unavailable(*_a, **_kw):
+            return hunt_mod.LakeAnswer(available=False, reason="ClickHouse is not reachable", hits=[])
+
+        monkeypatch.setattr(hunt_mod, "_search_lake", _unavailable)
+        res = await hunt_mod.hunt_search(hunt_mod.HuntQuery(query="process_name:powershell"), _PRINCIPAL)
+
+        assert res.source == "unavailable"
+        assert res.notice and "no query ran" in res.notice.lower()
+        assert res.hits == [], "nothing may be invented for a query that did not run"
+        assert res.took_ms is None, "there is no latency to publish for work nobody did"
+
+    @pytest.mark.asyncio
+    async def test_a_lake_answer_is_declared_live_and_returns_its_rows(self, monkeypatch: pytest.MonkeyPatch):
+        async def _answered(*_a, **_kw):
+            return hunt_mod.LakeAnswer(
+                available=True,
+                reason=None,
+                hits=[
+                    {
+                        "id": "e1",
+                        "timestamp": "2026-11-03T00:00:00+00:00",
+                        "source": "crowdstrike",
+                        "event_type": "4688",
+                        "raw": {"process_name": "powershell.exe"},
+                        "highlights": ["process_name:powershell"],
+                    }
+                ],
+            )
+
+        monkeypatch.setattr(hunt_mod, "_search_lake", _answered)
+        res = await hunt_mod.hunt_search(hunt_mod.HuntQuery(query="process_name:powershell", limit=5), _PRINCIPAL)
+
+        assert res.source == "live"
+        assert res.hits and res.total == len(res.hits)
+
+    def test_the_fabricating_generator_is_gone_rather_than_relabelled(self):
+        assert not hasattr(hunt_mod, "_synthetic_hits")
 
 
 class TestCopilotProvenance:
