@@ -63,6 +63,7 @@ construction and logs once, rather than failing fusion import.
 from __future__ import annotations
 
 import asyncio
+import errno
 import ipaddress
 import json
 import random
@@ -433,6 +434,8 @@ def _is_connection_lake_error(exc: BaseException) -> bool:
     the outage direction loses events; guessing wrong in the data direction
     grows the buffer until it hits its explicit bound.
     """
+    if isinstance(exc, OSError) and exc.errno in {errno.EBADF, errno.ENOTCONN, errno.EPIPE}:
+        return True
     name = type(exc).__name__.lower()
     if any(marker in name for marker in ("network", "socket", "timeout", "connection", "unavailable")):
         return True
@@ -515,6 +518,7 @@ class LakeWriter:
         self._max_data_failures = max(1, int(max_data_failures or settings.lake_max_data_failures))
         self._client_factory = client_factory
         self._client: Any | None = None
+        self._flush_lock = asyncio.Lock()
         #: The queue is the spool, not a list. ``write_event`` returns True
         #: only once the row is on it, which is the property the consumer's
         #: offset commit now depends on.
@@ -734,16 +738,19 @@ class LakeWriter:
         *between* the insert and the commit replays those rows, which the
         deterministic ``event_id`` and ``LIMIT 1 BY event_id`` collapse.
         """
-        if self._disabled:
-            return
-        client = self._ensure_client()
-        if client is None:
-            return
-
-        for batch, segment, consumed in self._spool.read_batches(self._batch_size):
-            if not await self._insert_batch(client, batch, segment, consumed):
+        # The timer and consumer both flush; the native client and spool cursor
+        # must have one owner until the insert and its disk commit finish.
+        async with self._flush_lock:
+            if self._disabled:
                 return
-        self._oldest_pending_at = time.monotonic() if self._spool.rows_on_disk() else 0.0
+            client = self._ensure_client()
+            if client is None:
+                return
+
+            for batch, segment, consumed in self._spool.read_batches(self._batch_size):
+                if not await self._insert_batch(client, batch, segment, consumed):
+                    return
+            self._oldest_pending_at = time.monotonic() if self._spool.rows_on_disk() else 0.0
 
     async def _insert_batch(self, client: Any, batch: list[dict[str, Any]], segment: Any, consumed: int) -> bool:
         """Insert one batch. False means stop draining (the store is unhappy)."""
@@ -762,12 +769,17 @@ class LakeWriter:
                 rows.append(out)
             client.execute(_INSERT_SQL, rows, types_check=True)
 
+        insert_task = asyncio.create_task(asyncio.to_thread(_insert))
         try:
-            await asyncio.to_thread(_insert)
+            await asyncio.shield(insert_task)
         except asyncio.CancelledError:
-            # Cancellation (shutdown, task teardown) is a BaseException, so
-            # the handler below never sees it. Nothing is committed, so the
-            # rows stay spooled and the next start replays them.
+            # Cancelling an await cannot stop the driver's thread. Keep the
+            # flush lock until that thread exits before another flush or stop
+            # can reuse/disconnect the client. Uncommitted rows remain replayable.
+            try:
+                await insert_task
+            except Exception:  # noqa: BLE001 — retain the batch on shutdown
+                pass
             raise
         except Exception as exc:  # noqa: BLE001 — never raise into the consumer
             self.flush_failures += 1
