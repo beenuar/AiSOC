@@ -159,14 +159,25 @@ class Ledger:
             out = sys.stdout
         use_colour = bool(getattr(out, "isatty", lambda: False)())
 
+        def write(text: str) -> None:
+            # Windows consoles may expose legacy encodings such as cp1252.
+            # Preserve the complete demo when a glyph cannot be represented.
+            encoding = getattr(out, "encoding", None)
+            if encoding:
+                try:
+                    text.encode(encoding)
+                except UnicodeEncodeError:
+                    text = text.encode(encoding, errors="replace").decode(encoding)
+            out.write(text)
+
         def c(code: str, text: str) -> str:
             return f"\x1b[{code}m{text}\x1b[0m" if use_colour else text
 
         # Header so a reader who scrolled past the boot logs can still
         # tell what they're looking at. It is not sufficient on its own —
         # see the Decision lines, which carry the notice too.
-        out.write(c("1;36", "Investigation Ledger") + "\n")
-        out.write(f"  {len(self._steps)} steps · {sum(s.latency_ms for s in self._steps)} ms total · {SYNTHETIC_NOTICE}\n\n")
+        write(c("1;36", "Investigation Ledger") + "\n")
+        write(f"  {len(self._steps)} steps · {sum(s.latency_ms for s in self._steps)} ms total · {SYNTHETIC_NOTICE}\n\n")
 
         for s in self._steps:
             stage_label = {
@@ -175,16 +186,16 @@ class Ledger:
                 "hunt": c("35", "HUNT"),
                 "respond": c("32", "RESPOND"),
             }.get(s.funnel_stage, s.funnel_stage.upper())
-            out.write(f"{c('1', f'Step {s.step:>2}')}  {stage_label}  {c('2', s.agent)}  {c('2', f'({s.latency_ms} ms)')}\n")
-            out.write(f"  Action     {s.action}\n")
-            out.write(f"  Rationale  {_wrap(s.rationale)}\n")
+            write(f"{c('1', f'Step {s.step:>2}')}  {stage_label}  {c('2', s.agent)}  {c('2', f'({s.latency_ms} ms)')}\n")
+            write(f"  Action     {s.action}\n")
+            write(f"  Rationale  {_wrap(s.rationale)}\n")
             for key, value in s.evidence.items():
-                out.write(_render_evidence(key, value))
+                write(_render_evidence(key, value))
             for tc in s.tool_calls:
-                out.write(f"  → would-call {c('36', str(tc.get('name')))}({json.dumps(tc.get('args', {}), default=str)})  [not executed]\n")
+                write(f"  → would-call {c('36', str(tc.get('name')))}({json.dumps(tc.get('args', {}), default=str)})  [not executed]\n")
             if s.decision:
-                out.write(f"  {c('1', 'Decision')}   {_wrap(s.decision, indent=14)}\n")
-            out.write("\n")
+                write(f"  {c('1', 'Decision')}   {_wrap(s.decision, indent=14)}\n")
+            write("\n")
 
 
 def _wrap(text: str, *, indent: int = 13, width: int = 96) -> str:
