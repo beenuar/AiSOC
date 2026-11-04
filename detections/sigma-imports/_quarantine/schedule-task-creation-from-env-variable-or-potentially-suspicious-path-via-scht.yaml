@@ -69,6 +69,7 @@ detection:
   condition: ( all of selection_1_* or all of selection_2_* ) and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: 81325ce1-be01-4250-944f-b4789644556f
   source_commit: df5c6a6
   license: DRL-1.1

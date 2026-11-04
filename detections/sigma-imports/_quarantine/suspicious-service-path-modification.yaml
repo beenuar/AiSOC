@@ -45,6 +45,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 138d3531-8793-4f50-a2cd-f291b2863d78
   source_commit: df5c6a6
   license: DRL-1.1

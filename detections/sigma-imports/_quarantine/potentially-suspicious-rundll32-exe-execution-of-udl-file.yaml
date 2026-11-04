@@ -33,6 +33,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@kostastsale'
   source_id: 0ea52357-cd59-4340-9981-c46c7e900428
   source_commit: df5c6a6
   license: DRL-1.1

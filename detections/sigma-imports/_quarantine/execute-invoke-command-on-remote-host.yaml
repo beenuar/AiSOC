@@ -25,6 +25,7 @@ detection:
   condition: selection_cmdlet
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 7b836d7f-179c-4ba4-90a7-a7e60afb48e6
   source_commit: df5c6a6
   license: DRL-1.1

@@ -33,6 +33,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, oscd.community, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 24357373-078f-44ed-9ac4-6d334a668a11
   source_commit: df5c6a6
   license: DRL-1.1

@@ -44,6 +44,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Pawel Mazur'
   source_id: f34047d9-20d3-4e8b-8672-0a35cc50dc71
   source_commit: df5c6a6
   license: DRL-1.1

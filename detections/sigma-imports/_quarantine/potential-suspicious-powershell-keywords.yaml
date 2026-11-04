@@ -34,6 +34,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Perez Diego (@darkquassar), Tuan Le (NCSGroup)'
   source_id: 1f49f2ab-26bc-48b3-96cc-dcffbc93eadf
   source_commit: df5c6a6
   license: DRL-1.1

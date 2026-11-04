@@ -112,6 +112,7 @@ detection:
   condition: 1 of selection_webserver_* and 1 of selection_susp_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Jonhnathan Ribeiro, Anton Kutepov, oscd.community, Chad Hudson, Matt Anderson'
   source_id: bed2a484-9348-4143-8a8a-b801c979301c
   source_commit: df5c6a6
   license: DRL-1.1

@@ -28,6 +28,7 @@ detection:
   condition: selection and not 1 of filter*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Diogo Braz'
   source_id: 54b9a76a-3c71-4673-b4b3-2edb4566ea7b
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Josh Nickels, mttaggart'
   source_id: 7f2376f9-42ee-4dfc-9360-fecff9a88fc8
   source_commit: df5c6a6
   license: DRL-1.1

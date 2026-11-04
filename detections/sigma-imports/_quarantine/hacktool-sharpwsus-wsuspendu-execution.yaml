@@ -42,6 +42,7 @@ detection:
   condition: all of selection_wsuspendu_* or all of selection_sharpwsus_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@Kostastsale, Nasreddine Bencherchali (Nextron Systems)'
   source_id: b0ce780f-10bd-496d-9067-066d23dc3aa5
   source_commit: df5c6a6
   license: DRL-1.1

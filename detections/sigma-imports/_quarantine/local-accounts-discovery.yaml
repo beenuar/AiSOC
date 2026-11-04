@@ -60,6 +60,7 @@ detection:
     or 1 of selection_other_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, Daniil Yugoslavskiy, oscd.community'
   source_id: 502b42de-4306-40b4-9596-6f590c81f073
   source_commit: df5c6a6
   license: DRL-1.1

@@ -25,6 +25,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Elastic (idea)'
   source_id: 49f2f17b-b4c8-4172-a68b-d5bf95d05130
   source_commit: df5c6a6
   license: DRL-1.1

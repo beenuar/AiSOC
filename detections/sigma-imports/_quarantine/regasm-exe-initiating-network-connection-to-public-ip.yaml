@@ -32,6 +32,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 0531e43a-d77d-47c2-b89f-5fe50321c805
   source_commit: df5c6a6
   license: DRL-1.1

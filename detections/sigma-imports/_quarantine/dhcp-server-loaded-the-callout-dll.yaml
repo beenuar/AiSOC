@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Dimitrios Slamaris'
   source_id: 13fc89a9-971e-4ca6-b9dc-aa53a445bf40
   source_commit: df5c6a6
   license: DRL-1.1

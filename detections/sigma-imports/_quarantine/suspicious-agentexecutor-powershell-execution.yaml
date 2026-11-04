@@ -35,6 +35,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), memory-shards'
   source_id: c0b40568-b1e9-4b03-8d6c-b096da6da9ab
   source_commit: df5c6a6
   license: DRL-1.1

@@ -41,6 +41,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Craig Young, oscd.community, Georg Lauenstein'
   source_id: 5cc90652-4cbd-4241-aa3b-4b462fa5a248
   source_commit: df5c6a6
   license: DRL-1.1

@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Patrick Bareiss'
   source_id: 66b6be3d-55d0-4f47-9855-d69df21740ea
   source_commit: df5c6a6
   license: DRL-1.1

@@ -28,6 +28,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ilyas Ochkov, oscd.community, Tim Shelton'
   source_id: 4f84b697-c9ed-4420-8ab5-e09af5b2345d
   source_commit: df5c6a6
   license: DRL-1.1

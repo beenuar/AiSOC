@@ -36,6 +36,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Patrick St. John, OTR (Open Threat Research)'
   source_id: cbb56d62-4060-40f7-9466-d8aaf3123f83
   source_commit: df5c6a6
   license: DRL-1.1

@@ -29,6 +29,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Burrell'
   source_id: 166e9c50-8cd9-44af-815d-d1f0c0e90dde
   source_commit: df5c6a6
   license: DRL-1.1

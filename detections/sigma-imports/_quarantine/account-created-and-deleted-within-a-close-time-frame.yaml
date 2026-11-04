@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mark Morowczynski ''@markmorow'', MikeDuddington, ''@dudders1'', Tim Shelton'
   source_id: 6f583da0-3a90-4566-a4ed-83c09fe18bbf
   source_commit: df5c6a6
   license: DRL-1.1

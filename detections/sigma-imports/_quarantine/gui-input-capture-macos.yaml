@@ -36,6 +36,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'remotephone, oscd.community'
   source_id: 60f1ce20-484e-41bd-85f4-ac4afec2c541
   source_commit: df5c6a6
   license: DRL-1.1

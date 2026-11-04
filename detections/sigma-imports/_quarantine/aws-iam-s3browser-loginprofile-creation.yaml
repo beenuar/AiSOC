@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'daniel.bohannon@permiso.io (@danielhbohannon)'
   source_id: db014773-b1d3-46bd-ba26-133337c0ffee
   source_commit: df5c6a6
   license: DRL-1.1

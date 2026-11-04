@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden (original elastic rule), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 472159c5-31b9-4f56-b794-b766faa8b0a7
   source_commit: df5c6a6
   license: DRL-1.1

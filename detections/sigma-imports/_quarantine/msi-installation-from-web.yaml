@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Stamatis Chatzimangou'
   source_id: 5594e67a-7f92-4a04-b65d-1a42fd824a60
   source_commit: df5c6a6
   license: DRL-1.1

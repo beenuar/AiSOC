@@ -28,6 +28,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'EagleEye Team'
   source_id: e81528db-fc02-45e8-8e98-4e84aba1f10b
   source_commit: df5c6a6
   license: DRL-1.1

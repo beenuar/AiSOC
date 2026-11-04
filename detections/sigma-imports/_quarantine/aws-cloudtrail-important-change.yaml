@@ -23,6 +23,7 @@ detection:
   condition: selection_source
 provenance:
   source: SigmaHQ/sigma
+  author: 'vitaliy0x1'
   source_id: 4db60cc0-36fb-42b7-9b58-a5b53019fb74
   source_commit: df5c6a6
   license: DRL-1.1

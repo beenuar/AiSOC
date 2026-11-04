@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Muhammad Faisal (@faisalusuf)'
   source_id: 34d81081-03c9-4a7f-91c9-5e46af625cde
   source_commit: df5c6a6
   license: DRL-1.1

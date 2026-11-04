@@ -34,6 +34,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@kostastsale'
   source_id: 84b1706c-932a-44c4-ae28-892b28a25b94
   source_commit: df5c6a6
   license: DRL-1.1

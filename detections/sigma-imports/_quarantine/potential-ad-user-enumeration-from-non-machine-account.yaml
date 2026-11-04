@@ -38,6 +38,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Maxime Thiebaut (@0xThiebaut)'
   source_id: ab6bffca-beff-4baa-af11-6733f296d57a
   source_commit: df5c6a6
   license: DRL-1.1

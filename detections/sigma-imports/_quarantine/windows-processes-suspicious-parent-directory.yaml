@@ -48,6 +48,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'vburov'
   source_id: 96036718-71cc-4027-a538-d1587e0006a7
   source_commit: df5c6a6
   license: DRL-1.1

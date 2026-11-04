@@ -46,6 +46,7 @@ detection:
   condition: selection_img and (all of selection_susp_1_* or selection_susp_2)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Michael McKinley (@McKinleyMike), Tony Latteri (@TheLatteri)'
   source_id: 631b22a4-70f4-4e2f-9ea8-42f84d9df6d8
   source_commit: df5c6a6
   license: DRL-1.1

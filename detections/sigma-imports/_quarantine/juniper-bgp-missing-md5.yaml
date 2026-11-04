@@ -25,6 +25,7 @@ detection:
   condition: keywords_bgp_juniper
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Brown'
   source_id: a7c0ae48-8df8-42bf-91bd-2ea57e2f9d43
   source_commit: df5c6a6
   license: DRL-1.1

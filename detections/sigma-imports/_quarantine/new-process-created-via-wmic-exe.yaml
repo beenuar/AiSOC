@@ -27,6 +27,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael Haag, Florian Roth (Nextron Systems), juju4, oscd.community'
   source_id: 526be59f-a573-4eea-b5f7-f0973207634d
   source_commit: df5c6a6
   license: DRL-1.1

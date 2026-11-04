@@ -30,6 +30,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'David Faiss'
   source_id: d7c75059-2901-4578-b209-8837fd31c6a8
   source_commit: df5c6a6
   license: DRL-1.1

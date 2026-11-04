@@ -24,6 +24,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'oscd.community, Natalia Shornikova'
   source_id: fc014922-5def-4da9-a0fc-28c973f41bfb
   source_commit: df5c6a6
   license: DRL-1.1

@@ -48,6 +48,7 @@ detection:
   condition: selection_registry and 1 of selection_folders_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior (Nextron Systems)'
   source_id: 9d8f9bb8-01af-4e15-a3a2-349071530530
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Konstantin Grishchenko, oscd.community'
   source_id: 285b85b1-a555-4095-8652-a8a4106af63f
   source_commit: df5c6a6
   license: DRL-1.1

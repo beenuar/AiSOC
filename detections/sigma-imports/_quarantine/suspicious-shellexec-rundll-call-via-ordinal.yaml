@@ -62,6 +62,7 @@ detection:
   condition: all of selection_parent_* and 1 of selection_susp_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel'
   source_id: 8823e85d-31d8-473e-b7f4-92da070f0fc6
   source_commit: df5c6a6
   license: DRL-1.1

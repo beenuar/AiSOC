@@ -30,6 +30,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Chester Le Bron (@123Le_Bron)'
   source_id: f8103686-e3e8-46f3-be72-65f7fcb4aa53
   source_commit: df5c6a6
   license: DRL-1.1

@@ -49,6 +49,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Vadim Khrykov, Cyb3rEng'
   source_id: e1693bc8-7168-4eab-8718-cdcaa68a1738
   source_commit: df5c6a6
   license: DRL-1.1

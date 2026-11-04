@@ -128,6 +128,7 @@ detection:
   condition: all of chrome_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: b64a026b-8deb-4c1d-92fd-98893209dff1
   source_commit: df5c6a6
   license: DRL-1.1

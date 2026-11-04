@@ -23,6 +23,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'oscd.community, Dmitry Uchakin'
   source_id: a5ea83a7-05a5-44c1-be2e-addccbbd8c03
   source_commit: df5c6a6
   license: DRL-1.1

@@ -52,6 +52,7 @@ detection:
   condition: selection_reg and 1 of selection_option_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 0fc35fc3-efe6-4898-8a37-0b233339524f
   source_commit: df5c6a6
   license: DRL-1.1

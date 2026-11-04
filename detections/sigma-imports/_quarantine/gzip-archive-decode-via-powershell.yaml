@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Hieu Tran'
   source_id: 98767d61-b2e8-4d71-b661-e36783ee24c1
   source_commit: df5c6a6
   license: DRL-1.1

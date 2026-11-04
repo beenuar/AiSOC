@@ -33,6 +33,7 @@ detection:
   condition: selection_meshagent and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Norbert Jaśniewicz (AlphaSOC)'
   source_id: b471f462-eb0d-4832-be35-28d94bdb4780
   source_commit: df5c6a6
   license: DRL-1.1

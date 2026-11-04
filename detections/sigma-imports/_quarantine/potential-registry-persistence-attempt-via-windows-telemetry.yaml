@@ -50,6 +50,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Lednyov Alexey, oscd.community, Sreeman'
   source_id: 73a883d0-0348-4be4-a8d8-51031c2564f8
   source_commit: df5c6a6
   license: DRL-1.1

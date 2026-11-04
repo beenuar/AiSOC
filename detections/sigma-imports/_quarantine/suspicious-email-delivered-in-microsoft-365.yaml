@@ -32,6 +32,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Marco Pedrinazzi (@pedrinazziM) (InTheCyber)'
   source_id: 3569aefd-e535-4391-8c18-24bd01a21eaf
   source_commit: df5c6a6
   license: DRL-1.1

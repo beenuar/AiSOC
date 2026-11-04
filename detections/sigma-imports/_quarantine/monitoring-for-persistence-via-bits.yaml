@@ -45,6 +45,7 @@ detection:
   condition: selection_img and (all of selection_cli_notify_* or all of selection_cli_add_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sreeman'
   source_id: b9cbbc17-d00d-4e3d-a827-b06d03d2380d
   source_commit: df5c6a6
   license: DRL-1.1

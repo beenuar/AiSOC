@@ -49,6 +49,7 @@ detection:
   condition: 1 of selection_image_* and selection_user and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov (idea), Mangatas Tondang (rule), oscd.community'
   source_id: cd951fdc-4b2f-47f5-ba99-a33bf61e3770
   source_commit: df5c6a6
   license: DRL-1.1

@@ -26,6 +26,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Wietze Beukema'
   source_id: cdb15e19-c2d0-432a-928e-e49c8c60dcf2
   source_commit: df5c6a6
   license: DRL-1.1

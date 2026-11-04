@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Corissa Koopmans, ''@corissalea'''
   source_id: 50a3c7aa-ec29-44a4-92c1-fce229eef6fc
   source_commit: df5c6a6
   license: DRL-1.1

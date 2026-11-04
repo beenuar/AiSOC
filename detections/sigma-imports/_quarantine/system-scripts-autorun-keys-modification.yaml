@@ -29,6 +29,7 @@ detection:
   condition: scripts_base and scripts and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: e7a2fd40-3ae1-4a85-bf80-15cf624fb1b1
   source_commit: df5c6a6
   license: DRL-1.1

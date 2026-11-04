@@ -42,6 +42,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, Roberto Rodriguez (@Cyb3rWard0g), Open Threat Research (OTR)'
   source_id: 590a5f4c-6c8c-4f10-8307-89afe9453a9d
   source_commit: df5c6a6
   license: DRL-1.1

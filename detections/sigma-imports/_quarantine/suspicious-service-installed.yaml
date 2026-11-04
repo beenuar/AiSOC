@@ -34,6 +34,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'xknow (@xknow_infosec), xorxes (@xor_xes)'
   source_id: f2485272-a156-4773-82d7-1d178bc4905b
   source_commit: df5c6a6
   license: DRL-1.1

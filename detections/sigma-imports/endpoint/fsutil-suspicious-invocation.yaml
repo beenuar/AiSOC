@@ -33,6 +33,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ecco, E.M. Anhaus, oscd.community'
   source_id: add64136-62e5-48ea-807e-88638d02df1e
   source_commit: df5c6a6
   license: DRL-1.1

@@ -275,6 +275,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, Nasreddine Bencherchali (Nextron Systems), Mustafa Kaan Demir, Georg Lauenstein'
   source_id: f331aa1f-8c53-4fc3-b083-cc159bc971cb
   source_commit: df5c6a6
   license: DRL-1.1

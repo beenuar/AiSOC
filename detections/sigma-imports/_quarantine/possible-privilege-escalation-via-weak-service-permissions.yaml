@@ -32,6 +32,7 @@ detection:
   condition: scbynonadmin and 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov'
   source_id: d937b75f-a665-4480-88a5-2f20e9f9b22a
   source_commit: df5c6a6
   license: DRL-1.1

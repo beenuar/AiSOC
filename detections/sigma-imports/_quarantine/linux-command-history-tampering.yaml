@@ -38,6 +38,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'Patrick Bareiss'
   source_id: fdc88d25-96fb-4b7c-9633-c0e417fdbd4e
   source_commit: df5c6a6
   license: DRL-1.1

@@ -24,6 +24,7 @@ detection:
   condition: selection and filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Kiran kumar s, oscd.community'
   source_id: 50e54b8d-ad73-43f8-96a1-5191685b17a4
   source_commit: df5c6a6
   license: DRL-1.1

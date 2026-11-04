@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Hieu Tran'
   source_id: 1c8e96cd-2bed-487d-9de0-b46c90cade56
   source_commit: df5c6a6
   license: DRL-1.1

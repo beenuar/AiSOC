@@ -25,6 +25,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bartlomiej Czyz @bczyz1, oscd.community'
   source_id: 67a6c006-3fbe-46a7-9074-2ba3b82c3000
   source_commit: df5c6a6
   license: DRL-1.1

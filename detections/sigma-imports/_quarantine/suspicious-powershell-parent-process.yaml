@@ -55,6 +55,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, Harish Segar'
   source_id: 754ed792-634f-40ae-b3bc-e0448d33f695
   source_commit: df5c6a6
   license: DRL-1.1

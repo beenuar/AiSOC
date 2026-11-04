@@ -37,6 +37,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Hieu Tran'
   source_id: 4aa6040b-3f28-44e3-a769-9208e5feb5ec
   source_commit: df5c6a6
   license: DRL-1.1

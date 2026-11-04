@@ -33,6 +33,7 @@ detection:
   condition: selection and 1 of anomaly*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: ea3ecad2-db86-4a89-ad0b-132a10d2db55
   source_commit: df5c6a6
   license: DRL-1.1

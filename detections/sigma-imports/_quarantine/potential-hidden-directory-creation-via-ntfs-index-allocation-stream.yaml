@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Scoubi (@ScoubiMtl)'
   source_id: a8f866e1-bdd4-425e-a27a-37619238d9c7
   source_commit: df5c6a6
   license: DRL-1.1

@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michaela Adams, Zach Mathis'
   source_id: 02f7c9c1-1ae8-4c6a-8add-04693807f92f
   source_commit: df5c6a6
   license: DRL-1.1

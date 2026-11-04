@@ -108,6 +108,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel'
   source_id: d0d2f720-d14f-448d-8242-51ff396a334e
   source_commit: df5c6a6
   license: DRL-1.1

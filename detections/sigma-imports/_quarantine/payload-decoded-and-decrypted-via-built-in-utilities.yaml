@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch (rule), Elastic (idea)'
   source_id: 234dc5df-40b5-49d1-bf53-0d44ce778eca
   source_commit: df5c6a6
   license: DRL-1.1

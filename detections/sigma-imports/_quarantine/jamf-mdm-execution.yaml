@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jay Pandit'
   source_id: be2e3a5c-9cc7-4d02-842a-68e9cb26ec49
   source_commit: df5c6a6
   license: DRL-1.1

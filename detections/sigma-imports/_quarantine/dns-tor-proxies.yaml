@@ -64,6 +64,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Saw Winn Naung , Azure-Sentinel'
   source_id: a8322756-015c-42e7-afb1-436e85ed3ff5
   source_commit: df5c6a6
   license: DRL-1.1

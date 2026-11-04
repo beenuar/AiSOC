@@ -72,6 +72,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Matthew Green - @mgreen27, Florian Roth (Nextron Systems), frack113'
   source_id: 0ba1da6d-b6ce-4366-828c-18826c9de23e
   source_commit: df5c6a6
   license: DRL-1.1

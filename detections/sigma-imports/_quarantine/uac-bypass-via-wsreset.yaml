@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'oscd.community, Dmitry Uchakin'
   source_id: 6ea3bf32-9680-422d-9f50-e90716b12a66
   source_commit: df5c6a6
   license: DRL-1.1

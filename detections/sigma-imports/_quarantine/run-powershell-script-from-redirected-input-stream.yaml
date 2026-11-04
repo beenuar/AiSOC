@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Moriarty Meng (idea), Anton Kutepov (rule), oscd.community'
   source_id: c83bf4b5-cdf0-437c-90fa-43d734f7c476
   source_commit: df5c6a6
   license: DRL-1.1

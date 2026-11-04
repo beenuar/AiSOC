@@ -33,6 +33,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 1dde5376-a648-492e-9e54-4241dd9b0c7f
   source_commit: df5c6a6
   license: DRL-1.1

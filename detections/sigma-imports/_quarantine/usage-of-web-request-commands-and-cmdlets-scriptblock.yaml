@@ -34,6 +34,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'James Pemberton / @4A616D6573'
   source_id: 1139d2e2-84b1-4226-b445-354492eba8ba
   source_commit: df5c6a6
   license: DRL-1.1

@@ -70,6 +70,7 @@ detection:
   condition: not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, oscd.community'
   source_id: db809f10-56ce-4420-8c86-d6a7d793c79c
   source_commit: df5c6a6
   license: DRL-1.1

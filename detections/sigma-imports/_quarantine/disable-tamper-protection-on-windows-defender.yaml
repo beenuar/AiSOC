@@ -25,6 +25,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Austin Songer @austinsonger'
   source_id: 93d298a1-d28f-47f1-a468-d971e7796679
   source_commit: df5c6a6
   license: DRL-1.1

@@ -46,6 +46,7 @@ detection:
   condition: selection_key and (all of selection_powershell_* or all of selection_reg_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 7dbbcac2-57a0-45ac-b306-ff30a8bd2981
   source_commit: df5c6a6
   license: DRL-1.1

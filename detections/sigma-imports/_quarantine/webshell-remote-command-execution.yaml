@@ -37,6 +37,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ilyas Ochkov, Beyu Denis, oscd.community'
   source_id: c0d3734d-330f-4a03-aae2-65dacc6a8222
   source_commit: df5c6a6
   license: DRL-1.1

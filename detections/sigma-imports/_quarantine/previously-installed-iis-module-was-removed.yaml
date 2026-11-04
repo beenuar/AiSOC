@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali'
   source_id: 9e1a1fdf-ee58-40ce-8e15-b66ca5a80e1f
   source_commit: df5c6a6
   license: DRL-1.1

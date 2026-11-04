@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'James Pemberton'
   source_id: ce5678bb-b9aa-4fb5-be4b-e57f686256ad
   source_commit: df5c6a6
   license: DRL-1.1

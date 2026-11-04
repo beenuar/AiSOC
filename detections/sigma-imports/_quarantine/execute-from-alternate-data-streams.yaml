@@ -42,6 +42,7 @@ detection:
   condition: selection_stream and (1 of selection_tools_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 7f43c430-5001-4f8b-aaa9-c3b88f18fa5c
   source_commit: df5c6a6
   license: DRL-1.1

@@ -50,6 +50,7 @@ detection:
     not filter_main_img)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: f91e51c9-f344-4b32-969b-0b6f6b8537d4
   source_commit: df5c6a6
   license: DRL-1.1

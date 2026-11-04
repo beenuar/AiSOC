@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Axel Olsson'
   source_id: 1a9bb21a-1bb5-42d7-aa05-3219c7c8f47d
   source_commit: df5c6a6
   license: DRL-1.1

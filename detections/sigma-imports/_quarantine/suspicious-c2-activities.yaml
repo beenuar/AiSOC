@@ -75,6 +75,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Marie Euler'
   source_id: f7158a64-6204-4d6d-868a-6e6378b467e0
   source_commit: df5c6a6
   license: DRL-1.1

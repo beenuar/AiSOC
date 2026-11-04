@@ -38,6 +38,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Stephen Lincoln `@slincoln_aiq` (AttackIQ)'
   source_id: 4809c683-059b-4935-879d-36835986f8cf
   source_commit: df5c6a6
   license: DRL-1.1

@@ -25,6 +25,7 @@ detection:
   condition: keywords_bgp_cisco
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Brown'
   source_id: 56fa3cd6-f8d6-4520-a8c7-607292971886
   source_commit: df5c6a6
   license: DRL-1.1

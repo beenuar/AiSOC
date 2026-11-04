@@ -43,6 +43,7 @@ detection:
   condition: all of selection_* and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Semanur Guneysu @semanurtg, oscd.community'
   source_id: d522eca2-2973-4391-a3e0-ef0374321dae
   source_commit: df5c6a6
   license: DRL-1.1

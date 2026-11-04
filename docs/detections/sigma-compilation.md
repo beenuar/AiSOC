@@ -76,22 +76,26 @@ travel with it. Every compiled rule therefore carries a `provenance` block,
 and the engine stamps that attribution onto each alert, because DRL-1.1 also
 requires messages produced by a match to identify the rule's author.
 
-### Known gap: the author is not the person
+### Author attribution
 
-What travels today is the upstream repository, the rule's upstream UUID,
-its path in that repository and the licence — enough to find the rule, not
-enough to name who wrote it. `provenance.author` is empty on all
-1,770 compiled rules, because the Sigma importer never read the
-upstream `author:` field, and the compiler can only carry forward what the
-importer recorded. `_attribution()` in the detection engine is built from
-whatever the block actually holds, so the alert reads *Translated from
-SigmaHQ/sigma (rules/...), licensed under DRL-1.1* rather than naming an
-author called `""` — the sentence is short rather than false, which is the
-right behaviour for a gap but is not the same as closing it.
+`provenance.author` names the upstream author on 1,770 of the
+1,770 compiled rules.
+The author travels with the rule and into the alert: `_attribution()` in
+the detection engine renders it onto every match, so a hit on *WScript or
+CScript Dropper - File* reads *Translated from SigmaHQ/sigma by Tim
+Shelton (rules/...), licensed under DRL-1.1*.
 
-Closing it needs a re-import: the field has to be captured at import time
-and the corpus recompiled. It is reported here rather than left implicit
-because a licence obligation that is partly met is not met, and a reader
-comparing this corpus against DRL-1.1 should not have to discover that by
-reading the JSON.
+This was open until November 2026, and the way it stayed open is worth
+recording. The field was never read at import, so every compiled rule
+credited a repository and no person; this section said so, under the
+heading *Known gap: the author is not the person*. Documenting a licence
+obligation is not meeting it — a caveat reads as modesty and functions as
+an exemption — and it took Florian Roth, who created Sigma, filing
+[#1680](https://github.com/beenuar/AiSOC/issues/1680) to close it.
+
+Attribution is re-read from SigmaHQ/sigma at the commit the importer pins,
+not from whatever `master` holds, so the credit is reproducible:
+`scripts/sync_sigma_authors.py --check` verifies every vendored rule
+against that commit, and `scripts/check_detection_attribution.py` fails the
+build if any DRL-1.1 rule on any surface ships without an author.
 

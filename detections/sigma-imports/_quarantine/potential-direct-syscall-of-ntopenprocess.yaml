@@ -68,6 +68,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christian Burkard (Nextron Systems), Tim Shelton (FP)'
   source_id: 3f3f3506-1895-401b-9cc3-e86b16e630d0
   source_commit: df5c6a6
   license: DRL-1.1

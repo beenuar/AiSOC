@@ -25,6 +25,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez @Cyb3rWard0g, Tim Shelton'
   source_id: 96b9f619-aa91-478f-bacb-c3e50f8df575
   source_commit: df5c6a6
   license: DRL-1.1

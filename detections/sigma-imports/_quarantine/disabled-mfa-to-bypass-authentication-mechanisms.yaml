@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@ionsor'
   source_id: 7ea78478-a4f9-42a6-9dcd-f861816122bf
   source_commit: df5c6a6
   license: DRL-1.1

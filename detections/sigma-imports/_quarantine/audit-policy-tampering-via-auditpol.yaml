@@ -30,6 +30,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Janantha Marasinghe (https://github.com/blueteam0ps)'
   source_id: 0a13e132-651d-11eb-ae93-0242ac130002
   source_commit: df5c6a6
   license: DRL-1.1

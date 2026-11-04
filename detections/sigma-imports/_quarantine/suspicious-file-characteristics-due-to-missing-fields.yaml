@@ -30,6 +30,7 @@ detection:
   condition: (selection1 or selection2 or selection3) and folder
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, Sander Wiebing'
   source_id: 9637e8a5-7131-4f7f-bdc7-2b05d8670c43
   source_commit: df5c6a6
   license: DRL-1.1

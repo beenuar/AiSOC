@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ivan Saakov, Nasreddine Bencherchali'
   source_id: 6393e346-1977-46ef-8987-ad414a145fad
   source_commit: df5c6a6
   license: DRL-1.1

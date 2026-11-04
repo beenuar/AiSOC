@@ -46,6 +46,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sai Prashanth Pulisetti, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 41f407b5-3096-44ea-a74f-96d04fbc41be
   source_commit: df5c6a6
   license: DRL-1.1

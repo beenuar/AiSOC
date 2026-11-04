@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alexander Rausch'
   source_id: 130c9e58-28ac-4f83-8574-0a4cc913b97e
   source_commit: df5c6a6
   license: DRL-1.1

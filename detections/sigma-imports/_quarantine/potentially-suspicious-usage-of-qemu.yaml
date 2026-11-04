@@ -38,6 +38,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Muhammad Faisal (@faisalusuf), Hunter Juhan (@threatHNTR)'
   source_id: 5fc297ae-25b6-488a-8f25-cc12ac29b744
   source_commit: df5c6a6
   license: DRL-1.1

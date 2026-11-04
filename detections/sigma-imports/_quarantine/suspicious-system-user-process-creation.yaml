@@ -96,6 +96,7 @@ detection:
   condition: all of selection* and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), David ANDRE (additional keywords)'
   source_id: 2617e7ed-adb7-40ba-b0f3-8f9945fe6c09
   source_commit: df5c6a6
   license: DRL-1.1

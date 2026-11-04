@@ -35,6 +35,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Thomas Patzke'
   source_id: 6f8b3439-a203-45dc-a88b-abf57ea15ccf
   source_commit: df5c6a6
   license: DRL-1.1

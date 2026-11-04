@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@Kostastsale, TheDFIRReport'
   source_id: 9ec9fb1b-e059-4489-9642-f270c207923d
   source_commit: df5c6a6
   license: DRL-1.1

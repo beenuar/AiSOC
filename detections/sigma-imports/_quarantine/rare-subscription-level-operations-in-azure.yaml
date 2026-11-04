@@ -26,6 +26,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'sawwinnnaung'
   source_id: c1182e02-49a3-481c-b3de-0fadc4091488
   source_commit: df5c6a6
   license: DRL-1.1

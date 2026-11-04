@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sittikorn S, Teoderick Contreras'
   source_id: 067d8238-7127-451c-a9ec-fa78045b618b
   source_commit: df5c6a6
   license: DRL-1.1

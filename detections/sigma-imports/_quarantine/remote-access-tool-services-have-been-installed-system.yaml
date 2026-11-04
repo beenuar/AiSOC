@@ -46,6 +46,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Connor Martin, Nasreddine Bencherchali'
   source_id: 1a31b18a-f00c-4061-9900-f735b96c99fc
   source_commit: df5c6a6
   license: DRL-1.1

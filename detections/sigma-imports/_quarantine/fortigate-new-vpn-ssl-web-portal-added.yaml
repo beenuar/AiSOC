@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Marco Pedrinazzi @pedrinazziM (InTheCyber)'
   source_id: 2bfb6216-0c31-4d20-8501-2629b29a3fa2
   source_commit: df5c6a6
   license: DRL-1.1

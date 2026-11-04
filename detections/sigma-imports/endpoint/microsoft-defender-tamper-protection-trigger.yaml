@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bhabesh Raj, Nasreddine Bencherchali'
   source_id: 49e5bc24-8b86-49f1-b743-535f332c2856
   source_commit: df5c6a6
   license: DRL-1.1

@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, Nasreddine Bencherchali (Nextron Systems)'
   source_id: e212d415-0e93-435f-9e1a-f29005bb4723
   source_commit: df5c6a6
   license: DRL-1.1

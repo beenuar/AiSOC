@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 9711de76-5d4f-4c50-a94f-21e4e8f8384d
   source_commit: df5c6a6
   license: DRL-1.1

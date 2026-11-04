@@ -28,6 +28,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Norbert Jaśniewicz (AlphaSOC)'
   source_id: 2fbbe9ff-0afc-470b-bdc0-592198339968
   source_commit: df5c6a6
   license: DRL-1.1

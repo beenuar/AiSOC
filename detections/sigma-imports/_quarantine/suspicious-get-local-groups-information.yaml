@@ -43,6 +43,7 @@ detection:
   condition: selection_localgroup or all of selection_wmi_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: cef24b90-dddc-4ae1-a09a-8764872f69fc
   source_commit: df5c6a6
   license: DRL-1.1

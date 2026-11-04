@@ -66,6 +66,7 @@ detection:
   condition: selection_img and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christian Burkard (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 1816994b-42e1-4fb1-afd2-134d88184f71
   source_commit: df5c6a6
   license: DRL-1.1

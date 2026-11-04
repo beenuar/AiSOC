@@ -764,6 +764,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@Kostastsale, TheDFIRReport'
   source_id: 225274c4-8dd1-40db-9e09-71dff4f6fb3c
   source_commit: df5c6a6
   license: DRL-1.1

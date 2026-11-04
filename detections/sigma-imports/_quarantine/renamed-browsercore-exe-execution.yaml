@@ -23,6 +23,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Max Altgelt (Nextron Systems)'
   source_id: 8a4519e8-e64a-40b6-ae85-ba8ad2177559
   source_commit: df5c6a6
   license: DRL-1.1

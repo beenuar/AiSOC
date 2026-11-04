@@ -34,6 +34,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Max Altgelt (Nextron Systems)'
   source_id: 3c1b5fb0-c72f-45ba-abd1-4d4c353144ab
   source_commit: df5c6a6
   license: DRL-1.1

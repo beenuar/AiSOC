@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'CD_R0M_'
   source_id: 7530b96f-ad8e-431d-a04d-ac85cc461fdc
   source_commit: df5c6a6
   license: DRL-1.1

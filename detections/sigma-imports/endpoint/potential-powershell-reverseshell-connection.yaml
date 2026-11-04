@@ -33,6 +33,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'FPT.EagleEye, wagga, Nasreddine Bencherchali (Nextron Systems)'
   source_id: edc2f8ae-2412-4dfd-b9d5-0c57727e70be
   source_commit: df5c6a6
   license: DRL-1.1

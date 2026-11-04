@@ -45,6 +45,7 @@ detection:
   condition: selection_img and 1 of selection_folders_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Luc Génaux'
   source_id: b48492dc-c5ef-4572-8dff-32bc241c15c8
   source_commit: df5c6a6
   license: DRL-1.1

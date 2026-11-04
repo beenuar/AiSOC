@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ján Trenčanský'
   source_id: 114e7f1c-f137-48c8-8f54-3088c24ce4b9
   source_commit: df5c6a6
   license: DRL-1.1

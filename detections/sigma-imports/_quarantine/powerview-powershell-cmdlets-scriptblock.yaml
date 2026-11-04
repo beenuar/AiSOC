@@ -75,6 +75,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bhabesh Raj'
   source_id: dcd74b95-3f36-4ed9-9598-0490951643aa
   source_commit: df5c6a6
   license: DRL-1.1

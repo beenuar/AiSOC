@@ -32,6 +32,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: 480421f9-417f-4d3b-9552-fd2728443ec8
   source_commit: df5c6a6
   license: DRL-1.1

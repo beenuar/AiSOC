@@ -48,6 +48,7 @@ detection:
   condition: selection_key and (all of selection_powershell_* or all of selection_wmic_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ahmed Farouk, Nasreddine Bencherchali'
   source_id: a7df0e9e-91a5-459a-a003-4cde67c2ff5d
   source_commit: df5c6a6
   license: DRL-1.1

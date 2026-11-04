@@ -32,6 +32,7 @@ detection:
     filter_toshiba)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Wietze Beukema (project and research)'
   source_id: f9df325d-d7bc-4a32-8a1a-2cc61dcefc63
   source_commit: df5c6a6
   license: DRL-1.1

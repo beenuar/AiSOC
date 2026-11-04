@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Omar Khaled (@beacon_exe)'
   source_id: 3b2c1059-ae5f-40b6-b5d4-6106d3ac20fe
   source_commit: df5c6a6
   license: DRL-1.1

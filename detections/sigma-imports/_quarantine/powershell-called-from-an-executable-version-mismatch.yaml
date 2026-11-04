@@ -25,6 +25,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sean Metcalf (source), Florian Roth (Nextron Systems)'
   source_id: c70e019b-1479-4b65-b0cc-cd0c6093a599
   source_commit: df5c6a6
   license: DRL-1.1

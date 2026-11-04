@@ -48,6 +48,7 @@ detection:
   condition: selection_parent or (all of selection_child_* and not 1 of filter_main_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, manasmbellani'
   source_id: 9cfc00b6-bfb7-49ce-9781-ef78503154bb
   source_commit: df5c6a6
   license: DRL-1.1

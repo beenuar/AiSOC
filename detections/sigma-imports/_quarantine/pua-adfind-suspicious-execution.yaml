@@ -47,6 +47,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Janantha Marasinghe (https://github.com/blueteam0ps), FPT.EagleEye Team, omkar72, oscd.community'
   source_id: 9a132afa-654e-11eb-ae93-0242ac130002
   source_commit: df5c6a6
   license: DRL-1.1

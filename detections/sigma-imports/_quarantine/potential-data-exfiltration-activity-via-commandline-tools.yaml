@@ -68,6 +68,7 @@ detection:
   condition: (selection_iwr or all of selection_curl* or selection_wget) and payloads
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 7d1aaf3d-4304-425c-b7c3-162055e0b3ab
   source_commit: df5c6a6
   license: DRL-1.1

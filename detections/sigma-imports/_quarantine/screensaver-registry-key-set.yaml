@@ -29,6 +29,7 @@ detection:
   condition: selection and registry and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jose Luis Sanchez Martinez (@Joseliyo_Jstnk)'
   source_id: 40b6e656-4e11-4c0c-8772-c1cc6dae34ce
   source_commit: df5c6a6
   license: DRL-1.1

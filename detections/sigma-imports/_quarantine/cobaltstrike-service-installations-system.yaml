@@ -38,6 +38,7 @@ detection:
   condition: selection_id and (selection1 or selection2 or selection3 or selection4)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Wojciech Lesicki'
   source_id: 5a105d34-05fc-401e-8553-272b45c1522d
   source_commit: df5c6a6
   license: DRL-1.1

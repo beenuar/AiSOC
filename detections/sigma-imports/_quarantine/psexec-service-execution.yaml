@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Thomas Patzke, Romaissa Adjailia, Florian Roth (Nextron Systems)'
   source_id: fdfcbd78-48f1-4a4b-90ac-d82241e368c5
   source_commit: df5c6a6
   license: DRL-1.1

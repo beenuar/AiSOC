@@ -46,6 +46,7 @@ detection:
   condition: selection_event_source and 1 of selection_action_* and 1 of selection_status_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'suktech24'
   source_id: d2656e78-c069-4571-8220-9e0ab5913f19
   source_commit: df5c6a6
   license: DRL-1.1

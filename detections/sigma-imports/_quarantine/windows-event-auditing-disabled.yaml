@@ -52,6 +52,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@neu5ron, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 69aeb277-f15f-4d2d-b32a-55e883609563
   source_commit: df5c6a6
   license: DRL-1.1

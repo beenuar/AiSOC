@@ -35,6 +35,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel'
   source_id: d557dc06-62e8-4468-a8e8-7984124908ce
   source_commit: df5c6a6
   license: DRL-1.1

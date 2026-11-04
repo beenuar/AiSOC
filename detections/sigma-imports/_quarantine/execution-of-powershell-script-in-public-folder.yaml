@@ -35,6 +35,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Max Altgelt (Nextron Systems)'
   source_id: fb9d3ff7-7348-46ab-af8c-b55f5fbf39b4
   source_commit: df5c6a6
   license: DRL-1.1

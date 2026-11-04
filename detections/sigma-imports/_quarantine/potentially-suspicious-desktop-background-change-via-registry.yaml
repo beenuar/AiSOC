@@ -53,6 +53,7 @@ detection:
     and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Stephen Lincoln @slincoln-aiq (AttackIQ)'
   source_id: 85b88e05-dadc-430b-8a9e-53ff1cd30aae
   source_commit: df5c6a6
   license: DRL-1.1

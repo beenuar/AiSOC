@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Tom Ueltschi, Jonhnathan Ribeiro, oscd.community'
   source_id: 0bcfabcb-7929-47f4-93d6-b33fb67d34d1
   source_commit: df5c6a6
   license: DRL-1.1

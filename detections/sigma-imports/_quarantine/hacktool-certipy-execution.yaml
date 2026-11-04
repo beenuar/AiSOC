@@ -51,6 +51,7 @@ detection:
   condition: selection_img or all of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'pH-T (Nextron Systems), Sittikorn Sangrattanapitak'
   source_id: 6938366d-8954-4ddc-baff-c830b3ba8fcd
   source_commit: df5c6a6
   license: DRL-1.1

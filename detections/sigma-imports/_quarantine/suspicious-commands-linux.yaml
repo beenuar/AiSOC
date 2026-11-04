@@ -33,6 +33,7 @@ detection:
   condition: 1 of cmd*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: 1543ae20-cbdf-4ec1-8d12-7664d667a825
   source_commit: df5c6a6
   license: DRL-1.1

@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'OTR (Open Threat Research), @neu5ron'
   source_id: bae2865c-5565-470d-b505-9496c87d0c30
   source_commit: df5c6a6
   license: DRL-1.1

@@ -49,6 +49,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'montysecurity, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: d487ed4a-fd24-436d-a0b2-f4e95f7b2635
   source_commit: df5c6a6
   license: DRL-1.1

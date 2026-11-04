@@ -38,6 +38,7 @@ detection:
   condition: all of selection_* or (selection_img and not 1 of filter_main_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Liran Ravich, Nasreddine Bencherchali'
   source_id: bcfece3d-56fe-4545-9931-3b8e92927db1
   source_commit: df5c6a6
   license: DRL-1.1

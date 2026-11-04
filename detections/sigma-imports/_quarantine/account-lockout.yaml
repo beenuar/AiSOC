@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'AlertIQ'
   source_id: 2b7d6fc0-71ac-4cf7-8ed1-b5788ee5257a
   source_commit: df5c6a6
   license: DRL-1.1

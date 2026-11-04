@@ -37,6 +37,7 @@ detection:
   condition: wow_classes_base and wow_classes and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: 18f2065c-d36c-464a-a748-bcf909acb2e3
   source_commit: df5c6a6
   license: DRL-1.1

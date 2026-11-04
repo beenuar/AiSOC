@@ -54,6 +54,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 378a05d8-963c-46c9-bcce-13c7657eac99
   source_commit: df5c6a6
   license: DRL-1.1

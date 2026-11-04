@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Beyu Denis, oscd.community'
   source_id: 646bc99f-6682-4b47-a73a-17b1b64c9d34
   source_commit: df5c6a6
   license: DRL-1.1

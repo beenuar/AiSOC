@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'kelnage'
   source_id: 07e97cc6-aed1-43ae-9081-b3470d2367f1
   source_commit: df5c6a6
   license: DRL-1.1

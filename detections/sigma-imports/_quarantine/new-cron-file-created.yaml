@@ -56,6 +56,7 @@ detection:
   condition: 1 of selection_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC'
   source_id: 6c4e2f43-d94d-4ead-b64d-97e53fa2bd05
   source_commit: df5c6a6
   license: DRL-1.1

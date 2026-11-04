@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Harish Segar (rule)'
   source_id: b3512211-c67e-4707-bedc-66efc7848863
   source_commit: df5c6a6
   license: DRL-1.1

@@ -28,6 +28,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, keepwatch'
   source_id: 1eeed653-dbc8-4187-ad0c-eeebb20e6599
   source_commit: df5c6a6
   license: DRL-1.1

@@ -34,6 +34,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'NVISO'
   source_id: f88e112a-21aa-44bd-9b01-6ee2a2bbbed1
   source_commit: df5c6a6
   license: DRL-1.1

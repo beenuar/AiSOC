@@ -28,6 +28,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Christopher Peacock ''@securepeacock'' (Update)'
   source_id: dd80db93-6ec2-4f4c-a017-ad40da6ffe81
   source_commit: df5c6a6
   license: DRL-1.1

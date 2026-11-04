@@ -33,6 +33,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael McKinley (@McKinleyMike), Tony Latteri (@TheLatteri)'
   source_id: 4f2cd9b6-4a17-440f-bb2a-687abb65993a
   source_commit: df5c6a6
   license: DRL-1.1

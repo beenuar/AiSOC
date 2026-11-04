@@ -86,6 +86,7 @@ detection:
   condition: 1 of selection_parent_* and selection_parent_ext and selection_cli
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), X__Junior (Nextron Systems)'
   source_id: b37998de-a70b-4f33-b219-ec36bf433dc0
   source_commit: df5c6a6
   license: DRL-1.1

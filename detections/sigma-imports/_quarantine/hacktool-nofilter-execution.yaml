@@ -29,6 +29,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Stamatis Chatzimangou (st0pp3r)'
   source_id: 7b14c76a-c602-4ae6-9717-eff868153fc0
   source_commit: df5c6a6
   license: DRL-1.1

@@ -80,6 +80,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ömer Günal, Alejandro Ortuno, oscd.community'
   source_id: e3a8a052-111f-4606-9aee-f28ebeb76776
   source_commit: df5c6a6
   license: DRL-1.1

@@ -38,6 +38,7 @@ detection:
   condition: selection and selection_object and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden'
   source_id: 35ba1d85-724d-42a3-889f-2e2362bcaf23
   source_commit: df5c6a6
   license: DRL-1.1

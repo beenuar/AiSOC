@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sajid Nawaz Khan'
   source_id: 75180c5f-4ea1-461a-a4f6-6e4700c065d4
   source_commit: df5c6a6
   license: DRL-1.1

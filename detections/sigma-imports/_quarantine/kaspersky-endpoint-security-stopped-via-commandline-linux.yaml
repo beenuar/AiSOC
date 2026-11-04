@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Milad Cheraghi'
   source_id: 36388120-b3f1-4ce9-b50b-280d9a7f4c04
   source_commit: df5c6a6
   license: DRL-1.1

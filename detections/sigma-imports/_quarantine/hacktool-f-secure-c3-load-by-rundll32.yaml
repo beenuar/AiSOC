@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alfie Champion (ajpc500)'
   source_id: b18c9d4c-fac9-4708-bd06-dd5bfacf200f
   source_commit: df5c6a6
   license: DRL-1.1

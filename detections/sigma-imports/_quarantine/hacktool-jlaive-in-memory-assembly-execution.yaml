@@ -37,6 +37,7 @@ detection:
   condition: parent_selection and (1 of selection*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jose Luis Sanchez Martinez (@Joseliyo_Jstnk)'
   source_id: 0a99eb3e-1617-41bd-b095-13dc767f3def
   source_commit: df5c6a6
   license: DRL-1.1

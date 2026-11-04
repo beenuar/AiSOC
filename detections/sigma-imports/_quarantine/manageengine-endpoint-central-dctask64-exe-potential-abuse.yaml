@@ -34,6 +34,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 6345b048-8441-43a7-9bed-541133633d7a
   source_commit: df5c6a6
   license: DRL-1.1

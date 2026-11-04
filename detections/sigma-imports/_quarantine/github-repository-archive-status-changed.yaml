@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ivan Saakov'
   source_id: dca8991c-cb16-4128-abf8-6b11e5cd156f
   source_commit: df5c6a6
   license: DRL-1.1

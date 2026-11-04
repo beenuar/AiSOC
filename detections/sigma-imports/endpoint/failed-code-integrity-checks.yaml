@@ -31,6 +31,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Thomas Patzke'
   source_id: 470ec5fa-7b4e-4071-b200-4c753100f49b
   source_commit: df5c6a6
   license: DRL-1.1

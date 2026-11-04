@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mark Morowczynski ''@markmorow'', Yochana Henderson, ''@Yochana-H'''
   source_id: 49a268a4-72f4-4e38-8a7b-885be690c5b5
   source_commit: df5c6a6
   license: DRL-1.1

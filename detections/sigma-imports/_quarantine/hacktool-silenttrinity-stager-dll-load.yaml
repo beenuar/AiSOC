@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Aleksey Potapov, oscd.community'
   source_id: 75c505b1-711d-4f68-a357-8c3fe37dbf2d
   source_commit: df5c6a6
   license: DRL-1.1

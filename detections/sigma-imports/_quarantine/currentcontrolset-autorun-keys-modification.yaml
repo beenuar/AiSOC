@@ -54,6 +54,7 @@ detection:
   condition: all of system_control_* and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: f674e36a-4b91-431e-8aef-f8a96c2aca35
   source_commit: df5c6a6
   license: DRL-1.1

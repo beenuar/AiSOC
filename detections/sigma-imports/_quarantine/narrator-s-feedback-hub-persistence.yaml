@@ -22,6 +22,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Dmitriy Lifanov, oscd.community'
   source_id: f663a6d9-9d1b-49b8-b2b1-0637914d199a
   source_commit: df5c6a6
   license: DRL-1.1

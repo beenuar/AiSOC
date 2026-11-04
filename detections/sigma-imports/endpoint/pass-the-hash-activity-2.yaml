@@ -34,6 +34,7 @@ detection:
   condition: 1 of selection_* and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Dave Kennedy, Jeff Warren (method) / David Vassallo (rule)'
   source_id: 8eef149c-bd26-49f2-9e5a-9b00e3af499b
   source_commit: df5c6a6
   license: DRL-1.1

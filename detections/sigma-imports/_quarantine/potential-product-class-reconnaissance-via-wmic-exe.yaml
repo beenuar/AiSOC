@@ -35,6 +35,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael Haag, Florian Roth (Nextron Systems), juju4, oscd.community, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: e568650b-5dcd-4658-8f34-ded0b1e13992
   source_commit: df5c6a6
   license: DRL-1.1

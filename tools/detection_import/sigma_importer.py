@@ -110,6 +110,35 @@ def _category_for(logsource: dict, upstream_path: Path) -> str:
     return "endpoint"
 
 
+#: Recorded when upstream credits nobody. Never an empty string: empty is
+#: indistinguishable from the importer having dropped the field, which is the
+#: defect #1680 reported, and never "SigmaHQ" — naming the publisher in place
+#: of the person is the substitution DRL-1.1 explicitly does not accept.
+AUTHOR_ABSENT = "(no author recorded upstream)"
+
+
+def _author_of(raw: dict) -> str:
+    """The upstream ``author:``, preserved as upstream wrote it.
+
+    DRL-1.1 permits redistribution in modified form on condition that author
+    identification travels with the copy and appears in messages produced by a
+    match. The importer read source, id, commit, licence and path and never
+    this field, so 3,132 vendored rules shipped crediting nobody.
+
+    Sigma's schema makes this a string, and in practice it is comma-separated
+    when a rule has several authors; a few rules use a YAML list. Both are kept
+    in the shape upstream chose rather than normalised into one this project
+    invented — a co-author dropped by tidying is the same defect at smaller
+    scale.
+    """
+    value = raw.get("author")
+    if isinstance(value, (list, tuple)):
+        joined = ", ".join(str(part).strip() for part in value if str(part).strip())
+        return joined or AUTHOR_ABSENT
+    text = str(value).strip() if value is not None else ""
+    return text or AUTHOR_ABSENT
+
+
 def _convert_rule(
     raw: dict,
     upstream_path: Path,
@@ -154,6 +183,7 @@ def _convert_rule(
 
     provenance = {
         "source": "SigmaHQ/sigma",
+        "author": _author_of(raw),
         "source_id": upstream_id,
         "source_commit": short_sha(commit),
         "license": SIGMA_LICENSE,

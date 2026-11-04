@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Antonlovesdnb, Trent Liffick (@tliffick)'
   source_id: 295a59c1-7b79-4b47-a930-df12c15fc9c2
   source_commit: df5c6a6
   license: DRL-1.1

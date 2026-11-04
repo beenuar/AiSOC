@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sergey Soldatov, Kaspersky Lab, oscd.community'
   source_id: 45a594aa-1fbd-4972-a809-ff5a99dd81b8
   source_commit: df5c6a6
   license: DRL-1.1

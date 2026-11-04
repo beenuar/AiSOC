@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'elhoim'
   source_id: 5f87308a-0a5b-4623-ae15-d8fa1809bc60
   source_commit: df5c6a6
   license: DRL-1.1

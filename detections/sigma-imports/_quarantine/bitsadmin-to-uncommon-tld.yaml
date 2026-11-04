@@ -27,6 +27,7 @@ detection:
   condition: selection and not falsepositives
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Tim Shelton'
   source_id: 9eb68894-7476-4cd6-8752-23b51f5883a7
   source_commit: df5c6a6
   license: DRL-1.1

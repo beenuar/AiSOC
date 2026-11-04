@@ -40,6 +40,7 @@ detection:
   condition: selection_eventid and (all of selection_attributes_* or selection_share)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Elastic, Josh Nickels, Marius Rothenbücher'
   source_id: 123e4e6d-b123-48f8-b261-7214938acaf0
   source_commit: df5c6a6
   license: DRL-1.1

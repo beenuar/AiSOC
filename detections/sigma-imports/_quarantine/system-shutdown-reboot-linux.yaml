@@ -31,6 +31,7 @@ detection:
   condition: execve and (shutdowncmd or (init and initselection))
 provenance:
   source: SigmaHQ/sigma
+  author: 'Igor Fits, oscd.community'
   source_id: 4cb57c2f-1f29-41f8-893d-8bed8e1c1d2f
   source_commit: df5c6a6
   license: DRL-1.1

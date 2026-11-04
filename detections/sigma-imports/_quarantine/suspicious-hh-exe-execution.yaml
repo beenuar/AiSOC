@@ -41,6 +41,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Maxim Pavlunin'
   source_id: e8a95b5e-c891-46e2-b33a-93937d3abc31
   source_commit: df5c6a6
   license: DRL-1.1

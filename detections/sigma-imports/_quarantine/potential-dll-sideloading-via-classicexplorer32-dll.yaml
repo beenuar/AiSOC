@@ -23,6 +23,7 @@ detection:
   condition: selection_classicexplorer and not filter_classicexplorer
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: caa02837-f659-466f-bca6-48bde2826ab4
   source_commit: df5c6a6
   license: DRL-1.1

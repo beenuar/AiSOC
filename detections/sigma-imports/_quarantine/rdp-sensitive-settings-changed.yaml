@@ -89,6 +89,7 @@ detection:
     and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden, David ANDRE, Roberto Rodriguez @Cyb3rWard0g, Nasreddine Bencherchali'
   source_id: 3f6b7b62-61aa-45db-96bd-9c31b36b653c
   source_commit: df5c6a6
   license: DRL-1.1

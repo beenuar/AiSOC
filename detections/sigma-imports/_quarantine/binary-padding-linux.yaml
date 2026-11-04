@@ -32,6 +32,7 @@ detection:
   condition: selection_execve and (keywords_truncate or (keywords_dd and not keywords_filter))
 provenance:
   source: SigmaHQ/sigma
+  author: 'Igor Fits, oscd.community'
   source_id: c52a914f-3d8b-4b2a-bb75-b3991e75f8ba
   source_commit: df5c6a6
   license: DRL-1.1

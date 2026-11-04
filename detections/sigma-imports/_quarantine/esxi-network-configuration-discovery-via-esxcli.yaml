@@ -28,6 +28,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Cedric Maurugeon'
   source_id: 33e814e0-1f00-4e43-9c34-31fb7ae2b174
   source_commit: df5c6a6
   license: DRL-1.1

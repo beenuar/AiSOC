@@ -31,6 +31,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Kirill Kiryanov, Beyu Denis, Daniil Yugoslavskiy, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 9f0a8bf3-a65b-440a-8c1e-5cb1547c8e70
   source_commit: df5c6a6
   license: DRL-1.1

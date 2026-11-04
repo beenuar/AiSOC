@@ -33,6 +33,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Center for Threat Informed Defense (CTID) Summiting the Pyramid Team'
   source_id: 11d00fff-5dc3-428c-8184-801f292faec0
   source_commit: df5c6a6
   license: DRL-1.1

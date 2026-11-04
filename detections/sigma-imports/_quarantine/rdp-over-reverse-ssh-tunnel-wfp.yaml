@@ -39,6 +39,7 @@ detection:
   condition: selection and ( sourceRDP or destinationRDP ) and not 1 of filter*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden'
   source_id: 5bed80b6-b3e8-428e-a3ae-d3c757589e41
   source_commit: df5c6a6
   license: DRL-1.1

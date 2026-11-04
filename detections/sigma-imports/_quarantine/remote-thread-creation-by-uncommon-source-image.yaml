@@ -109,6 +109,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Perez Diego (@darkquassar), oscd.community'
   source_id: 66d31e5f-52d6-40a4-9615-002d3789a119
   source_commit: df5c6a6
   license: DRL-1.1

@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael Haag, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 9a025188-6f2d-42f8-bb2f-d3a83d24a5af
   source_commit: df5c6a6
   license: DRL-1.1

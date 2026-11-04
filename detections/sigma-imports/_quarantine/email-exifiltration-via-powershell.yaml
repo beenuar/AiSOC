@@ -28,6 +28,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems),  Azure-Sentinel (idea)'
   source_id: 312d0384-401c-4b8b-abdf-685ffba9a332
   source_commit: df5c6a6
   license: DRL-1.1

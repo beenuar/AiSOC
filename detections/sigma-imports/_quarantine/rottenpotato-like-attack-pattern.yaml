@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@SBousseaden, Florian Roth'
   source_id: 16f5d8ca-44bd-47c8-acbe-6fc95a16c12f
   source_commit: df5c6a6
   license: DRL-1.1

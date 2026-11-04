@@ -46,6 +46,7 @@ detection:
   condition: selection_cmd and 1 of selection_folders_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bhabesh Raj, X__Junior (Nextron Systems)'
   source_id: 9f107a84-532c-41af-b005-8d12a607639f
   source_commit: df5c6a6
   license: DRL-1.1

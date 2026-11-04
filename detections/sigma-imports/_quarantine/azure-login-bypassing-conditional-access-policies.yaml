@@ -27,6 +27,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Josh Nickels, Marius Rothenbücher'
   source_id: 13f2d3f5-6497-44a7-bf5f-dc13ffafe5dc
   source_commit: df5c6a6
   license: DRL-1.1

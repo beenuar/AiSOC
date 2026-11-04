@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, E.M. Anhaus, oscd.community'
   source_id: 6f3e2987-db24-4c78-a860-b4f4095a7095
   source_commit: df5c6a6
   license: DRL-1.1

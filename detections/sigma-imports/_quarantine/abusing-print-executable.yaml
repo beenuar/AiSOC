@@ -26,6 +26,7 @@ detection:
   condition: selection and not filter_print
 provenance:
   source: SigmaHQ/sigma
+  author: 'Furkan CALISKAN, @caliskanfurkan_, @oscd_initiative'
   source_id: bafac3d6-7de9-4dd9-8874-4a1194b493ed
   source_commit: df5c6a6
   license: DRL-1.1

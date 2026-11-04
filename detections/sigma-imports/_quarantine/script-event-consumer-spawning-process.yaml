@@ -33,6 +33,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sittikorn S'
   source_id: f6d1dd2f-b8ce-40ca-bc23-062efb686b34
   source_commit: df5c6a6
   license: DRL-1.1

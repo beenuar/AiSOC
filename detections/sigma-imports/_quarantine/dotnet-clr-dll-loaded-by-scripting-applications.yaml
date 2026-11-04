@@ -34,6 +34,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'omkar72, oscd.community'
   source_id: 4508a70e-97ef-4300-b62b-ff27992990ea
   source_commit: df5c6a6
   license: DRL-1.1

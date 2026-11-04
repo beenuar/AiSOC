@@ -33,6 +33,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Leo Tsaousis (@laripping)'
   source_id: 84b777bd-c946-4d17-aa2e-c39f5a454325
   source_commit: df5c6a6
   license: DRL-1.1

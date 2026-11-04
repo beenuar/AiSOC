@@ -37,6 +37,7 @@ detection:
   condition: selection_img or all of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Luca Di Bartolomeo (CrimpSec)'
   source_id: 055fb54c-a8f4-4aee-bd44-f74cf30a0d9d
   source_commit: df5c6a6
   license: DRL-1.1

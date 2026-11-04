@@ -33,6 +33,7 @@ detection:
   condition: ( selection1a and selection1b ) or ( selection2a and selection2b )
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: b0524451-19af-4efa-a46f-562a977f792e
   source_commit: df5c6a6
   license: DRL-1.1

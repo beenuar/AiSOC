@@ -42,6 +42,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mauricio Velazco, Michael Haag'
   source_id: 6a53d871-682d-40b6-83e0-b7c1a6c4e3a5
   source_commit: df5c6a6
   license: DRL-1.1

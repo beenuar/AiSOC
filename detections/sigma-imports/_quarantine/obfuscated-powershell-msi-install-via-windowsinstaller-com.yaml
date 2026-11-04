@@ -52,6 +52,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Meroujan Antonyan (vx3r)'
   source_id: 7b6a7418-3afc-11f0-aff4-000d3abf478c
   source_commit: df5c6a6
   license: DRL-1.1

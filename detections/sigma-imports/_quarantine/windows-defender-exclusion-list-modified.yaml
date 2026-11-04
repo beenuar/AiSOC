@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@BarryShooshooga'
   source_id: 46a68649-f218-4f86-aea1-16a759d81820
   source_commit: df5c6a6
   license: DRL-1.1

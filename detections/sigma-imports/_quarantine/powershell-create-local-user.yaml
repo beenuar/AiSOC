@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@ROxPinTeddy'
   source_id: 243de76f-4725-4f2e-8225-a8a69b15ad61
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Pratinav Chandra'
   source_id: 452df256-da78-427a-866f-49fa04417d74
   source_commit: df5c6a6
   license: DRL-1.1

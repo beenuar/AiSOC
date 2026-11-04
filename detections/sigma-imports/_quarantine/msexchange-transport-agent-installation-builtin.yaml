@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tobias Michalski (Nextron Systems)'
   source_id: 4fe151c2-ecf9-4fae-95ae-b88ec9c2fca6
   source_commit: df5c6a6
   license: DRL-1.1

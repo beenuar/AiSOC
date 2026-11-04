@@ -39,6 +39,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mohamed LAKRI'
   source_id: 3f0f5957-04f8-4792-ad89-192b0303bde6
   source_commit: df5c6a6
   license: DRL-1.1

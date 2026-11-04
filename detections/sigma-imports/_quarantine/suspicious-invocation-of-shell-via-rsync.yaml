@@ -38,6 +38,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth'
   source_id: 297241f3-8108-4b3a-8c15-2dda9f844594
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: all of selection_* and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Oddvar Moe, Sander Wiebing, oscd.community'
   source_id: 0b80ade5-6997-4b1d-99a1-71701778ea61
   source_commit: df5c6a6
   license: DRL-1.1

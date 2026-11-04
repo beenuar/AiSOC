@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Vadim Varganov, Florian Roth (Nextron Systems)'
   source_id: 318557a5-150c-4c8d-b70e-a9910e199857
   source_commit: df5c6a6
   license: DRL-1.1

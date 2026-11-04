@@ -35,6 +35,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniel Koifman (KoifSec)'
   source_id: c453ab7a-1f5c-4716-a3b4-dea8135fb43a
   source_commit: df5c6a6
   license: DRL-1.1

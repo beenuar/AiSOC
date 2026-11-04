@@ -55,6 +55,7 @@ detection:
   condition: selection and keywords and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Saw Win Naung, Nasreddine Bencherchali (Nextron Systems), Thurein Oo (Yoma Bank)'
   source_id: 5513deaf-f49a-46c2-a6c8-3f111b5cb453
   source_commit: df5c6a6
   license: DRL-1.1

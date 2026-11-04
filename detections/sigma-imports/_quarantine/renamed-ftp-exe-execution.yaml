@@ -23,6 +23,7 @@ detection:
   condition: selection_original and not filter_img
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, oscd.community'
   source_id: 277a4393-446c-449a-b0ed-7fdc7795244c
   source_commit: df5c6a6
   license: DRL-1.1

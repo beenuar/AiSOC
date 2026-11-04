@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis'
   source_id: e074832a-eada-4fd7-94a1-10642b130e16
   source_commit: df5c6a6
   license: DRL-1.1

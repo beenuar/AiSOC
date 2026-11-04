@@ -35,6 +35,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Den Iuzvyk'
   source_id: 62120148-6b7a-42be-8b91-271c04e281a3
   source_commit: df5c6a6
   license: DRL-1.1

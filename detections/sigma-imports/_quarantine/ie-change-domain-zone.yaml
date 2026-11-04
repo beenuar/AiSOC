@@ -25,6 +25,7 @@ detection:
   condition: selection_domains and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 45e112d0-7759-4c2a-aa36-9f8fb79d3393
   source_commit: df5c6a6
   license: DRL-1.1

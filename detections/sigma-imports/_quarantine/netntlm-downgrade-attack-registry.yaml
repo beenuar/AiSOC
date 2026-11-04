@@ -39,6 +39,7 @@ detection:
   condition: selection_regkey and 1 of selection_value_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), wagga, Nasreddine Bencherchali (Splunk STRT)'
   source_id: d67572a0-e2ec-45d6-b8db-c100d14b8ef2
   source_commit: df5c6a6
   license: DRL-1.1

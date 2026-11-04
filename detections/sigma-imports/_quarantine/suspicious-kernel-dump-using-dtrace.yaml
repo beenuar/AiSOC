@@ -26,6 +26,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: 7124aebe-4cd7-4ccb-8df0-6d6b93c96795
   source_commit: df5c6a6
   license: DRL-1.1

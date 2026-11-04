@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael Portera (@mportatoes)'
   source_id: fa7703d6-0ee8-4949-889c-48c84bc15b6f
   source_commit: df5c6a6
   license: DRL-1.1

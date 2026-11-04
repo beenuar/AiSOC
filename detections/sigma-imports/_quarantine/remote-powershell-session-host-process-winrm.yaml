@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez @Cyb3rWard0g'
   source_id: 734f8d9b-42b8-41b2-bcf5-abaf49d5a3c8
   source_commit: df5c6a6
   license: DRL-1.1

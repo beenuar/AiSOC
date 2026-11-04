@@ -34,6 +34,7 @@ detection:
   condition: selection_findstr and all of selection_cli_download_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Furkan CALISKAN, @caliskanfurkan_, @oscd_initiative, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 587254ee-a24b-4335-b3cd-065c0f1f4baa
   source_commit: df5c6a6
   license: DRL-1.1

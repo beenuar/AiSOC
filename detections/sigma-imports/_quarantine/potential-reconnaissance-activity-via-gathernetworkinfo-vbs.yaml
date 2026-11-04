@@ -29,6 +29,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'blueteamer8699'
   source_id: 575dce0c-8139-4e30-9295-1ee75969f7fe
   source_commit: df5c6a6
   license: DRL-1.1

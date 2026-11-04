@@ -39,6 +39,7 @@ detection:
   condition: import and (import_window_root or import_no_window_root)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Pawel Mazur'
   source_id: dbe4b9c5-c254-4258-9688-d6af0b7967fd
   source_commit: df5c6a6
   license: DRL-1.1

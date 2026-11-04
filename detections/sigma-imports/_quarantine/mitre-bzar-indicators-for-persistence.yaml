@@ -37,6 +37,7 @@ detection:
   condition: 1 of op*
 provenance:
   source: SigmaHQ/sigma
+  author: '@neu5ron, SOC Prime'
   source_id: 53389db6-ba46-48e3-a94c-e0f2cefe1583
   source_commit: df5c6a6
   license: DRL-1.1

@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'mdecrevoisier'
   source_id: 3ce8e9a4-bc61-4c9b-8e69-d7e2492a8781
   source_commit: df5c6a6
   license: DRL-1.1

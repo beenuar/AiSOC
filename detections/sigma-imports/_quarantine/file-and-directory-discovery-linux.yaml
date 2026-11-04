@@ -32,6 +32,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniil Yugoslavskiy, oscd.community, CheraghiMilad'
   source_id: d3feb4ee-ff1d-4d3d-bd10-5b28a238cc72
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@d4ns4n_ (Wuerth-Phoenix)'
   source_id: ca387a8e-1c84-4da3-9993-028b45342d30
   source_commit: df5c6a6
   license: DRL-1.1

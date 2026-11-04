@@ -62,6 +62,7 @@ detection:
   condition: all of selection_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Karneades / Markus Neis, Jonhnathan Ribeiro, oscd.community'
   source_id: 45239e6a-b035-4aaf-b339-8ad379fcb67e
   source_commit: df5c6a6
   license: DRL-1.1

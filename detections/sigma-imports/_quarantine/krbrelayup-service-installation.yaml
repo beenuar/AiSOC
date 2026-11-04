@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sittikorn S, Tim Shelton'
   source_id: e97d9903-53b2-41fc-8cb9-889ed4093e80
   source_commit: df5c6a6
   license: DRL-1.1

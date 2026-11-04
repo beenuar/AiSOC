@@ -48,6 +48,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Peter Matkovski, IAI'
   source_id: a94cdd87-6c54-4678-a6cc-2814ffe5a13d
   source_commit: df5c6a6
   license: DRL-1.1

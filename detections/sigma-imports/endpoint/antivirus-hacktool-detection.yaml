@@ -68,6 +68,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Arnim Rupp'
   source_id: fa0c05b6-8ad3-468d-8231-c1cbccb64fba
   source_commit: df5c6a6
   license: DRL-1.1

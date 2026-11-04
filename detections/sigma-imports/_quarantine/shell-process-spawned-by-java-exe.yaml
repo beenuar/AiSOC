@@ -27,6 +27,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Andreas Hunkeler (@Karneades), Nasreddine Bencherchali'
   source_id: dff1e1cc-d3fd-47c8-bfc2-aeb878a754c0
   source_commit: df5c6a6
   license: DRL-1.1

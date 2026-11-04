@@ -27,6 +27,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Nasreddine Bencherchali'
   source_id: a5b40a90-baf5-4bf7-a6f7-373494881d22
   source_commit: df5c6a6
   license: DRL-1.1

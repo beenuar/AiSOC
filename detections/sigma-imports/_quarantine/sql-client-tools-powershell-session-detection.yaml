@@ -30,6 +30,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Agro (@agro_sev) oscd.communitly'
   source_id: a746c9b8-a2fb-4ee5-a428-92bee9e99060
   source_commit: df5c6a6
   license: DRL-1.1

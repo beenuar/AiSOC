@@ -50,6 +50,7 @@ detection:
     and not 1 of filter_main_parent_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 2cf29f11-e356-4f61-98c0-1bdb9393d6da
   source_commit: df5c6a6
   license: DRL-1.1

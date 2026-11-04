@@ -43,6 +43,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Micah Babinski'
   source_id: 8e95e73e-ba02-4a87-b4d7-0929b8053038
   source_commit: df5c6a6
   license: DRL-1.1

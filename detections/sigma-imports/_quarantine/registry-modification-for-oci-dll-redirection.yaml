@@ -31,6 +31,7 @@ detection:
     and not filter_main_ocilibpath)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: c0e0bdec-3e3d-47aa-9974-05539c999c89
   source_commit: df5c6a6
   license: DRL-1.1

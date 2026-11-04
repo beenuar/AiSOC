@@ -53,6 +53,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez @Cyb3rWard0g'
   source_id: 962fe167-e48d-4fd6-9974-11e5b9a5d6d1
   source_commit: df5c6a6
   license: DRL-1.1

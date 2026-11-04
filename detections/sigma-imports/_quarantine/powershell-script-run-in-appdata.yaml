@@ -32,6 +32,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Jonhnathan Ribeiro, oscd.community'
   source_id: ac175779-025a-4f12-98b0-acdaeb77ea85
   source_commit: df5c6a6
   license: DRL-1.1

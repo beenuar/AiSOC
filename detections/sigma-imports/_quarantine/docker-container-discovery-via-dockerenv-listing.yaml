@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Seth Hanford'
   source_id: 11701de9-d5a5-44aa-8238-84252f131895
   source_commit: df5c6a6
   license: DRL-1.1

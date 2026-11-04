@@ -35,6 +35,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ahmed Nosir (@egycondor)'
   source_id: 2db93a3f-3249-4f73-9e68-0e77a0f8ae7e
   source_commit: df5c6a6
   license: DRL-1.1

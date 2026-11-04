@@ -44,6 +44,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sami Ruohonen, Harish Segar, Tim Shelton, Teymur Kheirkhabarov, Vasiliy Burov, oscd.community, Nasreddine Bencherchali'
   source_id: bb780e0c-16cf-4383-8383-1e5471db6cf9
   source_commit: df5c6a6
   license: DRL-1.1
