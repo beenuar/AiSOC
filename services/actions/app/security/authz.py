@@ -119,8 +119,31 @@ def authorize_approver(
         raise ActionAuthzError(f"approver {approver.user_id} lacks '{required}' to approve {action_type.value}")
 
     record_tenant = str(record.get("tenant_id") or "").strip()
-    if approver.tenant_id is not None and record_tenant and str(approver.tenant_id) != record_tenant:
-        raise ActionAuthzError("approver tenant does not match the action's tenant")
+    if record_tenant:
+        if approver.tenant_id is None:
+            # GHSA-fm3f-p5jv-6hcg, F06. `approver.tenant_id is not None` used
+            # to guard this whole comparison, so an approver carrying no
+            # tenant skipped it -- and `_tenant_of` returns None for the same
+            # principal, which also leaves the record *read* unscoped. The two
+            # together let one identity approve any tenant's containment.
+            #
+            # It was not hypothetical configuration: the Teams entry in
+            # `chatops_identity`'s own documented example omits `tenant_id`,
+            # and `_coerce_principal` reads it with `raw.get(...)`. Measured
+            # against the real service, that approver took another tenant's
+            # `isolate_host` to `completed` while the record read
+            # `separation_of_duties: enforced`.
+            #
+            # An approver with no tenant is not "all tenants", it is an
+            # identity nobody scoped. The refusal names the config to fix,
+            # because the alternative is an operator seeing a 403 with no
+            # idea which of several controls produced it.
+            raise ActionAuthzError(
+                f"approver {approver.user_id} carries no tenant and this action belongs to tenant "
+                f"{record_tenant}; add `tenant_id` to their entry in AISOC_CHATOPS_APPROVERS"
+            )
+        if str(approver.tenant_id) != record_tenant:
+            raise ActionAuthzError("approver tenant does not match the action's tenant")
 
     requester = record.get("requested_by_user_id")
     if not separation_of_duties:

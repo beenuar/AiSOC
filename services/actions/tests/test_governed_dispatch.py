@@ -10,6 +10,7 @@ connector-style `auth_config` is translated to executor params at dispatch.
 from __future__ import annotations
 
 import asyncio
+from uuid import UUID
 
 import pytest
 from app.live_actions import registry
@@ -17,6 +18,14 @@ from app.live_actions.dispatcher import configured_tier, dispatch
 from app.live_actions.executor import LiveActionExecutor
 from app.live_actions.models import LiveActionRequest, LiveActionResult, LiveActionStatus
 from app.services.maturity import MaturityTier
+
+#: A dispatch that names no tenant can resolve neither the tenant's autonomy
+#: tier nor its kill switch, so it is refused rather than graded by the
+#: deployment default (GHSA-fm3f-p5jv-6hcg, F07). Every request below used to
+#: omit it -- so this suite was asserting governance against requests that
+#: escaped governance. A real caller sets it; `POST /live-actions/dispatch`
+#: takes it straight off the body.
+TENANT = UUID("11111111-1111-1111-1111-111111111111")
 
 
 class _RecordingExecutor(LiveActionExecutor):
@@ -91,7 +100,7 @@ def test_high_blast_action_downgrades_to_dry_run_at_default_tier(monkeypatch, re
     dry-run PREVIEW — never a silent real execution."""
     monkeypatch.delenv("AISOC_MATURITY_TIER", raising=False)
     monkeypatch.delenv("AISOC_ACTIONS_DEFAULT_DRY_RUN", raising=False)
-    result = _run(LiveActionRequest(capability="isolate_host", vendor_id="govtest", target="srv-1"))
+    result = _run(LiveActionRequest(tenant_id=TENANT, capability="isolate_host", vendor_id="govtest", target="srv-1"))
     assert result.status == LiveActionStatus.SIMULATED
     assert recording_executor.last_request is not None
     assert recording_executor.last_request.dry_run is True  # downgraded
@@ -103,7 +112,7 @@ def test_high_blast_action_queues_when_dry_run_disabled(monkeypatch, recording_e
     of executing — the executor is never invoked."""
     monkeypatch.delenv("AISOC_MATURITY_TIER", raising=False)
     monkeypatch.setenv("AISOC_ACTIONS_DEFAULT_DRY_RUN", "0")
-    result = _run(LiveActionRequest(capability="isolate_host", vendor_id="govtest", target="srv-1"))
+    result = _run(LiveActionRequest(tenant_id=TENANT, capability="isolate_host", vendor_id="govtest", target="srv-1"))
     assert result.status == LiveActionStatus.PENDING_APPROVAL
     assert recording_executor.last_request is None  # executor NEVER invoked
     assert result.details["autonomy_mode"] == "queued_approval"
@@ -112,14 +121,14 @@ def test_high_blast_action_queues_when_dry_run_disabled(monkeypatch, recording_e
 def test_high_blast_queues_even_at_l4_without_whitelist(monkeypatch, recording_executor):
     monkeypatch.setenv("AISOC_MATURITY_TIER", "L4_AUTOMATE")
     monkeypatch.delenv("AISOC_ALLOW_HIGH_BLAST_AUTO", raising=False)
-    result = _run(LiveActionRequest(capability="isolate_host", vendor_id="govtest", target="srv-1"))
+    result = _run(LiveActionRequest(tenant_id=TENANT, capability="isolate_host", vendor_id="govtest", target="srv-1"))
     assert result.status == LiveActionStatus.PENDING_APPROVAL
     assert recording_executor.last_request is None
 
 
 def test_l0_blocks_outright(monkeypatch, recording_executor):
     monkeypatch.setenv("AISOC_MATURITY_TIER", "L0_OBSERVE")
-    result = _run(LiveActionRequest(capability="isolate_host", vendor_id="govtest", target="srv-1"))
+    result = _run(LiveActionRequest(tenant_id=TENANT, capability="isolate_host", vendor_id="govtest", target="srv-1"))
     assert result.status == LiveActionStatus.BLOCKED
     assert recording_executor.last_request is None
 
@@ -127,7 +136,7 @@ def test_l0_blocks_outright(monkeypatch, recording_executor):
 def test_low_blast_action_executes_at_permitted_tier(monkeypatch, notify_executor):
     # notify_slack is LOW blast — permitted to auto-execute at L1.
     monkeypatch.delenv("AISOC_MATURITY_TIER", raising=False)
-    result = _run(LiveActionRequest(capability="notify_slack", vendor_id="govtest", target="#soc"))
+    result = _run(LiveActionRequest(tenant_id=TENANT, capability="notify_slack", vendor_id="govtest", target="#soc"))
     assert result.status == LiveActionStatus.SUCCEEDED
     assert notify_executor.last_request is not None
     assert notify_executor.last_request.dry_run is False
@@ -135,24 +144,67 @@ def test_low_blast_action_executes_at_permitted_tier(monkeypatch, notify_executo
 
 def test_explicit_dry_run_is_honoured_not_governed(monkeypatch, recording_executor):
     monkeypatch.setenv("AISOC_MATURITY_TIER", "L0_OBSERVE")  # would block a real run
-    result = _run(LiveActionRequest(capability="isolate_host", vendor_id="govtest", target="srv-1", dry_run=True))
+    result = _run(LiveActionRequest(tenant_id=TENANT, capability="isolate_host", vendor_id="govtest", target="srv-1", dry_run=True))
     # An explicit dry-run is already the safest mode; it executes as a preview.
     assert result.status == LiveActionStatus.SIMULATED
     assert recording_executor.last_request is not None
     assert recording_executor.last_request.dry_run is True
 
 
-def test_unmapped_capability_is_not_governed(monkeypatch):
+def test_unmapped_capability_is_refused_not_executed(monkeypatch):
+    """Was `test_unmapped_capability_is_not_governed`, asserting SUCCEEDED.
+
+    GHSA-fm3f-p5jv-6hcg, F81. The gate read `if not dry_run and (action_type
+    is not None or capability in CAPABILITY_CONTRACTS)`, so a capability in
+    neither vocabulary skipped governance entirely -- and this test pinned
+    that as intended behaviour. Note the tier it sets: `L0_OBSERVE`, the
+    setting that blocks *everything*, and the verb ran anyway.
+
+    A test asserting that an ungoverned verb executes is the thing that would
+    have kept it true.
+    """
     registry.reset_for_tests()
     ex = _RecordingExecutor()
-    ex.capability = "echo_probe"  # no ActionType mapping
+    ex.capability = "echo_probe"  # no ActionType mapping, no contract
     registry.register_executor(ex, source="test")
     try:
         monkeypatch.setenv("AISOC_MATURITY_TIER", "L0_OBSERVE")
-        result = _run(LiveActionRequest(capability="echo_probe", vendor_id="govtest", target="x"))
-        assert result.status == LiveActionStatus.SUCCEEDED
+        result = _run(LiveActionRequest(tenant_id=TENANT, capability="echo_probe", vendor_id="govtest", target="x"))
+        assert result.status == LiveActionStatus.BLOCKED
+        assert ex.last_request is None, "the executor must not have been reached"
     finally:
         registry.reset_for_tests()
+
+
+def test_a_dispatch_with_no_tenant_is_refused(monkeypatch, notify_executor):
+    """GHSA-fm3f-p5jv-6hcg, F07.
+
+    `resolve_tenant_policy(None)` returns the deployment's
+    `AISOC_MATURITY_TIER`, and `kill_switch_state(None)` matches only the
+    global row -- so a request naming no tenant was graded by an environment
+    variable and no tenant's stop button could reach it. `_govern` even
+    papered over it with `tenant_id=request.tenant_id or uuid4()`.
+
+    `tenant_id` is optional on `LiveActionRequest` and `POST
+    /live-actions/dispatch` takes it straight off the body, so omitting it
+    was a one-field escape from governance.
+    """
+    monkeypatch.setenv("AISOC_MATURITY_TIER", "L4_AUTOMATE")  # would permit plenty
+    result = _run(LiveActionRequest(capability="notify_slack", vendor_id="govtest", target="#soc"))
+    assert result.status == LiveActionStatus.BLOCKED
+    assert "names no tenant" in result.details["reason"]
+    assert notify_executor.last_request is None, "the executor must not have been reached"
+
+
+def test_a_dry_run_with_no_tenant_is_still_previewed(monkeypatch):
+    """Positive control for the refusal above.
+
+    A dry run reaches no vendor. Refusing one would break the preview an
+    operator uses to understand why a verb is gated.
+    """
+    monkeypatch.setenv("AISOC_MATURITY_TIER", "L0_OBSERVE")
+    result = _run(LiveActionRequest(capability="isolate_host", vendor_id="govtest", target="srv-1", dry_run=True))
+    assert result.status != LiveActionStatus.BLOCKED
 
 
 # ── credential translation at the boundary ──────────────────────────────────
@@ -170,6 +222,7 @@ def test_auth_config_is_translated_to_executor_params(monkeypatch, notify_execut
     try:
         result = _run(
             LiveActionRequest(
+                tenant_id=TENANT,
                 capability="notify_slack",
                 vendor_id="okta",
                 target="user@corp.com",

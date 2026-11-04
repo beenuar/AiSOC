@@ -183,6 +183,12 @@ def test_dispatch_succeeds_and_reports_live_mode(client: TestClient) -> None:
             "capability": "isolate_host",
             "vendor_id": "stubvendor",
             "target": "host-77",
+            # The request has to name the tenant it acts for, or neither the
+            # tenant's autonomy tier nor its kill switch can be resolved and
+            # the dispatch is refused (GHSA-fm3f-p5jv-6hcg, F07). This route
+            # takes it straight off the body, which is exactly why omitting
+            # it was a one-field escape from governance.
+            "tenant_id": "11111111-1111-1111-1111-111111111111",
         },
     )
     assert response.status_code == 200

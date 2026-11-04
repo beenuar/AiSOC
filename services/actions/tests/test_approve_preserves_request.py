@@ -30,12 +30,18 @@ from app.models.action import (
 from app.security import chatops_identity
 from app.services import action_store
 
+TENANT = "11111111-1111-1111-1111-111111111111"
+
 APPROVER_MAP = {
     "slack": {
         "U_LEAD": {
             "user_id": "dana@example.com",
             "permissions": ["actions:execute:high", "actions:execute:critical"],
             "roles": ["soc-lead"],
+            # Scoped. An approver with no tenant skipped the tenant
+            # comparison entirely and left the record read unscoped
+            # (GHSA-fm3f-p5jv-6hcg, F06); every entry in this file omitted it.
+            "tenant_id": TENANT,
         }
     }
 }
@@ -78,7 +84,7 @@ def _request(**overrides) -> ActionRequest:
     kwargs = {
         "id": uuid4(),
         "incident_id": uuid4(),
-        "tenant_id": uuid4(),
+        "tenant_id": TENANT,
         "action_type": ActionType.ISOLATE_HOST,
         "target": "WKSTN-01",
         "rationale": "confirmed beacon",
@@ -89,6 +95,7 @@ def _request(**overrides) -> ActionRequest:
         "principal": ActionPrincipal(
             user_id="rory@example.com",
             permissions=["actions:execute:high"],
+            tenant_id=TENANT,
         ),
     }
     kwargs.update(overrides)

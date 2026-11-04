@@ -213,7 +213,12 @@ jobs:
           authz = pathlib.Path("../actions/app/security/authz.py")
           router = pathlib.Path("../actions/app/api/router.py")
           a, r = authz.read_text(), router.read_text()
-          check = "    if approver.tenant_id is not None and record_tenant and str(approver.tenant_id) != record_tenant:\n"
+          # One anchor per layer. `if record_tenant:` guards both halves of
+          # the authz check -- the refusal of an approver carrying no tenant
+          # (GHSA-fm3f-p5jv-6hcg, F06) and the refusal of one carrying the
+          # wrong tenant -- so neutering it removes the whole layer, which is
+          # what this control has to do to mean anything.
+          check = "    if record_tenant:\n"
           narrow = "    record = await _load_for_decision(action_id, _tenant_of(bound))\n"
           if check not in a or narrow not in r:
               print("negative control could not find both tenant layers; they have been reshaped "

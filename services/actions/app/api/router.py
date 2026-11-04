@@ -344,6 +344,29 @@ def _resolve_identity(
     whose row-level policy is inert on this service's connections means the id
     is the only control.
     """
+    if approver is not None and assertion is not None:
+        # GHSA-fm3f-p5jv-6hcg, F01. The branch below reads
+        # `if approver is None and assertion is not None`, so a request
+        # carrying *both* took the body principal and never consulted the
+        # operator's approver map at all. Measured against the real service: a
+        # body `approver` naming an identity the map has never heard of, with
+        # `permissions: ["*"]`, was recorded as `approved_by_user_id`
+        # alongside a valid ChatOps assertion.
+        #
+        # A caller presenting two identities for one decision is ambiguous
+        # whichever one is correct, and silently preferring the *more*
+        # forgeable of the two is the worst resolution available. Refused
+        # rather than resolved by precedence, because a precedence rule is
+        # something a future caller can be built around.
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "send either `approver` or `chatops_approver`, not both: a decision has one "
+                "deciding identity, and a ChatOps assertion is resolved through the operator's "
+                "approver map rather than from the request body"
+            ),
+        )
+
     if approver is None and assertion is not None:
         approver = resolve_approver(assertion.platform, assertion.platform_user_id)
         if approver is None:

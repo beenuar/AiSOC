@@ -31,7 +31,7 @@ Every test here fails against the tree before this change.
 
 from __future__ import annotations
 
-import uuid
+from uuid import UUID
 
 import pytest
 from app.live_actions import dispatcher as dispatcher_mod
@@ -43,6 +43,15 @@ from app.services.maturity import MaturityTier
 from app.services.tenant_policy import TenantPolicy
 
 pytestmark = pytest.mark.asyncio
+
+
+#: A dispatch that names no tenant can resolve neither the tenant's autonomy
+#: tier nor its kill switch, so it is refused rather than graded by the
+#: deployment default (GHSA-fm3f-p5jv-6hcg, F07). Every request below used to
+#: omit it -- so this suite was asserting governance against requests that
+#: escaped governance. A real caller sets it; `POST /live-actions/dispatch`
+#: takes it straight off the body.
+TENANT = UUID("11111111-1111-1111-1111-111111111111")
 
 
 class _OkExecutor:
@@ -72,7 +81,7 @@ def _request(capability: str, **overrides) -> LiveActionRequest:
         "vendor_id": "crowdstrike",
         "target": "WIN-DC01",
         "dry_run": False,
-        "tenant_id": uuid.uuid4(),
+        "tenant_id": TENANT,
         "requested_by": "analyst@example.com",
     }
     payload.update(overrides)
@@ -169,20 +178,53 @@ async def test_a_contracted_verb_with_no_action_type_is_still_governed(
     assert result.details["autonomy_mode"] == "queued_approval"
 
 
-async def test_an_uncontracted_capability_is_left_to_blast_radius(
+async def test_an_uncontracted_capability_is_refused(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    """A verb nobody declared is recorded, not guessed at.
+    """A verb nobody declared is refused, not run (GHSA-fm3f-p5jv-6hcg, F81).
 
-    Inventing an impact for it is how a gate starts certifying things it
-    never examined. `check_action_contract.py` fails the build when a
-    *registered* executor has no contract, so this stays a real absence.
+    This was `..._is_left_to_blast_radius` and asserted SUCCEEDED, arguing
+    that "a verb nobody declared is recorded, not guessed at -- inventing an
+    impact for it is how a gate starts certifying things it never examined."
+
+    The first half of that is right and is kept: nothing here invents an
+    impact. The conclusion was the wrong one. Declining to certify and
+    *executing anyway* is not caution, it is the fail-open with a careful
+    rationale attached -- and it made governance opt-in by vocabulary, so the
+    first write capability added without a contract would have reached its
+    vendor unchecked under a passing test.
+
+    Refusing is not guessing. It is the same rule this service already
+    applies to verification probes: unverifiable means not autonomous.
+
+    Measured at the time of the fix, this is latent rather than exploitable:
+    all 167 registered builtin executors across 66 capabilities are covered,
+    27 through `ActionType` and 39 through a contract, with none in the gap.
+    `check_action_contract.py` fails the build when a *registered* executor
+    has no contract; this is the runtime half of the same rule, for anything
+    that reaches the dispatcher by another route.
     """
     _executor(monkeypatch, None)
     _policy(monkeypatch, TenantPolicy(tier=MaturityTier.L1_NOTIFY, from_store=True))
     result = await dispatch(_request("a_verb_nobody_declared"))
-    assert result.status is LiveActionStatus.SUCCEEDED
-    assert "autonomy_mode" not in result.details
+    assert result.status is LiveActionStatus.BLOCKED
+    assert "CAPABILITY_CONTRACTS" in result.details["reason"]
+
+
+async def test_a_dry_run_of_an_uncontracted_capability_is_still_previewed(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Positive control for the refusal above.
+
+    An explicit dry run touches no vendor, so refusing one would stop an
+    operator previewing exactly the verb they are about to be told they may
+    not run -- and a refusal nobody can investigate is how a control gets
+    switched off.
+    """
+    _executor(monkeypatch, None)
+    _policy(monkeypatch, TenantPolicy(tier=MaturityTier.L1_NOTIFY, from_store=True))
+    result = await dispatch(_request("a_verb_nobody_declared", dry_run=True))
+    assert result.status is not LiveActionStatus.BLOCKED
 
 
 async def test_the_contract_never_lowers_a_verdict_blast_radius_already_gated(

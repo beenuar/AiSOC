@@ -35,8 +35,24 @@ Configuration
         }
       },
       "teams": {"29:1xyz": {"user_id": "sam@example.com",
-                            "permissions": ["actions:execute:low"]}}
+                            "permissions": ["actions:execute:low"],
+                            "tenant_id": "0b4e..."}}
     }
+
+``tenant_id`` is required for an approver who will decide on a tenanted
+action, and the Teams entry above used to omit it — which is where
+GHSA-fm3f-p5jv-6hcg F06 came from. ``authorize_approver`` guarded its whole
+tenant comparison behind ``approver.tenant_id is not None``, so an approver
+with no tenant skipped it; ``_tenant_of`` returns ``None`` for the same
+principal, leaving the record read unscoped as well. Measured against the
+running service, an approver configured exactly like the old example took
+another tenant's ``isolate_host`` to ``completed`` while the record read
+``separation_of_duties: enforced``.
+
+It stays structurally optional because an approver may legitimately have no
+tenant on a single-tenant deployment, where no action carries one either. The
+refusal is specifically "this approver has no tenant and this action does",
+and it names this variable so an operator knows what to edit.
 
 Platform keys are lower-cased. Platform user ids are matched exactly, because
 Slack ids are case-sensitive opaque handles. Unset config means nobody can

@@ -485,6 +485,45 @@ def _stopped_by_kill_switch(request: LiveActionRequest, state: KillSwitchState) 
     )
 
 
+def _ungovernable_reason(request: LiveActionRequest, action_type: ActionType | None) -> str | None:
+    """Why this request cannot be graded, or ``None`` if it can.
+
+    Checked before any executor runs and only for would-be real executions --
+    an explicit dry run is already the safest mode and changes nothing, so
+    refusing one would stop an operator previewing a verb they are about to
+    be told they may not run.
+    """
+    if request.tenant_id is None:
+        return (
+            "the request names no tenant, so neither the tenant's autonomy tier nor its kill "
+            "switch can be resolved; set tenant_id on the dispatch"
+        )
+    if action_type is None and request.capability not in CAPABILITY_CONTRACTS:
+        return (
+            f"capability '{request.capability}' has neither a legacy ActionType nor an entry in "
+            "CAPABILITY_CONTRACTS, so its impact, reversibility and approval requirement are "
+            "undeclared; add a contract in capability_contracts.py"
+        )
+    return None
+
+
+def _refusal(reason: str) -> AutonomyDecision:
+    """A blocked verdict for a request governance could not grade.
+
+    CRITICAL blast radius and the lowest tier deliberately: the fields are
+    read by callers deciding how loudly to report, and an ungraded request is
+    not a low-risk one -- it is one whose risk nobody measured.
+    """
+    return AutonomyDecision(
+        mode=AutonomyMode.BLOCKED,
+        blast_radius=BlastRadius.CRITICAL,
+        tier=MaturityTier.L0_OBSERVE,
+        rollback=RollbackCapability.UNSUPPORTED,
+        requires_verification=False,
+        reason=reason,
+    )
+
+
 def _not_executed(request: LiveActionRequest, status: LiveActionStatus, decision: AutonomyDecision) -> LiveActionResult:
     return LiveActionResult(
         request_id=request.request_id,
@@ -644,7 +683,34 @@ async def dispatch(request: LiveActionRequest) -> LiveActionResult:
     # possible — so governance applies to would-be real executions only.
     decision: AutonomyDecision | None = None
     action_type = _action_type_for(request, executor)
-    if not request.dry_run and (action_type is not None or request.capability in CAPABILITY_CONTRACTS):
+    if not request.dry_run:
+        # Two ways a real execution used to escape governance entirely, and
+        # both are the same shape: the gate was opt-in, and whatever fell
+        # outside the vocabulary it knew ran unchecked (GHSA-fm3f-p5jv-6hcg).
+        #
+        # F07 -- no tenant. `resolve_tenant_policy(None)` returns the
+        # deployment's `AISOC_MATURITY_TIER`, and `kill_switch_state(None)`
+        # matches only the global row, so a tenantless request is graded by an
+        # environment variable and no tenant's stop button can reach it.
+        # `_govern` even papered over it with `tenant_id=request.tenant_id or
+        # uuid4()`, inventing a tenant to build the ActionRequest with.
+        #
+        # F81 -- no contract and no ActionType. 22 of the 95 known
+        # capabilities are in that gap. None of the 167 registered executors
+        # is, today, so this was latent rather than exploitable -- but the
+        # gate was opt-in by vocabulary and a test
+        # (`test_unmapped_capability_is_not_governed`) pinned the fail-open as
+        # intended behaviour, which is how it would have stayed true for the
+        # first write capability added without a contract.
+        #
+        # Both now refuse. "Unverifiable means not autonomous" is this
+        # service's own stated rule for verification probes; a verdict nobody
+        # can compute is not a verdict that permits.
+        ungovernable = _ungovernable_reason(request, action_type)
+        if ungovernable is not None:
+            log.warning("live_action.refused_ungovernable", reason=ungovernable)
+            return _not_executed(request, LiveActionStatus.BLOCKED, _refusal(ungovernable))
+
         decision = await (_govern(request, action_type) if action_type is not None else _govern_by_contract_alone(request))
         log = log.bind(autonomy_mode=decision.mode.value, blast=decision.blast_radius.value)
         if decision.mode is AutonomyMode.BLOCKED:
