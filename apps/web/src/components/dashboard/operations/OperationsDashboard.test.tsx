@@ -469,10 +469,42 @@ describe('derived helpers', () => {
 
   it('thinnestTactics ranks by active coverage and skips untagged techniques', () => {
     const ranked = thinnestTactics(COVERAGE);
-    // Persistence is 1/2 covered, Execution 1/1. The `tactic: null` cell is
-    // counted in the summary but cannot be attributed to a tactic here.
+    // Persistence is 1/2 covered, Execution 1/1. T9999 is in neither the
+    // response's tactic field nor the technique map, so it is counted in the
+    // summary but cannot be attributed to a tactic here.
     expect(ranked[0]).toEqual({ tactic: 'Persistence', covered: 1, total: 2 });
     expect(ranked.some((t) => t.tactic === null || t.tactic === 'Unknown')).toBe(false);
+  });
+
+  it('thinnestTactics resolves a tactic the API did not declare', () => {
+    // On a real deployment the compiled corpus carries no tactic key, so
+    // every cell arrives `tactic: null` and this ranking was empty — the
+    // panel's "weakest tactics" list had nothing in it while 392 techniques
+    // sat in the summary above it.
+    const ranked = thinnestTactics({
+      ...COVERAGE,
+      cells: [
+        { techniqueId: 'T1059.001', tactic: null, totalRules: 2, activeRules: 0, inactiveRules: 2 },
+        { techniqueId: 'T1078', tactic: null, totalRules: 1, activeRules: 1, inactiveRules: 0 },
+      ],
+    });
+
+    expect(ranked.map((t) => t.tactic)).toContain('Execution');
+    expect(ranked).not.toHaveLength(0);
+  });
+
+  it('does not claim coverage of ATT&CK it has not measured', async () => {
+    // "100% of known techniques have an enabled rule" was false: the
+    // endpoint returns one row per technique at least one rule references,
+    // so techniques with no rule at all never appear. The Coverage Advisor
+    // stated that scope correctly for the identical number while this panel
+    // shipped the unqualified claim.
+    renderDashboard();
+
+    expect(
+      await screen.findByText(/coverage of your own corpus, not of ATT&CK/i),
+    ).toBeTruthy();
+    expect(screen.queryByText(/of known techniques/i)).toBeNull();
   });
 });
 

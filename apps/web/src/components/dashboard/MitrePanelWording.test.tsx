@@ -61,14 +61,39 @@ describe('the tactics panel describes tactics', () => {
 });
 
 describe('the coverage row describes techniques', () => {
+  /**
+   * The row used to be labelled "MITRE coverage", which is the name five
+   * different figures carried on one deployment at one moment — 392/392 on
+   * the Coverage Advisor, 1/201 here, 22.22% on the SLA page — each
+   * measuring something different and none saying which. The label now
+   * states the denominator, so the two that remain on the console cannot be
+   * read as the same measurement.
+   */
+  const ROW_LABEL = 'label="ATT&CK techniques in scope"';
+
   it('does not claim to count tactics', () => {
     // The `<BarRow>`, not the `<LoadingBar>` placeholder above it — only the
     // former carries a description.
-    const start = efficiency.indexOf('label="MITRE coverage"\n');
+    const start = efficiency.indexOf(`${ROW_LABEL}\n`);
     expect(start, 'the coverage row has been renamed').toBeGreaterThan(-1);
-    const row = efficiency.slice(start, start + 600);
+    const row = efficiency.slice(start, start + 800);
 
     expect(row).not.toMatch(/Tactic \+ technique/i);
     expect(row).toMatch(/technique/i);
+  });
+
+  it('is not labelled with a name another surface uses for a different figure', () => {
+    // "MITRE coverage" over the ATT&CK Enterprise total and "techniques with
+    // an enabled rule" over the tenant's own corpus are both legitimate and
+    // are not the same number. Sharing a name is what made any two of them
+    // contradict each other.
+    expect(efficiency).not.toMatch(/label="MITRE coverage"/);
+  });
+
+  it('names the denominator it divides by', () => {
+    const start = efficiency.indexOf(`${ROW_LABEL}\n`);
+    const row = efficiency.slice(start, start + 800);
+
+    expect(row).toMatch(/ATT&CK Enterprise total/i);
   });
 });
