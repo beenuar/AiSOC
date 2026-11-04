@@ -36811,6 +36811,11 @@ components:
         status:
           type: string
           title: Status
+        detail:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Detail
         unmeasured:
           items:
             type: string

@@ -252,6 +252,16 @@ class PipelineStage(BaseModel):
     p95_latency_ms: float
     error_rate: float
     status: str
+    #: What this stage *did* observe, when the observation is not a backlog.
+    #:
+    #: `correlate` reported `backlog = <alerts that absorbed exactly one
+    #: event>` and the console rendered it as "Backlog 7", telling an
+    #: operator seven items were queued when nothing was. That count is a
+    #: correlation *outcome*, not a queue depth, and fusion emits no
+    #: per-correlation queue depth at all -- so `backlog` is now named in
+    #: `unmeasured` and the real observation travels here under its own
+    #: description.
+    detail: str | None = None
     #: Names of the numeric fields above this stage could not measure. Those
     #: fields still carry ``0`` for compatibility, and ``0`` is the most
     #: reassuring number a pipeline panel can show — an operator reads

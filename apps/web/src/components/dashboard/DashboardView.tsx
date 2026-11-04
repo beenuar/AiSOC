@@ -473,6 +473,26 @@ export function countConnectedSources(
   return sources.filter((s) => s.status === 'active' || s.count > 0).length;
 }
 
+/**
+ * Name the sources the count above counted.
+ *
+ * `sources` is "what produced alerts in this window", not "what the tenant
+ * configured" — a tenant with no connectors at all can still have five, via
+ * the ingest webhook. So the caption lists the real names rather than a
+ * fixed taxonomy that happened to have five entries too.
+ */
+export function describeConnectedSources(
+  sources: DashboardMetrics['sources'],
+): string {
+  const named = sources
+    .filter((s) => s.status === 'active' || s.count > 0)
+    .map((s) => s.name)
+    .filter(Boolean);
+  if (named.length === 0) return 'no source has produced an alert yet';
+  if (named.length <= 3) return named.join(', ');
+  return `${named.slice(0, 3).join(', ')} +${named.length - 3} more`;
+}
+
 // ─── Main Dashboard ───────────────────────────────────────────────────────────
 
 export function DashboardView() {
@@ -653,7 +673,14 @@ export function DashboardView() {
             <MetricCard
               label="Connected Sources"
               value={activeSourceCount}
-              sub="EDR, SIEM, Cloud, IAM, SaaS"
+              // The caption used to be the literal "EDR, SIEM, Cloud, IAM,
+              // SaaS" beside a live count, so the card read "5 — EDR, SIEM,
+              // Cloud, IAM, SaaS" on a tenant whose five sources were
+              // CloudTrail, CrowdStrike, Kubernetes Audit, Okta and an NDR,
+              // with zero connectors configured. A dynamic number paired
+              // with a fixed caption describes a different set from the one
+              // it counted.
+              sub={describeConnectedSources(sources)}
               color="purple"
             />
           </div>

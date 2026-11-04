@@ -454,6 +454,38 @@ describe('demo mode still populates the dashboards', () => {
       </TimeWindowProvider>,
     );
 
-    expect(screen.getByText('CrowdStrike EDR')).toBeTruthy();
+    // Twice now: once in the source list, once in the "Connected Sources"
+    // caption, which names the sources it counted instead of the fixed
+    // "EDR, SIEM, Cloud, IAM, SaaS" taxonomy it used to print beside a live
+    // number.
+    expect(screen.getAllByText('CrowdStrike EDR')).toHaveLength(2);
+  });
+
+  it('captions the source count with the sources it counted', () => {
+    __setDemoModeForTests(true);
+    swrData.set('dashboard-metrics', {
+      alerts: { total: 1, new: 1, critical: 0, high: 1, medium: 0, low: 0, resolvedToday: 0, mttr: 0 },
+      cases: { open: 0, inProgress: 0, resolvedThisWeek: 0 },
+      sources: [
+        { name: 'AWS CloudTrail', count: 4, status: 'active' },
+        { name: 'CrowdStrike Falcon', count: 2, status: 'active' },
+        { name: 'Okta', count: 1, status: 'active' },
+        { name: 'Kubernetes Audit', count: 1, status: 'active' },
+      ],
+      topMitre: [],
+      alertsTrend: [],
+      threatsBySource: [],
+    });
+
+    render(
+      <TimeWindowProvider>
+        <DashboardView />
+      </TimeWindowProvider>,
+    );
+
+    expect(
+      screen.getByText('AWS CloudTrail, CrowdStrike Falcon, Okta +1 more'),
+    ).toBeTruthy();
+    expect(screen.queryByText('EDR, SIEM, Cloud, IAM, SaaS')).toBeNull();
   });
 });

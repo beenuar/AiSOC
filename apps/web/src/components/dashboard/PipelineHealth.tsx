@@ -164,6 +164,13 @@ function StageCard({ stage }: { stage: PipelineStage }) {
           </dd>
         </div>
       </dl>
+
+      {/* What the stage did observe, when the observation is not a backlog.
+          `correlate` reported its single-event alert count as a backlog and
+          the strip rendered "Backlog 7" on an empty queue. */}
+      {stage.detail && (
+        <p className="mt-2 text-[11px] text-gray-500">{stage.detail}</p>
+      )}
     </div>
   );
 }

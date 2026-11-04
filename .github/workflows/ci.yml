@@ -575,8 +575,17 @@ jobs:
       #   2. apps/web/src/data/connectorCount.ts matches the JSON
       #   3. README, ROADMAP, docs/architecture and apps/docs all carry the
       #      same number as the registry
+      #   4. no component under apps/web/src renders the figure as a literal
       # If this fails, run `python scripts/generate_connector_count.py` and
       # commit the result.
+      #
+      # (4) exists because (3) only ever looked at markdown: the landing hero
+      # and the onboarding hero both rendered a hardcoded 26 against a
+      # registry of 91, the latter 35 lines below a correct dynamic use in
+      # the same file, and this gate reported OK throughout.
+      - name: Connector-count gate self-test (the defect, and two near misses)
+        run: python scripts/generate_connector_count.py --self-test
+
       - name: Verify connector count is in sync (Phase 1.1)
         run: python scripts/generate_connector_count.py --check
       # Same shape again, for the self-hosted webfonts. `apps/web` used to
