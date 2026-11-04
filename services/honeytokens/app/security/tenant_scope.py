@@ -69,6 +69,7 @@ import os
 import time
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
 from fastapi import Header, HTTPException, status
 
@@ -154,6 +155,21 @@ class TenantPrincipal:
     #: True when a service token asserted the tenant rather than a verified
     #: console claim carrying it. Surfaced so logs can tell the two apart.
     delegated: bool = False
+    #: The ``role`` claim from a verified console token, or ``""``.
+    #:
+    #: Carried because the services that vendor this module had *no* way to
+    #: ask what a caller may do: a verified principal said which tenants it
+    #: covers and nothing else, so a router could default-deny anonymous
+    #: callers and could not tell a viewer from an administrator. That is how
+    #: a `viewer` came to create and run response playbooks that dispatch
+    #: containment actions, while the API gates the same step dispatch on
+    #: `actions:execute` (GHSA-8cpf-mchw-jpf2, F15).
+    #:
+    #: Read from the signed claim and never from a request field. Empty for a
+    #: service token, which is authenticated by a shared secret and carries no
+    #: human role — a consumer deciding what a delegated caller may do must
+    #: look at `delegated`, not at an empty role.
+    role: str = ""
 
     @property
     def is_empty(self) -> bool:
@@ -384,11 +400,94 @@ def _principal_from_claims(claims: dict) -> TenantPrincipal | None:
         tenant = uuid.UUID(str(claims["tenant_id"]))
     except (KeyError, ValueError, TypeError):
         return None
+    role = claims.get("role")
     return TenantPrincipal(
         tenant_ids=frozenset({tenant}),
         subject=f"console:{claims.get('sub', 'unknown')}",
         delegated=False,
+        # From the signed claim. `create_access_token` in services/api has put
+        # `role` in every access token since it was written; a token without
+        # one yields "" and is treated as holding nothing, which is the safe
+        # reading of an unknown caller.
+        role=str(role).strip() if isinstance(role, str) else "",
     )
+
+
+#: Optional callback answering "has this principal's access been withdrawn?"
+#:
+#: GHSA-8cpf-mchw-jpf2, F16. :func:`verify_console_token` checks the
+#: signature, the algorithm, the token type, expiry and that a tenant is
+#: present. It consults no user record, so a token minted before an operator
+#: deactivated that user or revoked their sessions stayed valid here until it
+#: expired -- in the API the same token is refused, because
+#: ``token_is_revoked`` compares ``iat`` against ``sessions_revoked_at``.
+#:
+#: A hook rather than a lookup written into this module, for two reasons.
+#: This file is vendored into nine services, most of which hold no database
+#: connection at all and would have to grow one to satisfy a control they do
+#: not need; and a verifier that opens a connection stops being a pure
+#: function of its inputs, which is what makes the rest of it testable
+#: without infrastructure.
+#:
+#: Unset, the behaviour is exactly what it was. A service that *can* answer
+#: the question registers :func:`set_revocation_check` at startup and gets
+#: the check; one that cannot is no worse off than before.
+_REVOCATION_CHECK: Any = None
+
+
+def set_revocation_check(check: Any) -> None:
+    """Register an ``async (claims: dict) -> str | None`` revocation check.
+
+    The callable returns ``None`` when the principal is in good standing, or
+    a short reason when their access has been withdrawn. Raising
+    :class:`RevocationUnavailable` means the answer could not be obtained.
+    """
+    global _REVOCATION_CHECK
+    _REVOCATION_CHECK = check
+
+
+class RevocationUnavailable(Exception):
+    """The revocation state could not be read.
+
+    Distinguished from "not revoked" deliberately. The two are the same shape
+    to a caller that returns a bool and they need opposite answers, and this
+    repository has shipped the conflation before -- a probe whose unknown
+    bucket counted as a pass.
+    """
+
+
+async def _enforce_revocation(claims: dict) -> None:
+    """Refuse a cryptographically valid token whose principal has been cut off.
+
+    A read failure is a **503, not a pass**. The token is valid and the
+    question is unanswered, so the honest statement is "this service cannot
+    tell", not "you may proceed" -- and the refusal is scoped to this
+    service's own routes, where the console's remaining surfaces go through
+    the API, which answers the question from its own session.
+    """
+    if _REVOCATION_CHECK is None:
+        return
+    try:
+        reason = await _REVOCATION_CHECK(claims)
+    except RevocationUnavailable as exc:
+        logger.error(
+            "tenant_scope.revocation_unreadable service=%s detail=%s",
+            SERVICE_NAME,
+            str(exc).replace("\r", "").replace("\n", " ")[:200],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "could not check whether this session has been revoked, so the request is "
+                "refused rather than assumed valid; retry once the database is reachable"
+            ),
+        ) from exc
+    if reason:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"this session is no longer valid: {reason}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def require_console_or_service_auth(
@@ -434,6 +533,7 @@ async def require_console_or_service_auth(
     if console_secret:
         claims = verify_console_token(token, console_secret)
         if claims is not None:
+            await _enforce_revocation(claims)
             principal = _principal_from_claims(claims)
             if principal is not None:
                 return principal
