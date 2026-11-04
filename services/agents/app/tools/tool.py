@@ -27,6 +27,8 @@ from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
 
+import jsonschema
+
 __all__ = ["Tool"]
 
 
@@ -42,3 +44,52 @@ class Tool:
             "type": "function",
             "function": {"name": self.name, "description": self.description, "parameters": self.parameters},
         }
+
+    def argument_error(self, args: dict[str, Any]) -> str | None:
+        """Why ``args`` does not satisfy this tool's schema, or ``None``.
+
+        GHSA-4hxg-m5rw-gw3x. ``ToolRegistry.execute`` called ``fn(**args)``
+        with whatever the model produced. The schema already existed and was
+        already authoritative — it is what ``bind_tools`` sends the provider —
+        and nothing compared the two. Python enforces no annotation, so a
+        wrong type reached the body untouched: a tool declaring
+        ``indicator: str`` ran on a list, a dict or an integer. The argument
+        comes from a model whose context includes attacker-controlled alert
+        text, which is the whole subject of that advisory.
+
+        The check lives here rather than in the registry because it is a
+        property of the tool's own contract, and a second definition of
+        "valid arguments" somewhere else is the drift this repository keeps
+        finding.
+
+        Undeclared keys are rejected separately from the schema walk. The
+        shipped schemas do not set ``additionalProperties: false``, and
+        adding it to each of them would be seven places to forget; the
+        function-calling contract is that the model sends declared properties
+        only, so an undeclared key is out of contract wherever it came from.
+        It matters most for a tool whose body takes ``**kwargs``, which
+        swallows the extra argument rather than raising.
+
+        Returns a sentence rather than raising: the loop's contract is that a
+        tool failure reaches the model instead of aborting the run, and the
+        model can act on "unexpected argument" by not sending it again.
+        """
+        schema = self.parameters if isinstance(self.parameters, dict) else {}
+        declared = schema.get("properties")
+        declared = declared if isinstance(declared, dict) else {}
+
+        undeclared = sorted(set(args) - set(declared))
+        if undeclared:
+            return f"unexpected argument(s) {undeclared}; {self.name!r} declares {sorted(declared) or 'none'}"
+
+        try:
+            jsonschema.validate(instance=args, schema=schema)
+        except jsonschema.ValidationError as exc:
+            where = ".".join(str(part) for part in exc.absolute_path) or "(arguments)"
+            return f"invalid argument {where}: {exc.message}"
+        except jsonschema.SchemaError as exc:
+            # The tool's own schema is malformed. Refusing is right — the
+            # model was shown that schema — but the message must send a
+            # reader to the tool definition rather than to the model.
+            return f"tool {self.name!r} has an invalid parameter schema: {exc.message}"
+        return None
