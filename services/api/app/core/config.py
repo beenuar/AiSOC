@@ -7,6 +7,7 @@ MIT License
 import ipaddress
 import logging
 import os
+import secrets
 import warnings
 from functools import lru_cache
 from typing import Any, Final
@@ -918,6 +919,57 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [origin.strip() for origin in v.split(",")]
         return v
+
+    @model_validator(mode="after")
+    def _refuse_a_published_signing_key_on_a_deployed_demo(self) -> "Settings":
+        """Never let a key anyone can read sign a session (GHSA-m57m-6p4p-cq6p).
+
+        ``enforce_secure_defaults`` refuses an insecure default at boot, but
+        only when ``ENVIRONMENT=production``. ``infra/railway/railway.toml``
+        sets ``ENVIRONMENT = "demo"`` and never sets ``SECRET_KEY``, so the
+        documented one-click deploy came up on the internet signing tokens
+        with ``change-me-in-production-at-least-32-chars`` — a string in this
+        repository's front matter, good for a forged session as any tenant in
+        any role.
+
+        ``demo`` is the only member of ``DEV_ENVIRONMENTS`` that denotes a
+        *deployed* environment: ``development``, ``dev``, ``local`` and
+        ``test`` are on somebody's machine, where the placeholder is the
+        documented value and a per-process key would break every local flow
+        that signs something and reads it back. So the substitution is scoped
+        to ``demo`` alone, and the local environments are pinned untouched by
+        test.
+
+        Substitution rather than refusal, deliberately. Refusing is what
+        production does and is the obvious symmetry, but it would break the
+        one-click deploy for everyone following the documented path — and a
+        security default that breaks the documented path is one that gets
+        patched out downstream. Production keeps the louder answer, because a
+        production deployment that cannot keep a session across a restart is
+        a worse problem than one that will not start.
+
+        The cost is real and is said out loud rather than discovered: the key
+        lives for this process only, so sessions do not survive a restart,
+        and a demo running more than one replica needs a ``SECRET_KEY`` of
+        its own or the replicas will reject each other's tokens.
+        """
+        if _normalize_env(self.ENVIRONMENT) != "demo":
+            return self
+        if self.SECRET_KEY not in INSECURE_SECRET_KEY_DEFAULTS:
+            return self
+        # `object.__setattr__` is not needed — Settings is not frozen — but
+        # the assignment must not re-enter validation, which `model_config`
+        # already avoids by not setting `validate_assignment`.
+        self.SECRET_KEY = secrets.token_urlsafe(48)
+        # The module-level logger is created inside warn_if_insecure_defaults
+        # rather than at import, so this one is resolved by name here.
+        logging.getLogger("aisoc.config").error(
+            "insecure_default: SECRET_KEY was a published placeholder on a deployed demo. "
+            "A per-process key was generated so no token is signed with a value anyone can read. "
+            "Consequence: sessions end at the next restart, and a demo with more than one replica "
+            "must set SECRET_KEY itself or the replicas will reject each other's tokens."
+        )
+        return self
 
     @model_validator(mode="after")
     def _reconcile_env_aliases(self) -> "Settings":
