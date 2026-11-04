@@ -72,8 +72,17 @@ def _run(coro):  # type: ignore[no-untyped-def]
 
 
 def _admin_user(*, allow: bool = True) -> SimpleNamespace:
-    async def _check(_perm: str, _db: Any) -> bool:
-        return allow
+    """Answers for ``admin:tenants`` and for nothing else.
+
+    It used to return ``allow`` for any permission it was handed, so these
+    tests passed identically whether the gate asked for ``admin:tenants`` or
+    for the ``settings:write`` fallback that let every ``tenant_admin`` list
+    and provision tenants across the deployment (GHSA-6cwm-cx8p-h7f5). A
+    double more capable than the real principal cannot grade a gate.
+    """
+
+    async def _check(perm: str, _db: Any) -> bool:
+        return allow and perm == "admin:tenants"
 
     return SimpleNamespace(
         user_id=uuid.uuid4(),

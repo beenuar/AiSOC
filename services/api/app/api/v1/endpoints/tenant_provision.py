@@ -134,14 +134,26 @@ class TenantListResponse(BaseModel):
 
 
 async def _require_admin(user: AuthUser, db: AsyncSession) -> None:
-    """Gate on ``admin:tenants`` (preferred) or ``settings:write`` (fallback)."""
+    """Gate on ``admin:tenants``, and on nothing else.
+
+    There was a ``settings:write`` fallback here, justified as keeping
+    operators unblocked until a seed migration introduced ``admin:tenants``.
+    That migration never landed, so the permission did not exist, no role
+    could resolve it, and the fallback was the *only* reachable branch --
+    while ``settings:write`` is held by ``tenant_admin``. Every tenant
+    administrator on the deployment could therefore list every tenant and
+    provision new ones, neither of which is scoped to their own
+    (GHSA-6cwm-cx8p-h7f5).
+
+    Migration 158 seeds the permission, so the fallback has nothing left to
+    cover. A deployment-wide route takes a deployment-wide permission; the
+    wildcard roles hold it and no tenant-scoped role does.
+    """
     if await user.has_permission_db("admin:tenants", db):
-        return
-    if await user.has_permission_db("settings:write", db):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="admin:tenants (or settings:write) required",
+        detail="admin:tenants required",
     )
 
 

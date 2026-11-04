@@ -193,6 +193,12 @@ RLS_SESSION_VARIABLE = "app.current_tenant_id"
 AUTH_ANNOTATIONS = frozenset(
     {
         "AuthUser",
+        # `AuthUser` that additionally refuses a non-session credential
+        # (GHSA-jfvq-94hv-4wrj). It binds the same principal, so a predicate
+        # against its attributes is principal-derived exactly as before; it is
+        # listed because this set is a vocabulary, and a route that narrows its
+        # dependency should not silently lose the credit for scoping its reads.
+        "SessionUser",
         "CurrentUser",
         "ReadUser",
         "WriteUser",
