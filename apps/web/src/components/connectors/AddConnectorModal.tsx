@@ -89,7 +89,7 @@ function describeApiError(err: unknown, fallback: string): string {
  * no blank placeholder, so the browser already shows that option as chosen,
  * and the state has to match what the operator sees.
  */
-function buildInitialValues(
+export function buildInitialValues(
   fields: ConnectorSchemaField[],
 ): Record<string, string | number | boolean> {
   const values: Record<string, string | number | boolean> = {};
