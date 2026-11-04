@@ -54,7 +54,7 @@ finding.
 :::caution The EDR connectors do not supply this
 `crowdstrike`, `sentinelone` and `azure_defender` poll the **vendor's own
 detections**, not raw process telemetry — `crowdstrike.py` reads
-`/detects/queries/detects/v1`, which returns judgements. They are classed as
+`/alerts/combined/alerts/v1`, which returns judgements. They are classed as
 OCSF Security Findings for that reason, and they cannot supply a process
 start.
 

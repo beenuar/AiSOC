@@ -1,6 +1,9 @@
 """
 CrowdStrike Falcon connector.
-Fetches detections from the CrowdStrike Falcon API.
+
+Polls Falcon alerts. The Detects API (`/detects/queries/detects/v1`) was
+decommissioned on 2025-09-30 and now answers 404; the replacement is
+`POST /alerts/combined/alerts/v1`, which needs the Alerts:Read scope.
 """
 
 from __future__ import annotations
@@ -40,7 +43,7 @@ class CrowdStrikeConnector(BaseConnector):
             connector_id=cls.connector_id,
             connector_name=cls.connector_name,
             category=cls.connector_category,
-            description="CrowdStrike Falcon detections via the Falcon REST API.",
+            description="CrowdStrike Falcon alerts via the Falcon Alerts API.",
             docs_url="/docs/connectors/crowdstrike",
             fields=[
                 Field("client_id", "string", "Client ID"),
@@ -76,9 +79,17 @@ class CrowdStrikeConnector(BaseConnector):
             return self._access_token
 
     async def test_connection(self) -> dict[str, Any]:
+        # OAuth succeeding is not enough. A client with no Alerts:Read scope
+        # still gets a token, and that is exactly how a saved connector looked
+        # healthy while every poll 404'd the decommissioned Detects API.
         try:
-            token = await self._authenticate()
-            return {"success": True, "connector": self.connector_id, "authenticated": bool(token)}
+            alerts = await self.fetch_alerts(since_seconds=60)
+            return {
+                "success": True,
+                "connector": self.connector_id,
+                "authenticated": True,
+                "alerts_visible": len(alerts),
+            }
         except Exception as exc:
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
@@ -86,40 +97,47 @@ class CrowdStrikeConnector(BaseConnector):
         if not self._access_token:
             await self._authenticate()
 
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).isoformat()
-        headers = {"Authorization": f"Bearer {self._access_token}"}
-
+        # A `Z`-suffixed UTC timestamp, which is the form CrowdStrike's own
+        # FQL range examples use. `isoformat()` emits a `+00:00` offset
+        # instead; whether Falcon accepts that has not been established
+        # against a live tenant, and there is no reason to depend on it.
+        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
+        body: dict[str, Any] = {
+            "filter": f"created_timestamp:>'{since}'",
+            "limit": 100,
+            "sort": "created_timestamp|asc",
+        }
+        alerts: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
-            # Query detection IDs
-            resp = await client.get(
-                f"{self._base_url}/detects/queries/detects/v1",
-                headers=headers,
-                params={"filter": f"created_timestamp:>'{since}'", "limit": 100},
+            # One page is what the old Detects query returned. Follow `after`
+            # a few times so a burst larger than 100 is not dropped, and stop
+            # rather than paging a tenant's entire history.
+            for _ in range(5):
+                resp = await self._post_alerts(client, body)
+                payload = resp.json()
+                alerts.extend(item for item in (payload.get("resources") or []) if isinstance(item, dict))
+                after = ((payload.get("meta") or {}).get("pagination") or {}).get("after")
+                if not after:
+                    break
+                body = {**body, "after": after}
+        return [self.normalize(alert) for alert in alerts]
+
+    async def _post_alerts(self, client: httpx.AsyncClient, body: dict[str, Any]) -> httpx.Response:
+        headers = {"Authorization": f"Bearer {self._access_token}"}
+        url = f"{self._base_url.rstrip('/')}/alerts/combined/alerts/v1"
+        resp = await client.post(url, headers=headers, json=body)
+        if resp.status_code == 401:
+            await self._authenticate()
+            headers = {"Authorization": f"Bearer {self._access_token}"}
+            resp = await client.post(url, headers=headers, json=body)
+        if resp.status_code == 403:
+            raise RuntimeError(
+                "CrowdStrike refused the alerts query (403). The API client needs the "
+                "Alerts: Read scope. Falcon console → Support and resources → API clients "
+                "and keys → edit this client → Alerts → Read."
             )
-            if resp.status_code == 401:
-                await self._authenticate()
-                headers = {"Authorization": f"Bearer {self._access_token}"}
-                resp = await client.get(
-                    f"{self._base_url}/detects/queries/detects/v1",
-                    headers=headers,
-                    params={"filter": f"created_timestamp:>'{since}'", "limit": 100},
-                )
-            resp.raise_for_status()
-            detection_ids = resp.json().get("resources", [])
-
-            if not detection_ids:
-                return []
-
-            # Fetch detection details
-            details_resp = await client.post(
-                f"{self._base_url}/detects/entities/summaries/GET/v1",
-                headers=headers,
-                json={"ids": detection_ids[:100]},
-            )
-            details_resp.raise_for_status()
-            detections = details_resp.json().get("resources", [])
-
-        return [self.normalize(d) for d in detections]
+        resp.raise_for_status()
+        return resp
 
     def normalize(self, raw: dict[str, Any]) -> dict[str, Any]:
         # CrowdStrike Falcon's `/detects` API exposes severity in three
@@ -135,17 +153,26 @@ class CrowdStrikeConnector(BaseConnector):
         # numeric score along the bands documented by CrowdStrike.
         severity_bands_displayname = {
             "informational": "info",
+            # Both spellings: the band is published as "Informational", and
+            # `severity_name` has been observed carrying the short form.
+            # Missing one sends an otherwise-named band down the numeric
+            # path, which is a different answer, not a tidier one.
+            "info": "info",
             "low": "low",
             "medium": "medium",
             "high": "high",
             "critical": "critical",
         }
 
-        display_name = (raw.get("max_severity_displayname") or "").strip().lower()
+        # Alerts API names the band `severity_name`. The decommissioned
+        # Detects payload used `max_severity_displayname`. Accept both.
+        display_name = (raw.get("severity_name") or raw.get("max_severity_displayname") or "").strip().lower()
         if display_name in severity_bands_displayname:
             severity = severity_bands_displayname[display_name]
         else:
-            score = raw.get("max_severity")
+            score = raw.get("severity")
+            if score is None:
+                score = raw.get("max_severity")
             try:
                 score_int = int(score) if score is not None else None
             except (TypeError, ValueError):
@@ -163,32 +190,58 @@ class CrowdStrikeConnector(BaseConnector):
             else:
                 severity = "info"
 
-        behaviors = raw.get("behaviors") or [{}]
-        title = behaviors[0].get("display_name", "CrowdStrike Detection")
+        behaviors = raw.get("behaviors") or []
+        title = (
+            (raw.get("display_name") or "").strip()
+            or (behaviors[0].get("display_name") if behaviors else "")
+            or (raw.get("name") or "").strip()
+            or "CrowdStrike Detection"
+        )
 
-        # Falcon carries the acting identity per behavior, not on the
-        # detection. The envelope omitted it entirely, so every CrowdStrike
-        # alert reached fusion with no actor — and fusion's correlation key is
-        # {tenant}:{entity}:{tactic}, so an EDR detection on a named user
-        # correlated under "unknown" alongside every other one.
-        actor = ""
+        # Alerts carry the actor on the alert. Detects carried it only on
+        # each behavior. `assigned_to_name` is the analyst the alert is
+        # assigned to, not the actor, and must not be used here.
+        actor = (raw.get("user_name") or "").strip()
         for behavior in behaviors:
+            if actor:
+                break
             candidate = (behavior.get("user_name") or "").strip()
             if candidate:
                 domain = (behavior.get("user_id") or "").strip()
                 actor = f"{candidate}@{domain}" if "@" not in candidate and "@" in domain else candidate
                 break
 
+        # Bound once rather than called twice inside the conditional: two
+        # separate `raw.get("device")` calls give the checker nothing to
+        # narrow, so `device` stays `Any | dict | None` and every `.get`
+        # below it is an unchecked attribute on a possible None.
+        raw_device = raw.get("device")
+        device: dict[str, Any] = raw_device if isinstance(raw_device, dict) else {}
+        hostname = device.get("hostname") or raw.get("hostname")
+        techniques: list[str] = []
+        for candidate in (raw.get("technique_id"),):
+            if candidate and candidate not in techniques:
+                techniques.append(candidate)
+        for behavior in behaviors:
+            technique = behavior.get("technique_id")
+            if technique and technique not in techniques:
+                techniques.append(technique)
+        for item in raw.get("mitre_attack") or []:
+            technique = item.get("technique_id") if isinstance(item, dict) else item
+            if technique and technique not in techniques:
+                techniques.append(technique)
+        description = (raw.get("description") or "").strip() or f"CrowdStrike detection on {hostname or 'unknown'}"
+
         return {
             "source": self.connector_id,
-            "external_id": raw.get("detection_id", ""),
+            "external_id": raw.get("composite_id") or raw.get("id") or raw.get("detection_id") or "",
             "title": title,
-            "description": f"CrowdStrike detection on {raw.get('device', {}).get('hostname', 'unknown')}",
+            "description": description,
             "severity": severity,
-            "src_ip": raw.get("device", {}).get("external_ip"),
-            "hostname": raw.get("device", {}).get("hostname"),
+            "src_ip": device.get("external_ip") or device.get("local_ip"),
+            "hostname": hostname,
             "actor": actor or None,
-            "mitre_techniques": [b.get("technique_id", "") for b in raw.get("behaviors", []) if b.get("technique_id")],
+            "mitre_techniques": techniques,
             "raw_event": raw,
             "created_at": raw.get("created_timestamp"),
         }
