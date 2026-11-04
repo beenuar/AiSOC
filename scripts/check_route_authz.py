@@ -90,6 +90,27 @@ AUTHZ_CALLS = frozenset(
         "require_permission_db",
         "has_permission",
         "has_permission_db",
+        # Not a permission, and an authorization decision all the same: it
+        # refuses a credential type rather than a role. Enrolling or removing
+        # an authentication factor requires an interactive session, because a
+        # factor is what establishes a session and a bearer token that can
+        # mint one outranks its own scopes — a key scoped to `alerts:read`
+        # registered a passkey on its owner's account and signed in with it
+        # (GHSA-jfvq-94hv-4wrj).
+        #
+        # A permission would have been the wrong shape: it would be mintable
+        # onto the very credential this refuses. So it is listed here rather
+        # than added to the vocabulary.
+        "require_interactive_session",
+        # Also not a permission, and a stricter decision than any of them:
+        # `_resolve_reference_caller` answers only an internal service peer
+        # holding the service token and refuses *every* session outright,
+        # whatever permissions it carries (GHSA-c5qq-vhf5-wjqc). A route that
+        # serves no session cannot be gated by a role, so a permission is the
+        # wrong instrument; refusing the credential class is the decision.
+        # It has exactly one caller, `resolve_playbook_references`, so this
+        # exempts that route and nothing else.
+        "_resolve_reference_caller",
         # Organisation-role decisions. `_admin_scope` resolves the caller's
         # role inside an MSSP organisation and raises 403 unless they
         # administer it, which is an authorization decision by any
@@ -168,12 +189,49 @@ AUTHZ_CALLS = frozenset(
 #: interchangeable with a tenant role. This gate reads `require_permission`
 #: only, so it cannot see them; `test_mssp_route_permissions.py` asserts they
 #: still resolve that scope.
-MAX_UNAUTHORIZED = 21
+#:
+#: 18, reached from a measured 22 rather than from the 21 recorded here
+#: before. Both halves of that are worth stating, because the arithmetic does
+#: not work otherwise:
+#:
+#: * Three passkey routes — register begin, register finish and credential
+#:   revocation — took `require_interactive_session`. They were excused as
+#:   "the caller acts on their own credential", which assumed the
+#:   authenticated principal was the person; an `aisoc_` key resolves to its
+#:   owner's id and role, so a key scoped to `alerts:read` enrolled a passkey
+#:   on the owner's account and signed in with it (GHSA-jfvq-94hv-4wrj).
+#:   Refusing the credential *type* is the authorization decision those
+#:   routes were missing, so they are no longer debt.
+#: * `resolve_playbook_references` was never debt and was counted as such.
+#:   `_resolve_reference_caller` refuses every session outright, which this
+#:   gate could not see because the call was not in `AUTHZ_CALLS`.
+#:
+#: The recorded ceiling had also gone stale: it was set at 21 and the tree
+#: measured 22, because that route became identity-only in #1203 and nothing
+#: adjusted the number. So `main` was already over its own ceiling before
+#: this change, and 22 - 3 - 1 is the 18 below.
+MAX_UNAUTHORIZED = 18
+
+#: Annotated aliases defined in ``app/api/v1/deps.py`` that carry an
+#: authorization decision. They are imported by the modules that use them, so
+#: there is no module-level assignment for the alias scan to find.
+AUTHZ_IMPORTED_ALIASES = frozenset({"SessionUser"})
 
 #: Modules whose state-changing routes are authorized *by identity*, with the
 #: reason. A route where the caller acts on their own resource is not an
 #: unauthorized route — asking for a permission there would be theatre, since
 #: the only principal who could hold it is the one already identified.
+#:
+#: That last clause is the one to be careful with, and ``passkeys.py`` used to
+#: sit here on exactly it: "a permission would have to be held by the person
+#: enrolling their own key, which is everyone". The premise is that the
+#: identified principal *is* the person. It is not — an ``aisoc_`` API key
+#: resolves to its owner's id and role, so "everyone" silently included every
+#: key its owner had ever minted, and one of them registered a passkey and
+#: signed in as them (GHSA-jfvq-94hv-4wrj). The entry is gone because those
+#: routes now take ``SessionUser`` and are authorized; it is recorded here
+#: because "identity suffices" is a claim about *which* identities, and that
+#: is the question an entry in this dict has to answer.
 #:
 #: Declared per module rather than counted, because "20 remaining" tells a
 #: reviewer nothing and this tells them exactly what is excused and why. The
@@ -189,11 +247,6 @@ IDENTITY_IS_AUTHORIZATION: dict[str, str] = {
         "`SCIMPrincipal`, not a tenant role. There is no permission to check: "
         "the token *is* the grant, and it is scoped to one organisation at "
         "mint time."
-    ),
-    "passkeys.py": (
-        "A registration or authentication ceremony for the caller's own "
-        "credential. A permission would have to be held by the person "
-        "enrolling their own key, which is everyone."
     ),
     "push.py": (
         "Web-push subscriptions for the caller's own browser. The row is "
@@ -227,19 +280,33 @@ IDENTITY_IS_AUTHORIZATION: dict[str, str] = {
 def _authorizing_names(tree: ast.Module) -> set[str]:
     """Module-level names that carry an authorization decision.
 
-    Three indirections hide enforcement from a naive scan, and all three are
+    Four indirections hide enforcement from a naive scan, and all four are
     in this tree:
 
     * an ``Annotated`` alias — ``WriteUser = Annotated[AuthUser,
       Depends(require_permission("playbooks:write"))]`` in ``playbooks.py``;
     * a dependency helper — ``_admin_scope`` in ``mssp.py``;
     * a plain helper called from the handler body — ``_require_admin`` in
-      ``waitlist.py`` and ``tenant_provision.py``.
+      ``waitlist.py`` and ``tenant_provision.py``;
+    * an alias *imported* from ``deps.py`` rather than assigned here —
+      ``SessionUser``, which the three loops below cannot see because there
+      is no ``Assign`` node for it in the module that uses it.
 
     Missing any of them reports a gated route as ungated, which would inflate
     the ceiling with routes that are already fine and hide the real ones.
     """
     names: set[str] = set()
+
+    # The imported-alias case. Listed by name rather than resolved across
+    # modules: this gate parses one file at a time, and following an import
+    # would mean building an import graph to answer a question with four
+    # known answers.
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ImportFrom):
+            for alias in node.names:
+                bound = alias.asname or alias.name
+                if alias.name in AUTHZ_IMPORTED_ALIASES:
+                    names.add(bound)
 
     for node in ast.walk(tree):
         # Alias assignments: NAME = Annotated[..., Depends(require_permission(...))]

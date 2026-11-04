@@ -114,6 +114,13 @@ AUTH_DEPENDENCY_NAMES = {
     "get_current_active_user",
     "require_permission",
     "AuthUser",
+    # `AuthUser` narrowed to a principal that signed in, as opposed to one
+    # presenting an API key or a workload secret. It establishes the same
+    # identity and then refuses the credential types that must not change
+    # authentication state (GHSA-jfvq-94hv-4wrj), so it is strictly stronger
+    # than `AuthUser` and belongs in this set for the same reason.
+    "SessionUser",
+    "require_interactive_session",
     "CurrentUser",
     "ReadUser",
     "WriteUser",
@@ -171,7 +178,10 @@ FILE_LOCAL_RESOLVERS: dict[str, dict[str, str]] = {
         "_resolve_reference_caller": (
             "there is no client tenant to intersect here: the route serves only the internal "
             "service peer, so a session is refused outright (GHSA-c5qq-vhf5-wjqc) and the "
-            "declared tenant is the service caller's own, which is then the sole predicate on the read"
+            "declared tenant is the service caller's own, which is then the sole predicate on "
+            "the read. Re-checked against the caller: the agents engine passes the run "
+            "context's tenant, and #1651 made that come from the credential rather than from "
+            "a request body, so the service token is not laundering a caller-chosen tenant"
         ),
     },
 }

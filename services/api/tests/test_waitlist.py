@@ -74,13 +74,17 @@ def _run(coro):  # type: ignore[no-untyped-def]
 def _admin_user(*, allow: bool = True) -> SimpleNamespace:
     """Mock the AuthUser dependency.
 
-    The endpoint calls ``user.has_permission_db(perm, db)`` twice
-    (admin:waitlist then settings:write fallback); the stub returns
-    ``allow`` for both unless overridden.
+    The stub answers for ``admin:waitlist`` and for nothing else. It used to
+    return ``allow`` for whatever permission it was handed, which made the
+    double strictly more capable than the real principal and meant these
+    tests passed identically whether the gate asked for ``admin:waitlist``,
+    for the ``settings:write`` fallback that reached the whole deployment
+    (GHSA-6cwm-cx8p-h7f5), or for a permission that does not exist. A stub
+    that grants everything cannot grade an authorization decision.
     """
 
-    async def _check(_perm: str, _db: Any) -> bool:
-        return allow
+    async def _check(perm: str, _db: Any) -> bool:
+        return allow and perm == "admin:waitlist"
 
     return SimpleNamespace(
         user_id=uuid.uuid4(),

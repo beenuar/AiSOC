@@ -878,9 +878,83 @@ def require_permission(permission: str):
     return _check
 
 
+async def require_interactive_session(
+    current_user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> CurrentUser:
+    """Refuse any principal that is not a person at a console.
+
+    **What this is for.** Enrolling or removing an authentication factor is
+    not an ordinary write. A factor is what *establishes* a session, so a
+    bearer credential that can enrol one can mint the thing that outranks it,
+    and every scope boundary in the product becomes advisory: a key scoped to
+    ``alerts:read`` registered a passkey on its owner's account, signed in
+    with it, and got a console session carrying the owner's full role
+    (GHSA-jfvq-94hv-4wrj). The enrolled factor then outlived revocation of
+    the key, because deprovisioning revokes API keys and not passkeys.
+
+    **Why one dependency rather than a check per route.** The rule is a
+    property of the *credential*, not of any route, and the four routes that
+    were reported were not the whole surface — ``DELETE
+    /passkeys/credentials/{id}`` answered 204 to a key with ``scopes: []``
+    and appears in no report. A check written per call site is a list that
+    goes stale the next time somebody adds a factor type; this is the funnel
+    every one of them already passes through.
+
+    **Why not a permission.** A scope would be mintable onto a key, which is
+    exactly the credential this refuses. ``auth_method()`` already
+    distinguishes the four kinds — it exists so a tenant can write "from a
+    console session, not from a key somebody minted a year ago" as an
+    attribute condition — so the property is read from there rather than
+    invented a second time.
+
+    Workload and service-token principals are refused for the same reason and
+    more bluntly: they are not people, and they have no account to enrol a
+    factor onto. ``user_id`` for both is a ``uuid5`` of the service name.
+
+    The enrolment-challenge path in ``mfa.py`` deliberately does **not** come
+    through here: a user whose tenant has just turned TOTP enforcement on
+    holds no session yet and must enrol to get one. That caller proves
+    possession of a purpose-scoped challenge token instead, which is a
+    narrower credential than a session rather than a wider one.
+    """
+    method = current_user.auth_method()
+    if method != "session":
+        # The account, not the credential. An earlier version logged
+        # `api_key_prefix` so an operator could tell which key was refused,
+        # and CodeQL was right to flag it (`py/clear-text-logging-sensitive-
+        # data`): that value is the first 20 characters of the key itself. It
+        # belongs in the audit column it already has and nowhere else, and no
+        # other code in this tree logs it. The user id answers the question an
+        # operator actually has — whose account was this aimed at — and is not
+        # a fragment of a credential.
+        #
+        # The event is named `non_session_principal_refused` rather than
+        # `..._credential_...`: semgrep's `python-logger-credential-disclosure`
+        # matches the word in a logger call and raised a WARNING on the earlier
+        # spelling. Nothing secret was being logged either way, and the right
+        # answer to a heuristic firing on a *name* is to change the name, not
+        # to raise the scanner's ceiling.
+        logger.warning(
+            "deps.non_session_principal_refused_at_auth_state method=%s user=%s",
+            str(method).replace("\r", "").replace("\n", " ")[:32],
+            str(current_user.user_id).replace("\r", "").replace("\n", " ")[:64],
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This endpoint changes authentication state and requires an interactive session. "
+                f"The credential presented authenticated as '{method}'."
+            ),
+        )
+    return current_user
+
+
 # Type aliases
 DBSession = Annotated[AsyncSession, Depends(get_db)]
 AuthUser = Annotated[CurrentUser, Depends(get_current_user)]
+#: A principal that signed in, as opposed to one that presented a key.
+#: Required by every route that enrols or removes an authentication factor.
+SessionUser = Annotated[CurrentUser, Depends(require_interactive_session)]
 
 
 # Re-export TenantDBSession for convenience so endpoints can import from one place

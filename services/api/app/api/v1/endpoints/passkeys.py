@@ -44,7 +44,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import and_, select, update
 
-from app.api.v1.deps import AuthUser, DBSession
+from app.api.v1.deps import AuthUser, DBSession, SessionUser
 from app.core.config import settings
 from app.core.security import create_access_token, create_refresh_token
 from app.db.rls import TenantDBSession
@@ -191,7 +191,7 @@ class AuthenticateFinishResponse(BaseModel):
 @router.post("/register/begin")
 async def passkey_register_begin(
     body: RegisterBeginRequest,
-    user: AuthUser,
+    user: SessionUser,
     db: TenantDBSession,
 ) -> dict[str, Any]:
     """Start passkey enrollment for the currently logged-in user.
@@ -200,6 +200,14 @@ async def passkey_register_begin(
     ``navigator.credentials.create({ publicKey: <returned> })`` after the
     standard Base64URL-decoding of the binary fields.
     """
+    # `SessionUser`, not `AuthUser`: this used to admit an `aisoc_` API key,
+    # which resolves to its owner's id and role, so a key scoped to
+    # `alerts:read` could register a passkey on the owner's account and then
+    # sign in with it (GHSA-jfvq-94hv-4wrj).
+    #
+    # In a comment because the docstring is published as this operation's
+    # `description` in `docs/openapi.yaml`, and an API description should say
+    # what the endpoint does.
     webauthn, _ = _import_webauthn()
 
     # Pull existing credential IDs so the browser hides them in the picker.
@@ -252,10 +260,17 @@ async def passkey_register_begin(
 @router.post("/register/finish", response_model=PasskeyCredentialOut)
 async def passkey_register_finish(
     body: FinishRequest,
-    user: AuthUser,
+    user: SessionUser,
     db: TenantDBSession,
 ) -> PasskeyCredentialOut:
     """Verify the attestation response and persist the new credential."""
+    # `SessionUser` here as well as on `begin`, and not only because the pair
+    # should agree: this is the call that writes the row, so a regression that
+    # reopened one of the two would still be caught on whichever half an
+    # attacker actually needs (GHSA-jfvq-94hv-4wrj).
+    # In a comment rather than the docstring, which is published as this
+    # operation's `description` in `docs/openapi.yaml`.
+
     webauthn, _ = _import_webauthn()
 
     challenge_row = await _consume_challenge(db, encoded=body.challenge, purpose="register")
@@ -662,10 +677,18 @@ async def list_my_credentials(
 @router.delete("/credentials/{credential_id}", status_code=status.HTTP_204_NO_CONTENT, response_model=None)
 async def revoke_credential(
     credential_id: uuid.UUID,
-    user: AuthUser,
+    user: SessionUser,
     db: TenantDBSession,
 ) -> None:
     """Revoke (soft-delete) one of the current user's passkeys."""
+    # Removing a factor is an authentication-state change in the same sense
+    # that adding one is, so it takes the same dependency. This route is in no
+    # report: a key with `scopes: []` answered 204 here against a real
+    # credential id, which is account lockout, or the removal of the second
+    # factor guarding an account a key is about to take over.
+    # In a comment rather than the docstring, which is published as this
+    # operation's `description` in `docs/openapi.yaml`.
+
     row = (
         await db.execute(
             select(PasskeyCredential).where(
