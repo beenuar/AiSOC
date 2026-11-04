@@ -1,0 +1,217 @@
+# Two credentials that outlived the event that should have ended them.
+#
+# Why this exists
+# ---------------
+# GHSA-6465-rp4f-ppj6, the two findings that survived verification.
+#
+# F18: `bootstrap_admin --reset-password` is the documented recovery path for
+# a lost or compromised administrator password. It wrote `hashed_password`,
+# `is_active`, `is_verified` and `role` and left `sessions_revoked_at` alone,
+# so every token minted before the reset kept working — up to seven days for a
+# refresh token, which re-mints access on its own. The operator had done the
+# one thing the product offers for "somebody else has my password" and the
+# other session was untouched.
+#
+# F20: `POST /auth/mfa/verify` read `last_used_step`, verified against it, and
+# issued an unconditional UPDATE. Ten requests carrying one TOTP code all read
+# the same mark before any of them wrote, so all ten were handed a session.
+#
+# Why live
+# --------
+# F20 does not exist in a single-threaded test: the defect *is* the
+# interleaving, and no stand-in for Postgres reproduces READ COMMITTED
+# re-evaluating a predicate after a concurrent commit, which is the mechanism
+# the fix relies on. F18 is a column on a row, read back by the real auth
+# dependency through the real ASGI application.
+#
+# The suite connects as `aisoc_app`, which is NOBYPASSRLS, and binds the
+# tenant GUC to seed. Seeding as the table owner is the workaround that has
+# hidden this exact class of defect here before — a superuser ignores every
+# policy, and the suite would then prove nothing about the role the service
+# actually connects as.
+#
+# No `paths:` filter. A path filter here would mean the gate skips on exactly
+# the pull request that reshapes the revocation or verification path it exists
+# to protect.
+name: Session lifecycle (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Keyed per commit on push and per pull request on PRs, never on `github.ref`
+  # alone: that shape cancels the run for the commit before it, and a check
+  # that was cancelled never graded the commit it is reported against.
+  group: session-lifecycle-live-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  session-lifecycle-live:
+    name: a password reset ends existing sessions, and one TOTP code opens one session
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # The runtime role, not the owner: a superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, so seeding as the owner would
+      # write rows the service itself could not.
+      SESSION_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      SUITE: ../../tests/isolation/test_session_lifecycle_live.py
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real application pulls in the real application's whole
+      # import chain, and a set that differs from the lock tests software
+      # nobody ships.
+      - name: Install the API from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      # The suite's own skip guard reads this variable, so an unset DSN is a
+      # silent all-skipped pass. Prove the role can actually connect before
+      # grading anything, rather than discovering it from a green tick.
+      - name: The runtime role connects and cannot bypass RLS
+        run: |
+          set -euo pipefail
+          bypass=$(PGPASSWORD=aisoc_app_ci_only psql -h localhost -U aisoc_app -d aisoc -tAc \
+            "SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user")
+          if [ "$bypass" != "f" ]; then
+            echo "FAIL: aisoc_app has BYPASSRLS, so this suite would grade nothing."
+            exit 1
+          fi
+          echo "OK: connected as aisoc_app, NOBYPASSRLS."
+
+      - name: A reset ends sessions, and one code opens one session
+        working-directory: services/api
+        env:
+          ISOLATION_SESSION_DSN: ${{ env.SESSION_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          python -m pytest "$SUITE" -v --tb=short | tee /tmp/session-live.log
+          # A suite that skipped is not a suite that passed. `pytest.mark.skipif`
+          # on a missing DSN turns a misconfigured job into a green tick, which
+          # is the failure mode this repository has shipped before.
+          if grep -qE '[0-9]+ skipped' /tmp/session-live.log; then
+            echo "FAIL: a test skipped in the job whose whole purpose is to run it live."
+            exit 1
+          fi
+
+      # Negative control one: take the revocation stamp back out.
+      #
+      # One line is the entire fix for F18, so removing it must make this
+      # suite fail. If it does not, the suite is not driving the production
+      # reset path and its green tick means nothing — worth failing the build
+      # over, because the alternative is a check that certifies a revocation
+      # while being blind to it.
+      #
+      # The guard above the edit keeps this honest over time: if the line is
+      # reshaped so the string is not found, the control fails loudly rather
+      # than passing by editing nothing.
+      - name: The suite fails when the reset stops revoking sessions
+        working-directory: services/api
+        env:
+          ISOLATION_SESSION_DSN: ${{ env.SESSION_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/scripts/bootstrap_admin.py
+          cp "$TARGET" /tmp/bootstrap_admin.bak
+          restore() { cp /tmp/bootstrap_admin.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/scripts/bootstrap_admin.py")
+          s = p.read_text()
+          needle = "            user.sessions_revoked_at = datetime.now(UTC)\n"
+          if needle not in s:
+              print("FAIL: the revocation this control removes is not there to remove.")
+              print("      bootstrap() has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, ""))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the reset no longer revoking sessions."
+            echo "      It is not grading the production reset path."
+            exit 1
+          fi
+          echo "OK: removing the revocation makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q
+
+      # Negative control two: make the TOTP write unconditional again.
+      #
+      # The two findings have different fixes in different files, so one
+      # control cannot cover both. Without this, the replay half of the suite
+      # could rot untested behind a green tick earned entirely by the
+      # revocation half.
+      - name: The suite fails when the TOTP step is recorded rather than claimed
+        working-directory: services/api
+        env:
+          ISOLATION_SESSION_DSN: ${{ env.SESSION_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/api/v1/endpoints/mfa.py
+          cp "$TARGET" /tmp/mfa.bak
+          restore() { cp /tmp/mfa.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/endpoints/mfa.py")
+          s = p.read_text()
+          needle = '                "AND (last_used_step IS NULL OR last_used_step < :s)"\n'
+          if needle not in s:
+              print("FAIL: the claim predicate this control removes is not there to remove.")
+              print("      verify() has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, ""))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the TOTP step recorded unconditionally."
+            echo "      It is not grading the production verification path."
+            exit 1
+          fi
+          echo "OK: dropping the claim predicate makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q
