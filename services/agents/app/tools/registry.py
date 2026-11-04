@@ -111,6 +111,21 @@ class ToolRegistry:
             self._audit(identity.audit_row(name, allowed=False, reason=str(denied)))
             return {"error": str(denied)}
 
+        # Arguments are checked against the tool's own schema before the body
+        # sees them (GHSA-4hxg-m5rw-gw3x). Scope decides *whether* this agent
+        # may call the tool; this decides whether what it sent is the call the
+        # tool published. Both belong at the chokepoint: a tool validating its
+        # own input is a check the next tool forgets, and a tool whose body
+        # takes ``**kwargs`` cannot notice an argument it was never told about.
+        #
+        # Audited as a denial with the reason, so a model steered into
+        # malformed calls is visible in the same rows as one steered out of
+        # scope, rather than looking like a tool that happens to be failing.
+        invalid = tool.argument_error(args or {})
+        if invalid is not None:
+            self._audit(identity.audit_row(name, allowed=False, reason=invalid))
+            return {"error": f"refusing to run {name!r}: {invalid}"}
+
         self._audit(identity.audit_row(name, allowed=True))
         try:
             result = tool.fn(**(args or {}))
