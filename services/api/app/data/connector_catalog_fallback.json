@@ -836,7 +836,7 @@
     "category": "network",
     "connector_id": "cloudflare_zt",
     "connector_name": "Cloudflare WAF + Zero Trust",
-    "description": "Cloudflare data-plane events: WAF / firewall decisions (per-zone) and Zero Trust Access audit log (per-account). Auth is an account-scoped API token with Zone:Firewall Services:Read and Account:Access Audit Logs:Read.",
+    "description": "Cloudflare data-plane events: WAF / firewall decisions (per-zone, via the GraphQL firewallEventsAdaptive dataset) and Zero Trust Access audit log (per-account). Auth is an API token with Zone:Analytics:Read and Account:Access Audit Logs:Read.",
     "docs_url": "/docs/connectors/cloudflare_zt",
     "fields": [
       {
@@ -873,7 +873,7 @@
         "type": "string"
       },
       {
-        "help_text": "Account-scoped token with Zone:Firewall Services:Read (WAF) AND Account:Access Audit Logs:Read (Zero Trust).",
+        "help_text": "Token with Zone:Analytics:Read (WAF \u2014 this is what the GraphQL analytics dataset reads, not Firewall Services:Read) AND Account:Access Audit Logs:Read (Zero Trust).",
         "label": "API Token",
         "name": "api_token",
         "required": true,

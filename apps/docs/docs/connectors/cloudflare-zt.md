@@ -10,21 +10,27 @@ This connector pulls **data-plane events** from two Cloudflare streams and folds
 
 | Stream | Endpoint | What it captures |
 |---|---|---|
-| **WAF / firewall events** | `GET /zones/{zone_id}/security/events` | Per-request decisions: block, challenge, log, jschallenge. Includes rule_id, action, source IP, country, ray_id. |
+| **WAF / firewall events** | `POST /graphql`, dataset `firewallEventsAdaptive` | Per-request decisions: block, challenge, log, skip. Includes `ruleId`, `action`, `clientIP`, `clientCountryName`, `rayName`. |
 | **Zero Trust (Access) audit** | `GET /accounts/{account_id}/access/logs/access_requests` | App-access decisions: who tried to reach which Access app, were they allowed, why. Includes email, ip, app_uid, decision. |
 
-> One stream per connector instance. The form has a `mode` field — pick **`waf`** or **`zero_trust`**. Operators who want both streams add the connector **twice** (once per mode) so per-stream rate limits stay isolated.
+> One stream per connector instance. The form has a `mode` field — pick **`waf`** or **`access`**. Operators who want both streams add the connector **twice** (once per mode) so per-stream rate limits stay isolated.
+>
+> This page used to call the second mode `zero_trust`, which the connector has never accepted. `zero_trust` is now taken as a spelling of `access` so a config copied from the old text keeps working.
 
-Events are normalized with `source: cloudflare`, `category: edge` (WAF) or `category: identity` (Zero Trust).
+Events are normalized with `source: cloudflare_zt` and `stream: waf` or `stream: access`.
+
+:::note Why WAF events come over GraphQL
+Earlier versions of this connector polled `GET /zones/{zone_id}/security/events`. That route does not exist — Cloudflare answers it with **HTTP 404, error `10404` "No route for that URI"** — so WAF mode could never return an event ([#1686](https://github.com/beenuar/AiSOC/issues/1686)). Cloudflare exposes firewall events through the GraphQL Analytics API or through Logpush (Enterprise); this connector uses GraphQL.
+:::
 
 ## Prerequisites
 
-- A Cloudflare Enterprise or Pro plan for WAF event retention (Free tier expires events too quickly to be useful).
-- For Zero Trust mode: an active Cloudflare Zero Trust subscription.
-- An **account-scoped API token** with both:
-  - **Account → Access: Audit Logs → Read** (Zero Trust mode)
-  - **Zone → Firewall Services → Read** (WAF mode — replaces the legacy WAF Events: Read scope retired in 2024)
-- Your Cloudflare **account ID** (Zero Trust mode) and your **zone IDs** (WAF mode).
+- For Access mode: an active Cloudflare Zero Trust subscription.
+- Retention on the `firewallEventsAdaptive` dataset is plan-dependent; poll often enough that your interval sits inside your plan's window.
+- An **API token** with:
+  - **Account → Access: Audit Logs → Read** (Access mode)
+  - **Zone → Analytics → Read** (WAF mode — this is what the GraphQL analytics dataset reads. *Not* `Firewall Services: Read`, which governs rule management and is what this page used to ask for.)
+- Your Cloudflare **account ID** (both modes) and the **zone ID** (WAF mode).
 
 ## Setup walkthrough
 
@@ -34,7 +40,7 @@ Events are normalized with `source: cloudflare`, `category: edge` (WAF) or `cate
 2. Use **Custom token**.
 3. Permissions:
    - **Account** | **Access: Audit Logs** | **Read**
-   - **Zone** | **Firewall Services** | **Read**
+   - **Zone** | **Analytics** | **Read**
 4. Account Resources: **Include → Specific account → &lt;your account&gt;**.
 5. Zone Resources: **Include → Specific zone → &lt;your prod zones&gt;** (or **All zones from an account** if you want every zone).
 6. **Continue → Create Token**. Copy it now — you won't see it again.
@@ -49,9 +55,9 @@ Events are normalized with `source: cloudflare`, `category: edge` (WAF) or `cate
 1. **Connectors → Add connector → Cloudflare WAF + Zero Trust**.
 2. `mode` = `waf`.
 3. `api_token` = the token from step 1.
-4. `zone_ids` = comma-separated list (e.g. `dc4f...,90af...`).
-5. `account_id` = optional in WAF mode.
-6. **Test connection** → calls `GET /zones/{first_zone}/security/events?per_page=1`.
+4. `zone_id` = one zone (the field is a single id, not a list — add one instance per zone).
+5. `account_id` = the 32-char hex. Required in both modes.
+6. **Test connection** → verifies the token, then runs a one-row `firewallEventsAdaptive` query against that zone. A zone with no firewall events still passes; only an error fails.
 7. **Save**.
 
 ### 4. Add the connector — Zero Trust mode
@@ -59,49 +65,54 @@ Events are normalized with `source: cloudflare`, `category: edge` (WAF) or `cate
 Add a **second** instance:
 
 1. **Connectors → Add connector → Cloudflare WAF + Zero Trust**.
-2. `mode` = `zero_trust`.
+2. `mode` = `access`.
 3. `api_token` = same token (reusable).
 4. `account_id` = the 32-char hex.
-5. `zone_ids` = leave blank.
+5. `zone_id` = leave blank.
 6. **Test connection** → calls `GET /accounts/{account_id}/access/logs/access_requests?per_page=1`.
 7. **Save**.
 
 ## Polling details
 
-- Default interval: **60 seconds** (configurable down to 30s and up to 600s).
-- WAF mode walks the `since`/`until` cursor for each zone independently — per-zone rate limits stay isolated.
-- Zero Trust mode walks a single account-scoped cursor; 1000 events per poll cap absorbs bursts.
-- Both modes deduplicate by Cloudflare's `ray_id` (WAF) or `id` (Zero Trust) so a connector restart inside the cursor window doesn't double-emit.
+- WAF mode pages **by time**: `firewallEventsAdaptive` has no cursor, so rows come back ordered by `datetime` ascending and the next request's lower bound is the last row's timestamp. That bound is inclusive, so the boundary row repeats; emitted `rayName` values are remembered for the duration of a poll and a repeat is dropped.
+- Access mode walks the endpoint's own `result_info.cursor`. An empty cursor is end-of-stream.
+- Both modes stop after 20 pages of 100 rows, so one poll reads at most 2,000 events per instance.
 
 ## Severity heuristics
 
+These are what the connector computes, not a description of what it could.
+
 ### WAF mode
 
-| Action / pattern | Severity |
+| Condition | Severity |
 |---|---|
-| `action == "block"` on a WAF Managed Rule | `medium` |
-| `action == "block"` from rate-limit rule with high source-IP volume | `high` |
-| `action == "jschallenge"` on a non-bot path | `low` |
-| `action == "log"` | `info` |
+| `action == "block"` **and** `ruleId` contains `owasp` | `high` |
+| `action` in `block`, `drop`, `managed_challenge`, `jschallenge`, `challenge` | `medium` |
+| anything else, including `log` and `skip` | `info` |
 
-### Zero Trust mode
+### Access mode
 
-| Decision / pattern | Severity |
+| Condition | Severity |
 |---|---|
-| `decision == "deny"` because of group / IDP mismatch | `medium` |
-| `decision == "deny"` for an admin app | `high` |
-| `decision == "deny"` because of geo / posture rule | `medium` |
-| `decision == "allow"` | `info` |
+| `action` / `decision` is `blocked` | `high` |
+| `allowed` is `false`, or the decision is `denied` / `non_identity` | `medium` |
+| anything else | `info` |
 
 ## Troubleshooting
 
-**`Authentication error (code: 10000)`** — token lacks one of the two required scopes. Re-mint with both `Access: Audit Logs: Read` and `Firewall Services: Read`.
+**`No route for that URI` (code `10404`) on WAF mode** — you are on a build before this connector moved to GraphQL. Upgrade; no token change fixes it, because the route the old build called does not exist.
+
+**`cloudflare_zt graphql error: ...insufficient permissions`** — the token lacks **Zone → Analytics → Read**. The connector reports this rather than returning zero events, because "this token cannot read the dataset" and "your zone saw no attacks" are different sentences.
+
+**`the token sees no zone with that id`** — the `zone_id` is not in the token's zone scope, or belongs to another account.
+
+**`Authentication error (code: 10000)`** — token lacks one of the required scopes. Re-mint with `Access: Audit Logs: Read` and `Zone: Analytics: Read`.
 
 **`HTTP 429: rate limited`** — too many zones polled per cycle, or poll interval too aggressive. Either raise `poll_interval_seconds` to 120s or split zones across multiple connector instances.
 
-**Empty WAF results despite traffic** — confirm the zone has WAF or rate-limit rules deployed. The endpoint only returns events for **rules that fired**; quiet zones legitimately return empty.
+**Empty WAF results despite traffic** — confirm the zone has WAF or rate-limit rules deployed. The dataset only returns events for **rules that fired**; quiet zones legitimately return empty, and the connector reports that as a successful poll with zero events.
 
-**Zero Trust mode returns 404** — the account does not have Zero Trust enabled, or the token's account scope doesn't match `account_id`.
+**Access mode returns 404** — the account does not have Zero Trust enabled, or the token's account scope doesn't match `account_id`.
 
 ## Related
 
@@ -120,7 +131,7 @@ Add a **second** instance:
 | `mode` | Event stream | select | yes | — | Pick which stream this instance pulls. Run two instances side-by-side for full coverage. · one of: `waf`, `access` |
 | `account_id` | Account ID | string | yes | — | Cloudflare account ID, found in the dashboard right pane. |
 | `zone_id` | Zone ID (WAF mode only) | string | no | — | Required when mode=waf. Leave empty for Access mode. |
-| `api_token` | API Token | secret | yes | — | **encrypted at rest** · Account-scoped token with Zone:Firewall Services:Read (WAF) AND Account:Access Audit Logs:Read (Zero Trust). |
+| `api_token` | API Token | secret | yes | — | **encrypted at rest** · Token with Zone:Analytics:Read (WAF — this is what the GraphQL analytics dataset reads, not Firewall Services:Read) AND Account:Access Audit Logs:Read (Zero Trust). |
 
 :::note Credential handling
 `api_token` is encrypted at rest by the credential vault before the row is written, and decrypted only at poll time. The value is never logged and never returned by the API. See [credential vault](../operations/credentials.md).

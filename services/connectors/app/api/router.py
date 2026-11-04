@@ -366,6 +366,22 @@ async def test_connector_connection(connector_id: str, payload: TestConnectionRe
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=f"connector config does not match schema: {exc}",
         ) from exc
+    except ValueError as exc:
+        # A connector raising ValueError from its constructor is validating
+        # a value it was given, and the message is written for the operator:
+        # "unknown mode ''", "zone_id is required when mode='waf'". That is
+        # the same class as the TypeError above and belongs in the response.
+        #
+        # It used to fall into the catch-all below, which answers 500 with a
+        # fixed string, and the API turns a 500 here into a 502 upstream — so
+        # the console showed "API 502" and the one sentence that said what to
+        # change was discarded (reported in #1685, where the real cause was a
+        # required select submitting an empty value and the operator had
+        # nothing on screen to tell them so).
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:  # pragma: no cover - last-ditch
         logger.exception("connector.test.constructor_error", connector_id=_safe_log_val(connector_id))
         raise HTTPException(

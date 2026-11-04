@@ -23,38 +23,42 @@ license: MIT
 min_aisoc_version: "4.0.0"
 config_schema:
   type: object
-  required: [api_token, mode]
+  required: [api_token, mode, account_id]
   properties:
     mode:
       type: string
-      enum: [waf, zero_trust]
+      enum: [waf, access]
       description: >
         Which stream this connector instance polls.
-          * waf — request-level WAF/firewall decisions per zone
-          * zero_trust — Cloudflare Access audit (per account)
+          * waf — request-level WAF/firewall decisions for one zone,
+            read from the GraphQL firewallEventsAdaptive dataset
+          * access — Cloudflare Access audit (per account)
         Operators add two connector instances (one per mode) when they
-        want both streams.
+        want both streams. This enum previously read `zero_trust`, which
+        the connector has never accepted; it is still taken as a
+        spelling of `access` so an older saved config keeps working.
     api_token:
       type: string
       description: >
-        Account-scoped API token with both Account: Access: Audit Logs:
-        Read and Zone: Firewall Services: Read. Bearer-token model
-        only — the legacy global-key path is not supported. Use a
-        dedicated aisoc-readonly token for least privilege.
+        API token with Account: Access: Audit Logs: Read (access mode)
+        and Zone: Analytics: Read (waf mode — the scope the GraphQL
+        analytics dataset reads; Firewall Services: Read governs rule
+        management and does not grant it). Bearer-token model only —
+        the legacy global-key path is not supported. Use a dedicated
+        aisoc-readonly token for least privilege.
       secret: true
     account_id:
       type: string
       description: >
-        Cloudflare account ID (32-char hex). Required for the
-        zero_trust mode; optional for waf if zone_ids covers a single
-        account.
-    zone_ids:
-      type: array
-      items: {type: string}
+        Cloudflare account ID (32-char hex). Required in both modes.
+    zone_id:
+      type: string
       description: >
-        List of Cloudflare zone IDs to poll in waf mode. Each zone is
-        queried independently so per-zone rate limits stay isolated.
-        Leave empty in zero_trust mode.
+        The Cloudflare zone ID to poll in waf mode. One zone per
+        instance — add a second instance for a second zone, so per-zone
+        rate limits stay isolated. Leave empty in access mode. This was
+        declared as a `zone_ids` array, which the connector has never
+        accepted; its field is a single `zone_id`.
     poll_interval_seconds:
       type: integer
       default: 60

@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-03T16:54:23Z",
+  "generated": "2026-11-04T10:25:09Z",
   "categories": [
     {
       "id": "playbooks",
@@ -254544,7 +254544,7 @@
       "source": "core",
       "tier": "stable",
       "path": "plugins/cloudflare-zt/plugin.yaml",
-      "sha256": "af289c8ba1ad6ec32032780aa24bbde3835ead176af6f423410c3400042cdd56"
+      "sha256": "62ab403aa08fae0e73626348c869dcd13ba785a341ddb25ae339208859321456"
     },
     {
       "id": "confluence_audit",
