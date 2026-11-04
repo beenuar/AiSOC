@@ -26,6 +26,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'Austin Clark'
   source_id: cd072b25-a418-4f98-8ebc-5093fb38fe1a
   source_commit: df5c6a6
   license: DRL-1.1

@@ -35,6 +35,7 @@ detection:
     ) and not filter_scmevent
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Gleb Sukhodolskiy, Timur Zinniatullin oscd.community'
   source_id: 0b7889b4-5577-4521-a60a-3376ee7f9f7b
   source_commit: df5c6a6
   license: DRL-1.1

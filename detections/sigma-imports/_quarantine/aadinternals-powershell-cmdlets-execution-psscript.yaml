@@ -49,6 +49,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Austin Songer (@austinsonger), Nasreddine Bencherchali (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 91e69562-2426-42ce-a647-711b8152ced6
   source_commit: df5c6a6
   license: DRL-1.1

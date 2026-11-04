@@ -113,6 +113,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth, Roberto Rodriguez, Dimitrios Slamaris, Mark Russinovich, Thomas Patzke, Teymur Kheirkhabarov, Sherif Eldeeb, James Dickenson, Aleksey Potapov, oscd.community'
   source_id: a18dd26b-6450-46de-8c91-9659150cf088
   source_commit: df5c6a6
   license: DRL-1.1

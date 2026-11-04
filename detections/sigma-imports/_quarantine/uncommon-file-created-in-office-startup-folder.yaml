@@ -64,6 +64,7 @@ detection:
     and not filter_exclude_excel_ext)) and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Nasreddine Bencherchali (Nextron Systems)'
   source_id: a10a2c40-2c4d-49f8-b557-1a946bc55d9d
   source_commit: df5c6a6
   license: DRL-1.1

@@ -40,6 +40,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nischal Khadgi'
   source_id: b61e87c0-50db-4b2e-8986-6a2be94b33b0
   source_commit: df5c6a6
   license: DRL-1.1

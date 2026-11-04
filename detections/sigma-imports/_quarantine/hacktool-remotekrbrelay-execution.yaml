@@ -51,6 +51,7 @@ detection:
     or selection_cli_attack_changepass or selection_cli_attack_addgrpname or selection_cli_attack_smb
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: a7664b14-75fb-4a50-a223-cb9bc0afbacf
   source_commit: df5c6a6
   license: DRL-1.1

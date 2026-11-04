@@ -27,6 +27,7 @@ detection:
   condition: selection_4104
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, oscd.community'
   source_id: 20e5497e-331c-4cd5-8d36-935f6e2a9a07
   source_commit: df5c6a6
   license: DRL-1.1

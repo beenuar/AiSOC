@@ -23,6 +23,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'elhoim, CD_ROM_'
   source_id: caa06de8-fdef-4c91-826a-7f9e163eef4b
   source_commit: df5c6a6
   license: DRL-1.1

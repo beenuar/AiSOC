@@ -32,6 +32,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Anish Bogati'
   source_id: 2b140a5c-dc02-4bb8-b6b1-8bdb45714cde
   source_commit: df5c6a6
   license: DRL-1.1

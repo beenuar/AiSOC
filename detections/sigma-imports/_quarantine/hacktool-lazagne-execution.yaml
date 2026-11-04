@@ -134,6 +134,7 @@ detection:
   condition: 1 of selection_img_* or all of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: c2b86e67-b880-4eec-b045-50bc98ef4844
   source_commit: df5c6a6
   license: DRL-1.1

@@ -84,6 +84,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tom Kern, oscd.community, Natalia Shornikova, Tim Shelton, Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)'
   source_id: 092bc4b9-3d1d-43b4-a6b4-8c8acd83522f
   source_commit: df5c6a6
   license: DRL-1.1

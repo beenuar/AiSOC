@@ -43,6 +43,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'E.M. Anhaus, Tony Lambert, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: ffa6861c-4461-4f59-8a41-578c39f3f23e
   source_commit: df5c6a6
   license: DRL-1.1

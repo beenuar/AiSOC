@@ -32,6 +32,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Perez Diego (@darkquassar), oscd.community, Ecco'
   source_id: bdc64095-d59a-42a2-8588-71fd9c9d9abc
   source_commit: df5c6a6
   license: DRL-1.1

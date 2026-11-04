@@ -25,6 +25,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, oscd.community'
   source_id: f7375e28-5c14-432f-b8d1-1db26c832df3
   source_commit: df5c6a6
   license: DRL-1.1

@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'pH-T (Nextron Systems)'
   source_id: 065cceea-77ec-4030-9052-fc0affea7110
   source_commit: df5c6a6
   license: DRL-1.1

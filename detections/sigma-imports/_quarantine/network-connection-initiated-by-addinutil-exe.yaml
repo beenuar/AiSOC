@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael McKinley (@McKinleyMike), Tony Latteri (@TheLatteri)'
   source_id: 5205613d-2a63-4412-a895-3a2458b587b3
   source_commit: df5c6a6
   license: DRL-1.1

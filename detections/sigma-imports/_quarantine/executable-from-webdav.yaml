@@ -25,6 +25,7 @@ detection:
   condition: selection_webdav and selection_executable
 provenance:
   source: SigmaHQ/sigma
+  author: 'SOC Prime, Adam Swan'
   source_id: aac2fd97-bcba-491b-ad66-a6edf89c71bf
   source_commit: df5c6a6
   license: DRL-1.1

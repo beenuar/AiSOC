@@ -353,6 +353,26 @@ def _map_severity(level: Any) -> str:
 
 # ─── Provenance ──────────────────────────────────────────────────────────────
 
+#: Recorded when upstream credits nobody. Never an empty string — empty is
+#: indistinguishable from the field having been dropped — and never the
+#: publisher's name in place of the person's.
+AUTHOR_ABSENT = "(no author recorded upstream)"
+
+
+def _author_of(raw: dict[str, Any]) -> str:
+    """The upstream ``author:``, preserved in the shape upstream wrote it.
+
+    Comma-separated for multiple authors is Sigma's own convention; a few
+    rules use a YAML list. Neither is rewritten, because a co-author lost to
+    normalisation is the same licence defect at smaller scale.
+    """
+    value = raw.get("author")
+    if isinstance(value, (list, tuple)):
+        joined = ", ".join(str(part).strip() for part in value if str(part).strip())
+        return joined or AUTHOR_ABSENT
+    text = str(value).strip() if value is not None else ""
+    return text or AUTHOR_ABSENT
+
 
 def _build_provenance(
     raw: dict[str, Any],
@@ -376,9 +396,18 @@ def _build_provenance(
     Don't add fields here without a downstream consumer in mind; the
     column is JSONB and we'd rather keep the shape lean than attract
     drive-by additions.
+
+    ``author`` is not a drive-by addition: DRL-1.1, which the SigmaHQ corpus
+    is licensed under, requires author identification to travel with a shared
+    copy — including a modified one, and a translation into this engine's
+    matcher language is exactly that — and to appear in messages produced by a
+    match. Its consumer is ``_attribution()`` in the detection engine, which
+    renders the credit line onto every alert. Leaving it out is what issue
+    #1680 reported.
     """
     return {
         "source": source,
+        "author": _author_of(raw),
         "source_id": str(raw.get("id") or "").strip(),
         "source_commit": (source_commit or "").strip() or None,
         "license": license_id,

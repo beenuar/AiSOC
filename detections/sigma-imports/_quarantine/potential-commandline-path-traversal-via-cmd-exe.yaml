@@ -37,6 +37,7 @@ detection:
   condition: all of selection_* and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'xknow @xknow_infosec, Tim Shelton'
   source_id: 087790e3-3287-436c-bccf-cbd0184a7db1
   source_commit: df5c6a6
   license: DRL-1.1

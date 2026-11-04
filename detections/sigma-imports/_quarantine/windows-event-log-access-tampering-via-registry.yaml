@@ -48,6 +48,7 @@ detection:
     and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior'
   source_id: ba226dcf-d390-4642-b9af-b534872f1156
   source_commit: df5c6a6
   license: DRL-1.1

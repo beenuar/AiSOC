@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ensar Şamil, @sblmsrsn, OSCD Community'
   source_id: dddfebae-c46f-439c-af7a-fdb6bde90218
   source_commit: df5c6a6
   license: DRL-1.1

@@ -30,6 +30,7 @@ detection:
   condition: selection_dump and 1 of selection_tools_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Austin Songer @austinsonger, Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 129966c9-de17-4334-a123-8b58172e664d
   source_commit: df5c6a6
   license: DRL-1.1

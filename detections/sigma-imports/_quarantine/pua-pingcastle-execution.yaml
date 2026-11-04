@@ -179,6 +179,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), frack113'
   source_id: b1cb4ab6-ac31-43f4-adf1-d9d08957419c
   source_commit: df5c6a6
   license: DRL-1.1

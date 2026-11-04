@@ -23,6 +23,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'E.M. Anhaus, Tony Lambert, oscd.community, omkar72'
   source_id: 3bad990e-4848-4a78-9530-b427d854aac0
   source_commit: df5c6a6
   license: DRL-1.1

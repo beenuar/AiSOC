@@ -31,6 +31,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Karneades, Jonhnathan Ribeiro, Florian Roth'
   source_id: 36803969-5421-41ec-b92f-8500f79c23b0
   source_commit: df5c6a6
   license: DRL-1.1

@@ -38,6 +38,7 @@ detection:
   condition: 1 of selection_cmd_* and selection_keys
 provenance:
   source: SigmaHQ/sigma
+  author: 'lazarg'
   source_id: 0022869c-49f7-4ff2-ba03-85ac42ddac58
   source_commit: df5c6a6
   license: DRL-1.1

@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Janantha Marasinghe'
   source_id: 20f754db-d025-4a8f-9d74-e0037e999a9a
   source_commit: df5c6a6
   license: DRL-1.1

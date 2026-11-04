@@ -46,6 +46,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel'
   source_id: d36f7c12-14a3-4d48-b6b8-774b9c66f44d
   source_commit: df5c6a6
   license: DRL-1.1

@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Thodoris Polyzos (@SmoothDeploy)'
   source_id: 98054878-5eab-434c-85d4-72d4e5a3361b
   source_commit: df5c6a6
   license: DRL-1.1

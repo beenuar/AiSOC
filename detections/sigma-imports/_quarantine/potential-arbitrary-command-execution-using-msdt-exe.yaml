@@ -29,6 +29,7 @@ detection:
   condition: selection_img and (selection_cmd_inline or all of selection_cmd_answerfile_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 258fc8ce-8352-443a-9120-8a11e4857fa5
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sami Ruohonen'
   source_id: 8c521530-5169-495d-a199-0a3a881ad24e
   source_commit: df5c6a6
   license: DRL-1.1

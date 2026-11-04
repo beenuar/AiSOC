@@ -34,6 +34,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Arnim Rupp (Nextron Systems), Thomas Patzke'
   source_id: 0a1255c5-d732-4b62-ac02-b5152d34fb83
   source_commit: df5c6a6
   license: DRL-1.1

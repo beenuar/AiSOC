@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael Epping, ''@mepples21'''
   source_id: 4f77e1d7-3982-4ee0-8489-abf2d6b75284
   source_commit: df5c6a6
   license: DRL-1.1

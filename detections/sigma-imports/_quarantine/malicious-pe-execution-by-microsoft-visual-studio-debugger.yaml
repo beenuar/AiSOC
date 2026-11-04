@@ -31,6 +31,7 @@ detection:
   condition: selection and not (reduction1 or reduction2)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Agro (@agro_sev), Ensar Şamil (@sblmsrsn), oscd.community'
   source_id: 15c7904e-6ad1-4a45-9b46-5fb25df37fd2
   source_commit: df5c6a6
   license: DRL-1.1

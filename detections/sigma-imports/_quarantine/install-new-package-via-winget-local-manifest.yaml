@@ -36,6 +36,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sreeman, Florian Roth (Nextron Systems), frack113'
   source_id: 313d6012-51a0-4d93-8dfc-de8553239e25
   source_commit: df5c6a6
   license: DRL-1.1

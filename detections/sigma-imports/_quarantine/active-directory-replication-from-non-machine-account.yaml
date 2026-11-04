@@ -30,6 +30,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez @Cyb3rWard0g'
   source_id: 17d619c1-e020-4347-957e-1d1207455c93
   source_commit: df5c6a6
   license: DRL-1.1

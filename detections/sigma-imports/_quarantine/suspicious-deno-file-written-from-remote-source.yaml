@@ -30,6 +30,7 @@ detection:
   condition: selection_path
 provenance:
   source: SigmaHQ/sigma
+  author: 'Josh Nickels, Michael Taggart'
   source_id: 6c0ce3b6-85e2-49d4-9c3f-6e008ce9796e
   source_commit: df5c6a6
   license: DRL-1.1

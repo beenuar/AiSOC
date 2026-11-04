@@ -25,6 +25,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Joseliyo Sanchez, @Joseliyo_Jstnk'
   source_id: 312b42b1-bded-4441-8b58-163a3af58775
   source_commit: df5c6a6
   license: DRL-1.1

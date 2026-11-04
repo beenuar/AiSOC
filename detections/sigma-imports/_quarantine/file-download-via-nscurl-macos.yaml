@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniel Cortez'
   source_id: 6d8a7cf1-8085-423b-b87d-7e880faabbdf
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@gott_cyber'
   source_id: e173ad47-4388-4012-ae62-bd13f71c18a8
   source_commit: df5c6a6
   license: DRL-1.1

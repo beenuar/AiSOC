@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tobias Michalski (Nextron Systems), David Bertho (@dbertho) & Eirik Sveen (@0xSV1), Storebrand'
   source_id: ddd171b5-2cc6-4975-9e78-f0eccd08cc76
   source_commit: df5c6a6
   license: DRL-1.1

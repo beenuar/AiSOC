@@ -38,6 +38,7 @@ detection:
   condition: select_method and keywords and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Saw Win Naung, Nasreddine Bencherchali'
   source_id: 65354b83-a2ea-4ea6-8414-3ab38be0d409
   source_commit: df5c6a6
   license: DRL-1.1

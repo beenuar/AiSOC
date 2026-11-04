@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Max Altgelt (Nextron Systems), Tobias Michalski (Nextron Systems)'
   source_id: c73124a7-3e89-44a3-bdc1-25fe4df754b1
   source_commit: df5c6a6
   license: DRL-1.1

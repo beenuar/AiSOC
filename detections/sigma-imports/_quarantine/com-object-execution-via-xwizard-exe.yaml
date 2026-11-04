@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ensar Şamil, @sblmsrsn, @oscd_initiative, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 53d4bb30-3f36-4e8a-b078-69d36c4a79ff
   source_commit: df5c6a6
   license: DRL-1.1

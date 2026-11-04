@@ -42,6 +42,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'CertainlyP'
   source_id: 37e4024a-6c80-4d8f-b95d-2e7e94f3a8d1
   source_commit: df5c6a6
   license: DRL-1.1

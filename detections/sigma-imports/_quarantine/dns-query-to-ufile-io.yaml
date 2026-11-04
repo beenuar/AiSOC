@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'yatinwad, TheDFIRReport'
   source_id: 1cbbeaaf-3c8c-4e4c-9d72-49485b6a176b
   source_commit: df5c6a6
   license: DRL-1.1

@@ -24,6 +24,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sreeman'
   source_id: 24de4f3b-804c-4165-b442-5a06a2302c7e
   source_commit: df5c6a6
   license: DRL-1.1

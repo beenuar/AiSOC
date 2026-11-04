@@ -58,6 +58,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov (idea), Vasiliy Burov (rule), oscd.community, Tim Shelton'
   source_id: b6b49cd1-34d6-4ead-b1bf-176e9edba9a4
   source_commit: df5c6a6
   license: DRL-1.1

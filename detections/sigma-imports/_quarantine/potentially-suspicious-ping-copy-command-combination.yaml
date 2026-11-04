@@ -29,6 +29,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior (Nextron Systems)'
   source_id: ded2b07a-d12f-4284-9b76-653e37b6c8b0
   source_commit: df5c6a6
   license: DRL-1.1

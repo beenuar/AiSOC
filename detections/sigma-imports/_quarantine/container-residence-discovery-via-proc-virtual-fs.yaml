@@ -36,6 +36,7 @@ detection:
   condition: selection_tools and 1 of selection_procfs_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Seth Hanford'
   source_id: 746c86fb-ccda-4816-8997-01386263acc4
   source_commit: df5c6a6
   license: DRL-1.1

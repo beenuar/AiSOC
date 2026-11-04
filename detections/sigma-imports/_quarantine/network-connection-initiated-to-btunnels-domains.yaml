@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Kamran Saifullah'
   source_id: 9e02c8ec-02b9-43e8-81eb-34a475ba7965
   source_commit: df5c6a6
   license: DRL-1.1

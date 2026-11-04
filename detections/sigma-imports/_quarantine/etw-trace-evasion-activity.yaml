@@ -50,6 +50,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@neu5ron, Florian Roth (Nextron Systems), Jonhnathan Ribeiro, oscd.community'
   source_id: a238b5d0-ce2d-4414-a676-7a531b3d13d6
   source_commit: df5c6a6
   license: DRL-1.1

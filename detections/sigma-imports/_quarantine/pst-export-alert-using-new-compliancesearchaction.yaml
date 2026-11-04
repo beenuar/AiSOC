@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nikita Khalimonenkov'
   source_id: 6897cd82-6664-11ed-9022-0242ac120002
   source_commit: df5c6a6
   license: DRL-1.1

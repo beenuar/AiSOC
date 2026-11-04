@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Omar Khaled (@beacon_exe)'
   source_id: bf241472-f014-4f01-a869-96f99330ca8c
   source_commit: df5c6a6
   license: DRL-1.1

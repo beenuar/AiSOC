@@ -71,6 +71,7 @@ detection:
   condition: 1 of selection_* and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Jonhnathan Ribeiro'
   source_id: ae7fbf8e-f3cb-49fd-8db4-5f3bed522c71
   source_commit: df5c6a6
   license: DRL-1.1

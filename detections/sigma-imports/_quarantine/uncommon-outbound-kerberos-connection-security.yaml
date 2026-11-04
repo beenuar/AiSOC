@@ -42,6 +42,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ilyas Ochkov, oscd.community'
   source_id: eca91c7c-9214-47b9-b4c5-cb1d7e4f2350
   source_commit: df5c6a6
   license: DRL-1.1

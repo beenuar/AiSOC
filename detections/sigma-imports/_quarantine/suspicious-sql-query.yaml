@@ -25,6 +25,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: '@juju4'
   source_id: d84c0ded-edd7-4123-80ed-348bb3ccc4d5
   source_commit: df5c6a6
   license: DRL-1.1

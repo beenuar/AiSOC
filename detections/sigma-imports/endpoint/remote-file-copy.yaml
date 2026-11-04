@@ -23,6 +23,7 @@ detection:
   condition: tools and filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ömer Günal'
   source_id: 7a14080d-a048-4de8-ae58-604ce58a795b
   source_commit: df5c6a6
   license: DRL-1.1

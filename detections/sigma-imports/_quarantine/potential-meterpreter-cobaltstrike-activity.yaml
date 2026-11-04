@@ -37,6 +37,7 @@ detection:
   condition: selection_img and 1 of selection_technique_* and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, Ecco, Florian Roth'
   source_id: 15619216-e993-4721-b590-4c520615a67d
   source_commit: df5c6a6
   license: DRL-1.1

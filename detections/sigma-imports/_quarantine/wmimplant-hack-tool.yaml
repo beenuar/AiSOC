@@ -39,6 +39,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'NVISO'
   source_id: 8028c2c3-e25a-46e3-827f-bbb5abf181d7
   source_commit: df5c6a6
   license: DRL-1.1

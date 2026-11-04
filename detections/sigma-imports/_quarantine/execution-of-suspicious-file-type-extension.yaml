@@ -80,6 +80,7 @@ detection:
   condition: not known_image_extension and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Max Altgelt (Nextron Systems)'
   source_id: c09dad97-1c78-4f71-b127-7edb2b8e491a
   source_commit: df5c6a6
   license: DRL-1.1

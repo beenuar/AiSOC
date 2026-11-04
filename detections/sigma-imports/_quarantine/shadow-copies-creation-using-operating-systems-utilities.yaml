@@ -36,6 +36,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, Daniil Yugoslavskiy, oscd.community'
   source_id: b17ea6f7-6e90-447e-a799-e6c0a493d6ce
   source_commit: df5c6a6
   license: DRL-1.1

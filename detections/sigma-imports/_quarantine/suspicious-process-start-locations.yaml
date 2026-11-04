@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'juju4, Jonhnathan Ribeiro, oscd.community'
   source_id: 15b75071-74cc-47e0-b4c6-b43744a62a2b
   source_commit: df5c6a6
   license: DRL-1.1

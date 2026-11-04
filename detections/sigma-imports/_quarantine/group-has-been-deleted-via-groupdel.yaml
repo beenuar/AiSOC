@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tuan Le (NCSGroup)'
   source_id: 8a46f16c-8c4c-82d1-b121-0fdd3ba70a84
   source_commit: df5c6a6
   license: DRL-1.1

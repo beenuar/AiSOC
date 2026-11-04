@@ -41,6 +41,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tuan Le (NCSGroup), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 95d61234-7f56-465c-6f2d-b562c6fedbc4
   source_commit: df5c6a6
   license: DRL-1.1

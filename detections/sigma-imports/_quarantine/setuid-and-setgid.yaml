@@ -23,6 +23,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ömer Günal'
   source_id: c21c4eaa-ba2e-419a-92b2-8371703cbe21
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Elastic, Josh Nickels, Marius Rothenbücher'
   source_id: 1c480e10-7ee1-46d4-8ed2-85f9789e3ce4
   source_commit: df5c6a6
   license: DRL-1.1

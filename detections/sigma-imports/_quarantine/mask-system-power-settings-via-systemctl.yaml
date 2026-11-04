@@ -34,6 +34,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Milad Cheraghi, Nasreddine Bencherchali'
   source_id: c172b7b5-f3a1-4af2-90b7-822c63df86cb
   source_commit: df5c6a6
   license: DRL-1.1

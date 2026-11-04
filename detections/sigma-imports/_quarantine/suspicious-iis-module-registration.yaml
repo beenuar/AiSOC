@@ -29,6 +29,7 @@ detection:
   condition: selection_parent and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Microsoft (idea)'
   source_id: 043c4b8b-3a54-4780-9682-081cb6b8185c
   source_commit: df5c6a6
   license: DRL-1.1

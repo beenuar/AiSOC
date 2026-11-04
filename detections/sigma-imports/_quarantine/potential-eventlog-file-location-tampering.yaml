@@ -24,6 +24,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'D3F7A5105'
   source_id: 0cb8d736-995d-4ce7-a31e-1e8d452a1459
   source_commit: df5c6a6
   license: DRL-1.1

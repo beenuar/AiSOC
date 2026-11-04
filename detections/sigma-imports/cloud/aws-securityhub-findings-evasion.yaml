@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sittikorn S'
   source_id: a607e1fe-74bf-4440-a3ec-b059b9103157
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: (selection_1 and not filter) or selection_2
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alejandro Ortuno, oscd.community'
   source_id: 84bae5d4-b518-4ae0-b331-6d4afd34d00f
   source_commit: df5c6a6
   license: DRL-1.1

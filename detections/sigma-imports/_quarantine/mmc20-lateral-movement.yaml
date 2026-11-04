@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@2xxeformyshirt (Security Risk Advisors) - rule; Teymur Kheirkhabarov (idea)'
   source_id: f1f3bf22-deb2-418d-8cce-e1a45e46a5bd
   source_commit: df5c6a6
   license: DRL-1.1

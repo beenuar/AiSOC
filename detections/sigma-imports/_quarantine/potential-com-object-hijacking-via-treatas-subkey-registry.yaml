@@ -24,6 +24,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Kutepov Anton, oscd.community'
   source_id: 9b0f8a61-91b2-464f-aceb-0527e0a45020
   source_commit: df5c6a6
   license: DRL-1.1

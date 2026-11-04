@@ -37,6 +37,7 @@ detection:
   condition: empire and dnscat
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alina Stepchenkova, Group-IB, oscd.community'
   source_id: 3ceb2083-a27f-449a-be33-14ec1b7cc973
   source_commit: df5c6a6
   license: DRL-1.1

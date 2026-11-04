@@ -32,6 +32,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Jack Croock (method), Jonhnathan Ribeiro (improvements), oscd.community'
   source_id: 968eef52-9cff-4454-8992-1e74b9cbad6c
   source_commit: df5c6a6
   license: DRL-1.1

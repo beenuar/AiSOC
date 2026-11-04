@@ -51,6 +51,7 @@ detection:
   condition: selection_parent and 1 of selection_children_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Vadim Khrykov (ThreatIntel), Cyb3rEng, Florian Roth (Nextron Systems)'
   source_id: 8a582fe2-0882-4b89-a82a-da6b2dc32937
   source_commit: df5c6a6
   license: DRL-1.1

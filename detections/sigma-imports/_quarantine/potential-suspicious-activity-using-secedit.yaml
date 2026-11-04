@@ -43,6 +43,7 @@ detection:
   condition: selection_img and (1 of selection_flags_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Janantha Marasinghe'
   source_id: c2c76b77-32be-4d1f-82c9-7e544bdfe0eb
   source_commit: df5c6a6
   license: DRL-1.1

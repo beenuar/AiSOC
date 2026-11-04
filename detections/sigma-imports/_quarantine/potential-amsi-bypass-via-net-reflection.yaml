@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, @Kostastsale'
   source_id: 30edb182-aa75-42c0-b0a9-e998bb29067c
   source_commit: df5c6a6
   license: DRL-1.1

@@ -46,6 +46,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Austin Songer @austinsonger'
   source_id: 6ad91e31-53df-4826-bd27-0166171c8040
   source_commit: df5c6a6
   license: DRL-1.1

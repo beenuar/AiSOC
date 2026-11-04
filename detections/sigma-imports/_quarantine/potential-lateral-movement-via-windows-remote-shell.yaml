@@ -24,6 +24,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Liran Ravich'
   source_id: 79df3f68-dccb-48e9-9171-b75cbc37c51d
   source_commit: df5c6a6
   license: DRL-1.1

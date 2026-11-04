@@ -39,6 +39,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sohan G (D4rkCiph3r)'
   source_id: 69483748-1525-4a6c-95ca-90dc8d431b68
   source_commit: df5c6a6
   license: DRL-1.1

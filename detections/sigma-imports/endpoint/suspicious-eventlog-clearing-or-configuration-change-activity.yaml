@@ -70,6 +70,7 @@ detection:
     and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ecco, Daniil Yugoslavskiy, oscd.community, D3F7A5105, Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: cc36992a-4671-4f21-a91d-6c2b72a2edf5
   source_commit: df5c6a6
   license: DRL-1.1

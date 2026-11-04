@@ -91,6 +91,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Georg Lauenstein (sure[secure])'
   source_id: a015e032-146d-4717-8944-7a1884122111
   source_commit: df5c6a6
   license: DRL-1.1

@@ -38,6 +38,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali'
   source_id: 0f16d9cf-0616-45c8-8fad-becc11b5a41c
   source_commit: df5c6a6
   license: DRL-1.1

@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'citron_ninja'
   source_id: b3e6418f-7c7a-4fad-993a-93b65027a9f1
   source_commit: df5c6a6
   license: DRL-1.1

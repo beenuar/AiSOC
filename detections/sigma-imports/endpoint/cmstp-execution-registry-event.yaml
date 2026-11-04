@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nik Seetharaman'
   source_id: b6d235fc-1d38-4b12-adbe-325f06728f37
   source_commit: df5c6a6
   license: DRL-1.1

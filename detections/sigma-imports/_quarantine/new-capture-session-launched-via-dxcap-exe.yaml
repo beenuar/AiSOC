@@ -25,6 +25,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Beyu Denis, oscd.community, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 60f16a96-db70-42eb-8f76-16763e333590
   source_commit: df5c6a6
   license: DRL-1.1

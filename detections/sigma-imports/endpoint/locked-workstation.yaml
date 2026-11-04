@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alexandr Yampolskyi, SOC Prime'
   source_id: 411742ad-89b0-49cb-a7b0-3971b5c1e0a4
   source_commit: df5c6a6
   license: DRL-1.1

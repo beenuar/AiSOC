@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: de587dce-915e-4218-aac4-835ca6af6f70
   source_commit: df5c6a6
   license: DRL-1.1

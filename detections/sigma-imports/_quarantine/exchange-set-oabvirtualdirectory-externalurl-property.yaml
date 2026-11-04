@@ -24,6 +24,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jose Rodriguez @Cyb3rPandaH'
   source_id: 9db37458-4df2-46a5-95ab-307e7f29e675
   source_commit: df5c6a6
   license: DRL-1.1

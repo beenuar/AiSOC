@@ -41,6 +41,7 @@ detection:
   condition: selection_img and 1 of selection_ip_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), X__Junior (Nextron Systems)'
   source_id: 56d19cb4-6414-4769-9644-1ed35ffbb148
   source_commit: df5c6a6
   license: DRL-1.1

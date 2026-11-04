@@ -24,6 +24,7 @@ detection:
   condition: selection_mobsync and filter_created_file
 provenance:
   source: SigmaHQ/sigma
+  author: 'elhoim'
   source_id: 409f8a98-4496-4aaa-818a-c931c0a8b832
   source_commit: df5c6a6
   license: DRL-1.1

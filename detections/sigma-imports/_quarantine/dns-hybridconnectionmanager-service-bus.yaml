@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)'
   source_id: 7bd3902d-8b8b-4dd4-838a-c6862d40150d
   source_commit: df5c6a6
   license: DRL-1.1

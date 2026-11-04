@@ -29,6 +29,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@neu5ron'
   source_id: c9fbe8e9-119d-40a6-9b59-dd58a5d84429
   source_commit: df5c6a6
   license: DRL-1.1

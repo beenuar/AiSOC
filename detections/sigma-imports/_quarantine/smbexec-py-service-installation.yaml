@@ -29,6 +29,7 @@ detection:
   condition: selection_eid and 1 of selection_service_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Omer Faruk Celik'
   source_id: 52a85084-6989-40c3-8f32-091e12e13f09
   source_commit: df5c6a6
   license: DRL-1.1

@@ -81,6 +81,7 @@ detection:
     and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems), X__Junior (Nextron Systems)'
   source_id: b730a276-6b63-41b8-bcf8-55930c8fc6ee
   source_commit: df5c6a6
   license: DRL-1.1

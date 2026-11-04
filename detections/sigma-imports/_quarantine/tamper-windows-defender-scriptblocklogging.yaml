@@ -81,6 +81,7 @@ detection:
   condition: all of selection_options_disabling_* or all of selection_other_default_actions_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, elhoim, Tim Shelton (fps, alias support), Swachchhanda Shrawan Poudel, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 14c71865-6cd3-44ae-adaa-1db923fae5f2
   source_commit: df5c6a6
   license: DRL-1.1

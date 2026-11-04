@@ -36,6 +36,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'C.J. May'
   source_id: 02773bed-83bf-469f-b7ff-e676e7d78bab
   source_commit: df5c6a6
   license: DRL-1.1

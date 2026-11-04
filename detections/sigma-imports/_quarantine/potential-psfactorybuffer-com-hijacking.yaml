@@ -27,6 +27,7 @@ detection:
   condition: selection and not filter_main
 provenance:
   source: SigmaHQ/sigma
+  author: 'BlackBerry Threat Research and Intelligence Team - @Joseliyo_Jstnk'
   source_id: 243380fa-11eb-4141-af92-e14925e77c1b
   source_commit: df5c6a6
   license: DRL-1.1

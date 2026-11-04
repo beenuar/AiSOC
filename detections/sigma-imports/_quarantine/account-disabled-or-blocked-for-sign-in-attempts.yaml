@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Yochana Henderson, ''@Yochana-H'''
   source_id: 4afac85c-224a-4dd7-b1af-8da40e1c60bd
   source_commit: df5c6a6
   license: DRL-1.1

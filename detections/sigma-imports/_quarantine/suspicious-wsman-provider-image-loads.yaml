@@ -74,6 +74,7 @@ detection:
     and commandline_null )
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research)'
   source_id: ad1f4bb9-8dfb-4765-adb6-2a7cfb6c0f94
   source_commit: df5c6a6
   license: DRL-1.1

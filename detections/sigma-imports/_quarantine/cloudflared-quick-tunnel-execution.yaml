@@ -81,6 +81,7 @@ detection:
   condition: (selection_img and selection_param) or selection_other
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sajid Nawaz Khan'
   source_id: 222129f7-f4dc-4568-b0d2-22440a9639ba
   source_commit: df5c6a6
   license: DRL-1.1

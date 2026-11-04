@@ -35,6 +35,7 @@ detection:
   condition: ( selection_sysmon and not 1 of filter_main_* ) or selection_calltrace
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: d29ada0f-af45-4f27-8f32-f7b77c3dbc4e
   source_commit: df5c6a6
   license: DRL-1.1

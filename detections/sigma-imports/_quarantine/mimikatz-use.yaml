@@ -44,6 +44,7 @@ detection:
   condition: keywords and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), David ANDRE (additional keywords)'
   source_id: 06d71506-7beb-4f22-8888-e2e5e2ca7fd8
   source_commit: df5c6a6
   license: DRL-1.1

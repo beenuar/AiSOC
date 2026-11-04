@@ -27,6 +27,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, Daniil Yugoslavskiy, oscd.community'
   source_id: 2a072a96-a086-49fa-bcb5-15cc5a619093
   source_commit: df5c6a6
   license: DRL-1.1

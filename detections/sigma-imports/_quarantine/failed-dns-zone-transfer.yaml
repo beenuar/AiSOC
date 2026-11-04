@@ -19,6 +19,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Zach Mathis'
   source_id: 6d444368-6da1-43fe-b2fc-44202430480e
   source_commit: df5c6a6
   license: DRL-1.1

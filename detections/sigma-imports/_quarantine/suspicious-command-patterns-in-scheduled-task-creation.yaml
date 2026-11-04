@@ -66,6 +66,7 @@ detection:
     or all of selection_anomaly_* )
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: f2c64357-b1d2-41b7-849f-34d2682c0fad
   source_commit: df5c6a6
   license: DRL-1.1

@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Pushkarev Dmitry'
   source_id: 8e5c03fa-b7f0-11ea-b242-07e0576828d9
   source_commit: df5c6a6
   license: DRL-1.1

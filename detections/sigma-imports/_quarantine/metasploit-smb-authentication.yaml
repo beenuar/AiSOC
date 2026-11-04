@@ -27,6 +27,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Chakib Gzenayi (@Chak092), Hosni Mribah'
   source_id: 72124974-a68b-4366-b990-d30e0b2a190d
   source_commit: df5c6a6
   license: DRL-1.1

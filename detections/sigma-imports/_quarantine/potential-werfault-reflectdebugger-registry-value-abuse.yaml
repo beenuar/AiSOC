@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior'
   source_id: 0cf2e1c6-8d10-4273-8059-738778f981ad
   source_commit: df5c6a6
   license: DRL-1.1

@@ -40,6 +40,7 @@ detection:
   condition: selection_img and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), omkar72, oscd.community, Swachchhanda Shrawan Poudel'
   source_id: 322ed9ec-fcab-4f67-9a34-e7c6aef43614
   source_commit: df5c6a6
   license: DRL-1.1

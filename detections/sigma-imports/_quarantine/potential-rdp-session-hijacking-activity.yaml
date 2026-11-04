@@ -23,6 +23,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@juju4'
   source_id: 224f140f-3553-4cd1-af78-13d81bf9f7cc
   source_commit: df5c6a6
   license: DRL-1.1

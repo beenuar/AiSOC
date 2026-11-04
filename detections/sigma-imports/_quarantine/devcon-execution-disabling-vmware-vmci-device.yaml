@@ -38,6 +38,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Matt Anderson, Dray Agha, Anna Pham (Huntress)'
   source_id: 85f520e7-6f5e-43ca-874c-222e5bf9c0de
   source_commit: df5c6a6
   license: DRL-1.1

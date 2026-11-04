@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'David Ledbetter (shellcode), Florian Roth (Nextron Systems)'
   source_id: 16b37b70-6fcf-4814-a092-c36bd3aafcbd
   source_commit: df5c6a6
   license: DRL-1.1

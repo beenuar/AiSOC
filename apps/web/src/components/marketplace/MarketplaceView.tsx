@@ -49,6 +49,15 @@ export interface MarketplaceItem {
   quarantine_reason?: string;
   provenance?: {
     source?: string | null;
+    /**
+     * The person who wrote the rule upstream, which is not the same fact as
+     * `source` and cannot be substituted by it. DRL-1.1, which the whole
+     * imported SigmaHQ corpus is licensed under, requires author
+     * identification to travel with a shared copy — and this field was absent
+     * from the type and from the data on all 3,132 imported rules, while the
+     * item-level `author` below read `AiSOC`. Issue #1680.
+     */
+    author?: string | null;
     source_id?: string | null;
     source_commit?: string | null;
     license?: string | null;
@@ -357,6 +366,81 @@ interface ItemCardProps {
   onUninstall: (item: MarketplaceItem) => void | Promise<void>;
 }
 
+/**
+ * The upstream credit on an imported rule, rendered on the card itself.
+ *
+ * DRL-1.1 asks a shared copy to carry author identification, a link to the
+ * rule and the licence. All three were in the catalogue data except the one
+ * that names a person, so the console showed a rule written by Tim Shelton
+ * with `author: AiSOC` and no mention of him anywhere. This renders what the
+ * licence asks for in the place a reader actually looks.
+ *
+ * Built from what the provenance block holds rather than from a template with
+ * blanks: a rule whose upstream credits nobody gets a shorter line, never an
+ * author called "".
+ */
+function UpstreamAttribution({ provenance }: { provenance: NonNullable<MarketplaceItem['provenance']> }) {
+  const author = (provenance.author ?? '').trim();
+  const source = (provenance.source ?? '').trim();
+  if (!author && !source) return null;
+
+  const path = (provenance.upstream_path ?? '').trim();
+  const commit = (provenance.source_commit ?? '').trim();
+  // The rule as it stood at the commit we imported, not as master holds it
+  // today — a link to a moving target does not identify what we shipped.
+  const ruleUrl = source && path ? `https://github.com/${source}/blob/${commit || 'master'}/${path}` : null;
+  const licence = (provenance.license ?? '').trim();
+  const licenceUrl = (provenance.license_url ?? '').trim();
+
+  return (
+    <p className="text-xs leading-relaxed text-zinc-500">
+      {author ? (
+        <>
+          Written by <span className="text-zinc-300">{author}</span>
+        </>
+      ) : (
+        <>No upstream author recorded</>
+      )}
+      {source && (
+        <>
+          {' '}
+          for{' '}
+          {ruleUrl ? (
+            <a
+              href={ruleUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 underline decoration-dotted underline-offset-2 hover:text-zinc-200"
+            >
+              {source}
+            </a>
+          ) : (
+            source
+          )}
+        </>
+      )}
+      {licence && (
+        <>
+          , licensed under{' '}
+          {licenceUrl ? (
+            <a
+              href={licenceUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-zinc-400 underline decoration-dotted underline-offset-2 hover:text-zinc-200"
+            >
+              {licence}
+            </a>
+          ) : (
+            licence
+          )}
+        </>
+      )}
+      .
+    </p>
+  );
+}
+
 function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardProps) {
   return (
     <div className="flex flex-col gap-3 rounded-xl border border-zinc-700/60 bg-zinc-800/60 p-4 hover:border-zinc-600 transition-colors">
@@ -386,6 +470,11 @@ function ItemCard({ item, installed, busy, onInstall, onUninstall }: ItemCardPro
       <p className="text-xs text-zinc-400 leading-relaxed line-clamp-3">
         {item.description}
       </p>
+
+      {/* Upstream credit. Deliberately above the fold rather than in a detail
+          panel: the licence asks the attribution to travel with the copy, and
+          a card is the copy most readers ever see. */}
+      {item.provenance && <UpstreamAttribution provenance={item.provenance} />}
 
       {/* MITRE techniques (detections + playbooks) */}
       {item.mitre_techniques && item.mitre_techniques.length > 0 && (

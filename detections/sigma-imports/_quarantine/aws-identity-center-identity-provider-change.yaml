@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael McIntyre @wtfender'
   source_id: d3adb3ef-b7e7-4003-9092-1924c797db35
   source_commit: df5c6a6
   license: DRL-1.1

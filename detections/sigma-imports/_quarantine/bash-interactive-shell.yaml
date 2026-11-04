@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@d4ns4n_'
   source_id: 6104e693-a7d6-4891-86cb-49a258523559
   source_commit: df5c6a6
   license: DRL-1.1

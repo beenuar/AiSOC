@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mike Wade'
   source_id: 3eaf6218-3bed-4d8a-8707-274096f12a18
   source_commit: df5c6a6
   license: DRL-1.1

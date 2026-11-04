@@ -30,6 +30,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Janantha Marasinghe'
   source_id: bab049ca-7471-4828-9024-38279a4c04da
   source_commit: df5c6a6
   license: DRL-1.1

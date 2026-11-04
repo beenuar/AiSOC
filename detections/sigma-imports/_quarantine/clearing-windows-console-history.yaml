@@ -33,6 +33,7 @@ detection:
   condition: selection1 or selection2a and selection2b
 provenance:
   source: SigmaHQ/sigma
+  author: 'Austin Songer @austinsonger'
   source_id: bde47d4b-9987-405c-94c7-b080410e8ea7
   source_commit: df5c6a6
   license: DRL-1.1

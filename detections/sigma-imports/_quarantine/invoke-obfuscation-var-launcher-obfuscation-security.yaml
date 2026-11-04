@@ -34,6 +34,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, oscd.community'
   source_id: 4c54ba8f-73d2-4d40-8890-d9cf1dca3d30
   source_commit: df5c6a6
   license: DRL-1.1

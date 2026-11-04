@@ -33,6 +33,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, @Karneades'
   source_id: 56c217c3-2de2-479b-990f-5c109ba8458f
   source_commit: df5c6a6
   license: DRL-1.1

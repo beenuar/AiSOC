@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Luc Génaux'
   source_id: ed447910-bc30-4575-a598-3a2e49516a7a
   source_commit: df5c6a6
   license: DRL-1.1

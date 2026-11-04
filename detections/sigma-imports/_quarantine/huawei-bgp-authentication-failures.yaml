@@ -25,6 +25,7 @@ detection:
   condition: keywords_bgp_huawei
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Brown'
   source_id: a557ffe6-ac54-43d2-ae69-158027082350
   source_commit: df5c6a6
   license: DRL-1.1

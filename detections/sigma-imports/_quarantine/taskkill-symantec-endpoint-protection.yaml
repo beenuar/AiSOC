@@ -33,6 +33,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ilya Krestinichev, Florian Roth (Nextron Systems)'
   source_id: 4a6713f6-3331-11ed-a261-0242ac120002
   source_commit: df5c6a6
   license: DRL-1.1

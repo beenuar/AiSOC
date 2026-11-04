@@ -54,6 +54,7 @@ detection:
   condition: all of selection* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'bohops, Bhabesh Raj'
   source_id: 5687f942-867b-4578-ade7-1e341c46e99a
   source_commit: df5c6a6
   license: DRL-1.1

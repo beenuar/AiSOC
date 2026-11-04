@@ -48,6 +48,7 @@ detection:
   condition: selection_command and 1 of selection_ip_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), X__Junior (Nextron Systems)'
   source_id: cb5a2333-56cf-4562-8fcb-22ba1bca728d
   source_commit: df5c6a6
   license: DRL-1.1

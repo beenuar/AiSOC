@@ -41,6 +41,7 @@ detection:
   condition: (selection_netcat and not filter_main_netcat_listen_flag) or selection_network_scanning_tools
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alejandro Ortuno, oscd.community, Georg Lauenstein (sure[secure])'
   source_id: 3e102cd9-a70d-4a7a-9508-403963092f31
   source_commit: df5c6a6
   license: DRL-1.1

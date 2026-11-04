@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden'
   source_id: 586a8d6b-6bfe-4ad9-9d78-888cd2fe50c3
   source_commit: df5c6a6
   license: DRL-1.1

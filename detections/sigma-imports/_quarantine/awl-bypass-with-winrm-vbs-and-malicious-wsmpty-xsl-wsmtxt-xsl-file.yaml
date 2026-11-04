@@ -26,6 +26,7 @@ detection:
   condition: system_files and not in_system_folder
 provenance:
   source: SigmaHQ/sigma
+  author: 'Julia Fomina, oscd.community'
   source_id: d353dac0-1b41-46c2-820c-d7d2561fc6ed
   source_commit: df5c6a6
   license: DRL-1.1

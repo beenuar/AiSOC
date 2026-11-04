@@ -36,6 +36,7 @@ detection:
   condition: powershell_module or (cmd_execution and get_help)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Julia Fomina, oscd.community'
   source_id: 59e938ff-0d6d-4dc3-b13f-36cc28734d4e
   source_commit: df5c6a6
   license: DRL-1.1

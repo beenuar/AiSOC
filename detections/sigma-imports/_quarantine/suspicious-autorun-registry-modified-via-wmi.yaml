@@ -60,6 +60,7 @@ detection:
     of selection_suspicious_paths_user_*))
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: c80e66d8-1780-48a9-b412-46663fd21ac0
   source_commit: df5c6a6
   license: DRL-1.1

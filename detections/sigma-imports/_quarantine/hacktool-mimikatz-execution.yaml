@@ -51,6 +51,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, oscd.community, David ANDRE (additional keywords), Tim Shelton'
   source_id: a642964e-bead-4bed-8910-1bb4d63e3b4d
   source_commit: df5c6a6
   license: DRL-1.1

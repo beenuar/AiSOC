@@ -28,6 +28,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christopher Peacock @securepeacock, SCYTHE @scythe_io'
   source_id: c048f047-7e2a-4888-b302-55f509d4a91d
   source_commit: df5c6a6
   license: DRL-1.1

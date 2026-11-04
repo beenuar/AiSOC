@@ -28,6 +28,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Li Ling, Andy Parkidomo, Robert Rakowski, Blake Hartstein (Bloomberg L.P.)'
   source_id: bed978f8-7f3a-432b-82c5-9286a9b3031a
   source_commit: df5c6a6
   license: DRL-1.1

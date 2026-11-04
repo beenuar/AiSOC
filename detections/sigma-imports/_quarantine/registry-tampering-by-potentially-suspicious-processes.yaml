@@ -45,6 +45,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 7f4c43f9-b1a5-4c7d-b24a-b41bf3a3ebf2
   source_commit: df5c6a6
   license: DRL-1.1

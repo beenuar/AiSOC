@@ -32,6 +32,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Andreas Braathen (mnemonic.io)'
   source_id: c4568f5d-131f-4e78-83d4-45b2da0ec4f1
   source_commit: df5c6a6
   license: DRL-1.1

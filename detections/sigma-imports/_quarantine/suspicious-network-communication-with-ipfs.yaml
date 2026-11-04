@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Gavin Knapp'
   source_id: eb6c2004-1cef-427f-8885-9042974e5eb6
   source_commit: df5c6a6
   license: DRL-1.1

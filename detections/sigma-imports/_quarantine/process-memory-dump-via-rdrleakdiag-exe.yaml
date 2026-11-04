@@ -33,6 +33,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Cedric MAURUGEON, Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel, Nasreddine Bencherchali (Nextron Systems)'
   source_id: edadb1e5-5919-4e4c-8462-a9e643b02c4b
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniil Yugoslavskiy, oscd.community'
   source_id: c9d8b7fd-78e4-44fe-88f6-599135d46d60
   source_commit: df5c6a6
   license: DRL-1.1

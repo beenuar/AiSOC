@@ -41,6 +41,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Joseph Kamau'
   source_id: 1193d960-2369-499f-a158-7b50a31df682
   source_commit: df5c6a6
   license: DRL-1.1

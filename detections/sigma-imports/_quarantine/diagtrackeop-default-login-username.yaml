@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 2111118f-7e46-4fc8-974a-59fd8ec95196
   source_commit: df5c6a6
   license: DRL-1.1

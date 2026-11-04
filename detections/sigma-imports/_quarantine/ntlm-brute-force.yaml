@@ -30,6 +30,7 @@ detection:
   condition: selection and devicename
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jerry Shockley ''@jsh0x'''
   source_id: 9c8acf1a-cbf9-4db6-b63c-74baabe03e59
   source_commit: df5c6a6
   license: DRL-1.1

@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Oddvar Moe, Sander Wiebing, oscd.community'
   source_id: 0d7a9363-af70-4e7b-a3b7-1a176b7fbe84
   source_commit: df5c6a6
   license: DRL-1.1

@@ -69,6 +69,7 @@ detection:
   condition: (selection_file and 1 of selection_command_*) or 1 of selection_unique_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Max Altgelt (Nextron Systems), Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), MSTIC'
   source_id: 3fcc9b35-39e4-44c0-a2ad-9e82b6902b31
   source_commit: df5c6a6
   license: DRL-1.1

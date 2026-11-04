@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniel Bohannon (@Mandiant/@FireEye), oscd.community'
   source_id: 4bf943c6-5146-4273-98dd-e958fd1e3abf
   source_commit: df5c6a6
   license: DRL-1.1

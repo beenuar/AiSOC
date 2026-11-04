@@ -26,6 +26,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Antonio Cocomazzi (idea), Florian Roth (Nextron Systems)'
   source_id: 63e4f530-65dc-49cc-8f80-ccfa95c69d43
   source_commit: df5c6a6
   license: DRL-1.1

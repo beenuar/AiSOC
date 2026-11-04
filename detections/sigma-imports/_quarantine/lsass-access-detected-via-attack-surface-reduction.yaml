@@ -44,6 +44,7 @@ detection:
   condition: selection and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis'
   source_id: a0a278fe-2c0e-4de2-ac3c-c68b08a9ba98
   source_commit: df5c6a6
   license: DRL-1.1

@@ -25,6 +25,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Patryk Prauze - ING Tech'
   source_id: aa35a627-33fb-4d04-a165-d33b4afca3e8
   source_commit: df5c6a6
   license: DRL-1.1

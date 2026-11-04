@@ -52,6 +52,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: a1a144b7-5c9b-4853-a559-2172be8d4a03
   source_commit: df5c6a6
   license: DRL-1.1

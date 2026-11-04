@@ -33,6 +33,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Alexander McDonald'
   source_id: 744a188b-0415-4792-896f-11ddb0588dbc
   source_commit: df5c6a6
   license: DRL-1.1

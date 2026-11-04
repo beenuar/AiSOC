@@ -28,6 +28,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Rauch, Elastic (idea)'
   source_id: 8a3038e8-9c9d-46f8-b184-66234a160f6f
   source_commit: df5c6a6
   license: DRL-1.1

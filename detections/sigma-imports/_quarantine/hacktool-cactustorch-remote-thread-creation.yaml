@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@SBousseaden (detection), Thomas Patzke (rule)'
   source_id: 2e4e488a-6164-4811-9ea1-f960c7359c40
   source_commit: df5c6a6
   license: DRL-1.1

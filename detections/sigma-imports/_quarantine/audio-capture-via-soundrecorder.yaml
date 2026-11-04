@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'E.M. Anhaus (originally from Atomic Blue Detections, Endgame), oscd.community'
   source_id: 83865853-59aa-449e-9600-74b9d89a6d6e
   source_commit: df5c6a6
   license: DRL-1.1

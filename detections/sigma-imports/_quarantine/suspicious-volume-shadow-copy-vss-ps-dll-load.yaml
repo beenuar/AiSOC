@@ -59,6 +59,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Markus Neis, @markus_neis'
   source_id: 333cdbe8-27bb-4246-bf82-b41a0dca4b70
   source_commit: df5c6a6
   license: DRL-1.1

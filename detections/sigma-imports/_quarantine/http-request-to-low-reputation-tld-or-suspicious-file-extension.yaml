@@ -82,6 +82,7 @@ detection:
   condition: selection_suspicious_tld and 1 of selection_malicious_*
 provenance:
   source: SigmaHQ/sigma
+  author: '@signalblur, Corelight'
   source_id: 68c2c604-92ad-468b-bf4a-aac49adad08c
   source_commit: df5c6a6
   license: DRL-1.1

@@ -30,6 +30,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Bartlomiej Czyz, Relativity'
   source_id: 6fb63b40-e02a-403e-9ffd-3bcc1d749442
   source_commit: df5c6a6
   license: DRL-1.1

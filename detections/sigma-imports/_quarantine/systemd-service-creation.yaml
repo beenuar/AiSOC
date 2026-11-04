@@ -27,6 +27,7 @@ detection:
   condition: path and 1 of name_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Pawel Mazur'
   source_id: 1bac86ba-41aa-4f62-9d6b-405eac99b485
   source_commit: df5c6a6
   license: DRL-1.1

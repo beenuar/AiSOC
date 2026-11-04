@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ján Trenčanský, frack113, AlertIQ, Nasreddine Bencherchali'
   source_id: e1aa95de-610a-427d-b9e7-9b46cfafbe6a
   source_commit: df5c6a6
   license: DRL-1.1

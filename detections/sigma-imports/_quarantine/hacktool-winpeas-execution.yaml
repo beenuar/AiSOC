@@ -45,6 +45,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Georg Lauenstein (sure[secure])'
   source_id: 98b53e78-ebaf-46f8-be06-421aafd176d9
   source_commit: df5c6a6
   license: DRL-1.1

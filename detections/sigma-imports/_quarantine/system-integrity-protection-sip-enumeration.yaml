@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Joseliyo Sanchez, @Joseliyo_Jstnk'
   source_id: 53821412-17b0-4147-ade0-14faae67d54b
   source_commit: df5c6a6
   license: DRL-1.1

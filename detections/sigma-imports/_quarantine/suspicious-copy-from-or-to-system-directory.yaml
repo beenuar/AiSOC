@@ -53,6 +53,7 @@ detection:
   condition: 1 of selection_img_* and selection_target and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Markus Neis, Tim Shelton (HAWK.IO), Nasreddine Bencherchali (Nextron Systems)'
   source_id: fff9d2b7-e11c-4a69-93d3-40ef66189767
   source_commit: df5c6a6
   license: DRL-1.1

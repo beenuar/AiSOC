@@ -97,6 +97,7 @@ detection:
   condition: selection and not 1 of exclude_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Saw Winn Naung, Azure-Sentinel, @neu5ron'
   source_id: bf74135c-18e8-4a72-a926-0e4f47888c19
   source_commit: df5c6a6
   license: DRL-1.1

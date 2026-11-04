@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@neu5ron, @Antonlovesdnb, Mike Remen'
   source_id: 4096842a-8f9f-4d36-92b4-d0b2a62f9b2a
   source_commit: df5c6a6
   license: DRL-1.1

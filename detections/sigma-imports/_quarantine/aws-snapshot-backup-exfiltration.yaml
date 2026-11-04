@@ -21,6 +21,7 @@ detection:
   condition: selection_source
 provenance:
   source: SigmaHQ/sigma
+  author: 'Darin Smith'
   source_id: abae8fec-57bd-4f87-aff6-6e3db989843d
   source_commit: df5c6a6
   license: DRL-1.1

@@ -64,6 +64,7 @@ detection:
   condition: 1 of selection* or all of set1*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: 8bc64091-6875-4881-aaf9-7bd25b5dda08
   source_commit: df5c6a6
   license: DRL-1.1

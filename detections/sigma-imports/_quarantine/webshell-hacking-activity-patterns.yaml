@@ -88,6 +88,7 @@ detection:
   condition: 1 of selection_webserver_* and 1 of selection_child_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems)'
   source_id: 4ebc877f-4612-45cb-b3a5-8e3834db36c9
   source_commit: df5c6a6
   license: DRL-1.1

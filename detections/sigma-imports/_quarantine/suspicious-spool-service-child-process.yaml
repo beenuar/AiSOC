@@ -81,6 +81,7 @@ detection:
     or all of suspicious_rundll32_* )
 provenance:
   source: SigmaHQ/sigma
+  author: 'Justin C. (@endisphotic), @dreadphones (detection), Thomas Patzke (Sigma rule)'
   source_id: dcdbc940-0bff-46b2-95f3-2d73f848e33b
   source_commit: df5c6a6
   license: DRL-1.1

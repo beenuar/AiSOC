@@ -70,6 +70,7 @@ detection:
   condition: all of selection_root_* and 1 of selection_dword_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Swachchhanda Shrawan Poudel, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 452bce90-6fb0-43cc-97a5-affc283139b3
   source_commit: df5c6a6
   license: DRL-1.1

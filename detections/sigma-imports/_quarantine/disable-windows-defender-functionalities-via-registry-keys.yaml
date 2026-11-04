@@ -58,6 +58,7 @@ detection:
   condition: selection_main and 1 of selection_dword_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'AlertIQ, Ján Trenčanský, frack113, Nasreddine Bencherchali, Swachchhanda Shrawan Poudel'
   source_id: 0eb46774-f1ab-4a74-8238-1155855f2263
   source_commit: df5c6a6
   license: DRL-1.1

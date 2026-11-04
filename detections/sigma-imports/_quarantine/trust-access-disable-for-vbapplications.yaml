@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Trent Liffick (@tliffick), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 1a5c46e9-f32f-42f7-b2bc-6e9084db7fbf
   source_commit: df5c6a6
   license: DRL-1.1

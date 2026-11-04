@@ -29,6 +29,7 @@ detection:
   condition: selection1 or (selection2 and not selection3 and not filter_null)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Thomas Patzke, @atc_project (improvements)'
   source_id: 2632954e-db1c-49cb-9936-67d1ef1d17d2
   source_commit: df5c6a6
   license: DRL-1.1

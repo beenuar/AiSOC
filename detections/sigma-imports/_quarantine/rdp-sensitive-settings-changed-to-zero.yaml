@@ -32,6 +32,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden, David ANDRE, Roberto Rodriguez @Cyb3rWard0g, Nasreddine Bencherchali'
   source_id: a2863fbc-d5cb-48d5-83fb-d976d4b1743b
   source_commit: df5c6a6
   license: DRL-1.1

@@ -20,6 +20,7 @@ detection:
   condition: selection_names_re
 provenance:
   source: SigmaHQ/sigma
+  author: 'The DFIR Report, IrishDeath'
   source_id: 03f4ca17-de95-428d-a75a-4ee78b047256
   source_commit: df5c6a6
   license: DRL-1.1

@@ -26,6 +26,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Marie Euler, Pawel Mazur'
   source_id: 759d0d51-bc99-4b5e-9add-8f5b2c8e7512
   source_commit: df5c6a6
   license: DRL-1.1

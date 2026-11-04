@@ -34,6 +34,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Omar Khaled (@beacon_exe), MahirAli Khan (in/mahiralikhan), Nasreddine Bencherchali (Nextron Systems)'
   source_id: c615d676-f655-46b9-b913-78729021e5d7
   source_commit: df5c6a6
   license: DRL-1.1

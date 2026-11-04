@@ -27,6 +27,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'X__Junior (Nextron Systems)'
   source_id: 71b31e99-9ad0-47d4-aeb5-c0ca3928eeeb
   source_commit: df5c6a6
   license: DRL-1.1

@@ -31,6 +31,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christopher Peacock @securepeacock, SCYTHE @scythe_io'
   source_id: 7610a4ea-c06d-495f-a2ac-0a696abcfd3b
   source_commit: df5c6a6
   license: DRL-1.1

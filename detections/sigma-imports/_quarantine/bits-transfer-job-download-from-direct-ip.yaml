@@ -67,6 +67,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems)'
   source_id: 90f138c1-f578-4ac3-8c49-eecfd847c8b7
   source_commit: df5c6a6
   license: DRL-1.1

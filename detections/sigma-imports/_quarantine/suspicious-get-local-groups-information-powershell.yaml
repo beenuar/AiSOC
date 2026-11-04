@@ -34,6 +34,7 @@ detection:
   condition: selection_localgroup or all of selection_wmi_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: fa6a5a45-3ee2-4529-aa14-ee5edc9e29cb
   source_commit: df5c6a6
   license: DRL-1.1

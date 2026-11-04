@@ -60,6 +60,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Tim Shelton, Florian Roth (Nextron Systems), Yassine Oukessou'
   source_id: c3a99af4-35a9-4668-879e-c09aeb4f2bdf
   source_commit: df5c6a6
   license: DRL-1.1

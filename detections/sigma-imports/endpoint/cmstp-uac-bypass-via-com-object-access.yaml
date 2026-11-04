@@ -35,6 +35,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nik Seetharaman, Christian Burkard (Nextron Systems)'
   source_id: 4b60e6f2-bf39-47b4-b4ea-398e33cfe253
   source_commit: df5c6a6
   license: DRL-1.1

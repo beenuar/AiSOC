@@ -43,6 +43,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Chirag Damani'
   source_id: 7638e5fe-600c-4289-a968-f49dd537ec7d
   source_commit: df5c6a6
   license: DRL-1.1

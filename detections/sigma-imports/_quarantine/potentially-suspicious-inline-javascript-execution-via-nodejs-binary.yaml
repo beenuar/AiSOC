@@ -30,6 +30,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Microsoft (idea), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 8537c866-072e-460d-bfff-aaf39cbd73d3
   source_commit: df5c6a6
   license: DRL-1.1

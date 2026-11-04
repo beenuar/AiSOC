@@ -29,6 +29,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali'
   source_id: 15434e33-5027-4914-88d5-3d4145ec25a9
   source_commit: df5c6a6
   license: DRL-1.1

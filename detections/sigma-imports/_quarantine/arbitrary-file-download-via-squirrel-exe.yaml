@@ -32,6 +32,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Karneades / Markus Neis, Jonhnathan Ribeiro, oscd.community'
   source_id: 1e75c1cc-c5d4-42aa-ac3d-91b0b68b3b4c
   source_commit: df5c6a6
   license: DRL-1.1

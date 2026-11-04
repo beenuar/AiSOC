@@ -29,6 +29,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: '@BarryShooshooga, Nasreddine Bencherchali (Nextron Systems)'
   source_id: e9c8808f-4cfb-4ba9-97d4-e5f3beaa244d
   source_commit: df5c6a6
   license: DRL-1.1

@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jason Mull'
   source_id: 882fbe50-d8d7-4e29-ae80-0648a8556866
   source_commit: df5c6a6
   license: DRL-1.1

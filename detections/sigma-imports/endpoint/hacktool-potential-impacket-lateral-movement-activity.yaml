@@ -43,6 +43,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ecco, oscd.community, Jonhnathan Ribeiro, Tim Rauch'
   source_id: 10c14723-61c7-4c75-92ca-9af245723ad2
   source_commit: df5c6a6
   license: DRL-1.1

@@ -27,6 +27,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'juju4'
   source_id: 0f63e1ef-1eb9-4226-9d54-8927ca08520a
   source_commit: df5c6a6
   license: DRL-1.1

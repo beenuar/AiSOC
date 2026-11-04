@@ -36,6 +36,7 @@ detection:
   condition: selection1 or selection2 or (selection3 and not filter_sel3)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christian Burkard (Nextron Systems)'
   source_id: 152f3630-77c1-4284-bcc0-4cc68ab2f6e7
   source_commit: df5c6a6
   license: DRL-1.1

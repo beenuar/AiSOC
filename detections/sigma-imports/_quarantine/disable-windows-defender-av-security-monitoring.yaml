@@ -46,6 +46,7 @@ detection:
   condition: all of selection_pwsh_* or (selection_sc_binary and 1 of selection_sc_tamper_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'ok @securonix invrep-de, oscd.community, frack113'
   source_id: a7ee1722-c3c5-aeff-3212-c777e4733217
   source_commit: df5c6a6
   license: DRL-1.1

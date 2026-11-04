@@ -28,6 +28,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael McKinley (@McKinleyMike), Tony Latteri (@TheLatteri)'
   source_id: 6120ac2a-a34b-42c0-a9bd-1fb9f459f348
   source_commit: df5c6a6
   license: DRL-1.1

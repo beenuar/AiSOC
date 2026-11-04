@@ -27,6 +27,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'David Burkett, @signalblur'
   source_id: 9e1bef8d-0fff-46f6-8465-9aa54e128c1e
   source_commit: df5c6a6
   license: DRL-1.1

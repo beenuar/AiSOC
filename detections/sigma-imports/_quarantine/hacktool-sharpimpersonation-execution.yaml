@@ -33,6 +33,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sai Prashanth Pulisetti @pulisettis, Nasreddine Bencherchali (Nextron Systems)'
   source_id: f89b08d0-77ad-4728-817b-9b16c5a69c7a
   source_commit: df5c6a6
   license: DRL-1.1

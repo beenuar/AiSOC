@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Romain Gaillard (@romain-gaillard)'
   source_id: 04ad83ef-1a37-4c10-b57a-81092164bf33
   source_commit: df5c6a6
   license: DRL-1.1

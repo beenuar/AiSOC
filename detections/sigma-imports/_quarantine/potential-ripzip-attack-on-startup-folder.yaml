@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Greg (rule)'
   source_id: a6976974-ea6f-4e97-818e-ea08625c52cb
   source_commit: df5c6a6
   license: DRL-1.1

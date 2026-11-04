@@ -23,6 +23,7 @@ detection:
   condition: selection and not computer_acct
 provenance:
   source: SigmaHQ/sigma
+  author: 'sigma'
   source_id: 503fe26e-b5f2-4944-a126-eab405cc06e5
   source_commit: df5c6a6
   license: DRL-1.1

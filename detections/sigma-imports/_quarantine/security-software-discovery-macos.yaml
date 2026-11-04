@@ -37,6 +37,7 @@ detection:
   condition: image and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniil Yugoslavskiy, oscd.community'
   source_id: 0ed75b9c-c73b-424d-9e7d-496cd565fbe0
   source_commit: df5c6a6
   license: DRL-1.1

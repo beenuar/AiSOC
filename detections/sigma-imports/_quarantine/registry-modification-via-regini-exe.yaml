@@ -25,6 +25,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Eli Salem, Sander Wiebing, oscd.community'
   source_id: 5f60740a-f57b-4e76-82a1-15b6ff2cb134
   source_commit: df5c6a6
   license: DRL-1.1

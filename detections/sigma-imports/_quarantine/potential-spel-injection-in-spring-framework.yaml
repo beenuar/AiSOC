@@ -22,6 +22,7 @@ detection:
   condition: keywords
 provenance:
   source: SigmaHQ/sigma
+  author: 'Moti Harmats'
   source_id: e9edd087-89d8-48c9-b0b4-5b9bb10896b8
   source_commit: df5c6a6
   license: DRL-1.1

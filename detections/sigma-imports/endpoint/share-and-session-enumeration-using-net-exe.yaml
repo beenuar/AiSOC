@@ -30,6 +30,7 @@ detection:
   condition: all of selection_* and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Endgame, JHasenbusch (ported for oscd.community)'
   source_id: 62510e69-616b-4078-b371-847da438cc03
   source_commit: df5c6a6
   license: DRL-1.1

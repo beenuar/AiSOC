@@ -42,6 +42,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sreeman'
   source_id: 9c7e131a-0f2c-4ae0-9d43-b04f4e266d43
   source_commit: df5c6a6
   license: DRL-1.1

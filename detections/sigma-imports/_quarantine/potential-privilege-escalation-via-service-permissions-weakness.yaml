@@ -30,6 +30,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov'
   source_id: 0f9c21f1-6a73-4b0e-9809-cb562cb8d981
   source_commit: df5c6a6
   license: DRL-1.1

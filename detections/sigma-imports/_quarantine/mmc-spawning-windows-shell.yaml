@@ -31,6 +31,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Karneades, Swisscom CSIRT'
   source_id: 05a2ab7e-ce11-4b63-86db-ab32e763e11d
   source_commit: df5c6a6
   license: DRL-1.1

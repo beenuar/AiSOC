@@ -24,6 +24,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'oscd.community, Natalia Shornikova'
   source_id: 2a926e6a-4b81-4011-8a96-e36cc8c04302
   source_commit: df5c6a6
   license: DRL-1.1

@@ -29,6 +29,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Endgame, JHasenbusch (adapted to Sigma for oscd.community)'
   source_id: cd219ff3-fa99-45d4-8380-a7d15116c6dc
   source_commit: df5c6a6
   license: DRL-1.1

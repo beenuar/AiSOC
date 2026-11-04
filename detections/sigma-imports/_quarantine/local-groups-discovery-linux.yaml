@@ -32,6 +32,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ömer Günal, Alejandro Ortuno, oscd.community'
   source_id: 676381a6-15ca-4d73-a9c8-6a22e970b90d
   source_commit: df5c6a6
   license: DRL-1.1

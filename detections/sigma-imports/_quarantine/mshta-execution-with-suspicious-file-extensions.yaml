@@ -73,6 +73,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Diego Perez (@darkquassar), Markus Neis, Swisscom (Improve Rule), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: cc7abbd0-762b-41e3-8a26-57ad50d2eea3
   source_commit: df5c6a6
   license: DRL-1.1

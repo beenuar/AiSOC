@@ -47,6 +47,7 @@ detection:
   condition: selection_img and (all of selection_to_* or 1 of selection_gen_*)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov (idea), Vasiliy Burov (rule), oscd.community, Tim Shelton'
   source_id: cdf05894-89e7-4ead-b2b0-0a5f97a90f2f
   source_commit: df5c6a6
   license: DRL-1.1

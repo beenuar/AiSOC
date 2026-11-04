@@ -32,6 +32,7 @@ detection:
   condition: selection and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Christopher Peacock ''@securepeacock'', SCYTHE ''@scythe_io'', Sittikorn S'
   source_id: c4b890e5-8d8c-4496-8c66-c805753817cd
   source_commit: df5c6a6
   license: DRL-1.1

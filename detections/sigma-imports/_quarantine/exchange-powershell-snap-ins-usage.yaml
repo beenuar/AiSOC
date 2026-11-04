@@ -38,6 +38,7 @@ detection:
   condition: all of selection_* and not 1 of filter_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'FPT.EagleEye, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 25676e10-2121-446e-80a4-71ff8506af47
   source_commit: df5c6a6
   license: DRL-1.1

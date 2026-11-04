@@ -53,6 +53,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Timur Zinniatullin, oscd.community, Swachchhanda Shrawan Poudel'
   source_id: 05c36dd6-79d6-4a9a-97da-3db20298ab2d
   source_commit: df5c6a6
   license: DRL-1.1

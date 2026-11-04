@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Gleb Sukhodolskiy, Timur Zinniatullin oscd.community'
   source_id: f033f3f3-fd24-4995-97d8-a3bb17550a88
   source_commit: df5c6a6
   license: DRL-1.1

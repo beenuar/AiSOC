@@ -28,6 +28,7 @@ detection:
   condition: selection and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniil Yugoslavskiy, Ian Davis, oscd.community'
   source_id: 99793437-3e16-439b-be0f-078782cf953d
   source_commit: df5c6a6
   license: DRL-1.1

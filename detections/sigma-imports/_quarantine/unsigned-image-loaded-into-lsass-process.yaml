@@ -20,6 +20,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, oscd.community'
   source_id: 857c8db3-c89b-42fb-882b-f681c7cf4da2
   source_commit: df5c6a6
   license: DRL-1.1

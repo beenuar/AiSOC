@@ -31,6 +31,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nounou Mbeiri, Nasreddine Bencherchali (Nextron Systems)'
   source_id: 7892ec59-c5bb-496d-8968-e5d210ca3ac4
   source_commit: df5c6a6
   license: DRL-1.1

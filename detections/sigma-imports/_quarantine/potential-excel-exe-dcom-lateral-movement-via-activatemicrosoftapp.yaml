@@ -31,6 +31,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Aaron Stratton'
   source_id: 551d9c1f-816c-445b-a7a6-7a3864720d60
   source_commit: df5c6a6
   license: DRL-1.1

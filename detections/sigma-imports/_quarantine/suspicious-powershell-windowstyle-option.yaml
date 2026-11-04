@@ -31,6 +31,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Tim Shelton (fp AWS)'
   source_id: 313fbb0a-a341-4682-848d-6d6f8c4fab7c
   source_commit: df5c6a6
   license: DRL-1.1

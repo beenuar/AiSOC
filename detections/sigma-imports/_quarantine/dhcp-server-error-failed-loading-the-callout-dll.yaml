@@ -26,6 +26,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Dimitrios Slamaris, @atc_project (fix)'
   source_id: 75edd3fd-7146-48e5-9848-3013d7f0282c
   source_commit: df5c6a6
   license: DRL-1.1

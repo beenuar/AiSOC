@@ -94,6 +94,7 @@ detection:
   condition: all of selection_office_* and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Victor Sergeev, Daniil Yugoslavskiy, Gleb Sukhodolskiy, Timur Zinniatullin, oscd.community, Tim Shelton, frack113 (split)'
   source_id: baecf8fb-edbf-429f-9ade-31fc3f22b970
   source_commit: df5c6a6
   license: DRL-1.1

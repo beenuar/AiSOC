@@ -29,6 +29,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ialle Teixeira @teixeira0xfffff, Austin Songer @austinsonger'
   source_id: e290b10b-1023-4452-a4a9-eb31a9013b3a
   source_commit: df5c6a6
   license: DRL-1.1

@@ -39,6 +39,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Hugh Ryan (HueCodes), Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: 55e862a8-dd9c-4651-807a-f21fcad56716
   source_commit: df5c6a6
   license: DRL-1.1

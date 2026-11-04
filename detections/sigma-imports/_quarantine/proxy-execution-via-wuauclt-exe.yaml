@@ -38,6 +38,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez (Cyb3rWard0g), OTR (Open Threat Research), Florian Roth (Nextron Systems), Sreeman, FPT.EagleEye Team'
   source_id: af77cf95-c469-471c-b6a0-946c685c4798
   source_commit: df5c6a6
   license: DRL-1.1

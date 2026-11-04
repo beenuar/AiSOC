@@ -28,6 +28,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Jose Rodriguez (@Cyb3rPandaH), OTR (Open Threat Research), Jimmy Bayne (@bohops)'
   source_id: ad89044a-8f49-4673-9a55-cbd88a1b374f
   source_commit: df5c6a6
   license: DRL-1.1

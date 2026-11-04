@@ -37,6 +37,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Aedan Russell, frack113, X__Junior (Nextron Systems)'
   source_id: 27ba3207-dd30-4812-abbf-5d20c57d474e
   source_commit: df5c6a6
   license: DRL-1.1

@@ -28,6 +28,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'oscd.community, @redcanary, Zach Stanford @svch0st'
   source_id: d2125259-ddea-4c1c-9c22-977eb5b29cf0
   source_commit: df5c6a6
   license: DRL-1.1

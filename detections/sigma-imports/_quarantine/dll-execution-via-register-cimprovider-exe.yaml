@@ -23,6 +23,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ivan Dyachkov, Yulia Fomina, oscd.community'
   source_id: a2910908-e86f-4687-aeba-76a5f996e652
   source_commit: df5c6a6
   license: DRL-1.1

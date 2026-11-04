@@ -47,6 +47,7 @@ detection:
   condition: 1 of selection_* and sub_processes
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 818f7b24-0fba-4c49-a073-8b755573b9c7
   source_commit: df5c6a6
   license: DRL-1.1

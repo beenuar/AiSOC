@@ -35,6 +35,7 @@ detection:
   condition: 1 of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'NVISO'
   source_id: 8e1cb247-6cf6-42fa-b440-3f27d57e9936
   source_commit: df5c6a6
   license: DRL-1.1

@@ -51,6 +51,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, Endgame, JHasenbusch, Daniil Yugoslavskiy, oscd.community, frack113'
   source_id: fd877b94-9bb5-4191-bb25-d79cbd93c167
   source_commit: df5c6a6
   license: DRL-1.1

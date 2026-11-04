@@ -192,6 +192,16 @@ jobs:
       - name: Verify no orphan or duplicated detection rule ids
         run: python3 scripts/check_detection_yaml_orphans.py
 
+      # DRL-1.1 requires author identification to travel with a shared copy of
+      # an imported rule, including a modified one, and to appear in messages
+      # produced by a match. Three independent layers dropped it and the
+      # omission survived for months behind a note in the compiler's generated
+      # report calling it a known gap (#1680, reported by SigmaHQ). Network
+      # free by design: it reads the committed artefacts, so it cannot be
+      # skipped by an upstream outage.
+      - name: Verify imported rules name their upstream author
+        run: python3 scripts/check_detection_attribution.py
+
       # The cloud/identity/SaaS/code condition count depth plan 3.6 holds,
       # recomputed from the engine's own artefacts.
       - name: Verify the published condition count

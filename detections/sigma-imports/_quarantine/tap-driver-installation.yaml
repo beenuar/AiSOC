@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Daniil Yugoslavskiy, Ian Davis, oscd.community'
   source_id: 8e4cf0e5-aa5d-4dc3-beff-dc26917744a9
   source_commit: df5c6a6
   license: DRL-1.1

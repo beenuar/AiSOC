@@ -24,6 +24,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Roberto Rodriguez @Cyb3rWard0g'
   source_id: 13addce7-47b2-4ca0-a98f-1de964d1d669
   source_commit: df5c6a6
   license: DRL-1.1

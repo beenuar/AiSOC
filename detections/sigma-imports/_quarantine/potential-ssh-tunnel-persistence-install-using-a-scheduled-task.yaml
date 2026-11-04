@@ -33,6 +33,7 @@ detection:
   condition: selection_img and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Rory Duncan'
   source_id: 2daa93a0-a5fb-41c5-8cd8-3c11294bfd1f
   source_commit: df5c6a6
   license: DRL-1.1

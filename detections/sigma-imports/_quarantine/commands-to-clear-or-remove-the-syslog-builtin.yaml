@@ -26,6 +26,7 @@ detection:
   condition: selection and not falsepositives
 provenance:
   source: SigmaHQ/sigma
+  author: 'Max Altgelt (Nextron Systems)'
   source_id: e09eb557-96d2-4de9-ba2d-30f712a5afd3
   source_commit: df5c6a6
   license: DRL-1.1

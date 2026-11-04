@@ -57,6 +57,7 @@ detection:
   condition: 1 of selection_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Oleg Kolesnikov @securonix invrep_de, oscd.community, Florian Roth (Nextron Systems), Christian Burkard (Nextron Systems)'
   source_id: a7c3d773-caef-227e-a7e7-c2f13c622329
   source_commit: df5c6a6
   license: DRL-1.1

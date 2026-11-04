@@ -50,6 +50,7 @@ detection:
     and 1 of selection_cli_script_option_*) ) and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Alejandro Houspanossian (''@lekz86'')'
   source_id: b6676963-0353-4f88-90f5-36c20d443c6a
   source_commit: df5c6a6
   license: DRL-1.1

@@ -21,6 +21,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Elastic, Austin Songer @austinsonger'
   source_id: b056de1a-6e6e-4e40-a67e-97c9808cf41b
   source_commit: df5c6a6
   license: DRL-1.1

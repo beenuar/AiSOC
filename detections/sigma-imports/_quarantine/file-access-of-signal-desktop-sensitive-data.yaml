@@ -43,6 +43,7 @@ detection:
   condition: selection and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Andreas Braathen (mnemonic.io)'
   source_id: 5d6c375a-18ae-4952-b4f6-8b803f6c8555
   source_commit: df5c6a6
   license: DRL-1.1

@@ -50,6 +50,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sreeman'
   source_id: ae9b0bd7-8888-4606-b444-0ed7410cb728
   source_commit: df5c6a6
   license: DRL-1.1

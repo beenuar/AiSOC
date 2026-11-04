@@ -35,6 +35,7 @@ detection:
   condition: 1 of selection_* or all of selection1*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Ilyas Ochkov, Jonhnathan Ribeiro, Daniil Yugoslavskiy, oscd.community'
   source_id: 26b692dc-1722-49b2-b496-a8258aa6371d
   source_commit: df5c6a6
   license: DRL-1.1

@@ -26,6 +26,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Avneet Singh @v3t0_, oscd.community, Christopher Peacock @SecurePeacock (updated)'
   source_id: 198effb6-6c98-4d0c-9ea3-451fa143c45c
   source_commit: df5c6a6
   license: DRL-1.1

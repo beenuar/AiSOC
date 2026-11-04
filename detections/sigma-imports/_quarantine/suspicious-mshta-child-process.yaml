@@ -42,6 +42,7 @@ detection:
   condition: all of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Michael Haag'
   source_id: 03cc0c25-389f-4bf8-b48d-11878079f1ca
   source_commit: df5c6a6
   license: DRL-1.1

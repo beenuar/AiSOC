@@ -50,6 +50,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Swachchhanda Shrawan Poudel (Nextron Systems)'
   source_id: d7b81144-b866-48a4-9bcc-275dc69d870e
   source_commit: df5c6a6
   license: DRL-1.1

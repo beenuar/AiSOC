@@ -64,6 +64,7 @@ detection:
   condition: all of selection_main_* and 1 of selection_values_* and not 1 of filter_main_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'pH-T (Nextron Systems), @Kostastsale, TheDFIRReport'
   source_id: 0d5675be-bc88-4172-86d3-1e96a4476536
   source_commit: df5c6a6
   license: DRL-1.1

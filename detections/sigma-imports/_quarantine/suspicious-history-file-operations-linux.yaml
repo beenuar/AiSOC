@@ -26,6 +26,7 @@ detection:
   condition: execve and history
 provenance:
   source: SigmaHQ/sigma
+  author: 'Mikhail Larin, oscd.community'
   source_id: eae8ce9f-bde9-47a6-8e79-f20d18419910
   source_commit: df5c6a6
   license: DRL-1.1

@@ -22,6 +22,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Sohan G (D4rkCiph3r), Red Canary (Idea)'
   source_id: a753a6af-3126-426d-8bd0-26ebbcb92254
   source_commit: df5c6a6
   license: DRL-1.1

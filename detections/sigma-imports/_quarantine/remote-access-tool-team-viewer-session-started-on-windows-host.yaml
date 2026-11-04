@@ -25,6 +25,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'Josh Nickels, Qi Nan'
   source_id: ab70c354-d9ac-4e11-bbb6-ec8e3b153357
   source_commit: df5c6a6
   license: DRL-1.1

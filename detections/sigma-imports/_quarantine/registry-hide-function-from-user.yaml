@@ -31,6 +31,7 @@ detection:
   condition: 1 of selection_set_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113'
   source_id: 5a93eb65-dffa-4543-b761-94aa60098fb6
   source_commit: df5c6a6
   license: DRL-1.1

@@ -32,6 +32,7 @@ detection:
   condition: selection_parent or (selection_image and not filter_image)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Agro (@agro_sev) oscd.community'
   source_id: 0152550d-3a26-4efd-9f0e-54a0b28ae2f3
   source_commit: df5c6a6
   license: DRL-1.1

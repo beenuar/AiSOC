@@ -29,6 +29,7 @@ detection:
   condition: selection and not filter
 provenance:
   source: SigmaHQ/sigma
+  author: 'Samir Bousseaden, @neu5ron, Tim Shelton'
   source_id: f1b3a22a-45e6-4004-afb5-4291f9c21166
   source_commit: df5c6a6
   license: DRL-1.1

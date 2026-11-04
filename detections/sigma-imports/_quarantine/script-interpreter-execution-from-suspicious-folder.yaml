@@ -86,6 +86,7 @@ detection:
   condition: 1 of selection_proc_* and 1 of selection_folders_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Florian Roth (Nextron Systems), Nasreddine Bencherchali (Nextron Systems)'
   source_id: 1228c958-e64e-4e71-92ad-7d429f4138ba
   source_commit: df5c6a6
   license: DRL-1.1

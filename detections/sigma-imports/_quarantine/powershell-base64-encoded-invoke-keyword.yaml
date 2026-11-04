@@ -35,6 +35,7 @@ detection:
   condition: all of selection_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'pH-T (Nextron Systems), Harjot Singh, @cyb3rjy0t'
   source_id: 6385697e-9f1b-40bd-8817-f4a91f40508e
   source_commit: df5c6a6
   license: DRL-1.1

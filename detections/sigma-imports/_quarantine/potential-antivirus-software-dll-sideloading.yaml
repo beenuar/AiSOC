@@ -86,6 +86,7 @@ detection:
     filter_eset_deslock)
 provenance:
   source: SigmaHQ/sigma
+  author: 'Nasreddine Bencherchali (Nextron Systems), Wietze Beukema (project and research)'
   source_id: 552b6b65-df37-4d3e-a258-f2fc4771ae54
   source_commit: df5c6a6
   license: DRL-1.1

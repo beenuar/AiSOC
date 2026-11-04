@@ -46,6 +46,7 @@ detection:
   condition: selection
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Florian Roth'
   source_id: 654fcc6d-840d-4844-9b07-2c3300e54a26
   source_commit: df5c6a6
   license: DRL-1.1

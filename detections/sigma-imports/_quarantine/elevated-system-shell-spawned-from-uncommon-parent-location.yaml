@@ -58,6 +58,7 @@ detection:
   condition: all of selection_* and not 1 of filter_main_* and not 1 of filter_optional_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'frack113, Tim Shelton (update fp)'
   source_id: 178e615d-e666-498b-9630-9ed363038101
   source_commit: df5c6a6
   license: DRL-1.1

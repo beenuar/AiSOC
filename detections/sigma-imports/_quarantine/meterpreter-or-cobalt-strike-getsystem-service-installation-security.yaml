@@ -39,6 +39,7 @@ detection:
   condition: selection_eid and 1 of selection_cli_*
 provenance:
   source: SigmaHQ/sigma
+  author: 'Teymur Kheirkhabarov, Ecco, Florian Roth (Nextron Systems)'
   source_id: ecbc5e16-58e0-4521-9c60-eb9a7ea4ad34
   source_commit: df5c6a6
   license: DRL-1.1

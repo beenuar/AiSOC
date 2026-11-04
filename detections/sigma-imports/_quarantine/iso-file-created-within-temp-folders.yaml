@@ -28,6 +28,7 @@ detection:
   condition: 1 of selection*
 provenance:
   source: SigmaHQ/sigma
+  author: '@sam0x90'
   source_id: 2f9356ae-bf43-41b8-b858-4496d83b2acb
   source_commit: df5c6a6
   license: DRL-1.1

@@ -24,6 +24,7 @@ detection:
   condition: commands and a1
 provenance:
   source: SigmaHQ/sigma
+  author: 'Pawel Mazur'
   source_id: edd595d7-7895-4fa7-acb3-85a18a8772ca
   source_commit: df5c6a6
   license: DRL-1.1
