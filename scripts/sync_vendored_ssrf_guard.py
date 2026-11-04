@@ -50,6 +50,13 @@ SOURCE_FILE = REPO_ROOT / "services" / "agents" / "app" / "playbook" / "ssrf_gua
 VENDORED_FILES = (
     REPO_ROOT / "services" / "api" / "app" / "_vendor" / "ssrf_guard.py",
     REPO_ROOT / "services" / "connectors" / "app" / "security" / "ssrf_guard.py",
+    # The actions copy exists because `live_actions.dispatch()` opens outbound
+    # HTTP to addresses that, for the vendors with no entry in
+    # VENDOR_CREDENTIAL_MAP, come from the caller's own `params` rather than
+    # from a stored connector row the API guarded at write time
+    # (GHSA-78jg-x2ch-638f). A guard that drifts from the one the playbook
+    # engine enforces is two SSRF policies wearing one name.
+    REPO_ROOT / "services" / "actions" / "app" / "security" / "ssrf_guard.py",
 )
 
 

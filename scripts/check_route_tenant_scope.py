@@ -168,6 +168,11 @@ FILE_LOCAL_RESOLVERS: dict[str, dict[str, str]] = {
             "same shape as alert_writeback: a session's tenant comes from the session, "
             "so an authenticated user cannot drive a containment against another tenant's estate"
         ),
+        "_resolve_reference_caller": (
+            "there is no client tenant to intersect here: the route serves only the internal "
+            "service peer, so a session is refused outright (GHSA-c5qq-vhf5-wjqc) and the "
+            "declared tenant is the service caller's own, which is then the sole predicate on the read"
+        ),
     },
 }
 

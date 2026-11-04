@@ -126,6 +126,57 @@ class ReferenceLookupRequest(BaseModel):
     tenant_id: uuid.UUID | None = None
 
 
+def _resolve_reference_caller(
+    body_tenant_id: uuid.UUID | None,
+    user: CurrentUser | None,
+    service_token: str | None,
+) -> uuid.UUID:
+    """``tenant_id`` for the one caller this route may answer, or 401/403.
+
+    Deliberately *not* :func:`_resolve_caller`. That resolver admits two
+    classes of caller because dispatch has two: a person pressing a button
+    and the engine running a step. This route has one. What it returns for
+    four of the five reference kinds is the decrypted secret itself — the
+    bearer header value, the webhook URL with its embedded token, the
+    PagerDuty routing key, the whole SMTP configuration — so admitting a
+    session here turns the API into a read-back channel for the plaintext
+    the vault exists to keep (GHSA-c5qq-vhf5-wjqc). ``actions:execute`` is
+    held by ``soc_analyst``, so that was every analyst on the platform.
+
+    Refused by *class of caller*, not by demanding a higher permission. A
+    tenant admin reading SMTP passwords back out of an API that was never
+    meant to emit them is the same disclosure with a longer path, and
+    nothing in the console reads this route: the only caller in the tree is
+    ``services/agents/app/playbook/references.py``, over the service token.
+
+    403 rather than 404 because there is nothing here to enumerate — the
+    refusal lands before any name is looked at, so the answer is identical
+    whatever was asked for, and an operator who gets it should be told why.
+    """
+    if service_token_valid(service_token):
+        if body_tenant_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="a service caller must name the tenant it is acting for",
+            )
+        return body_tenant_id
+
+    if user is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "this route resolves decrypted integration secrets for the playbook engine and "
+                "is reachable only by an internal service peer; a session is never served here"
+            ),
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="authentication required",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
 @router.post("/references", summary="Resolve the named integrations a playbook http step addresses")
 async def resolve_playbook_references(
     body: ReferenceLookupRequest,
@@ -144,9 +195,17 @@ async def resolve_playbook_references(
     service, which is an authenticated internal peer holding the service
     token, and are used for exactly one request. The engine records header
     *names* in the run result, never values — the run record is readable by
-    anyone with access to the case.
+    anyone with access to the case. A session is never served here, whatever
+    permissions it holds.
     """
-    tenant_id, _requested_by = _resolve_caller(body.tenant_id, user, x_aisoc_service_token)
+    # That last sentence is enforced by `_resolve_reference_caller` rather
+    # than merely asserted here. It used to read `_resolve_caller`, which
+    # also admits a session holding `actions:execute` — so the paragraph
+    # above was false for every `soc_analyst` on the platform
+    # (GHSA-c5qq-vhf5-wjqc). The reasoning lives on that function; this
+    # docstring is published as the operation's description in
+    # `docs/openapi.yaml`, so it stays about what the route does.
+    tenant_id = _resolve_reference_caller(body.tenant_id, user, x_aisoc_service_token)
     try:
         references = await playbook_references.resolve(db, tenant_id=tenant_id, names=list(body.names))
     except playbook_references.ReferenceError as exc:

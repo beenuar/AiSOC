@@ -144,10 +144,99 @@ VENDOR_CREDENTIAL_MAP: dict[str, dict[str, str]] = {
 }
 
 
+# Connector fields that decide **where** a request goes or **what secret** it
+# presents. A caller may not supply the executor key translated from one of
+# these: the tenant's stored configuration is the only source for them.
+#
+# The split is the whole control, so it is written out rather than guessed at
+# by matching on substrings like "url" or "token" — `test_every_mapped_field_
+# is_classified` fails the build when a field is added to VENDOR_CREDENTIAL_MAP
+# without appearing in exactly one of these two sets. That gate is the half
+# that matters: `_SPLUNK_KEYS` once listed `splunk_host`/`token`/`index` while
+# the client factory read `splunk_url` plus basic-auth credentials, so a "dry
+# run" called the customer's production Splunk. A hand-maintained list drifts;
+# a hand-maintained list with an exhaustiveness gate cannot.
+#
+# `ssl_verify` is here because downgrading TLS verification is a redirection
+# primitive in slow motion, and the scope locators (`zone_id`, `account_id`,
+# `subscription_id`, `resource_group`, `workspace_name`, `region`) are here
+# because they choose *whose* estate the tenant's credential acts on.
+CONNECTION_OR_CREDENTIAL_FIELDS: frozenset[str] = frozenset(
+    {
+        # endpoints
+        "base_url",
+        "instance_url",
+        "kibana_url",
+        "domain",
+        "host",
+        # secrets
+        "api_key",
+        "api_token",
+        "token",
+        "client_id",
+        "client_secret",
+        "username",
+        "password",
+        "email",
+        "access_key",
+        "secret_key",
+        "role_arn",
+        "routing_key",
+        "service_account_json",
+        "admin_email",
+        # transport trust
+        "ssl_verify",
+        # scope locators: which tenant/subscription/zone the credential acts on
+        "tenant_id",
+        "subscription_id",
+        "resource_group",
+        "workspace_name",
+        "region",
+        "zone_id",
+        "account_id",
+    }
+)
+
+# Connector fields that choose *what* an action does rather than where it goes
+# or whose secret it spends. These are the reason ``extra`` exists at all, and
+# a playbook step is entitled to pick them per run: which Jira project to file
+# in, which PAN-OS tag to apply, which QRadar closing reason to record.
+OPERATIONAL_FIELDS: frozenset[str] = frozenset(
+    {
+        "tag",
+        "address_group",
+        "project_key",
+        "closing_reason_id",
+    }
+)
+
+
+class ProtectedParameterOverride(ValueError):
+    """A caller tried to supply a stored connection or credential field.
+
+    Raised rather than silently dropped. Dropping would send the request to
+    the vendor's default endpoint and report success — the "escaped value
+    reaches the endpoint, matches nothing, reports success" failure this
+    repository has shipped before, and the quieter of the two.
+    """
+
+
 def canonical_vendor(vendor_or_connector_id: str) -> str:
     """Resolve a connector_id or vendor_id to the live-actions vendor_id."""
     v = (vendor_or_connector_id or "").strip().lower()
     return CONNECTOR_TO_VENDOR.get(v, v)
+
+
+def protected_param_keys(vendor_or_connector_id: str) -> frozenset[str]:
+    """Executor param keys only the tenant's stored configuration may set.
+
+    Derived from :data:`VENDOR_CREDENTIAL_MAP` rather than listed separately,
+    so a vendor added to the map is covered without anyone remembering to
+    extend a second list — which is exactly how the two halves of a pair like
+    this drift apart.
+    """
+    mapping = VENDOR_CREDENTIAL_MAP.get(canonical_vendor(vendor_or_connector_id), {})
+    return frozenset(key for field, key in mapping.items() if field in CONNECTION_OR_CREDENTIAL_FIELDS)
 
 
 def resolve_params(
@@ -168,8 +257,9 @@ def resolve_params(
     extra:
         Per-action operational params already in executor-key form (e.g.
         ``aws_security_group_id``, ``panos_tag``, ``jira_project_key``,
-        ``target``). Merged on top of the translated credentials; a key here
-        overrides a translated one.
+        ``target``). Merged on top of the translated credentials — but it may
+        **not** carry a connection or credential key: see
+        :func:`protected_param_keys`.
 
     Returns
     -------
@@ -178,11 +268,33 @@ def resolve_params(
         (an unknown credential field is never blindly forwarded), except that
         already-prefixed passthrough keys in ``auth_config`` (those matching an
         executor target key) are preserved so a caller can supply raw params.
+
+    Raises
+    ------
+    ProtectedParameterOverride
+        If ``extra`` names a key that decides the endpoint or the credential.
+        ``extra`` reaches here from ``POST /playbook-steps/dispatch``, whose
+        ``params`` dict any session holding ``actions:execute`` can fill, so
+        letting it win over a translated field made the platform decrypt the
+        tenant's secret and present it to a host the caller chose
+        (GHSA-78jg-x2ch-638f). The stored value is authoritative, and the
+        attempt is refused rather than dropped.
     """
     vendor = canonical_vendor(vendor_id)
     mapping = VENDOR_CREDENTIAL_MAP.get(vendor, {})
     out: dict[str, Any] = {}
     target_keys = set(mapping.values())
+
+    protected = protected_param_keys(vendor)
+    refused = sorted(key for key in (extra or {}) if key in protected)
+    if refused:
+        # The keys, never the values: `extra` is attacker-influenced and this
+        # message is rendered into a dispatch report the console reads back.
+        raise ProtectedParameterOverride(
+            f"{', '.join(refused)} name{'s' if len(refused) == 1 else ''} stored "
+            f"{vendor} connection or credential settings and cannot be supplied per action; "
+            "the tenant's saved integration decides where an action goes and which credential it uses"
+        )
 
     for field, value in (auth_config or {}).items():
         if value is None:

@@ -300,12 +300,19 @@ class TestTheExecutedPathReachesASocket:
         """
         from app.live_actions.dispatcher import dispatch
 
+        # Credentials in `auth_config`, operational params in `params` — the
+        # shape `playbook_step_dispatch` actually sends. They used to be
+        # duplicated into both, which no production caller does and which a
+        # caller may no longer do: `params` naming a stored connection or
+        # credential key is refused outright (GHSA-78jg-x2ch-638f), so the
+        # duplicate turned this positive control into a refusal that still
+        # read as green.
         result = await dispatch(
             _request(
                 capability="search_siem",
                 vendor_id="splunk",
                 target="index=main",
-                params={**_splunk(vendor), "query": "index=main"},
+                params={"query": "index=main"},
                 auth_config=_splunk(vendor),
             )
         )
