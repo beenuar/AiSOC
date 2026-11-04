@@ -21,6 +21,8 @@ from typing import Any, Protocol
 import httpx
 import structlog
 
+from app.services.approval_audit import StructlogAuditSink
+
 log = structlog.get_logger(__name__)
 
 
@@ -116,25 +118,22 @@ def build_actions_client() -> _ActionsClient:
     return _FallbackActionsClient()
 
 
-class _NullAuditSink:
-    async def record(self, event: Any) -> None:
-        return None
-
-
 def build_audit_sink() -> _AuditSink:
-    """Construct the shared audit sink if available; null sink otherwise."""
-    candidate = Path(__file__).resolve().parents[3] / "slack-bot" / "app" / "services" / "approval_audit.py"
-    if not candidate.exists():
-        return _NullAuditSink()
-    spec = importlib.util.spec_from_file_location("_aisoc_audit", candidate)
-    if spec is None or spec.loader is None:
-        return _NullAuditSink()
-    module = importlib.util.module_from_spec(spec)
-    try:
-        spec.loader.exec_module(module)
-    except Exception as exc:  # noqa: BLE001
-        log.warning("teams_bot.audit_sink_import_failed", error=str(exc))
-        return _NullAuditSink()
-    if hasattr(module, "StructlogAuditSink"):
-        return module.StructlogAuditSink()  # type: ignore[no-any-return]
-    return _NullAuditSink()
+    """The audit sink every Teams approval decision is recorded through.
+
+    GHSA-vf98-8367-45mp, F62. This used to locate the sink by walking
+    ``Path(__file__).resolve().parents[3] / "slack-bot" / ...`` and fall back
+    to a ``_NullAuditSink`` when the file was not there. In a source checkout
+    that path resolves; **inside the built image it is ``/slack-bot/app/...``,
+    which does not exist**, because the Dockerfile copies only this service's
+    ``app/``. So the shipped container recorded no approval decisions at all,
+    silently -- and every developer running from source saw them recorded,
+    which is the pairing that keeps a defect alive.
+
+    The sink is now vendored into this service and imported normally. There is
+    no fallback, because the only thing a fallback could express here is
+    "audit nothing", and an approval surface that cannot write its audit trail
+    should fail loudly at startup rather than serve decisions it will not
+    record.
+    """
+    return StructlogAuditSink()

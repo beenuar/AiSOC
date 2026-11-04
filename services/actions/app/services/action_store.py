@@ -75,6 +75,14 @@ _MEMORY: dict[str, dict[str, Any]] = {}
 #: held across no I/O.
 _MEMORY_CLAIM_LOCK = asyncio.Lock()
 
+#: ChatOps prompts replied to, for the no-database configuration only.
+#:
+#: This is the weak form and is kept deliberately narrow. When a DSN is set,
+#: `claim_chatops_reply` writes to the row and this is never consulted -- the
+#: defect in GHSA-vf98-8367-45mp F04 was that the *only* form was a set like
+#: this one, in `api/router.py`, used on every deployment.
+_MEMORY_CHATOPS_REPLIED: set[tuple[str, str]] = set()
+
 
 class ActionStoreUnavailable(RuntimeError):
     """A durable store is configured and could not be read or written.
@@ -484,6 +492,87 @@ async def claim_for_execution(
         await conn.close()
 
 
+async def claim_chatops_reply(action_id: str, *, tenant_id: str, replied_at: str | None = None) -> bool:
+    """Record the one reply a ChatOps verification prompt gets. True if this is it.
+
+    GHSA-vf98-8367-45mp, F04. Replay protection for these prompts was a
+    module-level ``set[str]`` in ``api/router.py``. A set in process memory is
+    not replay protection: it is empty after every restart and was never
+    populated on the other replica, so the same signed payload -- within its
+    own expiry window, so the token check passes -- is accepted again.
+
+    Durable here, on the row, for the same reason ``claim_for_execution``
+    is: the write *is* the record that a reply happened, and one conditional
+    ``UPDATE`` re-evaluated by Postgres is what makes two simultaneous clicks
+    elect one winner.
+
+    Scoped by ``tenant_id`` as well as ``id``, like ``claim_for_execution``
+    above. The id is a UUID, so reaching another tenant's row means naming it --
+    but how a row is addressed is not an authorization control, and the tenant
+    here is not caller-settable: it comes from ``tid`` in the signed ChatOps
+    token, so a forged one fails the signature check before this is reached.
+
+    ``False`` means somebody already replied. **A store that is unreachable
+    also returns False**, which is the uncomfortable direction and the correct
+    one: an unprovable reply is worse than a lost one, and the caller shows
+    "already recorded" rather than accepting a reply it cannot write down.
+    That asymmetry is deliberate and is why the outcome is a bool -- the
+    caller has nothing useful to do differently.
+    """
+    stamp = replied_at or datetime.now(UTC).isoformat()
+    dsn = _dsn()
+
+    if dsn is None:
+        # No database configured. The in-memory set is all there is, and it
+        # carries exactly the weakness above -- recorded rather than hidden,
+        # because a single-replica deployment with no store is a real
+        # configuration and refusing every reply there would be worse.
+        async with _MEMORY_CLAIM_LOCK:
+            # Keyed on (tenant, action) for the same reason the SQL predicate
+            # names both: a set of bare action ids is claimable by whoever
+            # names the id, and one tenant's claim would consume another's.
+            key = (tenant_id, action_id)
+            record = _MEMORY.get(action_id)
+            if record is not None and str(record.get("tenant_id") or "") == tenant_id and record.get("chatops_replied_at"):
+                return False
+            if key in _MEMORY_CHATOPS_REPLIED:
+                return False
+            if record is not None and str(record.get("tenant_id") or "") == tenant_id:
+                record["chatops_replied_at"] = stamp
+            _MEMORY_CHATOPS_REPLIED.add(key)
+            return True
+
+    try:
+        conn = await _connect(dsn)
+    except Exception as exc:  # noqa: BLE001
+        _report_degraded("chatops_claim_connect_failed", action_id, exc)
+        return False
+
+    try:
+        row = await conn.fetchrow(
+            """
+            UPDATE aisoc_action_records
+               SET record = jsonb_set(record, '{chatops_replied_at}', to_jsonb($2::text), true),
+                   updated_at = now()
+             WHERE id = $1
+               AND tenant_id = $3
+               AND record->>'chatops_replied_at' IS NULL
+            RETURNING id
+            """,
+            action_id,
+            stamp,
+            tenant_id,
+        )
+    except Exception as exc:  # noqa: BLE001
+        _report_degraded("chatops_claim_failed", action_id, exc)
+        return False
+    finally:
+        await conn.close()
+
+    return row is not None
+
+
 def clear() -> None:
     """Drop the in-memory copy. Used by tests."""
     _MEMORY.clear()
+    _MEMORY_CHATOPS_REPLIED.clear()

@@ -8,6 +8,7 @@ requests to ``services/api`` and ``services/actions``.
 
 from __future__ import annotations
 
+import os
 from functools import lru_cache
 
 from pydantic import Field
@@ -124,6 +125,50 @@ class SlackBotSettings(BaseSettings):
         without a signing secret, so we let them opt out explicitly.
         """
         return bool(self.SLACK_SIGNING_SECRET)
+
+    @property
+    def is_production(self) -> bool:
+        """Anything that is not explicitly a development or test environment.
+
+        Defaulting the *unset* case to production is deliberate. The
+        alternative reads the same as "unconfigured means relaxed", which is
+        how `ENVIRONMENT` defaulting to `development` once left an
+        uncredentialed caller resolving to a demo admin on a stock install.
+        """
+        return os.environ.get("ENVIRONMENT", "production").strip().lower() not in {
+            "development",
+            "dev",
+            "test",
+            "testing",
+            "local",
+        }
+
+    def require_signature_verification(self) -> None:
+        """Refuse to serve unsigned Slack requests in production.
+
+        GHSA-vf98-8367-45mp, F02. `SLACK_SIGNING_SECRET` defaults to `""`, and
+        an empty value turned Bolt's request verification *off* -- so the
+        shipped service accepted a `block_actions` approval payload with no
+        `X-Slack-Signature` at all and forwarded the decision to the actions
+        service. The only trace was a `logger.warning` at startup saying this
+        was "acceptable for local dev only", which is a note, not a control:
+        nothing stopped the deployment it warns about.
+
+        Fails closed at construction rather than per request. A bot that
+        starts and silently accepts forged approvals is worse than one that
+        does not start, because the first looks healthy -- and this is the
+        same shape as `require_service_auth` in `services/actions`, which
+        refuses outright when its token is unset.
+        """
+        if self.signature_verification_enabled or not self.is_production:
+            return
+        raise RuntimeError(
+            "SLACK_SIGNING_SECRET is empty and ENVIRONMENT is not a development or test "
+            "environment. Without it Slack request signatures are not verified, so anyone "
+            "who can reach this service can approve or reject response actions under any "
+            "identity. Set SLACK_SIGNING_SECRET (Slack app settings -> Basic Information -> "
+            "Signing Secret), or set ENVIRONMENT=development if this really is a local run."
+        )
 
 
 @lru_cache(maxsize=1)

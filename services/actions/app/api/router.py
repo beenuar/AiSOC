@@ -75,10 +75,14 @@ _UNKNOWN_OUTCOME_FLOOR: frozenset[BlastRadius] = frozenset({BlastRadius.MEDIUM, 
 # analyst tapping Approve on a Slack card got "Action not found" for an
 # incident that was still live. Tests reset state with `action_store.clear()`.
 
-# Replay-protection set: action IDs that have already received a response.
-# Single-use enforcement is layered on top of HMAC + expiry. Anything more
-# durable belongs in Redis once we move off the in-memory action store.
-_chatops_replied: set[str] = set()
+# Replay protection lives on the action row, in `action_store.claim_chatops_reply`.
+#
+# It was this module-level set, and the comment beside it ("anything more
+# durable belongs in Redis once we move off the in-memory action store")
+# described a future that had already arrived: the store has been
+# Postgres-backed for several versions. A set in process memory is empty after
+# every restart and was never populated on the second replica, so a single-use
+# control enforced nothing across either boundary -- GHSA-vf98-8367-45mp F04.
 
 
 def _requester_id(request: ActionRequest) -> str | None:
@@ -759,7 +763,7 @@ async def chatops_callback(token: str = Query(..., min_length=8)):
 
     The token is the HMAC-signed payload minted by
     :class:`app.executors.chatops.ChatOpsVerifyExecutor`. We re-verify
-    the signature + expiry, dedupe against ``_chatops_replied``, write a
+    the signature + expiry, claim the one reply durably on the action row, write a
     ``chatops.verify.responded`` event onto the case timeline, and update
     the in-memory action record so ``GET /actions/{id}`` reflects the
     final status.
@@ -785,7 +789,13 @@ async def chatops_callback(token: str = Query(..., min_length=8)):
         )
 
     action_id_str = str(claims.action_id)
-    if action_id_str in _chatops_replied:
+    # Durable, on the row. GHSA-vf98-8367-45mp F04: this was a module-level
+    # `set[str]`, so the same signed payload -- inside its own expiry window,
+    # so the token check passes -- was accepted again after a restart and had
+    # never been seen by the other replica. An unreachable store answers False
+    # and lands here too, which is the right direction: an unprovable reply is
+    # worse than a lost one.
+    if not await action_store.claim_chatops_reply(action_id_str, tenant_id=str(claims.tenant_id)):
         return HTMLResponse(
             content=_chatops_response_html(
                 "Response already recorded",
@@ -823,8 +833,6 @@ async def chatops_callback(token: str = Query(..., min_length=8)):
             case_id=str(claims.case_id),
             error=timeline_warning,
         )
-
-    _chatops_replied.add(action_id_str)
 
     if record is not None:
         record["status"] = ActionStatus.COMPLETED
