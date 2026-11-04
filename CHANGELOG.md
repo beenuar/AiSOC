@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [22.0.0] - 2026-11-04
+
 ### BREAKING
 
 - **`GET /posture/summary` now returns `null` rather than `0` for every count
@@ -28,6 +30,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Migrating a client is reading `collected` first: when it is false the
   counts are absent and the correct render is "not scanned", not a zero.
+
+### Security
+
+Seven advisories, all in the approval and authorization path. The unifying
+shape is that the control existed and compared the wrong thing: a value the
+caller supplied rather than one the credential proved.
+
+**Three of these refuse calls that used to succeed.** If a deployment relies
+on any of them, it needs a change before upgrading:
+
+- An `aisoc_` API key can no longer enrol or remove an authentication factor.
+- A `tenant_admin` can no longer reach the deployment-wide tenant and
+  waitlist surfaces; those now need `admin:tenants` / `admin:waitlist`, which
+  only the wildcard roles hold.
+- A `viewer` can no longer create, update, delete or run a playbook. Listing
+  is unchanged.
+
+- **[GHSA-fm3f-p5jv-6hcg](https://github.com/beenuar/AiSOC/security/advisories/GHSA-fm3f-p5jv-6hcg)
+  (critical) — a tenantless approver could approve another tenant's action,
+  and an ungraded dispatch executed.** `approve_action` took `approver` and
+  `requester` from the request *body*, so separation of duties compared two
+  strings the caller chose; both now come from the verified principal. A
+  principal with no tenant skipped the tenant comparison entirely — and
+  `_tenant_of` returns `None` for that same principal, leaving the record
+  read unscoped too, so one identity could approve any tenant's containment.
+  An approver with no tenant is not "all tenants", it is an identity nobody
+  scoped, and it is refused with the configuration to fix named in the
+  message. A request with no tenant was also governed by the environment tier
+  rather than failing closed, so a tenant's kill switch did not apply to it.
+  Finally, a live capability with no contract bypassed the autonomy gate, and
+  a test pinned that as intended behaviour.
+
+- **[GHSA-vf98-8367-45mp](https://github.com/beenuar/AiSOC/security/advisories/GHSA-vf98-8367-45mp)
+  (critical) — ChatOps approval decisions were accepted unauthenticated,
+  replayable and unaudited.** With `SLACK_SIGNING_SECRET` empty the Slack
+  interactions route accepted a `block_actions` payload carrying no
+  signature and answered 200. The Teams bot took the approver from
+  `from.aadObjectId` in the card callback and validated no Bot Framework JWT.
+  Replay protection lived in process memory, so the same payload was accepted
+  again after a restart; the claim is now a durable conditional write scoped
+  by `(tenant_id, action_id)`, because an unscoped claim lets one tenant's
+  reply consume another's. And `build_audit_sink` resolved a path that exists
+  in a source checkout and not inside the built image, so the shipped
+  container recorded **no approval decisions at all**, silently, while every
+  developer running from source saw them recorded.
+
+- **[GHSA-jfvq-94hv-4wrj](https://github.com/beenuar/AiSOC/security/advisories/GHSA-jfvq-94hv-4wrj)
+  (high) — a scoped API key could enrol a passkey on its owner's account and
+  sign in with it.** An `aisoc_` key, however narrow its scopes — even `[]` —
+  was accepted at the passkey and TOTP enrolment routes. The key resolves to
+  a `CurrentUser` carrying its owner's id and role, so a key scoped to
+  `alerts:read` registered a passkey bound to the owner's account and signed
+  in with it, receiving a console session with the owner's full role. Driven
+  to completion before the fix: the sign-in carried no `Authorization` header
+  at all and answered 200 at `GET /connectors`, the exact route the key
+  itself is refused on. `require_interactive_session` refuses by **credential
+  type**, not by permission, because a permission would be mintable onto the
+  very credential it refuses.
+
+- **[GHSA-6cwm-cx8p-h7f5](https://github.com/beenuar/AiSOC/security/advisories/GHSA-6cwm-cx8p-h7f5)
+  (high) — a `settings:write` fallback exposed every tenant and all waitlist
+  PII to any `tenant_admin`.** The deployment-wide tenant-provisioning and
+  waitlist routes gated on `admin:tenants` / `admin:waitlist` **or**
+  `settings:write`, documented as a bridge until a seed migration landed. It
+  never landed, so neither permission existed, no role could resolve either,
+  and the fallback was the only reachable branch — while `tenant_admin` holds
+  `settings:write` and `GET /admin/tenants` selects every tenant with no
+  predicate. Migration 159 seeds both permissions, granted to no
+  tenant-scoped role.
+
+- **[GHSA-8cpf-mchw-jpf2](https://github.com/beenuar/AiSOC/security/advisories/GHSA-8cpf-mchw-jpf2)
+  (high) — any tenant member could create and run response playbooks, and a
+  revoked session kept working.** The playbooks router authenticated every
+  caller and then required no permission to author a playbook or to run one,
+  while the API gates the same step dispatch on `actions:execute`. Separately,
+  `verify_console_token` consulted no user record, so a token minted before an
+  operator deactivated that user stayed valid on these routes until it
+  expired — while the API refused the same token. An unreadable user record
+  is a 503, never a pass.
+
+- **[GHSA-q388-w896-9jr2](https://github.com/beenuar/AiSOC/security/advisories/GHSA-q388-w896-9jr2)
+  (high) — approval decisions lacked separation of duties, a named-approver
+  check and an expiry check.** A requester could approve their own request,
+  any eligible user could decide an approval addressed to a named approver,
+  and a decision was accepted after `expires_at`. One principle governs the
+  fix: approving is the governed act and denying executes nothing, so every
+  rule narrows who may *approve* and leaves denial open.
+
+- **[GHSA-xhmc-69rh-h3rr](https://github.com/beenuar/AiSOC/security/advisories/GHSA-xhmc-69rh-h3rr)
+  (medium) — one person could request and approve an MCP tool call, and one
+  approval could be spent twice.** Separation of duties compared the API-key
+  prefix with the session email rather than the person, so the key's owner
+  could approve their own key's request. The decision was a read-then-write
+  rather than a conditional update, so approve and deny could both succeed on
+  one request, and consuming an approval was keyed by a `(tenant, tool)`
+  fingerprint rather than by approval id.
+
 ### Fixed
 
 - **The syslog LEEF parser truncated every attribute value at its first `|`
