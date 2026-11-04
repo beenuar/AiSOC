@@ -10,7 +10,6 @@ from __future__ import annotations
 import httpx
 import pytest
 import respx
-
 from app.connectors.crowdstrike import CrowdStrikeConnector
 
 _BASE = "https://api.eu-1.crowdstrike.com"
@@ -46,6 +45,43 @@ class TestAlertShape:
         assert event["hostname"] == "WKSTN-01"
         assert event["mitre_techniques"] == ["T1003.001"]
         assert event["description"] == "LSASS access from an unsigned binary."
+
+
+class TestSeverityLadder:
+    """`critical` must reach fusion as `critical`, never folded into `high`.
+
+    The numeric bands below are CrowdStrike's published ones (info < 20,
+    low < 40, medium < 60, high < 80, critical <= 100).
+    """
+
+    @pytest.mark.parametrize(
+        ("name", "expected"),
+        [("Critical", "critical"), ("High", "high"), ("Medium", "medium"), ("Low", "low"), ("Informational", "info"), ("Info", "info")],
+    )
+    def test_the_band_name_decides(self, name, expected):
+        connector = CrowdStrikeConnector(client_id="id", client_secret="secret")
+        assert connector.normalize({"severity_name": name})["severity"] == expected
+
+    @pytest.mark.parametrize(
+        ("score", "expected"),
+        [
+            (100, "critical"),
+            (80, "critical"),
+            (79, "high"),
+            (60, "high"),
+            (59, "medium"),
+            (40, "medium"),
+            (39, "low"),
+            (20, "low"),
+            (19, "info"),
+            (0, "info"),
+        ],
+    )
+    def test_the_numeric_score_decides_when_no_band_name_is_present(self, score, expected):
+        # An alert with no `severity_name` must not land on a default. `0` in
+        # particular has to stay distinguishable from absent.
+        connector = CrowdStrikeConnector(client_id="id", client_secret="secret")
+        assert connector.normalize({"severity": score})["severity"] == expected
 
 
 class TestFetch:

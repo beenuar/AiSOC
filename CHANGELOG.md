@@ -7,7 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [22.0.0] - 2026-11-04
+### Fixed
+
+- **CrowdStrike polling 404'd on every deployment, and the investigation read
+  answered "no detections" rather than failing.** ([#1695](https://github.com/beenuar/AiSOC/issues/1695))
+  CrowdStrike decommissioned the `/detects/*` endpoints on 2025-09-30. Both
+  callers in this tree still used them, and they failed differently:
+
+  - `services/connectors` raised the 404 on each poll, so a saved connector
+    never synced. Visible, and the way the bug was reported.
+  - `services/actions`' `CrowdStrikeRTRClient.get_detections` logged a warning
+    and returned `[]`, so `CrowdStrikeGetDetections` reported `SUCCEEDED` with
+    `count: 0`. An investigation read that as the EDR having nothing on the
+    host — the strongest exonerating evidence there is — from a call that had
+    404'd. That one was silent, and is why this fix covers both.
+
+  Both now use `POST /alerts/combined/alerts/v1`, and a failed alerts read
+  raises instead of returning an empty list, matching the contract the
+  SentinelOne and Defender reads already held. A 403 names the **Alerts: Read**
+  scope rather than presenting as an empty result, because an API client
+  carrying only the RTR scopes authenticates perfectly well and is then
+  refused.
+
+  **Action required:** grant **Alerts: Read** to your CrowdStrike API client.
+  No reconfiguration can work around a removed endpoint, so an older build
+  cannot be made to poll CrowdStrike at all.
 
 ### BREAKING
 

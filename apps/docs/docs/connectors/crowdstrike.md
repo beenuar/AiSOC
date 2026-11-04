@@ -9,7 +9,7 @@ description: Connect CrowdStrike Falcon to AiSOC.
     schema(). Edit the schema, not this block. Prose between the HUMAN
     NOTES markers below is preserved across regeneration. */}
 
-CrowdStrike Falcon detections via the Falcon REST API.
+CrowdStrike Falcon alerts via the Falcon Alerts API.
 
 - **Connector id:** `crowdstrike`
 - **Category:** edr
@@ -38,6 +38,46 @@ The first poll is the honest signal that the credential works. A connector that 
 
 <!-- BEGIN HUMAN NOTES -->
 
-_Vendor-specific setup notes go here: which console page issues the credential, which scopes to grant, rate limits, and anything the schema cannot express. This section is preserved when the page is regenerated._
+## Required API scopes
+
+Issue the credential in the Falcon console under **Support and resources →
+API clients and keys → Create API client**, and grant:
+
+| Scope | Why |
+|-------|-----|
+| **Alerts: Read** | Polling. The connector reads `POST /alerts/combined/alerts/v1`. |
+| **Hosts: Read** | Resolves a hostname to a device id for response actions. |
+| **Real time response (admin)** | Only if you intend to use the host-containment, kill-process, quarantine-file or run-script actions. |
+
+Grant **Alerts: Read** even if you only want alert polling. A client without
+it still receives an OAuth token, so the credential looks valid — the
+connector surfaces the refusal with the scope named rather than reporting an
+empty poll, because "no alerts" and "not allowed to ask" are different
+answers and only one of them means your estate is quiet.
+
+:::caution The Detects API is gone
+CrowdStrike decommissioned the `/detects/*` endpoints on **30 September
+2025** (`/detects/queries/detects/v1`, `/detects/entities/detects/v2`,
+`/detects/entities/summaries/GET/v1`, `/detects/aggregates/detects/GET/v1`)
+and they now answer `404`. AiSOC polls the Alerts API instead. If you are
+running a build from before this change, polls fail with a 404 on
+`/detects/queries/detects/v1` — upgrade rather than reconfigure; no scope or
+base URL setting can work around a removed endpoint.
+:::
+
+## Choosing the base URL
+
+Leave `base_url` at `https://api.crowdstrike.com` unless your tenant is in a
+non-US cloud. The regional hosts are `https://api.us-2.crowdstrike.com`,
+`https://api.eu-1.crowdstrike.com` and
+`https://api.laggar.gcw.crowdstrike.com` (GovCloud). Using the wrong one
+fails at the OAuth step, so **Test connection** catches it.
+
+## What arrives
+
+Falcon alerts are not endpoint-only — identity protection and other Falcon
+modules publish into the same API, each carrying a `product` field. Severity
+is mapped from the band name (`Critical` → `critical`) and falls back to
+CrowdStrike's numeric 0–100 score when no band name is present.
 
 <!-- END HUMAN NOTES -->

@@ -20,6 +20,82 @@ logger = structlog.get_logger()
 _DEFAULT_BASE = "https://api.crowdstrike.com"
 _TOKEN_PATH = "/oauth2/token"
 
+#: The Alerts API. `/detects/queries/detects/v1` and
+#: `/detects/entities/summaries/GET/v1` were decommissioned on 2025-09-30 and
+#: answer 404 (issue #1695); `PostCombinedAlertsV1` is the documented
+#: replacement and carries the alert in one round trip.
+_ALERTS_PATH = "/alerts/combined/alerts/v1"
+
+
+class CrowdStrikeAlertsError(RuntimeError):
+    """An alerts read could not be completed.
+
+    Raised rather than returned as an empty list. "No alerts on this host"
+    and "I could not ask" are different answers, and only one of them
+    exonerates the host.
+    """
+
+
+def quote_fql_literal(value: str, *, field: str) -> str:
+    """Render ``value`` as one single-quoted Falcon Query Language literal.
+
+    ``device_id`` reaches here from the request parameters, so it is caller
+    controlled, and FQL filters are assembled as text. Refused rather than
+    escaped: an escaped value that reaches Falcon and matches nothing returns
+    a clean result from a query that never asked the intended question, which
+    on an investigation read is worse than an error. The refused set is only
+    what can leave a single-quoted literal, so no real device id is rejected.
+    """
+    if not isinstance(value, str) or not value:
+        raise CrowdStrikeAlertsError(f"{field} must be a non-empty string")
+    bad = sorted({c for c in "'\\\n\r\x00" if c in value})
+    if bad:
+        printable = ", ".join(repr(c) for c in bad)
+        raise CrowdStrikeAlertsError(f"{field} contains characters that cannot appear in an FQL literal: {printable}")
+    return f"'{value}'"
+
+
+def _alert_row(alert: dict[str, Any]) -> dict[str, Any]:
+    """Project one Alerts-API alert onto the fields an investigation reads.
+
+    An explicit projection rather than the raw record, for the same reason
+    ``get_device`` uses one: the payload carries well over a hundred fields
+    and an unbounded dict is an unbounded token cost.
+
+    ``tactic``, ``technique``, ``filename`` and ``sha256`` sit on the alert
+    itself here. The decommissioned Detects payload carried them under
+    ``behaviors[0]``, so reading only from there returns None against every
+    real Alerts response — the behaviours are still consulted as a fallback
+    because an alert may carry them in both places.
+    """
+    behaviors = [b for b in (alert.get("behaviors") or []) if isinstance(b, dict)]
+
+    def pick(key: str) -> Any:
+        value = alert.get(key)
+        if value:
+            return value
+        for behavior in behaviors:
+            candidate = behavior.get(key)
+            if candidate:
+                return candidate
+        return None
+
+    return {
+        "detection_id": alert.get("composite_id") or alert.get("id") or alert.get("detection_id"),
+        "severity": alert.get("severity_name") or alert.get("max_severity_displayname") or alert.get("severity"),
+        "tactic": pick("tactic"),
+        "technique": pick("technique"),
+        "filename": pick("filename"),
+        "sha256": pick("sha256"),
+        "occurred_at": alert.get("timestamp") or alert.get("created_timestamp"),
+        "status": alert.get("status"),
+        # Alerts are not EPP-only. A reader deciding what a finding means
+        # needs to know whether it came from the endpoint sensor or from
+        # identity protection, and the old Detects payload could not say.
+        "product": alert.get("product"),
+    }
+
+
 #: Characters that can leave a single-quoted RTR argument. Deliberately small.
 #:
 #: Every interpolation below sits *inside* single quotes, where `&`, `|`, `;`,
@@ -181,58 +257,49 @@ class CrowdStrikeRTRClient:
             }
 
     async def get_detections(self, device_id: str, *, limit: int = 20) -> list[dict[str, Any]]:
-        """Recent detections for one device, newest first.
+        """Recent alerts for one device, newest first.
 
-        Returns an empty list both when the device has no detections and
-        when the read fails; the caller cannot distinguish those, which is
-        why failures are logged rather than swallowed silently. A read error
-        surfacing as "no detections" would be an investigation concluding a
-        host is clean because the API was down.
+        Raises ``CrowdStrikeAlertsError`` when the read fails. It used to
+        return ``[]`` for both "no detections" and "could not read", and the
+        caller cannot tell those apart: ``CrowdStrikeGetDetections`` reports
+        SUCCEEDED with ``count: 0``, and an investigation reads that as the
+        EDR having nothing on the host — the strongest exonerating evidence
+        there is, from a call that never completed. Since the Detects API was
+        decommissioned that was not an outage-only hazard but the answer on
+        every deployment.
         """
         async with httpx.AsyncClient(timeout=30.0) as client:
             await self._ensure_token(client)
-            found = await self._get_with_retry(
-                client,
-                "/detects/queries/detects/v1",
-                {
-                    "filter": f"device.device_id:'{device_id}'",
-                    "limit": max(1, min(limit, 100)),
-                    "sort": "last_behavior|desc",
-                },
-            )
-            if found is None:
-                logger.warning("crowdstrike.get_detections.query_failed", device_id=device_id)
-                return []
-            ids = found.json().get("resources", [])
-            if not ids:
-                return []
-
-            resp = await client.post(
-                f"{self._base_url}/detects/entities/summaries/GET/v1",
-                headers=self._auth_headers(),
-                json={"ids": ids},
-            )
+            body = {
+                "filter": f"device.device_id:{quote_fql_literal(device_id, field='device_id')}",
+                "limit": max(1, min(limit, 1000)),
+                # `last_behavior` is a Detects field. An Alert is sortable on
+                # created_timestamp, which is also what "newest first" means
+                # for an alert rather than for its underlying behaviour.
+                "sort": "created_timestamp|desc",
+            }
+            url = f"{self._base_url}{_ALERTS_PATH}"
+            resp = await client.post(url, headers=self._auth_headers(), json=body)
+            if resp.status_code == 401:
+                await self._authenticate(client)
+                resp = await client.post(url, headers=self._auth_headers(), json=body)
+            if resp.status_code == 403:
+                raise CrowdStrikeAlertsError(
+                    "CrowdStrike refused the alerts read (403). This API client needs the "
+                    "Alerts: Read scope, which is separate from the RTR scopes the response "
+                    "actions use. Falcon console -> Support and resources -> API clients and "
+                    "keys -> edit this client -> Alerts -> Read."
+                )
             if resp.status_code != 200:
                 logger.warning(
-                    "crowdstrike.get_detections.summary_failed",
+                    "crowdstrike.get_detections.failed",
                     device_id=device_id,
                     status=resp.status_code,
                 )
-                return []
+                raise CrowdStrikeAlertsError(f"CrowdStrike alerts read returned HTTP {resp.status_code}")
 
-            return [
-                {
-                    "detection_id": d.get("detection_id"),
-                    "severity": d.get("max_severity_displayname"),
-                    "tactic": d.get("behaviors", [{}])[0].get("tactic"),
-                    "technique": d.get("behaviors", [{}])[0].get("technique"),
-                    "filename": d.get("behaviors", [{}])[0].get("filename"),
-                    "sha256": d.get("behaviors", [{}])[0].get("sha256"),
-                    "last_behavior": d.get("last_behavior"),
-                    "status": d.get("status"),
-                }
-                for d in resp.json().get("resources", [])
-            ]
+            resources = resp.json().get("resources") or []
+            return [_alert_row(alert) for alert in resources if isinstance(alert, dict)]
 
     async def _get_with_retry(self, client: httpx.AsyncClient, path: str, params: dict[str, Any]) -> httpx.Response | None:
         """GET with one re-auth retry. Returns None on a non-200.

@@ -97,8 +97,10 @@ class CrowdStrikeConnector(BaseConnector):
         if not self._access_token:
             await self._authenticate()
 
-        # Falcon Query Language rejects the `+00:00` offset `isoformat()`
-        # emits. The documented range form is a UTC `Z` timestamp.
+        # A `Z`-suffixed UTC timestamp, which is the form CrowdStrike's own
+        # FQL range examples use. `isoformat()` emits a `+00:00` offset
+        # instead; whether Falcon accepts that has not been established
+        # against a live tenant, and there is no reason to depend on it.
         since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
         body: dict[str, Any] = {
             "filter": f"created_timestamp:>'{since}'",
@@ -151,6 +153,11 @@ class CrowdStrikeConnector(BaseConnector):
         # numeric score along the bands documented by CrowdStrike.
         severity_bands_displayname = {
             "informational": "info",
+            # Both spellings: the band is published as "Informational", and
+            # `severity_name` has been observed carrying the short form.
+            # Missing one sends an otherwise-named band down the numeric
+            # path, which is a different answer, not a tidier one.
+            "info": "info",
             "low": "low",
             "medium": "medium",
             "high": "high",
@@ -204,7 +211,12 @@ class CrowdStrikeConnector(BaseConnector):
                 actor = f"{candidate}@{domain}" if "@" not in candidate and "@" in domain else candidate
                 break
 
-        device = raw.get("device") if isinstance(raw.get("device"), dict) else {}
+        # Bound once rather than called twice inside the conditional: two
+        # separate `raw.get("device")` calls give the checker nothing to
+        # narrow, so `device` stays `Any | dict | None` and every `.get`
+        # below it is an unchecked attribute on a possible None.
+        raw_device = raw.get("device")
+        device: dict[str, Any] = raw_device if isinstance(raw_device, dict) else {}
         hostname = device.get("hostname") or raw.get("hostname")
         techniques: list[str] = []
         for candidate in (raw.get("technique_id"),):
