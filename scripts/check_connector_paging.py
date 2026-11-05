@@ -58,8 +58,19 @@ import ast
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
-CONNECTOR_DIR = ROOT / "services/connectors/app/connectors"
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from gate_toolkit import BARE, SKELETON, refuses_an_empty_tree, repo_root  # noqa: E402
+
+CONNECTOR_REL = "services/connectors/app/connectors"
+
+#: Below this, the gate is not looking at this repository. The connector set
+#: has been in the high eighties for months and only grows, so a scan that
+#: finds a handful has been pointed at a scratch tree, a partial checkout or
+#: a moved directory. Reporting OK there would be the exact defect this gate
+#: is about one level up: "found nothing" and "scanned nothing" must not
+#: print the same word.
+MIN_CONNECTORS = 50
 
 #: Request parameters that cap how much of a window one response may carry.
 _CAP_KEYS = {
@@ -242,18 +253,28 @@ def _follows_a_continuation(nodes: list[ast.AST], source: str) -> bool:
     return "get_paginator" in source and "MaxItems" not in source
 
 
-def audit() -> tuple[list[tuple[str, str]], list[str], list[str]]:
-    """Returns (unclassified, paging, reviewed)."""
+class EmptyRead(RuntimeError):
+    """The gate could not find a corpus, so it has no verdict to give."""
+
+
+def audit(root: Path | None = None) -> tuple[list[tuple[str, str]], list[str], list[str]]:
+    """Returns (unclassified, paging, reviewed). Raises on an empty read."""
+    connector_dir = (root or repo_root()) / CONNECTOR_REL
+    if not connector_dir.is_dir():
+        raise EmptyRead(f"no connector directory at {CONNECTOR_REL}")
+
     unclassified: list[tuple[str, str]] = []
     paging: list[str] = []
     reviewed: list[str] = []
+    scanned = 0
 
-    for path in sorted(CONNECTOR_DIR.glob("*.py")):
+    for path in sorted(connector_dir.glob("*.py")):
         name = path.stem
         if name.startswith("__") or name == "_paging":
             continue
         source = path.read_text(encoding="utf-8")
         tree = ast.parse(source)
+        scanned += 1
         funcs = _module_functions(tree)
         if "fetch_alerts" not in funcs:
             continue
@@ -278,6 +299,9 @@ def audit() -> tuple[list[tuple[str, str]], list[str], list[str]]:
         )
         unclassified.append((name, detail))
 
+    if scanned < MIN_CONNECTORS:
+        raise EmptyRead(f"only {scanned} connector module(s) under {CONNECTOR_REL}; expected at least {MIN_CONNECTORS}")
+
     return unclassified, paging, reviewed
 
 
@@ -298,7 +322,13 @@ def main() -> int:
     if args.self_test:
         return _self_test()
 
-    unclassified, paging, reviewed = audit()
+    try:
+        unclassified, paging, reviewed = audit()
+    except EmptyRead as exc:
+        # Fail closed. An exit status of 0 here would credit a tree this gate
+        # never opened, which is indistinguishable from a clean one.
+        print(f"check_connector_paging: FAIL — nothing to check: {exc}")
+        return 1
     print(f"check_connector_paging: {len(paging)} follow a continuation, {len(reviewed)} reviewed, {len(unclassified)} unclassified")
     for name, why in unclassified:
         print(f"  UNCLASSIFIED  {name}: {why}")
@@ -401,9 +431,21 @@ def _self_test() -> int:
             failures.append(label)
 
     # The ratchet must be able to fail, not merely be able to pass.
-    unclassified, _, _ = audit()
-    forced = len(unclassified) > -1
-    print(f"  [{'ok' if forced else 'FAIL'}] the ceiling is comparable (unclassified={len(unclassified)})")
+    unclassified, paging, reviewed = audit()
+    corpus = len(unclassified) + len(paging) + len(reviewed)
+    print(f"  [{'ok' if corpus >= MIN_CONNECTORS else 'FAIL'}] it counts what it scanned ({corpus} connectors classified)")
+    if corpus < MIN_CONNECTORS:
+        failures.append("corpus too small")
+
+    # And it must refuse a tree with no connectors rather than calling it
+    # clean — the same defect this gate detects, one level up. Proven with
+    # the shared helper so it is the same question CI asks, against both of
+    # the empty shapes CI builds.
+    for shape in (BARE, SKELETON):
+        refused, detail = refuses_an_empty_tree("check_connector_paging.py", shape=shape)
+        print(f"  [{'ok' if refused else 'FAIL'}] a {shape} tree is refused, not reported clean: {detail.splitlines()[0]}")
+        if not refused:
+            failures.append(f"{shape} tree not refused")
 
     if failures:
         print(f"self-test FAILED: {failures}")
