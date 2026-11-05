@@ -103,11 +103,28 @@ above. The promotion outcomes stated here follow the fusion promoter's
 policy (category 2 always promoted; otherwise `severity_id >= 4`), which is
 pinned by its own cross-service test.
 
-**Not verified:** a live Agentmetry orchestrator POSTing to a live AiSOC
-deployment over the network. The template maps the documented, captured
-canonical shape; if a future Agentmetry schema release moves a field, the
-unmapped half degrades exactly as the malformed-event test describes
-(template defaults, severity Unknown) rather than being dropped.
+**Run once by hand, not gated:** the live leg, on 2026-11-02, by
+Agentmetry's maintainer
+([blitzcrieg1/agentmetry#367](https://github.com/blitzcrieg1/agentmetry/pull/367)).
+Agentmetry 0.10.4 installed from PyPI posted `canonical` events over HTTP
+to a local AiSOC v21 stack on the same host (`make up`, with `make smoke`
+passing 10 of 10 first), at an inbox minted with this template:
+
+- 11 of 11 events forwarded and accepted, none dead-lettered
+- both detections (`credential-exfil`, `remote-staging-then-execute`)
+  arrived as critical alerts with their ATT&CK techniques
+- the 9 routine events (tool calls, a denial, session start and end)
+  raised no alert
+- `claude` and `cursor` appeared in the AI estate with the operator attached
+
+No CI job repeats that run, so a later change on either side can break it
+without a gate failing.
+
+**Not verified:** a deployment where the sensor and AiSOC are on different
+hosts, and any AiSOC release after v21. The template maps the documented,
+captured canonical shape; if a future Agentmetry schema release moves a
+field, the unmapped half degrades exactly as the malformed-event test
+describes (template defaults, severity Unknown) rather than being dropped.
 
 **Agentmetry's own stated non-coverage**, so nobody expects otherwise: it
 does not see browser chat use, model providers, or anything an agent does
