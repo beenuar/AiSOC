@@ -24,6 +24,7 @@ from urllib.parse import quote
 import httpx
 import structlog
 
+from app.connectors._paging import read_linked_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
 
 logger = structlog.get_logger()
@@ -166,7 +167,21 @@ class AzureDefenderConnector(BaseConnector):
                     body=resp.text[:300],
                 )
                 return []
-            alerts = resp.json().get("value", [])
+            # Graph answers a `$top` request with the first page and an
+            # `@odata.nextLink` while more alerts remain. Reading only that
+            # first page kept the newest 200 of the window — the request is
+            # ordered `createdDateTime desc` — and dropped the rest. The next
+            # poll's window starts after this one, so the dropped alerts, the
+            # *earliest* of whatever burst overflowed the window, were never
+            # requested again.
+            alerts = await read_linked_pages(
+                client,
+                resp,
+                link_field="@odata.nextLink",
+                items_field="value",
+                headers=self._headers(),
+                feed="alerts_v2",
+            )
 
         return [self.normalize(a) for a in alerts]
 
