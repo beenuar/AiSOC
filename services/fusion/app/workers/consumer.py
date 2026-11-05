@@ -296,7 +296,52 @@ class FusionWorker:
         return self._durable_capture
 
     async def start(self) -> None:
+        """Run the worker under supervision until cancelled.
+
+        Every Kafka failure — a broker that is not up yet, a DNS blip
+        mid-bootstrap, a consume loop torn out by an unexpected error — used
+        to propagate out of ``start()`` and end the task. The service stayed
+        up serving traffic while nothing consumed ``raw_events`` (live-caught:
+        one cold-boot DNS failure logged a single ``fusion.worker_died`` and
+        left the alert pipeline deaf for days). Supervision retries with
+        capped exponential backoff until :meth:`stop` is called; the consume
+        path itself is unchanged.
+        """
+        await self.run_forever()
+
+    async def run_forever(
+        self,
+        initial_backoff_seconds: float = 1.0,
+        max_backoff_seconds: float = 60.0,
+    ) -> None:
+        backoff = max(0.1, initial_backoff_seconds)
         self._stop_event.clear()
+        while not self._stop_event.is_set():
+            try:
+                await self._attempt_start()
+                return  # consume loop ended on a clean stop request
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — any start/loop failure retries
+                if self._stop_event.is_set():
+                    return
+                _METRICS["errors"] += 1
+                logger.error(
+                    "fusion.worker_crashed_retrying",
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                    backoff_seconds=backoff,
+                    exc_info=True,
+                )
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=backoff)
+                    return  # stop() was requested during the backoff
+                except TimeoutError:
+                    pass
+                backoff = min(backoff * 2, max_backoff_seconds)
+
+    async def _attempt_start(self) -> None:
+        """One supervised start/consume/stop cycle. Raises if it cannot start."""
         topics = [settings.kafka_topic_alerts_raw]
         # Subscribe to raw_events when EITHER promotion or lake archival needs
         # it — the lake must fill even if promotion is turned off.
@@ -376,7 +421,10 @@ class FusionWorker:
             alert_sink=self._sink is not None,
             lake_writer=self._lake is not None,
         )
-        await self._consume_loop()
+        try:
+            await self._consume_loop()
+        finally:
+            await self._teardown()
 
     async def _periodic_flush(self) -> None:
         interval = max(0.5, settings.lake_batch_max_age_seconds)
@@ -408,8 +456,22 @@ class FusionWorker:
     async def stop(self) -> None:
         self._running = False
         # Wake any retry/backoff sleep. Without this a 30s backoff would make
-        # every rolling restart look like a hang.
+        # every rolling restart look like a hang. Also ends supervision: a
+        # retrying worker that ignores the stop request turns shutdown into a
+        # crash-loop.
         self._stop_event.set()
+        if not self._running:
+            # The consume loop is not running, so nobody will run its teardown
+            # `finally`: either start() never got past bootstrap or a previous
+            # teardown already ran. Close whatever is left (each close is
+            # guarded by a None check) so a failed start leaks no client, and
+            # leave the clients nulled for a supervised retry to rebuild. When
+            # the loop IS running it owns the teardown — closing Kafka
+            # underneath a live `async for` is the race this file has fixed
+            # twice already.
+            await self._teardown()
+
+    async def _teardown(self) -> None:
         if self._flush_task is not None:
             self._flush_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -446,8 +508,13 @@ class FusionWorker:
 
         if self._consumer:
             await self._consumer.stop()
+            # Null them out: a supervised retry builds fresh clients, and an
+            # aiokafka consumer cannot be restarted after stop(). Leaving a
+            # stopped client attached would make the next attempt reuse it.
+            self._consumer = None
         if self._producer:
             await self._producer.stop()
+            self._producer = None
         if self._sink is not None:
             await self._sink.stop()
         if self._lake is not None:
@@ -459,13 +526,13 @@ class FusionWorker:
         logger.info("Fusion worker stopped", metrics=_METRICS, inflight=self._inflight)
 
     async def _consume_loop(self) -> None:
-        # `start()` is the only caller and assigns `_consumer` before getting
-        # here. Bound locally so that invariant is stated where it is relied
-        # on: iterating or committing a None consumer would otherwise be an
+        # `_attempt_start()` is the only caller and assigns `_consumer` before
+        # getting here. Bound locally so that invariant is stated where it is
+        # relied on: iterating or committing a None consumer would otherwise be an
         # AttributeError inside the message loop, reported as a processing
         # failure rather than as the startup bug it is.
         consumer = self._consumer
-        if consumer is None:  # pragma: no cover — unreachable via start()
+        if consumer is None:  # pragma: no cover — unreachable via _attempt_start()
             raise RuntimeError("fusion consume loop started before the Kafka consumer")
         # Attached for as long as this loop is iterating; read by the
         # readiness probe app/main.py registers. Cleared in the ``finally`` so
