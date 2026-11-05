@@ -1,7 +1,7 @@
 {
   "$schema": "https://example.com/schemas/marketplace/v1.json",
   "version": "1.0.0",
-  "generated": "2026-11-04T10:25:09Z",
+  "generated": "2026-11-05T15:14:13Z",
   "categories": [
     {
       "id": "playbooks",
@@ -59188,7 +59188,7 @@
       "id": "det-identity-210",
       "type": "detection",
       "name": "Entra User Password Reset By An Administrator",
-      "description": "An administrator-driven reset locks the owner out and lets whoever asked for it in.",
+      "description": "An administrator-driven reset locks the owner out and lets whoever asked for it in. Scoped to a human initiator, so a self-service reset is not reported as an administrator's.",
       "version": "1.0.0",
       "author": "AiSOC",
       "tags": [
@@ -59207,7 +59207,7 @@
       "enabled": true,
       "executable": true,
       "path": "detections/identity/entra-user-password-reset.yaml",
-      "sha256": "5336031d318ec844734f2b7a86d3a24133861275eca9d3a306d8b32511f55bde"
+      "sha256": "f0b1b1c4f687ce96cab4bd6359cff320dd329e7425d0ec6201ac35d74f4abc85"
     },
     {
       "id": "det-identity-211",

@@ -564,8 +564,24 @@ var _canonicalAliases = []struct {
 	sources []string
 }{
 	{"actor.user.name", []string{"actor", "actor.name", "actor.displayName", "actor.username", "username", "user", "user.name", "user.username", "user_name"}},
-	{"device.name", []string{"hostname", "host", "host.name", "device_name", "device", "device.name", "device.hostname"}},
+	{"device.name", []string{"hostname", "host", "host.name", "device_name", "device", "device.name", "device.hostname", "target_hostname"}},
 	{"src_endpoint.ip", []string{"src_ip", "source_ip", "client_ip", "src_endpoint.ip", "client.ipAddress"}},
+	// Issue #1718. A directory-audit event names the object that *changed*
+	// separately from the principal that changed it, and nothing read those
+	// fields: the fusion promoter builds an alert's username from
+	// `actor.user.name` and its hostname from `device.name`, so a connector's
+	// target reached no column, no entity and no correlation key. Ten alerts
+	// measured from one Entra tenant named the Microsoft service that
+	// performed the change and nothing else.
+	//
+	// `target_hostname` above, and deliberately not `target_name`: the latter
+	// is the display name of whatever the target happens to be, so reading it
+	// as a device would put a person's name in the host column of every
+	// user-management event. Deciding which targets are devices belongs to
+	// the connector, which knows its vendor's type vocabulary; this layer
+	// reads a name that means exactly one thing. It sits last in that list,
+	// so a connector that identifies its own actor device keeps it.
+	{"target_user.name", []string{"target_user", "target_username", "target_user.name"}},
 	// Not identity, but the same fill-the-blank rule and the same reason to
 	// run everywhere. A vendor profile names the field its vendor's rows use
 	// — crowdstrike_falcon reads event_simpleName, not title — so a pushed

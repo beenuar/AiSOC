@@ -82,8 +82,15 @@ def test_azure_entra_normalize_directory_audit_role_change_is_high():
     assert out["source"] == "azure_entra"
     assert out["external_id"] == "audit-1"
     assert out["severity"] == "high", "successful RoleManagement audits must be high"
-    assert out["actor"] == "Alice Admin"
+    # Issue #1718: the principal name, not the display name. Graph puts a
+    # first-party client in that display-name slot when a person acts through
+    # one, so this assertion used to pin "Microsoft Teams Services" as the
+    # actor of changes a person made. The display name is still carried,
+    # under a name that says what it is.
+    assert out["actor"] == "alice@example.com"
     assert out["actor_email"] == "alice@example.com"
+    assert out["actor_display_name"] == "Alice Admin"
+    assert out["initiator_type"] == "user"
     assert out["event_type"].startswith("azure.entra.audit.")
 
 
