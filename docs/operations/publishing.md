@@ -243,6 +243,46 @@ checks the named tag out for its source. The GitHub Release stays skipped, and
 no package is uploaded, because a registry will not accept a package version
 twice.
 
+## Recovering a moving tag that has fallen behind
+
+A different failure with a different remedy, and for a long time nothing could
+see it. `:latest` is what `make up` pulls, and it goes stale with no commit at
+all: on 2026-11-04 the jobs that move `latest` and `demo` failed on a drained
+Actions token while the rest of the run succeeded, leaving every `:latest` at
+`95e397f7b` — seven commits and three security fixes behind `main`.
+
+Nothing was wrong with the version. `VERSION` only changes on a release
+commit, so the stale images carried `22.0.0` exactly like the tree, and
+`check_published_images.py --require-fresh` reported that all 42 references
+matched. `--require-current` compares the commit instead, which is the
+question a moving tag actually raises, and the daily `image-availability.yml`
+run is what asks it — a push-triggered check cannot notice a tag that stopped
+moving when nothing is being pushed.
+
+The gate names the drift directly:
+
+```
+[revision-stale] docker-compose.yml (web): ghcr.io/beenuar/aisoc-web:latest is a
+moving tag built 7 commit(s) behind 247b23556, which landed 421 minutes ago
+```
+
+Republish the moving tags from the branch rather than cutting anything:
+
+```bash
+gh workflow run publish-images.yml --ref main
+```
+
+Then confirm against the registry instead of the workflow's exit status, which
+is the whole reason this gate exists:
+
+```bash
+python3 scripts/check_published_images.py --require-fresh --require-current --require-network --list
+```
+
+A tag that is behind but inside the 240-minute publish window prints as a NOTE
+on a passing run. That window is above the slowest of the last 100 successful
+publishes, so a NOTE means a build is still going; a finding means it is not.
+
 A package half that only partly published has no equivalent repair: npm and
 PyPI both refuse a second upload of a version that already exists. Bump the
 package's version and cut a new tag. `Packages — publication report` is what

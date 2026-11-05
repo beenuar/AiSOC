@@ -50,6 +50,74 @@ What it checks
     release PR. It is a scheduled question, asked of ``main``, where a stale
     ``:latest`` is a real defect and not a race.
 
+``current`` (``--require-current``)
+    ``fresh`` compares ``VERSION``, and ``VERSION`` only moves on a release
+    commit — so every commit that lands *after* a release is invisible to it.
+    That is not hypothetical. ``v22.0.0`` was tagged at ``95bad815c``; the
+    jobs publishing the moving tags then failed on a drained Actions token,
+    leaving ``:latest`` on all sixteen images at ``95e397f7b``, seven commits
+    behind ``main``. ``make up`` served a stack missing three of five security
+    fixes published hours earlier, two of them for advisories rated 9.1 and
+    7.7 — and ``--require-fresh`` printed ``OK — all 42 first-party
+    references resolve and the version inside each matches the tree`` the
+    whole time, because ``VERSION`` at ``95e397f7b`` was already ``22.0.0``.
+    A passing condition satisfied while the property it stands for is false.
+
+    So this compares the *commit* rather than the version, and only for tags
+    that move. An immutable ``vX.Y.Z`` is a snapshot of a past commit and
+    keeps answering to ``VERSION``: comparing it against today's head would
+    red every release tag forever, which is a different wrong answer.
+
+    What counts as current is drawn deliberately, because a line in the wrong
+    place makes a gate noisy and a noisy gate gets switched off:
+
+    * Equal to the tracked head — current.
+    * *Ahead* of it — not a finding. A newer commit publishing while this run
+      was asking is a race this gate wins by losing, and reading it as drift
+      would red the ``verify`` job of the very workflow that just published.
+    * Behind it — a finding once either bound is crossed, and the two catch
+      different shapes:
+
+      ``time``   the head commit is older than :data:`PUBLISH_GRACE_SECONDS`.
+                 Below that the publish for it may genuinely still be running,
+                 so reporting drift would be reporting a race. 240 minutes is
+                 above the slowest of the last 100 successful ``publish-images``
+                 runs (168 minutes; median 19, p90 126 — the spread is runner
+                 queueing, not build time). Re-derive rather than trust it:
+                 ``gh api '…/workflows/publish-images.yml/runs?per_page=100&status=success'``
+                 and difference ``created_at`` against ``updated_at``.
+      ``lag``    more than :data:`MAX_LAG_COMMITS` commits behind, whatever the
+                 head's age. The time bound alone has a hole: ``publish-images``
+                 cancels in progress, so if commits keep landing faster than a
+                 publish completes and every publish fails, the head is always
+                 young and the tag drifts forever inside the window. Over the
+                 last 400 commits on ``main`` the most that landed inside one
+                 240-minute window was 24, so 40 is above anything a legitimate
+                 burst produces while still bounding a runaway.
+
+    * Not on the tracked history at all — a finding immediately. An image
+      built from a branch, a fork or a rewritten history is not something the
+      deployment files can be said to describe.
+    * Unplaceable — the image records no revision, or this checkout cannot
+      find the commit it names — a finding immediately. Unknown is not clean;
+      that exact blind spot, a bucket that passes because nothing could be
+      read, has shipped in this repository before.
+
+    The tracked head is the tip of ``main`` per :data:`TRACKING_REFS`, never
+    ``HEAD``. ``release.yml`` runs this gate with a tag checked out, where
+    ``HEAD`` is a past snapshot and "has ``:latest`` kept up" is not a
+    question that checkout can answer — so it is not asked there. Off by
+    default for the same reason ``fresh`` is, and separate from ``fresh``
+    because they ask different questions of different tags.
+
+    Scope, stated rather than implied: this reaches the moving tags the
+    deployment files actually name, which today is ``:latest``. ``:demo`` is
+    published but no compose file or chart value names it, so no reference to
+    it reaches this scan and no claim is made about it. Moving tags in prose
+    are excluded along with every other prose reference — ``aisoc-devcontainer:latest``
+    is built by a different workflow on changes to its own Dockerfile and is
+    legitimately behind ``main``.
+
 Third-party references — ``postgres:16-alpine``, ``redis:7-alpine``,
 ``ghcr.io/berriai/litellm`` — are counted and named but not resolved. This
 gate exists to check the images *this project publishes*; upstream
@@ -71,6 +139,8 @@ Usage
 -----
     python3 scripts/check_published_images.py
     python3 scripts/check_published_images.py --require-fresh --require-network
+    python3 scripts/check_published_images.py --require-current --require-network
+    python3 scripts/check_published_images.py --resolve-head
     python3 scripts/check_published_images.py --list
     python3 scripts/check_published_images.py --json
     python3 scripts/check_published_images.py --self-test
@@ -85,8 +155,10 @@ import json
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -123,6 +195,34 @@ REGISTRY = "ghcr.io"
 #: only the first is asked on a pull request.
 MOVING_TAGS = frozenset({"latest", "main", "edge", "nightly", "demo"})
 
+#: Where the commit a moving tag must track is read from, most authoritative
+#: first. Deliberately *not* ``HEAD``: ``release.yml`` runs this gate with a
+#: tag checked out, and resolving the tracked head to whatever is checked out
+#: would turn "has :latest kept up with main" into "does :latest match this
+#: tag", which is a question with a confidently wrong answer. Unresolvable is
+#: a refusal rather than a fallback, for the same reason.
+TRACKING_REFS = ("refs/remotes/origin/main", "refs/heads/main")
+
+#: How long after a commit lands its publish may still be in flight before a
+#: moving tag that has not caught up is drift rather than a race.
+#:
+#: Measured, not chosen: over the last 100 successful ``publish-images`` runs
+#: on ``main`` the slowest took 168 minutes (median 19, p90 126 — the spread
+#: is runner queueing, not build time). 240 is above all of them. Being
+#: generous costs almost nothing, because the question is asked daily and a
+#: publish that failed is still behind tomorrow; being tight costs a false
+#: red on every busy merge, which is how a gate gets switched off.
+PUBLISH_GRACE_SECONDS = 240 * 60
+
+#: The companion bound, because the window alone has a hole. ``publish-images``
+#: cancels in progress, so a stream of merges landing faster than a publish
+#: completes keeps the head young indefinitely — and if every one of those
+#: publishes fails, a time-only rule never fires while the tag drifts without
+#: limit. Over the last 400 commits on ``main`` the most that landed inside
+#: one 240-minute window was 24, so this is above any legitimate burst and
+#: still bounds a runaway.
+MAX_LAG_COMMITS = 40
+
 #: ``${AISOC_VERSION:-latest}`` and friends. Compose expands these at up time;
 #: read literally the tag is a string no registry has ever held.
 _INTERPOLATION = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}")
@@ -145,6 +245,13 @@ _MANIFEST_TYPES = (
 PRESENT = "present"
 ABSENT = "absent"
 UNREACHABLE = "unreachable"
+
+#: Where git places a published revision relative to the tracked head.
+CURRENT = "current"
+AHEAD = "ahead"
+BEHIND = "behind"
+DIVERGED = "diverged"
+UNPLACEABLE = "unplaceable"
 
 
 class Offline(RuntimeError):
@@ -189,6 +296,33 @@ class Resolution:
     state: str
     #: ``org.opencontainers.image.revision`` — the commit it was built from.
     revision: str = ""
+    detail: str = ""
+
+
+@dataclass(frozen=True)
+class Head:
+    """The commit a moving tag is required to track, and how old it is."""
+
+    commit: str
+    #: Which of :data:`TRACKING_REFS` answered, so a log says what was compared.
+    ref: str
+    #: Seconds since the commit was made. The publish for it starts within
+    #: seconds of the push, so this is how long that publish has had.
+    age_seconds: int
+
+    @property
+    def short(self) -> str:
+        return self.commit[:9]
+
+
+@dataclass(frozen=True)
+class Freshness:
+    """Where git places one published revision relative to :class:`Head`."""
+
+    state: str
+    #: Commits between the revision and the head, in whichever direction the
+    #: state names. Zero when the two are equal or the question is moot.
+    distance: int = 0
     detail: str = ""
 
 
@@ -415,6 +549,84 @@ def version_at(root: Path, commit: str) -> str:
 
 
 # --------------------------------------------------------------------------
+# Placing a published commit against the branch a moving tag has to track
+# --------------------------------------------------------------------------
+def _git(root: Path, *argv: str) -> tuple[int, str]:
+    """Run git in ``root``. Returns (status, trimmed stdout)."""
+    out = subprocess.run(  # noqa: S603 - fixed argv, no shell
+        ["git", *argv],
+        capture_output=True,
+        text=True,
+        check=False,
+        cwd=root,
+    )
+    return out.returncode, out.stdout.strip()
+
+
+def resolve_tracking_head(root: Path, explicit: str | None = None, *, now: int | None = None) -> Head:
+    """The commit moving tags must track, or a refusal naming what was tried.
+
+    ``explicit`` is what ``--head`` passes, and exists so the question can be
+    pointed at a known pair of commits — a negative control has to be able to
+    construct a state the registry is not currently in.
+
+    Raises rather than falling back to ``HEAD``. A checkout that cannot name
+    the tip of ``main`` cannot answer whether a moving tag has kept up with
+    it, and answering anyway is the failure this gate exists to detect.
+    """
+    attempts: list[tuple[str, str]] = [("--head", explicit)] if explicit else [(ref, ref) for ref in TRACKING_REFS]
+    for label, ref in attempts:
+        status, commit = _git(root, "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+        if status != 0 or not commit:
+            continue
+        status, stamp = _git(root, "show", "-s", "--format=%ct", commit)
+        if status != 0 or not stamp.isdigit():
+            raise ScanError(f"git resolved {label} to {commit[:9]} but could not date it, so its publish window is unknown")
+        # A commit dated in the future is clock skew, not a publish that has
+        # already had its chance; floor it at "just landed" rather than
+        # letting a negative age read as ancient.
+        age = max(0, int(now if now is not None else time.time()) - int(stamp))
+        return Head(commit, label, age)
+    tried = ", ".join(ref for _label, ref in attempts)
+    raise ScanError(
+        f"none of {tried} resolve in {root}, so there is no commit to compare a moving tag against. "
+        "Fetch the branch, or name one with --head; a tracked head that cannot be read is a refusal "
+        "rather than a comparison against whatever happens to be checked out."
+    )
+
+
+def place_revision(root: Path, revision: str, head: Head) -> Freshness:
+    """Where ``revision`` sits relative to ``head``, per this checkout's history.
+
+    Every answer other than the four placements is :data:`UNPLACEABLE`, which
+    is a finding rather than a pass: an image whose provenance cannot be read
+    is unverified, and unverified is the state this gate reports rather than
+    rounds off.
+    """
+    if not revision:
+        return Freshness(UNPLACEABLE, detail="the image records no org.opencontainers.image.revision at all")
+    if not re.fullmatch(r"[0-9a-f]{7,40}", revision):
+        return Freshness(UNPLACEABLE, detail=f"the image records {revision!r}, which is not a commit sha")
+    status, commit = _git(root, "rev-parse", "--verify", "--quiet", f"{revision}^{{commit}}")
+    if status != 0 or not commit:
+        return Freshness(
+            UNPLACEABLE,
+            detail=f"commit {revision[:9]} is not in this checkout, so where it sits relative to the branch is unknown",
+        )
+    if commit == head.commit:
+        return Freshness(CURRENT)
+    if _git(root, "merge-base", "--is-ancestor", commit, head.commit)[0] == 0:
+        status, count = _git(root, "rev-list", "--count", f"{commit}..{head.commit}")
+        if status != 0 or not count.isdigit():
+            return Freshness(UNPLACEABLE, detail=f"git could not count the commits between {revision[:9]} and {head.short}")
+        return Freshness(BEHIND, distance=int(count))
+    if _git(root, "merge-base", "--is-ancestor", head.commit, commit)[0] == 0:
+        status, count = _git(root, "rev-list", "--count", f"{head.commit}..{commit}")
+        return Freshness(AHEAD, distance=int(count) if count.isdigit() else 0)
+    return Freshness(DIVERGED, detail=f"{revision[:9]} is on neither side of {head.short}")
+
+
+# --------------------------------------------------------------------------
 # Asking the registry
 # --------------------------------------------------------------------------
 class GhcrClient:
@@ -520,6 +732,11 @@ class Report:
     versions: dict[str, str] = field(default_factory=dict)
     tree: str = ""
     skipped: str = ""
+    #: The commit moving tags are required to track, when that was asked.
+    head: Head | None = None
+    #: Where each published revision sits relative to it, keyed by revision so
+    #: sixteen images built from one commit cost one placement.
+    freshness: dict[str, Freshness] = field(default_factory=dict)
 
     @property
     def first_party(self) -> list[Reference]:
@@ -530,7 +747,111 @@ class Report:
         return [r for r in self.references if not r.first_party]
 
 
-def evaluate(report: Report, *, require_fresh: bool) -> list[tuple[str, str]]:
+def currency_findings(
+    reference: Reference,
+    freshness: Freshness | None,
+    head: Head | None,
+    *,
+    grace_seconds: int = PUBLISH_GRACE_SECONDS,
+    max_lag: int = MAX_LAG_COMMITS,
+) -> list[tuple[str, str]]:
+    """Whether one moving tag still describes the branch it is supposed to track.
+
+    Pure: every input is a fact somebody else measured, so the self-test can
+    drive the real incident through the real decision without a registry.
+
+    Two placements are deliberately *not* findings, and both directions matter
+    — a rule that only ever fires one way is the shape that has repeatedly let
+    drift through here. :data:`AHEAD` means a newer commit published while this
+    run was asking, which would otherwise red the ``verify`` job of the
+    workflow that just did the publishing. :data:`BEHIND` inside both bounds is
+    a publish still in flight, and calling that drift would be reporting a race.
+    """
+    where = f"{reference.source} ({reference.service})"
+    lead = f"{where}: {reference.ref} is a moving tag"
+    if head is None or freshness is None:
+        return [
+            (
+                "revision-unplaceable",
+                f"{lead} and nothing placed the commit it was built from. The comparison did not happen, "
+                "which is not the same as having happened and passed, so it is reported rather than assumed clean.",
+            )
+        ]
+    if freshness.state == UNPLACEABLE:
+        return [
+            (
+                "revision-unplaceable",
+                f"{lead} and {freshness.detail}. Whether it carries what this branch says it does is "
+                "unverified; unverified is a finding here, because a bucket that passes for want of a "
+                "reading is how a gate comes to guarantee nothing.",
+            )
+        ]
+    if freshness.state == DIVERGED:
+        return [
+            (
+                "revision-off-branch",
+                f"{lead} built from a commit that is not on {head.short} ({head.ref}) in either direction "
+                f"— {freshness.detail}. An image built from a branch, a fork or a rewritten history is not "
+                "something the deployment files can be said to describe.",
+            )
+        ]
+    if freshness.state != BEHIND:
+        return []
+    behind = f"{lead} built {freshness.distance} commit(s) behind {head.short} ({head.ref})"
+    if freshness.distance > max_lag:
+        return [
+            (
+                "revision-stale",
+                f"{behind}, past the {max_lag}-commit ceiling. Whatever the head's age, a gap that wide is "
+                "not one publish in flight — the most that has landed inside one publish window on this "
+                "branch is 24. Anyone pulling this tag is running something else.",
+            )
+        ]
+    if head.age_seconds > grace_seconds:
+        return [
+            (
+                "revision-stale",
+                f"{behind}, which landed {head.age_seconds // 60} minutes ago — past the "
+                f"{grace_seconds // 60}-minute window in which its publish could still be running. The publish "
+                "has had its chance and the tag did not move, so anyone following the documented deployment "
+                "path is pulling an older commit than this branch.",
+            )
+        ]
+    return []
+
+
+def tolerated_lag(
+    reference: Reference,
+    freshness: Freshness | None,
+    head: Head | None,
+    *,
+    grace_seconds: int = PUBLISH_GRACE_SECONDS,
+    max_lag: int = MAX_LAG_COMMITS,
+) -> str:
+    """The sentence for a moving tag that is behind but not yet a finding.
+
+    Printed rather than swallowed. A tolerance nobody can see is a tolerance
+    nobody re-examines, and the whole defect this gate was extended to close
+    was a state that looked exactly like a clean one.
+
+    Derived from :func:`currency_findings` rather than from a second reading of
+    the same bounds, so the note and the verdict cannot drift into contradicting
+    each other. The first cut of this duplicated the condition and printed
+    "inside the window, so not yet a finding" directly underneath sixteen
+    findings saying the window had passed.
+    """
+    if head is None or freshness is None or freshness.state != BEHIND:
+        return ""
+    if currency_findings(reference, freshness, head, grace_seconds=grace_seconds, max_lag=max_lag):
+        return ""
+    return (
+        f"{reference.ref} is {freshness.distance} commit(s) behind {head.short}, which landed "
+        f"{head.age_seconds // 60} minutes ago. Inside the {grace_seconds // 60}-minute publish window, so "
+        "not yet a finding — it becomes one if the tag is still behind after that."
+    )
+
+
+def evaluate(report: Report, *, require_fresh: bool, require_current: bool = False) -> list[tuple[str, str]]:
     """Every finding, as (code, detail). Pure, so the self-test can drive it."""
     findings: list[tuple[str, str]] = []
     for reference in report.first_party:
@@ -550,7 +871,13 @@ def evaluate(report: Report, *, require_fresh: bool) -> list[tuple[str, str]]:
                 )
             )
             continue
-        if not require_fresh or not reference.tracks_tree:
+        if not reference.tracks_tree:
+            # Prose describing a past release, or an image another workflow
+            # owns. Neither is a claim about this branch's current contents.
+            continue
+        if require_current and reference.moving:
+            findings.extend(currency_findings(reference, report.freshness.get(resolution.revision), report.head))
+        if not require_fresh:
             continue
         # Two independent sources, and which one exists depends on the tag.
         # `claimed` is what the tag name promises — the whole point of a
@@ -592,7 +919,7 @@ def evaluate(report: Report, *, require_fresh: bool) -> list[tuple[str, str]]:
     return findings
 
 
-def scan(root: Path, client: GhcrClient | None, *, require_fresh: bool) -> Report:
+def scan(root: Path, client: GhcrClient | None, *, require_fresh: bool, require_current: bool = False, head: Head | None = None) -> Report:
     """Read the deployment files, then ask the registry about what they name.
 
     The deployment files are read before ``VERSION`` and long before the first
@@ -607,6 +934,7 @@ def scan(root: Path, client: GhcrClient | None, *, require_fresh: bool) -> Repor
             "nothing print the same word, so this is a refusal rather than a clean result."
         )
     report.tree = tree_version(root)
+    report.head = head
     if client is None:
         return report
     for reference in report.first_party:
@@ -616,6 +944,13 @@ def scan(root: Path, client: GhcrClient | None, *, require_fresh: bool) -> Repor
         report.resolutions[reference.ref] = resolution
         if require_fresh and resolution.state == PRESENT:
             report.versions[reference.ref] = version_at(root, resolution.revision)
+    if require_current and head is not None:
+        for reference in report.first_party:
+            placed = report.resolutions.get(reference.ref)
+            if not reference.tracks_tree or not reference.moving or placed is None or placed.state != PRESENT:
+                continue
+            if placed.revision not in report.freshness:
+                report.freshness[placed.revision] = place_revision(root, placed.revision, head)
     return report
 
 
@@ -631,6 +966,21 @@ def main(argv: list[str] | None = None) -> int:
         help="also require the version inside each image to match the tree",
     )
     parser.add_argument(
+        "--require-current",
+        action="store_true",
+        help="also require every moving tag to have been built from the tip of main",
+    )
+    parser.add_argument(
+        "--head",
+        default=None,
+        help="the commit moving tags must track (default: origin/main, then main; never HEAD)",
+    )
+    parser.add_argument(
+        "--resolve-head",
+        action="store_true",
+        help="print the commit moving tags would be compared against, and exit",
+    )
+    parser.add_argument(
         "--require-network",
         action="store_true",
         help="fail instead of skipping when the registry cannot be reached",
@@ -644,9 +994,25 @@ def main(argv: list[str] | None = None) -> int:
         return self_test()
 
     root = (args.repo_root or repo_root()).resolve()
+
+    if args.resolve_head:
+        # Runs the same empty-tree refusal first, so this is a diagnostic
+        # about a real tree rather than a second invocation that would credit
+        # a repository holding nothing — every way CI runs a gate has to
+        # refuse that, not just the headline one.
+        try:
+            scan(root, None, require_fresh=False)
+            tracked = resolve_tracking_head(root, args.head)
+        except ScanError as exc:
+            print(f"check_published_images: FAILED to run the scan: {exc}", file=sys.stderr)
+            return 2
+        print(f"moving tags on this tree are compared against {tracked.commit} ({tracked.ref}), {tracked.age_seconds // 60} minute(s) old")
+        return 0
+
     client = GhcrClient()
     try:
-        report = scan(root, client, require_fresh=args.require_fresh)
+        head = resolve_tracking_head(root, args.head) if args.require_current else None
+        report = scan(root, client, require_fresh=args.require_fresh, require_current=args.require_current, head=head)
     except ScanError as exc:
         print(f"check_published_images: FAILED to run the scan: {exc}", file=sys.stderr)
         return 2
@@ -660,7 +1026,7 @@ def main(argv: list[str] | None = None) -> int:
         print("         Re-run with --require-network to make this a failure instead.")
         return 0
 
-    findings = evaluate(report, require_fresh=args.require_fresh)
+    findings = evaluate(report, require_fresh=args.require_fresh, require_current=args.require_current)
 
     if args.json:
         print(
@@ -668,9 +1034,11 @@ def main(argv: list[str] | None = None) -> int:
                 {
                     "repo_root": str(root),
                     "tree_version": report.tree,
+                    "tracked_head": asdict(report.head) if report.head else None,
                     "references": [asdict(r) for r in report.references],
                     "resolutions": {k: asdict(v) for k, v in report.resolutions.items()},
                     "versions": report.versions,
+                    "freshness": {k: asdict(v) for k, v in report.freshness.items()},
                     "findings": [{"code": c, "detail": d} for c, d in findings],
                 },
                 indent=2,
@@ -687,6 +1055,14 @@ def main(argv: list[str] | None = None) -> int:
         f"references       {len(report.first_party)} first-party ({REGISTRY}/beenuar), {len(report.third_party)} third-party not resolved"
     )
     print(f"freshness        {'enforced' if args.require_fresh else 'reported only (pass --require-fresh to enforce)'}")
+    moving = [r for r in report.first_party if r.moving and r.tracks_tree]
+    if report.head is not None:
+        print(
+            f"moving tags      {len(moving)} compared against {report.head.commit} ({report.head.ref}), "
+            f"{report.head.age_seconds // 60}m old; window {PUBLISH_GRACE_SECONDS // 60}m, ceiling {MAX_LAG_COMMITS} commits"
+        )
+    else:
+        print(f"moving tags      {len(moving)} present, currency not enforced (pass --require-current to compare the commit)")
     print()
 
     if args.list:
@@ -701,6 +1077,19 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  not resolved (published by somebody else): {', '.join(sorted({r.ref for r in report.third_party}))}")
         print()
 
+    # A tolerance nobody can see is a tolerance nobody re-examines, so a
+    # moving tag that is behind says so even on a run that passes.
+    notes = [
+        note
+        for reference in moving
+        if (placed := report.resolutions.get(reference.ref)) is not None
+        and (note := tolerated_lag(reference, report.freshness.get(placed.revision), report.head))
+    ]
+    if notes:
+        for note in notes:
+            print(f"  NOTE  {note}")
+        print()
+
     if findings:
         print(f"PUBLISHED-IMAGES GATE FAILED — {len(findings)} finding(s):", file=sys.stderr)
         for code, detail in findings:
@@ -709,6 +1098,15 @@ def main(argv: list[str] | None = None) -> int:
 
     checked = len(report.first_party)
     verified = "and the version inside each matches the tree" if args.require_fresh else "(freshness not enforced on this run)"
+    if args.require_current and report.head is not None:
+        # Not "or newer" when something is behind: the notes above say a tag
+        # is behind, and a summary claiming otherwise two lines later is the
+        # same two-surfaces-disagreeing defect the notes exist to prevent.
+        verified += (
+            f", and every moving tag is within the publish window of {report.head.short}"
+            if notes
+            else f", and every moving tag was built from {report.head.short} or newer"
+        )
     print(f"OK — all {checked} first-party image reference(s) resolve in {REGISTRY} {verified}.")
     return 0
 
@@ -736,6 +1134,102 @@ def _report(resolution: Resolution, *, built: str = "11.0.0", tree: str = "11.0.
         versions={reference.ref: built},
         tree=tree,
     )
+
+
+#: The state the registry was actually in on 2026-11-04, kept as data so the
+#: case that motivated the commit-level arm is the case the gate is held to.
+#: ``v22.0.0`` was tagged at 95bad815c; the jobs that move `latest` and `demo`
+#: then failed, leaving every `:latest` at 95e397f7b, seven commits and three
+#: security fixes behind `main` at 247b23556 — while --require-fresh printed
+#: OK, because VERSION at 95e397f7b was already 22.0.0.
+INCIDENT_REVISION = "95e397f7b7e1c0d0a4b2e4d1b8a9c6f3e2d1c0b9"
+INCIDENT_HEAD = "247b235563f30c64f1b50744ca398e47c60f0cb0"
+INCIDENT_BEHIND = 7
+
+
+def _currency_codes(
+    freshness: Freshness | None,
+    head: Head | None,
+    **overrides: object,
+) -> set[str]:
+    return {code for code, _ in currency_findings(_reference(**overrides), freshness, head)}
+
+
+def _evaluate_codes(report: Report, **kwargs: bool) -> set[str]:
+    return {code for code, _ in evaluate(report, **kwargs)}
+
+
+def _moving_report(*, revision: str, head: Head, placement: Freshness | None = None, **overrides: object) -> Report:
+    """A whole-report fixture for one moving tag, so ``evaluate`` can be driven end to end."""
+    reference = _reference(**overrides)
+    return Report(
+        references=[reference],
+        resolutions={reference.ref: Resolution(PRESENT, revision=revision)},
+        versions={reference.ref: "22.0.0"},
+        freshness={revision: placement} if placement else {},
+        tree="22.0.0",
+        head=head,
+    )
+
+
+def _commit_graph_checks(record: Callable[..., None]) -> None:
+    """Drive the git layer against a real commit graph built for the purpose.
+
+    Three commits on ``main`` plus one on a side branch, in a throwaway
+    repository, so every placement is computed by the same ``git`` calls the
+    gate makes against GHCR's answers — and so the self-test keeps working on
+    the shallow clone a pull-request job gets, where this repository's own
+    history is not present to ask about.
+    """
+    git = ["git", "-c", "user.name=gate", "-c", "user.email=gate@invalid", "-c", "commit.gpgsign=false"]
+    with scratch_tree() as tree:
+
+        def commit(message: str) -> str:
+            (tree / "payload.txt").write_text(message, encoding="utf-8")
+            subprocess.run(git + ["add", "-A"], cwd=tree, check=True, capture_output=True)  # noqa: S603
+            subprocess.run(git + ["commit", "-qm", message], cwd=tree, check=True, capture_output=True)  # noqa: S603
+            return subprocess.run(  # noqa: S603
+                ["git", "rev-parse", "HEAD"], cwd=tree, check=True, capture_output=True, text=True
+            ).stdout.strip()
+
+        first = commit("one")
+        commit("two")
+        third = commit("three")
+        subprocess.run(git + ["checkout", "-qb", "side", first], cwd=tree, check=True, capture_output=True)  # noqa: S603
+        elsewhere = commit("off to one side")
+        subprocess.run(git + ["checkout", "-q", "main"], cwd=tree, check=True, capture_output=True)  # noqa: S603
+
+        head = resolve_tracking_head(tree)
+        older = Head(first, "refs/heads/main", 0)
+        cases: list[tuple[str, object, object]] = [
+            ("the tracked head is the tip of main, not whatever is checked out", (head.commit, head.ref), (third, "refs/heads/main")),
+            ("a revision equal to the head is current", place_revision(tree, third, head).state, CURRENT),
+            (
+                "a revision two commits back is behind, and says how far",
+                (place_revision(tree, first, head).state, place_revision(tree, first, head).distance),
+                (BEHIND, 2),
+            ),
+            ("an abbreviated sha places the same as a full one", place_revision(tree, first[:9], head).state, BEHIND),
+            ("a revision newer than the head is ahead, never behind", place_revision(tree, third, older).state, AHEAD),
+            ("a revision on another branch is neither", place_revision(tree, elsewhere, head).state, DIVERGED),
+            ("a commit this checkout does not have is unplaceable", place_revision(tree, "0" * 40, head).state, UNPLACEABLE),
+            ("no revision label at all is unplaceable", place_revision(tree, "", head).state, UNPLACEABLE),
+            ("a label that is not a sha is unplaceable", place_revision(tree, "refs/heads/main", head).state, UNPLACEABLE),
+        ]
+        for description, got, want in cases:
+            record(f"GIT: {description}", got == want, f"expected {want!r}  got {got!r}")
+
+        # And the refusal: a tree that cannot name main's tip must not fall
+        # back to HEAD, because HEAD is exactly what release.yml checks out.
+        subprocess.run(git + ["checkout", "-q", "--detach", third], cwd=tree, check=True, capture_output=True)  # noqa: S603
+        subprocess.run(git + ["branch", "-qD", "main"], cwd=tree, check=True, capture_output=True)  # noqa: S603
+        subprocess.run(git + ["branch", "-qD", "side"], cwd=tree, check=True, capture_output=True)  # noqa: S603
+        try:
+            resolved = resolve_tracking_head(tree).commit
+        except ScanError as exc:
+            record("GIT: a checkout with no main refuses rather than falling back to HEAD", True, str(exc)[:120])
+        else:
+            record("GIT: a checkout with no main refuses rather than falling back to HEAD", False, f"resolved {resolved!r}")
 
 
 def self_test() -> int:
@@ -905,6 +1399,144 @@ def self_test() -> int:
         parsed.get("ueba.image") == ("ghcr.io/beenuar/aisoc-ueba", "1.2.3"),
         f"got {parsed.get('ueba.image')!r}",
     )
+
+    # ── Commit-level currency, in both directions ────────────────────────
+    #
+    # One direction alone is the dominant failure shape here: a gate that
+    # compares A against B and never B against A lets drift through in the
+    # direction things actually move. So every case that must fail is paired
+    # with the case that must not.
+    settled = Head(INCIDENT_HEAD, "refs/remotes/origin/main", 8 * 3600)
+    just_landed = Head(INCIDENT_HEAD, "refs/remotes/origin/main", 4 * 60)
+
+    must_fail: list[tuple[str, str, set[str]]] = [
+        (
+            "THE INCIDENT: :latest seven commits behind a settled head, at a VERSION that matches",
+            "revision-stale",
+            _currency_codes(Freshness(BEHIND, distance=INCIDENT_BEHIND), settled),
+        ),
+        (
+            "one commit behind is still behind once the publish window has passed",
+            "revision-stale",
+            _currency_codes(Freshness(BEHIND, distance=1), settled),
+        ),
+        (
+            "a lag past the ceiling is drift however young the head is",
+            "revision-stale",
+            _currency_codes(Freshness(BEHIND, distance=MAX_LAG_COMMITS + 1), just_landed),
+        ),
+        (
+            "a revision on no branch this checkout knows",
+            "revision-off-branch",
+            _currency_codes(Freshness(DIVERGED, detail="abc on neither side"), settled),
+        ),
+        (
+            "an image that records no commit at all is unverified, not clean",
+            "revision-unplaceable",
+            _currency_codes(Freshness(UNPLACEABLE, detail="records no revision"), settled),
+        ),
+        (
+            "a commit a shallow clone cannot place is unverified, not clean",
+            "revision-unplaceable",
+            _currency_codes(Freshness(UNPLACEABLE, detail="not in this checkout"), settled),
+        ),
+        (
+            "no tracked head resolved means the comparison never happened",
+            "revision-unplaceable",
+            _currency_codes(Freshness(BEHIND, distance=INCIDENT_BEHIND), None),
+        ),
+        (
+            "no placement at all means the comparison never happened",
+            "revision-unplaceable",
+            _currency_codes(None, settled),
+        ),
+    ]
+    for description, expected, found in must_fail:
+        record(f"CURRENCY: {description}", expected in found, f"expected [{expected}]  got {sorted(found) or 'nothing'}")
+
+    must_pass: list[tuple[str, set[str]]] = [
+        ("a moving tag built from the head is current", _currency_codes(Freshness(CURRENT), settled)),
+        (
+            "a moving tag ahead of the head is a race this gate must not read as drift",
+            _currency_codes(Freshness(AHEAD, distance=2), settled),
+        ),
+        (
+            "behind, but the head landed inside the publish window",
+            _currency_codes(Freshness(BEHIND, distance=INCIDENT_BEHIND), just_landed),
+        ),
+        (
+            "behind by exactly the ceiling, inside the window, is still a publish in flight",
+            _currency_codes(Freshness(BEHIND, distance=MAX_LAG_COMMITS), just_landed),
+        ),
+        (
+            "an immutable version tag is a past snapshot and is never asked to track the head",
+            _evaluate_codes(
+                _report(Resolution(PRESENT, revision="aaaaaaa"), tag="v22.0.0", built="22.0.0", tree="22.0.0"),
+                require_fresh=True,
+                require_current=True,
+            ),
+        ),
+        (
+            "prose naming a moving tag another workflow owns is not a claim about this branch",
+            _evaluate_codes(
+                _moving_report(
+                    revision="aaaaaaa",
+                    head=settled,
+                    source="apps/docs/docs/operations/codespaces.md",
+                    service="prose",
+                    repository=f"{REGISTRY}/beenuar/aisoc-devcontainer",
+                    tracks_tree=False,
+                ),
+                require_fresh=False,
+                require_current=True,
+            ),
+        ),
+        (
+            "a stale moving tag is silent when currency is not being enforced",
+            _evaluate_codes(
+                _moving_report(revision=INCIDENT_REVISION, head=settled, placement=Freshness(BEHIND, distance=INCIDENT_BEHIND)),
+                require_fresh=True,
+                require_current=False,
+            ),
+        ),
+    ]
+    for description, found in must_pass:
+        record(f"CURRENCY: {description}", not found, f"got {sorted(found) or 'nothing'}")
+
+    # The whole point, stated as one assertion: the arm that existed before
+    # this one cannot see the incident, and the new one can. If these two ever
+    # agree, the commit-level comparison has stopped doing anything.
+    incident = _moving_report(
+        revision=INCIDENT_REVISION,
+        head=settled,
+        placement=Freshness(BEHIND, distance=INCIDENT_BEHIND),
+    )
+    record(
+        "CURRENCY: --require-fresh alone still cannot see the incident (it compares VERSION, which did not move)",
+        not _evaluate_codes(incident, require_fresh=True),
+        f"got {sorted(_evaluate_codes(incident, require_fresh=True)) or 'nothing'}",
+    )
+    seen = _evaluate_codes(incident, require_fresh=True, require_current=True)
+    record(
+        "CURRENCY: --require-current does see it",
+        seen == {"revision-stale"},
+        f"got {sorted(seen) or 'nothing'}",
+    )
+
+    record(
+        "CURRENCY: a tag behind but inside the window is reported, not silently tolerated",
+        bool(tolerated_lag(_reference(), Freshness(BEHIND, distance=2), just_landed))
+        and not tolerated_lag(_reference(), Freshness(CURRENT), just_landed),
+        "a tolerance nobody can see is a tolerance nobody re-examines",
+    )
+    record(
+        "CURRENCY: a tag that IS a finding is never also described as tolerated",
+        not tolerated_lag(_reference(), Freshness(BEHIND, distance=INCIDENT_BEHIND), settled)
+        and not tolerated_lag(_reference(), Freshness(BEHIND, distance=MAX_LAG_COMMITS + 1), just_landed),
+        "the note derives from the verdict, so the two cannot contradict each other",
+    )
+
+    _commit_graph_checks(record)
 
     # The shared floor every gate here answers to, run the way CI runs this one.
     refused, detail = refuses_an_empty_tree(Path(__file__).name, ["--require-fresh"])

@@ -71,8 +71,17 @@ jobs:
       # --require-network because this job exists to ask the registry. A skip
       # would be a green run that verified nothing, which is the shape the
       # gate was written against.
-      - name: Every reference resolves, at the version the tree is on
-        run: python3 scripts/check_published_images.py --require-fresh --require-network --list
+      #
+      # --require-current is here and nowhere else on a timer, and the schedule
+      # is the reason it has to be here. A moving tag goes stale with no commit
+      # at all: on 2026-11-04 the jobs that move `latest` failed on a drained
+      # Actions token, so every `:latest` sat seven commits behind `main` with
+      # nothing further pushed to re-ask the question. A push-triggered check
+      # cannot catch that after the fact — only something that asks again
+      # tomorrow can. --require-fresh could not see it either, because it
+      # compares VERSION and VERSION only moves on a release commit.
+      - name: Every reference resolves, at the version and the commit the tree is on
+        run: python3 scripts/check_published_images.py --require-fresh --require-current --require-network --list
 
   self-test:
     name: The image-availability gate still works
@@ -80,9 +89,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # The same depth the registry job uses, because the step below
+          # asserts something about what a checkout can resolve and asserting
+          # it under different conditions would prove nothing about that job.
+          fetch-depth: 0
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: '3.11'
       - run: python -m pip install --quiet pyyaml
       - name: The gate detects the drift it claims to
         run: python3 scripts/check_published_images.py --self-test
+
+      # The currency comparison needs the tip of `main`, and it refuses rather
+      # than falling back to HEAD when it cannot find one — correct, and it
+      # would mean the scheduled job fails for an environment reason nobody
+      # saw coming, because that job runs on a timer and never on a pull
+      # request. This proves the assumption here, where it is visible, instead
+      # of discovering it tomorrow at 06:42 UTC.
+      - name: A checkout can name the commit moving tags must track
+        run: python3 scripts/check_published_images.py --resolve-head

@@ -9,6 +9,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The gate that proves published images match the tree compared `VERSION`,
+  which does not move after a release — so every post-release commit was
+  invisible to it.** `scripts/check_published_images.py --require-fresh` reads
+  `org.opencontainers.image.revision` off each image and then compares
+  `git show <revision>:VERSION` against the tree. `VERSION` changes on a
+  release commit and on no other, so two different commits of the same release
+  compare equal and the check passes.
+
+  That is not theoretical. `v22.0.0` was tagged at `95bad815c`; the jobs
+  publishing the moving tags then failed on a drained Actions token, leaving
+  `:latest` on all 16 images at `95e397f7b`, seven commits behind `main`.
+  `make up` served a stack missing three of the five security fixes published
+  hours earlier, two of them for advisories rated 9.1 and 7.7 — while the gate
+  printed `OK — all 42 first-party image reference(s) resolve ... and the
+  version inside each matches the tree` and exited 0, because `VERSION` at the
+  stale revision was already `22.0.0`.
+
+  `--require-current` compares the commit rather than the version, for tags
+  that move. An immutable `vX.Y.Z` is a snapshot of a past commit and still
+  answers to `VERSION`; comparing it against today's head would red every
+  release tag forever. A moving tag must hold the tip of `main`, and is
+  tolerated behind it only while both bounds hold: the head commit is inside a
+  240-minute publish window (above the slowest of the last 100 successful
+  publish runs, at 168 minutes) and the lag is at most 40 commits (above the
+  24 that is the most ever to land inside one such window — the window alone
+  has a hole, because publishes cancel in progress and a stream of merges
+  keeps the head young indefinitely). A tag *ahead* of the head is a race and
+  not drift. A revision that is off the branch, absent, or unplaceable by this
+  checkout is a finding and never a pass.
+
+  Passed by the daily `image-availability.yml` run, which is what can catch a
+  moving tag that went stale with no commit to trigger anything, and by
+  `publish-images.yml` after it pushes its manifests. Deliberately not passed
+  by `release.yml`, whose checkout is a release tag rather than a branch tip.
+  The gate's `--self-test` went from 30 assertions to 59, covering both
+  directions — stale must fail, current and ahead and in-window must pass —
+  and `docs/operations/publishing.md` documents the operator remedy.
+
 - **CrowdStrike polling 404'd on every deployment, and the investigation read
   answered "no detections" rather than failing.** ([#1695](https://github.com/beenuar/AiSOC/issues/1695))
   CrowdStrike decommissioned the `/detects/*` endpoints on 2025-09-30. Both

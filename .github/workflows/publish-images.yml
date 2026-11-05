@@ -522,5 +522,14 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install --quiet pyyaml
+      # --require-current closes this workflow's own loop: the moving tags it
+      # just pushed have to name the commit it just published, not merely a
+      # commit carrying the same VERSION. VERSION moves on a release commit
+      # and on no other, so without this every post-release push could leave
+      # `:latest` behind and still be told the images match the tree.
+      #
+      # It cannot red for losing a race. If a newer commit publishes while
+      # this job is asking, the tag is *ahead* of this checkout, which the
+      # gate reads as a race rather than as drift.
       - name: Every image docker-compose.yml and the chart name resolves
-        run: python3 scripts/check_published_images.py --require-fresh --require-network --list
+        run: python3 scripts/check_published_images.py --require-fresh --require-current --require-network --list
