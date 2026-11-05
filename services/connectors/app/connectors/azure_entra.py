@@ -37,6 +37,8 @@ _GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 # Microsoft Graph caps `$top` at 1000 for these collections; 200 keeps each
 # round-trip fast and rate-limit friendly while still covering normal volume.
 _PAGE_SIZE = 200
+# Bounds one feed's read in a single poll; reaching it is logged.
+_MAX_PAGES = 25
 
 
 def _target_fields(targets: Any) -> dict[str, Any]:
@@ -203,7 +205,7 @@ class AzureEntraConnector(BaseConnector):
                     params=audit_params,
                 )
             if audit_resp.status_code == 200:
-                for raw in audit_resp.json().get("value", []):
+                for raw in await self._read_pages(client, audit_resp, "directory_audits"):
                     raw["_aisoc_event_kind"] = "directoryAudit"
                     events.append(raw)
             else:
@@ -225,7 +227,7 @@ class AzureEntraConnector(BaseConnector):
                 params=signin_params,
             )
             if signin_resp.status_code == 200:
-                for raw in signin_resp.json().get("value", []):
+                for raw in await self._read_pages(client, signin_resp, "risky_signins"):
                     raw["_aisoc_event_kind"] = "riskySignIn"
                     events.append(raw)
             else:
@@ -236,6 +238,32 @@ class AzureEntraConnector(BaseConnector):
                 )
 
         return [self.normalize(e) for e in events]
+
+    async def _read_pages(self, client: httpx.AsyncClient, first: httpx.Response, feed: str) -> list[dict[str, Any]]:
+        """Every entry of a Graph collection, starting from its first page.
+
+        Graph returns ``$top`` entries and an ``@odata.nextLink`` while more
+        remain. Reading only the first page kept the newest 200 entries of the
+        window and dropped the rest; the next poll's window starts later, so
+        they were never read. The link already carries the filter, ordering
+        and skip token, so it is requested as-is. A failed later page keeps
+        what was already read.
+        """
+        body = first.json()
+        entries: list[dict[str, Any]] = list(body.get("value", []))
+        for _ in range(_MAX_PAGES - 1):
+            next_link = body.get("@odata.nextLink")
+            if not next_link:
+                return entries
+            resp = await client.get(next_link, headers=self._headers())
+            if resp.status_code != 200:
+                logger.warning("azure_entra.next_page_failed", feed=feed, status=resp.status_code, body=resp.text[:300])
+                return entries
+            body = resp.json()
+            entries.extend(body.get("value", []))
+        if body.get("@odata.nextLink"):
+            logger.warning("azure_entra.fetch_page_cap_reached", feed=feed, pages=_MAX_PAGES, entries=len(entries))
+        return entries
 
     # ------------------------- posture --------------------------
 
