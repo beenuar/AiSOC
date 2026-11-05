@@ -298,7 +298,29 @@ ceilings:
     # known shape from the +/-1 the long note above describes (that drift
     # moves `error` and `total` together). Counted rather than suppressed: a
     # ceiling counts a finding, a suppression hides it.
-    total: 114
+    #
+    # 114 -> 113 (error unchanged at 44). One of those six
+    # `dynamic-urllib-use-detected` warnings is gone: the one on
+    # check_main_run_cancellations.py, named in the 112 -> 113 note above.
+    # That gate had its own single-attempt copy of the Actions API request
+    # and now delegates to the retrying reader in
+    # check_required_check_substance.py, so the `urlopen` call site the rule
+    # fired on no longer exists in that file. No suppression was added and
+    # nothing moved to a different file; there is simply one fewer call.
+    #
+    # Attributed before the ceiling moved, and measured rather than inferred,
+    # because two consecutive CI runs reading 113 against a ceiling of 114 is
+    # also what the recorded +/-1 looks like and the first reading of this
+    # was wrongly called drift. The control that settles it: the file alone,
+    # scanned at `main` and on the branch with semgrep 1.86.0 on the same
+    # vendored packs, gives
+    #
+    #   main    1 finding:  ['dynamic-urllib-use-detected']
+    #   branch  0 findings: []
+    #
+    # `error` is unchanged at 44, which is the other half of the test --
+    # the scanner's drift moves `error` and `total` together.
+    total: 113
     error: 44
     measured_with: "1.86.0"
     rules_sha256: "5af76658e7e28b96b1099d2c995d7c85b3b9a4f96795a39df3d02aa7d295cb99"
