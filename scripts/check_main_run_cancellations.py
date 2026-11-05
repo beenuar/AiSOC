@@ -57,18 +57,17 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import re
 import subprocess
 import sys
 import urllib.error
-import urllib.request
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from check_required_check_substance import api_get
 from check_workflow_concurrency import EXCEPTIONS
 from gate_toolkit import repo_root
 
@@ -128,22 +127,22 @@ def resolve_repository(root: Path) -> str:
 
 
 def _get(url: str, token: str) -> dict:
-    # Same shape as check_codeql_alerts.py::_get, including the prefix check:
-    # urllib honours `file://`, so a URL that did not come from API is refused
-    # rather than fetched.
+    """One Actions API read, with the sibling gate's retry policy.
+
+    This used to be a single-attempt copy of the same request. The two gates
+    run in the same workflow against the same API, so whatever makes one of
+    them unreadable makes the other unreadable at the same moment — and only
+    one of them rode it out. Reusing the reader rather than restating it also
+    means a rate limit is waited on here too, which is the condition a merge
+    burst produces and the one that was costing manual re-runs.
+
+    The prefix check stays at this layer as well as inside: urllib honours
+    `file://`, so a URL that did not come from `API` is refused rather than
+    fetched, and that refusal should not depend on an import.
+    """
     if not url.startswith(API + "/"):
         raise GateError(f"refusing to call a non-GitHub URL: {url}")
-    req = urllib.request.Request(  # noqa: S310 - refused above unless it is the GitHub API
-        url,
-        headers={
-            "Accept": "application/vnd.github+json",
-            "Authorization": f"Bearer {token}",
-            "X-GitHub-Api-Version": "2022-11-28",
-            "User-Agent": "aisoc-grading-integrity/1.0",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310
-        return json.loads(resp.read().decode("utf-8"))
+    return api_get(url, token)
 
 
 def fetch_runs(repo: str, token: str, limit: int = FETCH_LIMIT) -> list[dict]:

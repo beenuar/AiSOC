@@ -623,6 +623,88 @@ def index_workflows(root: Path, contexts: list[str], branch: str) -> tuple[dict[
 _TRANSIENT_STATUS = frozenset({500, 502, 503, 504})
 _GET_ATTEMPTS = 4
 
+#: Rate limiting, which is a *different* condition from the above and from a
+#: permissions refusal, even though it shares a status code with one of them.
+#: GitHub answers both a primary and a secondary rate limit with **403 or
+#: 429**, so the code alone cannot separate "you are going too fast" from
+#: "this token may not read this" — and the difference matters in both
+#: directions. Waiting on a scope refusal would hang a gate on an answer that
+#: will never change; raising on a rate limit turns a busy minute into a red
+#: board nobody can act on, which is the condition this job hits when a merge
+#: burst queues dozens of jobs against the same API.
+#:
+#: The discriminator is the response headers, which is how GitHub documents
+#: it: a rate-limited answer carries `retry-after`, or `x-ratelimit-remaining:
+#: 0`. A 403 carrying neither is a durable answer about the token and is
+#: raised immediately, exactly as before.
+_RATE_LIMIT_STATUS = frozenset({403, 429})
+
+#: Used when GitHub asks for a pause without saying how long.
+_RATE_LIMIT_PAUSE_S = 30.0
+
+#: Longest a single `retry-after` may pause this gate. The header is a
+#: vendor's number arriving over the wire; honouring an arbitrary one would
+#: let the API decide when this job gets killed.
+_MAX_RETRY_AFTER_S = 60.0
+
+#: Total time this *process* may spend waiting on rate limits, across every
+#: call it makes. Bounded globally rather than per call so that a retry can
+#: never be the reason the job is killed: with this ceiling the worst case is
+#: the normal runtime plus five minutes, which is what the workflow's
+#: `timeout-minutes` is derived from. Spending it leaves the gate reporting
+#: "could not read" — still a failure, because an unknown is not a pass, but
+#: an honest one that names the API rather than a `cancelled` conclusion the
+#: cancellation gate correctly reads as a commit nothing graded.
+_RATE_LIMIT_BUDGET_S = 300.0
+
+#: Consumed by `_rate_limit_pause`. A list so the self-test can reset it.
+_rate_limit_spent: list[float] = [0.0]
+
+
+def _rate_limit_pause(exc: urllib.error.HTTPError) -> float | None:
+    """Seconds to wait when ``exc`` is GitHub asking for a pause, else None.
+
+    None means "this is not a rate limit", which for a 403 is the durable
+    permissions answer that must be raised rather than waited on. It is also
+    returned once the process-wide budget is spent, so the caller stops
+    retrying and reports instead of sleeping into its own timeout.
+    """
+    if exc.code not in _RATE_LIMIT_STATUS:
+        return None
+    # Read through `exc.headers` rather than coalescing it with a dict: on a
+    # real response it is an `email.message.Message`, whose `get` is
+    # case-insensitive, which is what makes a `Retry-After` sent in any
+    # casing match the lowercase name looked up here.
+    headers = exc.headers
+    retry_after = headers.get("retry-after") if headers is not None else None
+    quota_left = headers.get("x-ratelimit-remaining") if headers is not None else None
+    exhausted = str(quota_left or "").strip() == "0"
+    if exc.code == 403 and retry_after is None and not exhausted:
+        return None
+
+    pause = _RATE_LIMIT_PAUSE_S
+    if retry_after is not None:
+        try:
+            # Seconds form only. GitHub also permits an HTTP-date, which is
+            # rare here and falls through to the default rather than being
+            # parsed into a number this gate would then have to trust.
+            pause = float(int(str(retry_after).strip()))
+        except ValueError:
+            # Deliberately swallowed: an unparseable `retry-after` is still a
+            # rate limit, and the only question here is how long to wait. The
+            # default below answers it. Reporting the malformed header would
+            # replace a gate that waits and succeeds with one that fails on
+            # the vendor's formatting.
+            pause = _RATE_LIMIT_PAUSE_S
+    pause = max(0.0, min(pause, _MAX_RETRY_AFTER_S))
+
+    remaining = _RATE_LIMIT_BUDGET_S - _rate_limit_spent[0]
+    if remaining <= 0:
+        return None
+    pause = min(pause, remaining)
+    _rate_limit_spent[0] += pause
+    return pause
+
 
 def _get(url: str, token: str) -> dict:
     """One Actions API read, retried only while the failure is transient.
@@ -654,21 +736,35 @@ def _get(url: str, token: str) -> dict:
     )
     last: Exception | None = None
     for attempt in range(1, _GET_ATTEMPTS + 1):
+        # Short and bounded: this runs inside a job, and a gate that hangs on
+        # a sick API is its own outage. A rate limit replaces it with the
+        # pause GitHub asked for, which is the one case where backing off
+        # faster than told makes the condition worse.
+        wait = float(2**attempt)
         try:
             with urllib.request.urlopen(req, timeout=45) as resp:  # noqa: S310
                 return json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
-            if exc.code not in _TRANSIENT_STATUS:
+            pause = _rate_limit_pause(exc)
+            if pause is None and exc.code not in _TRANSIENT_STATUS:
                 raise
+            if pause is not None:
+                wait = pause
             last = exc
         except (urllib.error.URLError, TimeoutError) as exc:
             last = exc
         if attempt < _GET_ATTEMPTS:
-            # Short and bounded: this runs inside a job, and a gate that
-            # hangs on a sick API is its own outage.
-            time.sleep(2**attempt)
+            time.sleep(wait)
     assert last is not None
     raise last
+
+
+#: The same reader, under a name another module may import.
+#: `check_main_run_cancellations.py` runs against the same API from the same
+#: workflow and had its own single-attempt copy, so a 502 that this gate rode
+#: out reddened that one. One retry policy, in one place, rather than a second
+#: that drifts from it.
+api_get = _get
 
 
 def fetch_protection_contexts(repo: str, token: str, branch: str) -> list[str] | None:
@@ -1290,6 +1386,45 @@ def self_test() -> int:  # noqa: PLR0912, PLR0915 - a flat list of assertions re
     )
     if rendered != ["Python — Service unit tests wave 2 (actions)", "Python — Service unit tests wave 2 (ueba)"]:
         failures.append(f"matrix job names did not render: {rendered}")
+
+    # ── the API reader separates "slow down" from "you may not read this" ──
+    # Both directions, because getting either wrong is a defect that has
+    # shipped here: raising on a rate limit reds the board for a busy minute,
+    # and waiting on a scope refusal hangs a gate on an answer that will
+    # never change. `_rate_limit_pause` is driven directly rather than through
+    # a socket so the assertions cost nothing and sleep for nothing.
+    def _http_error(code: int, headers: dict[str, str]) -> urllib.error.HTTPError:
+        return urllib.error.HTTPError("https://api.github.com/x", code, "", headers, None)  # type: ignore[arg-type]
+
+    _rate_limit_spent[0] = 0.0
+    if _rate_limit_pause(_http_error(403, {})) is not None:
+        failures.append("a 403 with no rate-limit header was waited on instead of raised")
+    if _rate_limit_pause(_http_error(404, {})) is not None:
+        failures.append("a 404 was treated as a rate limit")
+    if _rate_limit_pause(_http_error(429, {})) != _RATE_LIMIT_PAUSE_S:
+        failures.append("a 429 with no retry-after did not take the default pause")
+    if _rate_limit_pause(_http_error(403, {"x-ratelimit-remaining": "0"})) != _RATE_LIMIT_PAUSE_S:
+        failures.append("an exhausted primary rate limit was not recognised on a 403")
+    if _rate_limit_pause(_http_error(403, {"retry-after": "7"})) != 7.0:
+        failures.append("a secondary rate limit did not honour retry-after")
+    if _rate_limit_pause(_http_error(429, {"retry-after": "9999"})) != _MAX_RETRY_AFTER_S:
+        failures.append("an unbounded retry-after was honoured rather than capped")
+    if _rate_limit_pause(_http_error(429, {"retry-after": "Wed, 21 Oct 2026 07:28:00 GMT"})) != _RATE_LIMIT_PAUSE_S:
+        failures.append("an HTTP-date retry-after was not fallen back from")
+
+    # The budget has to bind, or the retry becomes the reason the job is
+    # killed — the failure this change exists to stop.
+    _rate_limit_spent[0] = 0.0
+    waited = 0.0
+    while (pause := _rate_limit_pause(_http_error(429, {}))) is not None:
+        waited += pause
+        if waited > _RATE_LIMIT_BUDGET_S:
+            break
+    if waited > _RATE_LIMIT_BUDGET_S:
+        failures.append(f"rate-limit waiting ran past its budget: {waited}s > {_RATE_LIMIT_BUDGET_S}s")
+    if waited != _RATE_LIMIT_BUDGET_S:
+        failures.append(f"the rate-limit budget was not spent in full before refusing: {waited}s")
+    _rate_limit_spent[0] = 0.0
 
     if failures:
         print("self-test FAILED:")

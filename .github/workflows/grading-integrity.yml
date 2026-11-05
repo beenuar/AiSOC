@@ -133,7 +133,31 @@ jobs:
     # `main`, so asking there would grade the base branch.
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Derived from this job's own measured runtimes, not picked. Over the 100
+    # most recent runs of this workflow (2026-11-03 22:14Z → 2026-11-05
+    # 13:49Z) it executed 31 times successfully: fastest 8m13s, median
+    # 12m51s, slowest **14m30s**. The budget was 15 minutes, so the ordinary
+    # worst case finished 30 seconds — about 3% — inside its own ceiling, and
+    # anything that slowed the Actions API pushed it over. It did go over: one
+    # run was killed at 15m16s.
+    #
+    # That kill is why the number matters more than it looks. GitHub reports a
+    # timed-out job as **`cancelled`**, not `failed`, and `cancelled-runs`
+    # above then correctly reports a commit that nothing graded. So the cost
+    # of this ceiling being too low is a red board on a non-defect and a
+    # manual re-run, three times in two days; the cost of it being generous is
+    # runner minutes on a job that has never legitimately needed them. The
+    # asymmetry says err high.
+    #
+    # 40 minutes is 2.8x the slowest successful run. The headroom is sized for
+    # the two things that can legitimately extend it rather than guessed:
+    # the measured 14m30s worst case, plus the `_RATE_LIMIT_BUDGET_S` ceiling
+    # of 300s that bounds every rate-limit pause this process may take — about
+    # 20 minutes in total — doubled. The retry can therefore never be the
+    # reason this job is killed, which would have made the fix the defect.
+    # It still binds: a genuinely hung job dies here rather than running to
+    # the six-hour default.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
