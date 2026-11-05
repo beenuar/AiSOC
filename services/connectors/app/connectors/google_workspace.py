@@ -58,6 +58,40 @@ _DIRECTORY_SCOPE = " ".join(
 _DEFAULT_APPS = ("login", "admin", "drive", "token", "mobile")
 _PAGE_SIZE = 500
 
+# How long Google withholds an event before the Reports API will answer it.
+#
+# This is a vendor fact, not a tuning knob, and it is published per
+# application: https://support.google.com/a/answer/7061566 states the lag
+# "appl[ies] to log events data from the audit and investigation page,
+# security investigation tool, alert center, and the Admin SDK Reports API",
+# and the spread across the applications polled here is three orders of
+# magnitude — Admin, Drive, Devices and Login events are "Near real time
+# (couple of minutes)" while Token log events are "A couple of hours".
+#
+# Each figure sits above the documented one, because the same page warns:
+# "There's a small chance that reports and log event data for some events
+# will be delayed beyond the following specified times." Undershooting puts
+# the window back inside the band Google has not published, which is the
+# defect this exists to close; overshooting only delays an event.
+#
+# The cost is latency and the alternative was silence. A window ending at
+# `now` never held the unpublished tail, and the next poll began where it
+# ended, so that tail was read once while empty and never requeried. For
+# Token, whose lag exceeds the default interval by a factor of about
+# twenty-four, no poll ever overlapped the published part of the timeline at
+# all: the loss was not a fraction, it was everything.
+_PUBLICATION_LAG_S: dict[str, int] = {
+    "login": 600,
+    "admin": 600,
+    "drive": 600,
+    "mobile": 600,
+    "token": 10_800,
+}
+# Applied to an application not named above, so adding one to ``_DEFAULT_APPS``
+# cannot silently reintroduce a window pinned to ``now``. Look the application
+# up in Google's table and give it its own entry rather than relying on this.
+_DEFAULT_PUBLICATION_LAG_S = 600
+
 
 def _b64url(data: bytes) -> str:
     return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
@@ -228,15 +262,36 @@ class GoogleWorkspaceConnector(BaseConnector):
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
         await self._authenticate()
-        start_time = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        now = datetime.now(UTC)
 
         events: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
             for app_name in _DEFAULT_APPS:
                 url = f"{_REPORTS_BASE}/users/all/applications/{app_name}"
+                # End the window where Google has published, not at `now`, and
+                # keep its length so consecutive polls stay contiguous across
+                # that boundary. `endTime` has to be sent explicitly: left
+                # unset, "the report returns all activities from the startTime
+                # until the current time", which is the pinned-to-now window
+                # whose unpublished tail was being lost.
+                lag = _PUBLICATION_LAG_S.get(app_name, _DEFAULT_PUBLICATION_LAG_S)
+                end = now - timedelta(seconds=lag)
+                start_time = (end - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+                end_time = end.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-                async def page(token: str | None, *, url: str = url, app_name: str = app_name) -> httpx.Response:
-                    params: dict[str, Any] = {"startTime": start_time, "maxResults": _PAGE_SIZE}
+                async def page(
+                    token: str | None,
+                    *,
+                    url: str = url,
+                    app_name: str = app_name,
+                    start_time: str = start_time,
+                    end_time: str = end_time,
+                ) -> httpx.Response:
+                    params: dict[str, Any] = {
+                        "startTime": start_time,
+                        "endTime": end_time,
+                        "maxResults": _PAGE_SIZE,
+                    }
                     if token:
                         params["pageToken"] = token
                     resp = await client.get(url, headers=self._headers(), params=params)
