@@ -42,6 +42,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A fusion worker that lost its broker reported the loss and could never
+  undo it.** ([#1726](https://github.com/beenuar/AiSOC/pull/1726), closing
+  [#1724](https://github.com/beenuar/AiSOC/pull/1724) — thanks
+  [@alexmateescu](https://github.com/alexmateescu) for the analysis and the
+  original patch.) `FusionWorker.start()` ran one start/consume/stop cycle, so
+  any exception that escaped the consume loop — a broker not up yet at cold
+  boot, a connection lost mid-stream — ended the task, and nothing started it
+  again. Recovery meant a human noticing and restarting the container.
+
+  Reporting the death and healing from it are separate properties and only the
+  first was in place: `app/main.py` already registers `attached` as a
+  readiness subscription and `broker_reachable` as a bounded dependency
+  probe, so `/readyz` has answered 503 with `detached: ["alerts+raw_events"]`
+  since those landed. Verified rather than assumed, by driving the real worker
+  and the real route: healthy reads 200, dead reads 503, and the dead one
+  never came back. The missing half was the coming back, and no second probe
+  was added — `attached` is already false for the whole of a backoff window,
+  so one probe covers both directions and a second reading the same flag would
+  publish the same answer under a different name.
+
+  `start()` now supervises, retrying with capped exponential backoff, and
+  readiness returns to 200 on its own when consumption resumes. Three
+  properties a bare retry loop would have got wrong, each with a test that
+  fails when it is reverted:
+
+  - **A retry is attempted only where retrying can help.** The same three
+    classes `streamhealth` gives the Go consumer in `services/ingest`: a
+    transient fault backs off; a permanent one — a refused credential, a
+    missing ACL, an unsupported SASL mechanism — stops and names the operator
+    action, because a loop retrying a misconfiguration every 60 seconds turns
+    it into churn an operator reads as ordinary noise; a poison message is
+    still dead-lettered by the consume loop, which is the right place for it.
+    An unrecognised error is treated as transient and escalated to an error
+    naming where to look once it has outlived any transient explanation.
+  - **Teardown runs exactly once per attempt.** A bootstrap failure is the
+    commonest retry there is, and the next attempt reassigns the Kafka
+    handles, so an attempt that raised before reaching the consume loop left
+    both clients open and unreachable — measured at six leaked consumers and
+    six leaked producers over seven attempts. Teardown now covers the
+    bootstrap as well as the loop, and is idempotent so the two callers that
+    legitimately race on shutdown do not stop the alert sink twice.
+  - **A healthy worker is unaffected.** It attaches, builds exactly one
+    consumer and is never restarted — a supervisor stuck retrying reads as
+    working caution, which has shipped here before.
+
 - **The cancelled-run gate on `main` overstated the window it graded by about
   100x, so it went green by forgetting.**
   `scripts/check_main_run_cancellations.py` printed `graded window created at
