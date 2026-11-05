@@ -263,6 +263,19 @@ async def lifespan(app: FastAPI):
     worker_task = asyncio.create_task(worker.start())
     worker_task.add_done_callback(_log_worker_exit)
     register_subscription(app, "alerts+raw_events", lambda: worker.attached)
+
+    def _worker_consuming() -> bool:
+        """Live probe: true only while the supervised worker is actively attached.
+
+        During a retry backoff (broker down, DNS blip) the consume loop is not
+        iterating, so /readyz answers 503 and an orchestrator can see the
+        outage instead of routing to a service that is up but deaf. When the
+        worker re-attaches after a successful retry, readiness returns to 200
+        without any operator action.
+        """
+        return worker.attached
+
+    register_subscription(app, "fusion-worker", _worker_consuming)
     # Two different questions, which is why they are two probes and not one
     # flag read twice. The subscription above is "am I consuming"; the
     # dependency below is "can I reach the broker", and only the second can
