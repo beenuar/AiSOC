@@ -671,9 +671,14 @@ def _rate_limit_pause(exc: urllib.error.HTTPError) -> float | None:
     """
     if exc.code not in _RATE_LIMIT_STATUS:
         return None
-    headers = exc.headers or {}
-    retry_after = headers.get("retry-after")
-    exhausted = str(headers.get("x-ratelimit-remaining") or "").strip() == "0"
+    # Read through `exc.headers` rather than coalescing it with a dict: on a
+    # real response it is an `email.message.Message`, whose `get` is
+    # case-insensitive, which is what makes a `Retry-After` sent in any
+    # casing match the lowercase name looked up here.
+    headers = exc.headers
+    retry_after = headers.get("retry-after") if headers is not None else None
+    quota_left = headers.get("x-ratelimit-remaining") if headers is not None else None
+    exhausted = str(quota_left or "").strip() == "0"
     if exc.code == 403 and retry_after is None and not exhausted:
         return None
 
@@ -685,7 +690,12 @@ def _rate_limit_pause(exc: urllib.error.HTTPError) -> float | None:
             # parsed into a number this gate would then have to trust.
             pause = float(int(str(retry_after).strip()))
         except ValueError:
-            pass
+            # Deliberately swallowed: an unparseable `retry-after` is still a
+            # rate limit, and the only question here is how long to wait. The
+            # default below answers it. Reporting the malformed header would
+            # replace a gate that waits and succeeds with one that fails on
+            # the vendor's formatting.
+            pause = _RATE_LIMIT_PAUSE_S
     pause = max(0.0, min(pause, _MAX_RETRY_AFTER_S))
 
     remaining = _RATE_LIMIT_BUDGET_S - _rate_limit_spent[0]
