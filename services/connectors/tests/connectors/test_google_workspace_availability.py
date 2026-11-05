@@ -114,8 +114,14 @@ def _parse(raw: str | None) -> datetime | None:
 
 def _freeze(monkeypatch: pytest.MonkeyPatch, estate: _Estate) -> None:
     class _Clock(datetime):
+        # Subclassing `datetime` keeps every other use of the name in the
+        # module working while only `now` is replaced. mypy reads this as an
+        # incompatible override because typeshed types `datetime.now` through
+        # overloads that a plain classmethod cannot restate; the substitution
+        # is sound for the one call the connector makes, so the finding is
+        # suppressed here rather than by widening the tree's config.
         @classmethod
-        def now(cls, tz: Any = None) -> datetime:  # noqa: ARG003 — signature match
+        def now(cls, tz: Any = None) -> datetime:  # type: ignore[override]  # noqa: ARG003 — signature match
             return estate.now
 
     monkeypatch.setattr(google_workspace, "datetime", _Clock)

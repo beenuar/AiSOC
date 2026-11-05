@@ -193,7 +193,10 @@ def _requests_a_cap(nodes: list[ast.AST]) -> bool:
     return False
 
 
-def _is_page_shaped_loop(node: ast.AST) -> bool:
+_Loop = ast.For | ast.AsyncFor | ast.While
+
+
+def _is_page_shaped_loop(node: _Loop) -> bool:
     """A loop that re-requests, as opposed to one that iterates feeds.
 
     This is the discriminator the first version of this gate got wrong, in the
@@ -222,9 +225,12 @@ def _follows_a_continuation(nodes: list[ast.AST], source: str) -> bool:
         if _PAGING_HELPERS & _called_names(node):
             return True
         for sub in ast.walk(node):
-            if not _is_page_shaped_loop(sub):
+            # The isinstance is what narrows `sub` from `ast.AST` for the type
+            # checker; `_is_page_shaped_loop` then answers the question this
+            # gate actually cares about, which is whether the loop re-requests.
+            if not isinstance(sub, (ast.For, ast.AsyncFor, ast.While)) or not _is_page_shaped_loop(sub):
                 continue
-            body_nodes = list(sub.body)
+            body_nodes: list[ast.AST] = list(sub.body)
             if _makes_http_request(body_nodes):
                 return True
             body = "\n".join(ast.unparse(stmt) for stmt in body_nodes).lower()
