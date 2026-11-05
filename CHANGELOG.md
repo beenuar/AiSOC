@@ -153,6 +153,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   implementation from a wrong one. `MAX_UNCLASSIFIED` in the paging gate
   falls from 59 to 58 with it.
 
+- **Entra directory-audit alerts named the Microsoft service that performed a
+  change, never the user, group or device that changed.**
+  ([#1722](https://github.com/beenuar/AiSOC/pull/1722), reported in
+  [#1718](https://github.com/beenuar/AiSOC/issues/1718) by
+  [@gdncomm-dika-wibowo](https://github.com/gdncomm-dika-wibowo))
+  Measured across ten alerts from one tenant: an "Add member to group" alert
+  read `affected_users: ["Microsoft Teams Services"]` and named neither the
+  member added nor the group, and a device update carried no host at all. Six
+  causes across four layers, and a fix in any one of them reaches nothing —
+  the fusion promoter builds an alert's `username` from OCSF
+  `actor.user.name` and its `hostname` from `device.name`, so a target
+  sitting anywhere else reached no column, no entity and no correlation key.
+
+  `azure_entra.normalize()` now prefers `initiatedBy.user.userPrincipalName`
+  for the actor: Graph puts a first-party client in `user.displayName` when a
+  person acts through one, so the display name named Teams, Intune or the
+  password-reset service as the actor on events a person performed. The
+  display name is carried as `actor_display_name` rather than dropped,
+  because nothing downstream can tell from the value alone whether that slot
+  held a person or a client. `_target_fields` keeps every target and every
+  modified property — `modifiedProperties[0]` on a device update is the empty
+  `Included Updated Properties` marker, so a device's id, OS and trust type
+  were lost on every device event. Its docstring had refused `target_user_2`
+  on the reasoning that a rule written against it would pass its fixture and
+  miss the real shape; that hazard is **position, not plurality**, so nothing
+  added is positional — `targets` and `modified_properties` are keyed by what
+  a thing is, and `target_group_name` / `target_hostname` are found by
+  searching for the group or the device wherever Graph put it. The original
+  flat fields still describe `targetResources[0]` byte for byte.
+
+  The ingest normalizer maps `target_user` onto OCSF `target_user.name` and
+  `target_hostname` onto `device.name` (not `target_name`, which is the
+  display name of whatever the target is and would put a person in the host
+  column), and the fusion sink lists the target beside the actor in both
+  `affected_users` and `entities` from one shared helper, so the two can
+  never name a different set of people. A device change now also correlates
+  per device instead of collapsing every device event in the tenant onto the
+  Intune client that performed them.
+
+  `det-identity-210` ("Entra User Password Reset By An Administrator", high)
+  required only `activity == "Reset user password"`, so every self-service
+  reset raised a high-severity administrator reset. It now also requires
+  `initiator_type == "user"`. One rule with a clause rather than a split: the
+  defect is that the condition did not match the rule's own name, and an SSPR
+  rule would be new coverage rather than a fix. The id is unchanged, no new
+  id was allocated, and the negative fixture is a real self-service reset
+  rather than a flipped literal. `method_execution_result` additionally
+  surfaces the directory's own result, so an "add member" that returned
+  `DirectoryValueExistsException` is distinguishable from a real add without
+  rewriting Graph's own `result: success`.
+
+  Not fixed, and recorded as such: the group is available to rules and on the
+  alert's raw event but is **not** an entity chip, because the Investigation
+  Rail's entity vocabulary has no group kind and adding one is an API change
+  the report did not ask for. Nothing here was exercised against a live Entra
+  tenant; the fixtures are the anonymised shapes from the report and Graph's
+  published schema.
+
 ## [22.1.0] - 2026-11-05
 
 ### Security
