@@ -41,18 +41,25 @@ from app.workers.consumer import FusionWorker
 
 
 def _log_worker_exit(task: asyncio.Task) -> None:
-    """Say why the consume loop stopped, whatever the reason.
+    """Say why supervision stopped, whatever the reason.
 
     A worker that ends cleanly is as much of a problem as one that raises:
     either way nothing is consuming ``raw_events`` any more, and both used to
     be silent.
+
+    This task runs ``FusionWorker.start()``, which supervises, so reaching
+    here is no longer "one consume loop ended". A transient broker fault is
+    retried without the task completing at all; the task finishes only on a
+    clean shutdown, on a failure classified as permanent (already logged with
+    the operator action), or on a bug in the supervisor itself. The last of
+    those is the one with nothing else reporting it, which is why this stays.
     """
     if task.cancelled():
         logger.info("fusion.worker_cancelled")
         return
     exc = task.exception()
     if exc is None:
-        logger.error("fusion.worker_exited", detail="consume loop returned; the subscription is gone")
+        logger.error("fusion.worker_exited", detail="supervision returned; the subscription is gone")
         return
     logger.error("fusion.worker_died", error=str(exc), error_type=type(exc).__name__, exc_info=exc)
 
@@ -255,11 +262,20 @@ async def lifespan(app: FastAPI):
 
     # Start Kafka worker as a background task.
     #
-    # The done-callback is what makes a dead worker findable. The task is held
-    # on app.state, so it is never garbage-collected and asyncio never emits
-    # its "Task exception was never retrieved" warning — without this, a
-    # consume loop that died took the reason with it. The matching readiness
-    # probe below is what stops /readyz answering 200 afterwards.
+    # `start()` supervises: a transient Kafka failure is retried with capped
+    # backoff, so this task now ends only on a clean stop or on a failure no
+    # retry can clear. That makes the done-callback rarer and more
+    # significant than it was — it used to fire for any blip, and now firing
+    # means supervision itself gave up.
+    #
+    # The task is held on app.state, so it is never garbage-collected and
+    # asyncio never emits its "Task exception was never retrieved" warning —
+    # without this, a consume loop that died took the reason with it. The
+    # readiness probe below is what stops /readyz answering 200 afterwards,
+    # and what returns it to 200 when a retry re-attaches: `attached` is
+    # cleared for the whole of a backoff window, so one probe already covers
+    # both directions and a second one reading the same flag would only
+    # publish the same answer under a different name.
     worker_task = asyncio.create_task(worker.start())
     worker_task.add_done_callback(_log_worker_exit)
     register_subscription(app, "alerts+raw_events", lambda: worker.attached)
