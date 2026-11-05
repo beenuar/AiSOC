@@ -20,6 +20,9 @@ from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Fiel
 
 logger = structlog.get_logger()
 
+# Duo's documented delay before a new authentication is served by the logs API.
+_AVAILABILITY_DELAY_S = 120
+
 
 class DuoSecurityConnector(BaseConnector):
     connector_id = "duo_security"
@@ -80,9 +83,18 @@ class DuoSecurityConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        mintime = str(int((datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp()) * 1000)
+        # Duo serves an authentication "up to as recently as two minutes
+        # before the API request" and answers a newer range as empty. A window
+        # ending at now therefore never held its last two minutes, and the
+        # next poll's window starts at now, so those entries were never read.
+        # Ending the window two minutes back keeps consecutive polls contiguous.
+        maxtime = datetime.now(UTC) - timedelta(seconds=_AVAILABILITY_DELAY_S)
+        mintime = maxtime - timedelta(seconds=since_seconds)
         path = "/admin/v2/logs/authentication"
-        params = {"mintime": mintime, "maxtime": str(int(datetime.now(UTC).timestamp()) * 1000)}
+        params = {
+            "mintime": str(int(mintime.timestamp()) * 1000),
+            "maxtime": str(int(maxtime.timestamp()) * 1000),
+        }
 
         date_str, auth = self._sign("GET", path, params)
 
