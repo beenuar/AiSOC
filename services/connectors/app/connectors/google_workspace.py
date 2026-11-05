@@ -56,6 +56,8 @@ _DIRECTORY_SCOPE = " ".join(
 
 _DEFAULT_APPS = ("login", "admin", "drive", "token", "mobile")
 _PAGE_SIZE = 500
+# Bounds one application's read in a single poll; reaching it is logged.
+_MAX_PAGES = 20
 
 
 def _b64url(data: bytes) -> str:
@@ -232,34 +234,46 @@ class GoogleWorkspaceConnector(BaseConnector):
         events: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
             for app_name in _DEFAULT_APPS:
-                resp = await client.get(
-                    f"{_REPORTS_BASE}/users/all/applications/{app_name}",
-                    headers=self._headers(),
-                    params={"startTime": start_time, "maxResults": _PAGE_SIZE},
-                )
-                if resp.status_code == 401:
-                    self._invalidate()
-                    await self._authenticate()
+                params: dict[str, Any] = {"startTime": start_time, "maxResults": _PAGE_SIZE}
+                # The Reports API returns one page and a `nextPageToken` for
+                # the follow-on page. Reading only the first page kept the
+                # newest 500 activities of the window per application and
+                # dropped the rest; the next poll's window starts later.
+                for _ in range(_MAX_PAGES):
                     resp = await client.get(
                         f"{_REPORTS_BASE}/users/all/applications/{app_name}",
                         headers=self._headers(),
-                        params={"startTime": start_time, "maxResults": _PAGE_SIZE},
+                        params=params,
                     )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "google_workspace.fetch_failed",
-                        application=app_name,
-                        status=resp.status_code,
-                        body=resp.text[:300],
-                    )
-                    continue
-                items = resp.json().get("items", [])
-                # Tag each item with the app name so normalize() doesn't
-                # have to crack open ``id.applicationName`` (which is
-                # present, but explicit beats implicit).
-                for item in items:
-                    item["_aisoc_application"] = app_name
-                    events.append(item)
+                    if resp.status_code == 401:
+                        self._invalidate()
+                        await self._authenticate()
+                        resp = await client.get(
+                            f"{_REPORTS_BASE}/users/all/applications/{app_name}",
+                            headers=self._headers(),
+                            params=params,
+                        )
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "google_workspace.fetch_failed",
+                            application=app_name,
+                            status=resp.status_code,
+                            body=resp.text[:300],
+                        )
+                        break
+                    body = resp.json()
+                    # Tag each item with the app name so normalize() doesn't
+                    # have to crack open ``id.applicationName`` (which is
+                    # present, but explicit beats implicit).
+                    for item in body.get("items", []):
+                        item["_aisoc_application"] = app_name
+                        events.append(item)
+                    next_token = body.get("nextPageToken")
+                    if not next_token:
+                        break
+                    params = {**params, "pageToken": next_token}
+                else:
+                    logger.warning("google_workspace.fetch_page_cap_reached", application=app_name, pages=_MAX_PAGES)
 
         return [self.normalize(e) for e in events]
 
