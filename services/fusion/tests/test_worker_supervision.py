@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+from typing import cast
 
 import pytest
 from aiokafka.errors import AuthenticationFailedError, KafkaConnectionError
 from app._health import install_health_routes, register_subscription
+from app.services.alert_sink import AlertSink
 from app.workers import consumer as consumer_module
 from app.workers.consumer import FusionWorker, permanent_failure_action
 from fastapi import FastAPI
@@ -166,7 +168,10 @@ def make_worker(sink: CountingSink | None = None) -> FusionWorker:
         "_flush_task",
     ):
         setattr(worker, attribute, None)
-    worker._sink = sink
+    # Cast rather than subclass: the double implements the two methods
+    # teardown calls and nothing else, so it cannot quietly grow more
+    # capability than the real sink has.
+    worker._sink = cast("AlertSink | None", sink)
     worker._durable_capture = False
     worker._running = False
     worker._attached = False
@@ -199,7 +204,7 @@ async def shut_down(worker: FusionWorker, task: asyncio.Task) -> None:
     await worker.stop()
     task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
-        await task
+        _ = await task  # await the cancellation to settle; the result is unused
 
 
 # --------------------------------------------------------------------------
