@@ -1490,5 +1490,14 @@ jobs:
         with:
           python-version: '3.11'
       - run: python -m pip install --quiet pyyaml
+      # Deliberately without --require-current, which image-availability.yml
+      # and publish-images.yml both pass. That flag asks whether the moving
+      # tags have kept up with the tip of `main`; this job runs on a tag push,
+      # where the checkout is the release commit and `main` has usually moved
+      # on already. Asking here would either red every release for a race it
+      # cannot win or, worse, compare against whatever happens to be checked
+      # out. The release's own question — did every image publish, at the
+      # version its tag names — is what --require-fresh answers, and that is
+      # the question this job exists for.
       - name: Every image docker-compose.yml and the chart name resolves
         run: python3 scripts/check_published_images.py --require-fresh --require-network --list
