@@ -29,7 +29,7 @@ import importlib.util
 import shutil
 import subprocess
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -227,11 +227,16 @@ def test_recorded_exception_is_counted_not_failed():
 
 
 def test_empty_fetch_is_not_a_pass():
-    assert cancels.verdict_for(fetched=0, in_window=0, unexcused=[], excused={}) != 0
+    assert cancels.verdict_for(fetched=0, dated=0, in_window=0, unexcused=[], excused={}) != 0
 
 
 def test_young_window_is_not_a_failure():
-    assert cancels.verdict_for(fetched=200, in_window=0, unexcused=[], excused={}) == 0
+    assert cancels.verdict_for(fetched=200, dated=200, in_window=0, unexcused=[], excused={}) == 0
+
+
+def test_a_fetch_the_gate_could_not_date_is_not_a_pass():
+    """Populated, and understood none of it. An unknown is never clean."""
+    assert cancels.verdict_for(fetched=200, dated=0, in_window=0, unexcused=[], excused={}) == 2
 
 
 def test_missing_token_refuses_rather_than_skips(monkeypatch: pytest.MonkeyPatch):
@@ -262,3 +267,113 @@ def test_a_real_checkout_resolves_to_this_repository():
 def test_the_two_gates_share_one_exception_list():
     """Two lists drift the first time either learns something the other has not."""
     assert cancels.EXCEPTIONS is conc.EXCEPTIONS
+
+
+# ── the window the gate reports is the window it graded ──────────────────────
+#
+# The gate printed `SINCE` — a date about five weeks back — on a fetch that
+# reached eight hours. Every finding it made was correct; the coverage it
+# claimed was overstated by roughly 100x, which is the one thing that makes a
+# clean result unreadable. The tests below pin the printed window against a
+# fabricated fetch, and they run in both directions: a shallow fetch must be
+# reported as shallow, and one deep enough to reach the floor must say so.
+
+
+def _fetch_spanning(hours: float, count: int = 40) -> list[dict]:
+    """`count` successful runs, newest a minute old, oldest `hours` back."""
+    newest = datetime.now(UTC) - timedelta(minutes=1)
+    step = timedelta(hours=hours) / max(count - 1, 1)
+    return [_run_record("ci.yml", "success", (newest - step * i).strftime("%Y-%m-%dT%H:%M:%SZ")) for i in range(count)]
+
+
+def _drive(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], runs: list[dict]) -> tuple[int, str]:
+    """Run the gate end to end over a fabricated fetch, returning (code, stdout).
+
+    Deliberately through `main` rather than a reporting helper: the defect was
+    in what the operator reads, so the test has to exercise the real print
+    path. Only the network is replaced.
+    """
+    monkeypatch.setattr(cancels, "fetch_runs", lambda *_a, **_k: runs)
+    monkeypatch.setenv("GH_TOKEN", "fabricated-for-this-test")
+    code = cancels.main([])
+    return code, capsys.readouterr().out
+
+
+def test_printed_window_describes_the_fetch_not_the_declared_floor(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """The negative control for the overstated window.
+
+    Fails on the pre-fix gate, which printed `created at or after <SINCE>`
+    and never named the oldest run it actually read.
+    """
+    runs = _fetch_spanning(hours=9.0)
+    oldest = min(r["created_at"] for r in runs)
+    code, out = _drive(monkeypatch, capsys, runs)
+
+    assert code == 0, out
+    # The real floor of the fetch, to the minute.
+    assert oldest[:16] in out, f"the oldest run fetched ({oldest}) is not in the output:\n{out}"
+    # And how deep that is, because a bare timestamp still makes the reader
+    # do the subtraction the gate already did.
+    assert "9.0 hours" in out, f"the depth of the fetch is not stated:\n{out}"
+
+
+def test_an_unreachable_floor_is_reported_as_unreachable(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """A floor the fetch cannot reach must be named as not reached."""
+    code, out = _drive(monkeypatch, capsys, _fetch_spanning(hours=9.0))
+    assert code == 0, out
+    assert "NOT REACHED" in out, out
+    # Saying so without saying why invites the wrong fix — raising a limit
+    # that is already at the ceiling.
+    assert "1000" in out, out
+
+
+def test_a_reached_floor_is_reported_as_reached(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """The paired direction: always printing NOT REACHED would pass the test above."""
+    monkeypatch.setattr(cancels, "SINCE", (datetime.now(UTC) - timedelta(hours=2)).strftime("%Y-%m-%dT%H:%M:%SZ"))
+    code, out = _drive(monkeypatch, capsys, _fetch_spanning(hours=9.0))
+    assert code == 0, out
+    assert "NOT REACHED" not in out, out
+
+
+def test_the_operational_horizon_is_stated(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """How long an operator has to notice a cancellation is a fact, not a footnote."""
+    code, out = _drive(monkeypatch, capsys, _fetch_spanning(hours=9.0))
+    assert code == 0, out
+    assert "horizon" in out.lower(), out
+
+
+def test_a_clean_sweep_still_passes(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """Every assertion above is satisfied by a gate that always fails."""
+    code, out = _drive(monkeypatch, capsys, _fetch_spanning(hours=20.6))
+    assert code == 0, out
+    assert "OK" in out, out
+
+
+def test_a_cancellation_still_fails_through_the_real_path(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """The finding logic is not weakened by anything the window change does."""
+    runs = _fetch_spanning(hours=9.0)
+    runs[5] = _run_record("ci.yml", "cancelled", runs[5]["created_at"])
+    code, out = _drive(monkeypatch, capsys, runs)
+    assert code == 1, out
+    assert "ended `cancelled`" in out, out
+
+
+def test_a_fetch_with_no_readable_timestamp_is_not_a_pass(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]):
+    """A window that cannot be established is an unknown, and unknown is never clean.
+
+    The pre-fix gate dropped undateable runs inside `classify` and then read
+    the resulting `in_window == 0` as a young window, printing a NOTICE and
+    exiting 0 — a populated fetch it had understood none of.
+    """
+    runs = [_run_record("ci.yml", "success", "not-a-timestamp") for _ in range(40)]
+    code, out = _drive(monkeypatch, capsys, runs)
+    assert code == 2, out
+
+
+def test_fetch_limit_is_the_api_ceiling():
+    """Measured: the endpoint refuses any result past offset 1000.
+
+    `per_page=100&page=11` and `per_page=50&page=21` both answer empty, so it
+    is a result-offset cap and no paging strategy gets past it.
+    """
+    assert cancels.FETCH_LIMIT == 1000
