@@ -77,8 +77,8 @@ _PAGE_SIZE = 100
 _MAX_PAGES = 10
 
 _ISSUES_QUERY = """
-query IssuesTable($filterBy: IssueFilters, $first: Int) {
-  issues(filterBy: $filterBy, first: $first) {
+query IssuesTable($filterBy: IssueFilters, $first: Int, $after: String) {
+  issues(filterBy: $filterBy, first: $first, after: $after) {
     nodes {
       id
       severity
@@ -98,6 +98,10 @@ query IssuesTable($filterBy: IssueFilters, $first: Int) {
         id
         name
       }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
     }
   }
 }
@@ -397,35 +401,27 @@ class WizConnector(BaseConnector):
             return {"success": False, "connector": self.connector_id, "error": str(exc)}
 
     async def fetch_alerts(self, since_seconds: int = 300) -> list[dict[str, Any]]:
-        if not self._access_token:
-            await self._authenticate()
+        """Every open issue raised in the window, read to the end.
 
-        since = (datetime.now(UTC) - timedelta(seconds=since_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
-        headers = {"Authorization": f"Bearer {self._access_token}"}
-
-        payload = {
-            "query": _ISSUES_QUERY,
-            "variables": {
-                "filterBy": {
-                    "status": ["OPEN", "IN_PROGRESS"],
-                    "createdAt": {"after": since},
-                },
-                "first": 100,
+        This read is paged through the same ``_paginate`` the three context
+        reads use. It did not used to be: it asked for one page of 100 and
+        returned, which on this connector is data loss rather than a slow
+        poll. The window is ``[now - since_seconds, now]`` with the scheduler
+        passing the poll interval, so consecutive windows abut exactly and
+        nothing re-reads an earlier one -- and ``apply_checkpoint()``
+        de-duplicates rows the vendor already handed over, it never widens a
+        later request. Issue 101 of a window fell below the next window's
+        lower bound and was never asked for again.
+        """
+        nodes = await self._paginate(
+            _ISSUES_QUERY,
+            "issues",
+            {
+                "status": ["OPEN", "IN_PROGRESS"],
+                "createdAt": {"after": _iso(since_seconds)},
             },
-        }
-
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(self._api_url, headers=headers, json=payload)
-
-            if resp.status_code == 401:
-                await self._authenticate()
-                headers = {"Authorization": f"Bearer {self._access_token}"}
-                resp = await client.post(self._api_url, headers=headers, json=payload)
-
-            resp.raise_for_status()
-            issues = resp.json().get("data", {}).get("issues", {}).get("nodes", [])
-
-        return [self.normalize(i) for i in issues]
+        )
+        return [self.normalize(node) for node in nodes]
 
     async def _graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """One authenticated GraphQL round trip, with a single 401 retry.

@@ -390,3 +390,108 @@ async def test_paging_is_capped_so_one_poll_cannot_read_forever() -> None:
 
     assert len(findings) == _MAX_PAGES
     assert len(_requests()) == _MAX_PAGES
+
+
+# --- issues: the alert path has to read the window to the end ---------------
+#
+# The three context reads above went through `_paginate` from the day they
+# were written. `fetch_alerts` -- the one read that produces alerts -- did
+# not: it sent `first: 100`, read `data.issues.nodes` once and returned.
+#
+# That is data loss rather than a slow poll, because the window is clock
+# derived. `fetch_alerts` asks for `[now - since_seconds, now]` and the
+# scheduler passes the instance's poll interval, so consecutive windows abut
+# exactly and nothing re-reads an earlier one. `apply_checkpoint()`
+# de-duplicates rows the vendor already handed over; it never widens a later
+# request. Issue 101 of a window therefore falls below the next window's lower
+# bound and is never asked for again.
+
+
+def _issue(offset: int) -> dict:
+    """One issue standing in for the first of the page at ``offset``.
+
+    The id *is* the offset so that a failure prints which pages were read.
+    """
+    return {
+        "id": str(offset),
+        "severity": "HIGH",
+        "title": f"Public bucket, issue {offset} of the window",
+        "description": "d",
+        "createdAt": "2026-11-04T09:00:00Z",
+        "entitySnapshot": {"id": f"r-{offset}", "name": "quarterly-reports", "cloudPlatform": "AWS"},
+        "sourceRule": {"id": "sr-1", "name": "Public bucket"},
+    }
+
+
+@respx.mock
+async def test_fetch_alerts_reads_every_page_of_the_window() -> None:
+    """A tenant raising more than one page of issues per poll keeps all of them.
+
+    Both halves are asserted on purpose. The result list alone cannot tell a
+    correct implementation from a wrong one here, because `side_effect` hands
+    back the next canned page whatever the request said -- an implementation
+    that looped without ever sending the cursor would collect all three. So
+    the cursor the connector *sent* is asserted too.
+    """
+    _auth_route()
+    respx.post(_API).mock(
+        side_effect=[
+            httpx.Response(200, json=_page("issues", [_issue(0)], cursor="c1")),
+            httpx.Response(200, json=_page("issues", [_issue(100)], cursor="c2")),
+            httpx.Response(200, json=_page("issues", [_issue(200)])),
+        ]
+    )
+
+    events = await _connector().fetch_alerts(300)
+
+    assert [e["external_id"] for e in events] == ["0", "100", "200"]
+
+    sent = _requests()
+    assert len(sent) == 3
+    assert sent[0]["variables"]["after"] is None
+    assert sent[1]["variables"]["after"] == "c1"
+    assert sent[2]["variables"]["after"] == "c2"
+    # The window and the status filter are unchanged by paging.
+    assert sent[0]["variables"]["filterBy"]["status"] == ["OPEN", "IN_PROGRESS"]
+    assert "after" in sent[0]["variables"]["filterBy"]["createdAt"]
+
+
+async def test_the_issues_query_declares_the_cursor_the_connector_sends() -> None:
+    """Sending `after` is not the same as paging, and the difference is silent.
+
+    A GraphQL server coerces only the variables the operation *declares*; an
+    undeclared one in the variables map is not an error, it is ignored. So an
+    issues query that omits `$after` would accept every request this connector
+    sends, answer page one each time, and report `hasNextPage` forever -- the
+    loop would spin to its cap re-reading the same rows while the test above,
+    driven by a canned `side_effect` sequence, still passed.
+
+    The response half is load bearing for the same reason: with no `pageInfo`
+    in the selection set there is no cursor to carry, so the loop breaks after
+    one page no matter how it is written.
+    """
+    from app.connectors.wiz import _ISSUES_QUERY
+
+    assert "$after: String" in _ISSUES_QUERY
+    assert "after: $after" in _ISSUES_QUERY
+    assert "hasNextPage" in _ISSUES_QUERY
+    assert "endCursor" in _ISSUES_QUERY
+
+
+@respx.mock
+async def test_fetch_alerts_paging_is_capped_so_one_poll_cannot_read_forever() -> None:
+    """The alert path needs the same cap the context reads have.
+
+    A vendor that answers `hasNextPage: true` indefinitely -- a filter that
+    did not narrow, a backlog larger than the cap, a bug at their end -- must
+    not turn a five-minute schedule into an unbounded read.
+    """
+    _auth_route()
+    respx.post(_API).mock(return_value=httpx.Response(200, json=_page("issues", [_issue(0)], cursor="always-more")))
+
+    events = await _connector().fetch_alerts(300)
+
+    from app.connectors.wiz import _MAX_PAGES
+
+    assert len(events) == _MAX_PAGES
+    assert len(_requests()) == _MAX_PAGES

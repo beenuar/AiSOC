@@ -310,7 +310,7 @@ def audit(root: Path | None = None) -> tuple[list[tuple[str, str]], list[str], l
 #: connector follow the continuation. It must never be raised: a new connector
 #: that polls a vendor collection without reading it to the end is the defect
 #: this gate exists to stop.
-MAX_UNCLASSIFIED = 59
+MAX_UNCLASSIFIED = 58
 
 
 def main() -> int:
