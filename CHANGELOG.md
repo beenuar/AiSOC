@@ -42,6 +42,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The cancelled-run gate on `main` overstated the window it graded by about
+  100x, so it went green by forgetting.**
+  `scripts/check_main_run_cancellations.py` printed `graded window created at
+  or after 2026-09-29` — about five weeks — on a fetch of 300 push runs, which
+  at this push rate is **8.8 hours**. Roughly sixty workflows run on every
+  push, so the constant and the fetch were describing completely different
+  spans and only the constant was printed. The finding logic was never wrong;
+  the coverage it claimed was. The consequence is the one that matters: a
+  cancelled run ages out of reach within a day, so the gate reports clean
+  because the evidence scrolled past rather than because anyone fixed
+  anything — a passing condition that is not the property it claims, inside
+  the gate written to catch exactly that.
+
+  `SINCE` turned out to be **unreachable by construction**. The Actions
+  workflow-runs API refuses any result past offset 1,000 for this query —
+  `per_page=100` page 11 and `per_page=50` page 21 both answer empty, the
+  same boundary from two page sizes, so it is a result-offset cap and no
+  paging strategy gets past it — and 1,000 push runs reaches **20.6 hours**.
+  No value of `FETCH_LIMIT` could ever have made the printed claim true.
+
+  The window is now derived from the oldest run actually returned and printed
+  with both durations it has: the span those runs cover, which is the rate
+  that decides how fast a finding ages out, and how far back that reaches
+  from now. `SINCE` is kept as a declared floor and **reported as reached or
+  NOT REACHED** rather than printed as though it had been graded, because the
+  relationship is not permanent — if push volume fell, 1,000 runs would reach
+  past it again. The warning against moving the date to silence a finding is
+  unchanged and now sits beside a separate note on why the date is currently
+  out of reach. `FETCH_LIMIT` is raised 300 → 1,000, taken once the backlog in
+  reach was measured at zero: over the full depth there were 3 cancelled runs,
+  all `publish-images.yml`, already excepted with a written justification.
+
+  Two things the output now says that it could not before. The **horizon** is
+  printed every run — a cancellation has to be noticed and re-run inside about
+  a day or it is not findable here at all, which is an operational deadline
+  rather than a footnote — and a populated fetch whose runs carry no readable
+  `created_at` now **fails** instead of reporting clean. Those runs were
+  previously dropped inside `classify`, leaving a count of zero that was read
+  as a young window and exited 0: a window that cannot be established is an
+  unknown, and an unknown is never a pass.
+
 - **Google Workspace OAuth token grants and revocations had never once been
   ingested, on any deployment.**
   ([#1713](https://github.com/beenuar/AiSOC/pull/1713)) Google withholds a
