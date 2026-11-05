@@ -35,6 +35,7 @@ import structlog
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
+from app.connectors._paging import read_token_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
 
 logger = structlog.get_logger()
@@ -221,42 +222,48 @@ class GCPCloudAuditConnector(BaseConnector):
             f'AND timestamp >= "{since}"'
         )
 
-        events: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.post(
-                _LOGGING_URL,
-                headers=self._headers(),
-                json={
+
+            async def page(token: str | None) -> httpx.Response:
+                body: dict[str, Any] = {
                     "resourceNames": [f"projects/{self._project_id}"],
                     "filter": log_filter,
                     "orderBy": "timestamp desc",
                     "pageSize": _PAGE_SIZE,
-                },
-            )
-            if resp.status_code == 401:
-                # Token may have raced past expiry; refresh and retry once.
-                self._access_token = None
-                await self._authenticate()
-                resp = await client.post(
-                    _LOGGING_URL,
-                    headers=self._headers(),
-                    json={
-                        "resourceNames": [f"projects/{self._project_id}"],
-                        "filter": log_filter,
-                        "orderBy": "timestamp desc",
-                        "pageSize": _PAGE_SIZE,
-                    },
-                )
-            if resp.status_code != 200:
-                logger.warning(
-                    "gcp_cloud_audit.fetch_failed",
-                    status=resp.status_code,
-                    body=resp.text[:300],
-                )
-                return []
+                }
+                if token:
+                    body["pageToken"] = token
+                resp = await client.post(_LOGGING_URL, headers=self._headers(), json=body)
+                if resp.status_code == 401:
+                    # Token may have raced past expiry; refresh and retry once.
+                    self._access_token = None
+                    await self._authenticate()
+                    resp = await client.post(_LOGGING_URL, headers=self._headers(), json=body)
+                if resp.status_code != 200:
+                    logger.warning(
+                        "gcp_cloud_audit.fetch_failed",
+                        status=resp.status_code,
+                        body=resp.text[:300],
+                    )
+                return resp
 
-            for raw in resp.json().get("entries", []):
-                events.append(raw)
+            # `pageSize` is a cap, not a promise of the whole window: "The
+            # presence of `nextPageToken` in the response indicates that more
+            # results might be available." Reading one page kept the newest
+            # 200 entries — the query is ordered `timestamp desc` — and the
+            # next poll's window starts after this one, so the rest were never
+            # requested again.
+            #
+            # Following the token also fixes a sharper failure than
+            # truncation. Cloud Logging may answer with *no* entries and a
+            # token, meaning the search ran out of time rather than finding
+            # nothing, so stopping at the first empty page could return zero
+            # events from a window that was full of them.
+            events = await read_token_pages(
+                request=page,
+                items_field="entries",
+                feed="cloud_audit",
+            )
 
         return [self.normalize(e) for e in events]
 

@@ -33,6 +33,7 @@ The properties, each of which is a defect someone has shipped:
 
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -120,4 +121,78 @@ async def read_linked_pages(
             rows=len(rows),
             detail="the window was not read to the end; rows beyond this point are not re-requested by a later poll",
         )
+    return rows
+
+
+async def read_token_pages(
+    *,
+    request: Callable[[str | None], Awaitable[httpx.Response]],
+    items_field: str,
+    feed: str,
+    token_field: str = "nextPageToken",
+    max_pages: int = DEFAULT_MAX_PAGES,
+) -> list[dict[str, Any]]:
+    """Every row of a collection paged by an opaque continuation token.
+
+    The other half of :func:`read_linked_pages`. Where Microsoft hands back a
+    complete URL, Google hands back a token that the client puts back into the
+    *same* request — into the query string for a GET, into the body for a
+    POST. ``request`` is the caller's own closure so it keeps ownership of
+    authentication, the retry-on-401 and where the token belongs; it is called
+    with ``None`` for the opening page and with the token thereafter.
+
+    One rule here is not shared with the link-following version, and getting
+    it wrong is worse than the truncation this exists to fix. **An empty page
+    does not end the collection.** Cloud Logging's reference states:
+
+        If a value for nextPageToken appears and the entries field is empty,
+        it means that the search found no log entries so far but it did not
+        have time to search all the possible log entries. Retry the method
+        with this value for pageToken to continue the search.
+
+    So the loop ends on the *token*, never on an empty page. A connector that
+    stops at the first empty response can return nothing at all from a window
+    that was full of events, which reads downstream as a quiet estate rather
+    than as a failed read.
+    """
+    rows: list[dict[str, Any]] = []
+    token: str | None = None
+
+    for page in range(max_pages):
+        try:
+            resp = await request(token)
+        except httpx.HTTPError as exc:
+            # Keep what was read; a failure part-way is not a reason to
+            # discard the pages that succeeded.
+            logger.warning("connector.paging.token_page_error", feed=feed, page=page, rows=len(rows), error=str(exc))
+            return rows
+        if resp.status_code != 200:
+            logger.warning(
+                "connector.paging.token_page_failed",
+                feed=feed,
+                page=page,
+                status=resp.status_code,
+                rows=len(rows),
+                body=resp.text[:300],
+            )
+            return rows
+        try:
+            body = resp.json()
+        except ValueError:
+            logger.warning("connector.paging.token_page_unparseable", feed=feed, page=page, rows=len(rows))
+            return rows
+
+        rows.extend(_page_rows(body, items_field))
+
+        token = body.get(token_field) if isinstance(body, dict) else None
+        if not isinstance(token, str) or not token:
+            return rows
+
+    logger.warning(
+        "connector.paging.page_cap_reached",
+        feed=feed,
+        pages=max_pages,
+        rows=len(rows),
+        detail="the window was not read to the end; rows beyond this point are not re-requested by a later poll",
+    )
     return rows
