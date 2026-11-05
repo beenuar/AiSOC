@@ -43,7 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - **A fusion worker that lost its broker reported the loss and could never
-  undo it.** ([#1726](https://github.com/beenuar/AiSOC/pull/1726), closing
+  undo it.** ([#1725](https://github.com/beenuar/AiSOC/pull/1725), closing
   [#1724](https://github.com/beenuar/AiSOC/pull/1724) — thanks
   [@alexmateescu](https://github.com/alexmateescu) for the analysis and the
   original patch.) `FusionWorker.start()` ran one start/consume/stop cycle, so
