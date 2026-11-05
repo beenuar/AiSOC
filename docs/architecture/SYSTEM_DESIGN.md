@@ -422,17 +422,26 @@ Both detect the OS, install missing prerequisites (git, Docker Engine + Compose 
 → [One-click install (Docusaurus)](../../apps/docs/docs/installation.md)
 → [Quick install reference](../QUICK_INSTALL.md)
 
-### 13.7 Updated Service Inventory (post v2.2)
+### 13.7 Service Inventory
 
-The full set of services in `services/` after v2.2 is:
+The full set of services in `services/` is:
 
 ```
 actions/          agents/           api/              connectors/
-demo-producer/    enrichment/       fusion/           honeytokens/
-ingest/           mcp/              osquery-extensions/  osquery-tls/
-purple-team/      realtime/         slack-bot/        threatintel/
-ueba/
+demo-producer/    enrichment/       escalations/      fusion/
+honeytokens/      ingest/           mcp/              mesh/
+osquery-extensions/  osquery-tls/   purple-team/      realtime/
+slack-bot/        teams-bot/        threatintel/      ueba/
 ```
 
-17 services in total. The `mcp/`, `osquery-extensions/`, `osquery-tls/`, and `slack-bot/` directories are the v2.2 additions; the rest are described in §2 and §12 above.
+20 directories in total. That is a count of source trees, not of running
+containers: a deployment starts 16 on the `core` profile and 22 on `full`
+(21 under the production overlay, which does not run `kafka-ui` beside
+production data), because some directories ship more than one process and
+others are only started by a profile that needs them. Recount with
+`ls -d services/*/` and `python3 scripts/check_profile_service_counts.py`
+rather than trusting this line. The `mcp/`, `osquery-extensions/`,
+`osquery-tls/` and `slack-bot/` directories arrived in v2.2; `escalations/`,
+`mesh/` and `teams-bot/` are later additions. The rest are described in §2
+and §12 above.
 

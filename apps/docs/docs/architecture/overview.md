@@ -48,8 +48,8 @@ AiSOC/
 │   ├── aisoc-sandbox/    # Offline 30-second simulator (PyPI: aisoc-sandbox — published)
 │   └── aisoc-detections/ # Python detection-authoring framework (PyPI: aisoc-detections — published)
 ├── detections/           # Detection rules as YAML. A *projection* of the compiled
-│                         # ruleset, not the engine's input: 6,991 rules on disk,
-│                         # 2,511 executable. (More YAML files than that live here —
+│                         # ruleset, not the engine's input: 7,407 rules on disk,
+│                         # 2,966 executable. (More YAML files than that live here —
 │                         # the surplus are response playbooks, not rules.) Recount with
 │                         # scripts/generate_corpus_stats.py rather than trusting this line.
 ├── hunts/                # Hunt-as-Code YAML definitions (hypothesis + indicators + schedule)

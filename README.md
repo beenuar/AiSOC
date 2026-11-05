@@ -131,6 +131,10 @@ only moves down. ([why 1,362 were refused](docs/detections/sigma-compilation.md)
 it and labels the rest *uncited* rather than dropping them, and any investigation exports as a **signed
 evidence bundle** — byte-identical, prompts as digests, OCSF 1.9.0. ([how](docs/architecture/evidence-bundles.md))
 
+**Where state lives.** Twenty service trees (14 Python, 4 Go, 2 TypeScript) behind the Next.js console. Kafka is the
+spine; Postgres holds the alerts, cases and the tamper-evident audit chain; Redis and Qdrant are in CORE too, and
+`full` adds ClickHouse (the event lake), Neo4j (the entity graph) and OpenSearch (full-text search).
+
 **[docs/architecture/README.md](docs/architecture/README.md)** walks that path one step at a time —
 eleven steps, five diagrams, every box linking to the code — and [mirrors to the docs portal](https://beenuar.github.io/AiSOC/docs/architecture).
 

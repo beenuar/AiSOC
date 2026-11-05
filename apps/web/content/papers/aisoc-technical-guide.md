@@ -2,8 +2,8 @@
 title: "AiSOC Technical Guide"
 subtitle: "Install, operate and integrate — on a workstation and on a server"
 author: "AiSOC project"
-version: "v1.2"
-date: "2026-10-31"
+version: "v1.3"
+date: "2026-11-05"
 license: "MIT (same as the AiSOC project)"
 abstract: |
   A complete operator's guide to AiSOC: installing it on a laptop and on a
@@ -57,7 +57,7 @@ connector / ingest API
         ├──────────► graph writer ──► Neo4j       (entity graph)
         │
         ▼
-    fusion  ──────── 2,530 executable detection rules, your tenant's tuning,
+    fusion  ──────── 2,966 executable detection rules, your tenant's tuning,
         │            correlation into alerts
         ▼
    Postgres ──────── the alert, the case, the audit chain
@@ -616,7 +616,7 @@ investigation.*
 
 ## 6. The REST API
 
-**518 operations across 417 paths.** The specification is
+**662 operations across 535 paths.** The specification is
 `docs/openapi.yaml` in the repository, regenerated on every change and gated
 against breaking changes in CI.
 
