@@ -11,6 +11,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import read_linked_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field
 from app.federated.query import UnifiedQuery
 from app.federated.translators import to_kql
@@ -115,7 +116,19 @@ class MicrosoftSentinelConnector(BaseConnector):
                 headers = {"Authorization": f"Bearer {self._access_token}"}
                 resp = await client.get(api_url, headers=headers, params=params)
             resp.raise_for_status()
-            incidents = resp.json().get("value", [])
+            # Resource Manager answers a `$top` request with the first page
+            # and a `nextLink` carrying a `$skipToken` while more incidents
+            # remain. Reading only that page kept 100 incidents of the window
+            # and dropped the rest; the next poll's window starts after this
+            # one, so they were never requested again.
+            incidents = await read_linked_pages(
+                client,
+                resp,
+                link_field="nextLink",
+                items_field="value",
+                headers=headers,
+                feed="incidents",
+            )
 
         return [self.normalize(i) for i in incidents]
 
