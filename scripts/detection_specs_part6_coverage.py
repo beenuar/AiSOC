@@ -1372,15 +1372,8 @@ _ENTRA_AUDIT: list[tuple[str, str, str, list[str], str, str, str]] = [
         "Illicit consent is the textbook route to a mailbox without a password.",
     ),
     # --- Credentials and factors ---
-    (
-        "entra-user-password-reset",
-        "Entra User Password Reset By An Administrator",
-        "high",
-        ["t1098"],
-        "Reset user password",
-        "UserManagement",
-        "An administrator-driven reset locks the owner out and lets whoever asked for it in.",
-    ),
+    # `entra-user-password-reset` is not in this table: it carries a second
+    # clause and its own negative fixture, so it is written out in full below.
     (
         "entra-user-password-changed",
         "Entra User Changed Their Own Password",
@@ -1888,60 +1881,114 @@ _ENTRA_SIGNIN: list[tuple[str, str, str, list[str], dict[str, Any], str]] = [
     ),
 ]
 
-ENTRA_RULES: list[dict] = [
-    R(
-        family="entra-federated-identity",
-        category="identity",
-        emitter="azure_entra",
-        proof=entra_audit(activity, category),
-        slug=slug,
-        name=name,
-        severity=severity,
-        mitre=mitre,
-        product="azure",
-        service="entra-audit",
-        when={"activity": activity},
-        fp=[FP_ONBOARD, FP_AUTOMATION, FP_BREAK_GLASS],
-        playbook="tpl-privilege-escalation",
-        description=description,
-    )
-    for slug, name, severity, mitre, activity, category, description in _ENTRA_AUDIT
-] + [
-    R(
-        family="entra-federated-identity",
-        category="identity",
-        emitter="azure_entra",
-        proof=entra_signin(
-            **{
-                k: v
-                for k, v in {
-                    "risk_during": clause.get("riskLevelDuringSignIn"),
-                    "risk_state": clause.get("riskState"),
-                    "ca_status": clause.get("conditionalAccessStatus"),
-                    "auth_requirement": None if clause.get("mfa_satisfied") is not False else "singleFactorAuthentication",
-                    "compliant": clause.get("device_compliant"),
-                    "client_app": (clause.get("client_app_in") or [None])[0],
-                    "interactive": clause.get("isInteractive"),
-                    "risk_events": clause.get("riskEventTypes_v2_has_any"),
-                }.items()
-                if v is not None
-            }
+ENTRA_RULES: list[dict] = (
+    [
+        R(
+            family="entra-federated-identity",
+            category="identity",
+            emitter="azure_entra",
+            proof=entra_audit(activity, category),
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="azure",
+            service="entra-audit",
+            when={"activity": activity},
+            fp=[FP_ONBOARD, FP_AUTOMATION, FP_BREAK_GLASS],
+            playbook="tpl-privilege-escalation",
+            description=description,
+        )
+        for slug, name, severity, mitre, activity, category, description in _ENTRA_AUDIT
+    ]
+    + [
+        # Issue #1718, reported by gdncomm-dika-wibowo. This rule is named "By An
+        # Administrator" and its entire condition was `activity == "Reset user
+        # password"`, so every self-service reset in the tenant raised a
+        # high-severity administrator reset. Measured on a real tenant, where the
+        # initiator was the app "Microsoft password reset service".
+        #
+        # One rule with an initiator clause, not a split into an admin rule and an
+        # SSPR rule. The defect is that the condition did not match the name, and
+        # the clause is what makes the rule true to it. An SSPR rule would be new
+        # detection coverage rather than a fix to this one: it would fire on every
+        # self-service reset in the estate, and it would take an id out of a
+        # first-come namespace to do it. The events stay in the lake either way.
+        #
+        # The clause reads the initiator's *kind*, never its name. A denylist of
+        # service display names is the wrong control — it is one new first-party
+        # app away from being wrong again — and `initiator_type` means "a human
+        # principal name initiated this", which holds whether Graph files a
+        # service under `initiatedBy.app` or under `initiatedBy.user` with no
+        # principal name. The connector emits it on every directory audit as a
+        # string, "unknown" included, so the clause cannot silently stop matching
+        # the way an absent field would.
+        R(
+            family="entra-federated-identity",
+            category="identity",
+            emitter="azure_entra",
+            proof=entra_audit("Reset user password", "UserManagement"),
+            slug="entra-user-password-reset",
+            name="Entra User Password Reset By An Administrator",
+            severity="high",
+            mitre=["t1098"],
+            product="azure",
+            service="entra-audit",
+            when={"activity": "Reset user password", "initiator_type": "user"},
+            # A real self-service reset, not a flipped literal. The clause this
+            # rule is about is *who* reset the password, so the fixture that must
+            # not fire is the same activity initiated by the reset service.
+            negative={"activity": "Reset user password", "initiator_type": "app"},
+            fp=[
+                FP_ONBOARD,
+                FP_AUTOMATION,
+                FP_BREAK_GLASS,
+                "Self-service reset that Graph recorded against the user's own principal name rather than the password-reset service",
+            ],
+            playbook="tpl-privilege-escalation",
+            description=(
+                "An administrator-driven reset locks the owner out and lets whoever asked for it in. "
+                "Scoped to a human initiator, so a self-service reset is not reported as an administrator's."
+            ),
         ),
-        derived={"ip_class": "tor_exit"} if "ip_class_in" in clause else None,
-        slug=slug,
-        name=name,
-        severity=severity,
-        mitre=mitre,
-        product="azure",
-        service="entra-signin",
-        when=clause,
-        fp=["Staff member travelling, on a corporate VPN, or using a client the tenant still permits"],
-        playbook="tpl-account-takeover",
-        description=description,
-        neg_field=next(k.replace("_in", "").replace("_has_any", "") for k in clause if k != "event_type"),
-    )
-    for slug, name, severity, mitre, clause, description in _ENTRA_SIGNIN
-]
+    ]
+    + [
+        R(
+            family="entra-federated-identity",
+            category="identity",
+            emitter="azure_entra",
+            proof=entra_signin(
+                **{
+                    k: v
+                    for k, v in {
+                        "risk_during": clause.get("riskLevelDuringSignIn"),
+                        "risk_state": clause.get("riskState"),
+                        "ca_status": clause.get("conditionalAccessStatus"),
+                        "auth_requirement": None if clause.get("mfa_satisfied") is not False else "singleFactorAuthentication",
+                        "compliant": clause.get("device_compliant"),
+                        "client_app": (clause.get("client_app_in") or [None])[0],
+                        "interactive": clause.get("isInteractive"),
+                        "risk_events": clause.get("riskEventTypes_v2_has_any"),
+                    }.items()
+                    if v is not None
+                }
+            ),
+            derived={"ip_class": "tor_exit"} if "ip_class_in" in clause else None,
+            slug=slug,
+            name=name,
+            severity=severity,
+            mitre=mitre,
+            product="azure",
+            service="entra-signin",
+            when=clause,
+            fp=["Staff member travelling, on a corporate VPN, or using a client the tenant still permits"],
+            playbook="tpl-account-takeover",
+            description=description,
+            neg_field=next(k.replace("_in", "").replace("_has_any", "") for k in clause if k != "event_type"),
+        )
+        for slug, name, severity, mitre, clause, description in _ENTRA_SIGNIN
+    ]
+)
 
 
 # ===========================================================================

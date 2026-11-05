@@ -17825,22 +17825,6 @@
     {
       "category": "identity",
       "family": "entra-federated-identity",
-      "id": "det-identity-210",
-      "match_when": {
-        "activity": "Reset user password"
-      },
-      "mitre": [
-        "T1098"
-      ],
-      "name": "Entra User Password Reset By An Administrator",
-      "product": "azure",
-      "service": "entra-audit",
-      "severity": "high",
-      "slug": "entra-user-password-reset"
-    },
-    {
-      "category": "identity",
-      "family": "entra-federated-identity",
       "id": "det-identity-211",
       "match_when": {
         "activity": "Change user password"
@@ -18493,6 +18477,23 @@
       "service": "entra-audit",
       "severity": "low",
       "slug": "entra-device-updated"
+    },
+    {
+      "category": "identity",
+      "family": "entra-federated-identity",
+      "id": "det-identity-210",
+      "match_when": {
+        "activity": "Reset user password",
+        "initiator_type": "user"
+      },
+      "mitre": [
+        "T1098"
+      ],
+      "name": "Entra User Password Reset By An Administrator",
+      "product": "azure",
+      "service": "entra-audit",
+      "severity": "high",
+      "slug": "entra-user-password-reset"
     },
     {
       "category": "identity",

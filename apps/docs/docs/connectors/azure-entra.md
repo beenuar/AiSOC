@@ -78,6 +78,39 @@ You will need:
 
 Detection rules in `detections/identity/` consume the normalized event; tune severity there rather than monkey-patching the connector.
 
+## What a directory audit carries
+
+A Graph audit record names two different things — the principal that made the change, and the object that was changed — and AiSOC keeps them apart.
+
+### Who acted
+
+| Field | Meaning |
+|---|---|
+| `actor` | The person when Graph gave one: `initiatedBy.user.userPrincipalName`, falling back to a display name and then to the app. |
+| `actor_email` | The initiator's user principal name, or empty when a service initiated the change. |
+| `actor_app` | The application in `initiatedBy.app`, when Graph recorded one. |
+| `actor_display_name` | Whatever Graph put in `initiatedBy.user.displayName`. For a person acting through a first-party client this is the **client** ("Microsoft Teams Services"), not the person — which is why it is reported under its own name rather than as the actor. |
+| `initiator_type` | `user` when a human principal name initiated the change, `app` when an application did, `unknown` when Graph recorded no initiator. Always present, so a rule can clause on it safely. |
+
+`initiator_type` is what separates an administrator's password reset from a self-service one: `det-identity-210` requires `initiator_type == "user"`, so a reset performed by the Microsoft password reset service is not reported as an administrator's.
+
+### What changed
+
+| Field | Meaning |
+|---|---|
+| `target_type`, `target_user`, `target_name`, `target_id` | The first entry of `targetResources`. |
+| `modified_property`, `old_value`, `new_value` | The first entry of its `modifiedProperties`, with Graph's JSON quoting removed. |
+| `target_count` | How many targets the event carried. |
+| `targets` | Every target, each with its own full list of changed properties (`name`, `old_value`, `new_value`). |
+| `modified_properties` | Every changed property across every target, keyed by Graph's property name and holding the new value. |
+| `target_group_name`, `target_group_id` | The group on a membership change, found by looking for the group rather than by position. |
+| `target_hostname`, `target_device_id`, `target_device_os`, `target_device_trust_type` | The device on a device change. |
+| `method_execution_result` | The directory's own execution result, when Graph recorded one. An "add member" that returns `DirectoryValueExistsException` is a successful call that changed nothing — Graph still reports `result: success`, so this is how you tell a real add from a no-op. |
+
+The target reaches the alert row, not just the raw event: a group membership change lists both the member added and the person who added them in `affected_users`, and a device change lists the device in `affected_hosts`. A device change therefore also correlates per device rather than collapsing every device event in the tenant onto the Intune client that performed them.
+
+Nothing here is keyed by list position. A rule asking for the group gets the group wherever Graph put it in `targetResources`.
+
 ## Troubleshooting
 
 **`AADSTS7000215: Invalid client secret provided`** — the secret expired or was copied incorrectly. Mint a new one and update the connector via the wizard's edit path.

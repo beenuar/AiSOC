@@ -459,13 +459,43 @@ def _iocs(fused: FusedAlert) -> list[dict[str, str]]:
     return out
 
 
+def _usernames(fused: FusedAlert) -> list[str]:
+    """Every user this alert is about: the one who acted and the one acted on.
+
+    Issue #1718. `alert.username` is OCSF `actor.user.name` — the principal
+    that performed the change — and for a directory audit that is routinely a
+    Microsoft service rather than a person. Ten alerts measured from one
+    Entra tenant listed "Microsoft Teams Services" and named neither the
+    member added nor the group. The account that *changed* arrives beside it
+    in OCSF `target_user`, which nothing here read.
+
+    The target is read from the OCSF event rather than from a vendor-specific
+    field, so this stays a statement about what an alert affects rather than a
+    statement about Entra: `target_user` is the slot the CEF `duser` and the
+    email-recipient templates already fill, and a user an event was performed
+    on is an affected user whichever source said so.
+
+    Order is actor first, then target, and a target equal to the actor is
+    listed once — a self-service action affects one person, not two.
+    """
+    alert = fused.alert
+    raw = alert.raw_event if isinstance(alert.raw_event, dict) else {}
+    target = raw.get("target_user")
+    if not isinstance(target, dict):
+        target = {}
+    out: list[str] = []
+    for name in (alert.username, target.get("name"), target.get("email_addr")):
+        if isinstance(name, str) and name and name not in out:
+            out.append(name)
+    return out
+
+
 def _entities(fused: FusedAlert) -> list[dict[str, str]]:
     alert = fused.alert
     out: list[dict[str, str]] = []
     if alert.hostname:
         out.append({"type": "host", "value": alert.hostname})
-    if alert.username:
-        out.append({"type": "user", "value": alert.username})
+    out.extend({"type": "user", "value": name} for name in _usernames(fused))
     return out
 
 
@@ -481,15 +511,19 @@ def _affected(fused: FusedAlert) -> tuple[list[str], list[str], list[str]]:
     one.
 
     Derived from the same fields `_entities` and `_iocs` already use rather
-    than from a second source, so the row cannot disagree with itself.
-    `entities` stays exactly as it was: it is the shape the Investigation
-    Rail reads and these columns are the shape the filters read.
+    than from a second source, so the row cannot disagree with itself — the
+    users come from `_usernames`, which `_entities` also calls, so the blob
+    the Investigation Rail reads and the column the filters read can never
+    name a different set of people.
+
+    `hosts` needs no equivalent: OCSF `device.name` is already the device an
+    event is *about*, and issue #1718's missing device was missing one layer
+    earlier, in the connector that never said its target was a host.
     """
     alert = fused.alert
     hosts = [alert.hostname] if alert.hostname else []
-    users = [alert.username] if alert.username else []
     ips = [ip for ip in (alert.src_ip, alert.dst_ip) if ip]
-    return hosts, users, ips
+    return hosts, _usernames(fused), ips
 
 
 def _insert_args(fused: FusedAlert) -> tuple[Any, ...]:
