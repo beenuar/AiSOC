@@ -353,6 +353,18 @@ jobs:
         run: python scripts/check_module_reachability.py --self-test
       - name: Verify every service module has a production importer
         run: python scripts/check_module_reachability.py
+      # A connector's poll window is contiguous: it runs from `now -
+      # since_seconds` to `now`, the scheduler passes the poll interval, and
+      # nothing re-reads an earlier window. So a page a connector does not
+      # read is a page nothing reads later — the vendor's cap becomes silent
+      # data loss rather than lag. Five connectors shipped that shape inside
+      # two days (Duo, Entra, Defender, Sentinel and the three Google ones),
+      # and most order newest-first, so what went missing was the *start* of
+      # whatever burst overflowed the window.
+      - name: Connector paging — self-test
+        run: python scripts/check_connector_paging.py --self-test
+      - name: Verify every connector reads its poll window to the end
+        run: python scripts/check_connector_paging.py
       # Two permission models shipped side by side: 275 route dependencies
       # read the hardcoded ROLE_PERMISSIONS map while 27 read the
       # user_roles / role_permissions tables the console's RBAC screen
