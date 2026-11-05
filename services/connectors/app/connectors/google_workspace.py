@@ -32,6 +32,7 @@ import structlog
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
+from app.connectors._paging import read_token_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
 from app.connectors.posture import POSTURE_SNAPSHOT_ID, Collected
 from app.connectors.posture import gws as gws_posture
@@ -232,28 +233,38 @@ class GoogleWorkspaceConnector(BaseConnector):
         events: list[dict[str, Any]] = []
         async with httpx.AsyncClient(timeout=30.0) as client:
             for app_name in _DEFAULT_APPS:
-                resp = await client.get(
-                    f"{_REPORTS_BASE}/users/all/applications/{app_name}",
-                    headers=self._headers(),
-                    params={"startTime": start_time, "maxResults": _PAGE_SIZE},
+                url = f"{_REPORTS_BASE}/users/all/applications/{app_name}"
+
+                async def page(token: str | None, *, url: str = url, app_name: str = app_name) -> httpx.Response:
+                    params: dict[str, Any] = {"startTime": start_time, "maxResults": _PAGE_SIZE}
+                    if token:
+                        params["pageToken"] = token
+                    resp = await client.get(url, headers=self._headers(), params=params)
+                    if resp.status_code == 401:
+                        self._invalidate()
+                        await self._authenticate()
+                        resp = await client.get(url, headers=self._headers(), params=params)
+                    if resp.status_code != 200:
+                        logger.warning(
+                            "google_workspace.fetch_failed",
+                            application=app_name,
+                            status=resp.status_code,
+                            body=resp.text[:300],
+                        )
+                    return resp
+
+                # `maxResults` bounds one response page, not the window:
+                # "The response's `nextPageToken` property has the token to
+                # the second page." Reading one page per application dropped
+                # the rest of that application's window, and the next poll's
+                # window starts after this one. A single noisy application —
+                # `drive` on a busy tenant — was enough to lose the others'
+                # worth of activity behind it.
+                items = await read_token_pages(
+                    request=page,
+                    items_field="items",
+                    feed=f"activities.{app_name}",
                 )
-                if resp.status_code == 401:
-                    self._invalidate()
-                    await self._authenticate()
-                    resp = await client.get(
-                        f"{_REPORTS_BASE}/users/all/applications/{app_name}",
-                        headers=self._headers(),
-                        params={"startTime": start_time, "maxResults": _PAGE_SIZE},
-                    )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "google_workspace.fetch_failed",
-                        application=app_name,
-                        status=resp.status_code,
-                        body=resp.text[:300],
-                    )
-                    continue
-                items = resp.json().get("items", [])
                 # Tag each item with the app name so normalize() doesn't
                 # have to crack open ``id.applicationName`` (which is
                 # present, but explicit beats implicit).

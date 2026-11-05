@@ -30,6 +30,7 @@ import structlog
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 
+from app.connectors._paging import read_token_pages
 from app.connectors.base import BaseConnector, Capability, ConnectorSchema, Field, OAuthHints
 from app.connectors.posture import POSTURE_SNAPSHOT_ID
 from app.connectors.posture import gcp as gcp_posture
@@ -204,29 +205,37 @@ class GCPSCCConnector(BaseConnector):
         # last poll, and exclude already-resolved findings.
         scc_filter = f'state="ACTIVE" AND eventTime >= "{since}"'
 
-        async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(
-                f"{_SCC_BASE}/organizations/{self._organization_id}/sources/-/findings",
-                headers=self._headers(),
-                params={"filter": scc_filter, "pageSize": _PAGE_SIZE},
-            )
-            if resp.status_code == 401:
-                self._access_token = None
-                await self._authenticate()
-                resp = await client.get(
-                    f"{_SCC_BASE}/organizations/{self._organization_id}/sources/-/findings",
-                    headers=self._headers(),
-                    params={"filter": scc_filter, "pageSize": _PAGE_SIZE},
-                )
-            if resp.status_code != 200:
-                logger.warning(
-                    "gcp_scc.fetch_failed",
-                    status=resp.status_code,
-                    body=resp.text[:300],
-                )
-                return []
+        url = f"{_SCC_BASE}/organizations/{self._organization_id}/sources/-/findings"
 
-            entries = resp.json().get("listFindingsResults", [])
+        async with httpx.AsyncClient(timeout=30.0) as client:
+
+            async def page(token: str | None) -> httpx.Response:
+                params: dict[str, Any] = {"filter": scc_filter, "pageSize": _PAGE_SIZE}
+                if token:
+                    params["pageToken"] = token
+                resp = await client.get(url, headers=self._headers(), params=params)
+                if resp.status_code == 401:
+                    self._access_token = None
+                    await self._authenticate()
+                    resp = await client.get(url, headers=self._headers(), params=params)
+                if resp.status_code != 200:
+                    logger.warning(
+                        "gcp_scc.fetch_failed",
+                        status=resp.status_code,
+                        body=resp.text[:300],
+                    )
+                return resp
+
+            # `pageSize` caps one response; `pageToken` is documented as "the
+            # value returned by the last ListFindingsResponse [...] that the
+            # system should return the next page of data". Reading one page
+            # left the remaining findings of the window unrequested, and the
+            # next poll's window begins after this one.
+            entries = await read_token_pages(
+                request=page,
+                items_field="listFindingsResults",
+                feed="findings",
+            )
 
         return [self.normalize(item) for item in entries]
 
