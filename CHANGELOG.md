@@ -7,6 +7,151 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **A connector must now read its poll window to the end, and CI enforces it.**
+  ([#1714](https://github.com/beenuar/AiSOC/pull/1714))
+  `scripts/check_connector_paging.py` requires every connector whose
+  `fetch_alerts` issues an HTTP request to either follow a continuation — the
+  shared `app/connectors/_paging.py` helpers, its own paging loop, or a boto3
+  paginator that is not cut short by `MaxItems` — or carry a written reason in
+  `_REVIEWED` recording what the vendor's own documentation says it returns.
+  Six connectors shipped the same defect inside two days, so this stopped
+  being a review question.
+
+  The gate has no silent third state, which was the design problem worth
+  solving. "I could not find a page cap" and "this vendor returns the whole
+  window" are different statements and only the second is a reason, so a
+  connector that neither pages nor carries a reason is **named in the output
+  on every run** and counted. `MAX_UNCLASSIFIED` is a debt balance rather than
+  a target: it may only be lowered, and lowering it means somebody read a
+  vendor's document and wrote down what they found. Twenty of the connectors
+  it names were identified by the audit as matching the data-loss shape but
+  could not be confirmed against a citable vendor document — `slack_audit`,
+  `carbon_black`, `cloudflare`, `cortex_xdr`, `cortex_xsiam`, `github`,
+  `gitlab`, `salesforce`, `servicenow`, `crowdstrike` and the two AWS
+  connectors whose paginators carry a silent `MaxItems` cap among them. A
+  change that cites the vendor contract for any one of them and then fixes or
+  clears it is exactly the contribution that is wanted.
+
+  The detector keys on loop *shape* rather than on a vocabulary of cursor
+  names. The first cut matched `nextLink`, `pageToken` and their siblings and
+  flagged every connector that pages by page number or offset — Auth0,
+  CrowdStrike and Cisco Umbrella among them, all correct — and a gate that
+  flags correct code is switched off within a week.
+
+### Fixed
+
+- **Google Workspace OAuth token grants and revocations had never once been
+  ingested, on any deployment.**
+  ([#1713](https://github.com/beenuar/AiSOC/pull/1713)) Google withholds a
+  Reports API log event until it has published it, and that delay is
+  documented per application across three orders of magnitude: Admin, Drive,
+  Devices and Login events are "near real time (couple of minutes)" while
+  **Token** log events are "a couple of hours". `fetch_alerts` sent only
+  `startTime`, and with `endTime` unset the report "returns all activities
+  from the startTime until the current time" — a window pinned to `now`. The
+  next poll began where that one ended, so the unpublished tail of every
+  window was read once while empty and never requeried. For Token, whose lag
+  exceeds the default 300-second interval by a factor of about twenty-four,
+  no poll ever overlapped the published part of the timeline at all: the loss
+  was not a fraction of that feed, it was the whole of it.
+
+  Each window now ends where Google has published rather than at `now`, per
+  application, and keeps its length so consecutive polls stay contiguous
+  across that boundary. Each figure sits above the documented one, because
+  the same page warns that some events are delayed beyond the stated times
+  and undershooting puts the window back inside the band Google has not
+  published. An application absent from the table takes a conservative
+  default rather than a window pinned to `now`, so adding one cannot silently
+  reintroduce the defect. The cost is latency; the alternative was silence.
+
+- **Microsoft Entra directory audits and risky sign-ins never followed
+  `@odata.nextLink`, and what truncation discarded was the *oldest* part of a
+  burst.** ([#1708](https://github.com/beenuar/AiSOC/pull/1708)) Graph returns
+  `$top` entries and an `@odata.nextLink` while more of a collection remains.
+  Both feeds read the first page at `$top=200` and stopped. `fetch_alerts`
+  derives its window from the clock with no checkpoint and the scheduler
+  passes the poll interval as `since_seconds`, so consecutive windows abut
+  exactly and nothing re-reads an earlier one — anything past the first page
+  fell below the next window's lower bound and was never requested again.
+  Both queries are ordered newest-first (`activityDateTime desc` for directory
+  audits, `createdDateTime desc` for risky sign-ins), so what went missing was
+  the *beginning* of whatever burst overflowed the window, which is the part
+  an investigation needs. Both feeds now follow the link as-is through a
+  shared `_read_pages()` helper, bounded and logged when the bound binds.
+
+  Independently diagnosed and fixed by
+  [@rudycelekli](https://github.com/rudycelekli).
+
+- **Microsoft Defender and Sentinel each read one page of every poll window.**
+  ([#1711](https://github.com/beenuar/AiSOC/pull/1711)) Graph answers
+  Defender's `$top=200` alerts request with a first page and an
+  `@odata.nextLink`; Azure Resource Manager answers Sentinel's `$top=100`
+  incidents request with a first page and a `nextLink` carrying a
+  `$skipToken`. Neither was followed, and the contiguous-window argument above
+  applies unchanged: the remainder of the window was never requested again.
+  Defender's query is ordered `createdDateTime desc`, so there too it was the
+  earliest alerts of a burst that went missing.
+
+  Both now use `read_linked_pages()` from the new
+  `services/connectors/app/connectors/_paging.py`, which holds three
+  properties, each of which is a defect somebody has shipped: a partial read
+  is kept rather than thrown away when a later page fails, the page cap is
+  announced when it binds rather than silently cutting the result, and the
+  link is requested verbatim — Graph states outright that the `$skiptoken`
+  must not be extracted and reused in a different request.
+
+- **Google Cloud Audit, Security Command Center and Workspace each read one
+  page per window, and Cloud Logging could return nothing at all from a window
+  that was full of events.**
+  ([#1712](https://github.com/beenuar/AiSOC/pull/1712)) All three page by
+  `nextPageToken` and none of them followed it. Cloud Audit read 200 entries
+  of a `timestamp desc` query; SCC read one `listFindings` page; Workspace's
+  loop walked a fixed set of applications issuing one request each, so a
+  single noisy application — `drive` on a busy tenant — displaced the rest of
+  the window behind it.
+
+  Cloud Logging's variant is worse than truncation, and it is why the loop
+  ends on the token rather than on an empty page. Its reference states that a
+  `nextPageToken` returned with an empty `entries` field means the search
+  "found no log entries so far but it did not have time to search all the
+  possible log entries", and that the method should be retried with that
+  token. A connector that stopped at the first empty response therefore
+  returned **zero** events from a full window, which reads downstream as a
+  quiet estate rather than as a read that did not finish.
+
+  All three now go through a shared `read_token_pages()` in the same
+  `_paging.py`. The Google Workspace half of this was independently diagnosed
+  and fixed by [@rudycelekli](https://github.com/rudycelekli) in
+  [#1715](https://github.com/beenuar/AiSOC/pull/1715); that fix was correct
+  and lost only to the shared-helper version landing first as `595ab1aa7`.
+
+- **Wiz issues past the first 100 of a poll window were never ingested.**
+  `WizConnector.fetch_alerts` sent `first: 100`, read `data.issues.nodes`
+  once and returned. There was no `pageInfo` in the query, no cursor and no
+  loop — while the same module already defined a correct `_paginate()` that
+  walks `pageInfo` to the end, and the three context reads added later all
+  used it. The alert path was the one read that did not. The window is clock
+  derived and contiguous like every other connector in this family, so a
+  tenant raising more than one page of issues in a poll interval lost the
+  remainder permanently; `apply_checkpoint()` cannot recover it, because it
+  de-duplicates rows the vendor already returned and never widens a later
+  request.
+
+  `fetch_alerts` now goes through that same `_paginate()`, so the alert path
+  inherits the cursor walk, the page cap and the behaviour of raising on a
+  GraphQL `errors` block rather than reading a missing scope as a clean cloud
+  estate. The issues query gains `$after` and a `pageInfo` selection, which
+  the request needs in order to mean anything: a GraphQL server coerces only
+  the variables an operation declares, so sending `after` to a query that did
+  not declare it would have been silently ignored. The test drives the real
+  `fetch_alerts` through a transport serving three pages and asserts both the
+  issues returned and the cursor the connector sent, because a canned page
+  sequence will answer any request and cannot by itself tell a correct
+  implementation from a wrong one. `MAX_UNCLASSIFIED` in the paging gate
+  falls from 59 to 58 with it.
+
 ## [22.1.0] - 2026-11-05
 
 ### Security
@@ -206,6 +351,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fetch_alerts` through a transport that emulates Duo's availability cutoff
   and asserts that two back-to-back polls between them read every
   authentication — a path test rather than a source-inspection one.
+
+  Independently diagnosed and fixed by
+  [@rudycelekli](https://github.com/rudycelekli).
 
 - **`cloudflare_zt` WAF mode polled a route that does not exist, so it could
   never have returned an event on any deployment.**
