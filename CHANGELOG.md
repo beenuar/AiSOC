@@ -128,6 +128,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and lost only to the shared-helper version landing first as `595ab1aa7`.
 
 - **Wiz issues past the first 100 of a poll window were never ingested.**
+  ([#1720](https://github.com/beenuar/AiSOC/pull/1720))
   `WizConnector.fetch_alerts` sent `first: 100`, read `data.issues.nodes`
   once and returned. There was no `pageInfo` in the query, no cursor and no
   loop — while the same module already defined a correct `_paginate()` that
