@@ -144,6 +144,16 @@ class LiveActionRequest(BaseModel):
     tenant_id: UUID | None = None
     requested_by: str = "system"
 
+    #: Optional signed VAID badge (beenuar/AiSOC#1739) naming the agent
+    #: identity that requested this dispatch — a plain JSON document, never
+    #: an in-process object, because this request may cross a process
+    #: boundary (the agent runner calling this service) that no Python
+    #: object survives. Verified by ``app.security.vaid_verifier`` only
+    #: when the optional VAID plugin is enabled; ``None`` otherwise, which
+    #: is a no-op and not a refusal, so a deployment that has not opted in
+    #: sees no behaviour change.
+    vaid_badge: dict[str, Any] | None = None
+
 
 class LiveActionResult(BaseModel):
     """Result returned by a :class:`LiveActionExecutor`.

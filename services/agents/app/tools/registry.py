@@ -53,6 +53,14 @@ class ToolRegistry:
         #: defaults to the module logger so the rows exist on every
         #: deployment rather than only on the ones that wired a sink.
         self.audit_sink: Callable[[dict[str, Any]], None] = _log_audit_row
+        #: Optional second check on ``identity``, run after the scope check
+        #: passes and before the tool body is invoked. ``None`` (the
+        #: default) means no behaviour change from before this existed.
+        #: `app.security.vaid_plugin.install_into` sets this when the
+        #: optional VAID plugin is enabled (beenuar/AiSOC#1739); it must
+        #: raise to deny, never return a falsy value, so a verifier that
+        #: forgets to raise cannot be mistaken for one that approved.
+        self.identity_verifier: Callable[[AgentIdentity], None] | None = None
         for tool in tools or []:
             self.register(tool)
 
@@ -110,6 +118,17 @@ class ToolRegistry:
         except ScopeDenied as denied:
             self._audit(identity.audit_row(name, allowed=False, reason=str(denied)))
             return {"error": str(denied)}
+
+        # Second, optional check: does whatever is calling this hold a
+        # badge that stands up, on top of being in-scope. ``None`` by
+        # default (see __init__), so this is a no-op unless the VAID
+        # plugin installed one.
+        if self.identity_verifier is not None:
+            try:
+                self.identity_verifier(identity)
+            except Exception as denied:  # noqa: BLE001 — fail closed, name the reason
+                self._audit(identity.audit_row(name, allowed=False, reason=str(denied)))
+                return {"error": str(denied)}
 
         # Arguments are checked against the tool's own schema before the body
         # sees them (GHSA-4hxg-m5rw-gw3x). Scope decides *whether* this agent

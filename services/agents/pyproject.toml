@@ -115,6 +115,24 @@ jsonschema = ">=4.21,<5.0"
 # scripts/check_dependency_pins.py.
 clickhouse-driver = "^0.2.8"
 
+# Optional VAID badge plugin (beenuar/AiSOC#1739), off by default
+# (AISOC_VAID_PLUGIN_ENABLED). `app.security.vaid_plugin` imports this
+# lazily, only when the plugin is actually used, so a deployment that
+# never sets the flag never needs it installed.
+#
+# Pinned exactly, and held equal with services/actions by
+# `scripts/check_dependency_pins.py`, for the reason that file records
+# against `cryptography` and `sqlglot`: this verifies the Ed25519
+# signature that decides whether a containment action runs, so the version
+# *is* the behaviour. On a 0.x library any minor may change it, and
+# Dependabot's `update-types: semver-major` hold cannot cover a 0.x
+# dependency at all. Moving it is a deliberate re-read of the diff, not a
+# range that re-resolves under you.
+vaid-mint = {version = "==0.11.0", optional = true}
+
+[tool.poetry.extras]
+vaid = ["vaid-mint"]
+
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
 # pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two

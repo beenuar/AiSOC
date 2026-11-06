@@ -217,6 +217,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **An optional, off-by-default VAID badge plugin for agent identity
+  ([#1741](https://github.com/beenuar/AiSOC/pull/1741), closing
+  [#1739](https://github.com/beenuar/AiSOC/issues/1739)), contributed by
+  Allan Smeyatsky.** `services/agents/app/security/agent_identity.py` gives
+  each agent an identity, a role scope, a short expiry and monotonic
+  narrowing, and contains no cryptography at all — so the Investigation
+  Ledger records what an agent did, and an auditor reading it is trusting
+  AiSOC's account of itself. The plugin mints a signed badge *from* that
+  existing identity rather than introducing a second one, and verifies it at
+  the two boundaries where it would matter: `ToolRegistry.execute` in the
+  agents service, and `live_actions.dispatch()` in `services/actions`, which
+  is a different process and therefore sees only what travels with the
+  request.
+
+  This does not make VAID the project's agent identity format, and nothing
+  in the shipped product depends on it. `AISOC_VAID_PLUGIN_ENABLED` is unset
+  by default; `ToolRegistry.identity_verifier` defaults to `None`;
+  `vaid-mint` is an optional extra that `poetry export --only main` does not
+  install, so it is absent from both service images. With the flag unset,
+  `dispatch()` and `ToolRegistry.execute` were measured byte-identical to
+  the previous commit across a fixed input matrix — including a request
+  carrying a deliberately malformed badge, which is ignored rather than
+  refused — and both suites return the same pass counts with the package
+  absent as with it installed.
+
+  Enabled, it fails closed on every input that is not a currently-valid
+  badge for the calling identity: no badge, an unparseable one, a bad
+  signature, a tampered signed field, an expired badge, a revoked one, a
+  badge issued for a different agent, a badge issued under a different
+  tenant's authority, a delegated child badge this service cannot resolve
+  the ancestry of, and a revocation list that is absent, unreadable or
+  malformed. That last one is three-state rather than two: unavailable is
+  refused, never collapsed into "nothing is revoked" — the posture an
+  air-gapped deployment needs, where the list ships with the deployment and
+  the badge's own one-hour expiry is what bounds exposure between
+  deployments of a fresher one.
+
+  Known gap, stated rather than discovered later: nothing mints a badge on a
+  real agent path yet, so turning the flag on today would refuse every tool
+  call. `services/agents/app/security/vaid_plugin.py` is allowlisted in
+  `scripts/check_module_reachability.py` with that recorded and with the
+  change that removes the entry named. The actions-service half is reachable
+  from `dispatch()` and is not allowlisted.
+
 - **Upgrading is now a required check, and one leg crosses a major version.**
   People upgrade, and until now a pull request could break the upgrade path
   with both upgrade tests red or never run: neither `upgrade-test.yml` nor

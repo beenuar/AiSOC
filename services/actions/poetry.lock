@@ -1441,6 +1441,25 @@ files = [
 httpx = ">=0.25.0"
 
 [[package]]
+name = "rfc8785"
+version = "0.1.4"
+description = "A pure-Python implementation of RFC 8785 (JSON Canonicalization Scheme)"
+optional = true
+python-versions = ">=3.8"
+groups = ["main"]
+markers = "extra == \"vaid\""
+files = [
+    {file = "rfc8785-0.1.4-py3-none-any.whl", hash = "sha256:520d690b448ecf0703691c76e1a34a24ddcd4fc5bc41d589cb7c58ec651bcd48"},
+    {file = "rfc8785-0.1.4.tar.gz", hash = "sha256:e545841329fe0eee4f6a3b44e7034343100c12b4ec566dc06ca9735681deb4da"},
+]
+
+[package.extras]
+dev = ["build", "rfc8785[doc,lint,test]"]
+doc = ["pdoc"]
+lint = ["interrogate", "mypy (>=1.0)", "ruff (>=0.3,<1.0)"]
+test = ["coverage", "pytest", "pytest-cov"]
+
+[[package]]
 name = "six"
 version = "1.17.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -1716,6 +1735,47 @@ docs = ["Sphinx (>=4.1.2,<4.2.0)", "sphinx_rtd_theme (>=0.5.2,<0.6.0)", "sphinxc
 test = ["aiohttp (>=3.10.5)", "flake8 (>=6.1,<7.0)", "mypy (>=0.800)", "psutil", "pyOpenSSL (>=25.3.0,<25.4.0)", "pycodestyle (>=2.11.0,<2.12.0)"]
 
 [[package]]
+name = "vaid-mint"
+version = "0.11.0"
+description = "The open, self-hostable reference mint (Python) for the VAID standard: mint a root VAID and mint attenuated child VAIDs (scope/capability-contained delegation)."
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"vaid\""
+files = [
+    {file = "vaid_mint-0.11.0-py3-none-any.whl", hash = "sha256:e20f6f68a825932411faea7dd4f2ff70a72e508d10433f84ecf5136eec3def95"},
+    {file = "vaid_mint-0.11.0.tar.gz", hash = "sha256:f1237dbb61dc85c9a86e1786c5a68188311d55d708a2049cb6bccc6e2512972c"},
+]
+
+[package.dependencies]
+cryptography = ">=42.0"
+rfc8785 = ">=0.1.2"
+vaid-pop = ">=0.2.0,<0.3"
+
+[package.extras]
+test = ["pytest (>=8.0)"]
+
+[[package]]
+name = "vaid-pop"
+version = "0.2.0"
+description = "Canonical Python proof-of-possession (PoP) request signer for the VAID standard."
+optional = true
+python-versions = ">=3.10"
+groups = ["main"]
+markers = "extra == \"vaid\""
+files = [
+    {file = "vaid_pop-0.2.0-py3-none-any.whl", hash = "sha256:c9ed36d56160f1d0e565ecec05c6794c678c36f622a0d4b6c691ab7c2323e145"},
+    {file = "vaid_pop-0.2.0.tar.gz", hash = "sha256:4bfab5c5862626a3e2d356e2a10badf74a293e0c2fa2db5ddb8d54b5f52fbb67"},
+]
+
+[package.dependencies]
+cryptography = ">=42.0"
+rfc8785 = ">=0.1.2"
+
+[package.extras]
+test = ["pytest (>=8.0)"]
+
+[[package]]
 name = "watchfiles"
 version = "1.3.0"
 description = "Simple, modern and high performance file watching and code reload in python."
@@ -1919,7 +1979,10 @@ files = [
     {file = "websockets-17.1.tar.gz", hash = "sha256:acfea4c20bf54384883ea33b1240fc1db4f52e190823a4e2b334bc3e8bfca96a"},
 ]
 
+[extras]
+vaid = ["vaid-mint"]
+
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.11"
-content-hash = "d4821aae7573a41b7c13d469efa987ea740fc495b27360a4fcbbfa69c4e2b159"
+content-hash = "7be7d2629d26f8db38c2081b82ffa8cea0709adfaded56c8a8ede2abaa198c6c"
