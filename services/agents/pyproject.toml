@@ -115,6 +115,21 @@ jsonschema = ">=4.21,<5.0"
 # scripts/check_dependency_pins.py.
 clickhouse-driver = "^0.2.8"
 
+# Optional VAID badge plugin (beenuar/AiSOC#1739), off by default
+# (AISOC_VAID_PLUGIN_ENABLED). `app.security.vaid_plugin` imports this
+# lazily, only when the plugin is actually used, so a deployment that
+# never sets the flag never needs it installed.
+#
+# NOT present in poetry.lock as of this change — this environment has no
+# `poetry` installed to regenerate it (see REPORT-s566.md). A maintainer
+# or CI with network access must run `poetry lock` before this can merge;
+# until then `pip install vaid-mint` in a throwaway venv is how the new
+# unit tests were run.
+vaid-mint = {version = ">=0.11.0,<1.0.0", optional = true}
+
+[tool.poetry.extras]
+vaid = ["vaid-mint"]
+
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
 # pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two

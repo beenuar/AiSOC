@@ -23,6 +23,20 @@ aiokafka = ">=0.10,<0.16"
 python-dateutil = "^2.8.2"
 cryptography = ">=46,<51"
 
+# Optional VAID badge plugin (beenuar/AiSOC#1739), off by default
+# (AISOC_VAID_PLUGIN_ENABLED). `app.security.vaid_verifier` imports this
+# lazily, only when the plugin is actually used — this service verifies a
+# badge with the issuer's public key alone, never the agents service's
+# private signing key.
+#
+# NOT present in poetry.lock as of this change — this environment has no
+# `poetry` installed to regenerate it (see REPORT-s566.md). A maintainer
+# or CI with network access must run `poetry lock` before this can merge.
+vaid-mint = {version = ">=0.11.0,<1.0.0", optional = true}
+
+[tool.poetry.extras]
+vaid = ["vaid-mint"]
+
 [tool.poetry.group.dev.dependencies]
 # Floored at 9.0.3 for GHSA advisory coverage; the caret pins excluded it.
 # pytest-asyncio is widened to match — 0.23 predates pytest 9 and the two
