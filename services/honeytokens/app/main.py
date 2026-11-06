@@ -99,8 +99,12 @@ async def _shutdown() -> None:
     task = getattr(app.state, "outbox_drain", None)
     if task is not None:
         task.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await task
+        # Bounded rather than a bare `await task`: a drain wedged on an
+        # unresponsive receiver must not hold the pod open through its whole
+        # shutdown grace period. Losing the wait costs nothing — the journal
+        # is durable and the next replica drains it.
+        with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+            await asyncio.wait_for(task, timeout=5.0)
 
 
 @app.get("/health")

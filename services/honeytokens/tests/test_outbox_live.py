@@ -76,6 +76,28 @@ async def journal(sessions):
     return _write
 
 
+def _recorder(sink: list[dict]):
+    """A `deliver` stand-in that records what it was asked to send."""
+
+    async def _deliver(payload, **_):
+        sink.append(payload)
+        return DeliveryResult(Disposition.DELIVERED, "ingest responded 202")
+
+    return _deliver
+
+
+def _mine(calls: list[dict], trigger_id: uuid.UUID) -> int:
+    """How many of those deliveries were *this* test's row.
+
+    Scoped deliberately. `drain_once` returns a count over the whole table,
+    and this suite shares a database with every other row a CI run leaves
+    behind -- an assertion on the global count passes or fails depending on
+    what ran before it, which is how a live test gets its answer from
+    somebody else's data.
+    """
+    return sum(1 for c in calls if c.get("trigger_id") == str(trigger_id))
+
+
 async def _row(sessions, trigger_id: uuid.UUID):
     async with sessions() as session:
         return (await session.execute(sa.select(HoneytokenAlertOutbox).where(HoneytokenAlertOutbox.trigger_id == trigger_id))).scalar_one()
@@ -104,9 +126,11 @@ async def test_a_trip_during_a_receiver_outage_is_delivered_once_it_returns(sess
     assert row.attempts == 1
     assert "connection refused" in row.last_error
 
-    # It is not due yet — the backoff is real, not a busy loop.
-    assert await drain_once(sessions) == 0
-    assert (await _row(sessions, trigger_id)).attempts == 1
+    # It is not due yet — the backoff is real, not a busy loop. Asserted on
+    # this row's attempt count rather than on the drain's global return,
+    # which counts whatever else the database happens to hold.
+    await drain_once(sessions)
+    assert (await _row(sessions, trigger_id)).attempts == 1, "a row inside its backoff was retried early"
 
     # Time passes and the receiver comes back.
     async with sessions() as session:
@@ -118,19 +142,14 @@ async def test_a_trip_during_a_receiver_outage_is_delivered_once_it_returns(sess
         await session.commit()
 
     delivered: list[dict] = []
-
-    async def _ok(payload, **_):
-        delivered.append(payload)
-        return DeliveryResult(Disposition.DELIVERED, "ingest responded 202")
-
-    monkeypatch.setattr(outbox, "deliver", _ok)
-    assert await drain_once(sessions) == 1
+    monkeypatch.setattr(outbox, "deliver", _recorder(delivered))
+    await drain_once(sessions)
 
     row = await _row(sessions, trigger_id)
     assert row.status == "delivered", f"the receiver returned and the trip is still {row.status}"
     assert row.delivered_at is not None
     assert row.last_error is None
-    assert delivered and delivered[0]["trigger_id"] == str(trigger_id)
+    assert _mine(delivered, trigger_id) == 1, "the recovered trip was not delivered exactly once"
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -143,14 +162,9 @@ async def test_a_delivered_row_is_never_drained_again(sessions, journal, monkeyp
         await record_attempt(session, trigger_id=trigger_id, result=DeliveryResult(Disposition.DELIVERED, "202"))
 
     calls: list[dict] = []
-
-    async def _count(payload, **_):
-        calls.append(payload)
-        return DeliveryResult(Disposition.DELIVERED, "202")
-
-    monkeypatch.setattr(outbox, "deliver", _count)
+    monkeypatch.setattr(outbox, "deliver", _recorder(calls))
     await drain_once(sessions)
-    assert calls == [], "a delivered trip was sent a second time"
+    assert _mine(calls, trigger_id) == 0, "a delivered trip was sent a second time"
 
 
 @pytest.mark.asyncio(loop_scope="module")
@@ -223,14 +237,11 @@ async def test_the_claim_is_a_lease_so_two_drainers_do_not_both_deliver(sessions
         await session.commit()
 
     seen: list[dict] = []
+    monkeypatch.setattr(outbox, "deliver", _recorder(seen))
+    await drain_once(sessions)
+    assert _mine(seen, trigger_id) == 1, "the drain did not deliver this trip exactly once"
 
-    async def _slow(payload, **_):
-        seen.append(payload)
-        return DeliveryResult(Disposition.DELIVERED, "202")
-
-    monkeypatch.setattr(outbox, "deliver", _slow)
-    assert await drain_once(sessions) == 1
-    # A second pass finds nothing: the row is delivered, and even had it not
-    # been, the claim would still be held.
-    assert await drain_once(sessions) == 0
-    assert len(seen) == 1, f"the trip was delivered {len(seen)} times"
+    # A second pass must not send it again: the row is delivered, and even
+    # had it not been, the claim would still be held.
+    await drain_once(sessions)
+    assert _mine(seen, trigger_id) == 1, f"the trip was delivered {_mine(seen, trigger_id)} times"
