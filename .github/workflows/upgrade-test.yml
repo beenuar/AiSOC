@@ -311,7 +311,11 @@ jobs:
       matrix:
         from_version: ['v21.0.0', 'v17.0.0']
     env:
-      OWNER_DSN: postgresql://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc
+      # The runtime role, which is what every assertion below reads as. The
+      # owner DSN is deliberately NOT declared here: it is needed by exactly
+      # two steps, both of which carry it inline under an `aisoc-db-role`
+      # marker, and a job-wide owner credential is the shape
+      # `scripts/check_runtime_db_role.py` exists to refuse.
       APP_DSN: postgresql://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc
 
     steps:
@@ -386,13 +390,19 @@ jobs:
       # Leg two: this tree's chain, applied by THIS TREE's runner.
       - name: Upgrade to this tree, with this tree's runner
         env:
-          # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
-          DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc
+          # The runtime DSN. The runner reads it to provision the login this
+          # job's later assertions connect as; it applies no DDL through it.
           DATABASE_URL: postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc
           AISOC_APP_DB_PASSWORD: aisoc_app_dev_secret
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           ENVIRONMENT: development
           AISOC_MIGRATIONS_STRICT: '1'
+          # Declared last so the marker below attaches to this DSN and only
+          # this one — it covers the lines that follow it, and sitting above
+          # the block it claimed the runtime DSN too, which reads as "the app
+          # role needs DDL" and is the opposite of true.
+          # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
+          DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc
         run: |
           set -euo pipefail
           ( cd services/api && python3 -m app.scripts.run_migrations )
@@ -450,13 +460,19 @@ jobs:
 
       - name: Re-applying this tree's chain is a no-op
         env:
-          # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
-          DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc
+          # The runtime DSN. The runner reads it to provision the login this
+          # job's later assertions connect as; it applies no DDL through it.
           DATABASE_URL: postgresql+asyncpg://aisoc_app:aisoc_app_dev_secret@127.0.0.1:5432/aisoc
           AISOC_APP_DB_PASSWORD: aisoc_app_dev_secret
           SECRET_KEY: ci-dummy-secret-key-at-least-32bytes!
           ENVIRONMENT: development
           AISOC_MIGRATIONS_STRICT: '1'
+          # Declared last so the marker below attaches to this DSN and only
+          # this one — it covers the lines that follow it, and sitting above
+          # the block it claimed the runtime DSN too, which reads as "the app
+          # role needs DDL" and is the opposite of true.
+          # aisoc-db-role: owner - the migration chain is DDL and the runtime role holds no DDL grant.
+          DATABASE_MIGRATION_URL: postgresql+asyncpg://aisoc:aisoc_dev_secret@127.0.0.1:5432/aisoc
         run: |
           set -euo pipefail
           before=$(psql -tA "$APP_DSN" -c "select count(*) from aisoc_schema_migrations")
