@@ -21,7 +21,8 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `APP_NAME` | `AiSOC API` | Display name in OpenAPI docs |
-| `APP_VERSION` | `0.1.0` | Reported in `/healthz` |
+| `APP_VERSION` | `0.1.0` | Display version. Note the API's `/health` reads the separate `VERSION` setting, not this one — the two are independent fields that merely share a default, so setting `APP_VERSION` alone does not change what `/health` reports. The API serves `/health`, not `/healthz` |
+| `VERSION` | `0.1.0` | What `GET /health` reports in its `version` field |
 | `ENV` / `ENVIRONMENT` | `development` | One of `development`, `staging`, `production` |
 | `DEBUG` | `false` | Enables verbose error responses — never enable in production |
 | `API_PREFIX` | `/api/v1` | Mount point for the versioned API |
