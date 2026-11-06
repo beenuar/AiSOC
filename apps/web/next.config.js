@@ -3,19 +3,28 @@
 const fs = require('fs');
 const path = require('path');
 
-// Repo-root VERSION file is the single source of truth for the app version
-// shown in Settings → About. Baked into the bundle at build time since the
-// browser has no way to read a file off the deployed container's disk.
-// Falls back to "0.0.0" rather than failing the build if some build context
-// doesn't carry the file through (e.g. a Dockerfile COPY list falling out of
-// sync, or `next build` invoked from an unexpected working directory).
-let APP_VERSION = '0.0.0';
+// Repo-root VERSION file is the single source of truth for the app version.
+// Baked into the bundle at build time since the browser has no way to read a
+// file off the deployed container's disk; `GET /api/runtime-config` serves it
+// to the console, and `useConsoleVersion` is the only thing that reads it.
+//
+// The fallback is an empty string, not "0.0.0". A build context that does not
+// carry the file through (a Dockerfile COPY list out of sync, `next build`
+// from an unexpected working directory) has not told us the version, and
+// "0.0.0" is a version-shaped answer to a question nobody answered — the
+// console rendered it as `v0.0.0` beside a real release. It also made the
+// runtime route's own "unknown" branch unreachable, because the substituted
+// value was always present. Empty means absent, and absent renders as
+// "unknown".
+let APP_VERSION = '';
 try {
   APP_VERSION = fs
     .readFileSync(path.resolve(__dirname, '..', '..', 'VERSION'), 'utf8')
     .trim();
 } catch {
-  console.warn('[next.config.js] Could not read repo-root VERSION file; using 0.0.0');
+  console.warn(
+    '[next.config.js] Could not read repo-root VERSION file; this build will report its version as unknown',
+  );
 }
 
 // ─── Server-side rewrite targets ────────────────────────────────────────────

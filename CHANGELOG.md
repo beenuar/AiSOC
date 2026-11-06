@@ -490,6 +490,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version bump. The page says which two boundaries are exercised and that the
   other four are not.
 
+### BREAKING
+
+- **`DeploymentConfig` and `DeploymentConfigUpdate` drop the self-update
+  fields, and `telemetry_enabled` becomes read-only.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  Removed from the published spec: `DeploymentConfig.update_channel`,
+  `DeploymentConfig.auto_update`, `DeploymentConfigUpdate.update_channel`,
+  `DeploymentConfigUpdate.auto_update`, `DeploymentConfigUpdate.telemetry_enabled`,
+  and the `UpdateChannel` schema.
+
+  They could not be preserved because each was a published promise that
+  something acts on them and nothing does. `update_channel` and `auto_update`
+  are deleted rather than wired: AiSOC does not update itself, so there is no
+  implementation to point them at and leaving them settable would keep
+  advertising one. `telemetry_enabled` was worse than unread — it was
+  published as `true`, so an API consumer reading `docs/openapi.yaml`
+  concluded this platform phones home by default, which
+  `docs/trust/data-flows.md` and three CI gates say it does not. It is kept on
+  the response, typed `Literal[False]`, so the question stays answerable and
+  the spec cannot drift back; it is gone from the update model because
+  accepting `true` would have the API assert something no code here can do.
+
+  Consumers were checked before removal: no reader anywhere in the tree
+  outside the module, and the console never calls `/api/v1/deployment/*`.
+  `DeploymentConfigUpdate` now rejects unknown keys, so a client still sending
+  `auto_update: true` gets a 422 rather than a 200 and a false belief that it
+  configured something.
+
+### Added
+
+- **`GET /api/v1/system/version` — the route the upgrade runbook already told
+  operators to check.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  `apps/docs/docs/operations/upgrades.md` has said "check
+  `/api/v1/system/version` and see the same number" since it was written, and
+  the route did not exist, so the documented way to confirm an upgrade landed
+  returned 404. It reports the running version, the stamped commit, the
+  applied-migration high-water mark and the schema-skew verdict below, behind
+  `settings:read`.
+
+- **Schema skew is detected and reported, in three states.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  Nothing compared `aisoc_schema_migrations` against the migrations on disk.
+  The table was read in exactly one place — `run_migrations.py`, the runner
+  that writes it — so a deployment whose migration step failed, was skipped or
+  was rolled back ran new code against an old schema while `/health` answered
+  200 and `/readyz` answered ready, and the first symptom was an
+  `UndefinedColumnError` on whichever request happened to touch the missing
+  column.
+
+  `current` means every migration on disk is applied; `skewed` means the two
+  disagree, with `pending` and `applied_not_on_disk` naming which direction;
+  `unknown` means the comparison could not be performed at all — no database,
+  no tracking table, a failed query. **`unknown` is never `current`**, which
+  is the whole point: a check whose unknown bucket is a pass is
+  indistinguishable from one that works. The comparison is on filenames,
+  because `run_migrations.py` tracks and orders by filename and duplicate
+  numeric prefixes are a real occurrence here.
+
+  Surfaced on `/readyz` as a **non-required** dependency, so a schema that is
+  behind is reported loudly without pulling an operator's console out of the
+  load balancer during the incident they need it for: readiness answers
+  `ready_degraded` with the detail and keeps serving.
+
+### Fixed
+
+- **The API reported version `0.1.0` on every deployment it has ever shipped.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  `Settings.APP_VERSION` was a literal and nothing populated it, so `/health`,
+  the OpenAPI document and the startup log agreed on a version no release has
+  ever carried. `core/telemetry.py` in both `api` and `agents` carried a
+  second stale literal, `4.0.0`, so a trace and a health check named different
+  releases of the same process.
+
+  The version now resolves from the `AISOC_VERSION` build arg (stamped by
+  `publish-images.yml`, since a service build context cannot reach the
+  repo-root `VERSION` file), then from that file on a source checkout, then
+  the string `"unknown"` — deliberately not `0.0.0`. A version-shaped
+  placeholder parses as a release and sorts below every tag that ever shipped,
+  so an operator comparing a deployment against a tag cannot tell "very old"
+  from "nobody told me". `VERSION` is now a read-only alias of `APP_VERSION`,
+  so the two cannot disagree and a stray `VERSION` environment variable cannot
+  move either.
+
+- **The console had two version surfaces reading two different build-time
+  values.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  The sidebar footer rendered `packageJson.version` and Settings → About
+  rendered `process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'`, both frozen when
+  the bundle was compiled, by separate mechanisms, so one image could show two
+  numbers. Both now read `consoleVersion` from `/api/runtime-config`.
+  `next.config.js` substituted `'0.0.0'` when the `VERSION` file could not be
+  read, which also made that route's own `'unknown'` branch unreachable; it
+  now substitutes an empty string and the route guards with a trim, so a build
+  that carries no version says so.
+
 ## [22.2.0] - 2026-11-05
 
 ### Added

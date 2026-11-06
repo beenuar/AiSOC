@@ -3,7 +3,7 @@ info:
   title: AiSOC Platform API
   description: AiSOC — open-source AI Security Operations Center. Autonomous threat
     detection, investigation, and response.
-  version: 0.1.0
+  version: 22.2.0
 paths:
   /api/v1/auth/login:
     post:
@@ -21048,6 +21048,22 @@ paths:
                 $ref: '#/components/schemas/BundleJob'
       security:
       - HTTPBearer: []
+  /api/v1/system/version:
+    get:
+      tags:
+      - System
+      summary: Get System Version
+      description: Report the running build and whether its schema matches it.
+      operationId: get_system_version_api_v1_system_version_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemVersion'
+      security:
+      - HTTPBearer: []
   /api/v1/fusion/health:
     get:
       tags:
@@ -29422,14 +29438,15 @@ components:
           $ref: '#/components/schemas/DeploymentMode'
         llm_provider:
           $ref: '#/components/schemas/LLMProvider'
-        update_channel:
-          $ref: '#/components/schemas/UpdateChannel'
         telemetry_enabled:
           type: boolean
+          const: false
           title: Telemetry Enabled
-        auto_update:
-          type: boolean
-          title: Auto Update
+          description: Always false. AiSOC has no phone-home and no model-improvement
+            callback; see docs/trust/data-flows.md. Reported rather than removed so
+            a consumer asking the question gets an answer, and typed as a constant
+            so the published spec cannot drift back to claiming otherwise.
+          default: false
         last_updated:
           type: string
           title: Last Updated
@@ -29437,9 +29454,6 @@ components:
       required:
       - mode
       - llm_provider
-      - update_channel
-      - telemetry_enabled
-      - auto_update
       - last_updated
       title: DeploymentConfig
     DeploymentConfigUpdate:
@@ -29452,20 +29466,7 @@ components:
           anyOf:
           - $ref: '#/components/schemas/LLMProvider'
           - type: 'null'
-        update_channel:
-          anyOf:
-          - $ref: '#/components/schemas/UpdateChannel'
-          - type: 'null'
-        telemetry_enabled:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Telemetry Enabled
-        auto_update:
-          anyOf:
-          - type: boolean
-          - type: 'null'
-          title: Auto Update
+      additionalProperties: false
       type: object
       title: DeploymentConfigUpdate
     DeploymentMode:
@@ -40643,6 +40644,63 @@ components:
           title: Effect
       type: object
       title: ScheduleOut
+    SchemaMigrationState:
+      properties:
+        state:
+          type: string
+          enum:
+          - current
+          - skewed
+          - unknown
+          title: State
+          description: '''current'' — every migration on disk is applied. ''skewed''
+            — the two disagree; see pending and applied_not_on_disk. ''unknown'' —
+            the comparison could not be performed (no database, no tracking table,
+            or a failed query). ''unknown'' is never a pass.'
+        detail:
+          type: string
+          title: Detail
+          description: Why this verdict, in one sentence an operator can act on.
+        migrations_on_disk:
+          type: integer
+          title: Migrations On Disk
+          description: Migration files this build ships.
+        migrations_applied:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          title: Migrations Applied
+          description: Rows in aisoc_schema_migrations, or null when they could not
+            be read.
+        latest_applied:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Latest Applied
+          description: 'Applied-migration high-water mark: the last applied migration
+            in apply order.'
+        pending:
+          items:
+            type: string
+          type: array
+          title: Pending
+          description: On disk and not applied — new code against an old schema.
+        applied_not_on_disk:
+          items:
+            type: string
+          type: array
+          title: Applied Not On Disk
+          description: Applied but absent from this build — old code against a newer
+            schema.
+      type: object
+      required:
+      - state
+      - detail
+      - migrations_on_disk
+      - migrations_applied
+      - latest_applied
+      title: SchemaMigrationState
+      description: How the live schema compares with the migrations this build ships.
     ScimTokenOut:
       properties:
         id:
@@ -41724,6 +41782,35 @@ components:
       - posted
       - error
       title: SyncResult
+    SystemVersion:
+      properties:
+        version:
+          type: string
+          title: Version
+          description: The running release. Stamped into the image at build time;
+            read from the repo-root VERSION file on a source checkout; the literal
+            string 'unknown' when neither declared one. Never a placeholder version
+            number.
+        revision:
+          anyOf:
+          - type: string
+          - type: 'null'
+          title: Revision
+          description: The commit this build came from, or null when the build was
+            not stamped.
+        environment:
+          type: string
+          title: Environment
+          description: The deployment's configured environment name.
+        schema_migrations:
+          $ref: '#/components/schemas/SchemaMigrationState'
+      type: object
+      required:
+      - version
+      - revision
+      - environment
+      - schema_migrations
+      title: SystemVersion
     TAXIICollection:
       properties:
         id:
@@ -43283,14 +43370,6 @@ components:
           title: Sla Due At
       type: object
       title: UpdateCaseRequest
-    UpdateChannel:
-      type: string
-      enum:
-      - stable
-      - beta
-      - nightly
-      - manual
-      title: UpdateChannel
     UpdateConnectorRequest:
       properties:
         name:

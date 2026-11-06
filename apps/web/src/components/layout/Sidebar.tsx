@@ -4,12 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { clsx } from 'clsx';
-import packageJson from '../../../package.json';
 import { LiveQueueBadge } from './LiveQueueBadge';
 import { useBrandLogo, useBranding } from '@/hooks/useBranding';
+import { useConsoleVersion } from '@/hooks/useConsoleVersion';
 import { authApi } from '@/lib/api';
-
-const APP_VERSION = packageJson.version;
 
 interface NavItem {
   label: string;
@@ -389,6 +387,10 @@ export function Sidebar() {
   // there is one code path rather than two that drift.
   const { branding } = useBranding();
   const logoSrc = useBrandLogo(branding.logo_url);
+  // Was `packageJson.version`, compiled into the bundle, while Settings →
+  // About read a different build-time value. One runtime source now, so the
+  // two footers cannot name different releases of the same console.
+  const { version: consoleVersion } = useConsoleVersion();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -529,7 +531,12 @@ export function Sidebar() {
       {/* Footer */}
       <div className="p-4 border-t border-surface-border">
         <div className="flex items-center gap-2 text-xs text-fg-subtle">
-          <span className="font-mono">v{APP_VERSION}</span>
+          {/* Nothing until the answer arrives, then the answer — including
+              "unknown". A placeholder here would be a guess rendered in the
+              same place a real version goes. */}
+          <span className="font-mono">
+            {consoleVersion === null ? '' : consoleVersion === 'unknown' ? 'version unknown' : `v${consoleVersion}`}
+          </span>
           <span>·</span>
           <a
             href="https://github.com/beenuar/AiSOC"

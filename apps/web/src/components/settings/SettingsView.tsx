@@ -55,6 +55,7 @@ import { RetentionPanel } from './RetentionPanel';
 import { RulePacksPanel } from './RulePacksPanel';
 import { DelegationsPanel } from './DelegationsPanel';
 import { useTheme, type ThemePreference } from '@/components/theme/ThemeProvider';
+import { useConsoleVersion } from '@/hooks/useConsoleVersion';
 import { canUseDemoData } from '@/lib/demoFallback';
 import { rbacApi, authApi } from '@/lib/api';
 
@@ -2588,6 +2589,11 @@ function AuditPanel() {
 // ─── Panel: About ─────────────────────────────────────────────────────────────
 
 function AboutPanel() {
+  // Was `process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'`, inlined when the
+  // image was built. Same runtime source as the sidebar footer now, and an
+  // unanswered version says so instead of reading v0.0.0.
+  const { version } = useConsoleVersion();
+
   return (
     <div>
       <PanelHeader
@@ -2595,7 +2601,10 @@ function AboutPanel() {
         description="Open-source SOC platform — community-built, MIT licensed."
       />
       <div className="grid gap-4 px-6 py-5 sm:grid-cols-2">
-        <InfoTile label="Version" value={`v${process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'}`} />
+        <InfoTile
+          label="Version"
+          value={version === null ? 'Loading…' : version === 'unknown' ? 'Unknown' : `v${version}`}
+        />
         <InfoTile label="Build" value="Self-hosted • Docker Compose" />
         <InfoTile label="License" value="MIT" />
         <InfoTile label="Source" value="github.com/beenuar/AiSOC" mono />

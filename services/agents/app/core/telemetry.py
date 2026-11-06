@@ -31,6 +31,8 @@ from opentelemetry.sdk.resources import SERVICE_NAME, SERVICE_VERSION, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, ConsoleSpanExporter
 
+from app.core.version import resolve_version
+
 logger = logging.getLogger(__name__)
 
 _TRACER_PROVIDER: TracerProvider | None = None
@@ -40,7 +42,12 @@ def _make_resource() -> Resource:
     return Resource.create(
         {
             SERVICE_NAME: os.getenv("OTEL_SERVICE_NAME", "aisoc-agents"),
-            SERVICE_VERSION: os.getenv("AISOC_VERSION", "4.0.0"),
+            # Was os.getenv("AISOC_VERSION", "4.0.0") — a stale literal that
+            # outlived four majors. resolve_version() reads the build arg the
+            # image is stamped with, falls back to the repo-root VERSION file
+            # on a source checkout, and reports "unknown" rather than
+            # inventing a release that never ran.
+            SERVICE_VERSION: resolve_version(),
             "deployment.environment": os.getenv("ENVIRONMENT", "development"),
         }
     )
