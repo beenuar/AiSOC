@@ -189,6 +189,29 @@ func dialWS(t *testing.T, srv *httptest.Server, query string, headers map[string
 	return status, conn, br
 }
 
+// awaitSubscribers blocks until the broadcaster has registered want
+// subscribers.
+//
+// The handler writes the 101 response *before* it calls Subscribe, so a
+// test that publishes as soon as it has read the status line is racing
+// the registration — and this is a live tail with no replay, so an
+// envelope published into zero subscribers is simply gone. That cost a
+// CI run as a flaky positive, but the negative cases are the reason
+// this helper is not optional: "no envelope arrived" would otherwise
+// pass whenever the subscriber had not registered yet, which is a pass
+// for entirely the wrong reason.
+func awaitSubscribers(t *testing.T, b *Broadcaster, want int) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if b.SubscriberCount() >= want {
+			return
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	t.Fatalf("broadcaster registered %d subscriber(s), want %d", b.SubscriberCount(), want)
+}
+
 // awaitEnvelope reads one text frame, or reports that none arrived inside
 // the window. The boolean is the whole assertion in the cross-tenant
 // cases, so it must distinguish "nothing was sent" from "the read failed"
@@ -262,7 +285,11 @@ func TestGraphWSQueryStringTenantGrantsNoStream(t *testing.T) {
 	}
 
 	// The handshake succeeded, so the only remaining question is whether
-	// umbra's envelopes reach this socket.
+	// umbra's envelopes reach this socket. Wait for the registration
+	// before publishing: the control above is subscriber 1, so this
+	// connection is subscriber 2, and publishing before it exists would
+	// make the assertion below pass without testing anything.
+	awaitSubscribers(t, b, 2)
 	src.publish(umbraTenantWS, "leaked-entity")
 	payload, got := awaitEnvelope(t, conn, br, 2*time.Second)
 	if got {
@@ -334,8 +361,9 @@ func TestGraphWSDeliversTheCredentialsOwnTenant(t *testing.T) {
 		t.Fatalf("acme's own credential was refused: %s", status)
 	}
 
+	awaitSubscribers(t, b, 1)
 	src.publish(acmeTenantWS, "acme-entity")
-	payload, got := awaitEnvelope(t, conn, br, 2*time.Second)
+	payload, got := awaitEnvelope(t, conn, br, 5*time.Second)
 	if !got {
 		t.Fatal("acme received none of its own envelopes; the stream is closed to its owner")
 	}
@@ -391,8 +419,12 @@ func TestGraphWSTokenForOneTenantCannotReadAnother(t *testing.T) {
 				// outcome for the header case.
 				return
 			}
+			// Subscriber 1 is the umbra control above; this connection
+			// is subscriber 2. Publishing before it registers would let
+			// the assertion below pass on a race rather than on scope.
+			awaitSubscribers(t, b, 2)
 			src.publish(umbraTenantWS, "umbra-secret")
-			if payload, got := awaitEnvelope(t, conn, br, 1500*time.Millisecond); got {
+			if payload, got := awaitEnvelope(t, conn, br, 2*time.Second); got {
 				t.Fatalf("acme's credential reached umbra's stream via %s: %s", tc.name, payload)
 			}
 		})

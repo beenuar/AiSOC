@@ -212,13 +212,19 @@ func (b *Broadcaster) Unsubscribe(sub *Subscriber) {
 	if sub == nil {
 		return
 	}
+	// The close happens under the same write lock as the delete, and
+	// dispatch holds the read lock across its sends. Previously the
+	// close was outside the lock, so a subscriber disconnecting while
+	// an envelope was in flight could be closed between dispatch's
+	// RUnlock and its send — and a send on a closed channel panics even
+	// inside a select with a default, so that is a crash of the consume
+	// goroutine rather than a dropped envelope. Found by the race
+	// detector on the new handler tests; the existing tests never
+	// unsubscribed while the loop was actively dispatching.
 	b.mu.Lock()
-	_, ok := b.subscribers[sub.id]
-	if ok {
+	defer b.mu.Unlock()
+	if _, ok := b.subscribers[sub.id]; ok {
 		delete(b.subscribers, sub.id)
-	}
-	b.mu.Unlock()
-	if ok {
 		close(sub.Updates)
 	}
 }
@@ -291,16 +297,18 @@ func (b *Broadcaster) consumeLoop(ctx context.Context) {
 }
 
 func (b *Broadcaster) dispatch(env graph.GraphUpdate) {
+	// The read lock is held across the sends, not just across the
+	// snapshot, so Unsubscribe cannot close a channel this loop is
+	// about to send on. That is safe to do here precisely because the
+	// send is non-blocking: the select's default arm means no
+	// subscriber can hold the lock open, so a slow client still costs a
+	// dropped envelope rather than back-pressure into the consumer.
 	b.mu.RLock()
-	targets := make([]*Subscriber, 0, len(b.subscribers))
+	defer b.mu.RUnlock()
 	for _, sub := range b.subscribers {
 		if sub.TenantID != "" && env.TenantID != "" && sub.TenantID != env.TenantID {
 			continue
 		}
-		targets = append(targets, sub)
-	}
-	b.mu.RUnlock()
-	for _, sub := range targets {
 		select {
 		case sub.Updates <- env:
 		default:
