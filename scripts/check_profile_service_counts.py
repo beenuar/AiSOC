@@ -226,6 +226,34 @@ CLAIM_SITES: tuple[tuple[str, str, str], ...] = (
         "core",
         r"CORE profile, (\d+) long-running services",
     ),
+    # Two live CORE figures written as words, which neither half of this gate
+    # could see. The validator reads a word form, but only at a site this
+    # list names; `unregistered_mentions` below is what would have found
+    # them, and it matches digits only. So a sentence that spells the number
+    # out is invisible to both halves at once — the same blind spot that let
+    # `installation.md` sit at "fourteen" while every digit site was correct,
+    # reappearing in the one place nobody looked next.
+    #
+    # Registered individually rather than by teaching the sweep word forms,
+    # which was measured before being rejected: it finds ten word-form
+    # mentions in this tree and only these two are profile figures. The other
+    # eight count Python services with a lock, services defaulting a dev-mode
+    # flag, and services exposing `/metrics` — all correct sentences, and a
+    # gate that flags correct content is one somebody switches off.
+    #
+    # `doctor.sh` is also the only registered site this gate reads that the
+    # sweep could never reach whatever pattern it used, because the sweep
+    # only opens `.md`, `.mdx`, `.ts` and `.tsx`.
+    (
+        "scripts/doctor.sh",
+        "core",
+        r"CORE runs ([a-z-]+|\d+) services",
+    ),
+    (
+        "apps/web/src/components/ui/CapabilityUnavailable.tsx",
+        "core",
+        r"CORE is ([a-z-]+|\d+) services",
+    ),
 )
 
 

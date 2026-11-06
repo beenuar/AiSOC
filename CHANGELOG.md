@@ -475,6 +475,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **The compose comment justifying the `honeytokens` profile was void, and
+  contradicted itself three lines later.** It read "image isn't published to
+  GHCR yet", then explained that the image *is* in the publish matrix now.
+  Checked against the registry: `ghcr.io/beenuar/aisoc-honeytokens` serves
+  200 at `latest` and at the version tag, as a `linux/amd64` + `linux/arm64`
+  manifest. So the stated reason for the profile had not been true for some
+  time, and the real reason was written down nowhere.
+
+  The service **stays in `extras`**, and the comment now says why. This is
+  the open half of
+  [GHSA-9q6p-m345-h3hj](https://github.com/beenuar/AiSOC/security/advisories/GHSA-9q6p-m345-h3hj)
+  (F57), which named the profile alongside the alerting defect, so the
+  reasoning is recorded rather than left implied. The security content of
+  F57 was the alerting path and it is fixed: a trip now defaults into the
+  ingest spine and becomes an alert with no configuration at all, so an
+  operator who turns this on gets the signal. What remains is a placement
+  decision, taken on the grounds the ADR-0006 / ADR-0007 series already
+  uses. It is a leaf — nothing `depends_on` it and no other service calls
+  it, unlike `connectors` and `actions`, which ADR-0007 moved into CORE
+  because the agent's tool surface could not reach them there. Nothing seeds
+  a token, so on a fresh CORE install it would be a capability pointed at
+  nothing, which is the failure ADR-0007 set out to avoid, until an operator
+  plants one and is configuring deliberately anyway. It is not hidden:
+  `/honeytokens` renders the `CapabilityUnavailable` panel naming the
+  profile and the command, so an analyst reads an absent capability rather
+  than a clean zero. And `infra/helm` ships the same posture
+  (`honeytokens.enabled: false`), so both deployment paths agree.
+
+  Cost is deliberately **not** the argument and the comment says so: the
+  image is 86 MB on disk, which would no more move the 8 GB CORE figure than
+  the 124.8 MiB ADR-0007 measured did. The CORE service set is unchanged, so
+  no published count moves — measured, not assumed: moving it in was tried
+  locally and reverted, and it changes **all three** keys (`core` 16 to 17,
+  `full` 22 to 23 and `prod:full` 21 to 22, because `extras` sits outside
+  `full` as well) and every figure registered in
+  `scripts/check_profile_service_counts.py`.
+
+- **Two live CORE service counts were watched by neither half of the count
+  gate, because both halves can only see one spelling each.** The validator
+  reads a figure written as a word, but only at a site `CLAIM_SITES` names;
+  `unregistered_mentions`, which exists to find the sites nobody registered,
+  matches digits only — and it opens `.md`, `.mdx`, `.ts` and `.tsx`, so a
+  shell script is outside it whatever the pattern. A sentence spelling the
+  number out in one of those files is therefore invisible to both at once.
+  That is the same blind spot that left `installation.md` reading "fourteen"
+  while every digit site was correct, reappearing in the next place nobody
+  looked: `scripts/doctor.sh` ("CORE runs sixteen services") and
+  `apps/web/src/components/ui/CapabilityUnavailable.tsx` ("CORE is sixteen
+  services"). Both are correct today and would have gone stale silently.
+
+  Registered individually rather than by teaching the sweep word forms,
+  which was measured before being rejected: it finds ten word-form mentions
+  in this tree and only these two are profile figures. The other eight count
+  Python services with a lock, services defaulting a dev-mode flag, and
+  services exposing `/metrics` — all correct sentences, and a gate that
+  flags correct content is one somebody switches off. The release notes and
+  the screenshots README are left alone for the reason `COUNT_MENTION_EXEMPT`
+  already gives: they describe a point in time, and forcing them to track the
+  current count would make them false about what they describe. 31 published
+  figures become 33, and both new sites were watched failing by moving the
+  compose entry and reverting it.
+
 - **The upgrade guide stopped describing the product five majors ago, and the
   gap was in the one table whose job is to say what an operator must do.**
   `apps/docs/docs/operations/upgrades.md` carried rows for v10 through v17
