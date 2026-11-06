@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **A tripped honeytoken reached nobody, and said so at a level nothing
+  watches.**
+  ([GHSA-9q6p-m345-h3hj](https://github.com/beenuar/AiSOC/security/advisories/GHSA-9q6p-m345-h3hj))
+  `send_alert` posted to `HONEYTOKEN_ALERT_WEBHOOK_URL`, which has no default,
+  and returned `False` after an `info` log when it was unset. No receiver
+  route exists anywhere in the API, so the single highest-confidence
+  intrusion signal this platform can produce — a credential nobody has any
+  legitimate reason to touch — produced nothing on the shipped layout.
+
+  A trip is now pushed into the **ingest spine** by default, exactly the way
+  a connector pushes a vendor finding, so it becomes an alert through the
+  path every other signal already takes: dedup, fusion, correlation and
+  auto-triage, with no operator configuration at all. A deployment that has
+  configured a webhook keeps the webhook. The ingest profile ships in the
+  same change (`services/ingest/internal/normalizer`, class 2001 Security
+  Finding, category 2 so the promoter always promotes it) — without it the
+  push would fall to the lenient fallback, be filed as category 4 Network
+  Activity, and be archived to the lake and silently never promoted, which is
+  the same invisible outcome one layer down.
+
+- **A trip that happened while the receiver was down was never retried.**
+  (same advisory, F58) Delivery was attempted inline, once; a failure set
+  `alert_sent = False` on the trigger row and nothing ever looked at it
+  again, so a receiver restart meant the signal was simply gone.
+
+  Delivery is now journalled in `honeytoken_alert_outbox` **before the trip is
+  acknowledged** and drained by an awaited background path — the shape
+  migration 121 already uses for fusion's alert notifications. The ordering is
+  the point: a crash in the delivery window costs a duplicate rather than the
+  signal, and the receiver can deduplicate on `trigger_id`, which every
+  payload carries.
+
+  Permanent and transient are genuinely distinguished rather than retried
+  blindly. A timeout, a connection error, 408, 429 or any 5xx is retried with
+  a capped exponential backoff; any other 4xx is terminal, because a 401
+  means the token is wrong and a 404 means the URL is wrong and retrying
+  either for a day produces load and no alert. A row that exhausts its
+  attempts, or that can never be delivered, becomes `dead` **with the reason
+  recorded on the row**, so "honeytoken alerts are not arriving" is a query
+  rather than an archaeology exercise over container logs.
+
+  Graded against real Postgres as the DML-only `aisoc_app` role by
+  `services/honeytokens/tests/test_outbox_live.py`, which executes the
+  reporter's proof of concept directly — receiver down, trip, receiver back
+  up, alert delivered — and by `tests/test_delivery.py`, which asserts on the
+  **request** rather than the response, because the two defects worth
+  catching live there: a push carrying no `Authorization` is answered 401 by
+  our own ingest service and reads as the receiver rejecting us, and a push
+  whose `connector_type` has no normalizer profile is never promoted at all.
+
+  Reported by Jake Davis.
+
+### Fixed
+
+- The environment-variable reference listed `HONEYTOKEN_ALERT_WEBHOOK_SECRET`
+  as defaulting to `changeme`. It has defaulted to empty since the literal was
+  removed — precisely so that no deployment signs its alerts with a public
+  value — and the page was telling operators the opposite of what the service
+  does.
+
 ## [22.2.0] - 2026-11-05
 
 ### Added

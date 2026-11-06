@@ -12,15 +12,16 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import settings
-from app.models.honeytoken import Honeytoken, HoneytokenTrigger
+from app.models.honeytoken import Honeytoken, HoneytokenAlertOutbox, HoneytokenTrigger
 from app.security.service_auth import require_service_auth
 from app.security.tenant_scope import (
     TenantPrincipal,
     require_console_or_service_auth,
     scoped_tenant_or_403,
 )
-from app.services.alerting import send_alert
+from app.services.delivery import Disposition, deliver, trip_payload
 from app.services.generator import TOKEN_GENERATORS, generate_token
+from app.services.outbox import record_attempt
 
 router = APIRouter(prefix="/api/v1/honeytokens", tags=["honeytokens"], dependencies=[Depends(require_service_auth)])
 
@@ -214,11 +215,19 @@ async def webhook_trigger(body: WebhookTriggerPayload, db: DB) -> dict:
     if token.status == "active":
         token.status = "triggered"
 
-    await db.commit()
+    await db.flush()
     await db.refresh(trigger)
 
-    # Fire alert asynchronously (best-effort)
-    alert_sent = await send_alert(
+    # The journal row lands in the SAME transaction as the trigger, before
+    # anything is delivered and before the caller is told the trip was
+    # recorded (GHSA-9q6p-m345-h3hj, F58). Delivery used to be attempted
+    # inline, once: a receiver that was restarting meant the signal was
+    # simply gone, because nothing retried and nothing remembered.
+    #
+    # Committing the journal first means the worst case is a duplicate
+    # delivery rather than a lost one, and the receiver can deduplicate on
+    # `trigger_id`, which every payload carries.
+    payload = trip_payload(
         honeytoken_id=token.id,
         tenant_id=token.tenant_id,
         token_type=token.token_type,
@@ -227,15 +236,31 @@ async def webhook_trigger(body: WebhookTriggerPayload, db: DB) -> dict:
         source_ip=body.source_ip,
         triggered_at=now,
     )
+    db.add(HoneytokenAlertOutbox(tenant_id=token.tenant_id, trigger_id=trigger.id, payload=payload))
+    await db.commit()
+    await db.refresh(trigger)
 
-    if alert_sent:
+    # Now try to deliver. A failure here costs nothing: the row is durable
+    # and the drain will pick it up. `alert_sent` therefore reports whether
+    # this attempt reached the receiver, not whether the trip was recorded —
+    # `queued_for_retry` is what tells a caller the difference.
+    result = await deliver(payload)
+    await record_attempt(db, trigger_id=trigger.id, result=result)
+
+    if result.delivered:
         trigger.alert_sent = True
         trigger.alert_sent_at = datetime.now(UTC)
         await db.commit()
 
     return {
         "trigger_id": str(trigger.id),
-        "alert_sent": alert_sent,
+        "alert_sent": result.delivered,
+        # Honest about the three outcomes rather than collapsing two of them
+        # into `false`: an operator needs to tell "it will be retried" from
+        # "it will never arrive until you fix something".
+        "delivery_status": result.disposition.value,
+        "delivery_detail": result.detail,
+        "queued_for_retry": result.disposition is Disposition.RETRY,
         "token_status": token.status,
     }
 
