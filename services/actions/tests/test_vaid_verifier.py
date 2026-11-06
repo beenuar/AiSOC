@@ -263,6 +263,29 @@ def test_preflight_is_a_no_op_when_the_plugin_is_disabled():
     vaid_verifier.preflight_or_raise()  # must not raise
 
 
+def test_preflight_is_a_strict_no_op_when_disabled_no_reads_no_raise_no_logs(monkeypatch, caplog):
+    """Stronger than "does not raise": with the flag unset (the default,
+    and the fixture's own baseline — no kernel key, no revocation list,
+    nothing configured), this must touch nothing the enabled path would
+    touch.
+
+    Proven by making every one of those paths explode if reached, rather
+    than by reading the source and trusting the early return."""
+    import logging
+
+    def _boom(*a, **kw):
+        raise AssertionError("preflight_or_raise touched the enabled-only path with the plugin disabled")
+
+    monkeypatch.setattr(vaid_verifier, "_kernel_public_key", _boom)
+    monkeypatch.setattr(vaid_verifier, "_FileRevocationList", _boom)
+    monkeypatch.setattr(vaid_verifier.Path, "read_text", _boom)
+
+    with caplog.at_level(logging.DEBUG):
+        vaid_verifier.preflight_or_raise()  # must not raise
+
+    assert caplog.records == []
+
+
 def test_preflight_refuses_when_no_kernel_public_key_is_configured(monkeypatch, tmp_path):
     _enable(monkeypatch)
     mint = _Mint()

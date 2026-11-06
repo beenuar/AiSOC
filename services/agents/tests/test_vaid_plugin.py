@@ -494,6 +494,35 @@ def test_preflight_is_a_no_op_when_the_plugin_is_disabled():
     vaid_plugin.preflight_or_raise()  # must not raise
 
 
+def test_preflight_is_a_strict_no_op_when_disabled_no_reads_no_raise_no_logs(monkeypatch, caplog):
+    """Stronger than "does not raise": with the flag unset (the default,
+    and the fixture's own baseline — no revocation list, no seed, nothing
+    configured), this must touch nothing the enabled path would touch.
+
+    Proven by making every one of those paths explode if reached, rather
+    than by reading the source and trusting the early return: a
+    regression that moved the `vaid_plugin_enabled()` check one line down
+    would still pass "must not raise" (the thing it would reach still
+    tolerates a fully-unconfigured environment, by design) and only this
+    test would catch that something ran.
+    """
+    import logging
+
+    def _boom(*a, **kw):
+        raise AssertionError("preflight_or_raise touched the enabled-only path with the plugin disabled")
+
+    monkeypatch.setattr(vaid_plugin, "_issuer_handle_singleton", _boom)
+    monkeypatch.setattr(vaid_plugin, "_kernel_seed", _boom)
+    monkeypatch.setattr(vaid_plugin.Path, "read_text", _boom)
+    monkeypatch.setattr(vaid_plugin.Path, "read_bytes", _boom)
+    monkeypatch.setattr(vaid_plugin.os, "urandom", _boom)
+
+    with caplog.at_level(logging.DEBUG):
+        vaid_plugin.preflight_or_raise()  # must not raise
+
+    assert caplog.records == []
+
+
 def test_preflight_refuses_when_no_revocation_list_is_configured(monkeypatch):
     """The gap named in the pull request: enabling the plugin with no
     `AISOC_VAID_REVOCATION_LIST_PATH` used to refuse every tool call, live.
