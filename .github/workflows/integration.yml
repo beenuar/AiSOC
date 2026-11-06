@@ -118,8 +118,8 @@ jobs:
           # rail legs) were inert: their live tests only ran when something
           # *else* in the surviving list changed. This is the union of all
           # three lists; the next lane extends it rather than re-assigning.
-          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py tests/isolation/test_root_cause_findings_live.py .github/workflows/integration.yml'
-          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py services/api/tests/test_identity_resolution_live.py services/api/app/services/identity_resolution.py services/api/app/services/identity_resolution_store.py services/api/app/services/change_timeline.py tests/isolation/test_alert_occurrences_live.py services/fusion/app/services/alert_sink.py services/fusion/tests/test_alert_reduction_real.py services/connectors/app/vuln_promotion_sql.py services/connectors/app/scheduler.py services/connectors/tests/test_vuln_promotion_live.py services/api/app/api/v1/endpoints/triage_questions.py services/agents/app/context/triage_questions_store.py services/agents/app/hunt/source_report_store.py services/agents/app/api/router.py services/agents/tests/integration/ .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py tests/isolation/test_alert_occurrences_live.py tests/isolation/test_alert_recurrence_after_closure_live.py services/fusion/app/services/alert_sink.py services/fusion/app/services/alert_status.py services/fusion/tests/test_alert_reduction_real.py tests/isolation/test_root_cause_findings_live.py .github/workflows/integration.yml'
+          migration_paths='services/api/migrations/ services/api/app/scripts/run_migrations.py services/ueba/alembic/ services/api/tests/test_mssp_portfolio_isolation.py tests/isolation/test_postgres_rls.py tests/isolation/test_mssp_rls_live.py scripts/check_runtime_db_role.py services/fusion/tests/test_asset_context_live.py services/fusion/app/services/asset_context.py services/api/tests/test_alert_rail_business_context_live.py services/api/app/services/alert_rail.py services/agents/tests/test_business_context_tenant_rules_live.py services/agents/app/workers/business_context.py services/api/tests/test_alert_queue_priority_live.py services/api/app/services/alert_queue.py services/api/tests/test_identity_privilege_live.py services/api/app/services/identity_privilege.py services/api/app/services/identity_privilege_store.py services/api/app/services/alert_priority.py services/api/tests/test_access_review_live.py services/api/app/services/access_review.py services/api/app/services/access_review_store.py services/api/tests/test_identity_resolution_live.py services/api/app/services/identity_resolution.py services/api/app/services/identity_resolution_store.py services/api/app/services/change_timeline.py tests/isolation/test_alert_occurrences_live.py tests/isolation/test_alert_recurrence_after_closure_live.py services/fusion/app/services/alert_sink.py services/fusion/app/services/alert_status.py services/fusion/tests/test_alert_reduction_real.py services/connectors/app/vuln_promotion_sql.py services/connectors/app/scheduler.py services/connectors/tests/test_vuln_promotion_live.py services/api/app/api/v1/endpoints/triage_questions.py services/agents/app/context/triage_questions_store.py services/agents/app/hunt/source_report_store.py services/agents/app/api/router.py services/agents/tests/integration/ .github/workflows/integration.yml'
           # backup_crypt.py was missing from the old filter, and it is where
           # every byte of the AES-256-GCM implementation lives — so a change
           # to the encryption itself did not run the gate that proves the
@@ -941,6 +941,36 @@ jobs:
             || { echo "::error::the occurrence live suite did not report any passing test"; exit 1; }
           ! grep -qE 'skipped' /tmp/occurrences.log \
             || { echo "::error::the occurrence live suite skipped a test; its DSNs must both be set"; exit 1; }
+
+      # GHSA-qp9f-459j-w89c. `_INSERT_SQL`'s dedup guard carries no status, so
+      # a closed alert absorbed every later firing of the same detection and
+      # no open alert was created — an attacker who waited for an analyst to
+      # close the alert, then repeated the activity, was invisible.
+      #
+      # Only a database can grade this. `uq_alerts_tenant_dedup` is what rules
+      # out the "insert a second row" remedy, and the reopen is a conditional
+      # UPDATE whose `status = ANY(terminal)` predicate is simultaneously the
+      # fix and the control that leaves an open alert alone. A stub pool would
+      # accept both and prove neither.
+      - name: A detection that fires again after closure reaches the queue (live Postgres)
+        working-directory: services/fusion
+        env:
+          MSSP_ISOLATION_REQUIRED: '1'
+          # Runtime role for the code under test; owner for fixtures only.
+          ISOLATION_RECURRENCE_DSN: postgresql://aisoc_app:aisoc_app_ci_secret@localhost:5432/aisoc
+          # aisoc-db-role: owner — fixtures only. The suite creates scratch tenants, which the DML-only runtime role cannot. Every assertion is judged over ISOLATION_RECURRENCE_DSN above, which is NOBYPASSRLS, and the suite refuses to grade itself if that role can bypass RLS.
+          ISOLATION_RECURRENCE_ADMIN_DSN: postgresql://aisoc:aisoc_ci_secret@localhost:5432/aisoc
+        run: |
+          set -euo pipefail
+          pip install --quiet pydantic pydantic-settings structlog
+          python -m pytest ../../tests/isolation/test_alert_recurrence_after_closure_live.py -v --tb=short -rs | tee /tmp/recurrence.log
+          # A skipped live suite reports the same word as a passing one, and
+          # this is the suite standing between a closed alert and silent
+          # detection evasion. `[1-9][0-9]*` so `0 passed` is still a failure.
+          grep -qE '[1-9][0-9]* passed' /tmp/recurrence.log \
+            || { echo "::error::the recurrence live suite did not report any passing test"; exit 1; }
+          ! grep -qE 'skipped' /tmp/recurrence.log \
+            || { echo "::error::the recurrence live suite skipped a test; its DSNs must both be set"; exit 1; }
 
       # Phase 3.3, second half. Three statements a stub accepts and Postgres
       # does not: the ON CONFLICT upsert on the (resource, technique,
