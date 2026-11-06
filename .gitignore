@@ -179,3 +179,10 @@ docker-compose.ports.yml
 # work in.
 plugins/*/go/*-test
 *.test
+
+# Pre-upgrade database dumps written by `make upgrade`. A dump holds every
+# `vault:v1:` connector credential, every alert and every case in the
+# deployment, so committing one would publish the lot — and the directory
+# only exists on a host that has actually been upgraded, which is never a
+# contributor's checkout.
+/backups/

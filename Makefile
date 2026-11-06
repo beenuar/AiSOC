@@ -79,7 +79,8 @@ console_url = $(if $(strip $(CONSOLE_URL)),$(strip $(CONSOLE_URL)),http://localh
 
 .PHONY: help install env up up-dev up-full up-gpu up-host-llm _gpu_preflight _llm_note pull down restart status doctor smoke _anonymous_write_is_refused demo logs clean \
         bootstrap ingest-token api-token test test-unit test-integration test-e2e stats papers \
-        papers-install demo-script replay-eval replay-eval-verify
+        papers-install demo-script replay-eval replay-eval-verify \
+        upgrade _schema_guard _wait_postgres _upgrade_backup _migrate
 
 help:
 	@echo ""
@@ -94,8 +95,10 @@ help:
 	@echo "    make doctor         Diagnose the deployment and say what to fix"
 	@echo ""
 	@echo "  Upgrading"
-	@echo "    git pull && make up   Fetches new images when AISOC_VERSION is a moving tag"
-	@echo "                          (the default). A pinned release is immutable and is not refetched."
+	@echo "    make upgrade        Back up, apply pending migrations, then start the new code."
+	@echo "                        This is the supported upgrade. Run it after 'git pull'."
+	@echo "    make up             Refuses to start when the schema is behind the code, and"
+	@echo "                        names 'make upgrade'. It never migrates on its own."
 	@echo ""
 	@echo "  Running it"
 	@echo "    make status         Show every service and its health"
@@ -132,7 +135,7 @@ env:
 # allocated` against whichever container lost the race, which names neither the
 # process holding the port nor what to do about it. Half the stack is running
 # by then, so the error also arrives after a minute of unrelated output.
-up: env _ports _refresh
+up: env _ports _refresh _schema_guard
 	@# UP_FLAGS is the documented way to pass compose's own flags through
 	@# without a second code path for starting the stack. install.sh's
 	@# --rebuild uses it (`make up UP_FLAGS=--build`), which is how that
@@ -203,7 +206,7 @@ up-dev: env _ports _refresh
 	@echo ""
 	@$(MAKE) --no-print-directory bootstrap
 
-up-full: env _ports _refresh
+up-full: env _ports _refresh _schema_guard
 	AISOC_LAKE_WRITER_ENABLED=true AISOC_GRAPH_ENABLED=true $(COMPOSE) --profile full up -d
 	@$(MAKE) --no-print-directory _wait PROFILE=full
 	@echo ""
@@ -233,7 +236,7 @@ up-full: env _ports _refresh
 # no NVIDIA container toolkit is the daemon's own
 # `could not select device driver "nvidia"`, which names neither a cause nor a
 # next command.
-up-gpu: env _gpu_preflight _ports _refresh
+up-gpu: env _gpu_preflight _ports _refresh _schema_guard
 	$(COMPOSE) -f docker-compose.yml -f infra/compose/docker-compose.gpu.yml up -d
 	@$(MAKE) --no-print-directory _wait
 	@echo ""
@@ -251,7 +254,7 @@ _gpu_preflight:
 
 # Uses an Ollama already listening on the host. The bundled one is not started
 # at all, so there is no second copy and no port conflict to resolve.
-up-host-llm: env _ports _refresh
+up-host-llm: env _ports _refresh _schema_guard
 	$(COMPOSE) -f docker-compose.yml -f infra/compose/docker-compose.host-llm.yml up -d
 	@$(MAKE) --no-print-directory _wait
 	@echo ""
@@ -341,6 +344,186 @@ _refresh:
 # The same refresh on its own, for an operator who wants to fetch now and
 # start later, or who is diagnosing a version mismatch.
 pull: _refresh
+
+# ── Upgrading ────────────────────────────────────────────────────────────────
+#
+# Where the auto-migrate line sits, and why it sits there
+# -------------------------------------------------------
+# AiSOC never updates itself. Applying DDL to a production database is a
+# decision with no undo, so it happens when an operator asks for it and at no
+# other time. That rules out migrating on container start: a daemon restart, a
+# host reboot or a rescheduled pod would each silently rewrite the schema.
+#
+# But the alternative that was in place was worse than either. `main.py`
+# applies the chain only when ENVIRONMENT is dev-class, ENVIRONMENT defaults to
+# `production` here and in .env.example, the Postgres initdb hook fires only on
+# an empty data directory, and `api` has no command override — so
+# `docker compose pull && up -d` started new code against the old schema,
+# passed every healthcheck, and said nothing. The comment excluding production
+# pointed at "a managed migration pipeline" that exists in neither compose nor
+# the Helm chart.
+#
+# So the line is drawn between *consent* and *silence* rather than between
+# environments:
+#
+#   make upgrade   migrates. The operator typed it; that is the consent.
+#   make up        never migrates, and refuses to start when the schema is
+#                  behind, naming `make upgrade`. Starting anyway and printing
+#                  a warning would leave a running, healthy-looking, subtly
+#                  broken stack — which is the defect, not the fix for it.
+#
+# Three cases this cannot fire on, which is what makes refusing safe:
+# a first run (empty data directory — the initdb hook applies the whole chain
+# as it is created), a restart with no code change (nothing pending), and
+# `make up-dev` (ENVIRONMENT=development, where the API applies the chain at
+# boot and `_schema_guard` is deliberately not a prerequisite).
+
+# Reads the database and says whether its schema is behind the code.
+#
+# Starts only Postgres, before the rest of the stack, so a refusal costs
+# nothing and arrives before the thing it is refusing has happened.
+#
+# A database that cannot be read is reported as UNKNOWN and does not block the
+# start. That is the one place this is an alarm rather than a gate, and it is
+# deliberate: `make up` is how an operator gets to a position where they can
+# diagnose anything at all, and refusing to start a stack because its Postgres
+# is unreachable would take that away to prevent a condition that cannot be
+# confirmed. `make upgrade` makes the opposite call on the same signal, below,
+# because there the operator is about to write DDL.
+_schema_guard:
+	@if ! $(COMPOSE) up -d postgres >/dev/null 2>&1; then \
+	  echo "  Could not start Postgres to check the schema — continuing."; \
+	  echo "  If this is an existing deployment, run 'make upgrade' rather than 'make up'."; \
+	  exit 0; \
+	fi; \
+	$(MAKE) --no-print-directory _wait_postgres QUIET=1 || { \
+	  echo "  Postgres did not accept a connection in time, so the schema was not checked."; \
+	  echo "  If this is an existing deployment, run 'make upgrade' rather than 'make up'."; \
+	  exit 0; \
+	}; \
+	AISOC_PG_PSQL="$(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc" \
+	  $(PYTHON) scripts/pending_migrations.py --quiet; \
+	status=$$?; \
+	if [ $$status -eq 3 ]; then \
+	  echo ""; \
+	  echo "  Not starting: this database's schema is behind the code you are about to run."; \
+	  echo ""; \
+	  echo "  Starting anyway would boot the new release against the previous"; \
+	  echo "  release's tables. Every healthcheck would pass and the first symptom"; \
+	  echo "  would be a request failing on a column that does not exist."; \
+	  echo ""; \
+	  echo "    make upgrade     back up, apply the migrations above, then start"; \
+	  echo ""; \
+	  exit 1; \
+	elif [ $$status -eq 4 ]; then \
+	  echo "  Continuing without a schema check (see above)."; \
+	elif [ $$status -ne 0 ]; then \
+	  echo "  Could not compare the schema against the migrations on disk (exit $$status)."; \
+	  echo "  Continuing; run 'make upgrade' if this is an existing deployment."; \
+	fi
+
+# Waits for Postgres to accept a TCP connection *inside* the container.
+#
+# TCP rather than the unix socket on purpose. The official image runs its
+# initdb hooks — which is where a fresh install's migration chain is applied —
+# against a temporary server started with `listen_addresses=''`. A socket
+# connection reaches that server and would read a half-written migration table
+# mid-initialisation; a TCP connection cannot succeed until the real server is
+# listening. That turns a race into an impossibility rather than into a
+# longer sleep.
+_wait_postgres:
+	@for i in $$(seq 1 60); do \
+	  if $(COMPOSE) exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc -tAc 'SELECT 1' >/dev/null 2>&1; then \
+	    exit 0; \
+	  fi; \
+	  sleep 2; \
+	done; \
+	[ -n "$(QUIET)" ] || echo "Postgres did not accept a TCP connection within 120s."; \
+	exit 1
+
+# The supported upgrade: back up, prove the backup landed, migrate, start.
+#
+# `env` is deliberately NOT a prerequisite. It runs scripts/ensure_env.py,
+# which is a good citizen about an existing .env — it never overwrites a
+# secret that already has a value — but when .env is *absent* it copies the
+# example and generates a brand-new Fernet key. On an existing deployment that
+# orphans every stored connector credential: each `vault:v1:` token then fails
+# its integrity check against a key that never encrypted it. Creating that
+# file is the one thing an upgrade must not do, so the preflight runs first and
+# refuses, rather than being handed a .env that was minted a second earlier.
+#
+# Two preflight invocations, with different jobs. The first checks the
+# credential key before any work happens, so a deployment that cannot survive
+# a restore is stopped at the start. The second runs after the dump and
+# includes the backup arm, so it is verifying that the dump actually produced
+# something rather than repeating the first check — a pg_dump that writes an
+# empty file exits 0.
+upgrade:
+	@echo "==> Preflight"
+	@$(PYTHON) scripts/preflight_upgrade.py --skip-backup-check
+	@echo ""
+	@echo "==> Backing up before touching the schema"
+	@$(MAKE) --no-print-directory _upgrade_backup
+	@echo ""
+	@$(PYTHON) scripts/preflight_upgrade.py
+	@echo ""
+	@echo "==> Fetching images"
+	@$(MAKE) --no-print-directory _refresh
+	@echo ""
+	@echo "==> Applying migrations"
+	@$(MAKE) --no-print-directory _migrate
+	@echo ""
+	@echo "==> Starting"
+	@$(MAKE) --no-print-directory _ports
+	$(COMPOSE) $(PROFILE_ARG) up -d
+	@$(MAKE) --no-print-directory _wait
+	@echo ""
+	@echo "  Upgrade complete. Console: $(console_url)"
+	@echo "  The pre-upgrade dump is under ./backups/ — keep it until you have"
+	@echo "  confirmed the new release behaves."
+
+# A local dump of the one store whose loss is unrecoverable, taken with the
+# stack still on the old code.
+#
+# This is the rollback artefact for an in-place upgrade, and it is a different
+# thing from scripts/backup.sh, which is the off-host disaster-recovery path
+# for all six stores. Keeping them separate means an operator with no S3
+# bucket still gets the protection that matters for the operation they are
+# about to perform.
+_upgrade_backup:
+	@mkdir -p backups
+	@$(COMPOSE) up -d postgres >/dev/null 2>&1 || true
+	@$(MAKE) --no-print-directory _wait_postgres
+	@out="backups/pre-upgrade-$$(date -u +%Y%m%dT%H%M%SZ).sql.gz"; \
+	if $(COMPOSE) exec -T postgres pg_dump -U aisoc -d aisoc 2>backups/.pg_dump.err | gzip > "$$out"; then \
+	  if [ ! -s "$$out" ]; then \
+	    echo "pg_dump produced an empty file; refusing to call that a backup." >&2; \
+	    cat backups/.pg_dump.err >&2; rm -f "$$out"; exit 1; \
+	  fi; \
+	  rm -f backups/.pg_dump.err; \
+	  echo "  Wrote $$out ($$(du -h "$$out" | cut -f1))"; \
+	else \
+	  echo "pg_dump failed:" >&2; cat backups/.pg_dump.err >&2; rm -f "$$out"; exit 1; \
+	fi
+
+# AISOC_MIGRATIONS_STRICT is the whole point of this target.
+#
+# Without it `run_migrations.main()` logs each failure and returns normally:
+# exit 0 with a partially-applied schema, which is strictly worse than a clean
+# failure because the upgrade then reports success and starts the stack.
+#
+# It has to be set *inside* the container. The operator's shell is a different
+# environment, which is why the warning in the upgrade documentation was
+# unreachable through the documented command.
+#
+# `--no-deps` because this needs Postgres and nothing else; without it compose
+# waits on Kafka's healthcheck before it will run a schema migration.
+_migrate:
+	@$(COMPOSE) up -d postgres >/dev/null 2>&1 || true
+	@$(MAKE) --no-print-directory _wait_postgres
+	$(COMPOSE) run --rm --no-deps -T \
+	  -e AISOC_MIGRATIONS_STRICT=1 \
+	  api python -m app.scripts.run_migrations
 
 # Names a port conflict before compose hits it. Silent when every port is
 # either free or already held by this deployment's own containers — re-running

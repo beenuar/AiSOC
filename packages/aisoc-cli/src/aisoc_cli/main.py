@@ -595,12 +595,26 @@ def db() -> None:
     help="docker compose service that owns the migrations.",
 )
 def db_upgrade(service: str) -> None:
-    """Apply pending SQL migrations against the running dev stack.
+    """Apply pending SQL migrations against the running stack.
 
     Delegates to ``docker compose exec <service> python -m
     app.scripts.run_migrations``, which is the custom forward-only migration
     runner under ``services/api``. Requires the stack to already be up
     (``aisoc serve``).
+
+    Strict mode is unconditional, and passed with ``-e`` rather than left to
+    the caller's shell. ``docker compose exec`` gives the new process the
+    *container's* environment, so exporting ``AISOC_MIGRATIONS_STRICT`` before
+    running this did nothing at all — which is what made the warning in the
+    upgrade documentation unreachable through the command it documents.
+    Without it the runner logs each failure and returns normally: exit 0 over
+    a partially-applied schema, and a caller that reports the upgrade as done.
+
+    There is deliberately no ``--no-strict``. "Keep going past a failed
+    migration and report success" is not a mode anyone should be able to ask
+    for on a database with no undo; an operator who needs to inspect a
+    half-applied chain can read the runner's log, which names every failure
+    either way.
     """
     _require_docker()
     repo_root = _find_repo_root()
@@ -610,6 +624,10 @@ def db_upgrade(service: str) -> None:
         *_compose_file_arg(repo_root),
         "exec",
         "-T",
+        # Ahead of the service name: after it, docker reads `-e` as an
+        # argument to the command being run rather than as an exec flag.
+        "-e",
+        "AISOC_MIGRATIONS_STRICT=1",
         service,
         "python",
         "-m",

@@ -16,11 +16,23 @@ spec:
     matchLabels:
       {{- include "aisoc.selectorLabels" $ | nindent 6 }}
       app.kubernetes.io/component: {{ $name }}
+  {{- /*
+    A ReadWriteOnce plugin volume cannot be attached to the old and new pods
+    at once, so a RollingUpdate with `maxUnavailable: 0` deadlocks: the new
+    pod waits forever for a volume the old pod will not release until the new
+    one is ready. Recreate accepts a gap instead of never completing. A
+    ReadWriteMany volume has no such constraint and keeps the rolling update.
+  */}}
+  {{- if and $svc.plugins $svc.plugins.persistence $svc.plugins.persistence.enabled (eq ($svc.plugins.persistence.accessMode | default "ReadWriteOnce") "ReadWriteOnce") }}
+  strategy:
+    type: Recreate
+  {{- else }}
   strategy:
     type: RollingUpdate
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
+  {{- end }}
   template:
     metadata:
       labels:
@@ -194,12 +206,32 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- if and $svc.plugins $svc.plugins.persistence $svc.plugins.persistence.enabled }}
+            {{- /*
+              Installed plugins and the keys that make signed ones loadable.
+              Both are under /opt/aisoc, both were unmounted, and the pod's
+              `readOnlyRootFilesystem: true` means a plugin install could not
+              write there at all — so this is what makes the feature work on
+              Kubernetes, not only what makes it survive a rollout.
+            */}}
+            - name: plugins
+              mountPath: /opt/aisoc/plugins
+              subPath: plugins
+            - name: plugins
+              mountPath: /opt/aisoc/plugin-keys
+              subPath: plugin-keys
+            {{- end }}
             {{- range $svc.extraVolumeMounts }}
             - {{- toYaml . | nindent 14 }}
             {{- end }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- if and $svc.plugins $svc.plugins.persistence $svc.plugins.persistence.enabled }}
+        - name: plugins
+          persistentVolumeClaim:
+            claimName: {{ include "aisoc.fullname" $ }}-{{ $name }}-plugins
+        {{- end }}
         {{- range $svc.extraVolumes }}
         - {{- toYaml . | nindent 10 }}
         {{- end }}
