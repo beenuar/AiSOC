@@ -10,6 +10,7 @@ import { clsx } from "clsx";
 import { format } from "date-fns";
 import { EmptyState, EmptyStateIcons } from "@/components/ui/EmptyState";
 import { SavedViewsBar } from "@/components/saved-views/SavedViewsBar";
+import { useLocale } from "@/components/i18n/LocaleProvider";
 import { demoFallback } from "@/lib/demoFallback";
 
 // WS-F3 — the saved-views API stores an opaque filter blob per view, so we
@@ -104,6 +105,7 @@ const STATUS_CONFIG: Record<Case["status"], { label: string; className: string; 
 // ─── Case Card ────────────────────────────────────────────────────────────────
 
 function CaseCard({ c }: { c: Case }) {
+  const { t } = useLocale();
   const sev = SEVERITY_CONFIG[c.severity] ?? SEVERITY_CONFIG.medium;
   // Defensive: if normalization missed an unexpected status string, fall back
   // to "open" styling so the entire list never blanks the page.
@@ -148,7 +150,9 @@ function CaseCard({ c }: { c: Case }) {
             </div>
           </div>
           <div className="text-right shrink-0 flex flex-col items-end gap-2">
-            <p className="text-xs text-gray-500" suppressHydrationWarning>
+            {/* A bare timestamp in the corner of a card says nothing about
+                which event it marks. */}
+            <p className="text-xs text-gray-500" title={t("cases.openedAt")} suppressHydrationWarning>
               {format(new Date(c.createdAt), "MMM dd, HH:mm")}
             </p>
             {c.tags && c.tags.length > 0 && (
@@ -178,7 +182,7 @@ function CaseCard({ c }: { c: Case }) {
                   d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
                 />
               </svg>
-              Export Report
+              {t("common.export")} Report
             </button>
           </div>
         </div>
@@ -192,6 +196,7 @@ function CaseCard({ c }: { c: Case }) {
 type FilterStatus = Case["status"] | "all";
 
 export function CasesView() {
+  const { t } = useLocale();
   const [statusFilter, setStatusFilter] = useState<FilterStatus>("all");
   const [severityFilter, setSeverityFilter] = useState<Case["severity"] | "all">("all");
   const [search, setSearch] = useState("");
@@ -252,7 +257,7 @@ export function CasesView() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-gray-100">Cases</h1>
+          <h1 className="text-xl font-semibold text-gray-100">{t("cases.title")}</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             Manage security investigations and incidents
           </p>
@@ -362,6 +367,9 @@ export function CasesView() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search cases…"
+            // The placeholder disappears the moment anything is typed, so
+            // it is not a label. This one is, and it translates.
+            aria-label={t("common.search")}
             className="w-full pl-9 pr-4 py-2 bg-gray-900/60 border border-gray-800 rounded-lg text-sm text-gray-300 placeholder-gray-600 focus:outline-none focus:border-blue-500/50"
           />
         </div>
@@ -409,7 +417,7 @@ export function CasesView() {
       ) : error && !casesData ? (
         <EmptyState
           icon={EmptyStateIcons.case}
-          title="Could not load cases"
+          title={t("cases.loadFailed")}
           description="The case service did not answer. This is not a report that no cases exist — retry, or check the API is reachable."
         />
       ) : cases.length === 0 ? (
@@ -437,7 +445,7 @@ export function CasesView() {
         ) : (
           <EmptyState
             icon={EmptyStateIcons.case}
-            title="No cases yet"
+            title={t("cases.empty")}
             description="Cases bundle related alerts, evidence, and analyst notes into a single investigation. Promote alerts to a case from the Alerts tab, or click ‘New Case’ to start a manual investigation."
           />
         )

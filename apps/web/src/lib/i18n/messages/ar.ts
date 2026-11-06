@@ -50,7 +50,7 @@ export const ar: Translation<Messages> = {
   alerts: {
     title: 'التنبيهات',
     empty: 'لا توجد تنبيهات',
-    emptyHint: 'لم يطابق أي شيء قواعد الكشف في هذه الفترة.',
+    emptyHint: 'لم يطابق أي حدث قواعد الكشف بعد. أضف مصدر بيانات من الإعدادات لبدء استقبال الأحداث.',
     loadFailed: 'تعذّر تحميل التنبيهات',
     loadFailedHint: 'تعذّرت قراءة قائمة التنبيهات، لذا فهي ليست قائمة فارغة.',
     severity: 'الخطورة',
@@ -75,15 +75,27 @@ export const ar: Translation<Messages> = {
     empty: 'لا توجد حالات',
     loadFailed: 'تعذّر تحميل الحالات',
     openedAt: 'فُتحت',
-    closedAt: 'أُغلقت',
   },
 
   hunt: {
-    title: 'التصيّد',
+    title: 'تصيّد التهديدات',
     ask: 'اسأل بلغة طبيعية',
-    run: 'تشغيل الاستعلام',
-    queryShown: 'الاستعلام الذي نُفِّذ',
-    noStore: 'لم يتم الوصول إلى أي مخزن',
-    unsupportedFilters: 'لم تُطبَّق هذه الأجزاء من سؤالك',
+    run: 'تشغيل التصيّد',
+  },
+
+  // Translated, unlike `settings.*`, and for the same reason that one is
+  // not: the scope note exists to tell a reader which parts of the console
+  // they just switched and which stayed English. Shipping that sentence in
+  // English to someone who chose Arabic answers the question in the one
+  // language that cannot answer it.
+  language: {
+    description: 'اختر اللغة التي تُعرض بها الواجهة. يُحفظ الاختيار على هذا الجهاز ويُزامَن مع ملفك الشخصي.',
+    scopeTitle: 'ما الذي تشمله الترجمة',
+    scopeNote: 'الترجمة تغطي الشاشات المذكورة أدناه فقط. يبقى باقي الواجهة بالإنجليزية أياً كانت اللغة المختارة.',
+    covered: 'مُترجَم',
+    fallback: 'يعود إلى الإنجليزية',
+    absent: 'غير مُترجَم',
+    coverage: '{translated} من {total} نص',
+    contribute: 'لغتك غير موجودة؟ أضف ملف لغة بجانب الملف الإنجليزي.',
   },
 };

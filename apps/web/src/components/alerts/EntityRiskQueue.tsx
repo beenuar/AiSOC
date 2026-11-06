@@ -23,6 +23,7 @@ import {
   type EntityRiskStats,
   type EntityType,
 } from '@/lib/api';
+import { useLocale } from '@/components/i18n/LocaleProvider';
 import { demoFallback } from '@/lib/demoFallback';
 
 // ─── Visual config ───────────────────────────────────────────────────────────
@@ -193,6 +194,7 @@ function RatioStat({
   alertCount: number | undefined;
   incidentCount: number | undefined;
 }) {
+  const { t } = useLocale();
   // Alert-to-incident ratio is the published 2026 KPI bar (≥ 50:1) — the
   // single number that measures whether RBA is delivering, i.e. collapsing N
   // alerts into 1 entity-incident. It is derived from the two counts beside
@@ -203,7 +205,7 @@ function RatioStat({
       <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
         <p className="text-xs text-gray-500">Alert → Incident</p>
         <p className="text-2xl font-bold mt-1 text-gray-600">—</p>
-        <p className="text-[10px] text-gray-600 mt-0.5">not measured</p>
+        <p className="text-[10px] text-gray-600 mt-0.5">{t('common.notMeasured')}</p>
       </div>
     );
   }
@@ -305,6 +307,7 @@ function EntityRow({
   record: EntityRiskRecord;
   onSelect: () => void;
 }) {
+  const { t } = useLocale();
   const cfg = ENTITY_TYPE_CONFIG[record.entity_type] ?? ENTITY_TYPE_CONFIG.user;
   const band = bandFor(record.score, record.threshold);
   return (
@@ -339,7 +342,7 @@ function EntityRow({
           <SeverityHistogram histogram={record.severity_histogram} />
           <span className="text-gray-700">·</span>
           <span className="text-xs text-gray-500" suppressHydrationWarning>
-            last seen{' '}
+            {t('alerts.lastSeen')}{' '}
             {formatDistanceToNow(new Date(record.last_seen), {
               addSuffix: true,
             })}
@@ -369,6 +372,7 @@ function EntityDetailDrawer({
   entity: EntityRiskRecord;
   onClose: () => void;
 }) {
+  const { t } = useLocale();
   const cfg = ENTITY_TYPE_CONFIG[entity.entity_type] ?? ENTITY_TYPE_CONFIG.user;
   // Pull a fresh detail record so contributions are up-to-date when the drawer
   // opens — falls back to the row data on error.
@@ -410,7 +414,7 @@ function EntityDetailDrawer({
           <button
             onClick={onClose}
             className="text-gray-500 hover:text-gray-300 text-xl leading-none px-2"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             ×
           </button>
@@ -437,7 +441,7 @@ function EntityDetailDrawer({
                 {record.alert_count}
               </p>
               <p className="text-[10px] text-gray-500 mt-0.5" suppressHydrationWarning>
-                first seen{' '}
+                {t('alerts.firstSeen')}{' '}
                 {formatDistanceToNow(new Date(record.first_seen), {
                   addSuffix: true,
                 })}
@@ -510,6 +514,7 @@ function EntityDetailDrawer({
 // ─── Main view ───────────────────────────────────────────────────────────────
 
 export function EntityRiskQueue() {
+  const { t } = useLocale();
   const [promotedOnly, setPromotedOnly] = useState(false);
   const [selected, setSelected] = useState<EntityRiskRecord | null>(null);
 
@@ -574,7 +579,7 @@ export function EntityRiskQueue() {
           </p>
           <p className="text-[10px] text-gray-600 mt-0.5">
             {total === undefined
-              ? 'not measured'
+              ? t('common.notMeasured')
               : `threshold ${Math.round(threshold)} pts`}
           </p>
         </div>
@@ -589,7 +594,7 @@ export function EntityRiskQueue() {
             {promotedCount ?? '—'}
           </p>
           <p className="text-[10px] text-gray-600 mt-0.5">
-            {promotedCount === undefined ? 'not measured' : 'entity-incidents'}
+            {promotedCount === undefined ? t('common.notMeasured') : 'entity-incidents'}
           </p>
         </div>
         <div className="bg-gray-900/60 border border-gray-800/60 rounded-xl px-4 py-3">
@@ -603,7 +608,7 @@ export function EntityRiskQueue() {
             {alertCount ?? '—'}
           </p>
           <p className="text-[10px] text-gray-600 mt-0.5">
-            {alertCount === undefined ? 'not measured' : 'current decay window'}
+            {alertCount === undefined ? t('common.notMeasured') : 'current decay window'}
           </p>
         </div>
         <RatioStat alertCount={alertCount} incidentCount={promotedCount} />
