@@ -61,8 +61,38 @@ type Token struct {
 	TemplateID string
 	Label      string
 	HMACSecret string
-	CreatedAt  time.Time
-	LastUsedAt *time.Time
+	// HMACConfigured records whether the hmac_secret column was non-NULL,
+	// which is a different question from whether HMACSecret is non-empty
+	// and the two were previously collapsed by a COALESCE in the resolve
+	// query.
+	//
+	// Migration 033 documents NULL as "no signature verification (still
+	// secured by the token in the URL)" — a deliberate opt-out, because a
+	// webhook vendor often cannot sign. A non-NULL blank is not that: the
+	// mint API refuses a secret shorter than 16 characters, so a blank one
+	// got there by some route that skipped validation, and an HMAC keyed
+	// on the empty string is computable by anyone. Both branches of the
+	// old code were wrong for it — skipping verification accepted an
+	// unsigned body, and verifying against an empty key would have
+	// accepted a forged one.
+	HMACConfigured bool
+	CreatedAt      time.Time
+	LastUsedAt     *time.Time
+}
+
+// RequiresSignature reports whether a body signature must be present and
+// valid for this token.
+//
+// The two verification sites ask through this method rather than reading
+// the fields, so they cannot drift apart — and it is deliberately
+// `configured OR non-empty` rather than `configured` alone. Only Resolve
+// builds a Token in production, and it always sets both consistently,
+// but a caller that sets a secret and forgets the flag is asking for
+// verification; answering "no" would turn a typo into a skipped check.
+// The one combination that must never mean "skip" is a secret that is
+// present in some form, so that is the one this fails closed on.
+func (t Token) RequiresSignature() bool {
+	return t.HMACConfigured || t.HMACSecret != ""
 }
 
 // Store resolves inbox tokens against Postgres with a tiny in-process
@@ -144,7 +174,7 @@ func (s *Store) Resolve(ctx context.Context, token string) (*Token, error) {
 			tenant_id,
 			template_id,
 			COALESCE(label, ''),
-			COALESCE(hmac_secret, ''),
+			hmac_secret,
 			created_at,
 			revoked_at,
 			last_used_at
@@ -154,16 +184,17 @@ func (s *Store) Resolve(ctx context.Context, token string) (*Token, error) {
 	`, token)
 
 	var (
-		t         Token
-		revokedAt *time.Time
-		lastUsed  *time.Time
+		t          Token
+		revokedAt  *time.Time
+		lastUsed   *time.Time
+		hmacSecret *string
 	)
 	err := row.Scan(
 		&t.Token,
 		&t.TenantID,
 		&t.TemplateID,
 		&t.Label,
-		&t.HMACSecret,
+		&hmacSecret,
 		&t.CreatedAt,
 		&revokedAt,
 		&lastUsed,
@@ -174,6 +205,13 @@ func (s *Store) Resolve(ctx context.Context, token string) (*Token, error) {
 			return nil, ErrTokenNotFound
 		}
 		return nil, fmt.Errorf("inbox: resolve query failed: %w", err)
+	}
+	// Scanned into a pointer so NULL survives the boundary. The COALESCE
+	// this replaced turned "the operator opted out" and "the column is
+	// blank" into the same empty string, and only one of those is safe.
+	if hmacSecret != nil {
+		t.HMACConfigured = true
+		t.HMACSecret = *hmacSecret
 	}
 	t.LastUsedAt = lastUsed
 

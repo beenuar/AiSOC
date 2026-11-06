@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+
+- **The ingest graph-update WebSocket ran no authentication and took its
+  tenant from the query string.**
+  ([GHSA-cvfr-9r25-gqpf](https://github.com/beenuar/AiSOC/security/advisories/GHSA-cvfr-9r25-gqpf),
+  high, CVSS 8.6) `internal/graph_ws/server.go` read `?tenant_id=<id>` and
+  subscribed the caller to that tenant's live graph-update stream, so any
+  caller who could reach the port could read any tenant's stream with no
+  credential at all. The handler now runs the same `internal/ingestauth`
+  authenticator the ingest routes run and derives the tenant from the
+  resulting principal, by the same intersection-only rule `/v1/ingest` uses.
+  The query parameter is removed rather than validated.
+
+  The reason this survived is the part worth recording. Two comments — one in
+  the handler, one on the route — stated that authentication was enforced by
+  the Python API proxy and that the server "is expected to listen on the
+  internal service network only". The proxy's authentication is real: it
+  resolves a JWT or API key, enforces `graph:read`, and rebinds the tenant
+  from the resolved user. But nothing made the proxy the only way in, and the
+  proxy presented no credential upstream, so the Go side could not tell a
+  relayed browser from anyone else. A protection asserted in a comment and
+  enforced by an assumption about somebody else's deployment is not a
+  protection, and the identical reasoning was already written down one
+  package away in `internal/ingestauth` as the reason `/v1/ingest` needed a
+  credential. Both comments were corrected in place rather than deleted, and
+  the proxy now presents a service token and the resolved tenant as a header
+  — defence in depth in front of ingest's own check instead of a substitute
+  for it. Nothing in `docker-compose.yml` changes: the api and ingest-worker
+  containers already share `AISOC_SERVICE_TOKEN`, which is what ingest
+  resolves after `AISOC_INGEST_SERVICE_TOKEN`, and `make env` generates it.
+  Roll ingest last or roll both together, since a new ingest refuses an old
+  API while a new API against an old ingest is harmless.
+
+  The reported impact said graph events could be **written**. They cannot:
+  the handler only subscribes and pumps envelopes toward the client, and its
+  reader goroutine discards inbound frames. This is a cross-tenant read, and
+  the published vector says so (`I:N`).
+
+- **`/metrics` on ingest was open while its own compose file promised a
+  token.** `docker-compose.prod.yml` declares `METRICS_TOKEN` required for
+  this service with the message "guards /metrics outside development" and
+  `scripts/ensure_env.py` generates it, but nothing in `services/ingest` read
+  the variable, so the guard the compose file promised existed only in
+  `services/api` and `services/agents`. Ingest now applies the same two
+  rules: a constant-time bearer comparison when `METRICS_TOKEN` is set, and a
+  refusal outside a development-class environment when it is not. `/health`,
+  `/livez` and `/readyz` stay unauthenticated, deliberately — an
+  orchestrator's probe carries no credential, and pulling the pipeline's
+  front door out of a load balancer to protect a scrape endpoint would be a
+  worse trade than the one it buys.
+
+- **A blank HMAC secret skipped signature verification on both ingest push
+  paths.** `ingestauth.VerifySignature` and `inbox.verifyHMACOrFail` both
+  began `if secret == "" { accept }`, so a token that declared a signature
+  requirement accepted unsigned bodies. The cause was one layer down: the
+  resolve query applied `COALESCE(hmac_secret, '')`, which collapsed a NULL
+  column and a blank one into the same empty string. Those are different
+  facts. Migration `033` documents NULL as "no signature verification (still
+  secured by the token in the URL)" — the opt-out every webhook vendor that
+  cannot sign depends on — while a non-NULL blank cannot be created through
+  the mint API at all, which enforces `min_length=16`.
+
+  `inbox.Token` now carries `HMACConfigured` alongside the secret, so the two
+  states are distinguishable, and a blank configured secret is **refused**
+  with an operator-actionable message rather than waived. Verifying against
+  it was considered and rejected: an HMAC keyed on the empty string is a
+  value any caller can compute, so that branch would have accepted forged
+  bodies instead of unsigned ones. A test demonstrates the forgery directly
+  rather than asserting it. Tokens with no secret still push unsigned, which
+  is the behaviour the schema documents and a positive control covers.
+
+  `RequiresSignature()` is the single accessor both call sites ask through,
+  and it reads `configured OR non-empty` so a producer that sets a secret
+  without the flag still gets verification. Only the store builds a `Token`
+  in production and it always sets both, but the one combination that must
+  never mean "skip" is a secret that is present in some form.
+
+  Reported by Jake Davis (`@aptera-motors-it`). Every finding was supplied
+  with a working proof of concept, each of which is now a Go test that was
+  watched failing on the pre-fix tree and watched failing again with the fix
+  reverted.
+
 ## [22.2.0] - 2026-11-05
 
 ### Added

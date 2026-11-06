@@ -3,6 +3,7 @@ package server
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/beenuar/aisoc/services/ingest/internal/config"
+	"github.com/beenuar/aisoc/services/ingest/internal/envmode"
 	"github.com/beenuar/aisoc/services/ingest/internal/graph_ws"
 	"github.com/beenuar/aisoc/services/ingest/internal/handler"
 	"github.com/beenuar/aisoc/services/ingest/internal/inbox"
@@ -49,6 +51,61 @@ func resolveCORSOrigins() []string {
 		"http://127.0.0.1:3000",
 		"http://127.0.0.1:3001",
 	}
+}
+
+// metricsHandler guards the Prometheus scrape with the same two rules
+// services/api and services/agents apply, because this service was the
+// one that applied neither.
+//
+// docker-compose.prod.yml already declared METRICS_TOKEN required for
+// ingest with the message "guards /metrics outside development", and
+// scripts/ensure_env.py already generated it — but nothing in this
+// service read the variable, so the guard the compose file promised did
+// not exist here. The series it exposes are not catastrophic on their
+// own; they are a tenant-count, topic-name and throughput picture of a
+// deployment, and an open endpoint that an operator believes is shut is
+// the part worth fixing.
+//
+// The rules, matching services/agents/app/api/metrics.py:
+//
+//   - METRICS_TOKEN set: require `Authorization: Bearer <token>`, with a
+//     constant-time comparison so a wrong token does not leak its correct
+//     prefix through response timing.
+//   - METRICS_TOKEN empty: open only in a development-class environment.
+//     An operator who never set it in production has a gap rather than an
+//     opt-out, and the refusal is what tells them so.
+//
+// The variable is read per request rather than captured at construction.
+// That matches the Python siblings, keeps one code path for the two
+// rules, and means a deployment that injects the token after boot is not
+// stuck with the answer this process happened to start with.
+func metricsHandler() http.HandlerFunc {
+	prom := promhttp.Handler()
+	return func(w http.ResponseWriter, r *http.Request) {
+		if status, msg := authoriseScrape(r); status != 0 {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="metrics"`)
+			http.Error(w, msg, status)
+			return
+		}
+		prom.ServeHTTP(w, r)
+	}
+}
+
+// authoriseScrape returns (0, "") when the scrape may proceed, or the
+// status and message to refuse it with.
+func authoriseScrape(r *http.Request) (int, string) {
+	token := strings.TrimSpace(os.Getenv("METRICS_TOKEN"))
+	if token != "" {
+		presented := strings.TrimSpace(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "))
+		if subtle.ConstantTimeCompare([]byte(presented), []byte(token)) != 1 {
+			return http.StatusUnauthorized, "invalid metrics token"
+		}
+		return 0, ""
+	}
+	if !envmode.IsDevRuntime() {
+		return http.StatusUnauthorized, "metrics endpoint requires METRICS_TOKEN outside development"
+	}
+	return 0, ""
 }
 
 // Server wraps the HTTP server
@@ -118,7 +175,11 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler, gr
 	r.Get("/health", h.Health)
 	r.Get("/livez", h.Livez)
 	r.Get("/readyz", h.Readyz)
-	r.Get("/metrics", promhttp.Handler().ServeHTTP)
+	// Liveness and readiness stay open deliberately: an orchestrator's
+	// probe carries no credential, and pulling the pipeline's front door
+	// out of a load balancer to protect a scrape endpoint would be a
+	// worse trade than the one it buys.
+	r.Get("/metrics", metricsHandler())
 
 	r.Route("/v1", func(r chi.Router) {
 		r.Post("/ingest", h.IngestEvents)
@@ -149,13 +210,20 @@ func New(cfg *config.Config, h *handler.Handler, inboxHandler *inbox.Handler, gr
 			log.Warn().Msg("inbox routes disabled (no Postgres pool wired)")
 		}
 
-		// T1.4 — graph-update WebSocket fan-out. The Python API
-		// proxy at services/api/app/api/v1/endpoints/graph_ws.py is
-		// the public-facing entry point (auth + tenant binding); the
-		// ingest route is internal and trusts that the proxy has
-		// validated the connecting tenant. We still require
-		// ?tenant_id=<id> as a defence-in-depth filter so a misrouted
-		// internal client can't subscribe to every tenant by accident.
+		// T1.4 — graph-update WebSocket fan-out. The Python API proxy
+		// at services/api/app/api/v1/endpoints/graph_ws.py remains the
+		// public-facing entry point and does authenticate the browser,
+		// but this route no longer trusts it to have done so: the
+		// handler runs the same internal/ingestauth authenticator
+		// /v1/ingest runs and takes the tenant from the resulting
+		// credential.
+		//
+		// This comment used to say the route was "internal and trusts
+		// that the proxy has validated the connecting tenant", with
+		// ?tenant_id=<id> as a "defence-in-depth filter". A tenant the
+		// caller types is not a filter on the caller, and the port is
+		// published by the root compose file, so there was nothing
+		// behind the trust.
 		if graphWSServer != nil {
 			r.Handle("/graph_ws/stream", graphWSServer.Handler())
 		}

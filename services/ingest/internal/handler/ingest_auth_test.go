@@ -137,9 +137,15 @@ func newAuthHandler(t *testing.T, serviceToken string) (*Handler, *capturingPubl
 			Token: "aitnb_pagerduty_webhook_dddddddddd", TenantID: acmeTenant,
 			TemplateID: "pagerduty",
 		},
+		// HMACConfigured is set alongside the secret because that is what
+		// inbox.Store.Resolve does for a non-NULL hmac_secret column. A
+		// fixture that sets only one of the pair models a row the store
+		// cannot produce, and the point of this fake is to behave like
+		// the store.
 		"aitnb_acme_signed_eeeeeeeeeeeeeeee": {
 			Token: "aitnb_acme_signed_eeeeeeeeeeeeeeee", TenantID: acmeTenant,
-			TemplateID: ingestauth.PushTemplateID, HMACSecret: "shared-signing-secret",
+			TemplateID: ingestauth.PushTemplateID,
+			HMACSecret: "shared-signing-secret", HMACConfigured: true,
 		},
 	}}
 	tenants := &fakeTenants{active: map[uuid.UUID]bool{

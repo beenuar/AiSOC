@@ -1,12 +1,37 @@
 // HTTP upgrade handler for the graph_ws broadcaster (T1.4 — v8.0).
 //
-// The handler is intentionally minimal: tenant-scoped channels keyed
-// off the ?tenant_id=<id> query param, no auth (auth is enforced
-// by the Python API proxy at services/api/app/api/v1/endpoints/
-// graph_ws.py — this server is expected to listen on the internal
-// service network only). Each connection registers a Subscriber with
-// the Broadcaster and pumps envelopes from the bounded buffer to the
-// websocket until the client disconnects.
+// Each connection registers a Subscriber with the Broadcaster and pumps
+// envelopes from the bounded buffer to the websocket until the client
+// disconnects. The tenant that scopes those envelopes comes from the
+// caller's credential, resolved by the same internal/ingestauth
+// authenticator /v1/ingest runs.
+//
+// This comment previously said the handler took its tenant from a
+// ?tenant_id=<id> query parameter and ran "no auth (auth is enforced by
+// the Python API proxy ... this server is expected to listen on the
+// internal service network only)". Both halves of that were a problem,
+// and they were different problems:
+//
+//   - The proxy's authentication is real — services/api/app/api/v1/
+//     endpoints/graph_ws.py resolves a JWT or API key, enforces
+//     graph:read, and rebinds the tenant from the resolved user. It is
+//     still only defence in depth, because nothing made it the *only*
+//     way in. The root docker-compose.yml publishes this service's
+//     port, so "listens on the internal service network" was an
+//     assumption about somebody else's deployment, asserted here and
+//     enforced nowhere.
+//   - A tenant read out of the query string is a tenant the caller
+//     chose. That is the one rule this codebase does not bend: the
+//     scope has to come from the credential. The parameter is gone
+//     rather than validated, because a parameter that looks
+//     authoritative and is not is how it grows a reader again.
+//
+// So the handler authenticates first and derives the tenant from the
+// resulting Principal. A browser still cannot reach this directly — it
+// has no service token and cannot set headers on a WebSocket open — and
+// the proxy remains the public entry point. It now presents a
+// credential like every other internal caller instead of being trusted
+// because of where it sits.
 //
 // We deliberately avoid pulling in github.com/gorilla/websocket or
 // github.com/coder/websocket here — every new transitive dep on the
@@ -26,6 +51,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/beenuar/aisoc/services/ingest/internal/ingestauth"
+	"github.com/rs/zerolog/log"
 )
 
 // wsHandshakeMagic is the fixed GUID from RFC 6455 §1.3 used to
@@ -41,11 +69,25 @@ const writeTimeout = 5 * time.Second
 // upgrade against the same Broadcaster.
 type Server struct {
 	broker *Broadcaster
+	auth   *ingestauth.Authenticator
 }
 
 // NewServer pairs a Broadcaster with an HTTP handler.
+//
+// The server starts with no authenticator, which refuses every
+// connection. Call SetAuthenticator to make it usable.
 func NewServer(broker *Broadcaster) *Server {
 	return &Server{broker: broker}
+}
+
+// SetAuthenticator wires in the credential check.
+//
+// Same contract as handler.SetAuthenticator, and for the same reason:
+// nil is not a "feature disabled" signal. A nil *ingestauth.Authenticator
+// refuses every connection, so a wiring regression closes this stream
+// instead of opening it. There is no flag that turns the check off.
+func (s *Server) SetAuthenticator(a *ingestauth.Authenticator) {
+	s.auth = a
 }
 
 // Handler returns an http.Handler that upgrades GET requests to a
@@ -63,14 +105,37 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	tenantID := strings.TrimSpace(r.URL.Query().Get("tenant_id"))
-	if tenantID == "" {
-		tenantID = strings.TrimSpace(r.Header.Get("X-Tenant-ID"))
-	}
-	if tenantID == "" {
-		http.Error(w, "tenant_id required", http.StatusBadRequest)
+	// Authenticate before answering anything else about this service.
+	// The credential is what decides the tenant, so nothing below can
+	// run without it, and an unauthenticated caller should not learn
+	// the broadcaster's health or whether its handshake was well formed.
+	identity, authErr := s.auth.Authenticate(r.Context(), r)
+	if authErr != nil {
+		writeAuthError(w, r, authErr)
 		return
 	}
+
+	// Intersection only, exactly as /v1/ingest does it. The tenant
+	// header is honoured where it agrees with what the credential
+	// authorises — that is how the API proxy names the tenant it is
+	// relaying for — and naming any other tenant narrows the scope to
+	// nothing and is refused here. There is deliberately no query
+	// parameter in this path.
+	tenantUUID, scopeErr := ingestauth.Resolve(identity.Principal, s.auth.DeclaredTenant(r))
+	if scopeErr != nil {
+		declared := strings.ReplaceAll(strings.ReplaceAll(s.auth.DeclaredTenant(r), "\r", ""), "\n", " ")
+		if len(declared) > 128 {
+			declared = declared[:128]
+		}
+		log.Warn().
+			Str("subject", identity.Principal.Subject).
+			Str("requested_tenant", declared).
+			Bool("delegated", identity.Principal.Delegated).
+			Msg("graph_ws: refused a subscription outside the credential's tenant scope")
+		http.Error(w, scopeErr.Error(), http.StatusForbidden)
+		return
+	}
+	tenantID := tenantUUID.String()
 
 	if !isWebSocketHandshake(r) {
 		http.Error(w, "websocket upgrade required", http.StatusBadRequest)
@@ -164,6 +229,34 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+
+// writeAuthError renders an *ingestauth.Error with its own status.
+// Anything that is not one is reported as 401 rather than leaking an
+// internal message to an unauthenticated caller.
+//
+// The refusal is an ordinary HTTP response, never a completed handshake
+// followed by a close frame: a client that was upgraded and then closed
+// cannot tell "refused" from "the estate is quiet", which is the same
+// indistinguishability the 503 below exists to avoid.
+func writeAuthError(w http.ResponseWriter, r *http.Request, err error) {
+	var authErr *ingestauth.Error
+	status, msg := http.StatusUnauthorized, "unauthorized"
+	if errors.As(err, &authErr) {
+		status, msg = authErr.Status, authErr.Msg
+	}
+	// CR/LF stripped and length bounded inline at the call site: the
+	// taint tracker does not follow a helper across the boundary, and
+	// both of these are caller-controlled.
+	remote := strings.ReplaceAll(strings.ReplaceAll(r.RemoteAddr, "\r", ""), "\n", " ")
+	if len(remote) > 128 {
+		remote = remote[:128]
+	}
+	log.Warn().
+		Int("status", status).
+		Str("remote_addr", remote).
+		Msg("graph_ws: refused an unauthenticated or unauthorized subscription")
+	http.Error(w, msg, status)
 }
 
 func isWebSocketHandshake(r *http.Request) bool {

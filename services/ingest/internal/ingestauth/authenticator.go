@@ -68,10 +68,22 @@ func (e *Error) Error() string { return e.Msg }
 // Identity is the outcome of authenticating one request.
 type Identity struct {
 	Principal Principal
-	// HMACSecret is non-empty when the presented token was minted with a
-	// signature secret, in which case the body must carry a matching
-	// X-Signature. Empty means the token itself is the only authenticator.
+	// HMACSecret is the signature secret the presented token was minted
+	// with, when it was minted with one. Only meaningful alongside
+	// HMACConfigured.
 	HMACSecret string
+	// HMACConfigured reports whether the token row declared a secret at
+	// all — see inbox.Token.HMACConfigured. False means the token itself
+	// is the only authenticator, which migration 033 documents as a
+	// supported configuration. True with a blank HMACSecret is a
+	// misconfigured row and VerifySignature refuses it.
+	HMACConfigured bool
+}
+
+// RequiresSignature mirrors inbox.Token.RequiresSignature, including its
+// fail-closed reading of a secret set without the flag.
+func (i Identity) RequiresSignature() bool {
+	return i.HMACConfigured || i.HMACSecret != ""
 }
 
 // Authenticator resolves a credential into the set of tenants it may write
@@ -209,8 +221,9 @@ func (a *Authenticator) Authenticate(ctx context.Context, r *http.Request) (Iden
 	}
 
 	return Identity{
-		Principal:  NewPrincipal("token:"+Fingerprint(tok.Token), false, tok.TenantID),
-		HMACSecret: tok.HMACSecret,
+		Principal:      NewPrincipal("token:"+Fingerprint(tok.Token), false, tok.TenantID),
+		HMACSecret:     tok.HMACSecret,
+		HMACConfigured: tok.HMACConfigured,
 	}, nil
 }
 
@@ -255,9 +268,27 @@ func (a *Authenticator) authenticateService(ctx context.Context, r *http.Request
 // presented token was minted with a secret. Same headers and same
 // constant-time comparison as the inbox routes, so an operator who has
 // signed one push path already knows how to sign this one.
+//
+// "Optional" means the column may be NULL, not that a blank value waives
+// the check. This used to begin `if id.HMACSecret == "" { return nil }`,
+// which is the same test for both, so a token whose secret was set to a
+// blank string accepted unsigned bodies. Verifying against it instead
+// would have been no better: HMAC keyed on the empty string is a value
+// any caller can compute, so the comparison would have passed for a
+// forgery. An unusable key is a misconfiguration either way, and the
+// only honest answer to it is to refuse — the same posture New()
+// documents for an authenticator that cannot check a credential at all.
 func VerifySignature(r *http.Request, id Identity, body []byte) error {
-	if id.HMACSecret == "" {
+	if !id.RequiresSignature() {
 		return nil
+	}
+	if strings.TrimSpace(id.HMACSecret) == "" {
+		return &Error{
+			Status: http.StatusServiceUnavailable,
+			Msg: "this token declares a body signature requirement but its stored secret is blank; " +
+				"rotate it via POST /api/v1/inbox/tokens with an hmac_secret of at least 16 characters, " +
+				"or clear the column to NULL to push unsigned",
+		}
 	}
 	provided := r.Header.Get("X-Signature")
 	if provided == "" {
