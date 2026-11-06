@@ -7,6 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`docker compose pull && up -d` booted new code against the old schema and
+  said nothing. There is now a real upgrade path, and `make up` refuses rather
+  than starting quietly.** `main.py` applies the SQL migration chain only when
+  `AISOC_DEMO_MODE` is set or `ENVIRONMENT` is dev-class; `ENVIRONMENT`
+  defaults to `production` in both `docker-compose.yml` and `.env.example`,
+  the Postgres initdb hook fires only on an *empty* data directory, and the
+  `api` service has no `command:` override — so an in-place upgrade ran the
+  new release against the previous release's tables, passed every healthcheck,
+  and surfaced days later as a request failing on a column that does not
+  exist. The comment excluding production cited "a managed migration
+  pipeline", which existed in neither compose nor the Helm chart.
+
+  AiSOC still never updates itself: the line is drawn between consent and
+  silence rather than between environments. `make upgrade` runs the preflight,
+  takes a pre-upgrade dump, applies the chain and then starts; `make up` reads
+  the database first and **refuses to start** when its schema is behind,
+  naming `make upgrade` and listing the pending migrations. It cannot fire on
+  a first run (empty data directory), on a restart with no code change, or on
+  `make up-dev`, where the API applies the chain at boot.
+
+  `scripts/pending_migrations.py` is the detector. It reports `fresh`,
+  `up to date`, `behind` or `unknown` as four distinct answers — an
+  unreadable database is never folded into "fine" — and it connects over TCP
+  *inside* the container rather than over the unix socket, because the
+  official image runs its initdb hooks against a temporary server with
+  `listen_addresses=''`; a socket connection would read a half-written
+  migration table mid-initialisation and report a first run as behind.
+
+- **`AISOC_MIGRATIONS_STRICT` is now set on every path that applies
+  migrations.** It defaults off, so a failed migration is logged and `main()`
+  returns normally — exit 0 over a partially-applied schema, which is worse
+  than a clean failure because the upgrade then reports success. `make upgrade`
+  and the new Helm Job set it, and `aisoc db upgrade` passes it with `-e`:
+  `docker compose exec` gives the new process the *container's* environment,
+  so exporting it in the operator's shell did nothing and the warning in the
+  upgrade documentation was unreachable through the command it documents.
+  There is deliberately no `--no-strict`.
+
+- **`helm upgrade --set runMigrations=true` was documented and existed nowhere
+  else in the repository.** No value, no Job template — and `--set` on a value
+  nothing reads is accepted silently, so an operator following the
+  documentation got an upgrade that reported success having applied nothing.
+  The Job is now built (`templates/migrations-job.yaml`, a `pre-install,
+  pre-upgrade` hook running in strict mode, off by default), so the documented
+  flag does what it says; `ha-deployment.md`'s "The chart does not run them"
+  no longer describes the chart.
+
+- **A restored backup could not decrypt a single connector credential.**
+  `backup.sh` covered six stores with AES-256-GCM and a SHA-256 manifest and
+  never captured `AISOC_CREDENTIAL_KEY`, so a complete, verified Postgres
+  restore brought every `vault:v1:` token back as undecryptable ciphertext and
+  the only recovery was re-entering every vendor credential by hand. A seventh
+  component captures the key, and `restore_credential_key` reconciles it with
+  `.env` — written when absent, no-op when identical, **refused** when a
+  different key is already there, because overwriting orphans whatever the
+  running deployment has encrypted since.
+
+  Capturing a key is not a neutral act, so it is the one component that
+  refuses `BACKUP_ENCRYPTION=off`: the key and the ciphertext it opens now
+  share a bucket, which makes the envelope the only control between a bucket
+  reader and every credential in the deployment. It is uploaded under its own
+  `credential-key/` prefix so a bucket policy can separate the two halves, the
+  plaintext window on local disk is `umask 077` inside the directory the EXIT
+  trap removes, and the value is never logged. `check_backup_restore_parity.py`
+  gained a `MUST_BE_ENCRYPTED` arm, because name-pairing alone would pass a
+  component that shipped the key in the clear.
+
+- **`scripts/preflight_upgrade.py` refuses an upgrade a restore could not
+  undo**: no `.env`, no `AISOC_CREDENTIAL_KEY`, a key that is not a readable
+  Fernet key, or no recent non-empty backup. The first condition is the sharp
+  one — `ensure_env.py` never overwrites an existing secret, but on a host
+  with **no** `.env` it copies the example and generates a brand-new Fernet
+  key, orphaning every stored credential as a side effect of a helpful
+  command. `make upgrade` therefore does not depend on the `env` target.
+
+- **Three pre-existing defects in the backup and restore scripts, each found
+  by running them rather than reading them.** `"${args[@]}"` over an empty
+  array is an unbound variable under `set -u` on bash below 4.4 — macOS's
+  `/bin/bash` — so **every** upload in `backup.sh` failed there, through one
+  shared `s3_upload`. `restore.sh` read `$DRY_RUN` in three functions and set
+  it nowhere and parsed no `--dry-run`, so the neo4j, qdrant and redis
+  restores died with `DRY_RUN: unbound variable` at the line that decides
+  whether the run is a rehearsal — the three wave 15 added precisely because a
+  backup nobody can restore is a backup nobody has proven they can use, and
+  the crash only fires once the artifact is present, so it arrived during a
+  real recovery. Both are fixed, and `--dry-run` is now a real rehearsal.
+
+- **State an image pull destroyed, now on named volumes.** Installed plugins
+  (`/opt/aisoc/plugins`) and trusted plugin-signing keys
+  (`/opt/aisoc/plugin-keys`) lived in the API container's writable layer;
+  `/opt/aisoc` appeared in no compose file and no Helm template. Grafana's
+  `/var/lib/grafana` was unmounted, so every dashboard, user, annotation and
+  UI-created alert rule was destroyed on recreate — silently, with the
+  provisioned dashboards coming back and nothing saying the rest had ever
+  existed — while Prometheus lost all metrics history and Alertmanager every
+  silence. All five directories now have named volumes; the chart gains an
+  opt-in plugin PVC, which also makes plugin installation possible on
+  Kubernetes at all, since the pod runs with `readOnlyRootFilesystem: true`.
+
 ### Added
 
 - **Upgrading is now a required check, and one leg crosses a major version.**

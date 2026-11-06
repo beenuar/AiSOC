@@ -1,0 +1,131 @@
+{{- if .Values.runMigrations }}
+{{- /*
+  Apply the SQL migration chain before the new code serves traffic.
+
+  Why this exists
+  ---------------
+  `apps/docs/docs/operations/upgrades.md` told Kubernetes operators to run
+  `helm upgrade --set runMigrations=true`. A case-insensitive search for
+  `runmigrations` across the whole repository returned exactly that one
+  sentence: no value, no Job, no template — and `ha-deployment.md` flatly
+  contradicted it with "The chart does not run them." So the chart had no
+  migration path at all, and the documented flag was inert: `--set` on a
+  value nothing reads is silently accepted, so the upgrade reported success
+  having applied nothing.
+
+  The same hole as the Compose side, with the same consequence. The API
+  applies migrations at boot only when ENVIRONMENT is dev-class, and a chart
+  install sets `global.environment` to production, so `helm upgrade` rolled
+  new code onto the previous release's schema and every probe passed.
+
+  Built rather than deleted, because deleting the sentence would have left
+  Kubernetes operators with no migration path whatsoever — the gap would
+  have become honest instead of becoming closed.
+
+  Why a pre-upgrade hook rather than an init container
+  ----------------------------------------------------
+  An init container runs once per pod. With `replicaCount: 2` that is two
+  concurrent migration runs racing for the same advisory lock on every
+  rollout, every restart and every reschedule — and it would migrate on a
+  node drain, which is not a moment anyone consented to a schema change.
+
+  A `pre-upgrade` hook runs once, before the Deployment is patched, and its
+  failure aborts the upgrade with the old pods still serving the schema they
+  match. `pre-install` is included so a fresh install converges too.
+
+  AISOC_MIGRATIONS_STRICT is the point of the whole object
+  --------------------------------------------------------
+  Without it `run_migrations.main()` logs each failure and returns normally:
+  the Job exits 0, the hook passes, and the upgrade proceeds onto a
+  partially-applied schema. That is strictly worse than no Job, because it
+  manufactures evidence that the migration succeeded. It is set here and not
+  left to the operator precisely because the one thing this must never do is
+  report success over a broken schema.
+*/}}
+{{- $api := .Values.services.api }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aisoc.fullname" . }}-migrations
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "aisoc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migrations
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    # Ahead of everything else a hook might do. Nothing should touch the new
+    # schema before it exists.
+    "helm.sh/hook-weight": "-10"
+    # The previous run's Job is deleted as this one is created, so a failed
+    # upgrade leaves its Job and its logs behind for the operator to read.
+    # `hook-succeeded` would delete exactly the evidence they need.
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  # A failed migration under strict mode is a real failure, and retrying it
+  # four times just delays the report. One retry covers a Postgres that was
+  # still accepting connections when the wait loop checked and was not a
+  # moment later.
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "aisoc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrations
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "aisoc.serviceAccountName" . }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrations
+          image: "{{ $api.image.repository }}:{{ $api.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $api.image.pullPolicy | default "IfNotPresent" }}
+          command: ["python", "-m", "app.scripts.run_migrations"]
+          env:
+            - name: AISOC_MIGRATIONS_STRICT
+              value: "1"
+            - name: ENVIRONMENT
+              value: {{ .Values.global.environment | quote }}
+            {{- range $k, $v := $api.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          # The same two sources the API Deployment reads, so the Job cannot
+          # end up connecting somewhere other than where the application
+          # will. A separate copy of DATABASE_MIGRATION_URL here would be a
+          # second place for it to drift.
+          envFrom:
+            - secretRef:
+                name: {{ include "aisoc.fullname" . }}-secrets
+                optional: true
+            - configMapRef:
+                name: {{ include "aisoc.fullname" . }}-config
+                optional: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # run_migrations.py writes a completion sentinel, and the root
+        # filesystem is read-only.
+        - name: tmp
+          emptyDir: {}
+{{- end }}
