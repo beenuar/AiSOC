@@ -210,6 +210,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Reported by Jake Davis.
 
+### Documentation
+
+- **The upgrade guide stopped describing the product five majors ago, and the
+  gap was in the one table whose job is to say what an operator must do.**
+  `apps/docs/docs/operations/upgrades.md` carried rows for v10 through v17
+  while v18, v19, v20, v21 and v22 had all shipped, so anyone crossing the
+  last five majors got nothing; the procedure beside it told them to
+  `git checkout v7.3.1` and called that the latest release. Five rows added,
+  each written from that release's own `### BREAKING` section rather than
+  summarised: three previously-inert IAM tables that now deny and confer
+  (v18), a `PATCH /alerts/{id}` that answered 200 for a write it dropped and
+  now answers 422 naming the route that does apply the field (v19),
+  `is_system` removed from case comments (v20), correlation grouping narrowing
+  on missing identifiers with reduction moving 42.6% → 24.5% (v21), and the
+  eight `GET /posture/summary` counts becoming nullable so "nothing has
+  collected" stops rendering as "clean" (v22).
+
+- **Three documented verification steps could not pass.** The page ended on
+  `curl -fsS http://localhost:8000/healthz`, and the API has never served
+  `/healthz` — it serves `/health`, `/livez` and `/readyz`, and `-f` turns the
+  404 into a non-zero exit, so the final check of every upgrade reported
+  failure on a healthy deployment. (`/healthz` is real on `services/realtime`
+  and `services/mcp`, which is where it came from; `kubernetes.md` had the
+  same path as an ingress rule pointed at the API.) It also told readers to
+  run `aisoc-cli benchmark` / `pnpm aisoc:benchmark`, neither of which exists
+  — the CLI has `keygen`, `serve`, `submit` and `replay` plus the `plugin`,
+  `detection`, `db` and `mcp` groups — and to check `/api/v1/system/version`,
+  a route that exists nowhere in the tree. The version check is recorded as
+  **not yet available**, naming the pull request that builds it, with no
+  response shape quoted because none has been read off a route.
+
+- **`ha-deployment.md` and `upgrades.md` contradicted each other about Helm,
+  and now agree.** "The chart does not run them" was true when written and is
+  not: the chart ships `templates/migrations-job.yaml`, a
+  `pre-install,pre-upgrade` hook, off by default and strict, so
+  `helm upgrade --set runMigrations=true` finally does what `upgrades.md` has
+  always claimed. `apps/docs/docs/deployment/kubernetes.md` gains the
+  migrations section `release-policy.md` has been pointing readers at while it
+  contained zero mentions of either word.
+
+- **The LTS section promised a support window the security policy does not
+  offer.** It said security fixes are backported to the previous major for 90
+  days; `SECURITY.md` gives 90 days to the *latest tagged release* and
+  best-effort to older tags, so the previous major had no guarantee at all.
+  Two published documents disagreeing about the support window is the tell;
+  the security policy is now cited as the policy of record.
+
+- **A recovery note for Grafana dashboards already lost to an image pull,
+  which says plainly that they cannot be recovered.** `/var/lib/grafana` had
+  no volume behind it, so UI-built dashboards, users, annotations and
+  browser-created alert rules lived in the container's writable layer and a
+  recreate discarded them — silently, because the provisioned dashboards come
+  back looking fine. The remedy is to rebuild once, export each to JSON and
+  commit it under `infra/docker/grafana/dashboards/` so provisioning owns it
+  and the next recreate is a non-event, with the caveat that
+  `allowUiUpdates: false` means editing a provisioned dashboard in the browser
+  is silently reverted.
+
+- **`backup-and-restore.md` and `upgrades.md` now refer to each other.**
+  Neither mentioned the other, despite the pre-upgrade backup being the only
+  thing between an operator and an unrecoverable schema — the API chain is
+  forward-only and has no downgrade. `backup-and-restore.md` also documents
+  the seventh component it gained, the credential key: why it is the one
+  artefact that refuses `BACKUP_ENCRYPTION=off`, what `restore.sh` does when a
+  *different* key is already present, and that `--component` takes
+  `credential_key`, which its own command line had omitted. The rollback
+  section is unchanged in substance and gains an explicit warning that the new
+  pre-upgrade dump is a restore path and **not** a downgrade.
+
+- **Upgrade-test coverage is stated precisely rather than generously.**
+  `Previous minor to this tree, with data present` is a required check; the
+  two cross-major legs (`v21.0.0` and `v17.0.0`) run unfiltered on every pull
+  request and are deliberately not required, because a matrix context name
+  carries the matrix value and requiring it would orphan a context on the next
+  version bump. The page says which two boundaries are exercised and that the
+  other four are not.
 
 ## [22.2.0] - 2026-11-05
 
