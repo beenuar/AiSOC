@@ -490,6 +490,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   version bump. The page says which two boundaries are exercised and that the
   other four are not.
 
+- **"Every service exposes the same `GET /healthz` shape" was wrong in both
+  directions, and the sweep it recommended reported failure on a healthy
+  stack.** `apps/docs/docs/deployment/docker.md` told operators to curl
+  `/healthz` on the API and then to loop it across eleven ports. Probed
+  against a running `ghcr.io/beenuar/aisoc-core-api:latest`: `/health` 200,
+  `/healthz` **404**, `/livez` 200, `/readyz` 200 — and the documented
+  `curl -fsS` exits **22**, because `-f` turns the 404 into a failure. The
+  quoted body was invented too: it showed `{"status": "ok", "version": …}`
+  where the live response carries five keys (`status`, `service`, `version`,
+  `airgap`, `demo_bootstrap`) and a `status` of `healthy`. No example body
+  replaces it — three of the five are deployment-specific, and printing a
+  plausible one is how the section came to document an object no route has
+  ever returned.
+
+  `/healthz` is real, just not on the API: `realtime`, `mcp` and
+  `osquery-tls` serve it, as does Qdrant. The path every service does agree
+  on is `/readyz`, so that is what the sweep uses, with the two genuine
+  exceptions named rather than folded in. The page now carries a
+  path-to-service table derived from the route registrations, including the
+  one service whose `/health` is not at the root: `connectors` mounts its
+  health router at `/api/v1`.
+
+- **Two further instances of the same claim, found by sweeping for it.**
+  `troubleshooting.md` headed a section `/healthz returns 503` under "API
+  service" and printed a `subsystems` object — a key that appears nowhere in
+  `services/`, one of whose four entries was `opensearch`, which the API
+  holds no client for and `env-vars.md` already said so. It now describes the
+  real `/readyz`, which reports `subscriptions` and `dependencies` under
+  separate keys and has four `status` values. `env-vars.md` said
+  `APP_VERSION` is "Reported in `/healthz`" — wrong path, and wrong field:
+  `/health` reads the separate `VERSION` setting, and the two are independent
+  fields that merely share a default, so setting `APP_VERSION` alone changes
+  nothing a reader can observe.
+
+  The one third-party health claim in the runbooks was checked and left
+  alone: `qdrant/qdrant:v1.7.0` genuinely answers `/healthz`, `/livez` and
+  `/readyz` with 200 and 404s on `/health`.
+
 ## [22.2.0] - 2026-11-05
 
 ### Added
