@@ -48,13 +48,14 @@ down_revision = "0003"
 branch_labels = None
 depends_on = None
 
-TABLE = "honeytoken_alert_outbox"
-RUNTIME_ROLE = "aisoc_app"
+#: Spelled as a literal at every use below. `check_orm_migration_parity`
+#: reads these files statically, and a table named through a variable is
+#: invisible to it -- it reported this table as created by no migration.
 
 
 def upgrade() -> None:
     op.create_table(
-        TABLE,
+        "honeytoken_alert_outbox",
         sa.Column("id", sa.dialects.postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("tenant_id", sa.dialects.postgresql.UUID(as_uuid=True), nullable=False),
         # One row per trip. A redelivery of the same trigger bumps the
@@ -71,21 +72,31 @@ def upgrade() -> None:
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("NOW()")),
         sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True),
-        sa.CheckConstraint("status IN ('pending', 'delivered', 'dead')", name="honeytoken_alert_outbox_status"),
+    )
+
+    # Added as its own statement rather than inline in `create_table`: the
+    # ORM/migration parity gate reads the `create_table` argument list to
+    # learn the column names, and an inline `sa.CheckConstraint` is read as a
+    # column called "status IN ('pending', 'delivered', 'dead')".
+    op.execute(
+        "ALTER TABLE honeytoken_alert_outbox ADD CONSTRAINT honeytoken_alert_outbox_status "
+        "CHECK (status IN ('pending', 'delivered', 'dead'))"
     )
 
     # The drain's only query: rows that are due and unclaimed. Partial,
     # because a delivered row is never read again and indexing the whole
     # table would make every successful trip pay for the failures.
-    op.execute(f"CREATE INDEX IF NOT EXISTS {TABLE}_claimable ON {TABLE} (next_attempt_at) WHERE status = 'pending'")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS honeytoken_alert_outbox_claimable ON honeytoken_alert_outbox (next_attempt_at) WHERE status = 'pending'"
+    )
 
-    op.execute(f"ALTER TABLE {TABLE} ENABLE ROW LEVEL SECURITY")
+    op.execute("ALTER TABLE honeytoken_alert_outbox ENABLE ROW LEVEL SECURITY")
     # Without FORCE the table owner bypasses the policy, which is how an RLS
     # fix gets validated into a false pass.
-    op.execute(f"ALTER TABLE {TABLE} FORCE ROW LEVEL SECURITY")
-    op.execute(f"DROP POLICY IF EXISTS {TABLE}_tenant ON {TABLE}")
+    op.execute("ALTER TABLE honeytoken_alert_outbox FORCE ROW LEVEL SECURITY")
+    op.execute("DROP POLICY IF EXISTS honeytoken_alert_outbox_tenant ON honeytoken_alert_outbox")
     op.execute(
-        f"CREATE POLICY {TABLE}_tenant ON {TABLE} "
+        "CREATE POLICY honeytoken_alert_outbox_tenant ON honeytoken_alert_outbox "
         "USING (tenant_id = (NULLIF(current_setting('app.current_tenant_id', true), ''))::uuid "
         "OR (NULLIF(current_setting('app.current_tenant_id', true), '')) IS NULL)"
     )
@@ -95,14 +106,14 @@ def upgrade() -> None:
     # run after them. Guarded, so a deployment using a different runtime role
     # gets a notice instead of a failure.
     op.execute(
-        f"""
+        """
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{RUNTIME_ROLE}') THEN
-        RAISE NOTICE 'role {RUNTIME_ROLE} does not exist; skipping runtime grants on {TABLE}.';
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'aisoc_app') THEN
+        RAISE NOTICE 'role aisoc_app does not exist; skipping runtime grants on honeytoken_alert_outbox.';
         RETURN;
     END IF;
-    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON {TABLE} TO {RUNTIME_ROLE}';
+    EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON honeytoken_alert_outbox TO aisoc_app';
 END
 $$;
 """
@@ -110,5 +121,5 @@ $$;
 
 
 def downgrade() -> None:
-    op.execute(f"DROP POLICY IF EXISTS {TABLE}_tenant ON {TABLE}")
-    op.drop_table(TABLE)
+    op.execute("DROP POLICY IF EXISTS honeytoken_alert_outbox_tenant ON honeytoken_alert_outbox")
+    op.drop_table("honeytoken_alert_outbox")
