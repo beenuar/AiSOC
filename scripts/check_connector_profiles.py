@@ -115,7 +115,15 @@ LEGACY_PROFILE_KEYS = {"crowdstrike_falcon", "okta_system_log", "splunk_enterpri
 # The requirement that keeps it honest is below: an internal profile must
 # name AiSOC as its vendor, so the alert's own source attribution says
 # where it came from.
-INTERNAL_PROFILES = {"aisoc_sample"}
+# `honeytoken` is the second (GHSA-9q6p-m345-h3hj). A tripped honeytoken is
+# pushed by `services/honeytokens` rather than polled, so there is no
+# connector for an operator to configure and it must not appear in the
+# catalog or inflate the published connector count. It needs a profile for
+# exactly the reason stated above: without one it falls to the lenient
+# fallback, is filed as category 4 Network Activity, and `should_promote()`
+# never turns it into an alert — which is the advisory's own symptom, one
+# layer down. It satisfies the vendor requirement below, naming AiSOC.
+INTERNAL_PROFILES = {"aisoc_sample", "honeytoken"}
 
 # packages/types' ConnectorType union used to be a third name space written by
 # hand, and it predated the connectors registry. Ten members named no connector

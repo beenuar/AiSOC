@@ -5,13 +5,40 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class HoneytokenAlertOutbox(Base):
+    """One trip awaiting delivery, written before the trip is acknowledged.
+
+    GHSA-9q6p-m345-h3hj (F58). See `alembic/versions/0004_alert_outbox.py`
+    for why the row exists and why it carries a status and a reason rather
+    than being retried blindly.
+    """
+
+    __tablename__ = "honeytoken_alert_outbox"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    #: Unique: a redelivery bumps the attempt rather than adding a row.
+    trigger_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, unique=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    #: pending | delivered | dead
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    next_attempt_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    #: A lease, not a boolean, so a drainer that dies releases its claim by
+    #: expiry rather than stranding the row.
+    claimed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class Honeytoken(Base):

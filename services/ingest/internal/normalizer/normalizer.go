@@ -429,6 +429,34 @@ var connectorProfiles = map[string]connectorProfile{
 			"critical": 5, "high": 4, "medium": 3, "normal": 3, "low": 2, "info": 1, "informational": 1,
 		},
 	},
+	// A tripped honeytoken, pushed by services/honeytokens
+	// (GHSA-9q6p-m345-h3hj). Without an entry here the event falls to the
+	// lenient fallback, which files it as category 4 Network Activity with
+	// an empty severity map, and `should_promote()` requires category 2 or
+	// severity_id >= 4 — so the trip would be archived to the lake and
+	// silently never become an alert. That is the same invisible outcome the
+	// advisory is about, one layer down, which is why the profile ships with
+	// the push rather than after it.
+	//
+	// 2001 Security Finding, and the severity is not read from the payload:
+	// nothing legitimately touches a honeytoken. There is no benign reading
+	// of the event, so there is no ladder to map and the floor is `critical`.
+	"honeytoken": {
+		product:   OcsfProduct{Name: "Honeytokens", VendorName: "AiSOC"},
+		classUID:  2001,
+		className: "Security Finding",
+		fieldMap: map[string]string{
+			"token_name":    "finding.title",
+			"trigger_id":    "finding.uid",
+			"token_type":    "activity_name",
+			"source_ip":     "src_endpoint.ip",
+			"triggered_at":  "time",
+			"honeytoken_id": "finding.related_events[0].uid",
+		},
+		severityMap: map[string]int{
+			"critical": 5,
+		},
+	},
 	"kubernetes_audit": {
 		product:   OcsfProduct{Name: "Kubernetes Audit", VendorName: "Kubernetes"},
 		classUID:  6003,

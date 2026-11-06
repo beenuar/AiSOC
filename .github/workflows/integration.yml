@@ -1231,6 +1231,33 @@ jobs:
           [ "$missing" -eq 0 ] || exit 1
           echo "all four chains applied to one database"
 
+      # GHSA-9q6p-m345-h3hj (F58). A honeytoken trip is journalled before it
+      # is acknowledged and drained afterwards, so a receiver that is down
+      # costs a delay rather than the signal. The claim is made of database
+      # facts — the UNIQUE on `trigger_id`, the partial index agreeing with
+      # the `status = 'pending'` predicate, and terminal states really being
+      # terminal — so it is graded here, against the chain this job has just
+      # applied, rather than against a stub that would accept any of them.
+      #
+      # Runs as the DML-only `aisoc_app` role, which is what the service
+      # connects as. Run as the owner it would sail past the RLS policy that
+      # revision 0004 installs.
+      - name: A tripped honeytoken survives a receiver outage (live Postgres)
+        working-directory: services/honeytokens
+        env:
+          HONEYTOKEN_OUTBOX_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_secret@localhost:5432/shared_ci
+        run: |
+          set -euo pipefail
+          pip install --quiet pytest pytest-asyncio 'sqlalchemy[asyncio]' asyncpg pydantic pydantic-settings httpx
+          python -m pytest tests/test_outbox_live.py -v --tb=short -rs | tee /tmp/honeytoken-outbox.log
+          # A skipped live suite reports the same word as a passing one, and
+          # this is the suite standing between a transient outage and a lost
+          # intrusion signal. `[1-9][0-9]*` so `0 passed` is still a failure.
+          grep -qE '[1-9][0-9]* passed' /tmp/honeytoken-outbox.log \
+            || { echo "::error::the honeytoken outbox live suite reported no passing test"; exit 1; }
+          ! grep -qE 'skipped' /tmp/honeytoken-outbox.log \
+            || { echo "::error::the honeytoken outbox live suite skipped a test; HONEYTOKEN_OUTBOX_DSN must be set"; exit 1; }
+
   # ── Disaster recovery: an untested backup is not a backup ─────────────────
   #
   # Unlike the three jobs above, this one has no job-level `if`. It runs on
