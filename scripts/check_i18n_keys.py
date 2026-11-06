@@ -568,8 +568,8 @@ def check_readers(base_keys: set[str]) -> int:
     if unknown:
         failed = True
         print(f"\nFAIL: {len(unknown)} call site(s) name a key the base catalogue lacks:")
-        for path, key in sorted(unknown)[:20]:
-            print(f"    {path}: {key}")
+        for site, key in sorted(unknown)[:20]:
+            print(f"    {site}: {key}")
         print("      These render the key itself on screen. The mirror of an unknown")
         print("      key in a locale file, and just as invisible to the locales.")
 
@@ -748,12 +748,13 @@ def _self_test() -> int:
         ),
     )
     for name, sources, want_rendered, want_unknown in reader_cases:
-        rendered, unknown, _ = keys_rendered(sources, base)
-        ok = rendered == want_rendered and [k for _, k in unknown] == want_unknown
+        rendered, unknown_sites, _ = keys_rendered(sources, base)
+        found_unknown = [k for _, k in unknown_sites]
+        ok = rendered == want_rendered and found_unknown == want_unknown
         failures += 0 if ok else 1
         print(f"  {'PASS' if ok else 'FAIL'}  {name}")
         if not ok:
-            print(f"        rendered={sorted(rendered)} unknown={[k for _, k in unknown]}")
+            print(f"        rendered={sorted(rendered)} unknown={found_unknown}")
 
     # The exclusions are the arm, not a convenience: each of these is a
     # shape that has credited an unreachable capability in this repository.
