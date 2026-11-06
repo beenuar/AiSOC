@@ -40,6 +40,63 @@ path no template reads and silently changes nothing:
 
 Override any of the defaults in [`infra/helm/aisoc/values.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/values.yaml). For production deployments, walk through the [Hardening Runbook](https://github.com/beenuar/AiSOC/blob/main/docs/runbooks/HARDENING.md) before exposing the platform on the public internet.
 
+## Schema migrations and upgrades
+
+A chart install sets `global.environment` to production, and the API only
+applies migrations at boot when the environment is dev-class. So **`helm
+upgrade` on its own does not migrate**: it rolls new code onto the previous
+release's schema, every probe passes, and the first symptom is a request
+failing on a column that does not exist.
+
+Ask for the migration explicitly:
+
+```bash
+helm upgrade aisoc infra/helm/aisoc --set runMigrations=true
+```
+
+That renders
+[`templates/migrations-job.yaml`](https://github.com/beenuar/AiSOC/blob/main/infra/helm/aisoc/templates/migrations-job.yaml),
+a `pre-install,pre-upgrade` hook at weight `-10` — ahead of anything else a
+hook might do, because nothing should touch the new schema before it exists.
+Four properties worth knowing:
+
+- **Off by default.** `runMigrations: false`. A schema change is the one
+  operation with no undo, so the flag is your consent — the same role
+  `make upgrade` plays on the Compose side. Take a database backup first; the
+  hook cannot roll a migration back.
+- **Strict.** The Job sets `AISOC_MIGRATIONS_STRICT=1`. Without it the runner
+  logs each failure and returns normally, so the Job exits 0, the hook passes,
+  and the upgrade proceeds onto a partially-applied schema. It is set in the
+  template rather than left to you, because the one thing this must never do is
+  report success over a broken schema.
+- **A hook, not an init container.** An init container runs once per pod: with
+  `replicaCount: 2` that is two concurrent migration runs racing on every
+  rollout, restart and reschedule — and it would migrate on a node drain. The
+  hook runs once, before the Deployment is patched, and its failure aborts the
+  upgrade with the old pods still serving the schema they match.
+- **One source of connection detail.** The Job reads the same Secret and
+  ConfigMap the API Deployment does, so it cannot end up migrating a different
+  database from the one the application talks to.
+
+The previous run's Job is deleted as the next one is created, so a failed
+upgrade leaves its Job and its logs in the namespace:
+
+```bash
+kubectl -n aisoc logs job/aisoc-migrations
+```
+
+To migrate on your own schedule instead of at upgrade time, run the chain by
+hand as the **owner** role:
+
+```bash
+kubectl -n aisoc exec deploy/aisoc-api -- python -m app.scripts.run_migrations
+```
+
+Either way, migrate before or during the rollout, never after. The full
+procedure, the per-major breaking-change table and what upgrade testing does
+and does not cover are in [Upgrades](../operations/upgrades.md); the
+replica-level detail is in [HA deployment](../operations/ha-deployment.md).
+
 ## Container images
 
 All images are published to GHCR and Cosign-signed:
@@ -139,7 +196,9 @@ ingress:
     - host: aisoc.example.com         # web (Next.js, port 3000)
       paths: [ "/" ]
     - host: api.aisoc.example.com     # api (FastAPI, port 8000)
-      paths: [ "/api", "/healthz" ]
+      # /livez and /readyz, not /healthz — the API serves /health, /livez and
+      # /readyz. /healthz belongs to realtime and mcp, and 404s here.
+      paths: [ "/api", "/livez", "/readyz" ]
     - host: ws.aisoc.example.com      # realtime (WebSocket + push, port 8002)
       paths: [ "/ws" ]
     - host: mcp.aisoc.example.com     # MCP server (port 8003) — optional
