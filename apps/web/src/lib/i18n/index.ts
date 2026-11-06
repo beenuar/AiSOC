@@ -118,5 +118,63 @@ export function formatDate(locale: LocaleCode, value: Date | string, options?: I
   return new Intl.DateTimeFormat(locale, options ?? { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
 
+// ─── Coverage ─────────────────────────────────────────────────────────────
+//
+// The console has far more text than this catalogue has keys, so a language
+// switcher that silently translates a sliver reads as a *more* broken page
+// than a consistently English one. The switcher therefore states its own
+// scope — and states it by **measuring the catalogue**, not by a sentence a
+// maintainer wrote once. A hand-written "Alerts, Cases and Hunt are
+// translated" is a claim that goes stale the first time a surface is added,
+// in the direction nobody checks.
+
+/** Every dotted key under `catalogue`, in no particular order. */
+function flatten(catalogue: unknown, prefix = ''): string[] {
+  if (typeof catalogue !== 'object' || catalogue === null) return [];
+  const keys: string[] = [];
+  for (const [name, value] of Object.entries(catalogue)) {
+    const path = prefix ? `${prefix}.${name}` : name;
+    if (typeof value === 'string') keys.push(path);
+    else keys.push(...flatten(value, path));
+  }
+  return keys;
+}
+
+export interface Coverage {
+  /** Keys the base catalogue defines for this scope. */
+  total: number;
+  /** Of those, how many this locale translates itself. */
+  translated: number;
+}
+
+/**
+ * How much of a surface a locale carries, counted from the catalogues.
+ *
+ * `surface` is a top-level group — `alerts`, `cases`, `hunt`. A surface the
+ * base catalogue has never heard of returns `{ total: 0 }`, which is the
+ * honest answer for a console page with no keys at all and is rendered as
+ * "not translated" rather than as 100%: zero of zero is not full coverage,
+ * and a percentage over an empty denominator is the confident-zero defect
+ * in another costume.
+ */
+export function surfaceCoverage(locale: LocaleCode, surface: string): Coverage {
+  const prefix = `${surface}.`;
+  const keys = flatten(CATALOGUES[BASE_LOCALE]).filter((key) => key.startsWith(prefix));
+  return {
+    total: keys.length,
+    translated: keys.filter((key) => hasTranslation(locale, key)).length,
+  };
+}
+
+/** The same count across the whole catalogue. */
+export function localeCoverage(locale: LocaleCode): Coverage {
+  const keys = flatten(CATALOGUES[BASE_LOCALE]);
+  return {
+    total: keys.length,
+    translated: keys.filter((key) => hasTranslation(locale, key)).length,
+  };
+}
+
 export { BASE_LOCALE, LOCALES, isLocaleCode, negotiateLocale } from './locales';
 export type { LocaleCode, LocaleMeta } from './locales';
+export { LOCALE_STORAGE_KEY, localeBootstrapScript } from './localeScript';

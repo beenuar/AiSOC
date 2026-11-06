@@ -4,8 +4,10 @@ import './globals.css';
 import '@/fonts/fonts.css';
 import { FontPreloads } from '@/components/fonts/FontPreloads';
 import { PwaBootstrap } from '@/components/pwa/PwaBootstrap';
+import { LocaleProvider } from '@/components/i18n/LocaleProvider';
 import { ThemeProvider } from '@/components/theme/ThemeProvider';
 import { themeBootstrapScript } from '@/components/theme/themeScript';
+import { localeBootstrapScript } from '@/lib/i18n';
 import { CONSOLE_FONT_PRELOADS } from '@/fonts/preloads';
 import { docs } from '@/lib/docs';
 import { DISCOVERY_KEYWORDS, getPublicSiteUrl } from '@/lib/site';
@@ -162,7 +164,13 @@ export default function RootLayout({
     // `font-console-vars` declares --font-inter and --font-mono, which the
     // Tailwind `sans` and `mono` stacks read. It replaces the two class names
     // `next/font/google` used to generate for the same two variables.
-    <html lang="en" data-theme="dark" className="font-console-vars" suppressHydrationWarning>
+    // `lang`/`dir` follow the same contract as `data-theme`: the server
+    // ships the base locale, and the locale bootstrap script below rewrites
+    // both before any pixels are painted. Direction matters more than theme
+    // here — a right-to-left page that paints left-to-right first and then
+    // reflows is the most visible way a console announces it was translated
+    // rather than built.
+    <html lang="en" dir="ltr" data-theme="dark" className="font-console-vars" suppressHydrationWarning>
       <body className="bg-surface-base text-fg-primary antialiased">
         <FontPreloads hrefs={CONSOLE_FONT_PRELOADS} />
         <script
@@ -170,35 +178,41 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: themeBootstrapScript }}
         />
         <script
+          // eslint-disable-next-line react/no-danger -- pre-hydration locale bootstrap
+          dangerouslySetInnerHTML={{ __html: localeBootstrapScript }}
+        />
+        <script
           type="application/ld+json"
           // eslint-disable-next-line react/no-danger -- JSON-LD for SEO crawlers
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
         <PwaBootstrap />
-        <ThemeProvider>
-          {children}
-          <Toaster
-            position="bottom-right"
-            toastOptions={{
-              duration: 4000,
-              // Toast styles read CSS variables so the toaster flips with
-              // the rest of the chrome. `iconTheme` only takes hex values,
-              // so we pin the brand semantic colors there.
-              style: {
-                background: 'var(--surface-raised)',
-                color: 'var(--fg-primary)',
-                border: '1px solid var(--surface-border)',
-                fontSize: '0.875rem',
-              },
-              success: {
-                iconTheme: { primary: '#22c55e', secondary: '#0a0d14' },
-              },
-              error: {
-                iconTheme: { primary: '#ef4444', secondary: '#0a0d14' },
-              },
-            }}
-          />
-        </ThemeProvider>
+        <LocaleProvider>
+          <ThemeProvider>
+            {children}
+            <Toaster
+              position="bottom-right"
+              toastOptions={{
+                duration: 4000,
+                // Toast styles read CSS variables so the toaster flips with
+                // the rest of the chrome. `iconTheme` only takes hex values,
+                // so we pin the brand semantic colors there.
+                style: {
+                  background: 'var(--surface-raised)',
+                  color: 'var(--fg-primary)',
+                  border: '1px solid var(--surface-border)',
+                  fontSize: '0.875rem',
+                },
+                success: {
+                  iconTheme: { primary: '#22c55e', secondary: '#0a0d14' },
+                },
+                error: {
+                  iconTheme: { primary: '#ef4444', secondary: '#0a0d14' },
+                },
+              }}
+            />
+          </ThemeProvider>
+        </LocaleProvider>
       </body>
     </html>
   );

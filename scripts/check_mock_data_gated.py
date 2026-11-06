@@ -433,6 +433,30 @@ ESTATE_IDENTIFIER = re.compile(r"^(?:[A-Z]{2,}-[A-Z0-9-]{2,}|[a-z][\w-]*-\d+\.[a
 MAILBOX = re.compile(r"^[\w.+-]+@[\w-]+\.\w+$")
 MAILBOX_IS_A_LINK = re.compile(r"\b(?:href|url|link|to)\s*:|mailto:")
 
+#: The translation catalogues, which this detector cannot read correctly and
+#: should not try to.
+#:
+#: Not an exemption for a violation — a structural false positive, narrowed at
+#: the source rather than recorded. A UI catalogue's keys *are* the column
+#: names a SOC renders, so `severity:`, `status:`, `firstSeen:` and `openedAt:`
+#: sit in it by definition and `_asserts_state()` is therefore always true of
+#: it; and any two-word Title Case label — "Threat Hunting", "Rule Packs",
+#: "False Positive" — satisfies `PROPER_NOUN`. So the catalogue is permanently
+#: one ordinary label away from redding this gate for a reason that has nothing
+#: to do with fabricated data, which is how a gate gets switched off.
+#:
+#: It cannot be a tenant's state in the first place: every value is UI copy
+#: rendered as a label, and `scripts/check_i18n_keys.py` proves per key that
+#: each one is rendered as exactly that. This routes the directory to the gate
+#: that can read it rather than widening this one — the self-test asserts the
+#: same source still fires from any other path.
+TRANSLATION_CATALOGUES = "lib/i18n/messages"
+
+
+def _is_translation_catalogue(path: pathlib.Path, root: pathlib.Path) -> bool:
+    return TRANSLATION_CATALOGUES in path.relative_to(root).as_posix()
+
+
 #: Reviewed exceptions: fabricated-looking records that are not, and never
 #: render as, a tenant's state. Keyed on (path suffix, const name) so an
 #: exemption cannot silently widen to a different constant in the same file.
@@ -608,6 +632,8 @@ def find_inline_records(root: pathlib.Path) -> list[Record]:
     """
     found: list[Record] = []
     for path in _sources(root):
+        if _is_translation_catalogue(path, root):
+            continue
         text = path.read_text(encoding="utf-8", errors="replace")
         lines = text.split("\n")
         guarded = demo_guarded_lines(lines)
@@ -1067,6 +1093,36 @@ def _ratchet_results() -> list[tuple[str, bool]]:
     return results
 
 
+def _translation_catalogue_results() -> list[tuple[str, bool]]:
+    """The catalogue narrowing, in both directions.
+
+    One source, two paths. It has to stay quiet in `lib/i18n/messages` and
+    fire from anywhere else — a narrowing proven only in the direction that
+    silences it is indistinguishable from switching the rule off.
+    """
+    import tempfile
+
+    # Assertion keys and a Title Case value: exactly the shape a catalogue
+    # has by construction, and exactly the shape a fabricated record set has.
+    source = """export const en = {
+  alerts: { severity: 'Severity', status: 'Status', firstSeen: 'First seen' },
+  hunt: { title: 'Threat Hunting' },
+} as const;
+"""
+    results: list[tuple[str, bool]] = []
+    for label, relative, expect_quiet in (
+        ("stays quiet on a translation catalogue, whose keys are column names by definition", "lib/i18n/messages/en.ts", True),
+        ("still catches the identical source from any other path", "components/x/Catalogue.ts", False),
+    ):
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="aisoc-mock-i18n-"))
+        target = tmp / "apps" / "web" / "src" / relative
+        target.parent.mkdir(parents=True)
+        target.write_text(source, encoding="utf-8")
+        quiet = not inspect(tmp / "apps" / "web" / "src").findings
+        results.append((label, quiet is expect_quiet))
+    return results
+
+
 def self_test() -> int:
     """Prove the gate still detects each shape, and still refuses nothing."""
     import tempfile
@@ -1079,6 +1135,7 @@ def self_test() -> int:
     empty_corpus = pathlib.Path(tempfile.mkdtemp(prefix="aisoc-mock-empty-"))
     (empty_corpus / "apps" / "web" / "src").mkdir(parents=True)
     extra.append(("refuses a corpus directory that exists and holds no TypeScript", _refuses_empty_corpus(empty_corpus)))
+    extra += _translation_catalogue_results()
 
     return self_test_main(pathlib.Path(__file__).name, [], extra)
 

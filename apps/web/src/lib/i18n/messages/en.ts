@@ -39,7 +39,12 @@ export const en = {
   alerts: {
     title: 'Alerts',
     empty: 'No alerts',
-    emptyHint: 'Nothing has matched your detections in this window.',
+    // Keeps the next action in the sentence. The first version of this key
+    // read "Nothing has matched your detections in this window", which is
+    // true and tells a first-run operator nothing about why their console
+    // is empty or what to do about it — the copy it replaced on the alerts
+    // queue did, so wiring the catalogue would have been a regression.
+    emptyHint: 'Nothing has matched your detections yet. Connect a data source in Settings to start streaming events.',
     loadFailed: 'Could not load alerts',
     // "We could not read the queue" and "the queue is empty" are different
     // facts about a SOC, and only one of them means there is nothing to do.
@@ -66,16 +71,21 @@ export const en = {
     empty: 'No cases',
     loadFailed: 'Could not load cases',
     openedAt: 'Opened',
-    closedAt: 'Closed',
+    // `closedAt` was removed with the three `hunt.*` keys below: the case
+    // card renders an opened timestamp and no closed one, so the label had
+    // nowhere to go. It returns with the column that needs it.
   },
 
+  // `queryShown`, `noStore` and `unsupportedFilters` were removed when the
+  // catalogue was first wired: all three named controls the hunt surface
+  // does not have, so they could never render. A base key nothing shows is
+  // the same defect as a locale key the base lacks — invisible, and found
+  // by no amount of using the console — and `check_i18n_keys.py` now fails
+  // on it. They come back with the UI that needs them, not before.
   hunt: {
-    title: 'Hunt',
+    title: 'Threat Hunting',
     ask: 'Ask in plain English',
-    run: 'Run query',
-    queryShown: 'The query that ran',
-    noStore: 'No store was reached',
-    unsupportedFilters: 'These parts of your question were not applied',
+    run: 'Run hunt',
   },
 
   settings: {
@@ -85,6 +95,31 @@ export const en = {
     retention: 'Retention',
     rulePacks: 'Rule packs',
     delegations: 'Delegations',
+  },
+
+  /**
+   * The language switcher's own copy, including what it refuses to claim.
+   *
+   * This catalogue covers a fraction of the console's text, so a switcher
+   * that silently translates a sliver reads as a *more* broken page than a
+   * consistently English one. These keys exist so the switcher says so, in
+   * the language the reader just chose — the person who needs the scope
+   * note is precisely the one who cannot read it in English.
+   *
+   * A separate surface rather than more `settings.*` keys, because
+   * `settings.*` is deliberately left untranslated in the pilot locale to
+   * exercise the fallback on a real screen, and burying a translated string
+   * in there would quietly undo that.
+   */
+  language: {
+    description: 'Choose the language the console renders in. Stored on this device and synced to your profile.',
+    scopeTitle: 'What this translates',
+    scopeNote: 'Only the surfaces listed below are covered. The rest of the console stays in English whichever language you pick.',
+    covered: 'Translated',
+    fallback: 'Falls back to English',
+    absent: 'Not translated',
+    coverage: '{translated} of {total} strings',
+    contribute: 'Your language missing? Add a catalogue beside the English one.',
   },
 } as const;
 

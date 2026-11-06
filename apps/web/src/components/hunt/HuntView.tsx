@@ -43,6 +43,7 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useLocale } from '@/components/i18n/LocaleProvider';
 import { demoFallback } from '@/lib/demoFallback';
 
 // Monaco is heavy and SSR-incompatible; load it client-side only.
@@ -246,6 +247,7 @@ interface NLHeroProps {
  * translator does real work and we don't want to thrash the API.
  */
 function NLHero({ value, onChange, onSubmit, pending }: NLHeroProps) {
+  const { t } = useLocale();
   const trimmed = value.trim();
 
   return (
@@ -272,7 +274,7 @@ function NLHero({ value, onChange, onSubmit, pending }: NLHeroProps) {
         className="mt-5 flex flex-col gap-2 sm:flex-row"
       >
         <label className="sr-only" htmlFor="hunt-nl-input">
-          Ask a security question
+          {t('hunt.ask')}
         </label>
         <div className="relative flex-1">
           <svg
@@ -631,6 +633,7 @@ function ResultRow({ result }: { result: HuntResult }) {
 // ─── Main view ────────────────────────────────────────────────────────────────
 
 export function HuntView() {
+  const { t } = useLocale();
   const [language, setLanguage] = useState<Lang>('kql');
   const [query, setQuery] = useState<string>(STARTERS.kql);
   const [preset, setPreset] = useState<string>('24h');
@@ -993,7 +996,7 @@ export function HuntView() {
       ) : (
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-white">Threat Hunting</h1>
+            <h1 className="text-xl font-semibold text-white">{t('hunt.title')}</h1>
             {nlSubmittedQuery ? (
               <p
                 className="mt-1 max-w-3xl truncate text-sm text-slate-400"
@@ -1160,7 +1163,7 @@ export function HuntView() {
                   )}
                   title={nlSubmittedQuery ? 'Save this NL hunt' : 'Save this raw query'}
                 >
-                  {nlSubmittedQuery ? 'Save hunt' : 'Save'}
+                  {nlSubmittedQuery ? 'Save hunt' : t('common.save')}
                 </button>
                 <button
                   onClick={handleRun}
@@ -1178,7 +1181,7 @@ export function HuntView() {
                       Running…
                     </>
                   ) : (
-                    <>▶ Run hunt</>
+                    <>▶ {t('hunt.run')}</>
                   )}
                 </button>
               </div>

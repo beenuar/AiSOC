@@ -277,6 +277,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A language switcher in Settings, and the parity gate now fails when the
+  catalogue has no reader
+  ([#1729](https://github.com/beenuar/AiSOC/issues/1729), reported by
+  NiuBlibing).** The console was English-only, and the reason was not that
+  i18n had never been built: `apps/web/src/lib/i18n/` shipped a working
+  `translate()`, a `direction()` returning `rtl`, locale-aware `Intl`
+  formatting, two catalogues and a CI gate — and **no component imported any
+  of it**. The gate stayed green throughout because it compared the locales
+  with each other and never asked whether anything rendered them, which is
+  this repository's most-repeated defect shape sitting inside the control
+  that exists to catch it.
+
+  `LocaleProvider` is the reader, mounted in the root layout and shaped like
+  `ThemeProvider` deliberately — same storage-then-profile reconciliation,
+  same pre-paint bootstrap script, same default in `useState` so the first
+  client render matches the server's markup. The switcher lives in Settings
+  beside Theme and Density. **Direction is applied to the document**, by the
+  bootstrap script before first paint and by the provider on every change:
+  `direction()` returning `rtl` while `<html dir>` stays `ltr` renders Arabic
+  glyphs in a left-to-right page, which is the one outcome that looks
+  translated and reads wrong, and it is invisible to any test that only
+  compares text. There is **no automatic negotiation** from
+  `navigator.languages`: coverage is partial, so resolving an Arabic browser
+  into a partly-Arabic console nobody asked for is a worse first impression
+  than English.
+
+  `scripts/check_i18n_keys.py` gained the arm it was missing, and the unit is
+  the **key**, not the module — a count of importers is the same proxy one
+  level up, satisfied by one import while forty-seven keys stay unrendered. A
+  key is read when a non-test file outside the catalogue's own directory
+  passes it to `translate()`, `t()` or `hasTranslation()` as a literal, or
+  names its surface in a template prefix. Three scopes are excluded and each
+  exclusion is the point: the module itself (a module calling itself is what
+  being unread looks like from the inside), tests (a key exercised only by a
+  test is the defect, not the evidence against it), and build output (the one
+  match outside the module on the pre-fix tree was a TypeScript artifact).
+  Unread is **fatal rather than ratcheted**, unlike untranslated: an
+  untranslated key waits on a native speaker who may never arrive, while an
+  unread one waits on nobody who is not already in the commit. Its exemption
+  is a named key with a reason rather than a number, checked in both
+  directions, and holds exactly one entry — `common.unknown`, which
+  `formatDate()` really does render for an unparseable timestamp, from inside
+  the module the scan excludes by design.
+
+  **Four keys were deleted rather than exempted**, and finding them was the
+  more interesting half of the work: `hunt.queryShown`, `hunt.noStore`,
+  `hunt.unsupportedFilters` and `cases.closedAt` named a query-provenance
+  label, a store-unreachable notice, an unsupported-filter disclosure and a
+  case close timestamp that **no component has ever shown**. The catalogue
+  had been written against the surfaces as imagined rather than as built, so
+  roughly a fifth of it could never render. An exemption is for a key that is
+  rendered and cannot be seen; a key that is not rendered at all is not
+  exempt, it is wrong. They return with the UI that needs them.
+
+  **Coverage is a pilot and the switcher says so.** Fifty-two keys is a
+  fraction of the console's text, so the panel states its scope by
+  *measuring* the catalogue rather than by a sentence that goes stale: each
+  navigation destination is listed as translated, falling back to English, or
+  not covered at all, derived per surface, with a note that the counts are
+  catalogue strings and not a share of the product. A surface the catalogue
+  has never heard of reads "not translated" and never 100%, because zero of
+  zero is not full coverage. The deliberate gap is deliberate still —
+  `settings.*` stays untranslated in Arabic so the fallback runs on a real
+  screen — and the switcher now explains that instead of leaving an operator
+  wondering why the page they are standing on stayed English. **The
+  untranslated ceiling did not move**: it is 6, it was 6, and the eight keys
+  added for the switcher's own copy were translated in the same commit so it
+  could not drift.
+
 - **An optional, off-by-default VAID badge plugin for agent identity
   ([#1741](https://github.com/beenuar/AiSOC/pull/1741), closing
   [#1739](https://github.com/beenuar/AiSOC/issues/1739)), contributed by
