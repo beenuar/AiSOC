@@ -252,6 +252,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opt-in plugin PVC, which also makes plugin installation possible on
   Kubernetes at all, since the pod runs with `readOnlyRootFilesystem: true`.
 
+
+### Security
+
+- **A detection that fired again after its alert was closed produced nothing,
+  which made a closed alert into a place to hide.**
+  ([GHSA-qp9f-459j-w89c](https://github.com/beenuar/AiSOC/security/advisories/GHSA-qp9f-459j-w89c))
+  `alert_sink._INSERT_SQL` guarded its insert with `WHERE NOT EXISTS (… WHERE
+  tenant_id = $2 AND dedup_hash = $11)` and that predicate carried no status.
+  Once an analyst closed, resolved or false-positived an alert, the closed row
+  absorbed every later firing of the same detection: the insert was filtered,
+  the sink answered `DUPLICATE`, and no open alert was ever created. An
+  attacker who tripped a detection, waited for the alert to be closed and
+  repeated the activity was invisible to the queue — evasion of a detection
+  that was working correctly, rather than a cosmetic deduplication complaint.
+
+  The alert is now **reopened** on recurrence, counted and timestamped
+  (`reopen_count`, `reopened_at`, `reopen_reason`; migration 160), with the
+  reason naming the status it had been closed as. The alternative the reporter
+  offered — a new row under a time-bucketed fingerprint — is not available:
+  `uq_alerts_tenant_dedup` is UNIQUE per `(tenant_id, dedup_hash)`, so reaching
+  it would have meant changing `RawAlert.fingerprint()` itself, which moves the
+  dedup key for every consumer of it and splits two firings that straddle a
+  bucket boundary **while the alert is still open** into two rows. A wall-clock
+  bucket cannot distinguish "repeated while open" from "repeated after
+  closure", which is the only distinction that matters here. Reopening also
+  bounds the queue by construction: a recurrence returns one existing row, and
+  further recurrences while it is open change nothing.
+
+  Deduplication is unchanged and the control proving it is in the same suite,
+  passing before the fix as well as after: ten firings against one open alert
+  are still one row with its status untouched, and an alert an analyst has
+  moved to `triaging` is not dragged back to `new`. The reopen predicate is
+  `status = ANY(terminal)`, so it is simultaneously the fix and that control.
+  `resolved_at` returns to NULL because the MTTR average subtracts it without
+  consulting `status`; `disposition` is deliberately kept, so the row still
+  records that a human judged the previous occurrence.
+
+  Graded by `tests/isolation/test_alert_recurrence_after_closure_live.py`
+  against real Postgres as the DML-only `aisoc_app` role — the defect is in
+  SQL and in a unique index, neither of which a fake store can show.
+  Parametrised over all five terminal statuses, because a fix that knew only
+  `resolved` would have left `closed`, `false_positive`, `fp` and `dismissed`
+  as holes, and covering both dedup branches, because whether a recurrence
+  arrives as `NEW_ALERT` or as fusion's own `DUPLICATE` verdict depends only on
+  whether the fingerprint is still in Redis. Fusion's copy of the terminal
+  vocabulary is rendered from `app.services.alert_status` by
+  `scripts/sync_vendored_alert_status.py`, whose `--check` arm fails CI if the
+  console and fusion ever disagree about what "closed" means.
+
+  Reported by Jake Davis.
+
 ## [22.2.0] - 2026-11-05
 
 ### Added

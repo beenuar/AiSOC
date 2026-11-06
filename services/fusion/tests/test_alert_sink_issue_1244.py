@@ -203,6 +203,17 @@ async def test_the_batch_path_writes_the_same_columns() -> None:
 # ── a deduplicated event is recorded on the row it deduped onto ───────────
 
 
+def _dedup_provenance_updates(pool) -> list[tuple[str, tuple]]:
+    """The `source_event_ids` append among the statements a dedup hit issues.
+
+    Picked out by what the statement does rather than by where it sits in the
+    list. A dedup hit also reopens the alert when it had been closed
+    (GHSA-qp9f-459j-w89c), so there is more than one `UPDATE alerts` on this
+    path and `calls[0]` would pin a statement order nothing promises.
+    """
+    return [(sql, args) for sql, args in pool.conn.calls if sql.strip().upper().startswith("UPDATE ALERTS") and "source_event_ids" in sql]
+
+
 @pytest.mark.asyncio
 async def test_a_dedup_hit_records_the_second_events_id() -> None:
     """The defect behind "522 events formed 0 correlation instances"."""
@@ -216,14 +227,13 @@ async def test_a_dedup_hit_records_the_second_events_id() -> None:
     result = await sink.persist(fused)
     assert result.outcome is PersistOutcome.DUPLICATE
 
-    updates = [(sql, args) for sql, args in pool.conn.calls if sql.strip().upper().startswith("UPDATE ALERTS")]
+    updates = _dedup_provenance_updates(pool)
     assert updates, (
         "a deduplicated event left no trace on the alert it deduped onto, so "
         "source_event_ids can never reach length 2 and the Correlation "
         "Instances tile is a structural zero"
     )
     sql, args = updates[0]
-    assert "source_event_ids" in sql
     assert TENANT in args
     assert fused.alert.fingerprint() in args
     assert "evt-2" in json.dumps(args, default=str)
@@ -239,7 +249,7 @@ async def test_a_fusion_decided_duplicate_is_also_recorded() -> None:
     result = await sink.persist(_fused(FusionDecision.DUPLICATE, source_event_ids=["evt-3"]))
     assert result.outcome is PersistOutcome.DUPLICATE
 
-    updates = [(sql, args) for sql, args in pool.conn.calls if sql.strip().upper().startswith("UPDATE ALERTS")]
+    updates = _dedup_provenance_updates(pool)
     assert updates, "fusion's in-memory dedup verdict also loses the source event id"
     assert "evt-3" in json.dumps(updates[0][1], default=str)
 
