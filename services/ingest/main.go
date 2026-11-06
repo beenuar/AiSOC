@@ -280,6 +280,10 @@ func main() {
 				Health:     graphWSHealth,
 			})
 			graphWSServer = graph_ws.NewServer(graphWSBroker)
+			// Same authenticator /v1/ingest runs. The graph stream is
+			// tenant-owned data, so it is scoped by the credential and
+			// not by where the caller connected from.
+			graphWSServer.SetAuthenticator(auth)
 			// /readyz names this subscription and its state. A consumer
 			// detached from its topic behind a 200 that never mentions it is
 			// indistinguishable from an idle one.
