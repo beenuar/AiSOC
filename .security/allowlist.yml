@@ -332,8 +332,10 @@ ceilings:
     # to accommodate a false positive.
     #
     # The net is one *below* the old ceiling rather than level with it,
-    # because the pre-existing `services/honeytokens/app/services/alerting.py`
-    # was deleted in the same change: it had no callers left once delivery
+    # because the honeytokens service's previous alerting module was deleted
+    # in the same change (the path is deliberately not spelled out here: it
+    # no longer exists, and `check_comment_paths` rightly fails a comment
+    # naming a file that is gone). It had no callers left once delivery
     # moved, and a dead `send_alert` returning False is the shape the
     # advisory is about. CI measured 112/44, so the ceiling comes down with
     # it -- a shrink that is not banked drifts back up for free.
