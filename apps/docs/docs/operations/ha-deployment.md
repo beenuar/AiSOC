@@ -202,18 +202,42 @@ down, so their contract is exercised, not just published.
 
 ## Migrations
 
-The chart does not run them. Apply the chain as the **owner** role, with
-`AISOC_APP_DB_PASSWORD` in the environment so the runtime role gets its login:
+The chart runs them, on request. `templates/migrations-job.yaml` is a
+`pre-install,pre-upgrade` hook that applies the chain before the Deployment is
+patched, and it is **off by default** — a schema change is the one operation
+with no undo, so the flag is the operator's consent:
+
+```bash
+helm upgrade aisoc infra/helm/aisoc --set runMigrations=true
+```
+
+The Job sets `AISOC_MIGRATIONS_STRICT=1`, which is the point of the object:
+without it the migration runner logs each failure and returns normally, so the
+Job exits 0, the hook passes, and the upgrade proceeds onto a partially-applied
+schema — evidence of success manufactured over a broken one. With it, a failed
+migration fails the hook and aborts the upgrade with the old pods still serving
+the schema they match.
+
+A hook rather than an init container because an init container runs once per
+pod: with `replicaCount: 2` that is two concurrent migration runs racing on
+every rollout, restart and reschedule, and a schema change on a node drain.
+
+To apply the chain by hand instead — the right move when you want to migrate on
+your own schedule rather than at upgrade time — run it as the **owner** role,
+with `AISOC_APP_DB_PASSWORD` in the environment so the runtime role gets its
+login:
 
 ```bash
 kubectl -n aisoc exec deploy/aisoc-api -- python -m app.scripts.run_migrations
 ```
 
-Run it before or during the rollout, not after: a service that starts against
-an older schema fails in whatever way that schema's absence produces. The
-CI upgrade test (`.github/workflows/upgrade-test.yml`) exercises the previous
-minor to the current one with data already present, which is the case a fresh
-install never covers.
+Either way, migrate before or during the rollout, not after: a service that
+starts against an older schema fails in whatever way that schema's absence
+produces. The CI upgrade test (`.github/workflows/upgrade-test.yml`) exercises
+the previous minor to the current tree with data already present, which is the
+case a fresh install never covers, plus two cross-major legs from `v21.0.0` and
+`v17.0.0`. [Upgrades](./upgrades.md) has the full procedure and the per-major
+breaking-change table.
 
 ## Failure injection
 
