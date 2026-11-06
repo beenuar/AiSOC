@@ -173,8 +173,9 @@ After a successful upgrade you should be able to:
 
 :::note No version endpoint yet
 There is no `/api/v1/system/version` route. This page used to tell you to
-check one, and a case-insensitive search of the tree finds it only in this
-sentence — so the step could never have passed. An endpoint reporting the
+check one, and a case-insensitive search of the tree finds `system/version`
+nowhere outside this page — so the step could never have passed on any
+deployment, past or present. An endpoint reporting the
 running release, and grading the schema against it, is in review as
 [PR #1732](https://github.com/beenuar/AiSOC/pull/1732); this page will
 document its response shape once it has merged and the shape can be read off
