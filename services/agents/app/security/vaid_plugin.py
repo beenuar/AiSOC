@@ -112,7 +112,15 @@ def _ttl_hours() -> int:
     try:
         ttl = int(raw)
     except ValueError:
-        logger.warning("vaid_plugin.bad_ttl_env", value=raw)
+        # `logger` here is the stdlib one, not structlog: this service's
+        # module-level loggers are `logging.getLogger(__name__)`, and
+        # `logger.warning("event", value=raw)` — the structlog call shape used
+        # over in `services/actions` — raises `TypeError: Logger._log() got an
+        # unexpected keyword argument`. So the branch that exists to *tolerate*
+        # a mistyped `AISOC_VAID_TTL_HOURS` was the branch that crashed minting
+        # outright. Found by mypy's `call-arg`, reproduced by setting the
+        # variable to a non-integer, which is the only way to reach this line.
+        logger.warning("vaid_plugin.bad_ttl_env: %r is not an integer, using the default", raw)
         return DEFAULT_VAID_TTL_HOURS
     # 0 is a legitimate (if unusual) value: a badge that expires
     # immediately, useful mainly for testing the expiry path. Only a
@@ -388,7 +396,7 @@ class VaidBackedIdentity:
         row["vaid_id"] = self._badge.get("vaid_id")
         return row
 
-    def with_granted_tools(self, tools: frozenset[str] | set[str] | list[str]) -> "VaidBackedIdentity":
+    def with_granted_tools(self, tools: frozenset[str] | set[str] | list[str]) -> VaidBackedIdentity:
         """A copy of this identity extended with newly-granted tools, with a
         freshly minted badge whose ``capability_set`` mirrors the new scope.
 
@@ -438,10 +446,27 @@ def verify_identity_badge(identity: Any) -> None:
         raise BadgeDenied("VAID plugin is enabled and this identity carries no badge; mint one with issue_vaid_identity()")
 
     from vaid_mint.revocation import assemble_lineage  # noqa: PLC0415
-    from vaid_mint.verify import verify_vaid_standing  # noqa: PLC0415
+    from vaid_mint.verify import parse_vaid_document, verify_vaid_standing  # noqa: PLC0415
 
     handle = _issuer_handle_singleton()
-    badge = identity.badge
+
+    # Parse before verifying. vaid-mint's verifiers are not total over
+    # arbitrary dicts — ``assemble_lineage`` opens with ``leaf["vaid_id"]`` —
+    # so a ``VaidBackedIdentity`` holding a malformed badge reached the
+    # registry's ``except Exception`` and was refused with the reason
+    # ``"'vaid_id'"``, a bare KeyError repr. It refused, which is the half
+    # that matters, and it named nothing an operator could act on, which is
+    # the half this repository asks for as well. ``parse_vaid_document`` is
+    # vaid-mint's own total gate; re-stating the member list here would be a
+    # second definition of "is this a VAID" that drifts from the library's.
+    try:
+        as_text = json.dumps(identity.badge)
+    except (TypeError, ValueError):
+        raise BadgeDenied("badge is not a JSON document; refusing fail-closed") from None
+    badge = parse_vaid_document(as_text)
+    if badge is None:
+        raise BadgeDenied("badge is not a well-formed VAID document; refusing fail-closed")
+
     lineage = assemble_lineage(badge, handle.issuer)
     if lineage is None:
         raise BadgeDenied(f"badge {badge.get('vaid_id')!r} lineage could not be assembled; refusing fail-closed")
@@ -449,6 +474,18 @@ def verify_identity_badge(identity: Any) -> None:
     verdict = verify_vaid_standing(handle.issuer.kernel_public_key(), badge, revocation_status)
     if not verdict.is_valid():
         raise BadgeDenied(f"badge {badge.get('vaid_id')!r} failed verification: {verdict.code}")
+
+    # A genuine badge is not necessarily *this* identity's badge. Verification
+    # above answers "was this issued under our kernel key and does it still
+    # stand", which a correctly-signed badge minted for a different agent
+    # passes — measured: a ``triage`` identity carrying a real ``respond``
+    # badge was accepted. Scope is unaffected (``identity.require`` had
+    # already run against the triage scope table), so this is not an
+    # authorization escape; it is an attribution one, and attribution is the
+    # entire thing #1739 asked for. The ledger row written by
+    # ``record_badge_in_ledger`` would have named the wrong agent.
+    if badge.get("agent_class") != identity.agent:
+        raise BadgeDenied(f"badge {badge.get('vaid_id')!r} was issued for agent {badge.get('agent_class')!r}, not for {identity.agent!r}")
 
 
 def install_into(registry: Any) -> bool:

@@ -229,6 +229,14 @@ def test_normalise_keeps_genuinely_different_ranges_apart() -> None:
         ("26.33.0", ">=23,<27", True),
         ("27.0.0", ">=23,<27", False),
         ("50.0.1", ">=46,<51", True),
+        # A bare version is poetry's shorthand for `==`, and reading it as an
+        # unparseable bound failed a correct tree: `vaid-mint` pinned
+        # `version = "0.11.0"` was reported "outside the declared range
+        # 0.11.0". Both directions, so the shorthand cannot become a pass for
+        # a version that genuinely differs.
+        ("0.11.0", "0.11.0", True),
+        ("0.11.1", "0.11.0", False),
+        ("0.10.0", "0.11.0", False),
     ],
 )
 def test_satisfies(version: str, spec: str, expected: bool) -> None:

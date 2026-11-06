@@ -185,6 +185,20 @@ ALLOWED_UNREACHABLE: dict[str, str] = {
         "app.llm.tool_loop. Nothing imports the old path any more, so this "
         "is a compatibility shim with nothing left to be compatible with."
     ),
+    "services/agents/app/security/vaid_plugin.py": (
+        "Optional VAID badge plugin (#1739, PR #1741), off by default and "
+        "deliberately not wired: `install_into` is reachable, but nothing in "
+        "`app/orchestrator`, `app/investigator` or service startup mints a "
+        "`VaidBackedIdentity` for it to verify. Wiring the hook alone would "
+        "be worse than leaving it — with no minting call site, turning "
+        "`AISOC_VAID_PLUGIN_ENABLED` on would refuse every tool call, which "
+        "is fail-closed and also the agent not working. The actions-service "
+        "half (`app/security/vaid_verifier.py`) IS reachable from "
+        "`live_actions.dispatch()` and is not allowlisted. Remove this entry "
+        "in the change that mints an identity on a real agent path; until "
+        "then the plugin is a verified shape rather than a running feature, "
+        "and this entry is the record of that distinction."
+    ),
     "services/agents/app/routing/cascade.py": "Cost-aware model cascade. Complete, tested, no caller.",
     "services/agents/app/orchestrator/planner.py": "Specialist planner, scored agent selection. Complete, tested, no caller.",
     "services/agents/app/swarm/__init__.py": "Package marker for the swarm modules below.",

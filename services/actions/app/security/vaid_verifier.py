@@ -24,6 +24,28 @@ a revocation list this process could not read are all refused. None of
 those states is distinguished from the others in the returned error any
 more than necessary for an operator to act on it, but they are distinguished
 in the raised reason string for the audit log.
+
+Why the badge is parsed before it is verified
+---------------------------------------------
+An earlier draft of this module claimed "the vaid-mint verifiers this calls
+are themselves total over arbitrary JSON-shaped input". Measured against
+0.11.0, that is false: ``assemble_lineage`` opens with ``leaf["vaid_id"]``
+and ``has_capability`` with ``vaid["capability_set"]``, both bare
+subscripts. ``verify_badge_for_dispatch({}, "isolate_host")`` therefore
+raised ``KeyError``, which ``dispatch()`` did not catch — so a request body
+carrying ``"vaid_badge": {}`` turned an identity check into an unhandled
+exception, past a route whose own docstring promises it "never returns 5xx
+for executor failures" because "the agent loop relies on a uniform
+success-shape". The action still did not run, so the refusal held; the
+*structured* refusal, the audit line naming why, and the route contract did
+not.
+
+The gate is vaid-mint's own :func:`~vaid_mint.verify.parse_vaid_document`,
+which is written for exactly this ("Parse failure is UNPARSEABLE — a
+refusal, never a raise") rather than a hand-written list of required members
+here. A second definition of "is this a VAID" maintained in AiSOC would
+drift from the library's, and the drift would show up as this same class of
+crash one release later.
 """
 
 from __future__ import annotations
@@ -33,6 +55,7 @@ import os
 import threading
 from pathlib import Path
 from typing import Any
+from uuid import UUID
 
 __all__ = [
     "BadgeDenied",
@@ -98,13 +121,66 @@ class _FileRevocationList:
         return set(revoked)
 
 
-def verify_badge_for_dispatch(badge: dict[str, Any] | None, required_capability: str) -> None:
-    """Refuse the dispatch unless ``badge`` is a currently-valid VAID that
-    grants ``required_capability``. A no-op when the plugin is disabled.
+def _parsed_or_denied(badge: dict[str, Any]) -> dict[str, Any]:
+    """``badge`` as a structurally valid VAID document, or :class:`BadgeDenied`.
 
-    Raises :class:`BadgeDenied` on any failure, naming the reason. Never
-    raises anything else for a malformed ``badge`` — the vaid-mint verifiers
-    this calls are themselves total over arbitrary JSON-shaped input.
+    See the module docstring for why this gate exists and why it delegates to
+    vaid-mint rather than listing the required members here. The round-trip
+    through JSON text is what ``parse_vaid_document`` takes; a ``badge`` that
+    will not even serialise is refused for the same reason an unparseable one
+    is, rather than being allowed to raise ``TypeError`` out of a verifier.
+    """
+    from vaid_mint.verify import parse_vaid_document  # noqa: PLC0415
+
+    try:
+        as_text = json.dumps(badge)
+    except (TypeError, ValueError):
+        raise BadgeDenied("vaid_badge is not a JSON document; refusing fail-closed") from None
+    parsed = parse_vaid_document(as_text)
+    if parsed is None:
+        raise BadgeDenied("vaid_badge is not a well-formed VAID document; refusing fail-closed")
+    return parsed
+
+
+def _deny_unless_badge_is_for_this_tenant(badge: dict[str, Any], tenant_id: UUID | str | None) -> None:
+    """Refuse a badge minted under one tenant's authority and presented under
+    another's.
+
+    ``verify_vaid_standing`` answers "is this badge genuine", which is not the
+    same question as "is this badge *this caller's*". Without this, a badge
+    legitimately minted for tenant A verified cleanly against a dispatch
+    carrying tenant B — measured, and squarely against the point of the
+    feature, which is proving *under whose authority* an action ran.
+
+    ``tenant_id`` is a signed member of the document, so an attacker cannot
+    edit it without invalidating the signature; the only thing needed here is
+    to read it and compare. A badge naming a tenant presented on a dispatch
+    naming none is refused rather than waved through: this plugin is
+    off by default and has no legacy tenant-less caller to accommodate, so the
+    permissive reading would be a hole kept open for nobody.
+    """
+    badge_tenant = badge.get("tenant_id")
+    if not isinstance(badge_tenant, str) or not badge_tenant:
+        raise BadgeDenied("badge names no tenant; refusing fail-closed")
+    if tenant_id is None:
+        raise BadgeDenied(f"badge is bound to tenant {badge_tenant!r} and this dispatch names no tenant; refusing fail-closed")
+    if badge_tenant != str(tenant_id):
+        raise BadgeDenied(f"badge is bound to tenant {badge_tenant!r}, not to this dispatch's tenant")
+
+
+def verify_badge_for_dispatch(
+    badge: dict[str, Any] | None,
+    required_capability: str,
+    *,
+    tenant_id: UUID | str | None = None,
+) -> None:
+    """Refuse the dispatch unless ``badge`` is a currently-valid VAID, issued
+    for ``tenant_id``, that grants ``required_capability``. A no-op when the
+    plugin is disabled.
+
+    Raises :class:`BadgeDenied` on any failure, naming the reason, and nothing
+    else for any JSON-shaped ``badge`` — see the module docstring for the
+    measured case where that was not true.
     """
     if not vaid_plugin_enabled():
         return
@@ -115,6 +191,7 @@ def verify_badge_for_dispatch(badge: dict[str, Any] | None, required_capability:
     from vaid_mint.revocation import RevocationStatus, assemble_lineage  # noqa: PLC0415
     from vaid_mint.verify import verify_vaid_standing  # noqa: PLC0415
 
+    badge = _parsed_or_denied(badge)
     kernel_public_key = _kernel_public_key()
 
     # Root badges only (module docstring): `assemble_lineage` never actually
@@ -140,6 +217,11 @@ def verify_badge_for_dispatch(badge: dict[str, Any] | None, required_capability:
     verdict = verify_vaid_standing(kernel_public_key, badge, revocation_status)
     if not verdict.is_valid():
         raise BadgeDenied(f"badge {badge.get('vaid_id')!r} failed verification: {verdict.code}")
+
+    # Only after the signature: a complaint about the content of bytes that
+    # have not been authenticated is meaningless, and `tenant_id` is only
+    # trustworthy once the document it sits in has been shown to be genuine.
+    _deny_unless_badge_is_for_this_tenant(badge, tenant_id)
 
     if not has_capability(badge, required_capability):
         raise BadgeDenied(f"badge {badge.get('vaid_id')!r} does not grant capability {required_capability!r}")

@@ -308,9 +308,7 @@ async def test_execute_still_enforces_scope_before_the_badge_check(monkeypatch, 
     _enable(monkeypatch)
     monkeypatch.setenv(vaid_plugin._REVOCATION_LIST_PATH_ENV, str(_revocation_file(tmp_path, [])))
     vaid_plugin.reset_issuer_for_tests()
-    registry = ToolRegistry(
-        [Tool(name="isolate_host", description="", parameters={"type": "object", "properties": {}}, fn=lambda: {})]
-    )
+    registry = ToolRegistry([Tool(name="isolate_host", description="", parameters={"type": "object", "properties": {}}, fn=lambda: {})])
     vaid_plugin.install_into(registry)
     wrapped = vaid_plugin.issue_vaid_identity("triage", run_id="run-1", tenant_id="acme")
     result = await registry.execute("isolate_host", {}, identity=wrapped)
@@ -323,9 +321,7 @@ async def test_execute_still_enforces_scope_before_the_badge_check(monkeypatch, 
 @pytest.mark.asyncio
 async def test_record_badge_in_ledger_is_a_no_op_when_disabled():
     wrapped = vaid_plugin.issue_vaid_identity("triage", run_id="run-1", tenant_id="acme")
-    result = await vaid_plugin.record_badge_in_ledger(
-        wrapped, run_id=uuid.uuid4(), tenant_id=uuid.uuid4(), seq=1
-    )
+    result = await vaid_plugin.record_badge_in_ledger(wrapped, run_id=uuid.uuid4(), tenant_id=uuid.uuid4(), seq=1)
     assert result is None
 
 
@@ -341,9 +337,7 @@ async def test_record_badge_in_ledger_writes_the_hash_not_the_badge(monkeypatch)
 
     run_id = uuid.uuid4()
     tenant_id = uuid.uuid4()
-    result = await vaid_plugin.record_badge_in_ledger(
-        wrapped, run_id=run_id, tenant_id=tenant_id, seq=3, _record_event=_fake_record_event
-    )
+    result = await vaid_plugin.record_badge_in_ledger(wrapped, run_id=run_id, tenant_id=tenant_id, seq=3, _record_event=_fake_record_event)
 
     assert result is not None
     assert captured["run_id"] == run_id
@@ -355,3 +349,138 @@ async def test_record_badge_in_ledger_writes_the_hash_not_the_badge(monkeypatch)
     assert "public_key_der" not in captured["payload"]
     assert "kernel_signature" not in captured["payload"]
     assert captured["payload"]["vaid_id"] == wrapped.badge["vaid_id"]
+
+
+# ── Review follow-ups (PR #1741) ───────────────────────────────────────────
+
+
+def _with_empty_revocation_list(monkeypatch, tmp_path):
+    """Ship a well-formed, empty revocation list.
+
+    Without one the status is UNAVAILABLE and every badge is refused as
+    `indeterminate` — correct, and it would make each test below pass for a
+    reason that has nothing to do with its subject.
+    """
+    monkeypatch.setenv(vaid_plugin._REVOCATION_LIST_PATH_ENV, str(_revocation_file(tmp_path, [])))
+    vaid_plugin.reset_issuer_for_tests()
+
+
+@pytest.mark.parametrize(
+    "badge",
+    [
+        pytest.param({}, id="empty-object"),
+        pytest.param({"hello": "world"}, id="not-a-vaid"),
+        pytest.param({"vaid_id": "urn:not-a-uuid"}, id="vaid_id-only"),
+    ],
+)
+def test_verify_identity_badge_names_the_reason_for_a_malformed_badge(monkeypatch, badge):
+    """It already refused — `ToolRegistry.execute` catches `Exception` — but
+    the reason it audited was `"'vaid_id'"`, a bare `KeyError` repr from
+    vaid-mint's `assemble_lineage`. A refusal an operator cannot read is only
+    half of what this repository asks for, and the identical gap on the
+    actions side was an unhandled 500 rather than a cosmetic one.
+    """
+    _enable(monkeypatch)
+    identity = vaid_plugin.issue_vaid_identity("triage", run_id="run-malformed", tenant_id="acme")
+    with pytest.raises(vaid_plugin.BadgeDenied, match="well-formed VAID document"):
+        vaid_plugin.verify_identity_badge(vaid_plugin.VaidBackedIdentity(identity.identity, "acme", badge))
+
+
+def test_verify_identity_badge_refuses_a_genuine_badge_issued_for_another_agent(monkeypatch, tmp_path):
+    """Authenticity is not attribution.
+
+    `verify_vaid_standing` passes for any badge minted under our kernel key,
+    including one issued for a different agent — measured: a `triage`
+    identity carrying a real `respond` badge was accepted. Scope is
+    unaffected (`identity.require` runs against the triage table either way),
+    so this is not an authorization escape; it is an attribution one, and the
+    ledger row `record_badge_in_ledger` writes would have named the wrong
+    agent, which is the single thing #1739 exists to make trustworthy.
+    """
+    _enable(monkeypatch)
+    _with_empty_revocation_list(monkeypatch, tmp_path)
+    triage = vaid_plugin.issue_vaid_identity("triage", run_id="run-t", tenant_id="acme")
+    respond = vaid_plugin.issue_vaid_identity("respond", run_id="run-r", tenant_id="acme")
+
+    # Control: the real badge for this identity is accepted.
+    vaid_plugin.verify_identity_badge(triage)
+
+    mismatched = vaid_plugin.VaidBackedIdentity(triage.identity, "acme", respond.badge)
+    with pytest.raises(vaid_plugin.BadgeDenied, match="issued for agent 'respond'"):
+        vaid_plugin.verify_identity_badge(mismatched)
+
+
+def test_registry_refuses_a_mismatched_badge_before_the_tool_body_runs(monkeypatch, tmp_path):
+    """Through the real chokepoint, not the verifier alone: "refused" has to
+    mean the tool body never ran."""
+    _enable(monkeypatch)
+    _with_empty_revocation_list(monkeypatch, tmp_path)
+    ran: list[str] = []
+    registry = ToolRegistry(
+        [
+            Tool(
+                name="extract_iocs",
+                description="",
+                parameters={"type": "object", "properties": {}},
+                fn=lambda: ran.append("body") or {"iocs": []},
+            )
+        ]
+    )
+    vaid_plugin.install_into(registry)
+
+    triage = vaid_plugin.issue_vaid_identity("triage", run_id="run-t", tenant_id="acme")
+    respond = vaid_plugin.issue_vaid_identity("respond", run_id="run-r", tenant_id="acme")
+
+    import asyncio
+
+    allowed = asyncio.run(registry.execute("extract_iocs", {}, identity=triage))
+    assert "error" not in allowed
+    assert ran == ["body"]
+
+    ran.clear()
+    denied = asyncio.run(
+        registry.execute(
+            "extract_iocs",
+            {},
+            identity=vaid_plugin.VaidBackedIdentity(triage.identity, "acme", respond.badge),
+        )
+    )
+    assert "issued for agent 'respond'" in denied["error"]
+    assert ran == []
+
+
+def test_with_granted_tools_keeps_the_badge_matched_to_its_identity(monkeypatch, tmp_path):
+    """`with_granted_tools` re-mints. If it ever stopped doing so, the new
+    `agent_class` check would start refusing every grant — which is the
+    correct direction to fail, and this pins that it does not happen for the
+    ordinary expansion path."""
+    _enable(monkeypatch)
+    _with_empty_revocation_list(monkeypatch, tmp_path)
+    triage = vaid_plugin.issue_vaid_identity("triage", run_id="run-t", tenant_id="acme")
+    widened = triage.with_granted_tools({"entity_timeline"})
+    assert widened.badge["agent_class"] == widened.agent == "triage"
+    assert widened.badge["capability_set"] == sorted(widened.scopes)
+    vaid_plugin.verify_identity_badge(widened)  # must not raise
+
+
+def test_a_mistyped_ttl_env_falls_back_instead_of_crashing_the_mint(monkeypatch, caplog, tmp_path):
+    """`_ttl_hours` has a branch for a non-integer `AISOC_VAID_TTL_HOURS`, and
+    that branch raised.
+
+    It called `logger.warning("event", value=raw)` — structlog's call shape —
+    against this service's stdlib `logging.Logger`, which answers
+    `TypeError: Logger._log() got an unexpected keyword argument 'value'`. So
+    an operator typo in one environment variable did not degrade to the
+    default TTL; it took `issue_vaid_identity` down. Surfaced by mypy's
+    `call-arg`, which is the only reason anyone looked: the line is reachable
+    solely by setting that variable to something unparseable.
+    """
+    _enable(monkeypatch)
+    _with_empty_revocation_list(monkeypatch, tmp_path)
+    monkeypatch.setenv(vaid_plugin._TTL_HOURS_ENV, "not-a-number")
+
+    assert vaid_plugin._ttl_hours() == vaid_plugin.DEFAULT_VAID_TTL_HOURS
+    # And the whole production mint path survives it, which is the thing that
+    # was actually broken.
+    wrapped = vaid_plugin.issue_vaid_identity("triage", run_id="run-ttl", tenant_id="acme")
+    vaid_plugin.verify_identity_badge(wrapped)

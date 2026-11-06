@@ -29,10 +29,13 @@ cryptography = ">=46,<51"
 # badge with the issuer's public key alone, never the agents service's
 # private signing key.
 #
-# NOT present in poetry.lock as of this change — this environment has no
-# `poetry` installed to regenerate it (see REPORT-s566.md). A maintainer
-# or CI with network access must run `poetry lock` before this can merge.
-vaid-mint = {version = ">=0.11.0,<1.0.0", optional = true}
+# Pinned exactly, and held equal with services/agents by
+# `scripts/check_dependency_pins.py`. The two services are the mint and
+# the verify halves of one signature: a version skew between them is a
+# deployment where badges one process issues the other cannot read, which
+# surfaces as "dispatch intermittently refuses" rather than as anything
+# naming a dependency.
+vaid-mint = {version = "==0.11.0", optional = true}
 
 [tool.poetry.extras]
 vaid = ["vaid-mint"]

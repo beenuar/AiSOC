@@ -82,7 +82,7 @@ class _ServiceSwap:
         self._service_root = service_root
         self._old_path: list[str] | None = None
 
-    def __enter__(self) -> "_ServiceSwap":
+    def __enter__(self) -> _ServiceSwap:
         self._old_path = list(sys.path)
         _purge_app_modules()
         sys.path.insert(0, str(self._service_root))
@@ -95,7 +95,10 @@ class _ServiceSwap:
         _clear_vaid_env()
 
 
-def _mint_real_badge(agent: str, *, run_id: str, tenant_id: str) -> tuple[dict, str]:
+TENANT = "acme"
+
+
+def _mint_real_badge(agent: str, *, run_id: str, tenant_id: str = TENANT) -> tuple[dict, str]:
     """Mint through the REAL agents-service path — ``issue_identity()``
     (the scope table) then ``issue_vaid_identity()`` (the badge) — and
     return ``(badge, kernel_public_key_hex)`` as plain JSON-safe values.
@@ -121,15 +124,21 @@ def _real_action_types() -> set[str]:
         return {member.value for member in action_module.ActionType}
 
 
-def _verify_through_real_dispatch_boundary(badge: dict, capability: str, *, pubkey_hex: str, revocation_path: Path) -> None:
+def _verify_through_real_dispatch_boundary(
+    badge: dict, capability: str, *, pubkey_hex: str, revocation_path: Path, tenant_id: str = TENANT
+) -> None:
     """Verify through the REAL actions-service path —
-    ``verify_badge_for_dispatch``, exactly as ``dispatch()`` calls it."""
+    ``verify_badge_for_dispatch``, exactly as ``dispatch()`` calls it,
+    including the tenant `dispatch()` passes down from the request. Minting
+    under one tenant and verifying under another would make every test below
+    pass on the tenant binding, never reaching the capability mapping they
+    exist to check."""
     with _ServiceSwap(ACTIONS_ROOT):
         os.environ["AISOC_VAID_PLUGIN_ENABLED"] = "true"
         os.environ["AISOC_VAID_KERNEL_PUBLIC_KEY_HEX"] = pubkey_hex
         os.environ["AISOC_VAID_REVOCATION_LIST_PATH"] = str(revocation_path)
         vaid_verifier = importlib.import_module("app.security.vaid_verifier")
-        vaid_verifier.verify_badge_for_dispatch(badge, capability)
+        vaid_verifier.verify_badge_for_dispatch(badge, capability, tenant_id=tenant_id)
 
 
 @pytest.fixture(autouse=True)
@@ -187,3 +196,43 @@ def test_agent_action_capabilities_name_only_real_action_types():
     real = _real_action_types()
     assert declared, "AGENT_ACTION_CAPABILITIES has no entries — the mapping this test guards does not exist"
     assert declared <= real, f"named capabilities not in the real ActionType enum: {declared - real}"
+
+
+def test_a_real_badge_does_not_clear_a_dispatch_for_a_different_tenant(tmp_path):
+    """The other end-to-end property, found in review of PR #1741.
+
+    `verify_vaid_standing` answers "is this badge authentic and does it still
+    stand". A badge minted through the real agents path under tenant A is
+    authentic, stands, and carries `isolate_host` — and before the binding it
+    verified cleanly against a dispatch belonging to tenant B. Nothing was
+    escalated by that (the actions service's own kill switch, contract,
+    approval matrix and blast-radius tier all still run), but the one thing
+    #1739 asked for is proof of *under whose authority* an action ran, and a
+    credential that is valid under anyone's authority does not provide it.
+
+    Minted and verified through both real paths, because the per-service
+    suites each hold one side and neither could see the pair disagree.
+    """
+    revocation_path = tmp_path / "revoked.json"
+    revocation_path.write_text(json.dumps({"revoked": []}))
+
+    badge, pubkey_hex = _mint_real_badge("respond", run_id="run-3", tenant_id="tenant-a")
+
+    # Control: it clears its own tenant, so the refusal below is about the
+    # tenant and not about the badge being broken.
+    _verify_through_real_dispatch_boundary(
+        badge,
+        "isolate_host",
+        pubkey_hex=pubkey_hex,
+        revocation_path=revocation_path,
+        tenant_id="tenant-a",
+    )
+
+    with pytest.raises(Exception, match="bound to tenant 'tenant-a'"):
+        _verify_through_real_dispatch_boundary(
+            badge,
+            "isolate_host",
+            pubkey_hex=pubkey_hex,
+            revocation_path=revocation_path,
+            tenant_id="tenant-b",
+        )

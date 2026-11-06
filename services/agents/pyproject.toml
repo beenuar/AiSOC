@@ -120,12 +120,15 @@ clickhouse-driver = "^0.2.8"
 # lazily, only when the plugin is actually used, so a deployment that
 # never sets the flag never needs it installed.
 #
-# NOT present in poetry.lock as of this change — this environment has no
-# `poetry` installed to regenerate it (see REPORT-s566.md). A maintainer
-# or CI with network access must run `poetry lock` before this can merge;
-# until then `pip install vaid-mint` in a throwaway venv is how the new
-# unit tests were run.
-vaid-mint = {version = ">=0.11.0,<1.0.0", optional = true}
+# Pinned exactly, and held equal with services/actions by
+# `scripts/check_dependency_pins.py`, for the reason that file records
+# against `cryptography` and `sqlglot`: this verifies the Ed25519
+# signature that decides whether a containment action runs, so the version
+# *is* the behaviour. On a 0.x library any minor may change it, and
+# Dependabot's `update-types: semver-major` hold cannot cover a 0.x
+# dependency at all. Moving it is a deliberate re-read of the diff, not a
+# range that re-resolves under you.
+vaid-mint = {version = "==0.11.0", optional = true}
 
 [tool.poetry.extras]
 vaid = ["vaid-mint"]
