@@ -2,6 +2,20 @@
 (beenuar/AiSOC#1739): ``dispatch()`` must refuse before any executor runs
 when the plugin is enabled and the badge does not stand up, and must be
 byte-for-byte unaffected when the plugin is off (the negative control).
+
+These badges are hand-minted with ``_mint()`` below, deliberately isolated
+from the real agents-service mint path — this file is about ``dispatch()``'s
+own mechanics (ordering, the spy-executor proof that a denial never reaches
+a vendor, the plugin-off negative control), not about whether a *real*
+badge's ``capability_set`` happens to contain the capability being dispatched.
+That second question — does a badge minted by
+``app.security.vaid_plugin.issue_vaid_identity`` for a real agent actually
+clear ``verify_badge_for_dispatch`` for a real ``ActionType`` — is exactly
+what a synthetic badge here cannot prove (it was, in fact, how a real
+vocabulary mismatch between ``AGENT_TOOL_SCOPES`` and ``ActionType`` stayed
+hidden past review once already). See
+``tests/test_vaid_cross_service_capability_mapping.py`` at the repo root,
+which mints through the real path and verifies through this one.
 """
 
 from __future__ import annotations

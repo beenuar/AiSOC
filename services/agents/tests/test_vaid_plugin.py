@@ -23,10 +23,17 @@ from app.tools.registry import Tool, ToolRegistry
 
 @pytest.fixture(autouse=True)
 def _reset(monkeypatch):
-    """Every test gets a clean env flag and a fresh issuer."""
+    """Every test gets a clean env flag and a fresh issuer.
+
+    A test process is exactly the "single process" case
+    ``AISOC_VAID_ALLOW_EPHEMERAL_KERNEL_SEED`` exists for — there is only
+    ever one issuer in play, so a fresh per-run seed cannot produce the
+    cross-replica mismatch the flag's absence otherwise refuses.
+    """
     monkeypatch.delenv(vaid_plugin._ENABLED_ENV, raising=False)
     monkeypatch.delenv(vaid_plugin._REVOCATION_LIST_PATH_ENV, raising=False)
     monkeypatch.delenv(vaid_plugin._TTL_HOURS_ENV, raising=False)
+    monkeypatch.setenv(vaid_plugin._ALLOW_EPHEMERAL_SEED_ENV, "true")
     vaid_plugin.reset_issuer_for_tests()
     yield
     vaid_plugin.reset_issuer_for_tests()
@@ -89,6 +96,28 @@ def test_audit_row_names_the_vaid_id():
     row = wrapped.audit_row("extract_iocs", allowed=True)
     assert row["vaid_id"] == wrapped.badge["vaid_id"]
     assert row["agent"] == "triage"
+
+
+# ── Two vocabularies, never conflated ──────────────────────────────────────
+# (the gap a code review found: AGENT_TOOL_SCOPES names tool functions,
+# services/actions' ActionType names response capabilities, and a badge
+# minted with capability_set = identity.scopes alone could never clear
+# verify_badge_for_dispatch for any real action.)
+
+
+def test_respond_badge_carries_action_dispatch_capabilities_too():
+    wrapped = vaid_plugin.issue_vaid_identity("respond", run_id="run-1", tenant_id="acme")
+    capability_set = set(wrapped.badge["capability_set"])
+    assert capability_set >= vaid_plugin.AGENT_ACTION_CAPABILITIES["respond"]
+    assert capability_set >= wrapped.identity.scopes  # tool scopes are still there too
+    assert "isolate_host" in capability_set  # the specific capability the review named
+
+
+def test_only_respond_gets_action_dispatch_capabilities():
+    for agent in ("triage", "investigation", "hunt", "detect"):
+        wrapped = vaid_plugin.issue_vaid_identity(agent, run_id="run-1", tenant_id="acme")
+        assert set(wrapped.badge["capability_set"]) == wrapped.identity.scopes
+        assert "isolate_host" not in wrapped.badge["capability_set"]
 
 
 # ── verify_identity_badge: the off-by-default negative control ───────────
@@ -182,6 +211,16 @@ def test_enabled_plugin_refuses_a_tampered_badge(monkeypatch, tmp_path):
 
 
 # ── badge_sha256 ──────────────────────────────────────────────────────────
+
+
+def test_mint_refuses_an_unnamed_ephemeral_trust_root_by_default(monkeypatch):
+    """The multi-replica hazard: with neither a seed path nor the explicit
+    opt-out set, minting must refuse rather than silently generate a
+    per-process seed nothing else could ever verify against."""
+    monkeypatch.delenv(vaid_plugin._ALLOW_EPHEMERAL_SEED_ENV, raising=False)  # undo the fixture's default
+    vaid_plugin.reset_issuer_for_tests()
+    with pytest.raises(vaid_plugin.BadgeDenied, match=vaid_plugin._ALLOW_EPHEMERAL_SEED_ENV):
+        vaid_plugin.issue_vaid_identity("triage", run_id="run-1", tenant_id="acme")
 
 
 def test_badge_sha256_is_deterministic_and_order_independent():

@@ -69,6 +69,7 @@ __all__ = [
     "install_into",
     "uninstall_from",
     "badge_sha256",
+    "AGENT_ACTION_CAPABILITIES",
 ]
 
 _ENABLED_ENV = "AISOC_VAID_PLUGIN_ENABLED"
@@ -76,6 +77,7 @@ _TRUST_DOMAIN_ENV = "AISOC_VAID_TRUST_DOMAIN"
 _TTL_HOURS_ENV = "AISOC_VAID_TTL_HOURS"
 _REVOCATION_LIST_PATH_ENV = "AISOC_VAID_REVOCATION_LIST_PATH"
 _KERNEL_SEED_PATH_ENV = "AISOC_VAID_KERNEL_SEED_PATH"
+_ALLOW_EPHEMERAL_SEED_ENV = "AISOC_VAID_ALLOW_EPHEMERAL_KERNEL_SEED"
 
 #: Default badge lifetime. Short by design (asmeyatsky on #1739): in an
 #: air-gapped deployment the revocation list is shipped, not fetched live, so
@@ -166,10 +168,21 @@ def _kernel_seed() -> bytes:
 
     Read from ``AISOC_VAID_KERNEL_SEED_PATH`` (raw 32 bytes on disk) when
     set — the production path, where the seed is a real secret managed like
-    any other key material in this repository. Falls back to a freshly
-    generated, process-local seed otherwise, which is correct for tests and
-    for a single-process deployment that accepts "every restart is a new
-    trust root" as its posture; it is never correct across a fleet.
+    any other key material in this repository.
+
+    With no seed path configured, this refuses rather than silently
+    generating one: a fresh, process-local seed is exactly correct for a
+    single process (tests, a one-replica dev stack) and exactly wrong
+    across a fleet — every replica would mint under its own trust root, and
+    a badge minted by replica A would never verify against replica B's
+    issuer, let alone against ``services/actions``' configured
+    ``AISOC_VAID_KERNEL_PUBLIC_KEY_HEX``. That failure mode is silent (every
+    individual replica verifies its own badges fine) and would only surface
+    as "dispatch intermittently refuses a request, seemingly at random,
+    depending which replica handled it" — exactly the kind of thing that
+    should fail loudly at startup instead. ``AISOC_VAID_ALLOW_EPHEMERAL_KERNEL_SEED``
+    is the explicit, named opt-out for the cases where the fallback is
+    actually correct.
     """
     path = os.environ.get(_KERNEL_SEED_PATH_ENV, "").strip()
     if path:
@@ -177,6 +190,14 @@ def _kernel_seed() -> bytes:
         if len(data) != 32:
             raise BadgeDenied(f"{_KERNEL_SEED_PATH_ENV} does not name a 32-byte Ed25519 seed")
         return data
+    if os.environ.get(_ALLOW_EPHEMERAL_SEED_ENV, "").strip().lower() not in {"1", "true", "yes", "on"}:
+        raise BadgeDenied(
+            f"VAID plugin is enabled but neither {_KERNEL_SEED_PATH_ENV} nor "
+            f"{_ALLOW_EPHEMERAL_SEED_ENV} is set — refusing to mint under a fresh, "
+            "unnamed, per-process trust root. Set the former to a real key in any "
+            "deployment with more than one replica of this service; set the latter "
+            "only for a single-process dev stack or a test"
+        )
     return os.urandom(32)
 
 
@@ -220,15 +241,77 @@ def reset_issuer_for_tests() -> None:
         _issuer_handle = None
 
 
+#: A *second* vocabulary, deliberately distinct from ``AGENT_TOOL_SCOPES``.
+#:
+#: ``AGENT_TOOL_SCOPES`` answers "what Python functions may this agent call
+#: in-process" (``ToolRegistry.execute``, this service). This table answers a
+#: different question, for a different service: "what ``services/actions``
+#: live-action capability may this agent's badge be presented for, at the
+#: ``dispatch()`` boundary". The two vocabularies never overlap — tool names
+#: like ``extract_iocs`` versus ``ActionType`` strings like ``isolate_host`` —
+#: and conflating them is exactly the bug this table exists to close: a badge
+#: minted with ``capability_set = identity.scopes`` alone can never satisfy
+#: ``has_capability(badge, "isolate_host")`` on the actions side, because no
+#: agent's tool scope ever contains an ActionType string. Every real dispatch
+#: would refuse, which is "fails closed" in letter only — in effect it is the
+#: feature not working at all.
+#:
+#: Only ``"respond"`` holds anything, matching ``AGENT_TOOL_SCOPES``'s own
+#: comment on that agent: it is the only one whose job is to request a
+#: response action. No other agent gets an entry — the correct default,
+#: same reasoning as ``AGENT_TOOL_SCOPES``'s "absent from every set is
+#: reachable by nobody" — so a triage or investigation badge can never
+#: clear the actions-service boundary for any capability.
+#:
+#: This does **not** decide whether a given request actually executes.
+#: ``services/actions`` keeps every one of its own gates — the kill switch,
+#: the per-capability contract, the approval matrix, the blast-radius tier —
+#: fully in force regardless of this plugin; VAID verification is a
+#: *precondition* layered in front of them (see ``dispatch()``'s own
+#: ordering), proving identity, not re-grading risk. Granting the full
+#: response vocabulary to "respond" is therefore the correct scope for an
+#: identity check: narrowing it further would be duplicating policy this
+#: plugin is not the right place to hold.
+#:
+#: Why duplicated rather than imported: ``services/agents`` and
+#: ``services/actions`` are independently deployable and do not import each
+#: other's ``app`` package (see ``vaid_verifier.py``'s matching comment on
+#: its own revocation-list loader). The values below are literally
+#: ``app.models.action.ActionType`` in ``services/actions`` as of this
+#: writing; `tests/test_vaid_cross_service_capability_mapping.py` at the
+#: repo root loads that real enum (via a sys.path swap, never a cross-service
+#: import at runtime) and asserts every value here is still a real one, so a
+#: rename there is caught by a test rather than discovered as "every
+#: dispatch refused in production" — the way this table's *absence* was
+#: first found.
+AGENT_ACTION_CAPABILITIES: dict[str, frozenset[str]] = {
+    "respond": frozenset(
+        {
+            "block_ip",
+            "block_domain",
+            "isolate_host",
+            "disable_user",
+            "reset_password",
+            "kill_process",
+            "quarantine_file",
+            "capture_forensics",
+            "notify_slack",
+            "create_ticket",
+        }
+    ),
+}
+
+
 def _mint_badge(identity: AgentIdentity, *, tenant_id: str) -> dict[str, Any]:
     handle = _issuer_handle_singleton()
+    capability_set = identity.scopes | AGENT_ACTION_CAPABILITIES.get(identity.agent, frozenset())
     return handle.issuer.issue_vaid_with_lineage(
         agent_class=identity.agent,
         version="1",
         tenant_id=tenant_id,
         parent_vaid=None,
         scope_boundary=[],
-        capability_set=sorted(identity.scopes),
+        capability_set=sorted(capability_set),
     )
 
 
