@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Upgrading is now a required check, and one leg crosses a major version.**
+  People upgrade, and until now a pull request could break the upgrade path
+  with both upgrade tests red or never run: neither `upgrade-test.yml` nor
+  `integration.yml`'s upgrade leg appeared in `.github/required-checks.json`.
+  `Previous minor to this tree, with data present` is now required.
+
+  Promoting it as it stood would have been worse than leaving it alone.
+  `upgrade-test.yml` was path-filtered on both triggers, and a workflow that
+  does not trigger creates no check run at all — so a required check that
+  never reports blocks the pull request forever, which is the quiet failure
+  rather than a red one. Measured over the 18 most recently merged pull
+  requests, reading every page of `commits/{sha}/check-runs` (113–143 checks
+  each, so the familiar one-page cap was not the cause): the context was
+  absent from **18 of 18**, and none of those 18 had touched a filtered path.
+
+  The filter is gone rather than moved into the jobs. `integration.yml` needs
+  the job-level form because a disaster-recovery rehearsal costs 15 minutes;
+  this workflow runs in 1–3 minutes, so it now carries no path filter and no
+  job-level or step-level `if:` anywhere — 14 unconditional steps, 0
+  change-gated, as `scripts/check_required_check_substance.py --static`
+  reports it. It cannot rehearse nothing the way `Backup → destroy → restore`
+  did on 74 of 100 runs, and that is now a property a reader can confirm by
+  looking rather than a behaviour someone has to go and measure.
+
+- **Two upgrade legs that cross a major version boundary, with real data.**
+  Nothing had ever crossed one. The previous-minor job resolves its starting
+  point with `--previous-minor`, which is same-major by construction, and
+  `integration.yml` pins `v7.3.1`/`v7.5.0` — also same-major, and seeding a
+  throwaway `upgrade_probe` table, so what it proves is that a migration did
+  not drop an unrelated table. Meanwhile `apps/docs/docs/operations/upgrades.md`
+  told operators that crossing more than one major "is supported but untested
+  as a single step", which was true.
+
+  `v21.0.0` is the most recent boundary and the one a supported operator
+  crosses today; it is also the only boundary a *new* migration can still
+  break, since everything below it is frozen history. `v17.0.0` is five majors
+  in one step — the case the documentation admits is untested — and is the
+  oldest release this fixture can seed unmodified, because migration `083`
+  (`cases` → `aisoc_cases`) landed in v16.0.0.
+
+  Both legs are better than either existing one in the two ways that matter.
+  They seed the **real tables** from `scripts/upgrade_fixture.sql` — a tenant,
+  a user, one alert at each of the five severities, a case — and they apply
+  this tree's chain with **this tree's runner**, where the previous-minor job
+  deliberately uses the released image's runner and therefore cannot see a
+  migration that needs a newer runner than the previous release shipped.
+  Both legs pass: row counts identical, the alert and the case readable by id,
+  all five severities intact, every migration recorded as applied, the DML-only
+  runtime role still able to read, and a re-run applying nothing.
+
 ## [22.2.0] - 2026-11-05
 
 ### Added
