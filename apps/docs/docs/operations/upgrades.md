@@ -166,7 +166,7 @@ moment anyone consented to. Details in [Kubernetes](../deployment/kubernetes.md)
 
 After a successful upgrade you should be able to:
 
-- Hit `/livez` and `/readyz` on the API and get `200 OK`, with nothing detached or erroring in the `/readyz` body. Note the paths: the API service serves `/health`, `/livez` and `/readyz` — **not** `/healthz`, which this page used to tell you to curl. `curl -fsS .../healthz` fails on a perfectly healthy deployment, because `-f` turns the 404 into a non-zero exit. `/healthz` is real on `services/realtime` and `services/mcp`, which is where the confusion came from.
+- Hit `/livez` and `/readyz` on the API and get `200 OK`, with nothing detached or erroring in the `/readyz` body. Note the paths: the API service serves `/health`, `/livez` and `/readyz` — **not** `/healthz`, which this page used to tell you to curl. `curl -fsS .../healthz` fails on a perfectly healthy deployment, because `-f` turns the 404 into a non-zero exit (measured: exit 22). `/healthz` is real on `services/realtime`, `services/mcp` and `services/osquery-tls` — and on Qdrant — which is where the confusion came from. [Docker deployment](../deployment/docker.md#health-checks) has the full path-to-service map.
 - Run `make smoke` and watch one real event go through ingest, fusion and triage and come out as an alert. That exercises the path an upgrade is most likely to have broken; a health probe does not.
 - Open the analyst console and see the version in the sidebar footer match the new tag.
 - Re-run `make up`. It should start without a schema complaint, which is the signal that every migration on disk is recorded as applied.

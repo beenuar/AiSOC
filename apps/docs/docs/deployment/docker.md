@@ -294,21 +294,47 @@ release pipeline and has not been tampered with in transit.
 
 ## Health checks
 
-Every service exposes the same `GET /healthz` shape:
+There are three probe paths and they are **not** interchangeable. This page
+used to say every service exposes the same `GET /healthz`; it does not, and
+the API does not serve `/healthz` at all — a `curl -fsS` against it exits 22
+on a perfectly healthy deployment, because `-f` turns the 404 into a failure.
+
+| Path | What it answers | Who serves it |
+|---|---|---|
+| **`/readyz`** | "can this process serve a request?" — consumer subscriptions and store dependencies are evaluated, and it answers 503 when one is detached or erroring | Every Python service, plus `ingest` and `realtime`. **This is the one to sweep.** |
+| `/livez` | "is this process still running?" — deliberately does not consult the probes, so it stays 200 while a dependency is down | Every Python service, plus `ingest` |
+| `/health` | per-service detail, and the shape genuinely differs — `threatintel` names each dependency it checked, `ueba` answers 503 when its consumer is detached and carries the counters | Most services, at the root. The exception is `connectors`, whose health route hangs off a router mounted at `/api/v1`, so it answers on **`/api/v1/health`** and 404s at the root. `osquery-tls` has no `/health` at all |
+
+`/healthz` is real, just not on the API. It is served by `realtime`, `mcp` and
+`osquery-tls` — and by Qdrant, which is where most of the confusion starts.
+
+The API's `/health` returns `status`, `service`, `version`, `airgap` and
+`demo_bootstrap`. `status` reads `healthy`, not `ok`. No example body is
+printed here because three of those five fields are deployment-specific, and
+an invented example is how the previous version of this section came to
+document a two-field object that no route has ever returned.
+
+A quick "is everything up" sweep across the application tier. `/readyz`
+because it is the only path all of these agree on:
 
 ```bash
-curl http://localhost:8000/healthz
-# {"status": "ok", "version": "<version>"}
-```
-
-A quick "is everything up" sweep across the application tier:
-
-```bash
-for port in 8000 8001 8002 8003 8005 8006 8007 8008 8081 8080 8086; do
+# api 8000 · agents 8001 · actions 8002 · fusion 8003 · threatintel 8005
+# purple-team 8006 · ueba 8007 · honeytokens 8008 · slack-bot 8009
+# teams-bot 8010 · ingest 8081 · realtime 8086 · connectors 8088
+# osquery-tls 8091
+for port in 8000 8001 8002 8003 8005 8006 8007 8008 8009 8010 8081 8086 8088 8091; do
   printf "%-5s " "$port"
-  curl -fsS "http://localhost:${port}/healthz" || echo "FAIL"
+  curl -fsS "http://localhost:${port}/readyz" >/dev/null && echo OK || echo FAIL
 done
+
+# Two exceptions, because they answer on different paths:
+curl -fsS http://localhost:8080/health   >/dev/null && echo "enrichment OK"
+curl -fsS http://localhost:8096/healthz  >/dev/null && echo "mcp OK"
 ```
+
+Only the ports a profile publishes will answer; `slack-bot`, `teams-bot`,
+`osquery-tls` and `mcp` are not in the default CORE set, so a `FAIL` there
+means "not running", not "broken".
 
 ## Logs
 

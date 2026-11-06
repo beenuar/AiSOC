@@ -21,7 +21,8 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `APP_NAME` | `AiSOC API` | Display name in OpenAPI docs |
-| `APP_VERSION` | `0.1.0` | Reported in `/healthz` |
+| `APP_VERSION` | `0.1.0` | Display version. Note the API's `/health` reads the separate `VERSION` setting, not this one — the two are independent fields that merely share a default, so setting `APP_VERSION` alone does not change what `/health` reports. The API serves `/health`, not `/healthz` |
+| `VERSION` | `0.1.0` | What `GET /health` reports in its `version` field |
 | `ENV` / `ENVIRONMENT` | `development` | One of `development`, `staging`, `production` |
 | `DEBUG` | `false` | Enables verbose error responses — never enable in production |
 | `API_PREFIX` | `/api/v1` | Mount point for the versioned API |
@@ -434,8 +435,8 @@ All variables use the `HONEYTOKEN_` prefix.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `HONEYTOKEN_DATABASE_URL` | `postgresql+asyncpg://aisoc:aisoc@localhost:5432/aisoc` | Postgres DSN for token metadata and triggers |
-| `HONEYTOKEN_ALERT_WEBHOOK_URL` | — | Webhook called when a token is tripped. **Unset is not "no alerting":** with no webhook the trip is pushed into the ingest spine (`INGEST_SERVICE_URL`, default `http://ingest-worker:8080`) and becomes an alert through the same path every other signal takes. Set this only when you want the trip delivered somewhere else *instead* |
-| `HONEYTOKEN_ALERT_WEBHOOK_SECRET` | — (empty) | HMAC-SHA256 secret for webhook signing, required whenever `HONEYTOKEN_ALERT_WEBHOOK_URL` is set. Empty by default **on purpose**: this once defaulted to the literal `changeme`, so every deployment signed its alerts with a public value and a verifier could not tell a real trip from a forged one. With a URL set and no secret the service refuses to send rather than sending unsigned |
+| `HONEYTOKEN_ALERT_WEBHOOK_URL` | — | Webhook called when a token is triggered |
+| `HONEYTOKEN_ALERT_WEBHOOK_SECRET` | `changeme` | **Rotate before going live.** HMAC-SHA256 secret for webhook signing |
 | `HONEYTOKEN_TOKEN_TTL_DAYS` | `365` | Default token expiry |
 | `HONEYTOKEN_OTEL_ENDPOINT` | `http://localhost:4317` | OTLP collector endpoint |
 | `HONEYTOKEN_SERVICE_NAME` | `aisoc-honeytokens` | OTel service name |

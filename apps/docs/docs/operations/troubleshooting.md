@@ -70,15 +70,35 @@ The four most common causes and fixes:
 
 ## API service
 
-### `/healthz` returns 503
+### `/readyz` returns 503
 
-The API healthcheck reports per-subsystem status. A 503 means at least one required subsystem is down. The response body lists which one:
+:::caution This section used to name the wrong path and quote a body no route returns
+It was headed `/healthz`, which the API **does not serve** — that path 404s,
+so `curl -fsS` against it exits 22 whatever the service is doing. It also
+printed a `subsystems` object; the string `subsystems` appears nowhere in
+`services/`, and one of its four keys was `opensearch`, which the API service
+holds no client for at all. Readiness is `/readyz`. Liveness is `/livez`.
+Per-service detail is `/health`.
+:::
 
-```json
-{ "status": "degraded", "subsystems": { "postgres": "ok", "redis": "ok", "kafka": "down", "opensearch": "ok" } }
-```
+`/readyz` is the endpoint that can legitimately answer 503, and it reports two
+different kinds of problem under two different keys:
 
-Restart only the offending subsystem rather than the whole stack. If you intentionally don't run a subsystem (common in air-gap or minimal deployments), set the matching `AISOC_DISABLE_*` flag — see [Environment Variables](../deployment/env-vars). Endpoints that need the disabled subsystem will return 503 cleanly instead of crashing.
+- **`subscriptions`** — consumer subscriptions, so "is anything actually consuming". A detached consumer is named under `detached`, and `status` reads `degraded`. This is the case that used to be invisible: a container sitting at `running` with restarts 0 while its consumer had left the topic.
+- **`dependencies`** — stores the service needs to serve a request. Each is reported under its own name, and a failing one is explained under `dependency_errors`.
+
+`status` is one of `ready`, `starting`, `degraded` or `ready_degraded`.
+`starting` means the probes have not been consulted yet, which is reported as
+unknown rather than folded into either answer.
+
+Restart only the offending subsystem rather than the whole stack. If you
+intentionally don't run one (common in air-gap or minimal deployments), set the
+matching `AISOC_DISABLE_*` flag — see
+[Environment Variables](../deployment/env-vars). Endpoints that need the
+disabled subsystem will return 503 cleanly instead of crashing.
+
+`/livez` stays 200 throughout: it deliberately does not consult the probes, so
+an orchestrator does not kill a pod that is merely waiting on a dependency.
 
 ### `401 Unauthorized` on every API call
 
