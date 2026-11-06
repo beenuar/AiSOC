@@ -25,6 +25,10 @@ name: Reproducible builds
 #                    stayed invisible.
 #   lock-freshness — every lock still matches the manifest it was made from,
 #                    so `poetry install` cannot be pushed back into resolving.
+#   completeness   — each lock yields a non-empty runtime set, and the
+#                    derivation that produces it is proved in both
+#                    directions. This is what the build jobs below compare
+#                    an install against, so it is checked on its own first.
 #   fastapi-range  — the service imports on both ends of the range it declares,
 #                    so the bound is a tested claim rather than a guess.
 #   twice          — two `--no-cache` builds of this commit install the same
@@ -168,6 +172,42 @@ jobs:
           [ "$checked" -ge 13 ] || { echo "::error::only $checked services checked; expected at least 13"; exit 1; }
           exit "$failed"
 
+  install-completeness:
+    name: Every lock yields a runtime set, and the derivation is proved
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.11'
+      # PEP 508 marker comparison is *version* comparison, not string
+      # comparison, and the difference is live here: `async-timeout` in
+      # services/actions is gated `python_full_version < "3.11.3"`, which a
+      # lexicographic reading calls true on 3.11.10. The reference
+      # implementation decides that, not a hand-rolled evaluator.
+      - name: Install the marker evaluator
+        run: python -m pip install --quiet 'packaging>=23,<27'
+      # Both directions, because the dangerous one is the permissive one: a
+      # runtime/dev split that collapses toward empty is satisfied by an
+      # install that is also empty. The self-test watches a deliberately
+      # over-broad split reject a correct install, and watches a lock that
+      # yields nothing be refused rather than reported clean.
+      - name: The derivation detects a truncated install, a mis-split, and an empty expectation
+        run: python scripts/check_install_completeness.py --self-test
+      # Then the derivation itself, over every service in the tree. This is
+      # the half the build jobs below depend on: if a lock stopped yielding
+      # a runtime set, those jobs would be comparing installs against
+      # nothing and passing.
+      - name: Every service lock yields a non-empty runtime set
+        run: python scripts/check_install_completeness.py --check
+      # The self-test above runs on fixtures, which agree with the parser by
+      # construction because the same hand wrote both. These point the same
+      # derivation at this repository's real locks.
+      - name: Gate unit tests
+        run: |
+          pip install --quiet 'pytest>=7.4,<9'
+          python -m pytest tests/test_install_completeness_gate.py -v --tb=short
+
   fastapi-range:
     name: API imports on fastapi ${{ matrix.fastapi }} (${{ matrix.label }})
     runs-on: ubuntu-latest
@@ -247,10 +287,21 @@ jobs:
             echo "::error::two builds of the same commit resolved different versions"
             exit 1
           fi
-          # A diff of nothing is also what you get from two empty files.
-          [ "$(wc -l < first.txt)" -ge 50 ] || { echo "::error::pip freeze returned almost nothing"; exit 1; }
           grep -q '^fastapi==' first.txt || { echo "::error::fastapi absent from the image"; exit 1; }
           echo "identical: $(wc -l < first.txt) packages, byte-for-byte"
+      # A diff of nothing is also what you get from two empty files, so
+      # "identical" needs a second claim beside it: that the install is the
+      # whole install. See the same step in `twice-all` for why that claim is
+      # derived from the lock rather than written as a number.
+      - name: Install the marker evaluator
+        run: python3 -m pip install --quiet 'packaging>=23,<27'
+      - name: The image contains every runtime package its lock declares
+        run: |
+          set -euo pipefail
+          docker run --rm -i --entrypoint python aisoc-api:first - \
+            < scripts/marker_environment.py > env.json
+          python3 scripts/check_install_completeness.py \
+            --service api --freeze first.txt --environment env.json
 
   # ───────────────────────────────────────────────────────────────────────────
   # The same proof, every remaining service, nightly.
@@ -340,13 +391,39 @@ jobs:
             echo "::error::two builds of $svc at the same commit resolved different versions"
             exit 1
           fi
-          # Two empty files also diff clean. A service image that installs
-          # nothing is a broken build reported as a reproducible one.
-          [ "$(wc -l < first.txt)" -ge 20 ] || {
-            echo "::error::pip freeze in $svc returned $(wc -l < first.txt) packages — too few to be a real install"
-            exit 1
-          }
-          echo "$svc: identical, $(wc -l < first.txt) packages" >> "$GITHUB_STEP_SUMMARY"
+      - name: Install the marker evaluator
+        run: python3 -m pip install --quiet 'packaging>=23,<27'
+      # Two empty files also diff clean, so "identical" is only half the
+      # claim: a service image that installs nothing is a broken build
+      # reported as a reproducible one.
+      #
+      # The other half used to be a fixed floor of twenty packages, which is
+      # a proxy for "this install is real" and was wrong at both ends. It was
+      # wrong in the strict direction first — `escalations` imports one
+      # third-party module, and its complete install is three packages from
+      # the lock, so the floor failed it for being correct. Lowering the
+      # number would have been worse: `api` installs ninety-nine, and a floor
+      # of three would pass an `api` image missing ninety-six of them. A
+      # service that silently loses half its dependencies clears a floor
+      # written for its full size, and that is the failure the floor existed
+      # to catch.
+      #
+      # So the expectation comes from the lock, which is what defines truth
+      # here: every image is built `poetry export --only main` then
+      # `pip install --require-hashes`, so the install must contain every
+      # main-group package whose marker holds. The marker environment is read
+      # out of the image rather than off the runner, because the runner is a
+      # different platform running a different Python and markers are exactly
+      # where those two disagree.
+      - name: The image contains every runtime package its lock declares
+        run: |
+          set -euo pipefail
+          svc='${{ matrix.service }}'
+          docker run --rm -i --entrypoint python "aisoc-$svc:first" - \
+            < scripts/marker_environment.py > env.json
+          python3 scripts/check_install_completeness.py \
+            --service "$svc" --freeze first.txt --environment env.json
+          echo "$svc: identical across two builds, and complete against its lock" >> "$GITHUB_STEP_SUMMARY"
 
   twice-lockonly:
     name: ${{ matrix.service }} resolves the same twice
@@ -385,11 +462,20 @@ jobs:
             echo "::error::two installs of $svc at the same commit resolved different versions"
             exit 1
           }
-          [ "$(wc -l < /tmp/first-freeze.txt)" -ge 10 ] || {
-            echo "::error::$svc installed $(wc -l < /tmp/first-freeze.txt) packages — too few to be a real install"
-            exit 1
-          }
-          echo "$svc: identical, $(wc -l < /tmp/first-freeze.txt) packages (no image; proved from the lock)" >> "$GITHUB_STEP_SUMMARY"
+      # Same reasoning as the image leg: identical is not the same as
+      # complete. A lock-only service has no image to ask, so the marker
+      # environment is this container's own interpreter — which is the one
+      # the install just ran on, so it is still read from the thing under
+      # test rather than assumed.
+      - name: The install contains every runtime package the lock declares
+        run: |
+          set -euo pipefail
+          svc='${{ matrix.service }}'
+          pip install --quiet 'packaging>=23,<27'
+          python scripts/marker_environment.py > /tmp/env.json
+          python scripts/check_install_completeness.py \
+            --service "$svc" --freeze /tmp/first-freeze.txt --environment /tmp/env.json
+          echo "$svc: identical and complete (no image; proved from the lock)" >> "$GITHUB_STEP_SUMMARY"
 
   coverage:
     name: Every service was actually proved

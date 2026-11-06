@@ -109,6 +109,66 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The reproducible-builds gate failed `services/escalations` for being
+  correct, and would have passed an `api` image missing most of itself.**
+  Each build leg carried a fixed floor — more than fifty packages for `api`,
+  more than twenty for every other image, more than ten for a lock-only
+  install — standing in for "this install is real", because two empty files
+  diff clean just as well as two full ones. `escalations` imports exactly one
+  third-party module and declares exactly one, so its complete Linux runtime
+  install is three packages and the floor of twenty rejected it. Lowering the
+  number would have been the worse repair: `api` installs ninety-nine, and a
+  floor of three passes an `api` image missing ninety-six of them. A service
+  that silently loses half its dependencies clears a floor written for its
+  full size, which is the failure the floor was added to catch.
+
+  The expectation now comes from the lock. Every service image is built
+  `poetry export --only main` then `pip install --require-hashes`, so the
+  property is exact rather than approximate: **the install contains every
+  `main`-group package in the lock whose environment marker holds in the
+  environment the install actually ran in.** Three is a pass for
+  `escalations` and a catastrophic failure for `api`, and neither verdict
+  needs a number written down anywhere.
+
+  Separating runtime from dev is where this goes wrong, and the permissive
+  direction is the dangerous one: an expectation that collapses toward empty
+  is satisfied by an install that is also empty. Three shapes in these locks
+  each had to be read exactly. `escalations` declares its test dependencies
+  as a PEP 621 extra rather than a Poetry group, so **all twelve** of its
+  locked packages say `groups = ["main"]`, `pytest` included — reading
+  `groups` alone would demand eight test packages in a runtime image that
+  deliberately has none. Under lock-version 2.1 `markers` is sometimes a
+  table keyed by group, where `typing-extensions` carries a `dev` marker and
+  no `main` one, so flattening it drops a package the image installs. And
+  markers decide membership, not just version: `tzdata` is a non-optional
+  runtime dependency gated `sys_platform == "win32"` and is never installed
+  on Linux.
+
+  Marker truth depends on the environment, so the environment is read out of
+  the image — `scripts/marker_environment.py` piped into the image's own
+  interpreter — rather than off the runner, which is a different platform
+  running a different Python. The tree-wide audit has no image to ask and
+  refuses to guess: it evaluates each marker across every environment the
+  tree permits, both published architectures and the whole patch range of the
+  base image's Python minor, and reports a marker that answers differently
+  across them as `undetermined` rather than picking a half. That is not
+  hypothetical — `async-timeout` in `services/actions` is
+  `python_full_version < "3.11.3"`, so whether it is a runtime package at all
+  depends on the patch level of `python:3.11-slim` on the day the image was
+  built. It is also why marker comparison uses the reference implementation
+  rather than a hand-rolled evaluator: that expression is false on 3.11.10
+  and lexicographically true.
+
+  `scripts/check_install_completeness.py` is the gate, with a `--self-test`
+  that proves both directions — a truncated install is caught, and a split
+  broadened to count dev packages as runtime is watched rejecting a correct
+  install — and `tests/test_install_completeness_gate.py` points the same
+  derivation at this repository's real locks rather than at fixtures that
+  agree with the parser by construction. Verified against a built
+  `escalations` image: the real install passes and the same image with two
+  packages uninstalled fails naming both, where the old floor failed both
+  identically and could not tell them apart.
+
 - **`docker compose pull && up -d` booted new code against the old schema and
   said nothing. There is now a real upgrade path, and `make up` refuses rather
   than starting quietly.** `main.py` applies the SQL migration chain only when
