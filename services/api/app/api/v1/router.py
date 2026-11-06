@@ -99,6 +99,7 @@ from app.api.v1.endpoints import (
     software_inventory,
     sso_connections,
     stix_taxii,
+    system,
     taxii,
     tenant_provision,
     tenant_skills,
@@ -390,6 +391,11 @@ api_router.include_router(stix_taxii.router)
 
 # Deployment configuration and air-gap bundle management
 api_router.include_router(deployment.router)
+
+# What is actually running here: the build, the commit, and whether the live
+# schema matches the migrations this build ships. The route the upgrade
+# runbook has always told operators to check.
+api_router.include_router(system.router)
 
 # Fusion gateway: proxies to services/fusion when FUSION_URL is set, otherwise
 # returns graceful empty payloads so the analyst console renders cleanly.

@@ -69,6 +69,19 @@ RUN pip install --no-cache-dir --require-hashes -r /requirements.txt
 
 COPY . .
 
+# Which release this image is. The build context is `services/api`, so the
+# repo-root VERSION file is not reachable from here and the source-checkout
+# fallback in app/core/version.py cannot fire inside the container — the
+# build arg is the only path that works, and an image built without it
+# reports "unknown" rather than a number nobody measured.
+#
+# `.github/workflows/publish-images.yml` fills it from the repo-root VERSION
+# file. A local `docker build` that omits it still produces a working image;
+# it just cannot tell you which commit it came from, which is the honest
+# answer for a build that was never asked.
+ARG AISOC_VERSION=""
+ENV AISOC_VERSION=${AISOC_VERSION}
+
 EXPOSE 8000
 
 # Use a tiny Python wrapper (app.scripts.serve) that pre-binds a dual-stack

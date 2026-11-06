@@ -247,6 +247,24 @@ jobs:
       # The credentials are supplied here rather than defaulted in the
       # Dockerfile so a build that does not ask for the demo cannot inline
       # them into a bundle it ships to a customer.
+      # Every image gets the version it was built from, because a container
+      # cannot read the repo-root VERSION file: the build context is the
+      # service directory. Without this the Python services fall through to
+      # the honest-but-useless "unknown" (app/core/version.py), and before
+      # this existed at all they reported a hardcoded 0.1.0 — a number no
+      # release ever carried, on a surface operators use to confirm an
+      # upgrade landed.
+      #
+      # Read from the file rather than from the tag, so a `latest` build off
+      # main is stamped with the version main declares rather than with
+      # whatever the last tag was.
+      - id: version
+        run: |
+          set -euo pipefail
+          version="$(tr -d '[:space:]' < VERSION)"
+          test -n "$version"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
       - id: web-build-args
         if: matrix.demo == 'true'
         run: |
@@ -267,7 +285,9 @@ jobs:
           file: ${{ matrix.context }}/${{ matrix.dockerfile }}
           platforms: linux/${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ steps.web-build-args.outputs.build_args }}
+          build-args: |
+            AISOC_VERSION=${{ steps.version.outputs.version }}
+            ${{ steps.web-build-args.outputs.build_args }}
           # Scoped per architecture now that the two are separate jobs: one
           # scope written by two concurrent jobs is a cache each of them can
           # only partially trust.

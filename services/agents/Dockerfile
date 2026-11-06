@@ -100,6 +100,13 @@ n = c.reload(); \
 print(f'hunt corpus: {n} hunt(s) from {c.directory}'); \
 sys.exit(0 if n > 0 else 1)"
 
+# Which release this image is — see the matching block in
+# services/api/Dockerfile. The build context is `services/agents`, so the
+# repo-root VERSION file is not reachable and the build arg is the only path
+# that can answer inside the container. Unset means "unknown", not a number.
+ARG AISOC_VERSION=""
+ENV AISOC_VERSION=${AISOC_VERSION}
+
 EXPOSE 8084
 
 # Dual-stack entrypoint — see app/scripts/serve.py and the matching CMD in
