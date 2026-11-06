@@ -140,14 +140,21 @@ SURFACES: tuple[Surface, ...] = (
         symbols=("APP_VERSION",),
         reports="the version baked into the console bundle as NEXT_PUBLIC_APP_VERSION",
     ),
+    # Both console surfaces are listed under the spelling they use today *and*
+    # the one they are moving to. The symbol is how this gate finds the value,
+    # so a rename it does not know about makes the surface unwatched — and the
+    # gate refuses rather than reporting it clean, which is how this list came
+    # to carry both: it fired on exactly that, against a change that renames
+    # `APP_VERSION` and `NEXT_PUBLIC_APP_VERSION` to a `consoleVersion` read
+    # from one runtime hook. The refusal was right and the registry was stale.
     Surface(
         path="apps/web/src/components/layout/Sidebar.tsx",
-        symbols=("APP_VERSION",),
+        symbols=("APP_VERSION", "consoleVersion", "useConsoleVersion"),
         reports="the version rendered in the console sidebar",
     ),
     Surface(
         path="apps/web/src/components/settings/SettingsView.tsx",
-        symbols=("NEXT_PUBLIC_APP_VERSION",),
+        symbols=("NEXT_PUBLIC_APP_VERSION", "consoleVersion", "useConsoleVersion"),
         reports="the version rendered in Settings → About",
     ),
     Surface(
