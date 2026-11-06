@@ -1453,12 +1453,39 @@ services:
     restart: unless-stopped
 
   honeytokens:
-    # Gated behind the `extras` profile: image isn't published to GHCR yet, so
-    # `aisoc serve` skips it by default. Opt in with `--profile extras`.
-    # `pull_policy: build` used to be the only thing that worked here,
-    # because the image this names had never been published; it is in the
-    # publish matrix now, so `--profile extras` pulls like every other
-    # service instead of spending ten minutes building one.
+    # Opt in with `--profile extras`, and deliberately so. The note that used
+    # to sit here justified the profile with "image isn't published to GHCR
+    # yet" and then contradicted itself three lines later; the image is
+    # published, multi-arch (linux/amd64 and linux/arm64) at `latest` and at
+    # every version tag, so `--profile extras` pulls like every other service
+    # rather than spending ten minutes building one.
+    #
+    # GHSA-9q6p-m345-h3hj (F57) named this profile alongside an alerting
+    # defect. The alerting half is fixed and is where the security content
+    # was: a trip now defaults into the ingest spine and becomes an alert
+    # with no configuration at all (app/services/delivery.py), so an operator
+    # who turns this on gets the signal. What remains is a placement
+    # decision, taken on the grounds the ADR-0006 / ADR-0007 series uses:
+    #
+    #   * It is a leaf. Nothing `depends_on` it and no other service calls
+    #     it, unlike `connectors` and `actions`, which ADR-0007 moved into
+    #     CORE because the agent's tool surface could not reach them there.
+    #   * Nothing seeds a token, in this file or in the service, so on a
+    #     fresh CORE install it would be a capability pointed at nothing —
+    #     the failure ADR-0007 set out to avoid — until an operator plants
+    #     one, by which point they are configuring deliberately anyway.
+    #   * It is not hidden. `/honeytokens` renders the CapabilityUnavailable
+    #     panel naming this profile and the command, so an analyst reads an
+    #     absent capability rather than a clean zero.
+    #   * infra/helm ships the same posture (`honeytokens.enabled: false`),
+    #     so both deployment paths agree on the default.
+    #
+    # Cost is deliberately not the argument: the image is 86 MB on disk,
+    # which would no more move the 8 GB CORE figure than the 124.8 MiB
+    # ADR-0007 measured did. Moving it in would change all three published
+    # counts — core 16 to 17, full 22 to 23 and prod:full 21 to 22, because
+    # `extras` sits outside `full` as well — and every figure registered in
+    # scripts/check_profile_service_counts.py.
     profiles: ["extras"]
     build:
       context: ./services/honeytokens
