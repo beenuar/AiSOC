@@ -103,10 +103,24 @@ def _extract(source: str) -> tuple[str, ...]:
     """The canonical terminal statuses, or a hard failure."""
     tree = ast.parse(source)
     for node in tree.body:
-        targets = node.targets if isinstance(node, ast.Assign) else ([node.target] if isinstance(node, ast.AnnAssign) else [])
+        # Both forms, kept apart so the narrowing is real rather than a cast:
+        # the canonical module writes `NAME: Final[...] = (...)`, which is an
+        # AnnAssign, and a future edit dropping the annotation would make it
+        # an Assign. Reading `.value` off the common `ast.stmt` would be an
+        # attribute mypy cannot prove exists.
+        if isinstance(node, ast.Assign):
+            targets: list[ast.expr] = list(node.targets)
+            value: ast.expr | None = node.value
+        elif isinstance(node, ast.AnnAssign):
+            # `.value` is optional: `NAME: tuple[str, ...]` with no assignment
+            # is a declaration, and rendering an empty vocabulary from one
+            # would disable the reopen for every terminal status at once.
+            targets = [node.target]
+            value = node.value
+        else:
+            continue
         if not any(isinstance(t, ast.Name) and t.id == CONSTANT for t in targets):
             continue
-        value = node.value
         if not isinstance(value, ast.Tuple):
             raise SystemExit(f"FAIL: {CONSTANT} in {SOURCE_FILE.name} is not a literal tuple; this script cannot render it safely.")
         members: list[str] = []
