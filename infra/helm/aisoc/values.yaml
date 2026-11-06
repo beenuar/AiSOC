@@ -54,6 +54,29 @@ services:
     env: {}
     extraVolumes: []
     extraVolumeMounts: []
+    # Installed plugins (AISOC_PLUGINS_DIR, default /opt/aisoc/plugins) and
+    # the Ed25519 public keys that make signed third-party plugins loadable
+    # (PLUGIN_TRUSTED_KEYS_DIR, default /opt/aisoc/plugin-keys).
+    #
+    # Nothing in this chart mounted either path, and the pod runs with
+    # `readOnlyRootFilesystem: true` — so on Kubernetes installing a plugin
+    # did not merely fail to survive a rollout, it could not write at all.
+    #
+    # Off by default. A PVC needs a storage class and most clusters that
+    # install this never install a plugin, and a chart that cannot install
+    # without a working default StorageClass is worse than one that asks.
+    # Turning it on also makes the API Deployment `Recreate` rather than
+    # `RollingUpdate` when the access mode is ReadWriteOnce, because two
+    # replicas cannot share such a volume across nodes.
+    plugins:
+      persistence:
+        enabled: false
+        size: 5Gi
+        # Empty means the cluster default.
+        storageClass: ""
+        # ReadWriteMany if your storage supports it: with ReadWriteOnce the
+        # API is pinned to one node and rollouts serialise.
+        accessMode: ReadWriteOnce
 
   ingest:
     image:
@@ -754,6 +777,26 @@ redis:
 # ─── Legacy top-level keys (kept for backward compat with core-api-deployment.yaml) ─
 coreApi:
   enabled: false  # Replaced by services.api above
+
+# ─── Schema migrations ────────────────────────────────────────────────────────
+#
+# `helm upgrade --set runMigrations=true` applies the SQL migration chain in a
+# pre-upgrade hook Job before the new code serves traffic.
+#
+# This flag was documented in apps/docs/docs/operations/upgrades.md and existed
+# nowhere else in the repository: no value here, no Job template. `--set` on a
+# value nothing reads is accepted silently, so an operator following the
+# documentation got an upgrade that reported success having applied nothing,
+# then rolled new code onto the previous release's schema.
+#
+# Off by default, deliberately. A schema change is the one operation with no
+# undo, and AiSOC never updates itself: the flag is the operator's consent, the
+# same role `make upgrade` plays on the Compose side.
+#
+# The Job sets AISOC_MIGRATIONS_STRICT=1, so a failed migration fails the hook
+# and aborts the upgrade with the old pods still serving the schema they match.
+# Take a database backup first; the hook cannot roll a migration back.
+runMigrations: false
 
 # ─── Network Policies ─────────────────────────────────────────────────────────
 #

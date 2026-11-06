@@ -134,7 +134,7 @@ jobs:
       - name: Backup script must accept every component the chart can request
         run: |
           set -euo pipefail
-          for c in postgres clickhouse plugins neo4j qdrant redis all; do
+          for c in postgres clickhouse plugins neo4j qdrant redis credential_key all; do
             BACKUP_S3_BUCKET=s3://ci BACKUP_ENCRYPTION=off \
               ./scripts/backup.sh --dry-run --component "$c" >/dev/null \
               || { echo "::error::backup.sh rejected --component $c"; exit 1; }
