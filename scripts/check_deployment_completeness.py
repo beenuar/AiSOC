@@ -82,6 +82,11 @@ COMPOSE_EXEMPT: dict[str, str] = {
     "purple-team": "a full-profile service with its own template",
     "backup": "a CronJob, not a long-running service",
     "kafka-topics": "a one-shot topic-creation Job",
+    "migrations": (
+        "a one-shot pre-upgrade hook Job behind `runMigrations`, with no compose "
+        "counterpart by design: compose applies the chain through `make upgrade` on "
+        "the host rather than as a service"
+    ),
     "core-api": "an optional second API surface with its own template and values block",
     "kafka": "the chart ships its own StatefulSet; compose runs the Confluent image",
     "mcp": (

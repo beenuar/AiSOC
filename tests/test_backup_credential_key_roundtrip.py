@@ -215,6 +215,47 @@ def test_an_export_prefixed_assignment_is_read(harness) -> None:
 
 
 @requires_bash
+def test_plaintext_is_a_live_failure_and_a_dry_run_skip(harness) -> None:
+    """`BACKUP_ENCRYPTION=off` means two different things in the two modes,
+    and collapsing them breaks one of the two.
+
+    A live run must fail: the operator asked for a backup and this component
+    cannot be taken safely, so reporting success would hand them a backup
+    that silently omits the only thing that makes the dump usable.
+
+    A dry run must not: nothing was going to be uploaded either way, so
+    exiting 1 would make `--dry-run` useless as the configuration check it
+    exists to be — which is exactly what it broke, in `terraform-ci.yml`'s
+    "Backup script must accept every component the chart can request" step.
+    Reported either way; the difference is the exit code, never the silence.
+    """
+    tmp_path, env = harness
+    off = {**env, "BACKUP_ENCRYPTION": "off", "AISOC_CREDENTIAL_KEY": _key()}
+
+    live = subprocess.run(
+        ["bash", str(BACKUP), "--component", "credential_key"],
+        capture_output=True,
+        text=True,
+        env=off,
+    )
+    assert live.returncode != 0, f"a live run uploaded, or claimed to:\n{live.stdout}"
+    assert not list(Path(env["FAKE_BUCKET"]).rglob("credential-key-*")), "something was uploaded"
+
+    rehearsal = subprocess.run(
+        ["bash", str(BACKUP), "--dry-run", "--component", "all"],
+        capture_output=True,
+        text=True,
+        env=off,
+    )
+    assert rehearsal.returncode == 0, (
+        f"`--dry-run` failed, so it cannot serve as a configuration check:\n{rehearsal.stdout}\n{rehearsal.stderr}"
+    )
+    assert "BACKUP_ENCRYPTION=off" in rehearsal.stderr, (
+        "the dry run passed silently; an operator would not learn that the credential key is being left out of their backups"
+    )
+
+
+@requires_bash
 def test_backup_falls_back_to_dot_env_when_the_variable_is_unset(harness) -> None:
     """A cron-driven backup does not inherit the operator's shell, so reading
     `.env` is the normal path rather than the fallback."""

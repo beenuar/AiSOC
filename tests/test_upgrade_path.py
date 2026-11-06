@@ -95,6 +95,11 @@ def _recipe(target: str, _seen: frozenset[str] = frozenset()) -> str:
             try:
                 out.append(_recipe(sub, seen))
             except AssertionError:
+                # Deliberate, and the same case as above: a prerequisite that
+                # resolves to no target in this file (a variable, or one
+                # defined by an include) contributes nothing to inline. The
+                # comment lives inside the clause because `py/empty-except`
+                # cannot see one placed after the block.
                 pass
     return "".join(out)
 

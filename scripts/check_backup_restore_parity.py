@@ -73,8 +73,8 @@ _RESTORE_FN = re.compile(r"^restore_([a-z0-9_]+)\(\)", re.MULTILINE)
 #: had written the reasons down because nobody had noticed.
 EXEMPT: dict[str, str] = {}
 
-#: Components whose artifact IS the secret, rather than data protected by
-#: one — so ``BACKUP_ENCRYPTION=off`` has to be refused rather than
+#: Components whose artifact IS the key material, rather than data that
+#: such a key protects — so ``BACKUP_ENCRYPTION=off`` has to be refused rather than
 #: honoured.
 #:
 #: Name-pairing alone cannot see this. ``backup_credential_key`` and
@@ -152,32 +152,32 @@ def main() -> int:
         print(f"FAIL [stale-exemption] {store!r} is exempted ({EXEMPT[store]}) and is no longer backed up")
 
     plaintext: list[str] = []
-    stale_secret_claims: list[str] = []
+    stale_mandatory: list[str] = []
     for store, why in MUST_BE_ENCRYPTED.items():
         if store not in backed_up:
-            stale_secret_claims.append(store)
+            stale_mandatory.append(store)
             continue
         body = _function_body(backup_text, f"backup_{store}")
         if body is None or not _REFUSES_PLAINTEXT.search(body):
             plaintext.append(store)
             print(
-                f"FAIL [plaintext-secret] `backup_{store}` does not refuse "
+                f"FAIL [plaintext-key-material] `backup_{store}` does not refuse "
                 f"BACKUP_ENCRYPTION=off, and {why}. Encryption is the only control "
                 "standing between a bucket reader and the cleartext, so for this "
                 "component it cannot be optional."
             )
-    for store in stale_secret_claims:
+    for store in stale_mandatory:
         print(
-            f"FAIL [stale-secret-claim] {store!r} is listed as secret-bearing and is "
-            "no longer backed up — remove it from MUST_BE_ENCRYPTED or restore the component"
+            f"FAIL [stale-mandatory-encryption] {store!r} is listed as requiring encryption "
+            "and is no longer backed up — remove it from MUST_BE_ENCRYPTED or restore the component"
         )
 
-    if missing or stale_exemptions or plaintext or stale_secret_claims:
+    if missing or stale_exemptions or plaintext or stale_mandatory:
         return 1
 
     print(
         f"check_backup_restore_parity: OK — {len(backed_up)} store(s) backed up, all restorable "
-        f"({', '.join(sorted(backed_up))}); {len(MUST_BE_ENCRYPTED)} secret-bearing component(s) refuse plaintext upload"
+        f"({', '.join(sorted(backed_up))}); {len(MUST_BE_ENCRYPTED)} component(s) carrying key material refuse plaintext upload"
     )
     return 0
 

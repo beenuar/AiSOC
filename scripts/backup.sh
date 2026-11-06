@@ -619,13 +619,27 @@ backup_credential_key() {
 
   # Refuses rather than downgrading. This is the only component where
   # unencrypted upload turns the backup itself into the vulnerability.
+  #
+  # A dry run reports it and does not fail, for the same reason unreachable()
+  # exists: a dry run is a configuration check, and nothing was going to be
+  # uploaded either way, so exiting 1 would make --dry-run useless for the
+  # thing it is for. A live run is a genuine failure — the operator asked for
+  # a backup and one component of it cannot be taken safely.
   if [[ "$BACKUP_ENCRYPTION" == "off" ]]; then
-    fail "BACKUP_ENCRYPTION=off: refusing to upload the credential vault key in plaintext."
+    local verdict="[ERROR]"
+    if [[ "$DRY_RUN" == "true" ]]; then
+      verdict="[skip]"
+      SKIPS=$((SKIPS + 1))
+      echo "[skip] BACKUP_ENCRYPTION=off: the credential vault key would NOT be captured." >&2
+    else
+      fail "BACKUP_ENCRYPTION=off: refusing to upload the credential vault key in plaintext."
+    fi
     echo "        The Postgres dump beside it holds the vault:v1: tokens this key opens," >&2
     echo "        so writing both unencrypted makes the bucket's read ACL the only thing" >&2
     echo "        protecting every connector credential in the deployment." >&2
     echo "        Set BACKUP_ENCRYPTION_KEY_FILE and retry, or accept that a restore" >&2
     echo "        will not be able to decrypt any stored credential." >&2
+    [[ "$verdict" == "[skip]" ]] && log "  (dry run: reported, not failed)"
     return
   fi
 
