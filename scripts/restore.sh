@@ -11,6 +11,12 @@
 # aborts: restoring a corrupted dump is worse than not restoring, because it
 # looks like it worked.
 #   3. Plugin store (download + extract artifacts)
+#   4. Credential key (download + verify + decrypt + reconcile with .env)
+#
+# (4) is what makes the rest of it usable. The Postgres dump carries
+# `vault:v1:` tokens for every connector credential, and AISOC_CREDENTIAL_KEY
+# is the only thing that decrypts them — a restore without it brings the
+# deployment back with every connector raising CredentialVaultError.
 #
 # Required environment variables (same as backup.sh):
 #   BACKUP_S3_BUCKET      — s3://your-bucket or r2://your-bucket
@@ -27,9 +33,11 @@
 #
 # Usage:
 #   ./scripts/restore.sh --timestamp 20260503T120000Z \
-#       [--component postgres|clickhouse|plugins|neo4j|qdrant|redis|all]
+#       [--component postgres|clickhouse|plugins|neo4j|qdrant|redis|credential_key|all]
 #   ./scripts/restore.sh --latest [--component all]
-#   ./scripts/restore.sh --list   # show available backups
+#   ./scripts/restore.sh --list      # show available backups
+#   ./scripts/restore.sh --latest --dry-run   # rehearse: fetch, verify and
+#                                    # decrypt everything, write to nothing
 
 set -euo pipefail
 
@@ -46,6 +54,15 @@ TIMESTAMP=""
 COMPONENT="all"
 DO_LIST=false
 USE_LATEST=false
+# Three functions — restore_neo4j, restore_qdrant and restore_redis — branch
+# on this and nothing ever set it, so under `set -euo pipefail` each died with
+# `DRY_RUN: unbound variable` at the line that decides whether the run is a
+# rehearsal. They are the three wave 15 added precisely because a backup
+# nobody can restore is a backup nobody has proven they can use, and the crash
+# only fires once the artifact is actually present — so it arrived during a
+# real recovery and never during a rehearsal. There was no `--dry-run` arm
+# either, so the flag could not be set even deliberately.
+DRY_RUN=false
 RESTORE_DIR="/tmp/aisoc-restore-$$"
 
 # ── arg parsing ───────────────────────────────────────────────────────────────
@@ -55,6 +72,11 @@ while [[ $# -gt 0 ]]; do
     --component)  COMPONENT="$2"; shift ;;
     --latest)     USE_LATEST=true ;;
     --list)       DO_LIST=true ;;
+    # Rehearse: fetch, verify and decrypt every artifact, and stop short of
+    # writing to any store. An unreachable store is a skip here and not a
+    # failure, the same way it is in backup.sh — a rehearsal an operator
+    # cannot run from a laptop is a rehearsal nobody runs.
+    --dry-run)    DRY_RUN=true ;;
     *)            echo "Unknown arg: $1"; exit 1 ;;
   esac
   shift
@@ -67,10 +89,38 @@ require() {
   command -v "$1" &>/dev/null || { echo "Missing required command: $1" >&2; exit 1; }
 }
 
+# Reads one assignment out of a .env file; last one wins. Kept byte-identical
+# to backup.sh's copy on purpose — the two have to agree about which value is
+# "the configured key" or the comparison in restore_credential_key is between
+# two different questions.
+#
+# python3 rather than sed: BSD sed, which is what macOS provides, does not
+# accept `\+` or `\?` in a basic regex. The sed version returned empty on
+# every macOS host, and empty reads as "no key configured" — the branch that
+# writes. A live run overwrote a key it was supposed to refuse to touch.
+env_value() {
+  python3 - "$1" "$2" <<'PYEOF'
+import sys
+path, key = sys.argv[1:3]
+found = ""
+with open(path, encoding="utf-8", errors="replace") as handle:
+    for raw in handle:
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[len("export ") :].lstrip()
+        name, sep, value = line.partition("=")
+        if sep and name.strip() == key:
+            found = value.strip().strip("\"'")
+print(found)
+PYEOF
+}
+
 s3_args() {
   local args=()
   [[ -n "${AWS_ENDPOINT_URL:-}" ]] && args+=(--endpoint-url "$AWS_ENDPOINT_URL")
-  echo "${args[@]}"
+  echo ${args[@]+"${args[@]}"}
 }
 
 s3_ls() {
@@ -511,14 +561,110 @@ restore_redis() {
   log "Redis: RDB restored and the server restarted"
 }
 
+# ── Credential key ────────────────────────────────────────────────────────────
+# The key that decrypts every `vault:v1:` token the Postgres dump just
+# restored. Without it the rows come back and every connector raises
+# CredentialVaultError on its first poll.
+#
+# This deliberately does not write `.env` unconditionally. Three cases, and
+# only one of them is safe to do silently:
+#
+#   absent or empty in .env   the recovery case. Written, so the restore
+#                             actually completes.
+#   byte-identical            nothing to do.
+#   present and different     REFUSED. Overwriting it would orphan whatever
+#                             this deployment has encrypted under the current
+#                             key — the same defect as the one being fixed,
+#                             pointed the other way. The decrypted key is left
+#                             on disk at mode 600 and the operator decides.
+restore_credential_key() {
+  log "--- Credential key restore ---"
+  local base="credential-key-${TIMESTAMP}.json"
+  local local_file="${RESTORE_DIR}/${base}"
+
+  if ! fetch_artifact "${BACKUP_S3_BUCKET}/${BACKUP_S3_PREFIX}/credential-key" "$base" "$local_file"; then
+    log "No credential key in the ${TIMESTAMP} backup."
+    log "  If this deployment has stored connector credentials, they will NOT"
+    log "  decrypt: the vault key is not in this backup. Recover it from the"
+    log "  .env of the host the backup was taken on."
+    return
+  fi
+  chmod 600 "$local_file" 2>/dev/null || true
+
+  local repo_root env_file restored current
+  repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  env_file="${AISOC_ENV_FILE:-${repo_root}/.env}"
+
+  restored=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['AISOC_CREDENTIAL_KEY'])" "$local_file" 2>/dev/null || echo "")
+  if [[ -z "$restored" ]]; then
+    echo "[ERROR] The credential-key artifact carries no AISOC_CREDENTIAL_KEY." >&2
+    return 1
+  fi
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    log "[dry-run] Would reconcile the vault key against ${env_file}"
+    return
+  fi
+
+  current=""
+  if [[ -f "$env_file" ]]; then
+    current=$(env_value "$env_file" AISOC_CREDENTIAL_KEY)
+  fi
+
+  if [[ -n "$current" ]] && [[ "$current" != "$restored" ]]; then
+    # Never prints either value.
+    echo "[ERROR] ${env_file} already has a DIFFERENT AISOC_CREDENTIAL_KEY." >&2
+    echo "        Not overwriting it: anything this deployment has encrypted under" >&2
+    echo "        the current key would stop decrypting, which is the same failure" >&2
+    echo "        this component exists to prevent, in the other direction." >&2
+    echo "        The backup's key is at ${local_file} (mode 600). Decide which" >&2
+    echo "        deployment's credentials you are recovering, then set it by hand." >&2
+    return 1
+  fi
+
+  if [[ "$current" == "$restored" ]]; then
+    log "  ${env_file} already holds this key; nothing to do."
+    return
+  fi
+
+  touch "$env_file" && chmod 600 "$env_file"
+  if grep -qE '^[[:space:]]*(export[[:space:]]+)?AISOC_CREDENTIAL_KEY=' "$env_file"; then
+    # In-place via python rather than sed -i, whose flag differs between
+    # GNU and BSD and would silently create a `.env-e` on macOS.
+    AISOC_RESTORED_KEY="$restored" python3 - "$env_file" <<'PYEOF'
+import os, pathlib, re, sys
+p = pathlib.Path(sys.argv[1])
+pattern = re.compile(r"^(\s*(?:export\s+)?AISOC_CREDENTIAL_KEY\s*=).*$", re.MULTILINE)
+p.write_text(pattern.sub(lambda m: m.group(1) + os.environ["AISOC_RESTORED_KEY"], p.read_text(), count=1))
+PYEOF
+  else
+    printf '\n# Restored by scripts/restore.sh — the vault key the backup was taken with.\nAISOC_CREDENTIAL_KEY=%s\n' "$restored" >> "$env_file"
+  fi
+
+  local rotation
+  rotation=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('AISOC_CREDENTIAL_KEY_ROTATION_FROM',''))" "$local_file" 2>/dev/null || echo "")
+  if [[ -n "$rotation" ]]; then
+    log "  The backup also carries a rotation key. It is at ${local_file};"
+    log "  set AISOC_CREDENTIAL_KEY_ROTATION_FROM from it if tokens predate the"
+    log "  last rotation."
+  fi
+
+  log "  Vault key written to ${env_file}. Restart the stack for it to take effect."
+}
+
 case "$COMPONENT" in
-  postgres)   restore_postgres ;;
-  clickhouse) restore_clickhouse ;;
-  plugins)    restore_plugins ;;
-  neo4j)      restore_neo4j ;;
-  qdrant)     restore_qdrant ;;
-  redis)      restore_redis ;;
+  postgres)       restore_postgres ;;
+  clickhouse)     restore_clickhouse ;;
+  plugins)        restore_plugins ;;
+  neo4j)          restore_neo4j ;;
+  qdrant)         restore_qdrant ;;
+  redis)          restore_redis ;;
+  credential_key) restore_credential_key ;;
   all)
+    # The key first. Everything after it restores data encrypted under it,
+    # and a run that dies part-way should not leave the tokens recovered and
+    # the key that opens them still in the bucket.
+    restore_credential_key
     restore_postgres
     restore_clickhouse
     restore_plugins
@@ -529,7 +675,7 @@ case "$COMPONENT" in
     restore_redis
     ;;
   *)
-    echo "Unknown component: $COMPONENT (choose: postgres|clickhouse|plugins|neo4j|qdrant|redis|all)" >&2
+    echo "Unknown component: $COMPONENT (choose: postgres|clickhouse|plugins|neo4j|qdrant|redis|credential_key|all)" >&2
     exit 1
     ;;
 esac

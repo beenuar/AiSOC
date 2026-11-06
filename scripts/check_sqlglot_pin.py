@@ -51,6 +51,11 @@ DECLARING_FILES = (
     ".github/workflows/cross-tenant-rbac.yml",
     ".github/workflows/check-openapi.yml",
     ".github/workflows/reproducible-builds.yml",
+    # Added when `upgrade-test.yml` lost its path filters and became a
+    # required check (#1730). It installs the API's dependencies to run the
+    # migration runner, sqlglot among them, so it is an install path like any
+    # other and the pin has to agree here too.
+    ".github/workflows/upgrade-test.yml",
 )
 
 # `lake-isolation.yml` installs sqlglot from a build matrix, deliberately
