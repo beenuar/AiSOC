@@ -175,6 +175,16 @@ def _orm_statuses_written_in(path: Path) -> set[str]:
 #: entry names a file whose list is *not* a classification of open-versus-done.
 READER_EXEMPT: dict[str, str] = {
     "services/api/app/scripts/seed_demo.py": ("picks a spread of states for demo rows; it classifies nothing and reads nothing back"),
+    # Not a second opinion about what "finished" means — it is the canonical
+    # tuple, rendered into the fusion build context by
+    # `scripts/sync_vendored_alert_status.py`, whose `--check` arm fails CI
+    # the moment the two disagree. Fusion cannot import across the service
+    # boundary (its Docker context is `services/fusion`), and a byte-identical
+    # copy of the whole module would drag SQLAlchemy onto the alert hot path
+    # for a five-element tuple.
+    "services/fusion/app/services/alert_status.py": (
+        "generated from the canonical module and held identical by scripts/sync_vendored_alert_status.py --check"
+    ),
 }
 
 

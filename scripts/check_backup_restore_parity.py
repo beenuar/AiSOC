@@ -73,6 +73,52 @@ _RESTORE_FN = re.compile(r"^restore_([a-z0-9_]+)\(\)", re.MULTILINE)
 #: had written the reasons down because nobody had noticed.
 EXEMPT: dict[str, str] = {}
 
+#: Components whose artifact IS the key material, rather than data that
+#: such a key protects — so ``BACKUP_ENCRYPTION=off`` has to be refused rather than
+#: honoured.
+#:
+#: Name-pairing alone cannot see this. ``backup_credential_key`` and
+#: ``restore_credential_key`` would satisfy every check above while
+#: uploading the vault key in plaintext into the same bucket as the
+#: ``vault:v1:`` tokens it opens, which makes the backup itself the
+#: vulnerability: one bucket read would hand over every connector
+#: credential in the deployment. The other five components hold data that
+#: encryption protects; this one holds the thing that does the protecting,
+#: and the distinction is why it needs its own arm.
+MUST_BE_ENCRYPTED: dict[str, str] = {
+    "credential_key": (
+        "the artifact is AISOC_CREDENTIAL_KEY itself, and the Postgres dump "
+        "beside it in the same bucket is full of the vault:v1: tokens it decrypts"
+    ),
+}
+
+#: How a function says it refuses. Matched as source text rather than by
+#: running the script, because running `backup.sh` needs a bucket, a
+#: database and a key.
+_REFUSES_PLAINTEXT = re.compile(r"BACKUP_ENCRYPTION\"?\s*(?:==|=)\s*\"?off", re.IGNORECASE)
+
+
+def _function_body(text: str, name: str) -> str | None:
+    """One shell function, delimited by brace depth.
+
+    Depth rather than a closing brace at column zero: a ``case`` arm or a
+    subshell inside the function carries its own, and matching the first
+    one would read a fragment and report whatever it happened to contain.
+    """
+    marker = f"{name}() {{"
+    start = text.find(marker)
+    if start < 0:
+        return None
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return None
+
 
 def main() -> int:
     if not BACKUP.is_file() or not RESTORE.is_file():
@@ -85,7 +131,8 @@ def main() -> int:
         )
         return 2
 
-    backed_up = set(_BACKUP_FN.findall(BACKUP.read_text(encoding="utf-8")))
+    backup_text = BACKUP.read_text(encoding="utf-8")
+    backed_up = set(_BACKUP_FN.findall(backup_text))
     restorable = set(_RESTORE_FN.findall(RESTORE.read_text(encoding="utf-8")))
 
     if not backed_up:
@@ -104,10 +151,34 @@ def main() -> int:
     for store in stale_exemptions:
         print(f"FAIL [stale-exemption] {store!r} is exempted ({EXEMPT[store]}) and is no longer backed up")
 
-    if missing or stale_exemptions:
+    plaintext: list[str] = []
+    stale_mandatory: list[str] = []
+    for store, why in MUST_BE_ENCRYPTED.items():
+        if store not in backed_up:
+            stale_mandatory.append(store)
+            continue
+        body = _function_body(backup_text, f"backup_{store}")
+        if body is None or not _REFUSES_PLAINTEXT.search(body):
+            plaintext.append(store)
+            print(
+                f"FAIL [plaintext-key-material] `backup_{store}` does not refuse "
+                f"BACKUP_ENCRYPTION=off, and {why}. Encryption is the only control "
+                "standing between a bucket reader and the cleartext, so for this "
+                "component it cannot be optional."
+            )
+    for store in stale_mandatory:
+        print(
+            f"FAIL [stale-mandatory-encryption] {store!r} is listed as requiring encryption "
+            "and is no longer backed up — remove it from MUST_BE_ENCRYPTED or restore the component"
+        )
+
+    if missing or stale_exemptions or plaintext or stale_mandatory:
         return 1
 
-    print(f"check_backup_restore_parity: OK — {len(backed_up)} store(s) backed up, all restorable ({', '.join(sorted(backed_up))})")
+    print(
+        f"check_backup_restore_parity: OK — {len(backed_up)} store(s) backed up, all restorable "
+        f"({', '.join(sorted(backed_up))}); {len(MUST_BE_ENCRYPTED)} component(s) carrying key material refuse plaintext upload"
+    )
     return 0
 
 

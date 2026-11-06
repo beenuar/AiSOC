@@ -32,6 +32,7 @@ import structlog
 
 from app.core.config import settings
 from app.models.alert import FusedAlert, FusionDecision
+from app.services.alert_status import RESOLVED_STATUSES
 
 logger = structlog.get_logger()
 
@@ -70,6 +71,15 @@ class PersistResult:
     alert_id: str | None = None
     retryable: bool = False
     verified: bool = True
+
+    #: True when this repeat returned a closed alert to the queue
+    #: (GHSA-qp9f-459j-w89c). Distinct from the outcome, which stays
+    #: ``DUPLICATE``: no row was inserted, and a caller counting inserts must
+    #: not start counting these. It is surfaced rather than left to the log
+    #: because "a closed alert came back" is the event an operator wants a
+    #: number for, and a reopen that only exists in a log line is one nobody
+    #: can alert on.
+    reopened: bool = False
 
     @property
     def persisted(self) -> bool:
@@ -330,6 +340,50 @@ UPDATE root_cause_findings f
 #: `_MAX_SOURCE_EVENT_IDS`: two bounded lists of ids on one alert that
 #: disagreed about their length would be a question nobody can answer.
 _MAX_OCCURRENCE_PAYLOAD_IDS = 200
+
+#: Return a closed alert to the queue when its detection fires again.
+#:
+#: GHSA-qp9f-459j-w89c. The `WHERE NOT EXISTS` in `_INSERT_SQL` carries no
+#: status, so a closed row absorbed every later firing of the same detection
+#: and no open alert was ever created: an attacker who tripped a detection,
+#: waited for the alert to be closed and repeated the activity was invisible
+#: to the queue. Reopening is the only remedy the schema permits — migration
+#: 120's `uq_alerts_tenant_dedup` is UNIQUE per `(tenant_id, dedup_hash)`, so
+#: there is no second row to insert — and migration 160 explains why that is
+#: also the remedy worth having.
+#:
+#: Three properties the statement holds, so no caller has to remember them:
+#:
+#: * **`status = ANY($3)` is the open-alert control, not an optimisation.**
+#:   An alert that is already open matches nothing, so the row is untouched:
+#:   no status churn, no reopen counted, and firing twice while open still
+#:   produces exactly one row. Widening this predicate would fix recurrence
+#:   by breaking dedup, which is the trade the reporter explicitly ruled out.
+#:   It also protects work in flight — an alert an analyst has moved to
+#:   `triaging` is not dragged back to `new` by a repeat.
+#: * **`resolved_at` goes back to NULL.** It is a claim of fact rather than a
+#:   judgement, and the MTTR average subtracts it from `created_at` without
+#:   consulting `status`; leaving it set would count an open alert as
+#:   resolved. `disposition` is deliberately left alone — see migration 160.
+#: * **The reason names the status being overturned.** In an UPDATE, the
+#:   right-hand side sees the pre-update row, so `|| status` captures what
+#:   the alert had been closed as before this statement changes it.
+#:
+#: `RETURNING` carries the new count so the reopen can be logged as the
+#: analyst-visible state change it is, rather than happening silently.
+_REOPEN_CLOSED_ALERT_SQL = """
+UPDATE alerts
+   SET status = 'new',
+       resolved_at = NULL,
+       reopened_at = NOW(),
+       reopen_count = reopen_count + 1,
+       reopen_reason = 'recurrence: the detection fired again after this alert was closed as ' || status,
+       updated_at = NOW()
+ WHERE tenant_id = $1
+   AND dedup_hash = $2::text
+   AND status = ANY($3::text[])
+RETURNING id, reopen_count
+"""
 
 # The reconciliation row the two-way SIEM loop reads. Written here rather than
 # from the API because fusion is the only place that holds the alert id, the
@@ -713,8 +767,8 @@ class AlertSink:
         if is_duplicate:
             existing_id = await self._surviving_alert_id(conn, alert)
             if existing_id is not None:
-                await self._record_deduplicated_event(conn, alert)
-                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id))
+                reopened = await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id), reopened=reopened)
 
         try:
             row = await conn.fetchrow(_INSERT_SQL, *_insert_args(fused))
@@ -753,8 +807,8 @@ class AlertSink:
                     tenant_id=str(alert.tenant_id),
                     fingerprint=alert.fingerprint(),
                 )
-                await self._record_deduplicated_event(conn, alert)
-                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id))
+                reopened = await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id), reopened=reopened)
             # The winner's row is not visible: it was rolled back, deleted, or
             # the read is looking at a different snapshot. Do not claim
             # durability; the consumer retries.
@@ -772,8 +826,8 @@ class AlertSink:
             existing_id = await self._surviving_alert_id(conn, alert)
             if existing_id is not None:
                 logger.debug("alert_sink.dedup_skip", fingerprint=alert.fingerprint())
-                await self._record_deduplicated_event(conn, alert)
-                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id))
+                reopened = await self._record_deduplicated_event(conn, alert)
+                return PersistResult(PersistOutcome.DUPLICATE, str(existing_id), reopened=reopened)
             if is_duplicate:
                 # The hint said duplicate, but neither row nor insert exists.
                 # Do not report durability: a retry can settle the race.
@@ -949,7 +1003,70 @@ class AlertSink:
         except Exception as exc:  # noqa: BLE001 — the finding is not worth the alert
             logger.warning("alert_sink.root_cause_link_failed", error=str(exc))
 
-    async def _record_deduplicated_event(self, conn: Any, alert: Any) -> None:
+    async def _reopen_if_closed(self, conn: Any, alert: Any) -> bool:
+        """Return a closed alert to the queue when its detection fires again.
+
+        GHSA-qp9f-459j-w89c. Called from `_record_deduplicated_event`, which
+        is the one point all three dedup paths converge on (the fusion
+        DUPLICATE verdict, the unique-index race, and the `WHERE NOT EXISTS`
+        filter), so a future fourth path is governed by default rather than
+        by remembering to add a call.
+
+        Not best-effort, unlike the provenance writes beside it, and the
+        difference is deliberate: a dropped occurrence count costs a number
+        on a dashboard, whereas a dropped reopen leaves the recurrence
+        invisible, which is the vulnerability itself. So the two failure
+        classes are separated rather than both swallowed:
+
+        * **transient** (connection lost, timeout, deadlock) re-raises, so
+          the caller returns a retryable result and the consumer redelivers.
+          The reopen is idempotent in the sense that matters — a second
+          attempt against an alert that is open again matches nothing — and
+          the count is guarded by that same predicate, so a redelivery
+          cannot inflate it;
+        * **permanent** (migration 160 not applied, so the columns do not
+          exist) is logged at error naming the operator action and does not
+          re-raise. Wedging the entire alert pipeline behind a missing
+          migration would turn a missing-reopen defect into a total outage,
+          and a loop that retries a fault no retry can clear is the failure
+          mode this repository keeps paying for.
+        """
+        try:
+            row = await conn.fetchrow(
+                _REOPEN_CLOSED_ALERT_SQL,
+                alert.tenant_id,
+                alert.fingerprint(),
+                list(RESOLVED_STATUSES),
+            )
+        except Exception as exc:  # noqa: BLE001 — classified below, never silently dropped
+            if _is_retryable_db_error(exc):
+                raise
+            logger.error(
+                "alert_sink.reopen_failed",
+                error=str(exc),
+                tenant_id=str(alert.tenant_id),
+                fingerprint=alert.fingerprint(),
+                action="apply migration 160_alert_reopen_on_recurrence.sql; until then a detection that "
+                "fires again after its alert was closed will not return to the queue",
+            )
+            return False
+
+        if row is None:
+            # The alert is open, so there is nothing to reopen. The ordinary
+            # case, and the control: a repeat against an open alert must
+            # change nothing at all.
+            return False
+
+        logger.info(
+            "alert_sink.alert_reopened_on_recurrence",
+            alert_id=str(row["id"]),
+            tenant_id=str(alert.tenant_id),
+            reopen_count=row["reopen_count"],
+            fingerprint=alert.fingerprint(),
+        )
+        return True
+
+    async def _record_deduplicated_event(self, conn: Any, alert: Any) -> bool:
         """Keep a folded-away repeat, as provenance and as a counted occurrence.
 
         Two writes with different scopes, and the difference is the Phase 3.3
@@ -965,7 +1082,12 @@ class AlertSink:
         provenance entry is worth one statement, never the verdict the caller
         is about to return. A failure here must not turn a correct DUPLICATE
         into a FAILED.
+
+        The reopen is the exception and runs first — it is a security control
+        rather than provenance, and it is the reason this method returns a
+        value. See `_reopen_if_closed`.
         """
+        reopened = await self._reopen_if_closed(conn, alert)
         ids = [i for i in (alert.source_event_ids or []) if i]
         fingerprint = alert.fingerprint()
         if ids:
@@ -997,6 +1119,8 @@ class AlertSink:
             )
         except Exception as exc:  # noqa: BLE001 — the count is not worth the alert
             logger.warning("alert_sink.occurrence_record_failed", error=str(exc))
+
+        return reopened
 
     async def _link_source_finding(self, pool: asyncpg.Pool, alert: Any, *, alert_id: Any) -> None:
         """Record which vendor finding produced this alert, when there is one.

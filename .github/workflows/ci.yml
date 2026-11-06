@@ -529,6 +529,18 @@ jobs:
       # locally if this check fails.
       - name: Verify vendored narrative builder is in sync
         run: python scripts/sync_vendored_narrative.py --check
+      # `app.services.alert_status` owns which statuses mean an alert is
+      # finished. Fusion's alert sink needs that list to decide whether a
+      # repeat should reopen a closed alert (GHSA-qp9f-459j-w89c), and it
+      # cannot import across the service boundary — its Docker build context
+      # is `services/fusion`. The vendored copy is rendered rather than
+      # byte-copied, because the canonical module pulls in SQLAlchemy for two
+      # query helpers fusion has no use for. If this fails, the console and
+      # fusion disagree about what "closed" means, which either misses a
+      # recurrence or churns an alert an analyst is working. Re-run
+      # `python scripts/sync_vendored_alert_status.py` locally to fix.
+      - name: Verify vendored alert-status vocabulary is in sync
+        run: python scripts/sync_vendored_alert_status.py --check
       # The fifth vendored mirror, and the only one that had no gate. The
       # redactor strips internal IPs, emails, paths and secret-shaped strings
       # before untrusted text reaches a prompt; a copy that silently drifts
