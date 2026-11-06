@@ -252,3 +252,53 @@ def test_tenant_binding_accepts_a_uuid_typed_tenant(monkeypatch, tmp_path):
     _configure(monkeypatch, mint, tmp_path)
     badge = mint.mint(capability_set=["isolate_host"], tenant_id=str(tenant))
     vaid_verifier.verify_badge_for_dispatch(badge, "isolate_host", tenant_id=tenant)  # must not raise
+
+
+# ── Startup check: fails at boot, not at the first dispatch ──────────────
+# beenuar/AiSOC#1739 follow-up, verify-side counterpart of the agents
+# service's mint-side `preflight_or_raise`.
+
+
+def test_preflight_is_a_no_op_when_the_plugin_is_disabled():
+    vaid_verifier.preflight_or_raise()  # must not raise
+
+
+def test_preflight_refuses_when_no_kernel_public_key_is_configured(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    mint = _Mint()
+    _configure(monkeypatch, mint, tmp_path)
+    monkeypatch.delenv(vaid_verifier._KERNEL_PUBLIC_KEY_ENV, raising=False)
+
+    with pytest.raises(vaid_verifier.BadgeDenied, match=vaid_verifier._KERNEL_PUBLIC_KEY_ENV):
+        vaid_verifier.preflight_or_raise()
+
+
+def test_preflight_refuses_when_no_revocation_list_is_configured(monkeypatch):
+    """The gap named in the pull request: enabling the plugin with no
+    `AISOC_VAID_REVOCATION_LIST_PATH` used to refuse every dispatch, live.
+    This must refuse at startup instead."""
+    _enable(monkeypatch)
+    mint = _Mint()
+    monkeypatch.setenv(vaid_verifier._KERNEL_PUBLIC_KEY_ENV, mint.public_key_hex())
+
+    with pytest.raises(vaid_verifier.BadgeDenied, match=vaid_verifier._REVOCATION_LIST_PATH_ENV):
+        vaid_verifier.preflight_or_raise()
+
+
+def test_preflight_refuses_when_the_revocation_list_file_is_malformed(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    mint = _Mint()
+    monkeypatch.setenv(vaid_verifier._KERNEL_PUBLIC_KEY_ENV, mint.public_key_hex())
+    bad_path = tmp_path / "revoked.json"
+    bad_path.write_text("not json")
+    monkeypatch.setenv(vaid_verifier._REVOCATION_LIST_PATH_ENV, str(bad_path))
+
+    with pytest.raises(vaid_verifier.BadgeDenied, match=vaid_verifier._REVOCATION_LIST_PATH_ENV):
+        vaid_verifier.preflight_or_raise()
+
+
+def test_preflight_passes_when_the_plugin_is_fully_configured(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    mint = _Mint()
+    _configure(monkeypatch, mint, tmp_path)
+    vaid_verifier.preflight_or_raise()  # must not raise

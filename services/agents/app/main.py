@@ -39,7 +39,7 @@ from app.investigator import run_reaper as investigation_run_reaper
 from app.llm.factory import preflight_llm
 from app.playbook import PlaybookStore
 from app.playbook import sweeper as playbook_sweeper
-from app.security import session_revocation
+from app.security import session_revocation, vaid_plugin
 from app.security.tenant_scope import set_revocation_check
 from app.tools.mitre_full import embed_techniques_into_qdrant, load_attck_corpus
 from app.workers.business_context import BusinessContextApplier
@@ -70,6 +70,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # the one service that both needs the check and can answer it, so it
     # registers the answer rather than the module reaching for one.
     set_revocation_check(session_revocation.check)
+
+    # beenuar/AiSOC#1739 follow-up. Unlike the best-effort blocks below, this
+    # one is allowed to fail startup: a misconfigured VAID plugin left
+    # running IS the outage this exists to prevent — "every tool call
+    # refuses, discovered live" — just moved from boot time to the first
+    # investigation. A no-op when the plugin is disabled (the default).
+    vaid_plugin.preflight_or_raise()
 
     # Seed playbook store with default templates
     try:

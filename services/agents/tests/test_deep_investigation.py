@@ -240,6 +240,93 @@ class TestFailuresAreLegible:
         assert result.error and "disabled" in result.error
 
 
+class TestVaidBadgeMinting:
+    """beenuar/AiSOC#1739 follow-up: mint a VAID badge on the real agent
+    path, and re-mint it when scope narrows.
+
+    `issue_identity("investigation", ...)` here is the one real caller in
+    this service — `scripts/check_module_reachability.py`'s now-removed
+    allowlist entry for `app/security/vaid_plugin.py` named this exact gap:
+    "nothing in app/orchestrator, app/investigator or service startup mints
+    a VaidBackedIdentity". This is that call site.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _vaid_env(self, monkeypatch: pytest.MonkeyPatch):
+        pytest.importorskip("vaid_mint", reason="optional VAID plugin dependency — install the 'vaid' extra to run this suite")
+        from app.security import vaid_plugin
+
+        monkeypatch.delenv(vaid_plugin._ENABLED_ENV, raising=False)
+        # Single-process test, same reasoning as test_vaid_plugin.py's fixture.
+        monkeypatch.setenv(vaid_plugin._ALLOW_EPHEMERAL_SEED_ENV, "true")
+        vaid_plugin.reset_issuer_for_tests()
+        yield
+        vaid_plugin.reset_issuer_for_tests()
+
+    async def test_disabled_mints_a_plain_agent_identity_exactly_as_before(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Negative control for the off-by-default proof: with the plugin
+        disabled (the default), this is still exactly `issue_identity(...)`
+        — same type, no VAID machinery touched at all."""
+        from app.security.agent_identity import AgentIdentity
+
+        loop = StubLoop([])
+        monkeypatch.setattr(module, "run_with_tools", loop)
+        await run_deep_investigation(FakeState(), llm=object())
+
+        identity = loop.calls[0]["identity"]
+        assert type(identity) is AgentIdentity  # not a VaidBackedIdentity subclassing it
+
+    async def test_enabled_mints_a_vaid_backed_identity_for_the_investigator(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.security import vaid_plugin
+
+        monkeypatch.setenv(vaid_plugin._ENABLED_ENV, "true")
+        loop = StubLoop([])
+        monkeypatch.setattr(module, "run_with_tools", loop)
+        await run_deep_investigation(FakeState(tenant_id="acme-corp"), llm=object())
+
+        identity = loop.calls[0]["identity"]
+        assert isinstance(identity, vaid_plugin.VaidBackedIdentity)
+        assert identity.agent == "investigation"
+        assert identity.tenant_id == "acme-corp"
+        assert identity.badge["capability_set"] == sorted(identity.scopes)
+
+    async def test_an_mcp_grant_remints_the_badge_rather_than_mutating_it(self, monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+        """The hand-off case #1739 asked for: when the identity's scope
+        narrows — here, MCP's run-time grant — the badge presented
+        afterwards reflects the new scope rather than the stale one."""
+        import json
+
+        from app.mcp.tools import McpToolset
+        from app.security import vaid_plugin
+        from app.tools.registry import Tool
+
+        monkeypatch.setenv(vaid_plugin._ENABLED_ENV, "true")
+        # A well-formed, empty revocation list: without one the status is
+        # UNAVAILABLE and `verify_identity_badge` below refuses every badge
+        # as indeterminate, for a reason that has nothing to do with this
+        # test's subject (same reasoning as test_vaid_plugin.py's helper).
+        revocation_path = tmp_path / "revoked.json"
+        revocation_path.write_text(json.dumps({"revoked": []}))
+        monkeypatch.setenv(vaid_plugin._REVOCATION_LIST_PATH_ENV, str(revocation_path))
+
+        async def fake_mcp_toolset(tenant_id: str, *, run_id: Any = None) -> McpToolset:
+            tool = Tool(name="a_tenant_mcp_tool", description="", parameters={"type": "object", "properties": {}}, fn=lambda: {})
+            return McpToolset(nonce="n-1", tools=[tool])
+
+        monkeypatch.setattr(module, "build_mcp_toolset", fake_mcp_toolset)
+        loop = StubLoop([])
+        monkeypatch.setattr(module, "run_with_tools", loop)
+        await run_deep_investigation(FakeState(), llm=object())
+
+        identity = loop.calls[0]["identity"]
+        assert isinstance(identity, vaid_plugin.VaidBackedIdentity)
+        assert "a_tenant_mcp_tool" in identity.scopes
+        # A fresh root mint, not the badge minted before the grant.
+        assert identity.badge["capability_set"] == sorted(identity.scopes)
+        assert identity.badge["parent_vaid"] is None
+        vaid_plugin.verify_identity_badge(identity)  # the re-minted badge must still verify
+
+
 class TestFindings:
     def test_coverage_gaps_are_never_stated_as_absence(self) -> None:
         """The whole reason the unavailable tools exist."""

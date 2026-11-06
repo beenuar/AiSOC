@@ -483,4 +483,58 @@ def test_a_mistyped_ttl_env_falls_back_instead_of_crashing_the_mint(monkeypatch,
     # And the whole production mint path survives it, which is the thing that
     # was actually broken.
     wrapped = vaid_plugin.issue_vaid_identity("triage", run_id="run-ttl", tenant_id="acme")
+
+
+# ── Startup check: fails at boot, not at the first tool call ─────────────
+
+
+def test_preflight_is_a_no_op_when_the_plugin_is_disabled():
+    """The default. No seed, no revocation list, nothing configured at
+    all — and this must not raise, because the plugin is off."""
+    vaid_plugin.preflight_or_raise()  # must not raise
+
+
+def test_preflight_refuses_when_no_revocation_list_is_configured(monkeypatch):
+    """The gap named in the pull request: enabling the plugin with no
+    `AISOC_VAID_REVOCATION_LIST_PATH` used to refuse every tool call, live.
+    This must refuse at startup instead — before any request lands."""
+    _enable(monkeypatch)
+    # The fixture already deletes the revocation env var and allows an
+    # ephemeral seed, so minting itself would succeed; only the revocation
+    # list is missing.
+    with pytest.raises(vaid_plugin.BadgeDenied, match=vaid_plugin._REVOCATION_LIST_PATH_ENV):
+        vaid_plugin.preflight_or_raise()
+
+
+def test_preflight_refuses_when_the_revocation_list_file_is_malformed(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    bad_path = tmp_path / "revoked.json"
+    bad_path.write_text("not json")
+    monkeypatch.setenv(vaid_plugin._REVOCATION_LIST_PATH_ENV, str(bad_path))
+
+    with pytest.raises(vaid_plugin.BadgeDenied, match=vaid_plugin._REVOCATION_LIST_PATH_ENV):
+        vaid_plugin.preflight_or_raise()
+
+
+def test_preflight_refuses_when_nothing_can_mint(monkeypatch, tmp_path):
+    """The other half of the same gap: enabling the plugin with neither a
+    kernel seed path nor the explicit ephemeral opt-out set used to refuse
+    every tool call on first mint, live. Must fail at startup instead."""
+    _enable(monkeypatch)
+    _with_empty_revocation_list(monkeypatch, tmp_path)
+    monkeypatch.delenv(vaid_plugin._ALLOW_EPHEMERAL_SEED_ENV, raising=False)
+    monkeypatch.delenv(vaid_plugin._KERNEL_SEED_PATH_ENV, raising=False)
+
+    with pytest.raises(vaid_plugin.BadgeDenied, match=vaid_plugin._KERNEL_SEED_PATH_ENV):
+        vaid_plugin.preflight_or_raise()
+
+
+def test_preflight_passes_when_the_plugin_is_fully_configured(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    _with_empty_revocation_list(monkeypatch, tmp_path)
+    vaid_plugin.preflight_or_raise()  # must not raise
+    # And the issuer it built is the real one a later mint call reuses,
+    # not a throwaway that leaves minting to build its own from scratch.
+    wrapped = vaid_plugin.issue_vaid_identity("triage", run_id="run-preflight", tenant_id="acme")
+    vaid_plugin.verify_identity_badge(wrapped)
     vaid_plugin.verify_identity_badge(wrapped)

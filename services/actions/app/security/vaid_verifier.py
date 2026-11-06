@@ -61,6 +61,7 @@ __all__ = [
     "BadgeDenied",
     "vaid_plugin_enabled",
     "verify_badge_for_dispatch",
+    "preflight_or_raise",
 ]
 
 _ENABLED_ENV = "AISOC_VAID_PLUGIN_ENABLED"
@@ -225,3 +226,28 @@ def verify_badge_for_dispatch(
 
     if not has_capability(badge, required_capability):
         raise BadgeDenied(f"badge {badge.get('vaid_id')!r} does not grant capability {required_capability!r}")
+
+
+def preflight_or_raise() -> None:
+    """Startup-time check: refuse to enable the plugin when nothing can
+    verify or no revocation list is configured (beenuar/AiSOC#1739
+    follow-up, verify-side counterpart of the agents-service mint-side
+    check).
+
+    A no-op when the plugin is disabled. When enabled, this reads
+    ``AISOC_VAID_KERNEL_PUBLIC_KEY_HEX`` for real (not just checks it is
+    set — a malformed or wrong-length key fails here too) and the
+    revocation list, so a dispatch does not discover either gap on its
+    first live request, 3am included.
+    """
+    if not vaid_plugin_enabled():
+        return
+    _kernel_public_key()
+    path = os.environ.get(_REVOCATION_LIST_PATH_ENV, "").strip()
+    if not path or _FileRevocationList(path).revoked_ids() is None:
+        raise BadgeDenied(
+            f"VAID plugin is enabled ({_ENABLED_ENV}) but {_REVOCATION_LIST_PATH_ENV} "
+            "is not set, or names a file that is absent, unreadable or malformed; "
+            "refusing to start rather than refusing every dispatch once a badge "
+            "is first presented"
+        )
