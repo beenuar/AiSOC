@@ -349,9 +349,26 @@ func (h *Handler) readBody(w http.ResponseWriter, r *http.Request, route, templa
 //	X-Hub-Signature-256: sha256=<hex>   (GitHub-style)
 //
 // Constant-time comparison protects against timing oracles.
+//
+// "Set" means the column is non-NULL. A NULL secret is the documented
+// opt-out for vendors that cannot sign; a blank one is a row that should
+// not exist, since the mint API requires at least 16 characters. This
+// used to test `tok.HMACSecret == ""`, which could not tell the two
+// apart, so a blank secret accepted unsigned submissions — and keying an
+// HMAC on the empty string would have accepted forged ones, because the
+// key is known. See ingestauth.VerifySignature, which carries the same
+// rule for /v1/ingest.
 func (h *Handler) verifyHMACOrFail(w http.ResponseWriter, r *http.Request, route string, tok *Token, body []byte) bool {
-	if tok.HMACSecret == "" {
+	if !tok.RequiresSignature() {
 		return true
+	}
+	if strings.TrimSpace(tok.HMACSecret) == "" {
+		inboxRequests.WithLabelValues(route, tok.TemplateID, "unusable_secret").Inc()
+		writeErr(w, http.StatusServiceUnavailable,
+			"inbox: this token declares a signature requirement but its stored secret is blank; "+
+				"rotate it with an hmac_secret of at least 16 characters, or clear the column to NULL "+
+				"to push unsigned")
+		return false
 	}
 	provided := r.Header.Get("X-Signature")
 	if provided == "" {

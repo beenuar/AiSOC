@@ -343,14 +343,19 @@ func TestStreamRouteRefusesWhenTheSourceIsDetached(t *testing.T) {
 	defer b.Stop()
 	waitFor(t, "the source to report a permanent failure", func() bool { return b.Health().PermanentFailure })
 
-	req := httptest.NewRequest(http.MethodGet, "/v1/graph_ws/stream?tenant_id=t1", nil)
+	// A real credential, because the health refusal now sits behind the
+	// credential check — an unauthenticated caller is told it is not
+	// authenticated and learns nothing about the broker. The tenant comes
+	// from the token, so there is no tenant_id in the URL to set.
+	req := httptest.NewRequest(http.MethodGet, "/v1/graph_ws/stream", nil)
+	req.Header.Set("Authorization", "Bearer "+acmeWSToken)
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", "websocket")
 	req.Header.Set("Sec-WebSocket-Version", "13")
 	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
 	rec := httptest.NewRecorder()
 
-	NewServer(b).Handler().ServeHTTP(rec, req)
+	authenticatedWSServer(t, b).Handler().ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, want 503", rec.Code)
