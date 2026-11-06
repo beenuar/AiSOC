@@ -9,6 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **One file says what version this build is, and a gate keeps it that way.**
+  `scripts/check_single_version_source.py` asserts that every surface
+  reporting the application's version derives it from the root `VERSION`
+  file, and that none restates it as a literal. The root `VERSION` is the
+  single source of truth; a restated number is correct until the next release
+  and then silently is not, because "agrees with a constant" is not a property
+  anyone was checking.
+
+  Two rules. **agreement** — a surface resolving to a concrete version must
+  resolve to the tree's. **single-origin** — a surface may not restate the
+  version at all. Deriving it is fine however it is delivered: read the file,
+  inline it at build time, serve it from a runtime endpoint. A fallback
+  counts, because `'0.0.0'` is a plausible-looking version and renders as one,
+  so a failed read becomes a confident claim to be 0.0.0; the honest fallback
+  is a sentinel that cannot be mistaken for a version, which is what
+  `runtime-config/route.ts` already does with `'unknown'`. Taking the number
+  from `apps/web/package.json` is the same defect wearing a different costume
+  — a second origin rather than a second copy, agreeing today only because
+  `check_release_policy.py` separately holds those two in step.
+
+  The gate refuses rather than reporting clean when it has nothing to judge:
+  an absent, empty or non-semver `VERSION`, a registered surface that cannot
+  be read, a surface whose version symbol has been renamed away, or zero
+  surfaces scanned are each a refusal. `--self-test` drives nine cases in
+  both directions — four shapes that must be accepted, five that must be
+  caught — before the empty-tree probe.
+
 - **Upgrading is now a required check, and one leg crosses a major version.**
   People upgrade, and until now a pull request could break the upgrade path
   with both upgrade tests red or never run: neither `upgrade-test.yml` nor
