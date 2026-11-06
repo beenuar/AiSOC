@@ -46,6 +46,7 @@ import structlog
 
 from app.models.action import ActionRequest, ActionType
 from app.security.ssrf_guard import SSRFError, validate_outbound_url
+from app.security.vaid_verifier import BadgeDenied, verify_badge_for_dispatch
 from app.services.approval_matrix import evaluate_contract
 from app.services.asset_lookup import asset_criticality_for_target
 from app.services.autonomy_safety import (
@@ -611,6 +612,28 @@ async def dispatch(request: LiveActionRequest) -> LiveActionResult:
             reason=switch.reason,
         )
         return _stopped_by_kill_switch(request, switch)
+
+    # ── The VAID badge (beenuar/AiSOC#1739), before anything else that
+    # would spend a vendor call ──────────────────────────────────────────
+    #
+    # A no-op when the plugin is disabled (the default) — see
+    # `app.security.vaid_verifier.vaid_plugin_enabled`. When enabled, this
+    # is the response-dispatch half of the two boundaries named on the
+    # issue; the other half is `ToolRegistry.execute` in the agents
+    # service, which cannot be reached from here because that is a
+    # different process.
+    try:
+        verify_badge_for_dispatch(request.vaid_badge, request.capability)
+    except BadgeDenied as denied:
+        log.warning("live_action.vaid_badge_denied", reason=str(denied))
+        return LiveActionResult(
+            request_id=request.request_id,
+            status=LiveActionStatus.FAILED,
+            capability=request.capability,
+            vendor_id=request.vendor_id,
+            summary=f"'{request.capability}' on {request.target or 'target'}: refused — {denied}",
+            error=str(denied),
+        )
 
     # ── Where the caller may point this service ──────────────────────────
     #
