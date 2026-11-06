@@ -64,6 +64,13 @@ direction that drops detections.
 Measured over 2,000 iterations in process on an 18-core Apple-silicon
 host. Not a cloud-hardware figure; see the performance page.
 
+The corpus was **2,511 executable rules** when this was measured, and the
+figures above are left at what was actually run rather than restated against
+a corpus that has since grown to 2,966. What carries forward is the ratio —
+the index narrows a routine cloud event to roughly a third of the corpus,
+whatever its size — not the absolute counts. Re-measure before quoting an
+absolute number here.
+
 ### What keeps it safe
 
 `services/fusion/tests/test_rule_index_is_lossless.py` replays every

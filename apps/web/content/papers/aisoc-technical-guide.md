@@ -335,6 +335,9 @@ is the one misconfiguration here that cannot be made quietly.
 | Events ingest but no alerts appear | The fallback classifies events as OCSF category 4, and promotion needs category 2 or `severity_id >= 4` | Same cause as above. A vendor finding that already passed the vendor's correlation belongs at `class_uid: 2001` |
 | `/api/docs` returns 404 | `make up` starts a production-class stack with the spec disabled | This is intended. Use `docs/openapi.yaml` in the repository |
 | Everything is slow under load | One connection acquire per alert write | Current releases batch; check you are not pinned to an older image |
+| Fusion is `running` but processes nothing, forever | A broker fault escaped the consume loop and ended the task | Fixed in current releases: the worker supervises itself and recovers. Confirm with `curl localhost:8003/readyz` — a detached consumer answers 503 naming the subscription, never a silent 200 |
+| Fusion logs the same broker error every 60s and never recovers | A permanent fault — a refused credential, a missing ACL, an unsupported SASL mechanism — being retried as though it were transient | Current releases stop on these and name the operator action in the log line. Fix the credential or ACL; no amount of retrying clears it |
+| A connector's feed looks plausible but the start of each burst is missing | A page cap with a continuation that was not followed, on a query ordered newest-first | Fixed in current releases for the affected connectors. See *Connecting real data → Pull* |
 
 ### Upgrading
 
@@ -400,6 +403,26 @@ at rest with Fernet before they touch the database.
 Connecting a source is meant to be the only manual step: the scheduler polls
 on a five-minute default, events flow to ingest, fusion promotes what matters,
 and the agent triages every fused alert. No further intervention.
+
+**What the poll window guarantees, and the failure mode to know about.** A
+connector derives its window from the clock — `[now - interval, now]` — so
+consecutive windows abut exactly and nothing is ever re-read. Whatever a
+vendor does not hand over on the first attempt is gone permanently, and the
+loss is silent: a short answer and a quiet estate look identical downstream.
+Three things break that window and each takes a different fix — a page cap
+with a continuation nobody follows, a vendor that deliberately withholds
+recent records, and a record that exists but is not yet queryable by the time
+filter used. Continuations now go through one shared helper that keeps a
+partial read rather than discarding it when a later page fails, announces a
+page cap when it binds, and requests the continuation link verbatim.
+`scripts/check_connector_paging.py` makes it a gate: a connector either
+follows a continuation or carries a written reason citing what the vendor
+documents it returns.
+
+If you are operating a busy tenant, the symptom worth watching for is a feed
+whose volume looks plausible but whose *earliest* events in any burst are
+missing — several vendor queries are ordered newest-first, so truncation
+removes the beginning of a burst, which is the part an investigation needs.
 
 ### Bringing existing detections
 

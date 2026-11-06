@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [22.2.0] - 2026-11-05
+
 ### Added
 
 - **A connector must now read its poll window to the end, and CI enforces it.**
@@ -89,6 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **The cancelled-run gate on `main` overstated the window it graded by about
   100x, so it went green by forgetting.**
+  ([#1723](https://github.com/beenuar/AiSOC/pull/1723))
   `scripts/check_main_run_cancellations.py` printed `graded window created at
   or after 2026-09-29` — about five weeks — on a fetch of 300 push runs, which
   at this push rate is **8.8 hours**. Roughly sixty workflows run on every
@@ -127,6 +130,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   previously dropped inside `classify`, leaving a count of zero that was read
   as a young window and exited 0: a window that cannot be established is an
   unknown, and an unknown is never a pass.
+
+- **The grading-integrity gate was being killed by its own timeout, and a
+  killed job reports `cancelled` — which the gate beside it correctly reads
+  as a commit nothing graded.**
+  ([#1721](https://github.com/beenuar/AiSOC/pull/1721)) `timeout-minutes: 15`
+  on the `required-check-substance` job was not derived from anything. Over
+  the 100 most recent runs of the workflow (2026-11-03 22:14Z → 2026-11-05
+  13:49Z) it completed successfully 31 times: fastest 8m13s, median 12m51s,
+  **slowest 14m30s**. The ordinary worst case finished about 3% inside its
+  own ceiling, so any slowdown in the Actions API pushed it over — and it
+  did, one run killed at 15m16s, three red boards on a non-defect in two
+  days.
+
+  The failure mode is what makes the number worth a release note rather than
+  a line in a diff. GitHub reports a job that hits `timeout-minutes` as
+  **`cancelled`**, not `failed`, so `check_main_run_cancellations.py` in the
+  same workflow then reports — accurately — that a commit on `main` went
+  ungraded. The gate was right and the budget was what was broken, which is
+  the one case where moving a threshold is the fix rather than the evasion.
+  It is now 40 minutes, sized from the measured 14m30s plus the 300-second
+  rate-limit ceiling below, doubled; it still binds, so a genuinely hung job
+  dies here instead of running to the six-hour default.
+
+  The rate limit is the other half, because raising a budget without it would
+  have traded a timeout for a hard failure. GitHub answers both a primary and
+  a secondary rate limit with **403 or 429**, so the status code alone cannot
+  separate "you are going too fast" from "this token may not read this" — and
+  waiting on the second would hang the gate on an answer that will never
+  change. The discriminator is the headers, as GitHub documents it: a
+  rate-limited answer carries `retry-after` or `x-ratelimit-remaining: 0`, and
+  a 403 carrying neither is still raised immediately. Pauses are bounded
+  three ways — a single `retry-after` is honoured only up to 60 seconds, so
+  the API cannot decide when this job dies; the process may spend 300 seconds
+  in total across every call it makes; and spending it leaves the gate
+  reporting **"could not read"**, which is still a failure, because an
+  unknown is never a pass — but an honest one naming the API rather than a
+  `cancelled` conclusion that reads as a grading hole.
+
+  `check_main_run_cancellations.py` kept its own single-attempt copy of the
+  same request and now delegates to that reader. The two gates run in the
+  same workflow against the same API, so whatever makes one unreadable makes
+  the other unreadable at the same moment, and only one of them rode it out.
+  The semgrep ceiling falls 114 → 113 as a consequence rather than as a
+  concession: deleting that duplicated request removed one real
+  `dynamic-urllib-use-detected` call site, attributed by scanning the single
+  file at `main` and on the branch with the same pinned scanner and vendored
+  packs (1 finding against 0) because two runs reading 113 against a ceiling
+  of 114 is also what this scanner's recorded ±1 drift looks like. No
+  suppression was added and `error` is unchanged at 44, which is the control:
+  the drift moves `error` and `total` together.
 
 - **Google Workspace OAuth token grants and revocations had never once been
   ingested, on any deployment.**
@@ -296,6 +349,78 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the report did not ask for. Nothing here was exercised against a live Entra
   tenant; the fixtures are the anonymised shapes from the report and Graph's
   published schema.
+
+- **The Agentmetry connector page said its live leg was "not verified" after
+  somebody had verified it, so the one claim that was wrong was the modest
+  one.** ([#1719](https://github.com/beenuar/AiSOC/pull/1719), contributed by
+  [@blitzcrieg1](https://github.com/blitzcrieg1), Agentmetry's maintainer)
+  A flat "not verified" reads as honest and functions as an exemption: it
+  says nothing about *what* was never run, so nobody can tell a leg that
+  failed from one nobody attempted, and nobody can tell which part is still
+  open. It had in fact been run — on 2026-11-02, Agentmetry 0.10.4 installed
+  from PyPI posting `canonical` events over HTTP to a local AiSOC v21 stack
+  brought up with `make up` and `make smoke` passing 10 of 10 first, at an
+  inbox minted with this template. 11 of 11 events were forwarded and
+  accepted with none dead-lettered; both detections (`credential-exfil`,
+  `remote-staging-then-execute`) arrived as critical alerts carrying their
+  ATT&CK techniques; the nine routine events — tool calls, a denial, session
+  start and end — raised no alert; and `claude` and `cursor` appeared in the
+  AI estate with the operator attached.
+
+  The page now states that run with its date, its versions and its result,
+  and says plainly that **no CI job repeats it**, so a later change on either
+  side can break it without a gate failing. What remains unverified is named
+  rather than implied: a deployment with the sensor and AiSOC on different
+  hosts, and any AiSOC release after v21.
+
+  The claim-matrix row stays **GATED** and only its caveat moves. The gated
+  claim — that Agentmetry telemetry lands split, routine tool calls in the
+  lake and correlated detections as alerts with severity and ATT&CK ids
+  preserved — is proved by the same ingest, fusion and graph tests as before
+  and did not change. Promoting a row because a human ran something once
+  would make the matrix a record of what somebody remembers rather than of
+  what CI enforces, which is the failure the file exists to prevent.
+
+- **Published figures re-derived from the tree, in two passes, because the
+  first one did not reach every surface.**
+  ([#1709](https://github.com/beenuar/AiSOC/pull/1709) and this release's
+  documentation sweep) #1709 corrected nine surfaces that published a
+  detection-corpus figure counted before the corpus moved — 2,511 / 2,530 /
+  2,535 against 2,966 executable, 6,991 / 7,015 against 7,407 on disk — and
+  found the claim matrix's connector row stale in *both* cells while its gate
+  printed OK, because that gate reconciles the README phrase against the
+  generated artefact and never reads the table.
+
+  The sweep for this release found the surfaces the first pass missed, which
+  is the useful half: the glossary, the feature index, the operations FAQ,
+  `detections/README.md`, `services/connectors/README.md` and the funnel-KPI
+  page were each still quoting a superseded count, and
+  `docs/architecture/README.md` said "of the 87 declared connector types, 45
+  name a class of their own and the other 42" against a real 91 / 46 / 45. A
+  figure gated at one claim site goes stale at every *other* site silently,
+  so correcting the gated one is not the same as correcting the figure.
+
+  Two numbers were deliberately **not** rewritten. The fusion rule-index
+  measurement in
+  [ADR-0012](https://github.com/beenuar/AiSOC/blob/main/docs/decisions/0012-how-fusion-scales.md)
+  and on the performance page was taken against a 2,511-rule corpus and was
+  not re-run, so restating it against 2,966 would be falsifying a
+  measurement rather than refreshing a claim. Both now say what corpus they
+  were measured on and that the ratio, not the absolute count, is the part
+  that carries forward.
+
+  The claim matrix gains rows for the two capabilities this release shipped
+  without one — the connector paging gate and fusion worker supervision —
+  and its "rules that cannot fire" row is corrected from a ratchet of 45 to
+  the **2** the gate actually enforces. The matrix moves 398 rows / 389
+  GATED to **400 / 391**, with 9 PARTIAL and 0 NO GATE unchanged; the
+  summary is recomputed with `check_claim_gate_matrix.py --write` rather
+  than hand-edited, because that figure is published in three places and a
+  disagreement between them reds every open pull request.
+
+  The technical guide is re-rendered with the pinned toolchain and gains the
+  poll-window contract and three new troubleshooting rows; it is **28 pages**
+  now rather than 27, and the README badge moves with it.
 
 ## [22.1.0] - 2026-11-05
 
