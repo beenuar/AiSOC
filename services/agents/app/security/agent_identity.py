@@ -227,24 +227,32 @@ class IdentityLike(Protocol):
     """
 
     @property
-    def agent(self) -> str: ...
+    def agent(self) -> str:
+        """The agent name this identity was issued for."""
 
     @property
-    def run_id(self) -> str: ...
+    def run_id(self) -> str:
+        """The run this identity is scoped to."""
 
     @property
-    def scopes(self) -> frozenset[str]: ...
+    def scopes(self) -> frozenset[str]:
+        """The tool names this identity may call."""
 
     @property
-    def credential_id(self) -> str: ...
+    def credential_id(self) -> str:
+        """Distinguishes two concurrent runs of the same agent in the audit log."""
 
-    def expired(self, *, now: float | None = None) -> bool: ...
+    def expired(self, *, now: float | None = None) -> bool:
+        """True once this identity's expiry has passed."""
 
-    def may(self, tool: str) -> bool: ...
+    def may(self, tool: str) -> bool:
+        """True if this identity may call ``tool`` right now."""
 
-    def require(self, tool: str, *, now: float | None = None) -> None: ...
+    def require(self, tool: str, *, now: float | None = None) -> None:
+        """Raise unless this identity may call ``tool`` right now."""
 
-    def audit_row(self, tool: str, *, allowed: bool, reason: str | None = None) -> dict[str, object]: ...
+    def audit_row(self, tool: str, *, allowed: bool, reason: str | None = None) -> dict[str, object]:
+        """One row for the audit log. Never the tool's arguments."""
 
     def with_granted_tools(self, tools: frozenset[str] | set[str] | list[str]) -> IdentityLike: ...
 
