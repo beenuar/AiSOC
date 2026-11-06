@@ -11,7 +11,7 @@ the AiSOC engine can do with them out of the box.
 | Quarantined | `detections/<source>-imports/_quarantine/<category>/` | where the importer put it; see below | YAML schema + provenance + a populated `quarantine_reason` |
 | Community | `detections/community/<category>/`        | disabled by default | YAML schema; provenance encouraged                |
 
-The library holds **6,991 rules on disk, of which 2,529 execute** — 833 native
+The library holds **7,407 rules on disk, of which 2,966 execute** — 1,196 native
 and 1,770 imported Sigma rules translated into the engine's `match_when` by
 [`scripts/compile_sigma_ruleset.py`](../scripts/compile_sigma_ruleset.py).
 Recount rather than quoting these: they move, and
@@ -306,5 +306,5 @@ Two directories here hold no rules. `detections/playbooks/` has 25 response
 playbooks — `trigger:` and `steps:`, no `detection:` block — and
 `detections/sigma-correlations/` has 6 multi-document Sigma correlation files
 that compile into the windowed ruleset rather than the stateless one. They are
-the entire difference between the 7,022 YAML files under this tree and the
-6,991 rules every count in this repository publishes.
+the entire difference between the 7,438 YAML files under this tree and the
+7,407 rules every count in this repository publishes.

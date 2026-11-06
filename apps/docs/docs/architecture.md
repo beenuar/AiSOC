@@ -66,6 +66,53 @@ The registry is **now 91 connectors** — that figure is generated from
 [`scripts/generate_connector_count.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/generate_connector_count.py),
 which fails CI if this sentence disagrees with the tree.
 
+### What a poll window guarantees, and why it is the riskiest part of collection
+
+A connector's `fetch_alerts` builds its window from the clock —
+`[now - since_seconds, now]`, with the scheduler supplying the poll interval —
+so consecutive windows **abut exactly and never overlap**. That is efficient
+and it has one consequence worth stating plainly: *nothing is ever re-read.*
+Whatever a vendor does not hand over on the first attempt is gone permanently.
+`apply_checkpoint()` cannot recover it — that de-duplicates rows the vendor
+already returned and never widens a later request — and the failure is
+**silent**, because a short answer and a quiet estate look identical
+downstream.
+
+Three distinct mechanisms break that window, and they need different fixes:
+
+| Mechanism | What it looks like | The fix |
+|---|---|---|
+| **Truncation** | The vendor caps a page and offers a continuation that nobody follows | Follow the continuation to the end of the window |
+| **Availability delay** | The vendor deliberately withholds recent records | End the window where the vendor has published, not at `now` |
+| **Indexing lag** | The record exists but is not yet queryable by the time filter used | Per-vendor offset, derived from the vendor's own contract |
+
+Truncation is the worst of the three when a query is ordered newest-first,
+which several are: what gets discarded is then the *beginning* of whatever
+burst overflowed the window, which is the part an investigation needs most.
+
+Continuations go through one shared helper,
+[`app/connectors/_paging.py`](https://github.com/beenuar/AiSOC/blob/main/services/connectors/app/connectors/_paging.py),
+holding three properties that are each a defect somebody has shipped: a
+partial read is **kept** rather than thrown away when a later page fails; a
+page cap is **announced** when it binds rather than silently cutting the
+result; and the continuation link is requested **verbatim**, because Microsoft
+Graph states outright that a `$skiptoken` must not be extracted and reused in
+a different request.
+
+This is a gate rather than a review question, because six connectors shipped
+the same defect inside two days.
+[`scripts/check_connector_paging.py`](https://github.com/beenuar/AiSOC/blob/main/scripts/check_connector_paging.py)
+requires every connector whose `fetch_alerts` issues an HTTP request to either
+follow a continuation — the shared helpers, its own loop, or a boto3 paginator
+not cut short by `MaxItems` — or carry a **written reason** recording what the
+vendor's own documentation says it returns. There is deliberately no silent
+third state: "I could not find a page cap" and "this vendor returns the whole
+window" are different statements and only the second is a reason, so a
+connector that neither pages nor carries a reason is named in the output on
+every run and counted against `MAX_UNCLASSIFIED`, a debt balance that may only
+be lowered. Lowering it means somebody read a vendor's document and wrote down
+what they found — which is exactly the contribution that is wanted.
+
 :::info The tenant comes from the credential, never from the header
 Every ingest door is authenticated, and each resolves a tenant from the
 credential rather than believing a header:
@@ -120,6 +167,43 @@ restarted or left to fall behind without ingest knowing about it.
 
 Kafka is not a cache here. It is the reason a slow detection worker cannot
 block the front door, and the reason an event is not lost when fusion restarts.
+
+### A consumer that loses its broker reports it, and comes back on its own
+
+Those are two separate properties, and for a while only the first was in
+place. Fusion registers its subscription as a readiness key, so `/readyz`
+answers **503** with `detached: ["alerts+raw_events"]` the moment the consume
+loop stops iterating — a consumer detached from its topic is otherwise
+indistinguishable from an idle one, which is what makes this class of failure
+invisible. Liveness is deliberately separate: the broker probe is a bounded
+metadata fetch rather than a read of the "am I iterating" flag, because
+aiokafka's retry lives inside `__anext__` and iteration therefore never stops
+during an outage. "Subscribed" and "the broker is reachable" are two facts and
+the probe measures the second.
+
+`FusionWorker.start()` now **supervises** rather than running one
+start/consume/stop cycle, so a broker that is not up yet at cold boot, or a
+connection lost mid-stream, no longer ends the task and waits for a human to
+restart the container. Readiness returns to 200 on its own when consumption
+resumes. Three properties a bare retry loop gets wrong:
+
+- **A retry is attempted only where retrying can help.** The same three
+  classes `streamhealth` gives the Go consumer in `services/ingest`: a
+  transient fault backs off with capped exponential delay; a **permanent**
+  one — a refused credential, a missing ACL, an unsupported SASL mechanism —
+  stops and names the operator action, because a loop retrying a
+  misconfiguration every 60 seconds turns it into churn an operator reads as
+  ordinary noise; and a poison message is still dead-lettered by the consume
+  loop, which is the right place for it. An unrecognised error is treated as
+  transient and escalated to an error naming where to look once it has
+  outlived any transient explanation.
+- **Teardown runs exactly once per attempt.** A bootstrap failure is the
+  commonest retry there is, and the next attempt reassigns the Kafka handles —
+  so an attempt that raised before reaching the consume loop used to leak both
+  clients, measured at six consumers and six producers over seven attempts.
+- **A healthy worker is unaffected.** It attaches, builds exactly one consumer
+  and is never restarted. A supervisor stuck retrying reads as working
+  caution, which is a shape that has shipped here before.
 
 ## 4 · Fusion evaluates detections
 

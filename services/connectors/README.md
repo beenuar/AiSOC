@@ -25,7 +25,7 @@ normalises raw events into OCSF, and forwards them to the ingest pipeline.
 
 ## Supported connectors
 
-84 connectors are registered in `_CONNECTOR_CLASSES`
+91 connectors are registered in `_CONNECTOR_CLASSES`
 (`app/connectors/__init__.py`), which is the only source of truth. The count
 and its per-category breakdown are generated into
 [`apps/web/src/data/connector-count.json`](../../apps/web/src/data/connector-count.json)

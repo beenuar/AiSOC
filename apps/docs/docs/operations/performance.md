@@ -162,7 +162,10 @@ published image set, not a build of the branch that added the index to
 fusion. The index is measured separately and in process: 2,511 rules,
 797 candidates for a routine cloud event (a 68.3% reduction), and
 2.760 ms/event down to 1.066 ms/event over 2,000 iterations — a 2.6x
-improvement on detection evaluation alone.
+improvement on detection evaluation alone. That run is left at the corpus
+it actually used; the corpus is 2,966 executable rules today, so the
+ratio is the part that carries forward and the absolute counts are not
+re-quotable without re-measuring.
 
 **It is not a cloud-hardware run.** See the note at the end of this page.
 

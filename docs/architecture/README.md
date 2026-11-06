@@ -59,8 +59,8 @@ fails CI if any name in either direction stops resolving.
 
 The profile also decides the **OCSF class**. There are 17 of them in
 [`ocsf_classes.go`](../../services/ingest/internal/normalizer/ocsf_classes.go),
-verified against the published OCSF schema; of the 87 declared connector types,
-45 name a class of their own and the other 42 sit on the generic `2001` mapping
+verified against the published OCSF schema; of the 91 declared connector types,
+46 name a class of their own and the other 45 sit on the generic `2001` mapping
 **with a recorded reason each**. That decision is load-bearing rather than
 cosmetic: promotion reads the class, so a connector silently left on a category-4
 default archives its events and never raises an alert.
@@ -446,6 +446,34 @@ flowchart TD
     M --> N
     N --> O[("Kafka aisoc.alerts.fused")]
 ```
+
+The first box carries the guarantee that the rest of the diagram depends on,
+and it is the easiest one to get wrong. A poll window is derived from the
+clock — `[now - interval, now]` — so consecutive windows abut exactly and
+**nothing is ever re-read**: anything a vendor does not return on the first
+attempt never reaches Kafka, and the loss is silent, because a short answer
+and a quiet estate look identical at every box downstream. Three mechanisms
+break it — truncation (a page cap with a continuation nobody follows),
+availability delay (the vendor withholds recent records on purpose) and
+indexing lag — and they take different fixes: follow the continuation to the
+end, end the window where the vendor has actually published, or offset by a
+per-vendor amount established from that vendor's own documentation.
+Continuations go through the shared
+[`_paging.py`](../../services/connectors/app/connectors/_paging.py), and
+[`check_connector_paging.py`](../../scripts/check_connector_paging.py) makes
+it a gate: every connector either follows a continuation or carries a written
+reason citing what the vendor documents it returns, with no silent third
+state.
+
+The `Kafka aisoc.raw_events` box has the matching property on the consuming
+side. Fusion's worker supervises itself — a transient fault retries with
+capped exponential backoff and readiness recovers on its own, while a
+permanent one (a refused credential, a missing ACL, an unsupported SASL
+mechanism) stops and names the operator action rather than retrying a
+misconfiguration forever. A detached consumer is visible: `/readyz` answers
+503 naming the subscription, and the broker probe is a bounded metadata fetch
+rather than a read of the "am I iterating" flag, because iteration does not
+stop during an outage.
 
 ---
 
