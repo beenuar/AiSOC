@@ -7,151 +7,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### BREAKING
+### Security
 
-- **`DeploymentConfig` and `DeploymentConfigUpdate` drop the self-update
-  fields, and `telemetry_enabled` becomes read-only.**
-  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  Removed from the published spec: `DeploymentConfig.update_channel`,
-  `DeploymentConfig.auto_update`, `DeploymentConfigUpdate.update_channel`,
-  `DeploymentConfigUpdate.auto_update`, `DeploymentConfigUpdate.telemetry_enabled`,
-  and the `UpdateChannel` schema.
+- **The ingest graph-update WebSocket ran no authentication and took its
+  tenant from the query string.**
+  ([GHSA-cvfr-9r25-gqpf](https://github.com/beenuar/AiSOC/security/advisories/GHSA-cvfr-9r25-gqpf),
+  high, CVSS 8.6) `internal/graph_ws/server.go` read `?tenant_id=<id>` and
+  subscribed the caller to that tenant's live graph-update stream, so any
+  caller who could reach the port could read any tenant's stream with no
+  credential at all. The handler now runs the same `internal/ingestauth`
+  authenticator the ingest routes run and derives the tenant from the
+  resulting principal, by the same intersection-only rule `/v1/ingest` uses.
+  The query parameter is removed rather than validated.
 
-  They could not be preserved because each was a published promise that
-  something acts on them and nothing does. `update_channel` and `auto_update`
-  are deleted rather than wired: AiSOC does not update itself, so there is no
-  implementation to point them at and leaving them settable would keep
-  advertising one. `telemetry_enabled` was worse than unread — it was
-  published as `true`, so an API consumer reading `docs/openapi.yaml`
-  concluded this platform phones home by default, which
-  `docs/trust/data-flows.md` and three CI gates say it does not. It is kept on
-  the response, typed `Literal[False]`, so the question stays answerable and
-  the spec cannot drift back; it is gone from the update model because
-  accepting `true` would have the API assert something no code here can do.
+  The reason this survived is the part worth recording. Two comments — one in
+  the handler, one on the route — stated that authentication was enforced by
+  the Python API proxy and that the server "is expected to listen on the
+  internal service network only". The proxy's authentication is real: it
+  resolves a JWT or API key, enforces `graph:read`, and rebinds the tenant
+  from the resolved user. But nothing made the proxy the only way in, and the
+  proxy presented no credential upstream, so the Go side could not tell a
+  relayed browser from anyone else. A protection asserted in a comment and
+  enforced by an assumption about somebody else's deployment is not a
+  protection, and the identical reasoning was already written down one
+  package away in `internal/ingestauth` as the reason `/v1/ingest` needed a
+  credential. Both comments were corrected in place rather than deleted, and
+  the proxy now presents a service token and the resolved tenant as a header
+  — defence in depth in front of ingest's own check instead of a substitute
+  for it. Nothing in `docker-compose.yml` changes: the api and ingest-worker
+  containers already share `AISOC_SERVICE_TOKEN`, which is what ingest
+  resolves after `AISOC_INGEST_SERVICE_TOKEN`, and `make env` generates it.
+  Roll ingest last or roll both together, since a new ingest refuses an old
+  API while a new API against an old ingest is harmless.
 
-  Consumers were checked before removal: no reader anywhere in the tree
-  outside the module, and the console never calls `/api/v1/deployment/*`.
-  `DeploymentConfigUpdate` now rejects unknown keys, so a client still sending
-  `auto_update: true` gets a 422 rather than a 200 and a false belief that it
-  configured something.
+  The reported impact said graph events could be **written**. They cannot:
+  the handler only subscribes and pumps envelopes toward the client, and its
+  reader goroutine discards inbound frames. This is a cross-tenant read, and
+  the published vector says so (`I:N`).
 
+- **`/metrics` on ingest was open while its own compose file promised a
+  token.** `docker-compose.prod.yml` declares `METRICS_TOKEN` required for
+  this service with the message "guards /metrics outside development" and
+  `scripts/ensure_env.py` generates it, but nothing in `services/ingest` read
+  the variable, so the guard the compose file promised existed only in
+  `services/api` and `services/agents`. Ingest now applies the same two
+  rules: a constant-time bearer comparison when `METRICS_TOKEN` is set, and a
+  refusal outside a development-class environment when it is not. `/health`,
+  `/livez` and `/readyz` stay unauthenticated, deliberately — an
+  orchestrator's probe carries no credential, and pulling the pipeline's
+  front door out of a load balancer to protect a scrape endpoint would be a
+  worse trade than the one it buys.
 
-### Added
+- **A blank HMAC secret skipped signature verification on both ingest push
+  paths.** `ingestauth.VerifySignature` and `inbox.verifyHMACOrFail` both
+  began `if secret == "" { accept }`, so a token that declared a signature
+  requirement accepted unsigned bodies. The cause was one layer down: the
+  resolve query applied `COALESCE(hmac_secret, '')`, which collapsed a NULL
+  column and a blank one into the same empty string. Those are different
+  facts. Migration `033` documents NULL as "no signature verification (still
+  secured by the token in the URL)" — the opt-out every webhook vendor that
+  cannot sign depends on — while a non-NULL blank cannot be created through
+  the mint API at all, which enforces `min_length=16`.
 
-- **`GET /api/v1/system/version` — the route the upgrade runbook already told
-  operators to check.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  `apps/docs/docs/operations/upgrades.md` has said "check
-  `/api/v1/system/version` and see the same number" since it was written, and
-  the route did not exist, so the documented way to confirm an upgrade landed
-  returned 404. It reports the running version, the stamped commit, the
-  applied-migration high-water mark and the schema-skew verdict below, behind
-  `settings:read`.
+  `inbox.Token` now carries `HMACConfigured` alongside the secret, so the two
+  states are distinguishable, and a blank configured secret is **refused**
+  with an operator-actionable message rather than waived. Verifying against
+  it was considered and rejected: an HMAC keyed on the empty string is a
+  value any caller can compute, so that branch would have accepted forged
+  bodies instead of unsigned ones. A test demonstrates the forgery directly
+  rather than asserting it. Tokens with no secret still push unsigned, which
+  is the behaviour the schema documents and a positive control covers.
 
-- **Schema skew is detected and reported, in three states.**
-  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  Nothing compared `aisoc_schema_migrations` against the migrations on disk.
-  The table was read in exactly one place — `run_migrations.py`, the runner
-  that writes it — so a deployment whose migration step failed, was skipped or
-  was rolled back ran new code against an old schema while `/health` answered
-  200 and `/readyz` answered ready, and the first symptom was an
-  `UndefinedColumnError` on whichever request happened to touch the missing
-  column.
+  `RequiresSignature()` is the single accessor both call sites ask through,
+  and it reads `configured OR non-empty` so a producer that sets a secret
+  without the flag still gets verification. Only the store builds a `Token`
+  in production and it always sets both, but the one combination that must
+  never mean "skip" is a secret that is present in some form.
 
-  `current` means every migration on disk is applied; `skewed` means the two
-  disagree, with `pending` and `applied_not_on_disk` naming which direction;
-  `unknown` means the comparison could not be performed at all — no database,
-  no tracking table, a failed query. **`unknown` is never `current`**, which
-  is the whole point: a check whose unknown bucket is a pass is
-  indistinguishable from one that works. The comparison is on filenames,
-  because `run_migrations.py` tracks and orders by filename and duplicate
-  numeric prefixes are a real occurrence here.
+  Reported by Jake Davis (`@aptera-motors-it`). Every finding was supplied
+  with a working proof of concept, each of which is now a Go test that was
+  watched failing on the pre-fix tree and watched failing again with the fix
+  reverted.
 
-  Surfaced on `/readyz` as a **non-required** dependency, so a schema that is
-  behind is reported loudly without pulling an operator's console out of the
-  load balancer during the incident they need it for: readiness answers
-  `ready_degraded` with the detail and keeps serving.
+- **A graph_ws subscriber disconnecting mid-dispatch could panic the ingest
+  consume goroutine.** Not part of the advisory — found by the race detector
+  on the new handler tests above, which are the first to unsubscribe while
+  the consume loop is actively dispatching. `Unsubscribe` closed the
+  subscriber channel *outside* the lock while `dispatch` sent to it *after*
+  releasing the read lock, so a client that disconnected at the wrong moment
+  could have its channel closed between the two. A send on a closed channel
+  panics even inside a `select` with a `default` arm, so the outcome is a
+  crashed consumer rather than a dropped envelope. The close now happens
+  under the same write lock as the delete, and `dispatch` holds the read lock
+  across its sends — which is safe only because that send is non-blocking, so
+  a slow client still costs a dropped envelope and never back-pressure.
 
-- **Upgrading is now a required check, and one leg crosses a major version.**
-  People upgrade, and until now a pull request could break the upgrade path
-  with both upgrade tests red or never run: neither `upgrade-test.yml` nor
-  `integration.yml`'s upgrade leg appeared in `.github/required-checks.json`.
-  `Previous minor to this tree, with data present` is now required.
-
-  Promoting it as it stood would have been worse than leaving it alone.
-  `upgrade-test.yml` was path-filtered on both triggers, and a workflow that
-  does not trigger creates no check run at all — so a required check that
-  never reports blocks the pull request forever, which is the quiet failure
-  rather than a red one. Measured over the 18 most recently merged pull
-  requests, reading every page of `commits/{sha}/check-runs` (113–143 checks
-  each, so the familiar one-page cap was not the cause): the context was
-  absent from **18 of 18**, and none of those 18 had touched a filtered path.
-
-  The filter is gone rather than moved into the jobs. `integration.yml` needs
-  the job-level form because a disaster-recovery rehearsal costs 15 minutes;
-  this workflow runs in 1–3 minutes, so it now carries no path filter and no
-  job-level or step-level `if:` anywhere — 14 unconditional steps, 0
-  change-gated, as `scripts/check_required_check_substance.py --static`
-  reports it. It cannot rehearse nothing the way `Backup → destroy → restore`
-  did on 74 of 100 runs, and that is now a property a reader can confirm by
-  looking rather than a behaviour someone has to go and measure.
-
-- **Two upgrade legs that cross a major version boundary, with real data.**
-  Nothing had ever crossed one. The previous-minor job resolves its starting
-  point with `--previous-minor`, which is same-major by construction, and
-  `integration.yml` pins `v7.3.1`/`v7.5.0` — also same-major, and seeding a
-  throwaway `upgrade_probe` table, so what it proves is that a migration did
-  not drop an unrelated table. Meanwhile `apps/docs/docs/operations/upgrades.md`
-  told operators that crossing more than one major "is supported but untested
-  as a single step", which was true.
-
-  `v21.0.0` is the most recent boundary and the one a supported operator
-  crosses today; it is also the only boundary a *new* migration can still
-  break, since everything below it is frozen history. `v17.0.0` is five majors
-  in one step — the case the documentation admits is untested — and is the
-  oldest release this fixture can seed unmodified, because migration `083`
-  (`cases` → `aisoc_cases`) landed in v16.0.0.
-
-  Both legs are better than either existing one in the two ways that matter.
-  They seed the **real tables** from `scripts/upgrade_fixture.sql` — a tenant,
-  a user, one alert at each of the five severities, a case — and they apply
-  this tree's chain with **this tree's runner**, where the previous-minor job
-  deliberately uses the released image's runner and therefore cannot see a
-  migration that needs a newer runner than the previous release shipped.
-  Both legs pass: row counts identical, the alert and the case readable by id,
-  all five severities intact, every migration recorded as applied, the DML-only
-  runtime role still able to read, and a re-run applying nothing.
-
+  Latent rather than observed: eight race-detector runs of the pre-change
+  tree are clean, because nothing previously exercised that interleaving.
+  Reverting either half alone leaves the race closed, so the negative control
+  reverts both and watches it return.
 
 ### Fixed
-
-- **The API reported version `0.1.0` on every deployment it has ever shipped.**
-  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  `Settings.APP_VERSION` was a literal and nothing populated it, so `/health`,
-  the OpenAPI document and the startup log agreed on a version no release has
-  ever carried. `core/telemetry.py` in both `api` and `agents` carried a
-  second stale literal, `4.0.0`, so a trace and a health check named different
-  releases of the same process.
-
-  The version now resolves from the `AISOC_VERSION` build arg (stamped by
-  `publish-images.yml`, since a service build context cannot reach the
-  repo-root `VERSION` file), then from that file on a source checkout, then
-  the string `"unknown"` — deliberately not `0.0.0`. A version-shaped
-  placeholder parses as a release and sorts below every tag that ever shipped,
-  so an operator comparing a deployment against a tag cannot tell "very old"
-  from "nobody told me". `VERSION` is now a read-only alias of `APP_VERSION`,
-  so the two cannot disagree and a stray `VERSION` environment variable cannot
-  move either.
-
-- **The console had two version surfaces reading two different build-time
-  values.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
-  The sidebar footer rendered `packageJson.version` and Settings → About
-  rendered `process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'`, both frozen when
-  the bundle was compiled, by separate mechanisms, so one image could show two
-  numbers. Both now read `consoleVersion` from `/api/runtime-config`.
-  `next.config.js` substituted `'0.0.0'` when the `VERSION` file could not be
-  read, which also made that route's own `'unknown'` branch unreachable; it
-  now substitutes an empty string and the route guards with a trim, so a build
-  that carries no version says so.
 
 - **`docker compose pull && up -d` booted new code against the old schema and
   said nothing. There is now a real upgrade path, and `make up` refuses rather
@@ -252,6 +208,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opt-in plugin PVC, which also makes plugin installation possible on
   Kubernetes at all, since the pod runs with `readOnlyRootFilesystem: true`.
 
+### Added
+
+- **Upgrading is now a required check, and one leg crosses a major version.**
+  People upgrade, and until now a pull request could break the upgrade path
+  with both upgrade tests red or never run: neither `upgrade-test.yml` nor
+  `integration.yml`'s upgrade leg appeared in `.github/required-checks.json`.
+  `Previous minor to this tree, with data present` is now required.
+
+  Promoting it as it stood would have been worse than leaving it alone.
+  `upgrade-test.yml` was path-filtered on both triggers, and a workflow that
+  does not trigger creates no check run at all — so a required check that
+  never reports blocks the pull request forever, which is the quiet failure
+  rather than a red one. Measured over the 18 most recently merged pull
+  requests, reading every page of `commits/{sha}/check-runs` (113–143 checks
+  each, so the familiar one-page cap was not the cause): the context was
+  absent from **18 of 18**, and none of those 18 had touched a filtered path.
+
+  The filter is gone rather than moved into the jobs. `integration.yml` needs
+  the job-level form because a disaster-recovery rehearsal costs 15 minutes;
+  this workflow runs in 1–3 minutes, so it now carries no path filter and no
+  job-level or step-level `if:` anywhere — 14 unconditional steps, 0
+  change-gated, as `scripts/check_required_check_substance.py --static`
+  reports it. It cannot rehearse nothing the way `Backup → destroy → restore`
+  did on 74 of 100 runs, and that is now a property a reader can confirm by
+  looking rather than a behaviour someone has to go and measure.
+
+- **Two upgrade legs that cross a major version boundary, with real data.**
+  Nothing had ever crossed one. The previous-minor job resolves its starting
+  point with `--previous-minor`, which is same-major by construction, and
+  `integration.yml` pins `v7.3.1`/`v7.5.0` — also same-major, and seeding a
+  throwaway `upgrade_probe` table, so what it proves is that a migration did
+  not drop an unrelated table. Meanwhile `apps/docs/docs/operations/upgrades.md`
+  told operators that crossing more than one major "is supported but untested
+  as a single step", which was true.
+
+  `v21.0.0` is the most recent boundary and the one a supported operator
+  crosses today; it is also the only boundary a *new* migration can still
+  break, since everything below it is frozen history. `v17.0.0` is five majors
+  in one step — the case the documentation admits is untested — and is the
+  oldest release this fixture can seed unmodified, because migration `083`
+  (`cases` → `aisoc_cases`) landed in v16.0.0.
+
+  Both legs are better than either existing one in the two ways that matter.
+  They seed the **real tables** from `scripts/upgrade_fixture.sql` — a tenant,
+  a user, one alert at each of the five severities, a case — and they apply
+  this tree's chain with **this tree's runner**, where the previous-minor job
+  deliberately uses the released image's runner and therefore cannot see a
+  migration that needs a newer runner than the previous release shipped.
+  Both legs pass: row counts identical, the alert and the case readable by id,
+  all five severities intact, every migration recorded as applied, the DML-only
+  runtime role still able to read, and a re-run applying nothing.
 
 ### Security
 
@@ -302,6 +309,177 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   console and fusion ever disagree about what "closed" means.
 
   Reported by Jake Davis.
+
+### Documentation
+
+- **The upgrade guide stopped describing the product five majors ago, and the
+  gap was in the one table whose job is to say what an operator must do.**
+  `apps/docs/docs/operations/upgrades.md` carried rows for v10 through v17
+  while v18, v19, v20, v21 and v22 had all shipped, so anyone crossing the
+  last five majors got nothing; the procedure beside it told them to
+  `git checkout v7.3.1` and called that the latest release. Five rows added,
+  each written from that release's own `### BREAKING` section rather than
+  summarised: three previously-inert IAM tables that now deny and confer
+  (v18), a `PATCH /alerts/{id}` that answered 200 for a write it dropped and
+  now answers 422 naming the route that does apply the field (v19),
+  `is_system` removed from case comments (v20), correlation grouping narrowing
+  on missing identifiers with reduction moving 42.6% → 24.5% (v21), and the
+  eight `GET /posture/summary` counts becoming nullable so "nothing has
+  collected" stops rendering as "clean" (v22).
+
+- **Three documented verification steps could not pass.** The page ended on
+  `curl -fsS http://localhost:8000/healthz`, and the API has never served
+  `/healthz` — it serves `/health`, `/livez` and `/readyz`, and `-f` turns the
+  404 into a non-zero exit, so the final check of every upgrade reported
+  failure on a healthy deployment. (`/healthz` is real on `services/realtime`
+  and `services/mcp`, which is where it came from; `kubernetes.md` had the
+  same path as an ingress rule pointed at the API.) It also told readers to
+  run `aisoc-cli benchmark` / `pnpm aisoc:benchmark`, neither of which exists
+  — the CLI has `keygen`, `serve`, `submit` and `replay` plus the `plugin`,
+  `detection`, `db` and `mcp` groups — and to check `/api/v1/system/version`,
+  a route that exists nowhere in the tree. The version check is recorded as
+  **not yet available**, naming the pull request that builds it, with no
+  response shape quoted because none has been read off a route.
+
+- **`ha-deployment.md` and `upgrades.md` contradicted each other about Helm,
+  and now agree.** "The chart does not run them" was true when written and is
+  not: the chart ships `templates/migrations-job.yaml`, a
+  `pre-install,pre-upgrade` hook, off by default and strict, so
+  `helm upgrade --set runMigrations=true` finally does what `upgrades.md` has
+  always claimed. `apps/docs/docs/deployment/kubernetes.md` gains the
+  migrations section `release-policy.md` has been pointing readers at while it
+  contained zero mentions of either word.
+
+- **The LTS section promised a support window the security policy does not
+  offer.** It said security fixes are backported to the previous major for 90
+  days; `SECURITY.md` gives 90 days to the *latest tagged release* and
+  best-effort to older tags, so the previous major had no guarantee at all.
+  Two published documents disagreeing about the support window is the tell;
+  the security policy is now cited as the policy of record.
+
+- **A recovery note for Grafana dashboards already lost to an image pull,
+  which says plainly that they cannot be recovered.** `/var/lib/grafana` had
+  no volume behind it, so UI-built dashboards, users, annotations and
+  browser-created alert rules lived in the container's writable layer and a
+  recreate discarded them — silently, because the provisioned dashboards come
+  back looking fine. The remedy is to rebuild once, export each to JSON and
+  commit it under `infra/docker/grafana/dashboards/` so provisioning owns it
+  and the next recreate is a non-event, with the caveat that
+  `allowUiUpdates: false` means editing a provisioned dashboard in the browser
+  is silently reverted.
+
+- **`backup-and-restore.md` and `upgrades.md` now refer to each other.**
+  Neither mentioned the other, despite the pre-upgrade backup being the only
+  thing between an operator and an unrecoverable schema — the API chain is
+  forward-only and has no downgrade. `backup-and-restore.md` also documents
+  the seventh component it gained, the credential key: why it is the one
+  artefact that refuses `BACKUP_ENCRYPTION=off`, what `restore.sh` does when a
+  *different* key is already present, and that `--component` takes
+  `credential_key`, which its own command line had omitted. The rollback
+  section is unchanged in substance and gains an explicit warning that the new
+  pre-upgrade dump is a restore path and **not** a downgrade.
+
+- **Upgrade-test coverage is stated precisely rather than generously.**
+  `Previous minor to this tree, with data present` is a required check; the
+  two cross-major legs (`v21.0.0` and `v17.0.0`) run unfiltered on every pull
+  request and are deliberately not required, because a matrix context name
+  carries the matrix value and requiring it would orphan a context on the next
+  version bump. The page says which two boundaries are exercised and that the
+  other four are not.
+
+### BREAKING
+
+- **`DeploymentConfig` and `DeploymentConfigUpdate` drop the self-update
+  fields, and `telemetry_enabled` becomes read-only.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  Removed from the published spec: `DeploymentConfig.update_channel`,
+  `DeploymentConfig.auto_update`, `DeploymentConfigUpdate.update_channel`,
+  `DeploymentConfigUpdate.auto_update`, `DeploymentConfigUpdate.telemetry_enabled`,
+  and the `UpdateChannel` schema.
+
+  They could not be preserved because each was a published promise that
+  something acts on them and nothing does. `update_channel` and `auto_update`
+  are deleted rather than wired: AiSOC does not update itself, so there is no
+  implementation to point them at and leaving them settable would keep
+  advertising one. `telemetry_enabled` was worse than unread — it was
+  published as `true`, so an API consumer reading `docs/openapi.yaml`
+  concluded this platform phones home by default, which
+  `docs/trust/data-flows.md` and three CI gates say it does not. It is kept on
+  the response, typed `Literal[False]`, so the question stays answerable and
+  the spec cannot drift back; it is gone from the update model because
+  accepting `true` would have the API assert something no code here can do.
+
+  Consumers were checked before removal: no reader anywhere in the tree
+  outside the module, and the console never calls `/api/v1/deployment/*`.
+  `DeploymentConfigUpdate` now rejects unknown keys, so a client still sending
+  `auto_update: true` gets a 422 rather than a 200 and a false belief that it
+  configured something.
+
+### Added
+
+- **`GET /api/v1/system/version` — the route the upgrade runbook already told
+  operators to check.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  `apps/docs/docs/operations/upgrades.md` has said "check
+  `/api/v1/system/version` and see the same number" since it was written, and
+  the route did not exist, so the documented way to confirm an upgrade landed
+  returned 404. It reports the running version, the stamped commit, the
+  applied-migration high-water mark and the schema-skew verdict below, behind
+  `settings:read`.
+
+- **Schema skew is detected and reported, in three states.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  Nothing compared `aisoc_schema_migrations` against the migrations on disk.
+  The table was read in exactly one place — `run_migrations.py`, the runner
+  that writes it — so a deployment whose migration step failed, was skipped or
+  was rolled back ran new code against an old schema while `/health` answered
+  200 and `/readyz` answered ready, and the first symptom was an
+  `UndefinedColumnError` on whichever request happened to touch the missing
+  column.
+
+  `current` means every migration on disk is applied; `skewed` means the two
+  disagree, with `pending` and `applied_not_on_disk` naming which direction;
+  `unknown` means the comparison could not be performed at all — no database,
+  no tracking table, a failed query. **`unknown` is never `current`**, which
+  is the whole point: a check whose unknown bucket is a pass is
+  indistinguishable from one that works. The comparison is on filenames,
+  because `run_migrations.py` tracks and orders by filename and duplicate
+  numeric prefixes are a real occurrence here.
+
+  Surfaced on `/readyz` as a **non-required** dependency, so a schema that is
+  behind is reported loudly without pulling an operator's console out of the
+  load balancer during the incident they need it for: readiness answers
+  `ready_degraded` with the detail and keeps serving.
+
+### Fixed
+
+- **The API reported version `0.1.0` on every deployment it has ever shipped.**
+  ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  `Settings.APP_VERSION` was a literal and nothing populated it, so `/health`,
+  the OpenAPI document and the startup log agreed on a version no release has
+  ever carried. `core/telemetry.py` in both `api` and `agents` carried a
+  second stale literal, `4.0.0`, so a trace and a health check named different
+  releases of the same process.
+
+  The version now resolves from the `AISOC_VERSION` build arg (stamped by
+  `publish-images.yml`, since a service build context cannot reach the
+  repo-root `VERSION` file), then from that file on a source checkout, then
+  the string `"unknown"` — deliberately not `0.0.0`. A version-shaped
+  placeholder parses as a release and sorts below every tag that ever shipped,
+  so an operator comparing a deployment against a tag cannot tell "very old"
+  from "nobody told me". `VERSION` is now a read-only alias of `APP_VERSION`,
+  so the two cannot disagree and a stray `VERSION` environment variable cannot
+  move either.
+
+- **The console had two version surfaces reading two different build-time
+  values.** ([#1732](https://github.com/beenuar/AiSOC/pull/1732))
+  The sidebar footer rendered `packageJson.version` and Settings → About
+  rendered `process.env.NEXT_PUBLIC_APP_VERSION || '0.0.0'`, both frozen when
+  the bundle was compiled, by separate mechanisms, so one image could show two
+  numbers. Both now read `consoleVersion` from `/api/runtime-config`.
+  `next.config.js` substituted `'0.0.0'` when the `VERSION` file could not be
+  read, which also made that route's own `'unknown'` branch unreachable; it
+  now substitutes an empty string and the route guards with a trim, so a build
+  that carries no version says so.
 
 ## [22.2.0] - 2026-11-05
 
