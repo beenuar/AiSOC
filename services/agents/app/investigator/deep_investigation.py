@@ -45,7 +45,7 @@ from app.mcp.tools import build_mcp_toolset
 from app.prompting.envelope import system_rule
 from app.prompting.tool_results import unverified_tool_claims
 from app.security import vaid_plugin
-from app.security.agent_identity import issue_identity
+from app.security.agent_identity import IdentityLike, issue_identity
 from app.tools.customer_tools import scoped_customer_tools
 from app.tools.investigation import investigation_tools
 from app.tools.registry import default_registry
@@ -509,6 +509,7 @@ async def run_deep_investigation(
         # the plugin disabled (the default), `vaid_plugin_enabled()` is false
         # and this is exactly the `issue_identity(...)` call it was before —
         # same function, same arguments, same return type.
+        identity: IdentityLike
         if vaid_plugin.vaid_plugin_enabled():
             identity = vaid_plugin.issue_vaid_identity("investigation", run_id=run_id, tenant_id=tenant_id)
         else:

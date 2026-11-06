@@ -55,6 +55,7 @@ from __future__ import annotations
 import time
 import uuid
 from dataclasses import dataclass, field
+from typing import Protocol
 
 #: Default credential lifetime. Long enough for a deep investigation,
 #: short enough that a stalled run re-issues rather than continuing on a
@@ -210,6 +211,42 @@ class ScopeDenied(RuntimeError):
     the structured ``{"error": ...}`` its loop contract requires, which is a
     conversion at one place rather than every caller parsing a string.
     """
+
+
+class IdentityLike(Protocol):
+    """The structural interface :class:`AgentIdentity` offers, and that
+    ``app.security.vaid_plugin.VaidBackedIdentity`` (beenuar/AiSOC#1739)
+    delegates to it rather than replacing.
+
+    A caller that only needs this interface — :func:`ToolRegistry.execute`,
+    ``run_with_tools`` — should type its ``identity`` parameter against this
+    rather than against :class:`AgentIdentity` directly, so that passing a
+    badge-wrapped identity (when the VAID plugin is enabled) type-checks
+    without either side depending on the other: this module has no business
+    importing the optional plugin that builds on it.
+    """
+
+    @property
+    def agent(self) -> str: ...
+
+    @property
+    def run_id(self) -> str: ...
+
+    @property
+    def scopes(self) -> frozenset[str]: ...
+
+    @property
+    def credential_id(self) -> str: ...
+
+    def expired(self, *, now: float | None = None) -> bool: ...
+
+    def may(self, tool: str) -> bool: ...
+
+    def require(self, tool: str, *, now: float | None = None) -> None: ...
+
+    def audit_row(self, tool: str, *, allowed: bool, reason: str | None = None) -> dict[str, object]: ...
+
+    def with_granted_tools(self, tools: frozenset[str] | set[str] | list[str]) -> IdentityLike: ...
 
 
 @dataclass(frozen=True)
