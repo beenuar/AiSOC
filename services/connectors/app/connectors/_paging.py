@@ -34,6 +34,7 @@ The properties, each of which is a defect someone has shipped:
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
+from datetime import datetime
 from typing import Any
 
 import httpx
@@ -195,4 +196,117 @@ async def read_token_pages(
         rows=len(rows),
         detail="the window was not read to the end; rows beyond this point are not re-requested by a later poll",
     )
+    return rows
+
+
+def created_before(row: dict[str, Any], cutoff_ms: int) -> bool:
+    """Is this row's ``created_at`` older than ``cutoff_ms``? An absent or unparseable stamp is not."""
+    value = row.get("created_at")
+    if not isinstance(value, str):
+        return False
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp() * 1000 < cutoff_ms
+    except ValueError:
+        return False
+
+
+def _array_rows(body: Any) -> list[dict[str, Any]]:
+    return [row for row in body if isinstance(row, dict)] if isinstance(body, list) else []
+
+
+def _same_origin_target(origin: httpx.URL, link: str) -> httpx.URL | None:
+    """``link`` resolved against ``origin``, or None if it leaves that origin."""
+    try:
+        target = origin.join(link)
+    except httpx.InvalidURL:
+        return None
+    return target if (target.scheme, target.host, target.port) == (origin.scheme, origin.host, origin.port) else None
+
+
+async def read_link_header_pages(
+    client: httpx.AsyncClient,
+    first: httpx.Response,
+    *,
+    headers: dict[str, str],
+    feed: str,
+    stop_when: Callable[[list[dict[str, Any]]], bool] | None = None,
+    max_pages: int = DEFAULT_MAX_PAGES,
+) -> list[dict[str, Any]]:
+    """Every row of a JSON-array collection paged by an RFC 8288 ``Link`` header.
+
+    The sibling of :func:`read_linked_pages` for vendors that put the link in
+    the response headers and the rows at the top level of the body. ``first``
+    is the caller's own 200 response, for the same reason as there.
+    ``stop_when`` receives each non-empty page and ends the read when it answers
+    True, which is how a newest-first collection with no server-side time filter
+    stops once a page has passed the start of the window.
+
+    Two rules are specific to this shape:
+
+    * **An empty page ends the collection, even when it carries a next link.**
+      This is the opposite of :func:`read_token_pages`, and it is what the
+      vendor requires. Okta documents that a System Log request with no
+      ``until`` has "an infinite number of pages" whose next link is "always
+      present, even if there are no new events", and says to "continue this
+      process until no events are returned".
+    * **The link may not leave the origin of the opening request.** The egress
+      guard in ``app/security/egress.py`` validates the URLs a tenant configures,
+      not the ones a server answers with, and ``domain`` and ``gitlab_url`` are
+      tenant-controlled. A server at a permitted address could otherwise answer
+      ``Link: <http://169.254.169.254/...>; rel="next"`` and have this loop fetch
+      it, with the vendor credential attached. A refused link is logged and ends
+      the read with the rows already in hand.
+    """
+
+    def finished(page: list[dict[str, Any]]) -> bool:
+        return not page or (stop_when is not None and stop_when(page))
+
+    try:
+        page = _array_rows(first.json())
+    except ValueError:
+        logger.warning("connector.paging.first_page_unparseable", feed=feed)
+        return []
+
+    rows = list(page)
+    resp = first
+    for _ in range(max_pages - 1):
+        if finished(page):
+            return rows
+        link = resp.links.get("next", {}).get("url")
+        if not link:
+            return rows
+        target = _same_origin_target(first.url, link)
+        if target is None:
+            logger.warning("connector.paging.next_link_refused", feed=feed, origin=first.url.host, rows=len(rows))
+            return rows
+        try:
+            resp = await client.get(target, headers=headers)
+        except httpx.HTTPError as exc:
+            # Keep what was read, as in the other two readers.
+            logger.warning("connector.paging.next_page_error", feed=feed, rows=len(rows), error=str(exc))
+            return rows
+        if resp.status_code != 200:
+            logger.warning(
+                "connector.paging.next_page_failed",
+                feed=feed,
+                status=resp.status_code,
+                rows=len(rows),
+                body=resp.text[:300],
+            )
+            return rows
+        try:
+            page = _array_rows(resp.json())
+        except ValueError:
+            logger.warning("connector.paging.next_page_unparseable", feed=feed, rows=len(rows))
+            return rows
+        rows.extend(page)
+
+    if not finished(page) and resp.links.get("next"):
+        logger.warning(
+            "connector.paging.page_cap_reached",
+            feed=feed,
+            pages=max_pages,
+            rows=len(rows),
+            detail="the window was not read to the end; rows beyond this point are not re-requested by a later poll",
+        )
     return rows
