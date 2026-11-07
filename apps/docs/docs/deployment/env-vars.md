@@ -21,11 +21,40 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `APP_NAME` | `AiSOC API` | Display name in OpenAPI docs |
-| `APP_VERSION` | `0.1.0` | Reported in `/healthz` |
+| `APP_VERSION` | _resolved, see below_ | The running release. Reported by `GET /health`, by `GET /api/v1/system/version`, and as `info.version` in the OpenAPI document — one fact, three surfaces. The API serves `/health`, not `/healthz` |
+| `VERSION` | — | **Not read.** `Settings.VERSION` is a read-only alias for `APP_VERSION`, not a field, so a bare `VERSION` variable in the environment is ignored. It is deliberately unbindable: `VERSION` is a name the release workflow already exports for its own purposes, and nothing but the build arg and the tree should be able to move the version a process reports |
 | `ENV` / `ENVIRONMENT` | `development` | One of `development`, `staging`, `production` |
 | `DEBUG` | `false` | Enables verbose error responses — never enable in production |
 | `API_PREFIX` | `/api/v1` | Mount point for the versioned API |
 | `LOG_LEVEL` | `INFO` | `DEBUG`, `INFO`, `WARNING`, `ERROR` |
+
+#### How the version resolves
+
+`APP_VERSION` has no literal default. When it is not set explicitly it is
+resolved, in this order:
+
+1. **`AISOC_VERSION`** in the environment. Images stamp this from the
+   `AISOC_VERSION` build arg, which the publish workflow fills from the
+   repo-root `VERSION` file. A container has no repository to read, so this
+   is the only path that can work inside one.
+2. **The repo-root `VERSION` file**, found by walking up from the module.
+   This is the source-checkout path — running from a clone, the test suite,
+   and the OpenAPI export. The walk is bounded and only accepts a file whose
+   contents look like a release, because from inside a container it can
+   otherwise reach `/VERSION`, which exists on some base images and means
+   something unrelated.
+3. **The literal string `"unknown"`** when neither declared one.
+
+That third case is the point, and it is why this row no longer shows a
+number. `APP_VERSION` used to default to `0.1.0`, which is not a neutral
+placeholder: it parses as a version, sorts below every tag that has ever
+shipped, and renders in a console tile as though it had been measured. A
+v22.2.0 deployment reported `0.1.0` on `/health`, published `0.1.0` as
+`info.version` and logged it at startup — three surfaces agreeing, all
+wrong, which is exactly why it went unnoticed for twenty-two majors. An
+operator comparing a deployment against a release tag could not tell "this
+is very old" from "nobody told me". `"unknown"` cannot be mistaken for
+either.
 
 ### Security and tokens
 
@@ -35,7 +64,7 @@ The API uses bare environment variable names (no prefix). Booleans accept `true`
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | `30` | Lifetime of an access token |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | `7` | Lifetime of a refresh token |
 | `ALGORITHM` | `HS256` | JWT signing algorithm |
-| `AISOC_CREDENTIAL_KEY` | _empty_ | Fernet key encrypting connector credentials at rest. Empty means "not configured" and the API generates an **ephemeral** key per process, so saved credentials do not survive a restart. Any other invalid value raises, and every connector save answers HTTP 500 — which is why `.env.example` ships it empty rather than as a placeholder. `make env` writes a real one. |
+| `AISOC_CREDENTIAL_KEY` | _empty_ | **Required outside a development environment.** Fernet key encrypting connector credentials at rest. What an empty value does depends on `ENVIRONMENT`: in a dev-class environment (`development`, `dev`, `local`, `demo`, `test`) the vault generates an **ephemeral** process-local key and logs a warning, so saved credentials do not survive a restart; anywhere else it **raises** and refuses to start the vault, because silently encrypting under a throwaway key is worse than refusing. A non-empty but invalid value raises in every environment, and every connector save then answers HTTP 500 — which is why `.env.example` ships it empty rather than as a placeholder. `make env` writes a real one. |
 | `AISOC_CREDENTIAL_KEY_ROTATION_FROM` | _empty_ | Comma-separated previous keys, accepted for decryption only, for zero-downtime rotation. |
 | `AISOC_SERVICE_TOKEN` | _empty_ | Shared bearer for service-to-service calls. The API **sends** it when proxying the connector catalog and "Test connection" to `services/connectors`, which **verifies** it — so a value set on one side only is a 401 the wizard reports as a failed connection test. `make env` generates one and compose passes it to both. |
 | `AISOC_CONNECTORS_SERVICE_TOKEN` | _empty_ | Per-service override for the above, if you would rather not share one secret. |
@@ -297,7 +326,7 @@ Source: [`services/agents/app/`](https://github.com/beenuar/AiSOC/tree/main/serv
 | `ATTCK_DATA_PATH` | — | Path to a local MITRE ATT&CK STIX bundle (falls back to the bundled snapshot) |
 | `AISOC_ATTCK_CDN_FETCH` | _off_ | Allow the startup corpus load to fetch the full ATT&CK bundle from `raw.githubusercontent.com` when no file is present at `ATTCK_DATA_PATH`. Off by default: the lifespan runs on every start, so leaving it on would make an unconfigured deployment — including an air-gapped one — reach the internet before serving a request. With it off the service loads the bundled snapshot. |
 | `OTEL_SERVICE_NAME` | `aisoc-agents` | Service name in OTel traces |
-| `AISOC_VERSION` | `0.1.0` | Reported in OTel resource attributes |
+| `AISOC_VERSION` | _resolved; see [How the version resolves](#how-the-version-resolves)_ | Stamped into the image from the build arg of the same name. Reported as `service.version` in OTel resource attributes, and it is the first source the running-version resolver consults, so a trace and `/health` name the same release. It previously defaulted to the literal `4.0.0` here while the health endpoint defaulted to `0.1.0` — two stale literals, so one process reported two different versions of itself depending on which surface you asked. |
 | `JAEGER_HOST` / `JAEGER_PORT` | `localhost` / `6831` | Jaeger agent endpoint (used when `OTEL_EXPORTER=jaeger`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | — | OTLP collector endpoint |
 | `OTEL_EXPORTER` | `otlp` | One of `otlp`, `jaeger`, `console` |

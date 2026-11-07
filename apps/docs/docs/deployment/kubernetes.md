@@ -197,7 +197,8 @@ ingress:
       paths: [ "/" ]
     - host: api.aisoc.example.com     # api (FastAPI, port 8000)
       # /livez and /readyz, not /healthz — the API serves /health, /livez and
-      # /readyz. /healthz belongs to realtime and mcp, and 404s here.
+      # /readyz. /healthz belongs to realtime, mcp and osquery-tls, and 404s
+      # here. Probe /readyz for readiness and /livez for liveness.
       paths: [ "/api", "/livez", "/readyz" ]
     - host: ws.aisoc.example.com      # realtime (WebSocket + push, port 8002)
       paths: [ "/ws" ]
