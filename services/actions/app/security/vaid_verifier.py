@@ -61,6 +61,7 @@ __all__ = [
     "BadgeDenied",
     "vaid_plugin_enabled",
     "verify_badge_for_dispatch",
+    "preflight_or_raise",
 ]
 
 _ENABLED_ENV = "AISOC_VAID_PLUGIN_ENABLED"
@@ -225,3 +226,52 @@ def verify_badge_for_dispatch(
 
     if not has_capability(badge, required_capability):
         raise BadgeDenied(f"badge {badge.get('vaid_id')!r} does not grant capability {required_capability!r}")
+
+
+def preflight_or_raise() -> None:
+    """Startup-time check: refuse to enable the plugin when nothing can
+    verify or no revocation list is configured (beenuar/AiSOC#1739
+    follow-up, verify-side counterpart of the agents-service mint-side
+    check).
+
+    A no-op when the plugin is disabled. When enabled, this reads
+    ``AISOC_VAID_KERNEL_PUBLIC_KEY_HEX`` for real (not just checks it is
+    set — a malformed or wrong-length key fails here too) and the
+    revocation list, so a dispatch does not discover either gap on its
+    first live request, 3am included.
+
+    It also imports vaid-mint, which is the failure mode a deployment is
+    *most* likely to hit and the one reading this function would not
+    predict: ``vaid-mint`` is an optional extra and ``poetry export --only
+    main`` — what ``Dockerfile`` installs from — resolves 37 packages with
+    no ``vaid`` among them. So the stock image has the flag and none of the
+    library, and without this import an operator who configures everything
+    correctly gets a clean boot followed by ``VAID badge check failed
+    unexpectedly (ModuleNotFoundError)`` on the first dispatch that presents
+    a badge — a refused containment action, named after the wrong subsystem,
+    at exactly the hour this check exists to avoid. The agents-side
+    counterpart catches it already, because its preflight builds the issuer
+    and that reaches the library; this side touched nothing but ``os`` and
+    ``json`` and so could not.
+
+    ``tests/test_vaid_verifier.py`` holds the two halves together: it reads
+    this module and fails if the verification path imports a ``vaid_mint``
+    submodule this function does not, so the list below cannot fall behind
+    the one that matters.
+    """
+    if not vaid_plugin_enabled():
+        return
+
+    from vaid_mint.document import has_capability  # noqa: F401, PLC0415
+    from vaid_mint.revocation import RevocationStatus, assemble_lineage  # noqa: F401, PLC0415
+    from vaid_mint.verify import parse_vaid_document, verify_vaid_standing  # noqa: F401, PLC0415
+
+    _kernel_public_key()
+    path = os.environ.get(_REVOCATION_LIST_PATH_ENV, "").strip()
+    if not path or _FileRevocationList(path).revoked_ids() is None:
+        raise BadgeDenied(
+            f"VAID plugin is enabled ({_ENABLED_ENV}) but {_REVOCATION_LIST_PATH_ENV} "
+            "is not set, or names a file that is absent, unreadable or malformed; "
+            "refusing to start rather than refusing every dispatch once a badge "
+            "is first presented"
+        )

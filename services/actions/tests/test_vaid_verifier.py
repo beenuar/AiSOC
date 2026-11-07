@@ -252,3 +252,137 @@ def test_tenant_binding_accepts_a_uuid_typed_tenant(monkeypatch, tmp_path):
     _configure(monkeypatch, mint, tmp_path)
     badge = mint.mint(capability_set=["isolate_host"], tenant_id=str(tenant))
     vaid_verifier.verify_badge_for_dispatch(badge, "isolate_host", tenant_id=tenant)  # must not raise
+
+
+# ── Startup check: fails at boot, not at the first dispatch ──────────────
+# beenuar/AiSOC#1739 follow-up, verify-side counterpart of the agents
+# service's mint-side `preflight_or_raise`.
+
+
+def test_preflight_is_a_no_op_when_the_plugin_is_disabled():
+    vaid_verifier.preflight_or_raise()  # must not raise
+
+
+def test_preflight_is_a_strict_no_op_when_disabled_no_reads_no_raise_no_logs(monkeypatch, caplog):
+    """Stronger than "does not raise": with the flag unset (the default,
+    and the fixture's own baseline — no kernel key, no revocation list,
+    nothing configured), this must touch nothing the enabled path would
+    touch.
+
+    Proven by making every one of those paths explode if reached, rather
+    than by reading the source and trusting the early return."""
+    import logging
+
+    def _boom(*a, **kw):
+        raise AssertionError("preflight_or_raise touched the enabled-only path with the plugin disabled")
+
+    monkeypatch.setattr(vaid_verifier, "_kernel_public_key", _boom)
+    monkeypatch.setattr(vaid_verifier, "_FileRevocationList", _boom)
+    monkeypatch.setattr(vaid_verifier.Path, "read_text", _boom)
+
+    with caplog.at_level(logging.DEBUG):
+        vaid_verifier.preflight_or_raise()  # must not raise
+
+    assert caplog.records == []
+
+
+def test_preflight_refuses_when_no_kernel_public_key_is_configured(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    mint = _Mint()
+    _configure(monkeypatch, mint, tmp_path)
+    monkeypatch.delenv(vaid_verifier._KERNEL_PUBLIC_KEY_ENV, raising=False)
+
+    with pytest.raises(vaid_verifier.BadgeDenied, match=vaid_verifier._KERNEL_PUBLIC_KEY_ENV):
+        vaid_verifier.preflight_or_raise()
+
+
+def test_preflight_refuses_when_no_revocation_list_is_configured(monkeypatch):
+    """The gap named in the pull request: enabling the plugin with no
+    `AISOC_VAID_REVOCATION_LIST_PATH` used to refuse every dispatch, live.
+    This must refuse at startup instead."""
+    _enable(monkeypatch)
+    mint = _Mint()
+    monkeypatch.setenv(vaid_verifier._KERNEL_PUBLIC_KEY_ENV, mint.public_key_hex())
+
+    with pytest.raises(vaid_verifier.BadgeDenied, match=vaid_verifier._REVOCATION_LIST_PATH_ENV):
+        vaid_verifier.preflight_or_raise()
+
+
+def test_preflight_refuses_when_the_revocation_list_file_is_malformed(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    mint = _Mint()
+    monkeypatch.setenv(vaid_verifier._KERNEL_PUBLIC_KEY_ENV, mint.public_key_hex())
+    bad_path = tmp_path / "revoked.json"
+    bad_path.write_text("not json")
+    monkeypatch.setenv(vaid_verifier._REVOCATION_LIST_PATH_ENV, str(bad_path))
+
+    with pytest.raises(vaid_verifier.BadgeDenied, match=vaid_verifier._REVOCATION_LIST_PATH_ENV):
+        vaid_verifier.preflight_or_raise()
+
+
+def test_preflight_passes_when_the_plugin_is_fully_configured(monkeypatch, tmp_path):
+    _enable(monkeypatch)
+    mint = _Mint()
+    _configure(monkeypatch, mint, tmp_path)
+    vaid_verifier.preflight_or_raise()  # must not raise
+
+
+def test_preflight_refuses_when_vaid_mint_is_not_installed(monkeypatch, tmp_path):
+    """The likeliest misconfiguration of all, and the one the first draft of
+    this check could not see: everything configured correctly, and the
+    library absent.
+
+    ``vaid-mint`` is an optional extra, so ``poetry export --only main`` —
+    what this service's ``Dockerfile`` installs from — carries none of it.
+    The stock image therefore has the flag and not the library, and a
+    preflight that reads only environment variables and a JSON file passes
+    on it. Measured before the fix: a fully-configured deployment booted
+    clean and answered the first badge-bearing dispatch with ``VAID badge
+    check failed unexpectedly (ModuleNotFoundError); refusing fail-closed``
+    — a containment action refused, blamed on nothing an operator can act
+    on, at the hour this check exists to avoid.
+    """
+    import sys
+
+    _enable(monkeypatch)
+    mint = _Mint()
+    _configure(monkeypatch, mint, tmp_path)
+
+    class _Absent:
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == "vaid_mint" or fullname.startswith("vaid_mint."):
+                raise ModuleNotFoundError(f"No module named {fullname!r}")
+            return None
+
+    for name in [n for n in sys.modules if n == "vaid_mint" or n.startswith("vaid_mint.")]:
+        monkeypatch.delitem(sys.modules, name)
+    monkeypatch.setattr(sys, "meta_path", [_Absent(), *sys.meta_path])
+
+    with pytest.raises(ModuleNotFoundError, match="vaid_mint"):
+        vaid_verifier.preflight_or_raise()
+
+
+def test_preflight_imports_everything_the_verification_path_imports():
+    """Binds the two lists together so the preflight cannot fall behind.
+
+    ``preflight_or_raise`` proves the library is importable by importing the
+    same names ``verify_badge_for_dispatch`` reaches for. Two hand-written
+    lists of the same thing drift, and the drift would show up as the exact
+    boot-clean-then-refuse behaviour the test above exists to prevent — so
+    this reads the module and fails when the verification path grows a
+    ``vaid_mint`` import the preflight does not cover.
+    """
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(vaid_verifier))
+    preflight = next(n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "preflight_or_raise")
+
+    def _vaid_imports(node) -> set[str]:
+        return {n.module for n in ast.walk(node) if isinstance(n, ast.ImportFrom) and n.module and n.module.split(".")[0] == "vaid_mint"}
+
+    covered = _vaid_imports(preflight)
+    assert covered, "preflight_or_raise imports no vaid_mint module, so it cannot prove the library is installed"
+    assert _vaid_imports(tree) <= covered, (
+        f"the verification path imports a vaid_mint module the preflight does not: {sorted(_vaid_imports(tree) - covered)}"
+    )

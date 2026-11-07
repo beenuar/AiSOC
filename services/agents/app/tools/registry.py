@@ -33,7 +33,7 @@ import logging
 from collections.abc import Callable
 from typing import Any
 
-from app.security.agent_identity import AgentIdentity, ScopeDenied
+from app.security.agent_identity import IdentityLike, ScopeDenied
 
 # Re-exported so every existing `from app.tools.registry import Tool`
 # keeps working. The dataclass moved to its own module to break the
@@ -60,7 +60,7 @@ class ToolRegistry:
         #: optional VAID plugin is enabled (beenuar/AiSOC#1739); it must
         #: raise to deny, never return a falsy value, so a verifier that
         #: forgets to raise cannot be mistaken for one that approved.
-        self.identity_verifier: Callable[[AgentIdentity], None] | None = None
+        self.identity_verifier: Callable[[IdentityLike], None] | None = None
         for tool in tools or []:
             self.register(tool)
 
@@ -84,7 +84,7 @@ class ToolRegistry:
     def openai_schemas(self) -> list[dict[str, Any]]:
         return [t.openai_schema() for t in self._tools.values()]
 
-    async def execute(self, name: str, args: dict[str, Any], *, identity: AgentIdentity | None = None) -> Any:
+    async def execute(self, name: str, args: dict[str, Any], *, identity: IdentityLike | None = None) -> Any:
         """Run one tool for one identity, or refuse and say why.
 
         The refusals are structured errors rather than exceptions because

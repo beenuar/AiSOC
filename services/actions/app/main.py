@@ -29,6 +29,7 @@ from app.api.replay_history_router import router as replay_history_router
 from app.api.router import router as legacy_router
 from app.api.shadow_reconcile_router import router as shadow_reconcile_router
 from app.live_actions import register_builtin_executors
+from app.security import vaid_verifier
 
 logger = structlog.get_logger(__name__)
 
@@ -89,6 +90,14 @@ async def _register_builtin_live_actions() -> None:
     """
     count = register_builtin_executors(overwrite=True)
     logger.info("live_actions.bootstrap_complete", builtin_count=count)
+
+    # beenuar/AiSOC#1739 follow-up, verify-side counterpart of the agents
+    # service's mint-side check. Allowed to fail startup: a misconfigured
+    # VAID plugin left running IS the outage this exists to prevent, just
+    # moved from boot time to the first dispatch that presents a badge. A
+    # no-op when the plugin is disabled (the default).
+    vaid_verifier.preflight_or_raise()
+
     # Phase 2.6 — the registry is now populated, so flip /readyz on.
     app.state.mark_ready()
 

@@ -69,6 +69,7 @@ __all__ = [
     "install_into",
     "uninstall_from",
     "badge_sha256",
+    "preflight_or_raise",
     "AGENT_ACTION_CAPABILITIES",
 ]
 
@@ -491,7 +492,28 @@ def verify_identity_badge(identity: Any) -> None:
 def install_into(registry: Any) -> bool:
     """Wire the badge check into a ``ToolRegistry`` instance, if the plugin
     is enabled. Returns whether it did. Safe to call unconditionally at
-    service startup — a disabled plugin leaves the registry untouched."""
+    service startup — a disabled plugin leaves the registry untouched.
+
+    **Nothing in this service calls this yet, and that is the gap that
+    remains after minting landed.** ``run_deep_investigation`` now mints a
+    ``VaidBackedIdentity`` on the real path, so the module is reachable and
+    no longer allowlisted in ``scripts/check_module_reachability.py`` — but
+    reachable is not the same claim as verified: with no caller here,
+    ``ToolRegistry.identity_verifier`` is ``None`` on every production
+    registry and a minted badge is carried, never checked in-process.
+
+    The cross-service half is in the same state from the other direction:
+    ``app/playbook/action_bridge.py`` builds its dispatch payload without a
+    ``vaid_badge`` member, so ``services/actions`` is presented no badge by
+    any in-tree caller and, with the plugin enabled there, refuses every
+    agent-originated dispatch for want of one.
+
+    Both are deliberate: wiring either is a decision about whether VAID is
+    this project's agent identity format, which has not been taken. Until
+    it is, this docstring is the record that the mint is the only half that
+    runs — a plugin that looks installed and checks nothing would be worse
+    than one that is honestly unwired.
+    """
     if not vaid_plugin_enabled():
         return False
     registry.identity_verifier = verify_identity_badge
@@ -501,6 +523,37 @@ def install_into(registry: Any) -> bool:
 def uninstall_from(registry: Any) -> None:
     """Test/ops helper: remove the hook regardless of the env flag."""
     registry.identity_verifier = None
+
+
+def preflight_or_raise() -> None:
+    """Startup-time check: refuse to enable the plugin when nothing can mint
+    or no revocation list is configured (beenuar/AiSOC#1739 follow-up).
+
+    A no-op when the plugin is disabled — the default stays unchecked and
+    unchanged. When enabled, this builds the real issuer (exercising
+    :func:`_kernel_seed` for real, not just reading the env var) and reads
+    the revocation list, so a bad seed file, an unset
+    ``AISOC_VAID_ALLOW_EPHEMERAL_KERNEL_SEED``/``AISOC_VAID_KERNEL_SEED_PATH``
+    pair, or a missing/unreadable/malformed revocation list fail here.
+
+    Call this from service startup and let it raise. Every misconfiguration
+    it catches was already fail-closed at request time — ``FileRevocationList``
+    reads :data:`~vaid_mint.revocation.RevocationStatus.UNAVAILABLE` as
+    refuse, never as "nothing is revoked" — so this changes *when* the
+    deployment finds out, from "every tool call refuses, discovered live" to
+    "the process does not come up". Both refuse; only one of them pages
+    someone at boot instead of at 3am.
+    """
+    if not vaid_plugin_enabled():
+        return
+    handle = _issuer_handle_singleton()
+    if handle.revocation._load() is None:
+        raise BadgeDenied(
+            f"VAID plugin is enabled ({_ENABLED_ENV}) but {_REVOCATION_LIST_PATH_ENV} "
+            "is not set, or names a file that is absent, unreadable or malformed; "
+            "refusing to start rather than refusing every tool call once a badge "
+            "is first presented"
+        )
 
 
 async def record_badge_in_ledger(

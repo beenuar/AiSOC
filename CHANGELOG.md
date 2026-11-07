@@ -383,12 +383,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the badge's own one-hour expiry is what bounds exposure between
   deployments of a fresher one.
 
-  Known gap, stated rather than discovered later: nothing mints a badge on a
-  real agent path yet, so turning the flag on today would refuse every tool
-  call. `services/agents/app/security/vaid_plugin.py` is allowlisted in
-  `scripts/check_module_reachability.py` with that recorded and with the
-  change that removes the entry named. The actions-service half is reachable
-  from `dispatch()` and is not allowlisted.
+  Known gap at the time, closed by the entry below: nothing minted a badge
+  on a real agent path, so `services/agents/app/security/vaid_plugin.py` was
+  allowlisted in `scripts/check_module_reachability.py` with that recorded
+  and with the change that removes the entry named. The actions-service half
+  was reachable from `dispatch()` and was not allowlisted.
+
+- **A VAID badge is minted on the real agent path, and a plugin that cannot
+  do its job now refuses at boot instead of at 3am
+  ([#1746](https://github.com/beenuar/AiSOC/pull/1746), follow-up to the
+  entry above), contributed by solara-associates.**
+  `run_deep_investigation` holds the one production call to
+  `issue_identity` in `services/agents`, and with the plugin enabled it now
+  mints a `VaidBackedIdentity` there. The MCP grant a few lines below
+  re-mints the badge for the widened scope with no branch of its own,
+  because `with_granted_tools` was already duck-typed across both identity
+  types; `IdentityLike`, a `Protocol` in `agent_identity.py`, is what lets
+  `ToolRegistry.execute` and `run_with_tools` accept either without that
+  module importing the optional plugin built on it. `vaid_plugin.py`'s
+  reachability allowlist entry is removed and the gate is green without it.
+
+  With the flag unset — the default — this is the `issue_identity(...)` call
+  it was before. Three fixed-input matrices were run against this tree and
+  against the previous commit under one interpreter and compared byte for
+  byte: `ToolRegistry.execute` (114 lines), `live_actions.dispatch()` (30
+  rows) and `run_deep_investigation` itself (6 rows), the last being where
+  the new branch lives and the one the original proof did not cover. That
+  harness replaces every plugin entry point with one that raises if reached,
+  so identical there also means untouched.
+
+  `vaid_plugin.preflight_or_raise()` and `vaid_verifier.preflight_or_raise()`
+  run unguarded from each service's startup hook and are no-ops when the
+  plugin is disabled. Enabled, the agents side builds the real issuer and
+  reads the revocation list; the actions side reads the kernel public key
+  and the revocation list. Every misconfiguration they catch was already
+  fail-closed at request time — an unreadable revocation list is refused,
+  never read as "nothing is revoked" — so what changes is when a deployment
+  finds out.
+
+  One failure mode had to be measured rather than reasoned about, because
+  it is the likeliest of all and the first draft of the check could not see
+  it: `vaid-mint` is an optional extra and `poetry export --only main` —
+  what both Dockerfiles install from — resolves 130 and 37 packages with
+  none of it, so the stock image carries the flag and not the library. The
+  agents-side preflight catches that because building the issuer reaches
+  the library. The actions-side one read an environment variable and a JSON
+  file, so a fully and correctly configured deployment booted clean and
+  answered the first badge-bearing dispatch with `VAID badge check failed
+  unexpectedly (ModuleNotFoundError); refusing fail-closed` — a refused
+  containment action, blamed on nothing an operator can act on, at exactly
+  the hour the check exists to avoid. It now imports what the verification
+  path imports, and a test reads the module and fails if that path grows a
+  `vaid_mint` import the preflight does not cover, so the two cannot drift.
+
+  Still deliberately unwired, and recorded in `install_into`'s own
+  docstring rather than left for a reader to discover: the module is
+  reachable, which is not the same claim as verified. Nothing in
+  `services/agents` calls `install_into`, so `ToolRegistry.identity_verifier`
+  is `None` on every production registry and a minted badge is carried but
+  not checked in-process; and `app/playbook/action_bridge.py` builds its
+  dispatch payload with no `vaid_badge` member, so `services/actions` is
+  presented no badge by any in-tree caller. Wiring either is a decision
+  about whether VAID is this project's agent identity format, which has not
+  been taken — so no claim-to-gate matrix row was added, because the
+  capability is not reachable end to end and a row would say it is.
 
 - **Upgrading is now a required check, and one leg crosses a major version.**
   People upgrade, and until now a pull request could break the upgrade path
