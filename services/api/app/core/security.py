@@ -256,12 +256,42 @@ ROLE_PERMISSIONS: dict[str, list[str]] = {
         # alert can read it.
         "knowledge_base:read",
     ],
+    # The identity a trusted peer service resolves to, and the **only**
+    # declaration of what one may do. `deps.SERVICE_PRINCIPAL_PERMISSIONS` is
+    # built from this row rather than written out beside it: the two were
+    # authored separately and disagreed, this one granting `alerts:write` and
+    # `cases:write` that the other deliberately withheld, and
+    # `has_permission_db` consulted this one (GHSA-ghpm-vc6j-hp5r).
+    #
+    # Deliberately explicit reads rather than the wildcard. The credential
+    # reaches every route in the API, so granting it `*` would make one shared
+    # secret equivalent to `platform_admin` on every tenant at once. These are
+    # the permissions the agents service's own tools need: `connectors:read`
+    # for the backend catalogue and the SIEM fan-out, `actions:read` for a
+    # read-only vendor verb, `lake:query` for a hunt plan, `hunts:read` for the
+    # hunting agent, and `alerts:read` for the alert an investigation is about.
+    #
+    # Anything that changes state at a vendor or in the database is absent on
+    # purpose: those go through the live-action contract with its approval
+    # matrix, not through a service token.
+    #
+    # `approvals:write` is the one exception, and it is narrow by
+    # construction. A playbook `approval` step has to open an approval for a
+    # human to decide, and the engine runs in the agents service, so without it
+    # the step 403'd and the run suspended against an approval that was never
+    # created. It is a dedicated permission rather than the `cases:write` the
+    # route used to demand precisely so this list does not acquire the whole
+    # case write surface to unblock one POST — and `POST
+    # /approvals/{id}/decide` still requires `cases:write`, so a service may
+    # raise an approval and may not answer it.
     "api_service": [
+        "actions:read",
         "alerts:read",
-        "alerts:write",
-        "cases:read",
-        "cases:write",
         "approvals:write",
+        "cases:read",
+        "connectors:read",
+        "hunts:read",
+        "lake:query",
         "threat_intel:read",
     ],
 }

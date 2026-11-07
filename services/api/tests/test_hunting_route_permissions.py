@@ -34,7 +34,7 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from app.api.v1.deps import CurrentUser, get_current_user
+from app.api.v1.deps import SERVICE_PRINCIPAL_PERMISSIONS, CurrentUser, get_current_user
 from app.api.v1.endpoints import graph, hunts, nl_detection, nl_query, saved_hunts, translation
 from app.db.database import get_db
 from fastapi import FastAPI
@@ -80,10 +80,21 @@ GATED: list[tuple[Any, str, str, str, str, dict[str, Any] | None]] = [
 #: fails if the hunt surface is ever re-gated on a detection permission.
 HOLDER = {"lake:query": "soc_analyst", "rules:read": "threat_hunter"}
 
-#: Roles that must be refused. `viewer` is the advisory shape. `api_service`
-#: holds no lake permission either and is included because a machine key is
-#: the credential most likely to be over-scoped by accident.
-REFUSED = {"lake:query": ["viewer", "api_service"], "rules:read": ["viewer", "soc_analyst"]}
+#: Roles that must be refused. `viewer` is the advisory shape.
+#:
+#: `api_service` used to be listed here under the note that it "holds no lake
+#: permission either", and that note was false. It passed because `_user`
+#: builds a principal with no resolved set, so the check read
+#: `ROLE_PERMISSIONS["api_service"]` — while a real service token resolves to
+#: `SERVICE_PRINCIPAL_PERMISSIONS`, which has carried `lake:query` since the
+#: list was written. Two declarations of one principal, and this test happened
+#: to read the narrower one (GHSA-ghpm-vc6j-hp5r).
+#:
+#: Removed from the enumeration rather than silently kept passing: the static
+#: map is not the path that credential takes, so asserting against it says
+#: nothing about it either way. What the credential actually does is measured
+#: by `test_a_service_token_reaches_the_hunt_write_surface` below.
+REFUSED = {"lake:query": ["viewer"], "rules:read": ["viewer", "soc_analyst"]}
 
 
 def _user(role: str) -> CurrentUser:
@@ -168,6 +179,42 @@ class TestUnentitledCallersAreRefused:
             status, committed = _request(module, role, method, path, payload)
             assert not committed, f"{role} committed a write through {handler}"
             assert status == 403, f"{role} got HTTP {status} from {handler}, not 403"
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "Known, measured and not fixed here: the shared service token holds `lake:query`, "
+            "and `lake:query` is what gates the hunt *write* routes, so it reaches them. "
+            "Closing it means splitting authoring from running into a write permission, "
+            "which changes what four human roles hold and needs its own change. "
+            "Strict, so whoever does that is told to delete this marker."
+        ),
+    )
+    def test_a_service_token_reaches_the_hunt_write_surface(self) -> None:
+        """What the credential does, rather than what one of its two lists said.
+
+        Driven with the resolved set `_resolve_service_principal` hands out,
+        which is the only thing a real service token carries. Against
+        unmodified `main` this same principal answered **422** — past
+        authorization, into body validation — on `POST /api/v1/hunts` and
+        `POST /api/v1/saved-hunts`, so the exposure predates the declaration
+        being unified and is not caused by it.
+        """
+        app = FastAPI()
+        app.include_router(saved_hunts.router, prefix="/api/v1")
+        app.dependency_overrides[get_db] = _db
+        app.dependency_overrides[get_current_user] = lambda: CurrentUser(
+            user_id=uuid.uuid4(),
+            tenant_id=TENANT,
+            role="api_service",
+            email="service@tenant.example",
+            resolved_permissions=SERVICE_PRINCIPAL_PERMISSIONS,
+        )
+        response = TestClient(app, raise_server_exceptions=False).post(
+            "/api/v1/saved-hunts", json={"name": "n", "nl_query": "logins from iran"}
+        )
+
+        assert response.status_code == 403, f"a service token reached a hunt write: {response.status_code}"
 
     def test_a_viewer_cannot_delete_another_teams_saved_hunt(self) -> None:
         """Saved hunts are a tenant-shared list, which is what made this bite.

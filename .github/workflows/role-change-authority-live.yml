@@ -1,0 +1,228 @@
+# Re-roling a principal, and the one model that answers "may this caller act".
+#
+# Why this exists
+# ---------------
+# GHSA-hrc5-w9r3-2g8r: `PATCH /api/v1/tenants/me/users/{id}` authorised the
+# *new* role and never asked whether the caller holds what the target
+# currently holds. The last-administrator guard beside it counted only the
+# wildcard roles, which `never_grantable` refuses to every API caller — so on
+# a tenant created through the product it protected nothing, and one
+# `tenant_admin` could demote every peer and then itself, leaving nobody able
+# to restore access without database credentials. Measured against this
+# suite's ALPHA tenant, both demotions answered 200.
+#
+# GHSA-ghpm-vc6j-hp5r: `SERVICE_PRINCIPAL_PERMISSIONS` and
+# `ROLE_PERMISSIONS["api_service"]` were two declarations of one principal's
+# authority and disagreed in both directions, while `has_permission_db` read
+# neither the resolved set nor elevation nor the tenant's conditions. The same
+# blindness reopened a defect the resolver had already closed: a deprovisioned
+# user reached `GET /api/v1/mcp-servers` on their old static role.
+#
+# Why live
+# --------
+# Every fact here is a row — a user's role, a tenant's RBAC grants, the tenant
+# table a service token is checked against. A constructed principal carries
+# whatever it was built with and a fake session answers whatever it was told
+# to, which is exactly how the two permission models stayed divergent under a
+# green gate for fourteen releases. So this drives the real ASGI application
+# with its real auth dependencies against real Postgres with the migration
+# chain applied.
+#
+# No `paths:` filter. A path filter here would mean the gate skips on exactly
+# the pull request that reshapes the authorization code it exists to protect.
+name: Role-change authority (live)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # Keyed per commit on push and per pull request on PRs, never on `github.ref`
+  # alone: that shape cancels the run for the commit before it, and a check
+  # that was cancelled never graded the commit it is reported against.
+  group: role-change-authority-live-${{ github.event_name }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  role-change-authority-live:
+    name: a tenant cannot be emptied of administrators, and one principal has one answer
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    env:
+      # The runtime role, not the owner. A superuser ignores every RLS policy
+      # even under FORCE ROW LEVEL SECURITY, and this suite seeds the RBAC
+      # tables, which carry it.
+      ROLECHANGE_DSN: postgresql+asyncpg://aisoc_app:aisoc_app_ci_only@localhost:5432/aisoc
+      PGPASSWORD: aisoc_ci_only
+      SUITE: ../../tests/isolation/test_role_change_symmetry_live.py
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Start PostgreSQL with registry fallback
+        uses: ./.github/actions/start-postgres
+        with:
+          password: aisoc_ci_only
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
+        with:
+          python-version: "3.11"
+
+      # The service's own lockfile, not a hand-curated pip list: a suite that
+      # drives the real application pulls in the real application's whole
+      # import chain, and a set that differs from the lock tests software
+      # nobody ships.
+      - name: Install the API from its lockfile
+        working-directory: services/api
+        run: |
+          set -euo pipefail
+          python -m pip install --quiet --upgrade pip "poetry==2.4.1"
+          poetry config virtualenvs.create false
+          poetry install --no-root --no-interaction
+          python -m pip install --quiet pytest pytest-asyncio
+
+      - name: Apply every migration, in order
+        run: |
+          set -euo pipefail
+          for f in services/api/migrations/*.sql; do
+            psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+
+      - name: Give the runtime role its password
+        run: |
+          set -euo pipefail
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "ALTER ROLE aisoc_app WITH PASSWORD 'aisoc_app_ci_only';"
+          psql -h localhost -U aisoc -d aisoc -v ON_ERROR_STOP=1 -q -c \
+            "GRANT USAGE ON SCHEMA public TO aisoc_app;"
+
+      - name: The suite passes
+        working-directory: services/api
+        env:
+          ISOLATION_ROLECHANGE_DSN: ${{ env.ROLECHANGE_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: python -m pytest "$SUITE" -v --tb=short
+
+      # Negative control one: take the symmetric check back out.
+      #
+      # Without it the whole first advisory is unfixed, so removing it must
+      # make this suite fail. If it does not, the suite is not grading the
+      # production chokepoint and its green tick means nothing — which is
+      # worth failing the build over, because the alternative is a check that
+      # certifies an authorization control while being blind to it.
+      #
+      # The guard above each edit keeps these honest over time: if the code is
+      # reshaped so the string is not found, the control fails loudly rather
+      # than passing by editing nothing.
+      - name: The suite fails when a caller may strip authority it does not hold
+        working-directory: services/api
+        env:
+          ISOLATION_ROLECHANGE_DSN: ${{ env.ROLECHANGE_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/core/role_grants.py
+          cp "$TARGET" /tmp/role_grants.bak
+          restore() { cp /tmp/role_grants.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/core/role_grants.py")
+          s = p.read_text()
+          needle = "    unheld = missing_permissions(held, permissions_for(current_role))\n    if unheld:\n"
+          if needle not in s:
+              print("FAIL: the symmetric check this control reverts is not there to revert.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    unheld = []\n    if unheld:\n", 1))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the symmetric authority check disabled."
+            echo "      It is not grading the production chokepoint."
+            exit 1
+          fi
+          echo "OK: removing the symmetric check makes the suite fail, as it must."
+          restore
+          trap - EXIT
+
+      # Negative control two: put the lockout guard back on wildcard roles.
+      #
+      # This is the half that actually bites on the reported scenario, and it
+      # lives in a different file from the control above, so one cannot cover
+      # both. Without this the last-administrator assertion could rot behind a
+      # green tick earned entirely by the symmetry half.
+      - name: The suite fails when the guard counts only the wildcard roles
+        working-directory: services/api
+        env:
+          ISOLATION_ROLECHANGE_DSN: ${{ env.ROLECHANGE_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/core/role_grants.py
+          cp "$TARGET" /tmp/role_grants.bak
+          restore() { cp /tmp/role_grants.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/core/role_grants.py")
+          s = p.read_text()
+          needle = "    return frozenset(role for role in ROLE_PERMISSIONS if _covers(permissions_for(role), ADMINISTRATIVE_PERMISSION))"
+          if needle not in s:
+              print("FAIL: administrative_roles has been reshaped and this control proves nothing.")
+              sys.exit(1)
+          p.write_text(s.replace(needle, "    return wildcard_roles()", 1))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the lockout guard back on wildcard roles only."
+            echo "      A tenant created through the product can still be emptied of administrators."
+            exit 1
+          fi
+          echo "OK: narrowing the guard makes the suite fail, as it must."
+          restore
+          trap - EXIT
+
+      # Negative control three: give the service principal its second
+      # declaration back. Different advisory, different file again.
+      - name: The suite fails when the in-body check keeps its own model
+        working-directory: services/api
+        env:
+          ISOLATION_ROLECHANGE_DSN: ${{ env.ROLECHANGE_DSN }}
+          PYTHONPATH: ${{ github.workspace }}/services/api:${{ github.workspace }}/tests/isolation
+        run: |
+          set -euo pipefail
+          TARGET=app/api/v1/deps.py
+          cp "$TARGET" /tmp/deps.bak
+          restore() { cp /tmp/deps.bak "$TARGET"; }
+          trap restore EXIT
+          python - <<'PY'
+          import pathlib, sys
+          p = pathlib.Path("app/api/v1/deps.py")
+          s = p.read_text()
+          needle = "        await self._ensure_resolved(db)\n        self.require_permission(permission)\n"
+          if needle not in s:
+              print("FAIL: require_permission_db no longer delegates, so this control proves nothing.")
+              sys.exit(1)
+          revert = (
+              "        if self.scopes is not None:\n"
+              "            if not (\"*\" in self.scopes or permission in self.scopes):\n"
+              "                raise HTTPException(status_code=403, detail=permission)\n"
+              "            return\n"
+              "        if not has_permission(self.role, permission):\n"
+              "            raise HTTPException(status_code=403, detail=permission)\n"
+          )
+          p.write_text(s.replace(needle, revert, 1))
+          PY
+          if python -m pytest "$SUITE" -q >/dev/null 2>&1; then
+            echo "FAIL: the suite passed with the database-backed check reading the static map."
+            echo "      A deprovisioned user gets their old role back on 27 routes."
+            exit 1
+          fi
+          echo "OK: restoring the second model makes the suite fail, as it must."
+          restore
+          trap - EXIT
+          python -m pytest "$SUITE" -q

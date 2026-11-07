@@ -343,41 +343,79 @@ class CurrentUser:
             return "service_token"
         return "session"
 
-    async def has_permission_db(self, permission: str, db: AsyncSession) -> bool:
-        """Check permission via RBAC tables (granular RBAC).
+    async def _ensure_resolved(self, db: AsyncSession) -> None:
+        """Give this principal a database-backed set if nothing has yet.
 
-        Falls back to the static ROLE_PERMISSIONS map when the user has
-        no rows in ``user_roles`` (e.g. fresh tenants not yet migrated).
+        Almost never does any work. ``get_current_user`` resolves one for
+        every credential it admits — an API key and a workload carry
+        ``scopes``, a service token and a session carry
+        ``resolved_permissions`` — so this covers the two cases that reach a
+        route without passing through there: a principal constructed directly
+        by a test, and a session whose resolution failed and fell open to the
+        static map.
+
+        Failing open to the static map, like authentication does. This is not
+        the place to invent a stricter posture than the door the caller came
+        through.
         """
-        if self.scopes is not None:
-            return "*" in self.scopes or permission in self.scopes or f"{permission.split(':')[0]}:*" in self.scopes
-
-        # Query RBAC tables
-        from app.models.rbac import Permission as PermModel  # noqa: PLC0415
-        from app.models.rbac import Role, RolePermission, UserRole
-
-        result = await db.execute(
-            select(PermModel.name)
-            .join(RolePermission, RolePermission.permission_id == PermModel.id)
-            .join(Role, Role.id == RolePermission.role_id)
-            .join(UserRole, UserRole.role_id == Role.id)
-            .where(UserRole.user_id == self.user_id, Role.tenant_id == self.tenant_id)
-        )
-        db_perms: list[str] = [row[0] for row in result.all()]
-
-        if db_perms:
-            return "*" in db_perms or permission in db_perms or f"{permission.split(':')[0]}:*" in db_perms
-
-        # Fallback to static map
-        return has_permission(self.role, permission)
+        if self.scopes is not None or self.resolved_permissions is not None:
+            return
+        try:
+            self.resolved_permissions = await resolve_permissions(db, tenant_id=self.tenant_id, user_id=self.user_id, static_role=self.role)
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "late permission resolution failed for user %s; falling back to the static role map: %s",
+                str(self.user_id).replace("\r", "").replace("\n", " ")[:64],
+                str(exc).replace("\r", "").replace("\n", " ")[:200],
+            )
 
     async def require_permission_db(self, permission: str, db: AsyncSession) -> None:
-        """Async permission check (RBAC tables then static fallback)."""
-        if not await self.has_permission_db(permission, db):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission denied: {permission}",
-            )
+        """The same check as :meth:`require_permission`, for in-body call sites.
+
+        **It used to be a second permission model, and that is the whole
+        reason this docstring is long.** It ran its own ``user_roles`` join,
+        read neither the resolved set nor live elevation nor the tenant's
+        attribute conditions, and fell back to the static map whenever the
+        join came back empty. Three consequences, all measured
+        (GHSA-ghpm-vc6j-hp5r):
+
+        * A service token resolves to ``SERVICE_PRINCIPAL_PERMISSIONS`` and
+          was then measured against ``ROLE_PERMISSIONS["api_service"]``, so
+          the more permissive of the two declarations won on all 27 routes
+          that call this.
+        * **A deprovisioned user got their static role back.**
+          ``resolve_permissions`` distinguishes "this tenant has no RBAC" from
+          "this tenant has RBAC and gave this user none" and returns the empty
+          set for the second. This method saw the same zero rows the resolver
+          does and could not tell the two apart — the exact defect the
+          resolver was written to close, still live one layer up, and
+          reachable today on every route here.
+        * Elevation and conditions applied on one path and not the other, so
+          the same principal was allowed or refused depending only on which
+          factory a route happened to use.
+
+        So there is one decision function and this delegates to it. ``db``
+        stays in the signature and stays used: it is what resolves a set for
+        a principal authentication did not resolve one for.
+        """
+        await self._ensure_resolved(db)
+        self.require_permission(permission)
+
+    async def has_permission_db(self, permission: str, db: AsyncSession) -> bool:
+        """Whether this principal holds *permission*, by the one model above.
+
+        The boolean form, for the two call sites that branch rather than
+        refuse. Only a 403 becomes ``False``; anything else is a fault and
+        propagates, because a permission check that swallows an unexpected
+        error answers "no" for a reason nobody can see.
+        """
+        try:
+            await self.require_permission_db(permission, db)
+        except HTTPException as exc:
+            if exc.status_code == status.HTTP_403_FORBIDDEN:
+                return False
+            raise
+        return True
 
 
 #: Header a trusted service uses to declare which tenant it is acting for.
@@ -388,39 +426,18 @@ SERVICE_TENANT_HEADER = "X-AiSOC-Tenant-ID"
 
 #: What a service principal may do, and nothing else.
 #:
-#: Deliberately an explicit read-only list rather than the wildcard. The
-#: credential reaches every route in the API, so granting it ``*`` would make
-#: one shared secret equivalent to ``platform_admin`` on every tenant at once.
-#: These are the permissions the agents service's own tools need:
-#: ``connectors:read`` for the backend catalogue and the SIEM fan-out,
-#: ``actions:read`` for a read-only vendor verb, ``lake:query`` for a hunt
-#: plan, ``hunts:read`` for the hunting agent, and ``alerts:read`` for the
-#: alert an investigation is about.
+#: **Derived, not declared.** This was a literal set written here while
+#: ``ROLE_PERMISSIONS["api_service"]`` described the same principal in
+#: ``app/core/security.py``, and the two disagreed: the role map granted
+#: ``alerts:write`` and ``cases:write`` that this list deliberately withheld,
+#: and withheld four reads this list granted. Whichever check a route happened
+#: to use decided which of the two applied, and the permissive one governed
+#: the database-backed path (GHSA-ghpm-vc6j-hp5r).
 #:
-#: Anything that changes state at a vendor or in the database is absent on
-#: purpose: those go through the live-action contract with its approval
-#: matrix, not through a service token.
-#:
-#: ``approvals:write`` is the one exception, and it is narrow by construction.
-#: A playbook ``approval`` step has to open an approval for a human to decide,
-#: and the engine runs in the agents service, so without it the step 403'd and
-#: the run suspended against an approval that was never created. It is a
-#: dedicated permission rather than the ``cases:write`` the route used to
-#: demand precisely so this list does not acquire the whole case write surface
-#: to unblock one POST — and ``POST /approvals/{id}/decide`` still requires
-#: ``cases:write``, so a service may raise an approval and may not answer it.
-SERVICE_PRINCIPAL_PERMISSIONS: frozenset[str] = frozenset(
-    {
-        "alerts:read",
-        "cases:read",
-        "connectors:read",
-        "actions:read",
-        "lake:query",
-        "hunts:read",
-        "threat_intel:read",
-        "approvals:write",
-    }
-)
+#: One object now, so they cannot drift. The rationale for each entry lives
+#: with the row, in ``app/core/security.py``; this is the frozen view of it
+#: that ``_resolve_service_principal`` hands to a principal.
+SERVICE_PRINCIPAL_PERMISSIONS: frozenset[str] = frozenset(ROLE_PERMISSIONS["api_service"])
 
 #: Mirrors ``INSECURE_SECRET_KEY_DEFAULTS`` so a placeholder token is treated
 #: as unset here too. Accepting a well-known literal would authenticate

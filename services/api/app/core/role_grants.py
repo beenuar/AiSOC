@@ -142,6 +142,30 @@ def holds_wildcard(role: str) -> bool:
     return WILDCARD in ROLE_PERMISSIONS.get(role, [])
 
 
+#: What makes a role administrative: the holder can put another principal's
+#: access back. A tenant with nobody holding it cannot recover a demotion
+#: through any route, only with database credentials.
+ADMINISTRATIVE_PERMISSION: Final[str] = "users:write"
+
+
+def administrative_roles() -> frozenset[str]:
+    """Every role that can restore another principal's access.
+
+    Derived from ``ROLE_PERMISSIONS`` rather than listed, for the same reason
+    :func:`never_grantable` derives the wildcard set: a role that gains
+    ``users:write`` next year is counted the moment it is declared, and a
+    hand-written list is a list somebody forgets.
+
+    The last-administrator guard used to count only the wildcard roles, which
+    on a real tenant is nobody — :func:`never_grantable` refuses those to every
+    API caller, so a tenant created through the product is administered by
+    ``tenant_admin`` and the guard could not fire. One administrator could then
+    demote every peer and finally itself, leaving a tenant nobody can
+    administer (GHSA-hrc5-w9r3-2g8r).
+    """
+    return frozenset(role for role in ROLE_PERMISSIONS if _covers(permissions_for(role), ADMINISTRATIVE_PERMISSION))
+
+
 def _granter_permissions(
     granter_role: str,
     granter_scopes: Sequence[str] | None,
@@ -282,17 +306,42 @@ def authorize_role_change(
 ) -> str:
     """Authorize re-roling an existing principal.
 
-    Two checks, because changing a role is two acts. Conferring the new role
-    is :func:`authorize_role_grant`. Taking away the old one matters
-    separately: without this, a ``tenant_admin`` could not *create* a
+    Three checks, because changing a role is two acts and the second one was
+    unbounded. Conferring the new role is :func:`authorize_role_grant`.
+
+    Taking the old one away matters separately. A principal currently holding
+    a never-grantable role is not re-roled from a tenant-scoped request at
+    all: without that, a ``tenant_admin`` could not *create* a
     ``platform_admin`` but could demote the one that exists to ``viewer``,
-    ending the only principal able to undo it. So a principal currently
-    holding a never-grantable role is not re-roled from a tenant-scoped
-    request at all.
+    ending the only principal able to undo it.
+
+    And the symmetric form of the grant rule, which was missing
+    (GHSA-hrc5-w9r3-2g8r): **a caller may not strip authority it does not
+    itself hold.** Conferring was bounded by what the granter holds while
+    removing was bounded by nothing, so a database-backed role carrying
+    ``users:write`` and little else could re-role a ``tenant_admin`` to
+    ``viewer`` — taking away twenty-odd permissions its holder had never been
+    admitted on.
+
+    What this deliberately does **not** stop is one ``tenant_admin``
+    re-roling another. Their permission sets are identical, so no subset test
+    can separate them, and administrators managing administrators is what the
+    role is for. The end state with nobody left is the part that must be
+    unreachable, and that is the last-administrator guard's job —
+    :func:`administrative_roles` is what makes it able to fire.
     """
     blocked = never_grantable().get(current_role)
     if blocked is not None:
         raise RoleGrantDenied(f"This account holds {current_role!r}, which cannot be changed through the API: {blocked}")
+
+    held = _granter_permissions(granter_role, granter_scopes, granter_permissions)
+    unheld = missing_permissions(held, permissions_for(current_role))
+    if unheld:
+        raise RoleGrantDenied(
+            f"Cannot change this account: it currently holds {current_role!r}, which confers "
+            f"permissions you do not hold ({', '.join(unheld)})"
+        )
+
     return authorize_role_grant(
         granter_role=granter_role,
         requested_role=requested_role,

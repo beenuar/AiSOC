@@ -318,6 +318,19 @@ async def _tenant_has_rbac(db: AsyncSession, tenant_id: Any) -> bool:
     return bool(total)
 
 
+async def tenant_uses_rbac(db: AsyncSession, tenant_id: Any) -> bool:
+    """Whether this tenant's permissions come from the database.
+
+    The public form of :func:`_tenant_has_rbac`, for callers that need to say
+    what a change will actually do rather than decide a permission. When it
+    answers ``True``, ``users.role`` is not what any permission check reads,
+    so re-roling a principal moves a column and nothing else — an
+    administrator who is told the demotion succeeded has had a true statement
+    about the row and a false impression about the access.
+    """
+    return await _tenant_has_rbac(db, tenant_id)
+
+
 async def resolve_permissions(db: AsyncSession, *, tenant_id: Any, user_id: Any, static_role: str) -> frozenset[str]:
     """This principal's effective permissions, database first.
 
