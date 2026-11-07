@@ -44,7 +44,8 @@ from app.llm.tool_loop import run_with_tools
 from app.mcp.tools import build_mcp_toolset
 from app.prompting.envelope import system_rule
 from app.prompting.tool_results import unverified_tool_claims
-from app.security.agent_identity import issue_identity
+from app.security import vaid_plugin
+from app.security.agent_identity import IdentityLike, issue_identity
 from app.tools.customer_tools import scoped_customer_tools
 from app.tools.investigation import investigation_tools
 from app.tools.registry import default_registry
@@ -501,7 +502,18 @@ async def run_deep_investigation(
         # Wave-2 7.3. The investigator acts under its own short-lived
         # identity, scoped to the pivots it is allowed to reach, and every
         # tool call it makes writes an audit row naming the agent and run.
-        identity = issue_identity("investigation", run_id=run_id)
+        #
+        # beenuar/AiSOC#1739 follow-up. The one real caller of `issue_identity`
+        # in this service, which is why minting a VAID badge here is "mint one
+        # on a real agent path" rather than a second synthetic call site. With
+        # the plugin disabled (the default), `vaid_plugin_enabled()` is false
+        # and this is exactly the `issue_identity(...)` call it was before —
+        # same function, same arguments, same return type.
+        identity: IdentityLike
+        if vaid_plugin.vaid_plugin_enabled():
+            identity = vaid_plugin.issue_vaid_identity("investigation", run_id=run_id, tenant_id=tenant_id)
+        else:
+            identity = issue_identity("investigation", run_id=run_id)
 
         mcp = await build_mcp_toolset(tenant_id, run_id=getattr(state, "run_id", None))
         if mcp.tools:
@@ -513,6 +525,12 @@ async def run_deep_investigation(
             # control handing its verdict to the other; the alternative —
             # a static table naming a tenant's MCP tools — cannot exist,
             # because they are discovered at run time.
+            #
+            # `with_granted_tools` is duck-typed across `AgentIdentity` and
+            # `VaidBackedIdentity` (see `vaid_plugin.py`'s module docstring on
+            # why a grant re-mints rather than mutates): when the plugin is
+            # enabled this line is also the re-mint on scope narrowing #1739's
+            # follow-up asked for, with no branch of its own needed here.
             identity = identity.with_granted_tools({t.name for t in mcp.tools})
             system = f"{system}\n\n{system_rule(mcp.nonce)}"
             result.mcp_tools = [t.name for t in mcp.tools]

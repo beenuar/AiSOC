@@ -26,7 +26,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from app.llm.contract import safe_ainvoke
 from app.prompting.tool_results import render_tool_message
-from app.security.agent_identity import AgentIdentity
+from app.security.agent_identity import IdentityLike
 from app.tools.registry import ToolRegistry
 
 logger = structlog.get_logger()
@@ -38,7 +38,7 @@ async def run_with_tools(
     system: str,
     user: str,
     registry: ToolRegistry,
-    identity: AgentIdentity,
+    identity: IdentityLike,
     max_iters: int = 4,
 ) -> dict[str, Any]:
     """Run a tool-calling conversation and return the final content + tool trace.
