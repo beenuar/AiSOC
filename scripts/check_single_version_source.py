@@ -193,7 +193,10 @@ class Finding:
 @dataclass
 class SurfaceReport:
     surface: Surface
-    literals: list[tuple[int, str]] = field(default_factory=list)
+    #: ``(line, literal, is_fallback)``. The third element is what separates
+    #: "this restates the version" from "this is what a failed read renders
+    #: as", which `grade` turns into two different sentences.
+    literals: list[tuple[int, str, bool]] = field(default_factory=list)
     package_json_lines: list[int] = field(default_factory=list)
     symbols_seen: int = 0
 
@@ -230,14 +233,20 @@ def python_literals(source: str, symbols: tuple[str, ...]) -> tuple[list[tuple[i
     tree = ast.parse(source)
     found: list[tuple[int, str, bool]] = []
     seen = 0
+    targets: list[str]
+    value: ast.expr | None
     for node in ast.walk(tree):
-        targets: list[str] = []
-        value: ast.expr | None = None
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
             targets, value = [node.target.id], node.value
         elif isinstance(node, ast.Assign):
             targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
             value = node.value
+        else:
+            # Anything that is not one of those two statements is skipped here
+            # rather than filtered below, which is also what makes `node.lineno`
+            # provable: `ast.walk` yields `ast.AST`, and only the two narrowed
+            # types above are guaranteed to carry a line number.
+            continue
         if not targets or value is None:
             continue
         for name in targets:
@@ -267,7 +276,7 @@ def js_literals(source: str, symbols: tuple[str, ...]) -> tuple[list[tuple[int, 
     be correctly ignored. Scoping to a line that also names the version symbol
     keeps every finding one a reader agrees with on sight.
     """
-    found: list[tuple[int, str]] = []
+    found: list[tuple[int, str, bool]] = []
     seen = 0
     for number, line in enumerate(source.splitlines(), start=1):
         code = line.split("//", 1)[0]
