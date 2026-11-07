@@ -109,6 +109,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Okta, GitHub and GitLab read one page of each poll window and lost the
+  rest.** All three answer a capped request with a `Link: <url>; rel="next"`
+  header, and none of the three connectors looked at it. A poll window opens
+  where the last one closed, so an unread row is never requested again: Okta
+  kept the first 50 rows per event type, oldest-first, so a password-spraying
+  run lost everything after its first 50 sign-ins in that window. The GitHub
+  audit log and code-scanning streams and the GitLab audit-event and
+  vulnerability streams stopped at 100. They now read to the end through a new
+  `read_link_header_pages` in `app/connectors/_paging.py`, with
+  `MAX_UNCLASSIFIED` lowered from 58 to 55.
+
+  Okta also moves from a 50-row to a 1,000-row page, its documented maximum, to
+  spend fewer requests from the System Log rate limit, and GitLab audit events
+  move to keyset pagination because offset pagination on that endpoint is
+  deprecated. The two streams with no server-side time filter stop requesting
+  at the first page that passes the start of the window, rather than walking
+  back to the oldest open finding.
+
+  Two rules in the helper are worth knowing. An empty page ends the read even
+  when it carries a next link, because Okta documents that a request with no
+  `until` always has one. And a next link may not leave the origin of the opening
+  request: the egress guard validates the URLs a tenant configures, not the ones
+  a server answers with, so without this a server at a permitted `gitlab_url`
+  could point the loop at a metadata address with the vendor credential attached.
+
 - **The reproducible-builds gate failed `services/escalations` for being
   correct, and would have passed an `api` image missing most of itself.**
   Each build leg carried a fixed floor — more than fifty packages for `api`,
