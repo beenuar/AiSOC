@@ -7,9 +7,15 @@ zero B rows/nodes/keys/messages. An isolation contract that is only unit-tested
 against a mock is a claim, not a gate — this is the gate.
 
 Each store test skips cleanly when its container env var is absent, so a local
-`pytest tests/isolation` run stays green without Docker. In CI
-(`.github/workflows/isolation-live.yml`) every env var is set to a live
-container, so every test runs for real and a leak fails the build.
+`pytest tests/isolation` run stays green without Docker — unless
+``LIVE_STORES_REQUIRED`` is set, in which case the same absence is a failure.
+`isolation-live.yml` sets it, because that job is a required status check and
+a required check that can report success having connected to nothing is the
+defect this repository measured on the backup gate, where it rehearsed
+nothing on 74 of 100 runs. An unreachable store already failed here — nothing
+catches the connection error — but an unset env var or a missing client
+library did not, and those are the two ways this suite could have gone green
+without touching a datastore.
 
 Design of every test (the shape that makes it meaningful):
 
@@ -23,11 +29,13 @@ Design of every test (the shape that makes it meaningful):
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import os
 import time
 import uuid
 from pathlib import Path
+from typing import Any, NoReturn
 
 import pytest
 
@@ -37,12 +45,48 @@ _REPO = Path(__file__).resolve().parents[2]
 TENANT_A = "11111111-1111-1111-1111-111111111111"
 TENANT_B = "22222222-2222-2222-2222-222222222222"
 
+#: When set, a missing container address or client library fails instead of
+#: skipping. Same spelling and same meaning as `BACKTEST_LAKE_LIVE_REQUIRED`
+#: in the sibling file, because the two run as steps of one job and a reader
+#: comparing them should not have to work out whether they differ.
+REQUIRED = os.environ.get("LIVE_STORES_REQUIRED", "").strip() not in ("", "0", "false")
+
+
+def _unavailable(detail: str) -> NoReturn:
+    """Name what is missing, and decide whether missing is allowed.
+
+    One helper so the skip reason and the required-mode failure can never
+    drift apart or describe different things.
+    """
+    if REQUIRED:
+        pytest.fail(f"LIVE_STORES_REQUIRED is set and {detail}")
+    pytest.skip(detail)
+    # Both calls above raise. Written out rather than left implicit because
+    # the type-check runs with `--no-site-packages`, so pytest's own
+    # `NoReturn` annotations are not visible to it and the declared return
+    # type would otherwise be unprovable.
+    raise AssertionError("unreachable")
+
 
 def _require(env: str) -> str:
     val = os.environ.get(env, "").strip()
     if not val:
-        pytest.skip(f"{env} not set — live-container isolation replay only runs in CI")
+        _unavailable(f"{env} not set — live-container isolation replay only runs in CI")
     return val
+
+
+def _client(module: str, distribution: str) -> Any:
+    """Import a store client, routing its absence through the same decision.
+
+    `pytest.importorskip` cannot express "required here, optional there", and
+    it was the second way this suite could report success having connected to
+    nothing: the four client libraries are installed by the workflow, so a
+    name that stopped resolving would have read as a clean local run rather
+    than as the job losing a store.
+    """
+    if importlib.util.find_spec(module) is None:  # pragma: no cover - environment-specific
+        _unavailable(f"{distribution} is not installed")
+    return importlib.import_module(module)
 
 
 # ── ClickHouse: the real lake_sql tenant rewriter against a live warehouse ────
@@ -67,7 +111,7 @@ def test_clickhouse_lake_query_as_A_excludes_B():
     host = _require("ISOLATION_CLICKHOUSE_HOST")
     port = int(os.environ.get("ISOLATION_CLICKHOUSE_PORT", "9000"))
 
-    clickhouse_driver = pytest.importorskip("clickhouse_driver")
+    clickhouse_driver = _client("clickhouse_driver", "clickhouse-driver")
     lake_sql = _load_lake_sql()
 
     client = clickhouse_driver.Client(host=host, port=port)
@@ -121,7 +165,7 @@ def test_neo4j_scoped_match_as_A_excludes_B():
     user = os.environ.get("ISOLATION_NEO4J_USER", "neo4j")
     password = os.environ.get("ISOLATION_NEO4J_PASSWORD", "neo4j")
 
-    neo4j = pytest.importorskip("neo4j")
+    neo4j = _client("neo4j", "neo4j")
 
     driver = neo4j.GraphDatabase.driver(uri, auth=(user, password))
     try:
@@ -167,7 +211,7 @@ def tenant_key(tenant_id: str, *parts: str) -> str:
 def test_redis_scan_as_A_excludes_B():
     url = _require("ISOLATION_REDIS_URL")
 
-    redis = pytest.importorskip("redis")
+    redis = _client("redis", "redis")
     client = redis.Redis.from_url(url, decode_responses=True)
 
     a_prefix = tenant_key(TENANT_A)
@@ -221,7 +265,7 @@ def _envelope_tenant(value: bytes, headers: list[tuple[str, bytes]]) -> str:
 def test_kafka_subscriber_A_never_receives_B():
     brokers = _require("ISOLATION_KAFKA_BROKERS")
 
-    kafka = pytest.importorskip("kafka")
+    kafka = _client("kafka", "kafka-python")
     import json
 
     topic = f"isolation.graph_updates.{uuid.uuid4().hex[:8]}"
