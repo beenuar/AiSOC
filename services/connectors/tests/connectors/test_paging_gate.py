@@ -69,3 +69,8 @@ def test_the_ceiling_is_a_debt_balance_that_only_falls() -> None:
         "continuation, or record in _REVIEWED what the vendor's documentation says it returns.\n"
         + "\n".join(f"  {name}: {why}" for name, why in unclassified)
     )
+
+
+def test_slack_audit_reads_its_window_to_the_end() -> None:
+    _, paging, _ = _load().audit()
+    assert "slack_audit" in paging

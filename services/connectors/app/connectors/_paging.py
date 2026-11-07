@@ -124,6 +124,14 @@ async def read_linked_pages(
     return rows
 
 
+def _token_at(body: Any, path: str) -> str | None:
+    """The continuation token at a dotted ``path``, or None when the collection has ended."""
+    node = body
+    for key in path.split("."):
+        node = node.get(key) if isinstance(node, dict) else None
+    return node if isinstance(node, str) and node else None
+
+
 async def read_token_pages(
     *,
     request: Callable[[str | None], Awaitable[httpx.Response]],
@@ -140,6 +148,7 @@ async def read_token_pages(
     POST. ``request`` is the caller's own closure so it keeps ownership of
     authentication, the retry-on-401 and where the token belongs; it is called
     with ``None`` for the opening page and with the token thereafter.
+    ``token_field`` is a dotted path, for a vendor that nests its token.
 
     One rule here is not shared with the link-following version, and getting
     it wrong is worse than the truncation this exists to fix. **An empty page
@@ -184,8 +193,8 @@ async def read_token_pages(
 
         rows.extend(_page_rows(body, items_field))
 
-        token = body.get(token_field) if isinstance(body, dict) else None
-        if not isinstance(token, str) or not token:
+        token = _token_at(body, token_field)
+        if token is None:
             return rows
 
     logger.warning(

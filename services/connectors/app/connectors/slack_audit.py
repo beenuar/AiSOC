@@ -16,6 +16,7 @@ from typing import Any
 import httpx
 import structlog
 
+from app.connectors._paging import read_token_pages
 from app.connectors.base import (
     BaseConnector,
     Capability,
@@ -101,19 +102,19 @@ class SlackAuditConnector(BaseConnector):
         oldest = int((datetime.now(UTC) - timedelta(seconds=since_seconds)).timestamp())
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.get(
-                    f"{self._base}/logs",
-                    headers=self._headers(),
-                    params={"oldest": oldest, "limit": 200},
+
+                async def page(cursor: str | None) -> httpx.Response:
+                    params: dict[str, Any] = {"oldest": oldest, "limit": 200}
+                    if cursor:
+                        params["cursor"] = cursor
+                    return await client.get(f"{self._base}/logs", headers=self._headers(), params=params)
+
+                items = await read_token_pages(
+                    request=page,
+                    items_field="entries",
+                    token_field="response_metadata.next_cursor",
+                    feed="slack_audit.logs",
                 )
-                if resp.status_code != 200:
-                    logger.warning(
-                        "slack_audit.fetch_failed",
-                        status=resp.status_code,
-                        body=resp.text[:300],
-                    )
-                    return []
-                items = (resp.json() or {}).get("entries") or []
                 return [self.normalize(i) for i in items]
         except Exception as exc:
             logger.warning("slack_audit.fetch_exception", error=str(exc))
