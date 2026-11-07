@@ -51,8 +51,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from sqlalchemy import text
-
 #: The directory ``run_migrations.py`` reads. Kept as a module constant so a
 #: test can assert the two agree rather than assuming they do.
 MIGRATIONS_DIR = Path(__file__).resolve().parents[2] / "migrations"
@@ -173,6 +171,15 @@ async def _read_applied() -> tuple[set[str] | None, str | None]:
     # connection pool, and this module is also imported by the pure-function
     # tests and by `scripts/export_openapi.py`, neither of which should pay
     # for one.
+    #
+    # SQLAlchemy is deferred for a second reason. Everything above this
+    # function is the standard library, which is what lets
+    # `scripts/pending_migrations.py` load this file by path and share the
+    # comparison rather than keeping a second copy of it — see that script's
+    # docstring. A module-scope third-party import would put the two
+    # implementations back.
+    from sqlalchemy import text
+
     from app.db.database import AsyncSessionLocal
 
     try:

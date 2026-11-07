@@ -7,15 +7,28 @@ name: Tenant Isolation (live containers)
 # returns zero B data. ClickHouse runs the production lake_sql rewriter against
 # a live warehouse. A leak fails the build.
 
+# The filter names *directories*, not the individual modules the suites
+# import, and that is a correction rather than a style choice. It used to
+# name three API files — `backtest.py`, `lake_sql.py`, `db/clickhouse.py` —
+# which is three of the eleven `services/api` files the backtest suite
+# actually loads. `app/core/config.py` is one of the other eight, so the
+# commit that added `from app.core.version import …` to it never triggered
+# this job, merged ungraded, and left twelve tenant-scoping assertions
+# erroring at setup on `main`.
+#
+# A suite's import closure is free to grow; an enumeration of it goes stale
+# silently and the only symptom is a job that stops grading. The three
+# directories below contain the whole measured closure of all three steps,
+# so a new sibling is covered without anyone remembering to add it.
 on:
   push:
     branches: [main]
-    paths:
+    paths: &isolation_live_paths
       - "tests/isolation/**"
-      - "services/api/app/services/lake_sql.py"
-      - "services/api/app/services/retro_hunt/**"
-      - "services/api/app/services/backtest.py"
-      - "services/api/app/db/clickhouse.py"
+      - "services/api/app/__init__.py"
+      - "services/api/app/core/**"
+      - "services/api/app/db/**"
+      - "services/api/app/services/**"
       - "services/api/app/api/v1/endpoints/detection_rules.py"
       - "services/api/app/api/v1/endpoints/detection_proposals.py"
       - "services/api/clickhouse/**"
@@ -23,18 +36,11 @@ on:
       - "services/ingest/internal/graph_ws/**"
       - ".github/workflows/isolation-live.yml"
   pull_request:
-    paths:
-      - "tests/isolation/**"
-      - "services/api/app/services/lake_sql.py"
-      - "services/api/app/services/retro_hunt/**"
-      - "services/api/app/services/backtest.py"
-      - "services/api/app/db/clickhouse.py"
-      - "services/api/app/api/v1/endpoints/detection_rules.py"
-      - "services/api/app/api/v1/endpoints/detection_proposals.py"
-      - "services/api/clickhouse/**"
-      - "services/fusion/app/services/lake_writer.py"
-      - "services/ingest/internal/graph_ws/**"
-      - ".github/workflows/isolation-live.yml"
+    # Anchored to the push list rather than repeated. The two copies had not
+    # drifted, but a filter that has to be edited in two places is one edit
+    # away from grading pushes and not pull requests, which is the direction
+    # that lets a change merge ungraded.
+    paths: *isolation_live_paths
   workflow_dispatch:
 
 concurrency:

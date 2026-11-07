@@ -30,6 +30,8 @@ measured more than any other.
 
 from __future__ import annotations
 
+import ast
+import importlib.util
 import os
 import re
 import shutil
@@ -39,12 +41,16 @@ import time
 import uuid
 from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 MAKEFILE = ROOT / "Makefile"
 DETECTOR = ROOT / "scripts/pending_migrations.py"
+#: The one implementation of the on-disk-versus-applied comparison. Section 4
+#: is what keeps it the only one.
+SKEW_MODULE = ROOT / "services/api/app/services/schema_skew.py"
 MIGRATIONS = ROOT / "services" / "api" / "migrations"
 CLI_MAIN = ROOT / "packages" / "aisoc-cli" / "src" / "aisoc_cli" / "main.py"
 
@@ -393,3 +399,120 @@ def test_cli_db_upgrade_sets_strict_mode_inside_the_container() -> None:
         f"`-e` appears after the module argument, where docker treats it as an argument to the command rather than as an exec flag:\n{cmd}"
     )
     assert cmd.index('"-e"') < cmd.index("service"), f"`-e` appears after the service name, where docker stops parsing exec flags:\n{cmd}"
+
+
+# ── 4. one comparison, two policies ──────────────────────────────────────────
+#
+# `scripts/pending_migrations.py` and `services/api/app/services/schema_skew.py`
+# ask the same question of the same two sets. They used to answer it with two
+# copies of the set arithmetic, which had already drifted — the service
+# skipped a directory named `*.sql` and the script counted it — and this
+# repository has shipped that shape twice before, as two case tables and two
+# `playbook.schema.json` files.
+#
+# The arithmetic is now one implementation. What stays different is the
+# verdict on exactly one case, and these tests are what stop a second
+# difference appearing without anyone deciding on it.
+
+
+def _detector_module() -> Any:
+    """`scripts/pending_migrations.py`, imported rather than run."""
+    spec = importlib.util.spec_from_file_location("_aisoc_pending_migrations_under_test", DETECTOR)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_the_detector_reads_the_services_comparison_rather_than_keeping_a_copy() -> None:
+    """There is one implementation, and the script is pointed at it."""
+    detector = _detector_module()
+
+    assert detector._SKEW_MODULE == SKEW_MODULE, "the detector is pointed at some other file"
+    assert SKEW_MODULE.is_file(), "the shared comparison is not where the detector looks for it"
+
+    skew = detector._schema_skew()
+    assert skew is not None, "the detector could not load the shared comparison"
+    assert Path(skew.__file__).resolve() == SKEW_MODULE
+
+    for name in ("migrations_on_disk", "pending"):
+        assert not hasattr(detector, name), (
+            f"`{name}` is defined in the detector again. The comparison belongs in "
+            f"{SKEW_MODULE.name}; a second copy here is the drift this section exists to stop."
+        )
+
+
+def test_the_shared_comparison_stays_importable_from_a_script() -> None:
+    """Its pure half imports nothing but the standard library.
+
+    This is the property that lets one implementation serve both callers:
+    `scripts/` and `services/api` share no Python path and no dependency set,
+    so a module-scope `from sqlalchemy import ...` would force the script
+    back to a copy of its own. The database read defers its imports for
+    exactly this reason.
+    """
+    tree = ast.parse(SKEW_MODULE.read_text(encoding="utf-8"))
+    roots: set[str] = set()
+    for node in tree.body:  # top level only; deferred imports live inside functions
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            roots.add(node.module.split(".")[0])
+    third_party = sorted(r for r in roots if r not in sys.stdlib_module_names)
+    assert third_party == [], (
+        f"{SKEW_MODULE.name} imports {third_party} at module scope, so a script cannot "
+        "load it and the comparison has to be duplicated again. Defer the import into "
+        "the function that needs it."
+    )
+
+
+#: Every shape the two callers can be handed. `applied=None` is the database
+#: that could not be read, which is not the same as one that has applied
+#: nothing.
+_SKEW_CASES: tuple[tuple[str, set[str] | None, list[str]], ...] = (
+    ("nothing anywhere", set(), []),
+    ("fully applied", {"001_a.sql", "002_b.sql"}, ["001_a.sql", "002_b.sql"]),
+    ("one pending", {"001_a.sql"}, ["001_a.sql", "002_b.sql"]),
+    ("all pending", set(), ["001_a.sql", "002_b.sql"]),
+    ("applied but not on disk", {"001_a.sql", "009_rolled_back.sql"}, ["001_a.sql"]),
+    ("both directions at once", {"001_a.sql", "009_rolled_back.sql"}, ["001_a.sql", "002_b.sql"]),
+    ("unreadable database", None, ["001_a.sql"]),
+)
+
+#: The one case the two are allowed to disagree on, named so that a second
+#: one cannot appear silently.
+_DECLARED_DIVERGENCE = "applied but not on disk"
+
+
+@pytest.mark.parametrize(("label", "applied", "on_disk"), _SKEW_CASES, ids=[c[0] for c in _SKEW_CASES])
+def test_the_two_callers_agree_except_on_the_declared_case(label: str, applied: set[str] | None, on_disk: list[str]) -> None:
+    """`/readyz` healthy and `pending_migrations` exit 0 mean the same thing — once."""
+    detector = _detector_module()
+    skew = detector._schema_skew()
+    verdict = skew.evaluate_skew(applied=applied, on_disk=on_disk)
+    code = detector.exit_code_for(verdict)
+
+    if label == _DECLARED_DIVERGENCE:
+        assert verdict.state == "skewed" and not verdict.pending and verdict.applied_not_on_disk
+        assert verdict.healthy is False, "the service must still call a rollback skew"
+        assert code == detector.OK, (
+            "the detector must still exit 0: it answers 'run `make upgrade`?', and "
+            "upgrading applies migrations forward, so it cannot fix a rollback"
+        )
+        return
+
+    assert verdict.healthy == (code == detector.OK), (
+        f"{label}: the service says healthy={verdict.healthy} and the detector exits {code}. "
+        f"Only '{_DECLARED_DIVERGENCE}' is allowed to disagree, and that difference is "
+        "stated in the detector's docstring and implemented in one branch of `exit_code_for`."
+    )
+
+
+def test_an_unreadable_database_is_never_a_pass_on_either_side() -> None:
+    """The unknown bucket is not a clean bill of health for either caller."""
+    detector = _detector_module()
+    skew = detector._schema_skew()
+    verdict = skew.evaluate_skew(applied=None, on_disk=["001_a.sql"], reason="probe failed")
+    assert verdict.state == "unknown"
+    assert verdict.healthy is False
+    assert detector.exit_code_for(verdict) == detector.UNKNOWN
