@@ -27,6 +27,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   Stated precisely, because only part of the surface was open: an *unreachable* store already failed in `test_live_stores.py`, since nothing catches the connection error. The two ways left to pass vacuously were an unset address and an uninstalled client library. Verified both directions against four real containers — with the stores up all three steps pass, 38 assertions in total, which is the positive control that a fail-closed check is not merely stuck closed; with them down all three fail. Re-adding a change-gate to the three assertive steps makes the static gate exit 1 naming all three, and removing it returns it to 0.
 
+- **"Every service exposes the same `GET /healthz` shape" was wrong in both
+  directions, and the sweep it recommended reported failure on a healthy
+  stack.** `apps/docs/docs/deployment/docker.md` told operators to curl
+  `/healthz` on the API and then to loop it across eleven ports. Probed
+  against a running `ghcr.io/beenuar/aisoc-core-api:latest`: `/health` 200,
+  `/healthz` **404**, `/livez` 200, `/readyz` 200 — and the documented
+  `curl -fsS` exits **22**, because `-f` turns the 404 into a failure. The
+  quoted body was invented too: it showed `{"status": "ok", "version": …}`
+  where the live response carries five keys (`status`, `service`, `version`,
+  `airgap`, `demo_bootstrap`) and a `status` of `healthy`. No example body
+  replaces it — three of the five are deployment-specific, and printing a
+  plausible one is how the section came to document an object no route has
+  ever returned.
+
+  `/healthz` is real, just not on the API: `realtime`, `mcp` and
+  `osquery-tls` serve it, as does Qdrant. The path every service does agree
+  on is `/readyz`, so that is what the sweep uses, with the two genuine
+  exceptions named rather than folded in (`enrichment` is Go and serves only
+  `/health`; `mcp` serves only `/healthz`). The page now carries a
+  path-to-service table derived from the route registrations, including the
+  one service whose `/health` is not at the root: `connectors` mounts that
+  router at `/api/v1`, while its `/livez` and `/readyz` are installed on the
+  application directly and stay at the root. Every port in the sweep was
+  re-checked against `docker-compose.yml`.
+
+- **Two further instances of the same claim, found by sweeping for it.**
+  `troubleshooting.md` headed a section `/healthz returns 503` under "API
+  service" and printed a `subsystems` object — a key that appears nowhere in
+  `services/`, one of whose four entries was `opensearch`, which the API
+  holds no client for and `env-vars.md` already said so. It now describes the
+  real `/readyz`, which reports `subscriptions` and `dependencies` under
+  separate keys and has four `status` values. `kubernetes.md` named two of
+  the three `/healthz` servers and missed `osquery-tls`.
+
+  The one third-party health claim in the runbooks was checked and left
+  alone: `qdrant/qdrant:v1.7.0` genuinely answers `/healthz`, `/livez` and
+  `/readyz` with 200 and 404s on `/health`.
+
+- **The upgrade guide can now document `GET /api/v1/system/version` instead
+  of promising it.** The page told operators to check that route while no
+  such route existed, so the documented way to confirm an upgrade answered
+  404; a previous revision of this page correctly declined to guess the
+  response shape. The route is real, and the shape is now documented from a
+  running instance rather than from reading the handler: version, build
+  revision, environment, and a `schema_migrations` object carrying the
+  applied-migration high-water mark and a three-state verdict. All three
+  states were exercised — `current` against a fully migrated Postgres,
+  `unknown` against a dead port (still a 200, with `migrations_applied` as
+  `null` rather than `0`, because a database that answered and applied
+  nothing is different from one that could not be asked), and `skewed` with
+  a row planted outside the build. Authorization was exercised too, not just
+  read: `settings:read`, measured as 401 unauthenticated, 403 for `viewer`,
+  200 for `tenant_admin`. The page also records why `migrations_on_disk`
+  (157) and the high-water mark (`160_…`) legitimately differ — migrations
+  are compared by filename, never by a parsed number, because duplicate
+  numeric prefixes are real here.
+
+- **`env-vars.md` documented `APP_VERSION` and `AISOC_VERSION` as defaulting
+  to `0.1.0`, which is now wrong in the most misleading direction.** Neither
+  has a literal default any more: both resolve from the `AISOC_VERSION`
+  build arg, then the repo-root `VERSION` file, then the literal string
+  `"unknown"`. Documenting that as a version number reinstates in prose
+  exactly the defect the resolver was built to remove — `0.1.0` is not a
+  neutral placeholder, it parses as a version and sorts below every tag that
+  has shipped, so an operator cannot distinguish "very old" from "nobody
+  told me". The page now explains the resolution order and says plainly why
+  the sentinel is a word rather than a number. The `AISOC_VERSION` row also
+  carried the wrong history: its stale literal was `4.0.0`, not `0.1.0`, so
+  one process reported two different versions of itself depending on whether
+  you asked a trace or `/health`.
+
+  A row added for `VERSION` in an earlier revision of this change was removed
+  before it shipped. It described `APP_VERSION` and `VERSION` as independent
+  fields sharing a default, which was true when written and is not now:
+  `Settings.VERSION` is a read-only property aliasing `APP_VERSION`, so a
+  bare `VERSION` variable in the environment is deliberately not bound at
+  all. Shipping the row as drafted would have added a new false claim to the
+  page it was correcting.
+
+- **The credential-key row described the development branch as though it
+  were the only one.** `env-vars.md` said an empty `AISOC_CREDENTIAL_KEY`
+  means "the API generates an **ephemeral** key per process". That happens
+  only in a dev-class environment (`development`, `dev`, `local`, `demo`,
+  `test`); anywhere else the vault **raises** and refuses to start, which is
+  the opposite operational outcome and the one an operator needs to plan
+  for. The row now states the conditional and marks the variable required
+  outside development.
+
 ### Security
 
 - **Re-roling a principal was bounded in one direction only, and a tenant

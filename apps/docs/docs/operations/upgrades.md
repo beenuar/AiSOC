@@ -166,22 +166,114 @@ moment anyone consented to. Details in [Kubernetes](../deployment/kubernetes.md)
 
 After a successful upgrade you should be able to:
 
-- Hit `/livez` and `/readyz` on the API and get `200 OK`, with nothing detached or erroring in the `/readyz` body. Note the paths: the API service serves `/health`, `/livez` and `/readyz` — **not** `/healthz`, which this page used to tell you to curl. `curl -fsS .../healthz` fails on a perfectly healthy deployment, because `-f` turns the 404 into a non-zero exit. `/healthz` is real on `services/realtime` and `services/mcp`, which is where the confusion came from.
+- Hit `/livez` and `/readyz` on the API and get `200 OK`, with nothing detached or erroring in the `/readyz` body. Note the paths: the API service serves `/health`, `/livez` and `/readyz` — **not** `/healthz`, which this page used to tell you to curl. `curl -fsS .../healthz` fails on a perfectly healthy deployment, because `-f` turns the 404 into a non-zero exit (measured: exit 22). `/healthz` is real on `services/realtime`, `services/mcp` and `services/osquery-tls` — and on Qdrant — which is where the confusion came from. [Docker deployment](../deployment/docker.md#health-checks) has the full path-to-service map.
 - Run `make smoke` and watch one real event go through ingest, fusion and triage and come out as an alert. That exercises the path an upgrade is most likely to have broken; a health probe does not.
 - Open the analyst console and see the version in the sidebar footer match the new tag.
 - Re-run `make up`. It should start without a schema complaint, which is the signal that every migration on disk is recorded as applied.
 
-:::note No version endpoint yet
-There is no `/api/v1/system/version` route. This page used to tell you to
-check one, and a case-insensitive search of the tree finds `system/version`
-nowhere outside this page — so the step could never have passed on any
-deployment, past or present. An endpoint reporting the
-running release, and grading the schema against it, is in review as
-[PR #1732](https://github.com/beenuar/AiSOC/pull/1732); this page will
-document its response shape once it has merged and the shape can be read off
-the route rather than guessed. Until then the console footer and the image tag
-are the two answers available.
-:::
+### `GET /api/v1/system/version`
+
+This page used to tell operators to check this route while no such route
+existed, so the documented way to confirm an upgrade answered 404. It is
+real now, and the shape below is read off a running instance rather than
+guessed.
+
+It requires the **`settings:read`** permission — held by `admin`,
+`platform_admin` and `tenant_admin`, and by no analyst role — so send a
+bearer token for one of those:
+
+```bash
+curl -fsS -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/v1/system/version
+```
+
+A real response, taken from a v22.2.0 checkout against a Postgres with every
+migration applied:
+
+```json
+{
+  "version": "22.2.0",
+  "revision": null,
+  "environment": "development",
+  "schema_migrations": {
+    "state": "current",
+    "detail": "All 157 migration(s) on disk are applied.",
+    "migrations_on_disk": 157,
+    "migrations_applied": 157,
+    "latest_applied": "160_alert_reopen_on_recurrence.sql",
+    "pending": [],
+    "applied_not_on_disk": []
+  }
+}
+```
+
+`revision` is `null` there because a source checkout is not a stamped image;
+a published image reports the commit it was built from. The two other fields
+echo that deployment's configuration.
+
+Four things to read, and the last is the one worth the request:
+
+- **`version`** — the running release. The same value `/health` reports and
+  the same one published as `info.version` in the OpenAPI document; they are
+  one field, so they cannot disagree. It is the literal string `"unknown"`
+  when neither the build arg nor a `VERSION` file in the tree declared one,
+  never a placeholder number. See
+  [Environment Variables](../deployment/env-vars.md#how-the-version-resolves).
+- **`revision`** — the commit the image was built from, stamped from the
+  `AISOC_REVISION` build arg, or `null` when the build was not stamped.
+  There is deliberately no fallback to `git rev-parse`: a source checkout's
+  working tree is not the commit an image was built from.
+- **`environment`** — the deployment's configured environment name.
+- **`schema_migrations`** — whether the database matches the code you just
+  started. `state` is one of three values and **`unknown` is never a pass**:
+
+  | `state` | Meaning | What to do |
+  |---|---|---|
+  | `current` | Every migration this build ships is applied. | Nothing. |
+  | `skewed` | The two disagree. `pending` names migrations on disk and not applied — new code against an old schema, the dangerous direction. `applied_not_on_disk` names the reverse, which is what a rolled-back deploy looks like. | Run `make upgrade`, or the Helm migration Job. |
+  | `unknown` | The comparison could not be made: no database reachable, no `aisoc_schema_migrations` table, or a query that failed. `detail` says which. | Fix the reason before trusting any other answer on this page. |
+
+  `latest_applied` is the applied-migration high-water mark — the last
+  applied migration in apply order, which is the value to compare against a
+  release's migration list. `migrations_on_disk` and `migrations_applied`
+  are the two counts behind the verdict; the second is `null` when the
+  database could not be read.
+
+  :::note The count and the highest number are not the same thing
+  In the response above, 157 migrations on disk have a high-water mark of
+  `160_…`. That is not a gap in the applied set. Migrations are tracked and
+  compared **by filename**, never by a parsed number, because duplicate
+  numeric prefixes are a real occurrence in this repository — thirteen
+  pre-existing collisions are deliberately frozen, since renaming an applied
+  migration would make it pending again everywhere it had already run.
+  Comparing on the number would fold two distinct migrations into one and
+  call a database that is missing one of them current.
+  :::
+
+The route answers **200 even when the database is unreachable** — pointed at
+a dead port it still reports the version, with:
+
+```json
+"schema_migrations": {
+  "state": "unknown",
+  "detail": "Applied migrations could not be read (ConnectionRefusedError); 157 migration(s) on disk were not compared.",
+  "migrations_applied": null,
+  "latest_applied": null
+}
+```
+
+That is deliberate: a build identifier is most needed exactly when something
+is broken, and refusing to answer would withhold the diagnosis along with
+the fault. Note that `migrations_applied` is `null` rather than `0` — a
+database that answered and has applied nothing is real, actionable skew, and
+a database that could not be asked is not the same fact.
+
+A skewed schema is likewise reported rather than refused. It also surfaces
+on `/readyz`, registered as a **non-required** dependency on purpose: failing
+readiness would pull the console out of the load balancer, and losing your
+console mid-incident because a migration is behind is worse than the skew.
+`/readyz` answers `ready_degraded` with the detail and the orchestrator keeps
+routing.
 
 If any of those fail, see [Troubleshooting](./troubleshooting). Note what rollback does and does not mean here: `services/api` uses a **forward-only** SQL migration runner (`services/api/app/scripts/run_migrations.py`), not Alembic — there is no `alembic.ini`, no `alembic/` directory, and no downgrade concept. The only services with Alembic are `ueba`, `honeytokens`, `purple-team` and `osquery-tls`. Reverting the **code** to the previous tag is supported; reverting the **schema** is not, so a rollback that needs the old schema means restoring the snapshot taken in step 2 of the pre-upgrade checklist.
 
