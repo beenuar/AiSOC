@@ -45,6 +45,33 @@ Four answers, and the two that are not "fine" are distinguishable
 Exit 2 is a refusal to answer — no migrations directory, or a usage error. A
 check that credits a tree it never opened credits every tree.
 
+One comparison, two policies
+----------------------------
+``services/api/app/services/schema_skew.py`` asks the same question for
+``/readyz`` and ``GET /api/v1/system/version``, and this file used to answer
+it with its own copy of the set arithmetic. Two implementations of one
+comparison is how the two case tables and the two ``playbook.schema.json``
+files happened in this repository, and the copies had already drifted: the
+service skipped a directory named ``*.sql`` and this file counted it.
+
+So the comparison is no longer duplicated. ``migrations_on_disk`` and
+``evaluate_skew`` are imported from that module — loaded by path, because
+``scripts/`` and ``services/api`` do not share a Python path and the API's
+package name is ``app``, which four services claim. Everything this file
+needs from it is standard-library-only by construction, and a test pins that.
+
+What stays different is the *verdict on one case*, and it stays different
+deliberately. A migration applied in the database and absent from the tree
+means the deployment is running **older code than its schema**. The service
+calls that ``skewed``, correctly: it is asked whether the schema matches the
+build, and it does not. This file is asked a narrower question — *should the
+operator run ``make upgrade``* — and the answer there is no, because
+``make upgrade`` applies migrations forward and cannot fix a rollback.
+Reporting ``behind`` would send an operator to run a command that changes
+nothing. It is one branch in :func:`exit_code_for`, named, and
+``tests/test_upgrade_path.py`` asserts it is the only case on which the two
+disagree.
+
 Reading the database
 --------------------
 The probe command is ``AISOC_PG_PSQL``, so the Makefile can point it at its own
@@ -63,11 +90,13 @@ up, which makes the race impossible rather than unlikely.
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import os
 import shlex
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -87,6 +116,58 @@ TRACKING_TABLE = "aisoc_schema_migrations"
 
 DEFAULT_PROBE = "docker compose exec -T postgres psql -h 127.0.0.1 -U aisoc -d aisoc"
 
+#: The one implementation of the comparison, relative to *this* script's
+#: repository rather than to the tree being probed. The migrations directory
+#: is the tree under test's; the arithmetic over it is this build's, which is
+#: also what keeps the gate-contract harness able to run this inside a bare
+#: repository and watch it refuse.
+_SKEW_MODULE = Path(__file__).resolve().parents[1] / "services/api/app/services/schema_skew.py"
+
+
+def _schema_skew() -> Any | None:
+    """Load the shared comparison by path, or ``None`` when it is not there.
+
+    Under a private alias: the real dotted name is ``app.services.schema_skew``
+    and ``app`` is claimed by four services, so registering it would shadow
+    whichever one a caller already imported.
+
+    ``None`` rather than an exception because the gate-contract harness runs
+    this script inside a bare tree, where the module is genuinely absent and
+    the right answer is a named refusal rather than a traceback.
+    """
+    if not _SKEW_MODULE.is_file():
+        return None
+    spec = importlib.util.spec_from_file_location("_aisoc_schema_skew", _SKEW_MODULE)
+    if spec is None or spec.loader is None:  # pragma: no cover - the path is checked above
+        return None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.modules.pop(spec.name, None)
+    return module
+
+
+def exit_code_for(verdict: Any) -> int:
+    """Map one :class:`SchemaSkew` onto this script's exit statuses.
+
+    The whole difference between the two callers of the shared comparison is
+    the ``ahead`` branch below, and it is here rather than spread through
+    ``main`` so that a test can drive it directly over a corpus of verdicts
+    and assert it is the only disagreement.
+    """
+    if verdict.state == "unknown":
+        return UNKNOWN
+    if verdict.pending:
+        return BEHIND
+    # `current`, or `skewed` with nothing pending — which means migrations are
+    # applied that this tree does not carry. The service calls that skewed and
+    # is right to; this script is answering "run `make upgrade`?" and the
+    # answer is no, because upgrading applies migrations forward and a
+    # rollback is not something it can fix.
+    return OK
+
 
 def tree_under_test() -> Path:
     """The tree to read, which is not necessarily this file's own.
@@ -105,29 +186,12 @@ def tree_under_test() -> Path:
     return repo_root()
 
 
-def migrations_on_disk(migrations_dir: Path) -> list[str]:
-    """The chain, in the order and under the names the runner uses.
-
-    ``run_migrations.py`` does ``sorted(p for p in MIGRATIONS_DIR.iterdir() if
-    p.suffix == ".sql")`` and records ``path.name``. Both halves are copied
-    here deliberately: a different ordering or a different key would make this
-    answer a question about a chain nobody applies.
-    """
-    if not migrations_dir.is_dir():
-        return []
-    return sorted(p.name for p in migrations_dir.iterdir() if p.suffix == ".sql")
-
-
-def pending(applied: set[str], on_disk: list[str]) -> list[str]:
-    """Migrations present on disk and absent from the database, in chain order.
-
-    Set difference in one direction only. A name in the database and not on
-    disk means the deployment is running *older* code than its schema, which
-    is a rollback rather than a pending upgrade — it is reported separately by
-    the caller rather than counted here, because telling an operator to
-    upgrade would be the wrong instruction.
-    """
-    return [name for name in on_disk if name not in applied]
+def _list(names: list[str], limit: int = 10) -> None:
+    """Print migration names, bounded, with the remainder counted."""
+    for name in names[:limit]:
+        print(f"    {name}")
+    if len(names) > limit:
+        print(f"    … and {len(names) - limit} more")
 
 
 def _probe(command: str, sql: str) -> tuple[bool, str]:
@@ -170,8 +234,29 @@ def main(argv: list[str] | None = None) -> int:
 
     root = tree_under_test()
     migrations_dir = args.migrations_dir or root / "services" / "api" / "migrations"
-    on_disk = migrations_on_disk(migrations_dir)
 
+    # The chain is checked before the comparison is loaded, so a tree with no
+    # migrations refuses for the reason that is true of it rather than for a
+    # missing module one directory over — which is what a bare tree is, and
+    # what the gate-contract harness runs this against.
+    if not migrations_dir.is_dir():
+        print(
+            f"pending_migrations: no migrations directory at {migrations_dir} — "
+            "refusing to report a database up to date against a chain it never read",
+            file=sys.stderr,
+        )
+        return REFUSED
+
+    skew = _schema_skew()
+    if skew is None:  # pragma: no cover - a tree with migrations but no API service
+        print(
+            f"pending_migrations: the shared comparison is missing at {_SKEW_MODULE} — "
+            "refusing rather than answering with a second copy of it",
+            file=sys.stderr,
+        )
+        return REFUSED
+
+    on_disk = skew.migrations_on_disk(migrations_dir)
     if not on_disk:
         # Refuses rather than reporting "up to date". With no chain to compare
         # against, every database is trivially current, and a wrong root or a
@@ -203,14 +288,15 @@ def main(argv: list[str] | None = None) -> int:
             if not args.quiet:
                 print("pending_migrations: fresh — empty database; the initdb hook applies the chain on creation.")
             return OK
-        print(f"pending_migrations: behind — {len(on_disk)} migration(s) pending.")
+        # A database that answered and has applied nothing is an empty set,
+        # not an unknown — so the shared comparison decides this case too,
+        # rather than this file hand-rolling "everything is pending".
+        verdict = skew.evaluate_skew(applied=set(), on_disk=on_disk)
+        print(f"pending_migrations: behind — {len(verdict.pending)} migration(s) pending.")
         print(f"  This database has tables but no {TRACKING_TABLE}, so none of the")
         print("  chain is recorded as applied.")
-        for name in on_disk[:10]:
-            print(f"    {name}")
-        if len(on_disk) > 10:
-            print(f"    … and {len(on_disk) - 10} more")
-        return BEHIND
+        _list(verdict.pending)
+        return exit_code_for(verdict)
 
     reachable, rows = _probe(probe, f"SELECT name FROM {TRACKING_TABLE}")
     if not reachable:
@@ -219,25 +305,24 @@ def main(argv: list[str] | None = None) -> int:
         return UNKNOWN
 
     applied = {line.strip() for line in rows.splitlines() if line.strip()}
-    missing = pending(applied, on_disk)
-    ahead = sorted(applied - set(on_disk))
+    verdict = skew.evaluate_skew(applied=applied, on_disk=on_disk)
+    code = exit_code_for(verdict)
 
-    if not missing:
+    if code == OK:
         if not args.quiet:
-            print(f"pending_migrations: up to date — {len(applied)} migration(s) applied, none pending.")
-            if ahead:
-                # Not a failure. The operator is running older code than their
-                # schema, which `make upgrade` cannot fix and should not claim to.
-                print(f"  note: {len(ahead)} migration(s) are applied that this tree does not carry,")
+            print(f"pending_migrations: up to date — {verdict.applied_count} migration(s) applied, none pending.")
+            if verdict.applied_not_on_disk:
+                # Not a failure here, though the service calls the same state
+                # skewed — see the module docstring. The operator is running
+                # older code than their schema, which `make upgrade` cannot
+                # fix and should not claim to.
+                print(f"  note: {len(verdict.applied_not_on_disk)} migration(s) are applied that this tree does not carry,")
                 print("  so this deployment's code is older than its database.")
-        return OK
+        return code
 
-    print(f"pending_migrations: behind — {len(missing)} migration(s) on disk are not applied.")
-    for name in missing[:10]:
-        print(f"    {name}")
-    if len(missing) > 10:
-        print(f"    … and {len(missing) - 10} more")
-    return BEHIND
+    print(f"pending_migrations: behind — {len(verdict.pending)} migration(s) on disk are not applied.")
+    _list(verdict.pending)
+    return code
 
 
 if __name__ == "__main__":

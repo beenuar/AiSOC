@@ -29,13 +29,14 @@ throughout. So no part of the chain below is re-implemented here:
 If the mapping is wrong, this test fails. That is the difference between
 proving a sweep matches recorded data and asserting that it does.
 
-Both modules are loaded by path because ``services/api`` and
-``services/fusion`` both package their code as a top-level ``app``, so only
-one of them can be imported normally in one interpreter. The loader registers
-each module in ``sys.modules`` for the duration of its execution, because
-``@dataclass`` resolves annotations through it, and removes it afterwards,
-because a synthetic name left behind has previously broken 21 unrelated tests
-in this repository while every test in its own file passed.
+The API modules are borrowed through ``service_packages`` and the fusion
+writer is loaded by path, because ``services/api`` and ``services/fusion``
+both package their code as a top-level ``app`` and only one of them can be
+imported normally in one interpreter. Each registration lives in
+``sys.modules`` for the duration of its use, because ``@dataclass`` resolves
+annotations through it, and is removed afterwards, because a name left
+behind has previously broken 21 unrelated tests in this repository while
+every test in its own file passed.
 
 Skips when no ClickHouse is reachable, the same way the rest of this directory
 does. It runs for real in ``isolation-live.yml``.
@@ -43,6 +44,7 @@ does. It runs for real in ``isolation-live.yml``.
 
 from __future__ import annotations
 
+import importlib
 import importlib.util
 import ipaddress
 import os
@@ -53,6 +55,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from service_packages import service_app_tree
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -88,30 +91,23 @@ def _load_sweep_sql() -> Any:
     """Load ``retro_hunt.sql``, which imports ``ioc_fields`` by package path.
 
     ``sql.py`` does ``from app.services.retro_hunt.ioc_fields import ...``, so
-    the package name has to resolve. Registering the two parents as namespace
-    modules is enough, and is cheaper and far less fragile than putting the
-    whole API service on ``sys.path`` beside the fusion service, which is the
-    collision this loader exists to avoid.
-    """
-    import types  # noqa: PLC0415 - only needed on this path
+    the package name has to resolve. ``service_app_tree`` borrows the API
+    service's ``app`` for the length of the block and hands it back, which is
+    cheaper and far less fragile than putting the whole API service on
+    ``sys.path`` beside the fusion service — the collision this loader exists
+    to avoid.
 
-    created: list[str] = []
-    for name in ("app", "app.services", "app.services.retro_hunt"):
-        if name not in sys.modules:
-            sys.modules[name] = types.ModuleType(name)
-            created.append(name)
-    try:
-        ioc_fields = _load_by_path(
-            "services/api/app/services/retro_hunt/ioc_fields.py",
-            "app.services.retro_hunt.ioc_fields",
+    ``retro_hunt`` is registered without running its ``__init__.py``: that
+    file re-exports from four siblings, two of which reach SQLAlchemy, and
+    ``isolation-live.yml`` installs a ClickHouse client and a Kafka client
+    and no ORM. Both leaves below are imported normally through it, so a new
+    sibling needs no change here.
+    """
+    with service_app_tree("api", namespace_only=("app.services.retro_hunt",)):
+        return (
+            importlib.import_module("app.services.retro_hunt.ioc_fields"),
+            importlib.import_module("app.services.retro_hunt.sql"),
         )
-        sys.modules["app.services.retro_hunt.ioc_fields"] = ioc_fields
-        sql_module = _load_by_path("services/api/app/services/retro_hunt/sql.py", "app.services.retro_hunt.sql")
-        return ioc_fields, sql_module
-    finally:
-        sys.modules.pop("app.services.retro_hunt.ioc_fields", None)
-        for name in created:
-            sys.modules.pop(name, None)
 
 
 def _raw_events_ddl() -> str:

@@ -210,6 +210,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A live tenant-isolation suite stopped running, and the mechanism that
+  stopped it would have stopped the next one too.**
+  Twelve of the fifteen tests in `tests/isolation/test_backtest_lake_live.py`
+  errored at fixture setup with `No module named 'app.core.version';
+  'app.core' is not a package` from the moment the version module landed. The
+  cause is not the cross-service `app` name collision; it is the machinery
+  built to avoid it. The fixture registered `app`, `app.core`, `app.db` and
+  `app.services` as bare `types.ModuleType` objects, and a module has no
+  `__path__`, so the import system cannot resolve *any* submodule through it
+  however plainly the file is on disk — a hand-written list of file paths was
+  the only way a module became reachable. `tests/isolation/service_packages.py`
+  now borrows a service's `app` tree as a real package whose `__path__` is the
+  real directory, so submodules resolve from disk the way they do in
+  production and there is no list to keep current. Nothing is added to
+  `sys.path`, and the whole `app` namespace is restored on exit by snapshot
+  rather than by a list of names the caller recorded — which it has to be, now
+  that the import system registers submodules nobody enumerated.
+  `test_retro_hunt_live.py` had the same construction and uses the same
+  helper, keeping one deliberate exception for a package whose `__init__.py`
+  reaches an ORM this job does not install. `tests/isolation/test_service_packages.py`
+  pins all of it, and reverting the `__path__` reproduces the original error.
+
+- **The job that would have caught it was never triggered.**
+  `isolation-live.yml` filtered on three `services/api` files; the backtest
+  suite loads eleven, and `app/core/config.py` is one of the eight the filter
+  did not name, so the change merged ungraded. The filter now names the three
+  directories containing the whole measured closure, and the pull-request list
+  is a YAML anchor of the push list so the two cannot drift.
+
+- **One migration comparison instead of two, with the one deliberate
+  divergence pinned.**
+  `scripts/pending_migrations.py` and `services/api/app/services/schema_skew.py`
+  compared the same two sets with two copies of the arithmetic, and the copies
+  had already drifted — the service skipped a directory named `*.sql` and the
+  script counted it. The script now loads the service's `migrations_on_disk`
+  and `evaluate_skew` by path; `_read_applied` defers its SQLAlchemy import so
+  the shared half stays standard-library-only and loadable from a script with
+  no dependency set. What stays different is the verdict on a rollback — a
+  migration applied in the database and absent from the tree. The service
+  calls it skewed, because it is asked whether the schema matches the build;
+  the detector exits 0, because it is asked whether to run `make upgrade`, and
+  upgrading applies migrations forward and cannot fix a rollback. That is one
+  named branch, and `tests/test_upgrade_path.py` drives both callers over seven
+  verdicts and fails if a second case disagrees, if the script grows its own
+  copy again, or if the shared module gains a module-scope third-party import.
+
 - **Okta, GitHub and GitLab read one page of each poll window and lost the
   rest.** All three answer a capped request with a `Link: <url>; rel="next"`
   header, and none of the three connectors looked at it. A poll window opens
