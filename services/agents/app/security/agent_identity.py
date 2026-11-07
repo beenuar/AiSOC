@@ -254,7 +254,8 @@ class IdentityLike(Protocol):
     def audit_row(self, tool: str, *, allowed: bool, reason: str | None = None) -> dict[str, object]:
         """One row for the audit log. Never the tool's arguments."""
 
-    def with_granted_tools(self, tools: frozenset[str] | set[str] | list[str]) -> IdentityLike: ...
+    def with_granted_tools(self, tools: frozenset[str] | set[str] | list[str]) -> IdentityLike:
+        """A copy of this identity extended with newly-granted tools."""
 
 
 @dataclass(frozen=True)

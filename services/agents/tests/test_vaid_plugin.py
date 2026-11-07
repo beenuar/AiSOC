@@ -483,6 +483,7 @@ def test_a_mistyped_ttl_env_falls_back_instead_of_crashing_the_mint(monkeypatch,
     # And the whole production mint path survives it, which is the thing that
     # was actually broken.
     wrapped = vaid_plugin.issue_vaid_identity("triage", run_id="run-ttl", tenant_id="acme")
+    vaid_plugin.verify_identity_badge(wrapped)
 
 
 # ── Startup check: fails at boot, not at the first tool call ─────────────
@@ -565,5 +566,4 @@ def test_preflight_passes_when_the_plugin_is_fully_configured(monkeypatch, tmp_p
     # And the issuer it built is the real one a later mint call reuses,
     # not a throwaway that leaves minting to build its own from scratch.
     wrapped = vaid_plugin.issue_vaid_identity("triage", run_id="run-preflight", tenant_id="acme")
-    vaid_plugin.verify_identity_badge(wrapped)
     vaid_plugin.verify_identity_badge(wrapped)
